@@ -1,18 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-
-from typing import Optional, cast
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+from typing import Any, Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next import errors
@@ -24,7 +17,7 @@ from gt4py.next.ffront import (
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def _ensure_no_sliced_field(entry: past.Expr):
+def _ensure_no_sliced_field(entry: past.Expr) -> None:
     """
     Check that all arguments are of type past.Name or past.TupleExpr.
 
@@ -44,7 +37,55 @@ def _is_integral_scalar(expr: past.Expr) -> bool:
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
 
 
-def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
+def _validate_domain_out(
+    dom: past.Dict | past.TupleExpr,
+    out: ts.TypeSpec,
+    is_nested: bool = False,
+) -> None:
+    if isinstance(dom, past.Dict):
+        # Only reject tuple outputs if nested
+        if is_nested and isinstance(out, ts.TupleType):
+            raise ValueError("Domain dict cannot map to tuple outputs.")
+        assert not (is_nested and isinstance(out, past.TupleExpr))
+
+        if len(dom.keys_) == 0:
+            raise ValueError("Empty domain not allowed.")
+
+        for dim in dom.keys_:
+            if not isinstance(dim.type, ts.DimensionType):
+                raise ValueError(
+                    f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
+                )
+
+        for domain_values in dom.values_:
+            if len(domain_values.elts) != 2:
+                raise ValueError(
+                    f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
+                )
+            if any(not _is_integral_scalar(el) for el in domain_values.elts):
+                raise ValueError(
+                    f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
+                )
+
+    elif isinstance(dom, past.TupleExpr):
+        if isinstance(out, ts.CollectionTypeSpec):
+            # TODO(havogt): for NamedCollectionType, we assume the domain tuple is in element order
+            out_elts = out.types
+        else:
+            raise ValueError(f"Tuple domain requires tuple output, got {type(out)}.")
+
+        if len(dom.elts) != len(out_elts):
+            raise ValueError("Mismatched tuple lengths between domain and output.")
+
+        for d, o in zip(dom.elts, out_elts, strict=True):
+            assert isinstance(d, (past.Dict, past.TupleExpr))
+            _validate_domain_out(d, o, is_nested=True)
+
+    else:
+        raise ValueError(f"'domain' must be Dict or TupleExpr, got {type(dom)}.")
+
+
+def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
     """
     Perform checks for domain and output field types.
 
@@ -52,10 +93,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
 
     Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
     """
-    if not isinstance(
-        new_func.type,
-        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
-    ):
+    if not isinstance(new_func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType)):
         raise ValueError(
             f"Only calls to 'FieldOperators' and 'ScanOperators' "
             f"allowed in 'Program', got '{new_func.type}'."
@@ -63,32 +101,11 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
 
     if "out" not in new_kwargs:
         raise ValueError("Missing required keyword argument 'out'.")
-    if "domain" in new_kwargs:
+    if (domain := new_kwargs.get("domain")) is not None:
         _ensure_no_sliced_field(new_kwargs["out"])
-
-        domain_kwarg = new_kwargs["domain"]
-        if not isinstance(domain_kwarg, past.Dict):
-            raise ValueError(f"Only Dictionaries allowed in 'domain', got '{type(domain_kwarg)}'.")
-
-        if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
-            raise ValueError("Empty domain not allowed.")
-
-        for dim in domain_kwarg.keys_:
-            if not isinstance(dim.type, ts.DimensionType):
-                raise ValueError(
-                    f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
-                )
-        for domain_values in domain_kwarg.values_:
-            if len(domain_values.elts) != 2:
-                raise ValueError(
-                    f"Only 2 values allowed in domain range, got {len(domain_values.elts)}."
-                )
-            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                domain_values.elts[1]
-            ):
-                raise ValueError(
-                    f"Only integer values allowed in domain range, got '{domain_values.elts[0].type}' and '{domain_values.elts[1].type}'."
-                )
+        out = new_kwargs["out"]
+        assert isinstance(out, past.Expr) and out.type is not None
+        _validate_domain_out(domain, out.type)
 
 
 class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -96,7 +113,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def apply(cls, node: past.Program) -> past.Program:
         return cls().visit(node)
 
-    def visit_Program(self, node: past.Program, **kwargs):
+    def visit_Program(self, node: past.Program, **kwargs: Any) -> past.Program:
         params = self.visit(node.params, **kwargs)
 
         definition_type = ts.FunctionType(
@@ -114,7 +131,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_Subscript(self, node: past.Subscript, **kwargs):
+    def visit_Slice(self, node: past.Slice, **kwargs: Any) -> past.Slice:
+        return past.Slice(
+            lower=self.visit(node.lower, **kwargs),
+            upper=self.visit(node.upper, **kwargs),
+            step=self.visit(node.step, **kwargs),
+            type=ts.DeferredType(constraint=None),
+            location=node.location,
+        )
+
+    def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
         return past.Subscript(
             value=value,
@@ -123,19 +149,34 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_TupleExpr(self, node: past.TupleExpr, **kwargs):
-        elts = self.visit(node.elts, **kwargs)
-        return past.TupleExpr(
-            elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
+    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
+        new_value = self.visit(node.value, **kwargs)
+        return past.Attribute(
+            value=new_value,
+            attr=node.attr,
+            location=node.location,
+            type=getattr(new_value.type, node.attr),
         )
 
+    def visit_Dict(self, node: past.Dict, **kwargs: Any) -> past.Dict:
+        # the only supported dict for now is in domain specification
+        keys = self.visit(node.keys_, **kwargs)
+        assert all(isinstance(key.type, ts.DimensionType) for key in keys)
+        return past.Dict(
+            keys_=keys,
+            values_=self.visit(node.values_, **kwargs),
+            location=node.location,
+            type=ts.DomainType(dims=[key.type.dim for key in keys]),
+        )
+
+    def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
+        elts = self.visit(node.elts, **kwargs)
+        ttype = ts.TupleType(types=[elt.type for elt in elts])
+
+        return past.TupleExpr(elts=elts, type=ttype, location=node.location)
+
     def _deduce_binop_type(
-        self,
-        node: past.BinOp,
-        *,
-        left: past.Expr,
-        right: past.Expr,
-        **kwargs,
+        self, node: past.BinOp, *, left: past.Expr, right: past.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
@@ -173,7 +214,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f" in call to '{node.op}'.",
             ) from ex
 
-    def visit_BinOp(self, node: past.BinOp, **kwargs) -> past.BinOp:
+    def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> past.BinOp:
         new_left = self.visit(node.left, **kwargs)
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
@@ -181,7 +222,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
-    def visit_Call(self, node: past.Call, **kwargs):
+    def visit_Call(self, node: past.Call, **kwargs: Any) -> past.Call:
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
@@ -200,10 +241,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             }
 
             type_info.accepts_args(
-                new_func.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                new_func.type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
             return_type = ts.VoidType()
             if is_operator:
@@ -217,19 +255,19 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"'{new_kwargs['out'].type}'."
                     )
             elif new_func.id in ["minimum", "maximum"]:
-                if new_args[0].type != new_args[1].type:
+                if arg_types[0] != arg_types[1]:
                     raise ValueError(
                         f"First and second argument in '{new_func.id}' must be of the same type."
-                        f"Got '{new_args[0].type}' and '{new_args[1].type}'."
+                        f"Got '{arg_types[0]}' and '{arg_types[1]}'."
                     )
-                return_type = new_args[0].type
+                return_type = arg_types[0]
             else:
                 raise AssertionError(
                     "Only calls to 'FieldOperator', 'ScanOperator' or 'minimum' and 'maximum' builtins allowed."
                 )
 
         except ValueError as ex:
-            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.") from ex
+            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.\n{ex}") from ex
 
         return past.Call(
             func=new_func,
@@ -239,7 +277,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
-    def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
+    def visit_Name(self, node: past.Name, **kwargs: Any) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
             raise errors.DSLError(node.location, f"Undeclared or untyped symbol '{node.id}'.")

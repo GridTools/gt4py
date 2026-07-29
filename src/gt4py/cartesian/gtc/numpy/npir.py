@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import List, Optional, Tuple, Union
 
@@ -22,7 +16,7 @@ from gt4py.eve import datamodels
 
 # --- Misc ---
 class AxisName(eve.StrEnum):
-    I = "I"  # noqa: E741 (ambiguous variable name)
+    I = "I"  # noqa: E741 [ambiguous-variable-name]
     J = "J"
     K = "K"
 
@@ -46,7 +40,6 @@ class ScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -56,7 +49,6 @@ class LocalScalarDecl(Decl):
     """Scalar per grid point.
 
     Used for API scalar parameters. Local scalars never have data_dims.
-
     """
 
     pass
@@ -76,12 +68,14 @@ class TemporaryDecl(Decl):
 
     Parameters
     ----------
+    data_dims: Data dimensions sizes (static)
+    dimensions: Mask which cartesian dimensions are present
     offset: Origin of the temporary field.
     padding: Buffer added to compute domain as field size.
-
     """
 
     data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    dimensions: Tuple[bool, bool, bool]
     offset: Tuple[int, int]
     padding: Tuple[int, int]
 
@@ -122,6 +116,10 @@ class Broadcast(Expr):
 
 class VarKOffset(common.VariableKOffset[Expr]):
     pass
+
+
+class KMaskFieldAccess(Expr):
+    dtype = common.DataType.INT64
 
 
 class FieldSlice(VectorLValue):

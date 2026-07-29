@@ -1,16 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import enum
 import random
@@ -24,7 +20,6 @@ from gt4py.eve.concepts import (
     SourceLocation,
     SourceLocationGroup,
     SymbolName,
-    VType,
 )
 from gt4py.eve.datamodels import Coerced
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
@@ -54,9 +49,6 @@ class StrKind(StrEnum):
     BLA = "bla"
     FIZ = "fiz"
     FUZ = "fuz"
-
-
-SimpleVType = VType("simple")
 
 
 class EmptyNode(Node):
@@ -123,6 +115,10 @@ class CompoundNode(Node):
     simple_loc: SimpleNodeWithLoc
     simple_opt: SimpleNodeWithOptionals
     other_simple_opt: Optional[SimpleNodeWithOptionals]
+
+
+class RecursiveCompoundNode(CompoundNode):
+    children: list[RecursiveCompoundNode]
 
 
 class CompoundNodeWithSymbols(Node):
@@ -370,8 +366,7 @@ def make_simple_node_with_collections(*, fixed: bool = False) -> SimpleNodeWithC
 
 
 def make_simple_node_with_abstract_collections(
-    *,
-    fixed: bool = False,
+    *, fixed: bool = False
 ) -> SimpleNodeWithAbstractCollections:
     int_value = make_int_value(fixed=fixed)
     int_sequence = make_collection_value(int, collection_type=tuple, length=3)
@@ -386,10 +381,7 @@ def make_simple_node_with_abstract_collections(
     )
 
 
-def make_simple_node_with_symbol_name(
-    *,
-    fixed: bool = False,
-) -> SimpleNodeWithSymbolName:
+def make_simple_node_with_symbol_name(*, fixed: bool = False) -> SimpleNodeWithSymbolName:
     int_value = make_int_value(fixed=fixed)
     name = make_str_value(fixed=fixed)
 
@@ -397,8 +389,7 @@ def make_simple_node_with_symbol_name(
 
 
 def make_simple_node_with_default_symbol_name(
-    *,
-    fixed: bool = False,
+    *, fixed: bool = False
 ) -> SimpleNodeWithDefaultSymbolName:
     int_value = make_int_value(fixed=fixed)
 
@@ -413,6 +404,30 @@ def make_compound_node(*, fixed: bool = False) -> CompoundNode:
         simple_loc=make_simple_node_with_loc(),
         simple_opt=make_simple_node_with_optionals(),
         other_simple_opt=None,
+    )
+
+
+def make_recursive_compound_node(
+    num_levels: int = 5, width: int = 5, *, fixed: bool = False
+) -> RecursiveCompoundNode:
+    assert num_levels > 0
+    node = make_compound_node(fixed=fixed)
+    children = (
+        [
+            make_recursive_compound_node(num_levels=num_levels - 1, width=width, fixed=fixed)
+            for _ in range(width)
+        ]
+        if num_levels > 1
+        else []
+    )
+    return RecursiveCompoundNode(
+        int_value=node.int_value,
+        location=node.location,
+        simple=node.simple,
+        simple_loc=node.simple_loc,
+        simple_opt=node.simple_opt,
+        other_simple_opt=node.other_simple_opt,
+        children=children,
     )
 
 

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 from dataclasses import dataclass
@@ -18,8 +12,7 @@ from typing import Any, Callable, Dict, Iterable, List, Set, Tuple
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, oir
-
-from .utils import AccessCollector, symbol_name_creator
+from gt4py.cartesian.gtc.passes.oir_optimizations.utils import AccessCollector, symbol_name_creator
 
 
 """Utilities for cache detection and modifications on the OIR level.
@@ -45,7 +38,6 @@ are replaced by just a few registers.
 Note that filling and flushing k-caches can always be replaced by a local
 (non-filling or flushing) k-cache plus additional filling and flushing
 statements.
-
 """
 
 
@@ -74,10 +66,7 @@ class IJCacheDetection(eve.NodeTranslator):
             oir.IJCache(name=field) for field in cacheable
         ]
         return oir.VerticalLoop(
-            sections=node.sections,
-            loop_order=node.loop_order,
-            caches=caches,
-            loc=node.loc,
+            sections=node.sections, loop_order=node.loop_order, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -149,10 +138,7 @@ class KCacheDetection(eve.NodeTranslator):
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
         ]
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=node.sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=node.sections, caches=caches, loc=node.loc
         )
 
 
@@ -273,7 +259,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     For each cached field, the following actions are performed:
     1. A new locally-k-cached temporary is introduced.
     2. All accesses to the original field are replaced by accesses to this temporary.
-    3. Loop sections are split where necessary to allow single-level loads whereever possible.
+    3. Loop sections are split where necessary to allow single-level loads wherever possible.
     3. Fill statements from the original field to the temporary are introduced.
     4. Flush statements from the temporary to the original field are introduced.
     """
@@ -325,7 +311,6 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
 
         Returns:
             A dict, mapping field names to min and max read offsets relative to loop order (i.e., positive means in the direction of the loop order).
-
         """
 
         def directional_k_offset(offset: Tuple[int, int, int]) -> int:
@@ -344,6 +329,11 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
     @staticmethod
     def _requires_splitting(interval: oir.Interval) -> bool:
         """Check if an interval is larger than one level and thus may require splitting."""
+        if not (
+            isinstance(interval.start, common.AxisBound)
+            and isinstance(interval.end, common.AxisBound)
+        ):
+            raise NotImplementedError("K-Caches should be disabled with runtime axis bounds")
         if interval.start.level != interval.end.level:
             return True
         return abs(interval.end.offset - interval.start.offset) > 1
@@ -364,6 +354,11 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             Two loop sections.
         """
         assert loop_order in (common.LoopOrder.FORWARD, common.LoopOrder.BACKWARD)
+        if not (
+            isinstance(section.interval.start, common.AxisBound)
+            and isinstance(section.interval.end, common.AxisBound)
+        ):
+            raise NotImplementedError("K-Caches should be disabled with runtime axis bounds")
         if loop_order == common.LoopOrder.FORWARD:
             bound = common.AxisBound(
                 level=section.interval.start.level, offset=section.interval.start.offset + 1
@@ -459,9 +454,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
                 k_offset = common.CartesianOffset(
-                    i=0,
-                    j=0,
-                    k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                    i=0, j=0, k=offset if loop_order == common.LoopOrder.FORWARD else -offset
                 )
                 fill_stmts.append(
                     oir.AssignStmt(
@@ -554,7 +547,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             first_unfilled: Dict[str, int] = dict()
             split_sections: List[oir.VerticalLoopSection] = []
             for section in node.sections:
-                split_section, previous_fills = self._split_section_with_multiple_fills(
+                split_section, _previous_fills = self._split_section_with_multiple_fills(
                     node.loop_order, section, filling_fields, first_unfilled, new_symbol_name
                 )
                 split_sections += split_section
@@ -586,10 +579,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         ]
 
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=sections, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

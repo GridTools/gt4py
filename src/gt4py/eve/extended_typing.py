@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 Typing definitions working across different Python versions (via `typing_extensions`).
@@ -20,12 +14,11 @@ Definitions in 'typing_extensions' take priority over those in 'typing'.
 
 from __future__ import annotations
 
+# ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
 import collections.abc as _collections_abc
-import ctypes as _ctypes
 import dataclasses as _dataclasses
-import enum as _enum
 import functools as _functools
 import inspect as _inspect
 import mmap as _mmap
@@ -33,32 +26,32 @@ import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
-from typing import *  # noqa: F403
-from typing import overload  # Only needed to avoid false flake8 errors
+from typing import *  # noqa: F403 [undefined-local-with-import-star]
+from typing import overload
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
 if _sys.version_info >= (3, 9):
     # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]  # isort:skip
-        tuple as Tuple,
-        list as List,
+    from builtins import (  # type: ignore[assignment]
         dict as Dict,
-        set as Set,
         frozenset as FrozenSet,
+        list as List,
+        set as Set,
+        tuple as Tuple,
         type as Type,
     )
-    from collections import (  # isort:skip
+    from collections import (
         ChainMap as ChainMap,
         Counter as Counter,
         OrderedDict as OrderedDict,
         defaultdict as defaultdict,
         deque as deque,
     )
-    from collections.abc import (  # isort:skip
+    from collections.abc import (
         AsyncGenerator as AsyncGenerator,
         AsyncIterable as AsyncIterable,
         AsyncIterator as AsyncIterator,
@@ -80,14 +73,14 @@ if _sys.version_info >= (3, 9):
         MutableSet as MutableSet,
         Reversible as Reversible,
         Sequence as Sequence,
+        Set as AbstractSet,
+        ValuesView as ValuesView,
     )
-    from collections.abc import Set as AbstractSet  # isort:skip
-    from collections.abc import ValuesView as ValuesView  # isort:skip
-    from contextlib import (  # isort:skip
+    from contextlib import (
         AbstractAsyncContextManager as AsyncContextManager,
+        AbstractContextManager as ContextManager,
     )
-    from contextlib import AbstractContextManager as ContextManager  # isort:skip
-    from re import Match as Match, Pattern as Pattern  # isort:skip
+    from re import Match as Match, Pattern as Pattern
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -127,40 +120,62 @@ def __dir__() -> List[str]:
     return self_func.__cached_dir
 
 
-_T = TypeVar("_T")
-
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
 
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
+
+
+class ArgsOnlyCallable(Protocol[_A, _R]):
+    def __call__(self, *args: _A) -> _R: ...
+
+
+_T_co = TypeVar("_T_co", covariant=True)
+NestedSequence = Sequence[Union[_T_co, "NestedSequence[_T_co]"]]
+NestedList = List[Union[_T_co, "NestedList[_T_co]"]]
+NestedTuple = Tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
+
+MaybeNested = Union[_T_co, NestedSequence[_T_co]]
+MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
+MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
+MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
+
+
+def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
+    """Check if `value` is a nested tuple of elements of type `type_`."""
+    return isinstance(value, tuple) and all(
+        isinstance(v, type_) or (isinstance(v, tuple) and is_nested_tuple_of(v, type_))
+        for v in value
+    )
+
+
+def is_maybe_nested_in_tuple_of(
+    value: object, type_: type[_T_co]
+) -> TypeIs[MaybeNestedInTuple[_T_co]]:
+    """Check if `value` is either of type `type_` or a nested tuple of elements of type `type_`."""
+    return isinstance(value, type_) or is_nested_tuple_of(value, type_)
+
 
 # -- Typing annotations --
-if _sys.version_info >= (3, 9):
-    SolvedTypeAnnotation = Union[
-        Type,
-        _typing._SpecialForm,
-        _types.GenericAlias,  # type: ignore[name-defined]  # Python 3.8 does not include `_types.GenericAlias`
-        _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
-    ]
-else:
-    SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type,
-        _typing._SpecialForm,
-        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
-    ]
+SingleTypeAnnotation = Union[
+    Type,
+    _types.GenericAlias,
+    _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+]
+
+SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
 StdGenericAliasType: Final[Type] = type(List[int])
 
-if _sys.version_info >= (3, 9):
-    if TYPE_CHECKING:
-        StdGenericAlias: TypeAlias = _types.GenericAlias  # type: ignore[name-defined,attr-defined]  # Python 3.8 does not include `_types.GenericAlias`
+if TYPE_CHECKING:
+    StdGenericAlias: TypeAlias = _types.GenericAlias
 
 _TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = (
-    _typing._BaseGenericAlias if _sys.version_info >= (3, 9) else _typing._GenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
-)
+_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -177,19 +192,14 @@ class NonDataDescriptor(Protocol[_C, _V]):
     @overload
     def __get__(
         self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
-    ) -> NonDataDescriptor[_C, _V]:
-        ...
+    ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
-    def __get__(  # noqa: F811  # redefinion of unused member
-        self, _instance: _C, _owner_type: Optional[Type[_C]] = None
-    ) -> _V:
-        ...
+    def __get__(self, _instance: _C, _owner_type: Optional[Type[_C]] = None) -> _V: ...
 
-    def __get__(  # noqa: F811  # redefinion of unused member
+    def __get__(
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
-    ) -> _V | NonDataDescriptor[_C, _V]:
-        ...
+    ) -> _V | NonDataDescriptor[_C, _V]: ...
 
 
 class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
@@ -198,11 +208,9 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
     See https://docs.python.org/3/howto/descriptor.html for further information.
     """
 
-    def __set__(self, _instance: _C, _value: _V) -> None:
-        ...
+    def __set__(self, _instance: _C, _value: _V) -> None: ...
 
-    def __delete__(self, _instance: _C) -> None:
-        ...
+    def __delete__(self, _instance: _C) -> None: ...
 
 
 # -- Based on typeshed definitions --
@@ -213,33 +221,76 @@ WriteableBuffer: TypeAlias = Union[
 ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 
 
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+@runtime_checkable
+class SingleDispatchCallable(Protocol[_P, _T]):
+    # `functools.singledispatch` copies the wrapped function's identity onto
+    # the dispatcher; declaring these attributes allows callers to overwrite
+    # it (e.g. to give a dispatcher its own pickle identity).
+    __name__: str
+    __qualname__: str
+    registry: Mapping[Any, Callable[_P, _T]]
+
+    def dispatch(self, cls: Any) -> Callable[_P, _T]: ...
+
+    @overload
+    def register(
+        self, cls: Any, func: Literal[None] = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+    @overload
+    def register(self, cls: Any, func: Callable[_P, _T]) -> Callable[_P, _T]: ...
+
+    def register(
+        self, cls: Any, func: Callable[_P, _T] | None = None
+    ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]] | Callable[_P, _T]: ...
+
+    def _clear_cache(self) -> None: ...
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _T: ...
+
+
+def is_single_dispatch_callable(
+    func: Callable[_P, _T],
+) -> TypeGuard[SingleDispatchCallable[_P, _T]]:
+    return (
+        callable(func)
+        and getattr(func, "registry", None) is not None
+        and callable(getattr(func, "dispatch", None))
+        and callable(getattr(func, "register", None))
+        and callable(getattr(func, "_clear_cache", None))
+    )
+
+
 class HashlibAlgorithm(Protocol):
     """Used in the hashlib module of the standard library."""
 
-    digest_size: int
-    block_size: int
-    name: str
+    @property
+    def block_size(self) -> int: ...
 
-    def __init__(self, data: ReadableBuffer = ...) -> None:
-        ...
+    @property
+    def digest_size(self) -> int: ...
 
-    def copy(self) -> HashlibAlgorithm:
-        ...
+    @property
+    def name(self) -> str: ...
 
-    def update(self, data: ReadableBuffer) -> None:
-        ...
+    def __init__(self, data: ReadableBuffer = ...) -> None: ...
 
-    def digest(self) -> bytes:
-        ...
+    def copy(self) -> Self: ...
 
-    def hexdigest(self) -> str:
-        ...
+    def update(self, data: Buffer, /) -> None: ...
+
+    def digest(self) -> bytes: ...
+
+    def hexdigest(self) -> str: ...
 
 
 # -- Third party protocols --
 class SupportsArray(Protocol):
-    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]:
-        ...
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]: ...
 
 
 def supports_array(value: Any) -> TypeGuard[SupportsArray]:
@@ -248,8 +299,7 @@ def supports_array(value: Any) -> TypeGuard[SupportsArray]:
 
 class ArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> Dict[str, Any]:
-        ...
+    def __array_interface__(self) -> Dict[str, Any]: ...
 
 
 class ArrayInterfaceTypedDict(TypedDict):
@@ -265,8 +315,7 @@ class ArrayInterfaceTypedDict(TypedDict):
 
 class StrictArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> ArrayInterfaceTypedDict:
-        ...
+    def __array_interface__(self) -> ArrayInterfaceTypedDict: ...
 
 
 def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
@@ -275,8 +324,7 @@ def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
 
 class CUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> Dict[str, Any]:
-        ...
+    def __cuda_array_interface__(self) -> Dict[str, Any]: ...
 
 
 class CUDAArrayInterfaceTypedDict(TypedDict):
@@ -292,8 +340,7 @@ class CUDAArrayInterfaceTypedDict(TypedDict):
 
 class StrictCUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict:
-        ...
+    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict: ...
 
 
 def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
@@ -305,19 +352,15 @@ DLPackDevice = Tuple[int, int]
 
 
 class MultiStreamDLPackBuffer(Protocol):
-    def __dlpack__(self, *, stream: Optional[int] = None) -> Any:
-        ...
+    def __dlpack__(self, *, stream: Optional[int] = None) -> Any: ...
 
-    def __dlpack_device__(self) -> DLPackDevice:
-        ...
+    def __dlpack_device__(self) -> DLPackDevice: ...
 
 
 class SingleStreamDLPackBuffer(Protocol):
-    def __dlpack__(self, *, stream: None = None) -> Any:
-        ...
+    def __dlpack__(self, *, stream: None = None) -> Any: ...
 
-    def __dlpack_device__(self) -> DLPackDevice:
-        ...
+    def __dlpack_device__(self) -> DLPackDevice: ...
 
 
 DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
@@ -333,167 +376,19 @@ def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
-    def __pretty__(self, fmt: Callable[[Any], Any], **kwargs: Any) -> Generator[Any, None, None]:
-        ...
+    def __pretty__(
+        self, fmt: Callable[[Any], Any], **kwargs: Any
+    ) -> Generator[Any, None, None]: ...
 
 
 # -- Added functionality --
-class NonProtocolABCMeta(_typing._ProtocolMeta):
-    """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
+_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
 
-    __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None  # type: ignore[assignment]
+# `Any` is a class since Python 3.11
+if isinstance(_typing.Any, type):  # Python >= 3.11
+    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
-
-class NonProtocolABC(metaclass=NonProtocolABCMeta):
-    pass
-
-
-_ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
-
-
-@overload
-def extended_runtime_checkable(
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> Callable[[_ProtoT], _ProtoT]:
-    ...
-
-
-@overload
-def extended_runtime_checkable(
-    maybe_cls: _ProtoT,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT:
-    ...
-
-
-def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
-    maybe_cls: Optional[_ProtoT] = None,
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
-) -> _ProtoT | Callable[[_ProtoT], _ProtoT]:
-    """Emulates :func:`typing.runtime_checkable` with optional performance shortcuts.
-
-    If all optional shortcuts are set to ``False``, it behaves exactly
-    as :func:`typing.runtime_checkable`.
-
-    Keyword Arguments:
-        instance_check_shortcut: instance checks only use the instance type
-            instead of checking the instance data for members added at runtime.
-        subclass_check_with_data_members: subclass checks also work for
-            protocols with data members.
-    """
-
-    def _decorator(cls: _ProtoT) -> _ProtoT:
-        cls = _typing.runtime_checkable(cls)
-        if not (instance_check_shortcut or subclass_check_with_data_members):
-            return cls
-
-        if instance_check_shortcut:
-            # Monkey patch the decorated protocol class using our custom
-            # metaclass, which assumes that no data members have been
-            # added at runtime and therefore the expensive instance members
-            # checks can be replaced by (cached) tests with class members
-            cls.__class__ = NonProtocolABCMeta  # type: ignore[assignment]
-
-        if subclass_check_with_data_members:
-            assert "__subclasshook__" in cls.__dict__
-            if cls.__subclasshook__.__module__ not in (  # type: ignore[attr-defined]
-                "typing",
-                "typing_extensions",
-                "extended_typing",
-            ):
-                raise TypeError(
-                    "Cannot use 'subclass_check_with_data_members' with custom '__subclasshook__' definitions."
-                )
-
-            _allow_reckless_class_checks = getattr(
-                _typing,
-                "_allow_reckless_class_checks"
-                if hasattr(_typing, "_allow_reckless_class_checks")
-                else "_allow_reckless_class_cheks",  # There is a typo in 3.8 and 3.9
-            )
-
-            _get_protocol_attrs = (
-                _typing._get_protocol_attrs  # type: ignore[attr-defined]  # private member
-            )
-            _is_callable_members_only = (
-                _typing._is_callable_members_only  # type: ignore[attr-defined]  # private member
-            )
-
-            # Define a patched version of the proto hook which ignores
-            # __is_callable_members_only() result at certain points
-            def _patched_proto_hook(other):  # type: ignore[no-untyped-def]
-                if not cls.__dict__.get("_is_protocol", False):
-                    return NotImplemented
-
-                # First, perform various sanity checks.
-                if not getattr(cls, "_is_runtime_protocol", False):
-                    if _allow_reckless_class_checks():
-                        return NotImplemented
-                    raise TypeError(
-                        "Instance and class checks can only be used with"
-                        " @runtime_checkable protocols"
-                    )
-                if not _is_callable_members_only(cls) and _allow_reckless_class_checks():
-                    return NotImplemented
-                    # PATCHED: a TypeError should be raised here if not
-                    # `allow_reckless_class_checks()` but we ignored in
-                    # this patched version`
-                if not isinstance(other, type):
-                    # Same error message as for issubclass(1, int).
-                    raise TypeError("issubclass() arg 1 must be a class")
-
-                # Second, perform the actual structural compatibility check.
-                for attr in _get_protocol_attrs(cls):
-                    for base in other.__mro__:
-                        # Check if the members appears in the class dictionary...
-                        if callable(getattr(cls, attr, None)):  # Method member
-                            if attr in base.__dict__:
-                                if base.__dict__[attr] is None:
-                                    return NotImplemented
-                                break
-                        elif attr in base.__dict__ or (  # Data member
-                            base_annotations := getattr(base, "__annotations__", {})
-                            and isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                        ):
-                            break
-
-                        # ...or in annotations, if it is a sub-protocol.
-                        base_annotations = getattr(base, "__annotations__", {})
-                        if (
-                            isinstance(base_annotations, _collections_abc.Mapping)
-                            and attr in base_annotations
-                            and issubclass(other, Generic)
-                            and other._is_protocol
-                        ):
-                            break
-                    else:
-                        return NotImplemented
-                return True
-
-            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined,method-assign]
-
-        return cls
-
-    return _decorator(maybe_cls) if maybe_cls is not None else _decorator
-
-
-_ArtefactTypes: tuple[type, ...] = tuple()
-if _sys.version_info >= (3, 9):
-    _ArtefactTypes = (_types.GenericAlias,)  # type: ignore[attr-defined]  # GenericAlias only from >= 3.8
-
-    # `Any` is a class since Python 3.11
-    if isinstance(_typing.Any, type):  # Python >= 3.11
-        _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
-
-# `Any` is a class since typing_extensions >= 4.4
+# `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
     typing_exts_any, type
 ):
@@ -504,11 +399,13 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
     This is needed because since Python 3.9:
-        ``isinstance(types.GenericAlias(),  type) is True``
+        ``isinstance(types.GenericAlias(), type) is True``
     and since Python 3.11:
-        ``isinstance(typing.Any,  type) is True``
+        ``isinstance(typing.Any, type) is True``
     """
-    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
+    return (
+        isinstance(obj, type) and (obj not in _ArtefactTypes) and (type(obj) not in _ArtefactTypes)
+    )
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
@@ -534,6 +431,49 @@ def get_actual_type(obj: _T) -> Type[_T]:
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
 
+def get_represented_types(
+    type_annotation: TypeAnnotation,
+    *,
+    globalns: Optional[Dict[str, Any]] = None,
+    localns: Optional[Dict[str, Any]] = None,
+) -> tuple[type, ...]:
+    """Return a tuple with all the actual types contained in a type annotation."""
+
+    def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
+        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+
+    if type_annotation is Ellipsis:
+        return ()
+
+    if is_actual_type(type_annotation):
+        return (type_annotation,)
+
+    if isinstance(type_annotation, TypeVar):
+        if type_annotation.__bound__:
+            return get_represented_types(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return recurse_all(type_annotation.__constraints__)
+        if typevar_default := getattr(type_annotation, "__default__", None):
+            return get_represented_types(typevar_default)
+
+    if isinstance(type_annotation, ForwardRef):
+        return get_represented_types(
+            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+        )
+
+    # Generic types
+    origin_type = get_origin(type_annotation)
+    type_args = get_args(type_annotation)
+
+    if origin_type in [Literal, Union, _types.UnionType]:
+        return recurse_all(t for t in type_args)
+
+    if origin_type is not None:
+        return (origin_type,)
+
+    return ()
+
+
 def is_type_with_custom_hash(type_: Type) -> bool:
     return type_.__hash__ not in (None, object.__hash__)
 
@@ -546,62 +486,131 @@ class HasCustomHash(Hashable):
         return is_type_with_custom_hash(candidate_cls)
 
 
-def is_value_hashable(obj: Any) -> TypeGuard[HasCustomHash]:
-    return isinstance(obj, type) or obj is None or is_type_with_custom_hash(type(obj))
+class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
+    """ABC for `tuple` subclasses created with `collections.abc.namedtuple()`."""
 
+    # Replicate the standard tuple API
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: int) -> _T_co: ...
 
-def is_value_hashable_typing(
-    type_annotation: TypeAnnotation,
-    *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
-) -> bool:
-    """Check if a type annotation describes a type hashable by value."""
-    if is_actual_type(type_annotation):
-        assert not get_args(type_annotation)
+    @overload
+    @_abc.abstractmethod
+    def __getitem__(self, index: slice) -> Self: ...
+
+    @_abc.abstractmethod
+    def __getitem__(self, index: Union[int, slice]) -> Union[_T_co, Self]: ...
+
+    @_abc.abstractmethod
+    def __len__(self) -> int: ...
+
+    @_abc.abstractmethod
+    def __contains__(self, value: object) -> bool: ...
+
+    @_abc.abstractmethod
+    def __iter__(self) -> Iterator[_T_co]: ...
+
+    @_abc.abstractmethod
+    def __add__(self, other: Self) -> Self: ...
+
+    @_abc.abstractmethod
+    def __mul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def __rmul__(self, other: int) -> Self: ...
+
+    @_abc.abstractmethod
+    def index(self, value: Any, start: int = 0, stop: Optional[int] = None) -> int: ...
+
+    @_abc.abstractmethod
+    def count(self, value: Any) -> int: ...
+
+    # Add specific namedtuple methods
+    _fields: ClassVar[tuple[str, ...]]
+
+    @_abc.abstractmethod
+    def _make(self, iterable: Iterable) -> Self: ...
+
+    @_abc.abstractmethod
+    def _asdict(self) -> dict[str, Any]: ...
+
+    @_abc.abstractmethod
+    def _replace(self, **kwargs: Any) -> Self: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
         return (
-            True
-            if type_annotation in (type, type(None))
-            else is_type_with_custom_hash(type_annotation)
+            issubclass(subclass, tuple)
+            and (_typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
+        ) or (
+            (field_names := getattr(subclass, "_fields", None)) is not None
+            and {*field_names} <= _typing.get_type_hints(subclass).keys()
         )
 
-    if isinstance(type_annotation, TypeVar):
-        if type_annotation.__bound__:
-            return is_value_hashable_typing(type_annotation.__bound__)
-        if type_annotation.__constraints__:
-            return all(is_value_hashable_typing(c) for c in type_annotation.__constraints__)
-        return False
 
-    if isinstance(type_annotation, ForwardRef):
-        return is_value_hashable_typing(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
+class DataclassABC(_abc.ABC):
+    """ABC for data classes."""
 
-    if type_annotation is Any:
-        return False
+    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_params__: ClassVar[_DataclassParamsABC]
 
-    # Generic types
-    origin_type = get_origin(type_annotation)
-    type_args = get_args(type_annotation)
-
-    if origin_type is Literal:
-        return True
-
-    if origin_type is Union:
-        return all(is_value_hashable_typing(t) for t in type_args)
-
-    if isinstance(origin_type, type) and is_value_hashable_typing(origin_type):
-        return all(is_value_hashable_typing(t) for t in type_args if t != Ellipsis)
-
-    return type_annotation is None
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        return _dataclasses.is_dataclass(subclass)
 
 
-def _is_protocol(type_: type, /) -> bool:
-    """Check if a type is a Protocol definition."""
-    return getattr(type_, "_is_protocol", False)
+class _DataclassParamsABC(_abc.ABC):
+    init: bool
+    repr: bool
+    eq: bool
+    order: bool
+    unsafe_hash: bool
+    frozen: bool
+    match_args: bool
+    kw_only: bool
+    slots: bool
+    weakref_slot: bool
 
 
-is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
+class FrozenDataclass(DataclassABC):
+    """ABC for frozen data classes."""
+
+    __dataclass_params__: ClassVar[_FrozenDataclassParamsABC]
+
+    @_abc.abstractmethod
+    def __setattr__(self, name: str, value: Any) -> Never: ...
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        try:
+            return _dataclasses.is_dataclass(subclass) and (
+                subclass.__dataclass_params__.frozen is True  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
+            )
+        except AttributeError:
+            return False
+
+
+class _FrozenDataclassParamsABC(_DataclassParamsABC):
+    frozen: Literal[True]
+
+
+_KT = TypeVar("_KT", contravariant=True)
+_VT = TypeVar("_VT")
+
+
+class OpaqueMutableMapping(Protocol[_KT, _VT]):
+    """
+    Mutable mapping without access to the keys, just setting, getting, deleting with a given key.
+    """
+
+    def __getitem__(self, key: _KT) -> _VT: ...
+
+    def __setitem__(self, key: _KT, value: _VT) -> None: ...
+
+    def __delitem__(self, key: _KT) -> None: ...
+
+
+is_protocol = _typing_extensions.is_protocol
 
 
 def get_partial_type_hints(
@@ -622,14 +631,14 @@ def get_partial_type_hints(
 ) -> Dict[str, Union[Type, ForwardRef]]:
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
-    For each member type hint in the object a :class:`typing.ForwarRef` instance will be
+    For each member type hint in the object a :class:`typing.ForwardRef` instance will be
     returned if some names in the string annotation have not been found. For additional
     information see :func:`typing.get_type_hints`.
     """
     if getattr(obj, "__no_type_check__", None):
         return {}
     if not hasattr(obj, "__annotations__"):
-        return get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+        return get_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
@@ -638,12 +647,15 @@ def get_partial_type_hints(
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
         try:
-            resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+            resolved_hints = get_type_hints(
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
-            hints.update(resolved_hints)
+            hints[name] = resolved_hints[name]
         except NameError as error:
             if isinstance(hint, str):
+                # This conversion could be probably skipped in Python versions containing
+                # the fix applied in bpo-41370. Check:
+                # https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
                 hints[name] = ForwardRef(hint)
             elif isinstance(hint, (ForwardRef, _typing.ForwardRef)):
                 hints[name] = hint
@@ -673,25 +685,20 @@ def eval_forward_ref(
 
     Examples:
         >>> from typing import Dict, Tuple
-        >>> print("Result:", eval_forward_ref('Dict[str, Tuple[int, float]]'))
+        >>> print("Result:", eval_forward_ref("Dict[str, Tuple[int, float]]"))
         Result: ...ict[str, ...uple[int, float]]
 
     """
-    actual_type = ForwardRef(ref) if isinstance(ref, str) else ref
 
-    def _f() -> None:
-        pass
+    def f() -> None: ...
 
-    _f.__annotations__ = {"ref": actual_type}
+    f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
-    if localns:
-        safe_localns = {**localns}
-        safe_localns.setdefault("typing", _sys.modules[__name__])
-        safe_localns.setdefault("NoneType", type(None))
-    else:
-        safe_localns = {"typing": _sys.modules[__name__], "NoneType": type(None)}
+    safe_localns = {**localns} if localns else {}
+    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("NoneType", type(None))
 
-    actual_type = get_type_hints(_f, globalns, safe_localns, include_extras=include_extras)["ref"]  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
+    actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
 
     return actual_type
@@ -710,11 +717,8 @@ class CallableKwargsInfo:
     data: Dict[str, Any]
 
 
-def infer_type(  # noqa: C901  # function is complex but well organized in independent cases
-    value: Any,
-    *,
-    annotate_callable_kwargs: bool = False,
-    none_as_type: bool = True,
+def infer_type(
+    value: Any, *, annotate_callable_kwargs: bool = False, none_as_type: bool = True
 ) -> TypeAnnotation:
     """Generate a typing definition from a value.
 
@@ -737,10 +741,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         >>> infer_type(frozenset([1, 2, 3]))
         frozenset[int]
 
-        >>> infer_type({'a': 0, 'b': 1})
+        >>> infer_type({"a": 0, "b": 1})
         dict[str, int]
 
-        >>> infer_type({'a': 0, 'b': 'B'})
+        >>> infer_type({"a": 0, "b": "B"})
         dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
@@ -756,7 +760,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         Result: ...Callable[..., int]
 
         >>> print("Result:", infer_type(Dict[int, Union[int, float]]))
-        Result: ...ict[int, typing.Union[int, float]]
+        Result: ...ict[int, ...int...float...]
 
     For advanced cases, using :func:`functools.singledispatch` with custom hooks
     is a simple way to extend and customize this base implementation.
@@ -768,7 +772,7 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
         ... @extended_infer_type.register(float)
         ... @extended_infer_type.register(complex)
         ... def _infer_type_number(value, *, annotate_callable_kwargs: bool = False):
-        ...    return numbers.Number
+        ...     return numbers.Number
         >>> extended_infer_type(3.4)
         <class 'numbers.Number'>
         >>> infer_type(3.4)
@@ -780,13 +784,18 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
     if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
         return value
 
-    if value in (None, type(None)):
+    # note: identity check instead of `in`, which would use `__eq__` and fail
+    # for values with non-boolean equality (e.g. NumPy arrays)
+    if value is None or value is type(None):
         return type(None) if none_as_type else None
 
     if isinstance(value, type):
         return Type[value]
 
-    if isinstance(value, tuple):
+    if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
+        # Special case for tuples, which can have multiple types.
+        # We should not confuse them with namedtuples, which are
+        # treated as normal classes.
         _, args = _collapse_type_args(*(_infer(item) for item in value))
         if args:
             return StdGenericAliasType(tuple, args)
@@ -821,7 +830,10 @@ def infer_type(  # noqa: C901  # function is complex but well organized in indep
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
-                elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
+                elif p.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
                     raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]

@@ -1,18 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Basic utilities for Python programming."""
+
+from __future__ import annotations
 
 import collections.abc
 import functools
@@ -25,6 +21,8 @@ import string
 import sys
 import time
 import types
+import warnings
+from typing import Generic, TypeGuard, TypeVar
 
 from gt4py.cartesian import config as gt_config
 
@@ -40,22 +38,22 @@ def slugify(value: str, *, replace_spaces=True, valid_symbols="-_.()", invalid_m
     return slug
 
 
-# def stringify(value):
-#     pass
-
-
 def jsonify(value, indent=2):
     return json.dumps(value, indent=indent, default=lambda obj: str(obj))
 
 
-def is_identifier_name(value, namespaced=True):
+def is_identifier_name(value: object, namespaced: bool = True) -> TypeGuard[str]:
     if isinstance(value, str):
         if namespaced:
             return all(name.isidentifier() for name in value.split("."))
-        else:
-            return value.isidentifier()
-    else:
-        return False
+
+        return value.isidentifier()
+
+    return False
+
+
+def listify(value):
+    return value if isinstance(value, collections.abc.Sequence) else [value]
 
 
 def flatten(nested_iterables, filter_none=False, *, skip_types=(str, bytes)):
@@ -73,14 +71,12 @@ def flatten_iter(nested_iterables, filter_none=False, *, skip_types=(str, bytes)
 
 def get_member(instance, item_name):
     try:
-        if (
-            isinstance(instance, collections.abc.Mapping)
-            or isinstance(instance, collections.abc.Sequence)
-            and isinstance(item_name, int)
+        if isinstance(instance, collections.abc.Mapping) or (
+            isinstance(instance, collections.abc.Sequence) and isinstance(item_name, int)
         ):
             return instance[item_name]
-        else:
-            return getattr(instance, item_name)
+
+        return getattr(instance, item_name)
     except Exception:
         return NOTHING
 
@@ -89,7 +85,6 @@ def compose(*functions_or_iterable):
     """Return a function that chains the input functions.
 
     Derived from: https://mathieularose.com/function-composition-in-python/
-
     """
     if len(functions_or_iterable) == 1 and isinstance(
         functions_or_iterable[0], collections.abc.Iterable
@@ -177,7 +172,13 @@ def normalize_mapping(mapping, key_types=(object,), *, filter_none=False):
     return result
 
 
-def shash(*args, hash_algorithm=None):
+def shash(*args, hash_algorithm: hashlib._Hash | None = None, length: int | None = None) -> str:
+    """Hash the given arguments.
+
+    Args:
+        hash_algorithm: Specify the hashlib algorithm used. Defaults to sha 256.
+        length: Trim to the first `length` digits of the hash. Returns the full hash by default.
+    """
     if hash_algorithm is None:
         hash_algorithm = hashlib.sha256()
 
@@ -190,22 +191,28 @@ def shash(*args, hash_algorithm=None):
             item = str.encode(repr(item))
         hash_algorithm.update(item)
 
-    return hash_algorithm.hexdigest()
+    digest = hash_algorithm.hexdigest()
+    if length is not None and length > len(digest):
+        warnings.warn(
+            f"Requested hash of length {length}, but the full hash's length is {len(digest)}. Returning the full hash.",
+            stacklevel=2,
+        )
+        length = None
+    return digest[:length] if length is not None else digest
 
 
-def shashed_id(*args, length=10, hash_algorithm=None):
-    return shash(*args, hash_algorithm=hash_algorithm)[:length]
+def shashed_id(*args, length: int = 10) -> str:
+    """Hash the given arguments and trim to length."""
+    return shash(*args, length=length)
 
 
-def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):
+def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
-    else:
-        return class_method.__get__(instance, owner)
+    return class_method.__get__(instance, owner)
 
 
-def namespace_from_nested_dict(nested_dict):
-    assert isinstance(nested_dict, dict)
+def namespace_from_nested_dict(nested_dict: dict) -> types.SimpleNamespace:
     return types.SimpleNamespace(
         **{
             key: namespace_from_nested_dict(value) if isinstance(value, dict) else value
@@ -232,8 +239,7 @@ def make_dir(dir_name, *, mode=0o777, is_package=False, is_cache=False):
     if is_cache:
         with open(os.path.join(dir_name, "CACHEDIR.TAG"), "w") as f:
             f.write(
-                """Signature: 8
-a477f597d28d172789f06886806bc55
+                """Signature: 8a477f597d28d172789f06886806bc55
 # This file is a cache directory tag created by GT4Py.
 # For information about cache directory tags, see:
 #	http://www.brynosaurus.com/cachedir/
@@ -249,7 +255,6 @@ def make_module_from_file(qualified_name, file_path, *, public_import=False):
     References:
       https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
       https://stackoverflow.com/a/43602645
-
     """
 
     def load():
@@ -310,15 +315,13 @@ def patch_module(module, member, new_value, *, recursive=True):
         if patched:
             originals[current] = patched
 
-    patch = dict(
+    return dict(
         module=module,
         original_value=member,
         patched_value=new_value,
         recursive=recursive,
         originals=originals,
     )
-
-    return patch
 
 
 def restore_module(patch, *, verify=True):
@@ -343,20 +346,23 @@ def restore_module(patch, *, verify=True):
             current.__dict__[name] = original_value
 
 
-class Registry(dict):
+T = TypeVar("T")
+
+
+class Registry(Generic[T], dict[str, T]):
     @property
-    def names(self):
+    def names(self) -> list[str]:
         return list(self.keys())
 
-    def register(self, name, item=NOTHING):
+    def register(self, name: str, item: T) -> T:
         if name in self.keys():
-            raise ValueError("Name already exists in registry")
+            raise ValueError(f"Name {name} already exists in registry.")
 
         def _wrapper(obj):
             self[name] = obj
             return obj
 
-        return _wrapper if item is NOTHING else _wrapper(item)
+        return _wrapper(item)
 
 
 class ClassProperty:
@@ -432,3 +438,30 @@ class UniqueIdGenerator:
     @property
     def current(self):
         return self._current
+
+
+def warn_experimental_feature(*, feature: str, ADR: str) -> None:
+    """Warning message for experimental features.
+
+    Experimental features are required to print a (one-time) warning message such that users
+    know what to expect. We facilitate consistent warnings by providing this convenience
+    function.
+
+    Args:
+        feature (str): Name of the experimental feature.
+        ADR (str): Path to the associated ADR, relative to `docs/development/ADRs/cartesian/`
+
+    Raises:
+        ValueError: In case the the `ADR` can't be found.
+    """
+
+    # be nice and remove a potential `/` prefixed
+    ADR = ADR.removeprefix("/")
+
+    warnings.warn(
+        f"{feature} is an experimental feature. Please read "
+        f"<https://github.com/GridTools/gt4py/blob/main/docs/development/ADRs/cartesian/{ADR}> "
+        "to understand the consequences.",
+        category=UserWarning,
+        stacklevel=2,
+    )

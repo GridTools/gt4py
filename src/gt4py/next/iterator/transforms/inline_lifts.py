@@ -1,21 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import enum
-from collections.abc import Callable
-from typing import Optional
+from typing import Callable, ClassVar, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -71,9 +64,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -89,6 +80,7 @@ def _transform_and_extract_lift_args(
     new_args = []
     for i, arg in enumerate(node.args):
         if isinstance(arg, ir.SymRef):
+            # TODO(tehrengruber): Is it possible to reinfer the type if it is not inherited here?
             sym = ir.Sym(id=arg.id)
             assert sym not in extracted_args or extracted_args[sym] == arg
             extracted_args[sym] = arg
@@ -101,21 +93,28 @@ def _transform_and_extract_lift_args(
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
+            # TODO(tehrengruber): Is it possible to reinfer the type if it is not inherited here?
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific
     function nodes.
     """
+
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain",)
 
     class Flag(enum.IntEnum):
         #: `shift(...)(lift(f)(args...))` -> `lift(f)(shift(...)(args)...)`
@@ -155,6 +154,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ir.FunCall(
                 fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **kwargs),
                 args=self.generic_visit(node.args, **kwargs),
+                type=node.type,
             )
             if recurse
             else node
@@ -162,6 +162,9 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             shift = node.fun
+            # This transformation does not preserve the type (the position dims of the iterator
+            # change). Delete type to avoid errors.
+            shift.type = None
             assert len(node.args) == 1
             lift_call = node.args[0]
             new_args = [
@@ -200,13 +203,13 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return im.literal_from_value(True)
 
-                res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
+                res = im.can_deref(args[0])
                 for arg in args[1:]:
                     res = ir.FunCall(
                         fun=ir.SymRef(id="and_"),
-                        args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
+                        args=[res, im.can_deref(arg)],
                     )
                 return res
         elif (

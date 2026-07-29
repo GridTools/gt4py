@@ -1,19 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import enum
 import functools
+import os
+import platform
 from dataclasses import dataclass
 from typing import Literal, Tuple, Union
 
@@ -29,6 +25,21 @@ from gt4py.cartesian.utils.attrib import (
     attribkwclass,
     attribute,
 )
+
+
+# Dev note: platform.architecture() returns "('64bit', 'ELF')" for example.
+_ARCHITECTURE_LITERAL_PRECISION = platform.architecture()[0][:2]
+"""Literal precision of the architecture; expected 64 or 32."""
+
+LITERAL_INT_PRECISION = int(
+    os.environ.get("GT4PY_LITERAL_INT_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
+)
+"""Default literal precision used for unspecific `int` types and casts."""
+
+LITERAL_FLOAT_PRECISION = int(
+    os.environ.get("GT4PY_LITERAL_FLOAT_PRECISION", default=_ARCHITECTURE_LITERAL_PRECISION)
+)
+"""Default literal precision used for unspecific `float` types and casts."""
 
 
 @enum.unique
@@ -59,13 +70,7 @@ class FieldInfo:
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
-            access=self.access.name,
-            boundary=repr(self.boundary),
-            axes=repr(self.axes),
-            data_dims=repr(self.data_dims),
-            dtype=repr(self.dtype),
-        )
+        return f"FieldInfo(access=AccessKind.{self.access.name}, boundary={self.boundary!r}, axes={self.axes!r}, data_dims={self.data_dims!r}, dtype={self.dtype!r})"
 
     @functools.cached_property
     def domain_mask(self):
@@ -90,9 +95,7 @@ class ParameterInfo:
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "ParameterInfo(access=AccessKind.{access}, dtype={dtype})".format(
-            access=self.access.name, dtype=repr(self.dtype)
-        )
+        return f"ParameterInfo(access=AccessKind.{self.access.name}, dtype={self.dtype!r})"
 
 
 @attribkwclass
@@ -108,19 +111,25 @@ class BuildOptions(AttributeClassLike):
     raise_if_not_cached = attribute(of=bool, default=False)
     cache_settings = attribute(of=DictOf[str, Any], factory=dict)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
+    literal_int_precision = attribute(of=int, default=LITERAL_INT_PRECISION)
+    "Literal precision for `int` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_INT_PRECISION`."
+    literal_float_precision = attribute(of=int, default=LITERAL_FLOAT_PRECISION)
+    "Literal precision for `float` types and casts. Defaults to architecture precision unless overwritten by the environment variable `GT4PY_LITERAL_FLOAT_PRECISION`."
 
     @property
     def qualified_name(self):
-        name = ".".join([self.module, self.name])
-        return name
+        return ".".join([self.module, self.name])
 
     @property
     def shashed_id(self):
-        result = gt_utils.shashed_id(
-            self.name, self.module, self.format_source, *tuple(sorted(self.backend_opts.items()))
+        return gt_utils.shashed_id(
+            self.name,
+            self.module,
+            self.format_source,
+            self.literal_int_precision,
+            self.literal_float_precision,
+            *tuple(sorted(self.backend_opts.items())),
         )
-
-        return result
 
 
 @attribclass(frozen=True)
@@ -137,16 +146,16 @@ class GTError(Exception):
 
 
 class GTSyntaxError(GTError):
-    def __init__(self, message, *, frontend):
+    def __init__(self, message: str, *, frontend: str) -> None:
         super().__init__(message)
         self.frontend = frontend
 
 
 class GTSpecificationError(GTError):
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
 class GTSemanticError(GTError):
-    def __init__(self, message):
+    def __init__(self, message: str) -> None:
         super().__init__(message)

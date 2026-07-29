@@ -1,33 +1,22 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
 
 import abc
+import importlib.resources as importlib_resources
 import numbers
-import sys
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
-
-
-if sys.version_info >= (3, 9):
-    import importlib.resources as importlib_resources
-else:
-    import importlib_resources  # type: ignore[no-redef]
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import jinja2
 import numpy
 
-from gt4py.cartesian import utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo, StencilID
 from gt4py.cartesian.gtc import gtir, gtir_to_oir
 from gt4py.cartesian.gtc.definitions import Boundary
@@ -36,6 +25,7 @@ from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_access_kinds import compute_access_kinds
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.utils import dimension_flags_to_names
+from gt4py.eve import codegen
 
 
 if TYPE_CHECKING:
@@ -44,30 +34,28 @@ if TYPE_CHECKING:
 
 @dataclass
 class ModuleData:
-    domain_info: Optional[DomainInfo] = None
-    field_info: Dict[str, FieldInfo] = field(default_factory=dict)
-    parameter_info: Dict[str, ParameterInfo] = field(default_factory=dict)
-    unreferenced: List[str] = field(default_factory=list)
+    domain_info: DomainInfo | None = None
+    field_info: dict[str, FieldInfo] = field(default_factory=dict)
+    parameter_info: dict[str, ParameterInfo] = field(default_factory=dict)
+    unreferenced: list[str] = field(default_factory=list)
 
     @property
-    def field_names(self) -> Set[str]:
+    def field_names(self) -> set[str]:
         """Set of all field names."""
         return set(self.field_info.keys())
 
     @property
-    def parameter_names(self) -> Set[str]:
+    def parameter_names(self) -> set[str]:
         """Set of all parameter names."""
         return set(self.parameter_info.keys())
 
 
-_args_data_cache: Dict[StencilID, ModuleData] = {}
+_args_data_cache: dict[StencilID, ModuleData] = {}
 
 
 def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
     """
     Compute module data containing information about stencil arguments from gtir.
-
-    This is no longer compatible with the legacy backends.
     """
     if pipeline.stencil_id in _args_data_cache:
         return _args_data_cache[pipeline.stencil_id]
@@ -121,39 +109,23 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 class BaseModuleGenerator(abc.ABC):
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
-    DOMAIN_ARG_NAME = "_domain_"
-    ORIGIN_ARG_NAME = "_origin_"
-    SPLITTERS_NAME = "_splitters_"
-
     TEMPLATE_RESOURCE = "stencil_module.py.in"
 
-    _builder: Optional["StencilBuilder"]
+    builder: StencilBuilder
     args_data: ModuleData
     template: jinja2.Template
 
-    def __init__(self, builder: Optional["StencilBuilder"] = None):
-        self._builder = builder
+    def __init__(self, builder: StencilBuilder):
+        self.builder = builder
         self.args_data = ModuleData()
         self.template = jinja2.Template(
             importlib_resources.files("gt4py.cartesian.backend.templates")
             .joinpath(self.TEMPLATE_RESOURCE)
-            .read_text()
+            .read_text(encoding="utf-8")
         )
 
-    def __call__(
-        self,
-        args_data: ModuleData,
-        builder: Optional["StencilBuilder"] = None,
-        **kwargs: Any,
-    ) -> str:
-        """
-        Generate source code for a Python module containing a StencilObject.
-
-        A possible reaosn for extending is processing additional kwargs,
-        using a different template might require completely overriding.
-        """
-        if builder:
-            self._builder = builder
+    def __call__(self, args_data: ModuleData) -> str:
+        """Generate source code for a Python module containing a StencilObject."""
         self.args_data = args_data
 
         module_source = self.template.render(
@@ -178,24 +150,11 @@ class BaseModuleGenerator(abc.ABC):
             implementation=self.generate_implementation(),
         )
         if self.builder.options.as_dict()["format_source"]:
-            module_source = gt_utils.text.format_source(
-                module_source, line_length=self.SOURCE_LINE_LENGTH
+            module_source = codegen.format_source(
+                "python", module_source, line_length=self.SOURCE_LINE_LENGTH
             )
 
         return module_source
-
-    @property
-    def builder(self) -> "StencilBuilder":
-        """
-        Expose the builder reference.
-
-        Raises a runtime error if the builder reference is not initialized.
-        This is necessary because other parts of the public API depend on it before it is
-        guaranteed to be initialized.
-        """
-        if not self._builder:
-            raise RuntimeError("Builder attribute not initialized!")
-        return self._builder
 
     @property
     def backend_name(self) -> str:
@@ -214,7 +173,7 @@ class BaseModuleGenerator(abc.ABC):
         """
         Generate the name of the stencil class.
 
-        This should ususally be deferred to the chosen caching strategy via
+        This should usually be deferred to the chosen caching strategy via
         the builder object (see default implementation).
         """
         return self.builder.class_name
@@ -241,7 +200,7 @@ class BaseModuleGenerator(abc.ABC):
         """
         return self.backend_name
 
-    def generate_sources(self) -> Dict[str, str]:
+    def generate_sources(self) -> dict[str, str]:
         """
         Return the source code of the stencil definition in string format.
 
@@ -249,12 +208,12 @@ class BaseModuleGenerator(abc.ABC):
         """
         if self.builder.gtir.sources is not None:
             return {
-                key: gt_utils.text.format_source(value, line_length=self.SOURCE_LINE_LENGTH)
+                key: codegen.format_source("python", value, line_length=self.SOURCE_LINE_LENGTH)
                 for key, value in self.builder.gtir.sources.items()
             }
         return {}
 
-    def generate_constants(self) -> Dict[str, str]:
+    def generate_constants(self) -> dict[str, str]:
         """
         Return a mapping of named numeric constants passed as externals.
 
@@ -268,7 +227,7 @@ class BaseModuleGenerator(abc.ABC):
             }
         return {}
 
-    def generate_options(self) -> Dict[str, Any]:
+    def generate_options(self) -> dict[str, Any]:
         """
         Return dictionary of build options.
 
@@ -307,14 +266,12 @@ class BaseModuleGenerator(abc.ABC):
         for arg in self.builder.gtir.api_signature:
             if arg.is_keyword:
                 if arg.default:
-                    keyword_args.append(
-                        "{name}={default}".format(name=arg.name, default=arg.default)
-                    )
+                    keyword_args.append(f"{arg.name}={arg.default}")
                 else:
                     keyword_args.append(arg.name)
             else:
                 if arg.default:
-                    args.append("{name}={default}".format(name=arg.name, default=arg.default))
+                    args.append(f"{arg.name}={arg.default}")
                 else:
                     args.append(arg.name)
 

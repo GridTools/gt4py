@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Tuple
 
@@ -53,7 +47,7 @@ def test_access_collector():
                         body=[
                             AssignStmtFactory(
                                 left__name="baz", right__name="tmp", right__offset__j=1
-                            ),
+                            )
                         ],
                         mask=FieldAccessFactory(
                             name="mask",
@@ -63,7 +57,7 @@ def test_access_collector():
                             offset__k=1,
                         ),
                     )
-                ],
+                ]
             ),
         ],
         declarations=[TemporaryFactory(name="tmp")],
@@ -78,13 +72,13 @@ def test_access_collector():
         "mask": {(-1, -1, 1)},
     }
     ordered_accesses = [
-        GeneralAccess(field="foo", offset=(1, 0, 0), is_write=False),
-        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=True),
-        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=False),
-        GeneralAccess(field="bar", offset=(0, 0, 0), is_write=True),
-        GeneralAccess(field="mask", offset=(-1, -1, 1), is_write=False),
-        GeneralAccess(field="tmp", offset=(0, 1, 0), is_write=False),
-        GeneralAccess(field="baz", offset=(0, 0, 0), is_write=True),
+        GeneralAccess(field="foo", offset=(1, 0, 0), is_write=False, conditional=False),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=True, conditional=False),
+        GeneralAccess(field="tmp", offset=(0, 0, 0), is_write=False, conditional=False),
+        GeneralAccess(field="bar", offset=(0, 0, 0), is_write=True, conditional=False),
+        GeneralAccess(field="mask", offset=(-1, -1, 1), is_write=False, conditional=False),
+        GeneralAccess(field="tmp", offset=(0, 1, 0), is_write=False, conditional=True),
+        GeneralAccess(field="baz", offset=(0, 0, 0), is_write=True, conditional=True),
     ]
 
     result = AccessCollector.apply(testee)
@@ -188,8 +182,7 @@ def test_access_overlap_along_axis():
         ),
         (
             common.HorizontalMask(
-                i=common.HorizontalInterval.full(),
-                j=common.HorizontalInterval.full(),
+                i=common.HorizontalInterval.full(), j=common.HorizontalInterval.full()
             ),
             -1,
             ((-1, 0), (0, 0)),
@@ -211,7 +204,7 @@ def test_stencil_extents_region(mask, offset, access_extent):
                                 left__name="tmp", right__name="input", right__offset__i=offset
                             )
                         ],
-                    ),
+                    )
                 ]
             ),
             HorizontalExecutionFactory(

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.cartesian.gtc.common import AxisBound, LevelMarker, LoopOrder
 from gt4py.cartesian.gtc.oir import IJCache, KCache
@@ -89,27 +83,13 @@ def test_k_cache_detection_basic():
     testee = VerticalLoopFactory(
         loop_order=LoopOrder.FORWARD,
         sections__0__horizontal_executions__0__body=[
+            AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=1),
+            AssignStmtFactory(left__name="bar", right__name="foo", right__offset__k=-1),
             AssignStmtFactory(
-                left__name="foo",
-                right__name="foo",
-                right__offset__k=1,
+                left__name="baz", right__name="baz", right__offset__i=1, right__offset__k=1
             ),
             AssignStmtFactory(
-                left__name="bar",
-                right__name="foo",
-                right__offset__k=-1,
-            ),
-            AssignStmtFactory(
-                left__name="baz",
-                right__name="baz",
-                right__offset__i=1,
-                right__offset__k=1,
-            ),
-            AssignStmtFactory(
-                left__name="foo",
-                right__name="baz",
-                right__offset__j=1,
-                right__offset__k=-1,
+                left__name="foo", right__name="baz", right__offset__j=1, right__offset__k=-1
             ),
         ],
     )
@@ -191,13 +171,11 @@ def test_prune_k_cache_fills_forward_with_reads_outside_interval():
         loop_order=LoopOrder.FORWARD,
         sections__0=VerticalLoopSectionFactory(
             horizontal_executions__0__body=[
-                AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1),
+                AssignStmtFactory(left__name="foo", right__name="foo", right__offset__k=-1)
             ],
             interval__start=AxisBound.from_start(1),
         ),
-        caches=[
-            KCacheFactory(name="foo", fill=True),
-        ],
+        caches=[KCacheFactory(name="foo", fill=True)],
     )
     transformed = PruneKCacheFills().visit(testee)
     cache_dict = {c.name: c for c in transformed.caches}
@@ -284,10 +262,7 @@ def test_prune_k_cache_flushes():
                 ],
             ),
         ],
-        declarations=[
-            TemporaryFactory(name="tmp1"),
-            TemporaryFactory(name="tmp2"),
-        ],
+        declarations=[TemporaryFactory(name="tmp1"), TemporaryFactory(name="tmp2")],
     )
     transformed = PruneKCacheFlushes().visit(testee)
     cache_dict = {c.name: c for c in transformed.vertical_loops[0].caches}
@@ -334,41 +309,41 @@ def test_fill_to_local_k_caches_basic_forward():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong fill destination"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
-    ), "wrong fill source"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong fill destination"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo", (
+        "wrong fill source"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
         == 1
     ), "wrong fill offset"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 1
-    ), "wrong offset in cache access"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 1
-    ), "too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == 1, (
+        "wrong offset in cache access"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 1, (
+        "too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
 
 
 def test_fill_to_local_k_caches_basic_backward():
@@ -409,41 +384,41 @@ def test_fill_to_local_k_caches_basic_backward():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong fill destination"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo"
-    ), "wrong fill source"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong fill destination"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == "foo", (
+        "wrong fill source"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[0].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k
         == -1
     ), "wrong fill offset"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == -1
-    ), "wrong offset in cache access"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 1
-    ), "too many fill stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k == -1, (
+        "wrong offset in cache access"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 1, (
+        "too many fill stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
 
 
 def test_fill_to_local_k_caches_section_splitting_forward():
@@ -502,15 +477,15 @@ def test_fill_to_local_k_caches_section_splitting_forward():
         == -1
         and vertical_loop.sections[2].interval.end.offset == 0
     ), "wrong interval offsets in split sections"
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 4
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 3
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
-    ), "wrong number of fill stmts"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 4, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 3, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[2].horizontal_executions[0].body) == 1, (
+        "wrong number of fill stmts"
+    )
 
 
 def test_fill_to_local_k_caches_section_splitting_backward():
@@ -566,15 +541,15 @@ def test_fill_to_local_k_caches_section_splitting_backward():
         == 1
         and vertical_loop.sections[2].interval.start.offset == 0
     ), "wrong interval offsets in split sections"
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 4
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 3
-    ), "wrong number of fill stmts"
-    assert (
-        len(vertical_loop.sections[2].horizontal_executions[0].body) == 1
-    ), "wrong number of fill stmts"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 4, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 3, (
+        "wrong number of fill stmts"
+    )
+    assert len(vertical_loop.sections[2].horizontal_executions[0].body) == 1, (
+        "wrong number of fill stmts"
+    )
 
 
 def test_flush_to_local_k_caches_basic():
@@ -615,50 +590,50 @@ def test_flush_to_local_k_caches_basic():
 
     assert len(vertical_loop.sections) == 2, "number of vertical sections has changed"
 
-    assert (
-        len(vertical_loop.sections[0].horizontal_executions[0].body) == 2
-    ), "no or too many flush stmts introduced?"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 0
-    ), "wrong offset in cache access"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == "foo"
-    ), "wrong flush source"
-    assert (
-        vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong flush destination"
+    assert len(vertical_loop.sections[0].horizontal_executions[0].body) == 2, (
+        "no or too many flush stmts introduced?"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[0].right.offset.k == 0, (
+        "wrong offset in cache access"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].left.name == "foo", (
+        "wrong flush source"
+    )
+    assert vertical_loop.sections[0].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong flush destination"
+    )
     assert (
         vertical_loop.sections[0].horizontal_executions[0].body[1].left.offset.k
         == vertical_loop.sections[0].horizontal_executions[0].body[1].right.offset.k
         == 0
     ), "wrong flush offset"
-    assert (
-        len(vertical_loop.sections[1].horizontal_executions[0].body) == 2
-    ), "no or too many flush stmts introduced?"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name
-    ), "wrong field name in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == -1
-    ), "wrong offset in cache access"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].left.name == "foo"
-    ), "wrong flush source"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].right.name == cache_name
-    ), "wrong flush destination"
-    assert (
-        vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0
-    ), "wrong flush offset"
+    assert len(vertical_loop.sections[1].horizontal_executions[0].body) == 2, (
+        "no or too many flush stmts introduced?"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].left.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.name == cache_name, (
+        "wrong field name in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[0].right.offset.k == -1, (
+        "wrong offset in cache access"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].left.name == "foo", (
+        "wrong flush source"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].right.name == cache_name, (
+        "wrong flush destination"
+    )
+    assert vertical_loop.sections[1].horizontal_executions[0].body[1].right.offset.k == 0, (
+        "wrong flush offset"
+    )
 
 
 def test_fill_flush_to_local_k_caches_basic_forward():
@@ -667,10 +642,7 @@ def test_fill_flush_to_local_k_caches_basic_forward():
             VerticalLoopFactory(
                 loop_order=LoopOrder.FORWARD,
                 sections__0__horizontal_executions__0__body=[
-                    AssignStmtFactory(
-                        left__name="foo",
-                        right__name="foo",
-                    ),
+                    AssignStmtFactory(left__name="foo", right__name="foo")
                 ],
                 caches=[KCacheFactory(name="foo", fill=True, flush=True)],
             )

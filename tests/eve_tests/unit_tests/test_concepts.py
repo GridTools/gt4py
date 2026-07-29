@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 import re
@@ -125,29 +119,3 @@ class TestNode:
                 sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )
-
-
-class TestEqNonlocated:
-    def test_source_location(self):
-        node = definitions.make_simple_node_with_loc()
-
-        node_different_loc = copy.copy(node)
-        node_different_loc.loc = definitions.make_source_location()
-        assert node != node_different_loc
-        assert eve.concepts.eq_nonlocated(node, node_different_loc)
-
-        node_different_value_and_loc = copy.copy(node_different_loc)
-        node_different_value_and_loc.str_value = definitions.make_str_value()
-        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc)
-
-    def test_source_location_group(self):
-        node = definitions.make_simple_node_with_loc()
-
-        node_different_loc_group = copy.copy(node)
-        node_different_loc_group.loc = definitions.make_source_location_group()
-        assert node != node_different_loc_group
-        assert eve.concepts.eq_nonlocated(node, node_different_loc_group)
-
-        node_different_value_and_loc_group = copy.copy(node_different_loc_group)
-        node_different_value_and_loc_group.str_value = definitions.make_str_value()
-        assert not eve.concepts.eq_nonlocated(node, node_different_value_and_loc_group)

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
 import re
@@ -52,6 +46,13 @@ def test_with_location(loc_plain, message):
     assert errors.DSLError(None, message).with_location(loc_plain).location == loc_plain
 
 
+def test_did_you_mean_does_not_suggest_the_looked_up_name(loc_plain):
+    # A same-named symbol in the candidate set (e.g. a later SSA version) must not
+    # produce "Did you mean 'result'?" — the user already wrote that.
+    err = errors.UndefinedSymbolError(loc_plain, "result", candidates={"result"})
+    assert err.hints == []
+
+
 def test_str(loc_plain, message):
     pattern = f'{message}\\n  File ".*", line.*'
     s = str(errors.DSLError(loc_plain, message))
@@ -63,8 +64,8 @@ def test_str_snippet(loc_snippet, message):
         [
             f"{message}",
             '  File ".*", line.*',
-            "        # This very line of comment should be shown in the snippet.",
-            r"                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^",
+            r"\s+\d+ \|     # This very line of comment should be shown in the snippet\.",
+            r"\s+\| {15}\^{14}",
         ]
     )
     s = str(errors.DSLError(loc_snippet, message))

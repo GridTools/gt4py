@@ -1,0 +1,146 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+import collections
+import unittest.mock as mock
+
+import pytest
+
+from gt4py import next as gtx
+from gt4py.next.instrumentation import metrics
+from gt4py.next.iterator import ir as itir
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import IField, KDim, cartesian_case, unstructured_case
+from next_tests.integration_tests.cases_utils import (
+    exec_alloc_descriptor,
+    mesh_descriptor,
+)
+
+
+def test_program_gtir_regression(cartesian_case):
+    @gtx.field_operator(backend=None)
+    def testee_op(a: cases.IField) -> cases.IField:
+        return a
+
+    @gtx.program(backend=None)
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, out=out)
+
+    assert isinstance(testee.gtir, itir.Program)
+    assert isinstance(testee.with_backend(cartesian_case.backend).gtir, itir.Program)
+
+
+@pytest.mark.parametrize(
+    "metrics_level,expected_names",
+    [
+        (metrics.DISABLED, ()),
+        (metrics.MINIMAL, ("total",)),
+        (metrics.PERFORMANCE, ("total", "compute")),
+        (metrics.ALL, ("compute", "total")),
+    ],
+)
+@pytest.mark.uses_program_metrics
+def test_collect_metrics(cartesian_case, metrics_level, expected_names):
+    if cartesian_case.backend is None:
+        pytest.skip("Precompiled program with embedded execution is not possible.")
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        return a + b
+
+    @gtx.program(backend=None)
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, a, out=out)
+
+    with (
+        mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
+        mock.patch(
+            "gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)
+        ),
+    ):
+        testee = testee.with_backend(cartesian_case.backend).with_grid_type(
+            cartesian_case.grid_type
+        )
+        args, kwargs = cases.get_default_data(cartesian_case, testee)
+        testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+
+        if metrics_level == metrics.DISABLED:
+            assert len(metrics.sources) == 0
+        else:
+            assert len(metrics.sources) == 1
+            source = next(iter(metrics.sources.values()))
+            assert set(source.metrics.keys()) == set(expected_names)
+
+
+def test_docstring(cartesian_case):
+    @gtx.field_operator
+    def fieldop_with_docstring(a: cases.IField) -> cases.IField:
+        """My docstring."""
+        return a
+
+    @gtx.program
+    def test_docstring(a: cases.IField):
+        """My docstring."""
+        fieldop_with_docstring(a, out=a)
+
+    a = cases.allocate(cartesian_case, test_docstring, "a")()
+
+    cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
+
+
+def test_default_backend_is_respected_field_operator(cartesian_case):
+    """Test that manually calling the field operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    a = cases.allocate(cartesian_case, copy, "a")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # Calling this should fail if the default backend is respected
+        # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
+        # setting the default backend to something invalid.
+        _ = copy(a, out=a, offset_provider={})
+
+
+@pytest.mark.uses_scan
+def test_default_backend_is_respected_scan_operator(cartesian_case):
+    """Test that manually calling the scan operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.scan_operator(axis=KDim, init=0.0, forward=True)
+    def sum(state: float, a: float) -> float:
+        return state + a
+
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = sum(a, out=a, offset_provider={})
+
+
+def test_default_backend_is_respected_program(cartesian_case):
+    """Test that manually calling the program without setting the backend raises an error."""
+
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    # Important not to set the backend here!
+    @gtx.program
+    def copy_program(a: IField, b: IField) -> IField:
+        copy(a, out=b)
+
+    a = cases.allocate(cartesian_case, copy_program, "a")()
+    b = cases.allocate(cartesian_case, copy_program, "b")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = copy_program(a, b, offset_provider={})

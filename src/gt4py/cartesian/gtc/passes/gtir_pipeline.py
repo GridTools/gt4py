@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Callable, Dict, Optional, Sequence, Tuple
+from typing import Callable, ClassVar, Dict, Optional, Sequence, Tuple
 
 from gt4py.cartesian.definitions import StencilID
 from gt4py.cartesian.gtc import gtir
@@ -34,7 +28,8 @@ class GtirPipeline:
     May only call existing passes and may not contain any pass logic itself.
     """
 
-    _cache: Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil] = {}
+    # Cache pipelines across all instances
+    _cache: ClassVar[Dict[Tuple[StencilID, Tuple[PASS_T, ...]], gtir.Stencil]] = {}
 
     def __init__(self, node: gtir.Stencil, stencil_id: StencilID):
         self.gtir = node

@@ -1,34 +1,39 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Utilities to translate from Python types to GT4Py type specifications."""
+
+from __future__ import annotations
 
 import builtins
 import collections.abc
+import dataclasses
+import enum
 import functools
+import pkgutil
+import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, Union
+from typing import Any, ForwardRef, Optional, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
 
-from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.next import common, named_collections
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
+    """Get the GT4Py scalar kind for a given NumPy dtype."""
     # make int & float precision platform independent.
+    dt: np.dtype
     if dtype is builtins.int:
         dt = np.dtype("int64")
     elif dtype is builtins.float:
@@ -39,36 +44,99 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         except TypeError as err:
             raise ValueError(f"Invalid scalar type definition ('{dtype}').") from err
 
+    if dt.hasobject:
+        raise ValueError("Object dtypes are not supported.")
+
     if dt.shape == () and dt.fields is None:
         match dt:
             case np.bool_:
                 return ts.ScalarKind.BOOL
-            case np.int32:
-                return ts.ScalarKind.INT32
-            case np.int64:
-                return ts.ScalarKind.INT64
-            case np.float32:
-                return ts.ScalarKind.FLOAT32
-            case np.float64:
-                return ts.ScalarKind.FLOAT64
             case np.str_:
                 return ts.ScalarKind.STRING
+            case np.dtype():
+                return getattr(ts.ScalarKind, dt.name.upper())
             case _:
                 raise ValueError(f"Impossible to map '{dtype}' value to a 'ScalarKind'.")
     else:
         raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported.")
 
 
-def from_type_hint(
+def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
+    """Create a constructor type spec for a given scalar or python type."""
+
+    match type_spec:
+        case ts.ScalarType():
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=type_spec,
+                )
+            )
+
+        case ts.NamedCollectionType() as named_tuple_type:
+            type_ = pkgutil.resolve_name(named_tuple_type.original_python_type)
+            pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
+            kw_only_args = (
+                {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
+                if issubclass(type_, xtyping.DataclassABC)
+                else {}
+            )
+
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[],
+                    pos_or_kw_args=pos_or_kw_args,
+                    kw_only_args=kw_only_args,
+                    returns=type_spec,
+                )
+            )
+
+    raise ValueError(f"ConstructorType not implemented for {type_spec}.")
+
+
+def make_type(type_: type) -> ts.TypeSpec:
+    """Create a type specification for a given type."""
+
+    if issubclass(type_, (*core_defs.SCALAR_TYPES, str)):
+        return ts.ScalarType(kind=get_scalar_kind(type_))
+
+    if issubclass(type_, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
+        if issubclass(type_, xtyping.DataclassABC) and not issubclass(
+            type_, named_collections.CustomDataclassNamedCollectionABC
+        ):
+            raise ValueError(
+                f"Dataclass {type_} is not a valid field container. Supported dataclasses"
+                " must have at least one member, without custom '__init__'"
+                " functions, 'InitVar's or default arguments."
+            )
+
+        keys = [*named_collections.elements_keys(type_)]
+        hints = named_collections.elements_types(
+            type_, globalns=sys.modules[type_.__module__].__dict__
+        )
+        types = [from_type_hint(hint) for hint in hints.values()]
+        return ts.NamedCollectionType(
+            types=types, keys=keys, original_python_type=f"{type_.__module__}:{type_.__qualname__}"
+        )
+
+    if issubclass(type_, tuple) and type_ is not tuple:
+        raise ValueError(f"Untyped tuple subclass {type_} is not a valid typed namedtuple.")
+
+    raise ValueError(f"Type {type_} not supported")
+
+
+def canonicalize_type_hint(
     type_hint: Any,
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> ts.TypeSpec:
-    recursive_make_symbol = functools.partial(from_type_hint, globalns=globalns, localns=localns)
-    extra_args = ()
-
-    # ForwardRef
+) -> tuple[Any, tuple[Any, ...], tuple[Any, ...]]:
+    """
+    Canonicalize python type annotations as a tuple of (canonical_type, type_args, annotated_extra_args).
+    """
+    # Canonicalize 'ForwardRef()' annotations
     if isinstance(type_hint, str):
         type_hint = ForwardRef(type_hint)
     if isinstance(type_hint, ForwardRef):
@@ -79,54 +147,72 @@ def from_type_hint(
                 f"Type annotation '{type_hint}' has undefined forward references."
             ) from error
 
-    # Annotated
+    # Cannonicalize 'Annotated' annotations
+    extra_args = []
     if typing.get_origin(type_hint) is typing.Annotated:
         type_hint, *extra_args = typing.get_args(type_hint)
-        if not isinstance(type_hint, collections.abc.Callable):
+        if not isinstance(
+            type_hint,
+            collections.abc.Callable,  # type:ignore[arg-type] # see https://github.com/python/mypy/issues/14928
+        ):
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
 
-    canonical_type = (
-        typing.get_origin(type_hint)
-        if isinstance(type_hint, types.GenericAlias) or type(type_hint).__module__ == "typing"
-        else type_hint
-    )
+    canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
 
-    match canonical_type:
-        case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
-            return ts.ScalarType(kind=get_scalar_kind(type_hint))
+    return canonical_type, args, tuple(extra_args)
 
+
+@eve_utils.optional_lru_cache(maxsize=None, typed=False)
+def from_type_hint(
+    type_hint: Any,
+    *,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
+) -> ts.TypeSpec:
+    """Convert any kind of Python type hint to a GT4Py TypeSpec."""
+    from_type_hint_same_ns = functools.partial(from_type_hint, globalns=globalns, localns=localns)
+
+    canonical_type, args, extra_args = canonicalize_type_hint(
+        type_hint, globalns=globalns, localns=localns
+    )
+
+    match canonical_type:
         case builtins.tuple:
             if not args:
                 raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
             if Ellipsis in args:
                 raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
-            return ts.TupleType(types=[recursive_make_symbol(arg) for arg in args])
+            tuple_types = [from_type_hint_same_ns(arg) for arg in args]
+            assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
+            return ts.TupleType(types=tuple_types)
 
         case common.Field:
             if (n_args := len(args)) != 2:
                 raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
-
-            dims: Union[Ellipsis, list[common.Dimension]] = []
+            dims: list[common.Dimension] = []
             dim_arg, dtype_arg = args
+            dim_arg = (
+                list(typing.get_args(dim_arg))
+                if typing.get_origin(dim_arg) is common.Dims
+                else dim_arg
+            )
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
                         raise ValueError(f"Invalid field dimension definition '{d}'.")
                     dims.append(d)
-            elif dim_arg is Ellipsis:
-                dims = dim_arg
             else:
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
             try:
-                dtype = recursive_make_symbol(dtype_arg)
+                dtype = from_type_hint_same_ns(dtype_arg)
             except ValueError as error:
                 raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
             if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
-                raise ValueError("Field dtype argument must be a scalar type (got '{dtype}').")
+                raise ValueError(f"Field dtype argument must be a scalar type (got '{dtype}').")
             return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
@@ -135,7 +221,8 @@ def from_type_hint(
 
             try:
                 arg_types, return_type = args
-                args = [recursive_make_symbol(arg) for arg in arg_types]
+                new_args = [from_type_hint_same_ns(arg) for arg in arg_types]
+                assert all(isinstance(arg, ts.DataType) for arg in new_args)
             except Exception as error:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.") from error
 
@@ -143,25 +230,79 @@ def from_type_hint(
             if len(kwargs_info) != 1:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.")
             kwargs = {
-                arg: recursive_make_symbol(arg_type)
+                arg: from_type_hint_same_ns(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
             }
+            assert all(isinstance(val, (ts.DataType, ts.DeferredType)) for val in kwargs.values())
+
+            returns = from_type_hint_same_ns(return_type)
+            assert isinstance(returns, (ts.DataType, ts.DeferredType, ts.VoidType))
 
             # TODO(tehrengruber): print better error when no return type annotation is given
             return ts.FunctionType(
-                pos_only_args=args,
+                pos_only_args=new_args,
                 pos_or_kw_args=kwargs,
                 kw_only_args={},  # TODO
-                returns=recursive_make_symbol(return_type),
+                returns=returns,
             )
+
+        case builtins.type if args:
+            # This case matches 'type[Foo]' (where the 'Foo' type is stored in args[0])
+            python_type = args[0]
+            constructed_type_spec = from_type_hint_same_ns(python_type)
+            return make_constructor_type(constructed_type_spec)
+
+        case type():
+            # This case matches 'int', 'float', 'FooNamedCollection' etc. used as annotations
+            return make_type(canonical_type)
 
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
+ConstantPythonNamespaceObject: TypeAlias = eve_utils.FrozenNamespace | enum.EnumMeta
+PythonNamespaceObject: TypeAlias = ConstantPythonNamespaceObject | types.ModuleType
+
+
+class NamespaceProxy(ts.TypeSpec):
+    _object: PythonNamespaceObject
+
+    def __getattr__(self, key: str) -> ts.TypeSpec:
+        # `__getattr__` is called only when normal lookup fails. Two guards are
+        # needed so this never recurses:
+        #   1. Dunder probes: pickle / copy / cloudpickle look up things like
+        #      ``__setstate__``, ``__reduce_ex__``, ``__deepcopy__`` on freshly-
+        #      constructed instances *before* ``_object`` has been restored.
+        #      Forwarding them to ``self._object`` is both wrong and unbounded —
+        #      ``self._object`` itself would re-enter this method since
+        #      ``_object`` has not been assigned yet.
+        #   2. Any other attribute that arrives here before ``_object`` is bound:
+        #      use ``object.__getattribute__`` to consult the actual instance
+        #      dict so we reach base-class ``AttributeError`` rather than
+        #      recursing.
+        if key.startswith("_"):
+            raise AttributeError(key)
+        try:
+            obj = object.__getattribute__(self, "_object")
+        except AttributeError:
+            raise AttributeError(key) from None
+        return from_value(getattr(obj, key))
+
+    def __deepcopy__(self, _: dict[int, Any]) -> NamespaceProxy:
+        return NamespaceProxy(self._object)  # don't deep copy the module
+
+
 def from_value(value: Any) -> ts.TypeSpec:
+    """
+    Make a typespec from a Python value.
+
+    In principle, this function is conceptually equivalent to
+    `from_type_hint(type(value))`, but it also handles some special cases
+    which cannot be handled directly by `from_type_hint`
+    (like `int` values, which could be either `int32` or `int64`
+    depending on their value).
+    """
     # TODO(tehrengruber): use protocol from gt4py.next.common when available
     #  instead of importing from the embedded implementation
-    """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
     #  we should check for the protocol in the future?
     if hasattr(value, "__gt_type__"):
@@ -183,16 +324,23 @@ def from_value(value: Any) -> ts.TypeSpec:
         return candidate_type
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
-    elif common.is_field(value):
-        dims = list(value.__gt_dims__)
+    elif isinstance(value, common.Field):
+        dims = list(value.domain.dims)
         dtype = from_type_hint(value.dtype.scalar_type)
+        assert isinstance(dtype, ts.ScalarType)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
-    elif isinstance(value, tuple):
+    elif isinstance(value, tuple) and not isinstance(value, xtyping.TypedNamedTupleABC):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
         # manually here. If we get rid of all the special cases this is
         # not needed anymore.
-        return ts.TupleType(types=[from_value(el) for el in value])
+        # Note that we explicitly do not want to match namedtuples here,
+        # since those should be handled as general custom types.
+        elems = [from_value(el) for el in value]
+        assert all(isinstance(elem, ts.DataType) for elem in elems)
+        return ts.TupleType(types=elems)
+    elif isinstance(value, PythonNamespaceObject):
+        return NamespaceProxy(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
@@ -201,3 +349,62 @@ def from_value(value: Any) -> ts.TypeSpec:
         return symbol_type
     else:
         raise ValueError(f"Impossible to map '{value}' value to a 'Symbol'.")
+
+
+def as_dtype(type_: ts.ScalarType) -> core_defs.DType:
+    """
+    Translate a `ts.ScalarType` to a `core_defs.DType`
+
+    >>> as_dtype(ts.ScalarType(kind=ts.ScalarKind.BOOL))  # doctest:+ELLIPSIS
+    BoolDType(...)
+    """
+    if type_.kind == ts.ScalarKind.BOOL:
+        return core_defs.BoolDType()
+    elif type_.kind == ts.ScalarKind.INT32:
+        return core_defs.Int32DType()
+    elif type_.kind == ts.ScalarKind.INT64:
+        return core_defs.Int64DType()
+    elif type_.kind == ts.ScalarKind.FLOAT32:
+        return core_defs.Float32DType()
+    elif type_.kind == ts.ScalarKind.FLOAT64:
+        return core_defs.Float64DType()
+    raise ValueError(f"Scalar type '{type_}' not supported.")
+
+
+def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
+    """
+    Translate a `core_defs.DType` to a `ts.ScalarType`
+
+    >>> from_dtype(core_defs.BoolDType())  # doctest:+ELLIPSIS
+    ScalarType(kind=...BOOL...)
+    """
+    if dtype == core_defs.BoolDType():
+        return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    elif dtype == core_defs.Int32DType():
+        return ts.ScalarType(kind=ts.ScalarKind.INT32)
+    elif dtype == core_defs.Int64DType():
+        return ts.ScalarType(kind=ts.ScalarKind.INT64)
+    elif dtype == core_defs.Float32DType():
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    elif dtype == core_defs.Float64DType():
+        return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    raise ValueError(f"DType '{dtype}' not supported.")
+
+
+# TODO(havogt): Could be extended to also accept `core_defs.DType`s as `type_`
+def unsafe_cast_to(
+    value: xtyping.MaybeNestedInTuple[core_defs.Scalar], type_: ts.TupleType | ts.ScalarType
+) -> xtyping.MaybeNestedInTuple[core_defs.Scalar]:
+    """
+    Converts `value` to the type specified by `type_`.
+
+    Note: This function does not check if the conversion is valid (within the GT4Py type system).
+    It is assumed that the caller has already checked that the types are compatible.
+    """
+    if isinstance(type_, ts.ScalarType):
+        return as_dtype(type_).scalar_type(value)
+    else:
+        assert isinstance(type_, ts.TupleType)
+        assert isinstance(value, tuple)
+        assert all(isinstance(t, (ts.ScalarType, ts.TupleType)) for t in type_.types)
+        return tuple(unsafe_cast_to(v, t) for v, t in zip(value, type_.types, strict=True))  # type: ignore[arg-type] # checked in assert

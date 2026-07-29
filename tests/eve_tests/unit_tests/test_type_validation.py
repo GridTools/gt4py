@@ -1,33 +1,27 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
 import enum
-import sys
 import typing
+from frozendict import frozendict
 
 import pytest
 
 from gt4py.eve import (
     extended_typing as xtyping,
-    type_definitions as type_def,
     type_validation as type_val,
 )
 from gt4py.eve.extended_typing import (
     Any,
+    Callable,
     Dict,
     Final,
     ForwardRef,
@@ -41,8 +35,8 @@ from gt4py.eve.extended_typing import (
 )
 
 
-VALIDATORS: Final = [type_val.simple_type_validator]
-FACTORIES: Final = [type_val.simple_type_validator_factory]
+VALIDATORS: Final[list[Callable]] = [type_val.simple_type_validator]
+FACTORIES: Final[list[Callable]] = [type_val.simple_type_validator_factory]
 
 
 class SampleEnum(enum.Enum):
@@ -86,11 +80,11 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
     (
-        type_def.frozendict[int, str],
+        frozendict[int, str],
         (
-            type_def.frozendict(),
-            type_def.frozendict({3: "three"}),
-            type_def.frozendict({3: "three", -1: ""}),
+            frozendict(),
+            frozendict({3: "three"}),
+            frozendict({3: "three", -1: ""}),
         ),
         ({}, {3: "three"}, [(3, "three")], 3, "three", []),
         None,
@@ -146,21 +140,21 @@ SAMPLE_TYPE_DEFINITIONS: List[
     ),
 ]
 
-if sys.version_info >= (3, 10):
 
-    @dataclasses.dataclass(slots=True)
-    class SampleSlottedDataClass:
-        b: float
+@dataclasses.dataclass(slots=True)
+class SampleSlottedDataClass:
+    b: float
 
-    SAMPLE_TYPE_DEFINITIONS.append(
-        (
-            SampleSlottedDataClass,
-            [SampleSlottedDataClass(1.0), SampleSlottedDataClass(1)],
-            [object(), float(1.2), int(1), "1.2", SampleSlottedDataClass],
-            None,
-            None,
-        )
+
+SAMPLE_TYPE_DEFINITIONS.append(
+    (
+        SampleSlottedDataClass,
+        [SampleSlottedDataClass(1.0), SampleSlottedDataClass(1)],
+        [object(), float(1.2), int(1), "1.2", SampleSlottedDataClass],
+        None,
+        None,
     )
+)
 
 
 @pytest.mark.parametrize("validator", VALIDATORS)

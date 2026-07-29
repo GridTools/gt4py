@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -18,11 +12,16 @@ import dataclasses
 
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve import codegen
-from gt4py.next.otf import languages
+from gt4py.next.otf import code_specs
 
 
-def format_source(settings: languages.LanguageSettings, source):
-    return codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
+def format_source(source_code_spec: code_specs.SourceCodeSpec, source: str) -> str:
+    assert source_code_spec.formatter_key is not None, (
+        "No formatter key specified in source code specification."
+    )
+    return codegen.format_source(
+        source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -35,6 +34,7 @@ class Parameter:
 class Function:
     name: str
     parameters: tuple[Parameter, ...]
+    returns: bool = False
 
 
 @dataclasses.dataclass(frozen=True)

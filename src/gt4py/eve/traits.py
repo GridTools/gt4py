@@ -1,19 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Definitions of node and visitor trait classes."""
-
 
 from __future__ import annotations
 
@@ -27,7 +20,8 @@ from .extended_typing import Any, Dict, Set, Type, no_type_check
 @concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
 @datamodels.datamodel
 class SymbolTableTrait:
-    """Node trait adding an automatically created symbol table to the parent node.
+    """
+    Node trait adding an automatically created symbol table to the parent node.
 
     The actual symbol table dict will be stored in the `annex.symtable` attribute.
     To inject extra symbol definitions, add the nodes to a class attribute
@@ -171,4 +165,12 @@ class VisitorWithSymbolTableTrait(visitors.NodeVisitor):
         if new_scope:
             kwargs["symtable"] = kwargs["symtable"].parents
 
+        return result
+
+
+class PreserveLocationVisitor(visitors.NodeVisitor):
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        result = super().visit(node, **kwargs)
+        if hasattr(node, "location") and hasattr(result, "location"):
+            result.location = node.location
         return result

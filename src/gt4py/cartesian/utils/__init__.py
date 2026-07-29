@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from . import attrib, meta, text
+from . import attrib, meta
 from .base import (
     NOTHING,
     BaseFrozen,
@@ -30,6 +24,7 @@ from .base import (
     is_iterable_of,
     is_mapping_of,
     jsonify,
+    listify,
     make_dir,
     make_local_dir,
     make_module_from_file,
@@ -40,14 +35,15 @@ from .base import (
     shash,
     shashed_id,
     slugify,
+    warn_experimental_feature,
 )
+from .field import Field
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 `__all__` is not sorted
     # Modules
     "attrib",
     "meta",
-    "text",
     # Objects
     "NOTHING",
     "BaseFrozen",
@@ -57,6 +53,7 @@ __all__ = [
     "classmethod_to_function",
     "classproperty",
     "compose",
+    "Field",
     "flatten",
     "flatten_iter",
     "get_member",
@@ -65,6 +62,7 @@ __all__ = [
     "is_iterable_of",
     "is_mapping_of",
     "jsonify",
+    "listify",
     "make_dir",
     "make_local_dir",
     "make_module_from_file",
@@ -75,4 +73,5 @@ __all__ = [
     "shash",
     "shashed_id",
     "slugify",
+    "warn_experimental_feature",
 ]

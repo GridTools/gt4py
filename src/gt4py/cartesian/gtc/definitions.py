@@ -1,21 +1,16 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import enum
 import numbers
 import operator
+from typing import Final
 
 from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 
@@ -23,14 +18,14 @@ from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
+        I = 0  # noqa: E741 [ambiguous-variable-name]
         J = 1
         K = 2
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.name
 
-    names = [ax.name for ax in Axis]
+    names: Final[list[str]] = [ax.name for ax in Axis]
     ndim = len(names)
 
 
@@ -52,7 +47,7 @@ class NumericTuple(tuple):
         if isinstance(ndims, numbers.Integral):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, tuple) or len(ndims) != 2:
-            raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
+            raise ValueError(f"Invalid 'ndims' definition ({ndims})")
 
         try:
             cls._check_value(value, ndims)
@@ -95,12 +90,12 @@ class NumericTuple(tuple):
         elif isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, tuple) or len(ndims) != 2:
-            raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
+            raise ValueError(f"Invalid 'ndims' definition ({ndims})")
 
         try:
             cls._check_value(sizes, ndims=ndims)
         except Exception as e:
-            raise TypeError("Invalid {} definition".format(cls.__name__)) from e
+            raise TypeError(f"Invalid {cls.__name__} definition") from e
         else:
             return super().__new__(cls, sizes)
 
@@ -109,7 +104,7 @@ class NumericTuple(tuple):
             value = self[CartesianSpace.Axis.symbols.index(name)]
         except (IndexError, ValueError) as e:
             raise AttributeError(
-                "'{}' object has no attribute '{}'".format(self.__class__.__name__, name)
+                f"'{self.__class__.__name__}' object has no attribute '{name}'"
             ) from e
         else:
             return value
@@ -124,7 +119,7 @@ class NumericTuple(tuple):
         return self._apply(self._broadcast(other), operator.add)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), operator.sub)
 
     def __mul__(self, other):
@@ -184,14 +179,12 @@ class NumericTuple(tuple):
         )
 
     def __repr__(self):
-        return "{cls_name}({value})".format(
-            cls_name=type(self).__name__, value=tuple.__repr__(self)
-        )
+        return f"{type(self).__name__}({tuple.__repr__(self)})"
 
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -215,7 +208,7 @@ class NumericTuple(tuple):
 
     def _apply(self, other, func):
         if not isinstance(other, type(self)) or len(self) != len(other):
-            raise ValueError("Incompatible instance '{obj}'".format(obj=other))
+            raise ValueError(f"Incompatible instance '{other}'")
 
         return type(self)([func(a, b) for a, b in zip(self, other)])
 
@@ -229,7 +222,7 @@ class NumericTuple(tuple):
 
     def _compare(self, other, op, reduction_op):
         if len(self) != len(other):  # or not isinstance(other, type(self))
-            raise ValueError("Incompatible instance '{obj}'".format(obj=other))
+            raise ValueError(f"Incompatible instance '{other}'")
 
         return reduction_op(op(a, b) for a, b in zip(self, other))
 
@@ -282,7 +275,7 @@ class FrameTuple(tuple):
         if isinstance(ndims, int):
             ndims = tuple([ndims] * 2)
         elif not isinstance(ndims, tuple) or len(ndims) != 2:
-            raise ValueError("Invalid 'ndims' definition ({})".format(ndims))
+            raise ValueError(f"Invalid 'ndims' definition ({ndims})")
 
         try:
             cls._check_value(value, ndims)
@@ -326,7 +319,7 @@ class FrameTuple(tuple):
             value = self[CartesianSpace.Axis.symbols.index(name)]
         except (IndexError, ValueError) as e:
             raise AttributeError(
-                "'{}' object has no attribute '{}'".format(self.__class__.__name__, name)
+                f"'{self.__class__.__name__}' object has no attribute '{name}'"
             ) from e
         else:
             return value
@@ -341,7 +334,7 @@ class FrameTuple(tuple):
         return self._apply(self._broadcast(other), lambda a, b: a + b)
 
     def __sub__(self, other):
-        """Element-wise substraction."""
+        """Element-wise subtraction."""
         return self._apply(self._broadcast(other), lambda a, b: a - b)
 
     def __and__(self, other):
@@ -377,14 +370,12 @@ class FrameTuple(tuple):
         return self._compare(self._broadcast(other), operator.ge)
 
     def __repr__(self):
-        return "{cls_name}({value})".format(
-            cls_name=self.__class__.__name__, value=tuple.__repr__(self)
-        )
+        return f"{self.__class__.__name__}({tuple.__repr__(self)})"
 
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -433,7 +424,7 @@ class FrameTuple(tuple):
 
     def _apply(self, other, left_func, right_func=None):
         if not isinstance(other, FrameTuple) or len(self) != len(other):
-            raise ValueError("Incompatible instance '{obj}'".format(obj=other))
+            raise ValueError(f"Incompatible instance '{other}'")
 
         right_func = right_func or left_func
         return type(self)(
@@ -445,7 +436,7 @@ class FrameTuple(tuple):
 
     def _compare(self, other, left_op, right_op=None):
         if len(self) != len(other):  # or not isinstance(other, Frame)
-            raise ValueError("Incompatible instance '{obj}'".format(obj=other))
+            raise ValueError(f"Incompatible instance '{other}'")
 
         right_op = right_op or left_op
         return all(left_op(a[0], b[0]) and right_op(a[1], b[1]) for a, b in zip(self, other))
@@ -462,7 +453,7 @@ class FrameTuple(tuple):
 class Boundary(FrameTuple):
     """Frame size around one central origin (pairs of integers).
 
-    Negative numbers represent a boundary region substracting from
+    Negative numbers represent a boundary region subtracting from
     the wrapped area.
     """
 
@@ -484,7 +475,7 @@ class Boundary(FrameTuple):
     @classmethod
     def from_offset(cls, offset):
         if not Index.is_valid(offset):
-            raise ValueError("Invalid offset value ({})".format(offset))
+            raise ValueError(f"Invalid offset value ({offset})")
         return cls([(-1 * min(0, i), max(0, i)) for i in offset])
 
     @property
@@ -529,7 +520,7 @@ class Extent(FrameTuple):
     @classmethod
     def from_offset(cls, offset):
         if not Index.is_valid(offset):
-            raise ValueError("Invalid offset value ({})".format(offset))
+            raise ValueError(f"Invalid offset value ({offset})")
         return cls([(i, i) for i in offset])
 
     def __and__(self, other):
@@ -576,7 +567,7 @@ class Extent(FrameTuple):
 
     def _apply(self, other, left_func, right_func=None):
         if not isinstance(other, FrameTuple) or len(self) != len(other):
-            raise ValueError("Incompatible instance '{obj}'".format(obj=other))
+            raise ValueError(f"Incompatible instance '{other}'")
 
         right_func = right_func or left_func
         result = [None] * len(self)
@@ -627,7 +618,7 @@ class CenteredExtent(Extent):
     @classmethod
     def from_offset(cls, offset):
         if not Index.is_valid(offset):
-            raise ValueError("Invalid offset value ({})".format(offset))
+            raise ValueError(f"Invalid offset value ({offset})")
         return cls([(min(i, 0), max(i, 0)) for i in offset])
 
     def to_boundary(self):

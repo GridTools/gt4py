@@ -1,0 +1,4 @@
+# This will inline the minimum necessary information to determine a version
+# in pyproject.toml using the `describe-subst` expression defined there,
+# when any Git archive is made from the repository.
+pyproject.toml export-subst

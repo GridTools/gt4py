@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
@@ -43,11 +37,7 @@ def mask_cond() -> BinaryOp:
 
 @pytest.fixture
 def mask_assign(mask_cond) -> AssignStmtFactory:
-    return AssignStmtFactory(
-        left__name="mask_f",
-        left__dtype=DataType.BOOL,
-        right=mask_cond,
-    )
+    return AssignStmtFactory(left__name="mask_f", left__dtype=DataType.BOOL, right=mask_cond)
 
 
 def test_mask_inlining(mask_assign):
@@ -74,9 +64,7 @@ def test_mask_inlining(mask_assign):
             ],
             caches=[IJCacheFactory(name=mask_name)],
         ),
-        declarations=[
-            TemporaryFactory(name=mask_name, dtype=DataType.BOOL),
-        ],
+        declarations=[TemporaryFactory(name=mask_name, dtype=DataType.BOOL)],
     )
 
     pre_section = pre_oir.vertical_loops[0].sections[0]
@@ -115,8 +103,7 @@ def test_mask_no_inlining(mask_assign, mask_cond):
                                     mask=FieldAccessFactory(name=mask_name, dtype=DataType.BOOL),
                                     body=[
                                         AssignStmtFactory(
-                                            left__name=cond_name,
-                                            right=LiteralFactory(),
+                                            left__name=cond_name, right=LiteralFactory()
                                         )
                                     ],
                                 )
@@ -127,9 +114,7 @@ def test_mask_no_inlining(mask_assign, mask_cond):
             ],
             caches=[IJCacheFactory(name=mask_name)],
         ),
-        declarations=[
-            TemporaryFactory(name=mask_name, dtype=DataType.BOOL),
-        ],
+        declarations=[TemporaryFactory(name=mask_name, dtype=DataType.BOOL)],
     )
 
     pre_section = pre_oir.vertical_loops[0].sections[0]

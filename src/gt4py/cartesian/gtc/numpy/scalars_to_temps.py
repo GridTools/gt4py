@@ -1,26 +1,21 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """An optimization to convert npir.LocalScalarDecl to npir.TemporaryDecl."""
 
 from dataclasses import dataclass
 from typing import Dict
 
-from gt4py.cartesian.gtc import common, utils
+from gt4py import eve
+from gt4py.cartesian import utils
+from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.numpy import npir
-from gt4py.eve import NodeTranslator
 
 
 @dataclass
@@ -28,10 +23,11 @@ class Temporary:
     name: str
     dtype: common.DataType
     extent: Extent
+    dimensions: tuple[bool, bool, bool]
 
 
 def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
-    all_declarations = utils.flatten_list(
+    all_declarations = utils.flatten(
         stencil.walk_values().if_isinstance(npir.HorizontalBlock).getattr("declarations").to_list()
     )
 
@@ -46,7 +42,7 @@ def _all_local_scalars_are_unique_type(stencil: npir.Computation) -> bool:
     return True
 
 
-class ScalarsToTemporaries(NodeTranslator):
+class ScalarsToTemporaries(eve.NodeTranslator):
     def visit_LocalScalarAccess(
         self, node: npir.LocalScalarAccess, *, temps_from_scalars: Dict[str, Temporary]
     ) -> npir.FieldSlice:
@@ -64,7 +60,10 @@ class ScalarsToTemporaries(NodeTranslator):
         for decl in node.declarations:
             if decl.name not in temps_from_scalars:
                 temps_from_scalars[decl.name] = Temporary(
-                    name=decl.name, dtype=decl.dtype, extent=node.extent
+                    name=decl.name,
+                    dtype=decl.dtype,
+                    extent=node.extent,
+                    dimensions=(True, True, True),
                 )
             else:
                 temps_from_scalars[decl.name].extent |= node.extent
@@ -90,6 +89,7 @@ class ScalarsToTemporaries(NodeTranslator):
                 name=d.name,
                 offset=(-d.extent[0][0], -d.extent[1][0]),
                 padding=(d.extent[0][1] - d.extent[0][0], d.extent[1][1] - d.extent[1][0]),
+                dimensions=d.dimensions,
                 dtype=d.dtype,
             )
             for d in temps_from_scalars.values()

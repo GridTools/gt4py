@@ -1,215 +1,217 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-import functools
-import warnings
+import dataclasses
+import pathlib
 from typing import Any
 
-import numpy.typing as npt
+import factory
+import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.allocators as next_allocators
-from gt4py.eve.utils import content_hash
-from gt4py.next import common
-from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, recipes, stages, step_types, workflow
+import gt4py.next.custom_layout_allocators as next_allocators
+from gt4py._core import filecache
+from gt4py.next import backend, common, config, field_utils
+from gt4py.next.embedded import nd_array_field
+from gt4py.next.instrumentation import metrics
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
-from gt4py.next.type_system.type_translation import from_value
 
 
-# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
+    # Note: this function is on the hot path and needs to have minimal overhead.
+    if (origin := getattr(arg, "__gt_origin__", None)) is not None:
+        # `Field` is the most likely case, we use `__gt_origin__` as the property is needed anyway
+        # and (currently) uniquely identifies a `NDArrayField` (which is the only supported `Field`)
+        assert isinstance(arg, nd_array_field.NdArrayField)
+        return arg.ndarray, origin
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if common.is_field(arg):
-        arr = arg.ndarray
-        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
-        return arr, origin
-    else:
-        return arg
+    if isinstance(arg, np.bool_):
+        # nanobind does not support implicit conversion of `np.bool` to `bool`
+        return bool(arg)
+    # TODO(havogt): if this function still appears in profiles,
+    # we should avoid going through the previous isinstance checks for detecting a scalar.
+    # E.g. functools.cache on the arg type, returning a function that does the conversion
+    return arg
 
 
 def convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.CompiledProgram:
+    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.ExecutableProgram:
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
-        converted_args = [convert_arg(arg) for arg in args]
+        *args: Any,
+        offset_provider: dict[str, common.OffsetProviderElem],
+        out: Any = None,
+    ) -> None:
+        # Note: this function is on the hot path and needs to have minimal overhead.
+        if out is not None:
+            args = (*args, out)
+        converted_args = (convert_arg(arg) for arg in args)
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(
+
+        opt_kwargs: dict[str, Any] = {}
+        if collect_metrics := metrics.is_level_enabled(metrics.PERFORMANCE):
+            # If we are collecting metrics, we need to add the `exec_info` argument
+            # to the `inp` call, which will be used to collect performance metrics.
+            exec_info: dict[str, float] = {}
+            opt_kwargs["exec_info"] = exec_info
+
+        # generate implicit domain size arguments only if necessary, using `iter_size_args()`
+        inp(
             *converted_args,
             *conn_args,
+            **opt_kwargs,
         )
+
+        if collect_metrics:
+            metrics.add_sample_to_current_source(
+                metrics.COMPUTE_METRIC, exec_info["run_cpp_duration"]
+            )
 
     return decorated_program
 
 
-def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
-    if device == core_defs.DeviceType.CUDA:
-        import cupy as cp
-
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
-            )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
-
-
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
-) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
-    # note: the order here needs to agree with the order of the generated bindings
-    args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
-    for name, conn in offset_provider.items():
-        if isinstance(conn, common.Connectivity):
-            if not isinstance(conn, common.NeighborTable):
-                raise NotImplementedError(
-                    "Only 'NeighborTable' connectivities implemented at this point."
-                )
-            # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.table, device)
-            args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
-            pass
-        else:
-            raise AssertionError(
-                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                f"but got '{type(conn).__name__}'."
-            )
+    offset_provider: dict[str, common.OffsetProviderElem], device: core_defs.DeviceType
+) -> list[tuple[core_defs.NDArrayObject, tuple[int, ...]]]:
+    # Note: this function is on the hot path and needs to have minimal overhead.
+    zero_origin = (0, 0)
+    assert all(hasattr(conn, "ndarray") for conn in offset_provider.values())
+    # Note: the order here needs to agree with the order of the generated bindings.
+    # This is currently true only because when hashing offset provider dicts,
+    # the keys' order is taken into account. Any modification to the hashing
+    # of offset providers may break this assumption here.
+    assert all(
+        common.is_neighbor_table(conn) and field_utils.verify_device_field_type(conn, device)
+        for conn in offset_provider.values()
+        if hasattr(conn, "ndarray")
+    )
+    args: list[tuple[core_defs.NDArrayObject, tuple[int, ...]]] = [
+        (conn.ndarray, zero_origin)
+        for conn in offset_provider.values()
+        if common.is_neighbor_table(conn)
+    ]
+
     return args
 
 
-def compilation_hash(otf_closure: stages.ProgramCall) -> int:
-    """Given closure compute a hash uniquely determining if we need to recompile."""
-    offset_provider = otf_closure.kwargs["offset_provider"]
-    return hash(
-        (
-            otf_closure.program,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
+@dataclasses.dataclass(frozen=True)
+class GTFNCompilationArtifact(compiler.CPPCompilationArtifact):
+    def load(self) -> stages.ExecutableProgram:
+        return convert_args(super().load(), device=self.device_type)
+
+
+@dataclasses.dataclass(frozen=True)
+class GTFNCompiler(compiler.CPPCompiler):
+    def _make_artifact(
+        self, src_dir: pathlib.Path, module: pathlib.Path, entry_point_name: str
+    ) -> GTFNCompilationArtifact:
+        return GTFNCompilationArtifact(
+            src_dir=src_dir,
+            module=module,
+            entry_point_name=entry_point_name,
+            device_type=self.device_type,
         )
+
+
+class GTFNCompilerFactory(factory.Factory):
+    class Meta:
+        model = GTFNCompiler
+
+
+class GTFNCompileWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
+
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        unstructured_horizontal_has_unit_stride: bool = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        )
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
+        )
+
+        cached_translation = factory.Trait(
+            translation=factory.LazyAttribute(
+                lambda o: workflow.CachedStep.persistent(
+                    o.bare_translation,
+                    input_fingerprinter=stages.compilable_program_fingerprinter,
+                    cache=filecache.FileCache(
+                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                    ),
+                )
+            ),
+        )
+
+        bare_translation = factory.SubFactory(
+            gtfn_module.GTFNTranslationStepFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+        )
+
+    translation = factory.LazyAttribute(lambda o: o.bare_translation)
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = (
+        factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
+            lambda o: nanobind.ExtensionGenerator(
+                unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
+            )
+        )
+    )
+    compilation = factory.SubFactory(
+        GTFNCompilerFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        builder_factory=factory.SelfAttribute("..builder_factory"),
+        device_type=factory.SelfAttribute("..device_type"),
     )
 
 
-GTFN_DEFAULT_TRANSLATION_STEP: step_types.TranslationStep[
-    languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-] = gtfn_module.GTFNTranslationStep(
-    enable_itir_transforms=True,
-    use_imperative_backend=False,
-    device_type=core_defs.DeviceType.CPU,
-)
+class GTFNBackendFactory(factory.Factory):
+    class Meta:
+        model = backend.Backend
 
-GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
-    languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-] = gtfn_module.GTFNTranslationStep(
-    enable_itir_transforms=True,
-    use_imperative_backend=False,
-    device_type=core_defs.DeviceType.CUDA,
-)
+    class Params:
+        name_device = "cpu"
+        name_postfix = ""
+        gpu = factory.Trait(
+            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
+            name_device="gpu",
+        )
+        device_type = core_defs.DeviceType.CPU
+        key_function = stages.fast_compilable_program_fingerprinter
+        otf_workflow = factory.SubFactory(
+            GTFNCompileWorkflowFactory,
+            cached_translation=True,
+            device_type=factory.SelfAttribute("..device_type"),
+        )
 
-GTFN_DEFAULT_COMPILE_STEP: step_types.CompilationStep = compiler.Compiler(
-    cache_strategy=cache.Strategy.SESSION, builder_factory=compiledb.CompiledbFactory()
-)
-
-
-GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
-    translation=GTFN_DEFAULT_TRANSLATION_STEP,
-    bindings=nanobind.bind_source,
-    compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=convert_args,
-)
+    name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
+    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    allocator = next_allocators.StandardCPUFieldBufferAllocator()
+    transforms = backend.DEFAULT_TRANSFORMS
 
 
-GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
-    translation=GTFN_GPU_TRANSLATION_STEP,
-    bindings=nanobind.bind_source,
-    compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=functools.partial(convert_args, device=core_defs.DeviceType.CUDA),
+run_gtfn = GTFNBackendFactory()
+
+run_gtfn_imperative = GTFNBackendFactory(
+    name_postfix="_imperative",
+    otf_workflow__translation__use_imperative_backend=True,
 )
 
+run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
-gtfn_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
-)
-run_gtfn = otf_compile_executor.OTFBackend(
-    executor=gtfn_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-gtfn_imperative_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_imperative",
-    otf_workflow=gtfn_executor.otf_workflow.replace(
-        translation=gtfn_executor.otf_workflow.translation.replace(use_imperative_backend=True),
-    ),
-)
-run_gtfn_imperative = otf_compile_executor.OTFBackend(
-    executor=gtfn_imperative_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-# TODO(ricoh): add API for converting an executor to a cached version of itself and vice versa
-gtfn_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_cached",
-    otf_workflow=workflow.CachedStep(
-        step=gtfn_executor.otf_workflow, hash_function=compilation_hash
-    ),
-)
-run_gtfn_cached = otf_compile_executor.OTFBackend(
-    executor=gtfn_cached_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-
-run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
-    executor=otf_compile_executor.OTFCompileExecutor(
-        name="run_gtfn_with_temporaries",
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(
-                lift_mode=LiftMode.FORCE_TEMPORARIES
-            ),
-        ),
-    ),
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-gtfn_gpu_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
-)
-run_gtfn_gpu = otf_compile_executor.OTFBackend(
-    executor=gtfn_gpu_executor,
-    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-)
-
-
-gtfn_gpu_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_gpu_cached",
-    otf_workflow=workflow.CachedStep(
-        step=gtfn_gpu_executor.otf_workflow, hash_function=compilation_hash
-    ),
-)
-run_gtfn_gpu_cached = otf_compile_executor.OTFBackend(
-    executor=gtfn_gpu_cached_executor,
-    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+run_gtfn_no_transforms = GTFNBackendFactory(
+    otf_workflow__bare_translation__enable_itir_transforms=False
 )

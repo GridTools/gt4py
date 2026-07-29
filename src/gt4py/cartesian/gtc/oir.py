@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """
 Optimizable Intermediate Representation (working title).
@@ -19,11 +13,13 @@ OIR represents a computation at the level of GridTools stages and multistages,
 e.g. stage merging, staged computations to compute-on-the-fly, cache annotations, etc.
 """
 
+from __future__ import annotations
+
 from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound as AxisBound, LocNode as LocNode
+from gt4py.cartesian.gtc.common import AxisBound, BaseAxisBound, LocNode, RuntimeAxisBound
 from gt4py.eve import datamodels
 
 
@@ -37,11 +33,24 @@ class Stmt(common.Stmt):
     pass
 
 
-class Literal(common.Literal, Expr):  # type: ignore
+class IteratorAccess(Expr):
+    class AxisName(eve.StrEnum):
+        I = "I"  # noqa: E741 [ambiguous-variable-name]
+        J = "J"
+        K = "K"
+
+    name: AxisName
+
+
+class CodeBlock(common.BlockStmt[Stmt], Stmt):
+    label: str
+
+
+class Literal(common.Literal, Expr):
     pass
 
 
-class ScalarAccess(common.ScalarAccess, Expr):  # type: ignore
+class ScalarAccess(common.ScalarAccess, Expr):
     pass
 
 
@@ -49,7 +58,13 @@ class VariableKOffset(common.VariableKOffset[Expr]):
     pass
 
 
-class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):  # type: ignore
+class AbsoluteKIndex(common.AbsoluteKIndex[Expr]):
+    """See gtc.common.AbsoluteKIndex"""
+
+    pass
+
+
+class FieldAccess(common.FieldAccess[Expr, VariableKOffset], Expr):
     pass
 
 
@@ -92,7 +107,7 @@ class TernaryOp(common.TernaryOp[Expr], Expr):
     _dtype_propagation = common.ternary_op_dtype_propagation(strict=True)
 
 
-class Cast(common.Cast[Expr], Expr):  # type: ignore
+class Cast(common.Cast[Expr], Expr):
     pass
 
 
@@ -131,7 +146,7 @@ class Temporary(FieldDecl):
     pass
 
 
-def _check_interval(instance: Union["Interval", "UnboundedInterval"]) -> None:
+def _check_interval(instance: Union[Interval, UnboundedInterval]) -> None:
     start, end = instance.start, instance.end
     if (
         start is not None
@@ -145,7 +160,9 @@ def _check_interval(instance: Union["Interval", "UnboundedInterval"]) -> None:
         start is not None
         and end is not None
         and start.level == end.level
-        and not start.offset < end.offset
+        and not isinstance(start, RuntimeAxisBound)
+        and not isinstance(end, RuntimeAxisBound)
+        and not start.offset < end.offset  # type: ignore
     ):
         raise ValueError(
             "Start offset must be smaller than end offset if start and end levels are equal"
@@ -153,28 +170,52 @@ def _check_interval(instance: Union["Interval", "UnboundedInterval"]) -> None:
 
 
 class Interval(LocNode):
-    start: AxisBound
-    end: AxisBound
+    start: BaseAxisBound
+    end: BaseAxisBound
 
     @datamodels.root_validator
     @classmethod
-    def check(cls: Type["Interval"], instance: "Interval") -> None:
+    def check(cls: Type[Interval], instance: Interval) -> None:
         _check_interval(instance)
 
-    def covers(self, other: "Interval") -> bool:
+    def covers(self, other: Interval) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't determine coverage of runtime intervals")
         outer_starts_lower = self.start < other.start or self.start == other.start
         outer_ends_higher = self.end > other.end or self.end == other.end
         return outer_starts_lower and outer_ends_higher
 
-    def intersects(self, other: "Interval") -> bool:
+    def intersects(self, other: Interval) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't determine intersection of runtime intervals")
         return not (other.start >= self.end or self.start >= other.end)
 
-    def shifted(self, offset: Optional[int]) -> Union["Interval", "UnboundedInterval"]:
+    def shifted(self, offset: Optional[int]) -> Union[Interval, UnboundedInterval]:
+        if not (isinstance(self.start, AxisBound) and isinstance(self.end, AxisBound)):
+            raise NotImplementedError("Can't shift runtime-intervals")
         if offset is None:
             return UnboundedInterval()
         start = AxisBound(level=self.start.level, offset=self.start.offset + offset)
         end = AxisBound(level=self.end.level, offset=self.end.offset + offset)
         return Interval(start=start, end=end)
+
+    def has_runtime_access(self) -> bool:
+        """Check if the interval contains runtime-accesses.
+
+        Returns:
+            bool: True if there are runtime bounds to the interval.
+        """
+        return isinstance(self.start, RuntimeAxisBound) or isinstance(self.end, RuntimeAxisBound)
 
     @classmethod
     def full(cls):
@@ -187,10 +228,18 @@ class UnboundedInterval:
 
     @datamodels.root_validator
     @classmethod
-    def check(cls: Type["UnboundedInterval"], instance: "UnboundedInterval") -> None:
+    def check(cls: Type[UnboundedInterval], instance: UnboundedInterval) -> None:
         _check_interval(instance)
 
-    def covers(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
+    def covers(self, other: Union[Interval, UnboundedInterval]) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't assess if runtime intervals cover each other")
+
         if self.start is None and self.end is None:
             return True
         if (
@@ -215,7 +264,15 @@ class UnboundedInterval:
         assert isinstance(other, Interval)
         return Interval(start=self.start, end=self.end).covers(other)
 
-    def intersects(self, other: Union[Interval, "UnboundedInterval"]) -> bool:
+    def intersects(self, other: Union[Interval, UnboundedInterval]) -> bool:
+        if not (
+            isinstance(self.start, AxisBound)
+            and isinstance(self.end, AxisBound)
+            and isinstance(other.start, AxisBound)
+            and isinstance(other.end, AxisBound)
+        ):
+            raise NotImplementedError("Can't assess if runtime intervals intersect")
+
         no_overlap_high = (
             self.end is not None and other.start is not None and other.start >= self.end
         )
@@ -224,7 +281,7 @@ class UnboundedInterval:
         )
         return not (no_overlap_low or no_overlap_high)
 
-    def shifted(self, offset: Optional[int]) -> "UnboundedInterval":
+    def shifted(self, offset: Optional[int]) -> UnboundedInterval:
         if offset is None:
             return UnboundedInterval()
 
@@ -280,7 +337,7 @@ class VerticalLoop(LocNode):
 
     @datamodels.root_validator
     @classmethod
-    def valid_section_intervals(cls: Type["VerticalLoop"], instance: "VerticalLoop") -> None:
+    def valid_section_intervals(cls: Type[VerticalLoop], instance: VerticalLoop) -> None:
         starts, ends = zip(*((s.interval.start, s.interval.end) for s in instance.sections))
         if instance.loop_order == common.LoopOrder.BACKWARD:
             starts, ends = starts[:-1], ends[1:]

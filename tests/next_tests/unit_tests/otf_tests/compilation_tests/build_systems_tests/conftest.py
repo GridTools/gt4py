@@ -1,26 +1,20 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import shutil
 
 import jinja2
-import numpy as np
 import pytest
 
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.otf import languages, stages
+from gt4py.next import config
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
 
@@ -28,7 +22,7 @@ from gt4py.next.otf.compilation import cache
 def make_program_source(name: str) -> stages.ProgramSource:
     entry_point = interface.Function(
         name,
-        parameters=[
+        parameters=(
             interface.Parameter(
                 name="buf",
                 type_=ts.FieldType(
@@ -52,7 +46,8 @@ def make_program_source(name: str) -> stages.ProgramSource:
                 ),
             ),
             interface.Parameter(name="sc", type_=ts.ScalarType(ts.ScalarKind.FLOAT32)),
-        ],
+        ),
+        returns=True,
     )
     func = cpp_interface.render_function_declaration(
         entry_point,
@@ -77,11 +72,8 @@ def make_program_source(name: str) -> stages.ProgramSource:
     return stages.ProgramSource(
         entry_point=entry_point,
         source_code=src,
-        library_deps=[
-            interface.LibraryDependency("gridtools_cpu", "master"),
-        ],
-        language=languages.Cpp,
-        language_settings=cpp_interface.CPP_DEFAULT,
+        library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
+        code_spec=code_specs.CPPCodeSpec(),
     )
 
 
@@ -96,16 +88,10 @@ def program_source_example():
 
 
 @pytest.fixture
-def compilable_source_example(program_source_example):
-    return stages.CompilableSource(
+def extension_source_example(program_source_example):
+    return stages.ExtensionSource(
         program_source=program_source_example,
-        binding_source=nanobind.create_bindings(program_source_example),
+        binding_source=nanobind.create_bindings(
+            program_source_example, config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+        ),
     )
-
-
-@pytest.fixture
-def clean_example_session_cache(compilable_source_example):
-    cache_dir = cache.get_cache_folder(compilable_source_example, cache.Strategy.SESSION)
-    if cache_dir.exists():
-        shutil.rmtree(cache_dir)
-    yield

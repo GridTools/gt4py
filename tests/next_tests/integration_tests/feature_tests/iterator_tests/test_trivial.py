@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 import pytest
@@ -18,15 +12,15 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = offset("I")
-J = offset("J")
-K = offset("K")
+I = gtx.CartesianConnectivity(IDim)
+J = gtx.CartesianConnectivity(JDim)
+K = gtx.CartesianConnectivity(KDim)
 
 
 @fundef
@@ -44,7 +38,8 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(program_processor, lift_mode):
+@pytest.mark.uses_lift
+def test_trivial(program_processor):
     program_processor, validate = program_processor
 
     rng = np.random.default_rng()
@@ -60,8 +55,7 @@ def test_trivial(program_processor, lift_mode):
         program_processor,
         inp_s,
         out=out_s,
-        lift_mode=lift_mode,
-        offset_provider={"I": IDim, "J": JDim},
+        offset_provider={},
     )
 
     if validate:
@@ -73,11 +67,9 @@ def stencil_shifted_arg_to_lift(inp):
     return deref(lift(deref)(shift(I, -1)(inp)))
 
 
-def test_shifted_arg_to_lift(program_processor, lift_mode):
+@pytest.mark.uses_lift
+def test_shifted_arg_to_lift(program_processor):
     program_processor, validate = program_processor
-
-    if lift_mode != transforms.LiftMode.FORCE_INLINE:
-        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
@@ -95,8 +87,7 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
         program_processor,
         inp_s,
         out=out_s,
-        lift_mode=lift_mode,
-        offset_provider={"I": IDim, "J": JDim},
+        offset_provider={},
     )
 
     if validate:
@@ -105,18 +96,11 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
 
 @fendef
 def fen_direct_deref(i_size, j_size, out, inp):
-    closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-        ),
-        deref,
-        out,
-        [inp],
-    )
+    domain = cartesian_domain(named_range(IDim, 0, i_size), named_range(JDim, 0, j_size))
+    set_at(as_fieldop(deref, domain)(inp), domain, out)
 
 
-def test_direct_deref(program_processor, lift_mode):
+def test_direct_deref(program_processor):
     program_processor, validate = program_processor
 
     rng = np.random.default_rng()
@@ -132,7 +116,6 @@ def test_direct_deref(program_processor, lift_mode):
         *out.shape,
         out_s,
         inp_s,
-        lift_mode=lift_mode,
         offset_provider=dict(),
     )
 
@@ -163,7 +146,7 @@ def test_vertical_shift_unstructured(program_processor):
         program_processor,
         inp_s,
         out=out_s,
-        offset_provider={"K": KDim},
+        offset_provider={},
     )
 
     if validate:

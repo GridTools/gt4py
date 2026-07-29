@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Implementation of GTScript: an embedded DSL in Python for stencil computations.
 
@@ -22,7 +16,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Type, Union
 
 import numpy as np
 
@@ -65,6 +59,19 @@ MATH_BUILTINS = {
     "floor",
     "ceil",
     "trunc",
+    "erf",
+    "erfc",
+    "round",
+    "round_away_from_zero",
+}
+
+TYPE_HINT_AND_CAST_BUILTINS = {
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+    "int",
+    "float",
 }
 
 builtins = {
@@ -90,11 +97,18 @@ builtins = {
     "__INLINED",
     "compile_assert",
     *MATH_BUILTINS,
+    *TYPE_HINT_AND_CAST_BUILTINS,
 }
 
-IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
+IGNORE_WHEN_INLINING = {
+    *MATH_BUILTINS,
+    *TYPE_HINT_AND_CAST_BUILTINS,
+    "compile_assert",
+}
 
-__all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
+IGNORE_IN_ALL = {"int", "float"}
+
+__all__ = [*[b for b in builtins if b not in IGNORE_IN_ALL], "function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -145,12 +159,51 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     return original_annotations
 
 
-def function(func):
+def function(func: Callable) -> Callable:
     """Mark a GTScript function."""
     from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
 
     gt_frontend.GTScriptParser.annotate_definition(func)
     return func
+
+
+def lazy_function(
+    *, before_annotation: Callable | None = None, after_annotation: Callable | None = None
+) -> Callable:
+    """
+    Mark a GTScript function that will only be annotated before usage.
+
+    Lazy functions can be useful if e.g. annotated types aren't known when python
+    parses the code. Hooks allow to insert code before and after the function is
+    annotated.
+
+    Parameters
+    ----------
+        before_annotation : Callable | None
+            Hook to be called before annotating the function. Takes the function
+            that is about to be annotated as an argument and returns nothing.
+        after_annotation : Callable | None
+            Hook to be called after annotating the function. Takes the annotated
+            function as an argument and returns nothing.
+    """
+
+    def wrapper(func: Callable) -> Callable:
+        def inner_function() -> Callable:
+            if before_annotation is not None:
+                before_annotation(func)
+
+            from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
+
+            gt_frontend.GTScriptParser.annotate_definition(func)
+
+            if after_annotation is not None:
+                after_annotation(func)
+
+            return func
+
+        return inner_function
+
+    return wrapper
 
 
 # Interface functions
@@ -166,6 +219,8 @@ def stencil(
     rebuild=False,
     cache_settings=None,
     raise_if_not_cached=False,
+    literal_int_precision=gt_definitions.LITERAL_INT_PRECISION,
+    literal_float_precision=gt_definitions.LITERAL_FLOAT_PRECISION,
     **kwargs,
 ):
     """Generate an implementation of the stencil definition with the specified backend.
@@ -219,6 +274,14 @@ def stencil(
             - `root_path`: (str)
             - `dir_name`: (str)
 
+        literal_int_precision: `int` optional
+            Value to define the precision of generic `int` casts.
+            (System literal precision by default).
+
+        literal_float_precision: `int` optional
+            Value to define the precision of generic `float` casts.
+            (System literal precision by default).
+
         **kwargs: `dict`, optional
             Extra backend-specific options. Check the specific backend
             documentation for further information.
@@ -237,7 +300,6 @@ def stencil(
     Examples
     --------
         TODO
-
     """
 
     from gt4py.cartesian import loader as gt_loader
@@ -258,6 +320,14 @@ def stencil(
         raise ValueError(f"Invalid 'raise_if_not_cached' bool value ('{raise_if_not_cached}')")
     if cache_settings is not None and not isinstance(cache_settings, dict):
         raise ValueError(f"Invalid 'cache_settings' dictionary ('{cache_settings}')")
+    if not isinstance(literal_int_precision, int) and literal_int_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_int_precision'. Got '{literal_int_precision}', expected 32 or 64."
+        )
+    if not isinstance(literal_float_precision, int) and literal_float_precision not in (32, 64):
+        raise ValueError(
+            f"Invalid 'literal_float_precision'. Got '{literal_float_precision}', expected 32 or 64."
+        )
 
     module = None
     if name:
@@ -292,6 +362,8 @@ def stencil(
         backend_opts=kwargs,
         build_info=build_info,
         cache_settings=cache_settings or {},
+        literal_int_precision=literal_int_precision,
+        literal_float_precision=literal_float_precision,
         impl_opts=_impl_opts,
     )
 
@@ -485,7 +557,7 @@ class AxisIndex:
     def __eq__(self, other):
         return repr(self) == repr(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.index}] + {self.offset}"
 
     def __add__(self, offset: int):
@@ -516,7 +588,7 @@ class AxisInterval:
     def __repr__(self):
         return f"AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.start}:{self.end}]"
 
     def __len__(self):
@@ -532,7 +604,7 @@ class ShiftedAxis:
     def __repr__(self):
         return f"ShiftedAxis(name={self.name}, shift={self.shift})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name}+{self.shift}"
 
     def __add__(self, shift):
@@ -559,7 +631,7 @@ class Axis:
     def __repr__(self):
         return f"Axis(name={self.name})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __getitem__(self, interval):
@@ -581,7 +653,7 @@ class Axis:
         return ShiftedAxis(self.name, -shift)
 
 
-I = Axis("I")
+I = Axis("I")  # noqa: E741 [ambiguous name]
 """I axes (parallel)."""
 
 J = Axis("J")
@@ -634,8 +706,8 @@ class _FieldDescriptor:
                     data_dims = dtype.shape
                 if dtype not in _VALID_DATA_TYPES:
                     raise ValueError("Invalid data type descriptor")
-            except:
-                raise ValueError("Invalid data type descriptor")
+            except ValueError as ex:
+                raise ValueError("Invalid data type descriptor") from ex
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
         if data_dims:
@@ -651,22 +723,26 @@ class _FieldDescriptor:
         return None
 
     def __repr__(self):
-        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
+        args = f"dtype={self.dtype!r}, axes={self.axes!r}, data_dims={self.data_dims!r}"
         return f"_FieldDescriptor({args})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
+        )
+
+    def at(self, *, K):
+        """Stub function used to implement absolute K indexing"""
+        raise RuntimeError(
+            "`at(K=...)` stub function only, do not call outside of stencil field indexation."
         )
 
 
 class _FieldDescriptorMaker:
     @staticmethod
     def _is_axes_spec(spec) -> bool:
-        return (
-            isinstance(spec, Axis)
-            or isinstance(spec, collections.abc.Collection)
-            and all(isinstance(i, Axis) for i in spec)
+        return isinstance(spec, Axis) or (
+            isinstance(spec, collections.abc.Collection) and all(isinstance(i, Axis) for i in spec)
         )
 
     def __getitem__(self, field_spec):
@@ -674,14 +750,14 @@ class _FieldDescriptorMaker:
         data_dims = ()
 
         if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
-            # Field[dtype]
+            # Field[dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
-            # Field[axes, dtype]
+            # Field[axes, dtype] # noqa: ERA001 [commented-out-code]
             assert len(field_spec) == 2
             axes, dtype = field_spec
         elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
-            # Field[high_dimensional_dtype]
+            # Field[high_dimensional_dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         else:
             raise ValueError("Invalid field type descriptor")
@@ -694,9 +770,22 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
+class _GlobalTableDescriptorMaker(_FieldDescriptorMaker):
+    def __getitem__(self, field_spec):
+        if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
+            raise ValueError("GlobalTable is defined by a tuple (type, [axes_size..])")
+
+        dtype, data_dims = field_spec
+
+        return _FieldDescriptor(dtype, [], data_dims)
+
+
 # GTScript builtins: variable annotations
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
+
+GlobalTable = _GlobalTableDescriptorMaker()
+"""Data array with no spatial dimension descriptor."""
 
 
 class _SequenceDescriptor:
@@ -736,12 +825,12 @@ def computation(order):
 
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
-    pass
+    return _ComputationContextManager()
 
 
 def horizontal(*args):
     """Define a block of code that is restricted to a set of regions in the parallel axes."""
-    pass
+    return _ComputationContextManager()
 
 
 class _Region:
@@ -764,142 +853,191 @@ def compile_assert(expr):
     pass
 
 
+# GTScript builtins: type cast & hints
+int32 = np.int32
+int64 = np.int64
+float32 = np.float32
+float64 = np.float64
+_gt_all_op_types = Union[int32, int64, float32, float64]
+
+
 # GTScript builtins: math functions
-def abs(x):
+def abs(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
     """Return the absolute value of the argument"""
     pass
 
 
-def min(x, y):
+def min(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]  # noqa: A001 [builtin-variable-shadowing]
     """Return the smallest of two or more arguments."""
     pass
 
 
-def max(x, y):
+def max(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]  # noqa: A001 [builtin-variable-shadowing]
     """Return the largest of two or more arguments."""
     pass
 
 
-def mod(x, y):
+def mod(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]
     """returns the first argument modulo the second one"""
     pass
 
 
-def sin(x):
+def sin(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the sine of x radians"""
     pass
 
 
-def cos(x):
+def cos(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the cosine of x radians."""
     pass
 
 
-def tan(x):
+def tan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the tangent of x radians."""
     pass
 
 
-def asin(x):
+def asin(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """return the arc sine of x, in radians."""
     pass
 
 
-def acos(x):
+def acos(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the arc cosine of x, in radians."""
     pass
 
 
-def atan(x):
+def atan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the arc tangent of x, in radians."""
     pass
 
 
-def sinh(x):
+def sinh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic sine of x radians"""
     pass
 
 
-def cosh(x):
+def cosh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic cosine of x radians."""
     pass
 
 
-def tanh(x):
+def tanh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the hyperbolic tangent of x radians."""
     pass
 
 
-def asinh(x):
+def asinh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """return the inverse hyperbolic sine of x, in radians."""
     pass
 
 
-def acosh(x):
+def acosh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the inverse hyperbolic cosine of x, in radians."""
     pass
 
 
-def atanh(x):
+def atanh(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the inverse hyperbolic tangent of x, in radians."""
     pass
 
 
-def sqrt(x):
+def sqrt(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the square root of x."""
     pass
 
 
-def exp(x):
+def exp(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return e raised to the power x, where e is the base of natural logarithms."""
     pass
 
 
-def log(x):
+def log(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the natural logarithm of x (to base e)."""
     pass
 
 
-def log10(x):
+def log10(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the base-10 logarithm of x."""
     pass
 
 
-def gamma(x):
+def gamma(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the gamma function of x."""
     pass
 
 
-def cbrt(x):
+def cbrt(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the cubic root of x."""
     pass
 
 
-def isfinite(x):
+def isfinite(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is neither an infinity nor a NaN, and False otherwise. (Note that 0.0 is considered finite.)"""
     pass
 
 
-def isinf(x):
+def isinf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is a positive or negative infinity, and False otherwise."""
     pass
 
 
-def isnan(x):
+def isnan(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return True if x is a NaN (not a number), and False otherwise."""
     pass
 
 
-def floor(x):
+def floor(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the floor of x, the largest integer less than or equal to x."""
     pass
 
 
-def ceil(x):
+def ceil(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the ceiling of x, the smallest integer greater than or equal to x."""
     pass
 
 
-def trunc(x):
+def trunc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Return the Real value x truncated to an Integral (usually an integer)"""
+    pass
+
+
+def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Computes the error function of `x`."""
+    pass
+
+
+def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def round(x) -> _gt_all_op_types:  # type: ignore[empty-body] # noqa: A001 [builtin-variable-shadowing]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases to even numbers.
+
+        Examples:
+        -0.5 -> -0.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 2.0
+
+    This is in alignment with the IEEE754 standard python's built-in round() function.
+
+    In contrast, `round_away_from_zero()` splits ties away from zero e.g. 2.5 will
+    round to 3.0 and -0.5 will round to -1.0.
+    """
+    pass
+
+
+def round_away_from_zero(x) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """
+    Computes the nearest integer value to `x`, rounding halfway cases away from zero.
+
+        Examples:
+        -0.5 -> -1.0, 0.5 -> 0.0, 1.5 -> 2.0, 2.5 -> 3.0
+
+    This is in alignment with C(++) and FORTRAN standard round functions that round away
+    from zero by default.
+
+    In contrast, `round()` implements "Banker's rounding" and splits ties to the nearest
+    even integer, e.g. 1.5 and 2.5 both round to 2.0.
+    """
     pass

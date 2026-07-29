@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Utilities for runtime: introspection and bytecode."""
 
@@ -18,13 +12,8 @@ import ast
 import copy
 import inspect
 import operator
-import platform
 import textwrap
-from typing import Callable, Dict, List, Tuple, Type
-
-from packaging import version
-
-from .base import shashed_id
+from typing import Callable, Final
 
 
 def get_closure(func, *, include_globals=True, included_nonlocals=True, include_builtins=True):
@@ -35,10 +24,12 @@ def get_closure(func, *, include_globals=True, included_nonlocals=True, include_
         closure.update(closure_vars.globals)
     else:
         unbound |= set(closure_vars.globals.keys())
+
     if included_nonlocals:
         closure.update(closure_vars.nonlocals)
     else:
         unbound |= set(closure_vars.nonlocals.keys())
+
     if include_builtins:
         closure.update(closure_vars.builtins)
     else:
@@ -61,7 +52,7 @@ def get_source(func):
     return source
 
 
-def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
+def get_ast(func_or_source_or_ast, *, feature_version: tuple[int, int]):
     if callable(func_or_source_or_ast):
         func_or_source_or_ast = get_source(func_or_source_or_ast)
     if isinstance(func_or_source_or_ast, str):
@@ -71,70 +62,31 @@ def get_ast(func_or_source_or_ast, *, feature_version: Tuple[int, int]):
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:
-        raise ValueError("Invalid function definition ({})".format(func_or_source_or_ast))
+        raise ValueError(f"Invalid function definition ({func_or_source_or_ast})")
     return ast_root
 
 
-def ast_dump(
-    definition,
-    *,
-    skip_annotations: bool = True,
-    skip_decorators: bool = True,
-    feature_version: Tuple[int, int],
-) -> str:
-    def _dump(node: ast.AST, excluded_names):
+def ast_dump(definition, *, feature_version: tuple[int, int]) -> str:
+    def _dump(node: ast.AST) -> str:
         if isinstance(node, ast.AST):
-            if excluded_names:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                    if name not in excluded_names
-                ]
-            else:
-                fields = [
-                    (name, _dump(value, excluded_names))
-                    for name, value in sorted(ast.iter_fields(node))
-                ]
+            fields = [(name, _dump(value)) for name, value in sorted(ast.iter_fields(node))]
 
             return "".join(
                 [
                     node.__class__.__name__,
-                    "({content})".format(
-                        content=", ".join("{}={}".format(name, value) for name, value in fields)
-                    ),
+                    f"({', '.join(f'{name}={value}' for name, value in fields)})",
                 ]
             )
 
-        elif isinstance(node, list):
-            lines = ["[", *[_dump(i, excluded_names) + "," for i in node], "]"]
+        if isinstance(node, list):
+            lines = ["[", *[_dump(i) + "," for i in node], "]"]
             return "\n".join(lines)
 
-        else:
-            return repr(node)
+        return repr(node)
 
-    skip_node_names = set()
-    if skip_decorators:
-        skip_node_names.add("decorator_list")
-    if skip_annotations:
-        skip_node_names.add("annotation")
-
-    dumped_ast = _dump(get_ast(definition, feature_version=feature_version), skip_node_names)
+    dumped_ast = _dump(get_ast(definition, feature_version=feature_version))
 
     return dumped_ast
-
-
-def ast_unparse(ast_node):
-    """Call ast.unparse, but use astunparse for Python prior to 3.9."""
-    if version.parse(platform.python_version()) < version.parse("3.9"):
-        import astunparse
-
-        return astunparse.unparse(ast_node)
-    else:
-        return ast.unparse(ast_node)
-
-
-def ast_shash(ast_node, *, skip_decorators=True):
-    return shashed_id(ast_dump(ast_node, skip_decorators=skip_decorators))
 
 
 def collect_decorators(func_or_source_or_ast):
@@ -210,7 +162,7 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
     else:
         assert isinstance(node, ast.Attribute)
         components = get_qualified_name_from_node(node.value, as_list=True)
-        components = components + [node.attr]
+        components = [*components, node.attr]
 
     return components if as_list else ".".join(components)
 
@@ -262,7 +214,7 @@ class ASTTransformPass(ASTPass):
 
 
 class ASTEvaluator(ASTPass):
-    AST_OP_TO_OP: Dict[Type, Callable] = {
+    AST_OP_TO_OP: Final[dict[type, Callable]] = {
         # Arithmetic operations
         ast.UAdd: operator.pos,
         ast.USub: operator.neg,
@@ -306,10 +258,10 @@ class ASTEvaluator(ASTPass):
         return self.context[node.id]
 
     def visit_Num(self, node):
-        return node.n
+        return node.value
 
     def visit_Constant(self, node):
-        return node.n
+        return node.value
 
     def visit_NameConstant(self, node):
         return node.value
@@ -347,7 +299,7 @@ class ASTEvaluator(ASTPass):
         return all(comparisons)
 
     def generic_visit(self, node):
-        raise ValueError("Invalid AST node for evaluation: {}".format(repr(node)))
+        raise ValueError(f"Invalid AST node for evaluation: {node!r}")
 
 
 ast_eval = ASTEvaluator.apply
@@ -368,6 +320,14 @@ class AssignTargetsCollector(ASTPass):
         self.defs = []
         self.visit(ast_root)
         return self.assign_targets
+
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        if isinstance(node.target, ast.Tuple):
+            for t in node.target.elts:
+                assert isinstance(t, ast.Name)
+                self.assign_targets.append(t)
+        else:
+            self.assign_targets.append(node.target)
 
     def visit_Assign(self, node: ast.Assign):
         if len(node.targets) > 1 and not self.allow_multiple_targets:
@@ -425,13 +385,13 @@ class QualifiedNameCollector(ASTPass):
             self.name_nodes[node.id].append(node)
 
     def _get_name_components(self, node: ast.AST):
-        components: List
+        components: list
         if isinstance(node, ast.Name):
             components = [node.id]
             valid = self.prefixes is None or node.id in self.prefixes
         elif isinstance(node, ast.Attribute):
             components, valid = self._get_name_components(node.value)
-            components = components + [node.attr]
+            components = [*components, node.attr]
             valid = valid or ".".join(components) in self.prefixes
         else:
             components = [None]

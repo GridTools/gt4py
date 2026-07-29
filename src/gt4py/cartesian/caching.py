@@ -1,18 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Caching strategies for stencil generation."""
+
+from __future__ import annotations
 
 import abc
 import inspect
@@ -35,7 +31,7 @@ if TYPE_CHECKING:
 class CachingStrategy(abc.ABC):
     name: str
 
-    def __init__(self, builder: "StencilBuilder"):
+    def __init__(self, builder: StencilBuilder):
         self.builder = builder
 
     @property
@@ -65,7 +61,7 @@ class CachingStrategy(abc.ABC):
         """
         Generate the cache info dict.
 
-        Backend specific additions can be added via a hook propery on the backend instance.
+        Backend specific additions can be added via a hook properly on the backend instance.
         Override :py:meth:`gt4py.backend.base.Backend.extra_cache_info` to store extra
         info.
         """
@@ -80,7 +76,6 @@ class CachingStrategy(abc.ABC):
         ----------
         extra_cache_info:
             Additional info to be written
-
         """
         raise NotImplementedError
 
@@ -182,7 +177,7 @@ class JITCachingStrategy(CachingStrategy):
 
     def __init__(
         self,
-        builder: "StencilBuilder",
+        builder: StencilBuilder,
         *,
         root_path: Optional[str] = None,
         dir_name: Optional[str] = None,
@@ -202,9 +197,8 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def backend_root_path(self) -> pathlib.Path:
-        cpython_id = "py{version.major}{version.minor}_{api_version}".format(
-            version=sys.version_info, api_version=sys.api_version
-        )
+        version = sys.version_info
+        cpython_id = f"py{version.major}{version.minor}_{sys.api_version}"
         backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():
@@ -248,7 +242,7 @@ class JITCachingStrategy(CachingStrategy):
                 for k, v in self.builder.backend.extra_cache_info.items()
                 if k in self.builder.backend.extra_cache_validation_keys
             }
-            source = self.builder.module_path.read_text()
+            source = self.builder.module_path.read_text(encoding="utf-8")
             module_shash = gt_utils.shash(source)
 
             if validate_hash:
@@ -271,9 +265,7 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def cache_info(self) -> Dict[str, Any]:
-        if not self.cache_info_path:
-            return {}
-        if not self.cache_info_path.exists():
+        if not self.cache_info_path or not self.cache_info_path.exists():
             return {}
         return self._unpickle_cache_info_file(self.cache_info_path)
 
@@ -312,11 +304,25 @@ class JITCachingStrategy(CachingStrategy):
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
             **self._externals,
         }
+        debug_mode = self.builder.options.backend_opts.get("debug_mode", False)
+        fingerprint["debug_mode"] = debug_mode
+        if not debug_mode and self.builder.backend.name != "numpy":
+            fingerprint["opt_level"] = self.builder.options.backend_opts.get(
+                "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+            )
+            fingerprint["extra_opt_flags"] = self.builder.options.backend_opts.get(
+                "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
+            )
+            fingerprint["extra_compile_args"] = self.builder.options.backend_opts.get(
+                "extra_compile_args", gt_config.GT4PY_EXTRA_COMPILE_ARGS
+            )
+        if self.builder.backend.name == "dace:gpu":
+            fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
-        # typeignore because attrclass StencilID has generated constructor
+        # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
             self.builder.options.qualified_name,
-            gt_utils.shashed_id(gt_utils.shashed_id(fingerprint), self.options_id),
+            gt_utils.shashed_id(fingerprint, self.options_id),
         )
 
     @property
@@ -337,7 +343,7 @@ class JITCachingStrategy(CachingStrategy):
 
 class NoCachingStrategy(CachingStrategy):
     """
-    Apply no caching, useful for CLI.
+    Apply no caching.
 
     Instead of calculating paths and names based on a stencil fingerprint, use
     user input or by default the current working dir to output source and build files.
@@ -360,7 +366,7 @@ class NoCachingStrategy(CachingStrategy):
 
     name = "nocaching"
 
-    def __init__(self, builder: "StencilBuilder", *, output_path: pathlib.Path = pathlib.Path(".")):
+    def __init__(self, builder: StencilBuilder, *, output_path: pathlib.Path = pathlib.Path(".")):
         super().__init__(builder)
         self._output_path = output_path
 
@@ -403,7 +409,7 @@ class NoCachingStrategy(CachingStrategy):
 
 
 def strategy_factory(
-    name: str, builder: "StencilBuilder", *args: Any, **kwargs: Any
+    name: str, builder: StencilBuilder, *args: Any, **kwargs: Any
 ) -> CachingStrategy:
     strategies = {"jit": JITCachingStrategy, "nocaching": NoCachingStrategy}
     return strategies[name](builder, *args, **kwargs)

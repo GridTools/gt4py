@@ -1,452 +1,580 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-import copy
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-import gt4py.next as gtx
-from gt4py.eve.utils import UIDs
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.global_tmps import (
-    AUTO_DOMAIN,
-    FencilWithTemporaries,
-    Temporary,
-    collect_tmps_info,
-    split_closures,
-    update_domains,
+from typing import Optional
+import pytest
+import functools
+from gt4py.next import utils
+from gt4py.next import common
+from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator.transforms import (
+    global_tmps,
+    infer_domain,
+    collapse_tuple as ct,
+    constant_folding as cf,
+)
+from gt4py.next.iterator.type_system import inference as type_inference
+from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.ir_utils import (
+    ir_makers as im,
+    misc as ir_utils_misc,
 )
 
 
-def test_split_closures():
-    UIDs.reset_sequence()
-    testee = ir.FencilDefinition(
-        id="f",
+IDim = common.Dimension(value="IDim")
+JDim = common.Dimension(value="JDim")
+KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
+index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
+float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
+Ioff = im.cartesian_offset(IDim, IDim)
+
+
+def index_field_type_factory(dim):
+    return ts.FieldType(dims=[dim], dtype=index_type)
+
+
+def field_tuple_type_factory(field_type, n):
+    return ts.TupleType(types=[field_type] * n)
+
+
+i_field_tuple_type_factory = functools.partial(field_tuple_type_factory, i_field_type)
+
+
+def program_factory(
+    params: list[itir.Sym],
+    body: list[itir.SetAt],
+    declarations: Optional[list[itir.Temporary]] = None,
+) -> itir.Program:
+    return itir.Program(
+        id="testee",
         function_definitions=[],
-        params=[ir.Sym(id="d"), ir.Sym(id="inp"), ir.Sym(id="out")],
-        closures=[
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="baz_inp")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.FunCall(
-                                    fun=ir.SymRef(id="lift"),
-                                    args=[
-                                        ir.Lambda(
-                                            params=[ir.Sym(id="bar_inp")],
-                                            expr=ir.FunCall(
-                                                fun=ir.SymRef(id="deref"),
-                                                args=[
-                                                    ir.FunCall(
-                                                        fun=ir.FunCall(
-                                                            fun=ir.SymRef(id="lift"),
-                                                            args=[
-                                                                ir.Lambda(
-                                                                    params=[ir.Sym(id="foo_inp")],
-                                                                    expr=ir.FunCall(
-                                                                        fun=ir.SymRef(id="deref"),
-                                                                        args=[
-                                                                            ir.SymRef(id="foo_inp")
-                                                                        ],
-                                                                    ),
-                                                                )
-                                                            ],
-                                                        ),
-                                                        args=[ir.SymRef(id="bar_inp")],
-                                                    )
-                                                ],
-                                            ),
-                                        )
-                                    ],
-                                ),
-                                args=[ir.SymRef(id="baz_inp")],
-                            )
-                        ],
-                    ),
+        params=params,
+        declarations=declarations or [],
+        body=body,
+    )
+
+
+def test_trivial(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.as_fieldop("deref", domain)(im.as_fieldop("deref", domain)("inp")),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_0"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
+            ),
+            itir.SetAt(
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == expected
+
+
+def test_trivial_let(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.let("tmp", im.as_fieldop("deref", domain)("inp"))(
+                    im.as_fieldop("deref", domain)("tmp")
                 ),
-                output=ir.SymRef(id="out"),
-                inputs=[ir.SymRef(id="inp")],
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_0"), expr=im.as_fieldop("deref", domain)("inp"), domain=domain
+            ),
+            itir.SetAt(
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "projector_maker, inp_type, out_type",
+    [
+        (
+            # let projector
+            lambda inp: im.let("foo", inp)(
+                im.make_tuple(im.tuple_get(1, "foo"), im.tuple_get(3, "foo"))
+            ),
+            i_field_tuple_type_factory(4),
+            i_field_tuple_type_factory(2),
+        ),
+        (
+            # tuple_get projector
+            lambda inp: im.tuple_get(2, inp),
+            i_field_tuple_type_factory(4),
+            i_field_type,
+        ),
+        (
+            # nested tuple_get projector
+            lambda inp: im.tuple_get(1, im.tuple_get(2, inp)),
+            field_tuple_type_factory(i_field_tuple_type_factory(4), 4),
+            i_field_type,
+        ),
+        (
+            lambda inp: im.make_tuple(im.tuple_get(1, inp), im.tuple_get(3, inp)),
+            i_field_tuple_type_factory(4),
+            i_field_tuple_type_factory(2),
+        ),
+    ],
+)
+def test_dont_extract_projector(projector_maker, inp_type, out_type, uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    # this is a a scan, because we assert that we only extract projectors from scans
+    scan = im.as_fieldop(
+        im.call("scan")(im.lambda_("state", "inp")(im.call("deref")("inp")), True, 0), domain
+    )(im.ref("inp", inp_type))
+
+    testee = program_factory(
+        params=[
+            im.sym("inp", inp_type),
+            im.sym("out", out_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=projector_maker(scan),
+                domain=domain,
             )
         ],
     )
 
-    expected = ir.FencilDefinition(
-        id="f",
-        function_definitions=[],
+    actual = global_tmps.create_global_tmps(testee, offset_provider={}, uids=uids)
+    assert actual == testee  # did not extract from projector
+
+
+def test_top_level_if(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    offset_provider = {}
+    testee = program_factory(
         params=[
-            ir.Sym(id="d"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
-            ir.Sym(id="_tmp_1"),
-            ir.Sym(id="_tmp_2"),
-            ir.Sym(id="_gtmp_auto_domain"),
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
         ],
-        closures=[
-            ir.StencilClosure(
-                domain=AUTO_DOMAIN,
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="foo_inp")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="foo_inp")],
-                    ),
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.if_(
+                    True,
+                    im.as_fieldop("deref", domain)("inp1"),
+                    im.as_fieldop("deref", domain)("inp2"),
                 ),
-                output=ir.SymRef(id="_tmp_2"),
-                inputs=[ir.SymRef(id="inp")],
-            ),
-            ir.StencilClosure(
-                domain=AUTO_DOMAIN,
-                stencil=ir.Lambda(
-                    params=[
-                        ir.Sym(id="bar_inp"),
-                        ir.Sym(id="_tmp_2"),
-                    ],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[
-                            ir.SymRef(id="_tmp_2"),
-                        ],
-                    ),
-                ),
-                output=ir.SymRef(id="_tmp_1"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_2")],
-            ),
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="baz_inp"), ir.Sym(id="_tmp_1")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="_tmp_1")],
-                    ),
-                ),
-                output=ir.SymRef(id="out"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_1")],
-            ),
+                domain=domain,
+            )
         ],
     )
-    actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
-    assert actual.fencil == expected
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    expected = program_factory(
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
+        declarations=[],
+        body=[
+            itir.IfStmt(
+                cond=im.literal_from_value(True),
+                true_branch=[
+                    itir.SetAt(
+                        target=im.ref("out"),
+                        expr=im.as_fieldop("deref", domain)("inp1"),
+                        domain=domain,
+                    )
+                ],
+                false_branch=[
+                    itir.SetAt(
+                        target=im.ref("out"),
+                        expr=im.as_fieldop("deref", domain)("inp2"),
+                        domain=domain,
+                    )
+                ],
+            )
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == expected
 
 
-def test_split_closures_lifted_scan():
-    UIDs.reset_sequence()
-
-    testee = ir.FencilDefinition(
-        id="f",
-        function_definitions=[],
-        params=[im.sym("inp"), im.sym("out")],
-        closures=[
-            ir.StencilClosure(
-                domain=im.call("cartesian_domain")(),
-                stencil=im.lambda_("a")(
-                    im.call(
-                        im.call("scan")(
-                            im.lambda_("carry", "b")(im.plus("carry", im.deref("b"))),
-                            True,
-                            im.literal_from_value(0.0),
-                        )
-                    )(
-                        im.lift(
-                            im.call("scan")(
-                                im.lambda_("carry", "c")(im.plus("carry", im.deref("c"))),
-                                False,
-                                im.literal_from_value(0.0),
-                            )
-                        )("a")
+def test_nested_if(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 1)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.as_fieldop("deref", domain)(
+                    im.if_(
+                        True,
+                        im.as_fieldop("deref", domain)("inp1"),
+                        im.as_fieldop("deref", domain)("inp2"),
                     )
                 ),
-                output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                domain=domain,
             )
         ],
     )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
-    expected = ir.FencilDefinition(
-        id="f",
-        function_definitions=[],
-        params=[im.sym("inp"), im.sym("out"), im.sym("_tmp_1"), im.sym("_gtmp_auto_domain")],
-        closures=[
-            ir.StencilClosure(
-                domain=AUTO_DOMAIN,
-                stencil=im.call("scan")(
-                    im.lambda_("carry", "c")(im.plus("carry", im.deref("c"))),
-                    False,
-                    im.literal_from_value(0.0),
-                ),
-                output=im.ref("_tmp_1"),
-                inputs=[im.ref("inp")],
-            ),
-            ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=im.lambda_("a", "_tmp_1")(
-                    im.call(
-                        im.call("scan")(
-                            im.lambda_("carry", "b")(im.plus("carry", im.deref("b"))),
-                            True,
-                            im.literal_from_value(0.0),
-                        )
-                    )("_tmp_1")
-                ),
-                output=im.ref("out"),
-                inputs=[im.ref("inp"), im.ref("_tmp_1")],
-            ),
-        ],
-    )
-
-    actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1")]
-    assert actual.fencil == expected
-
-
-def test_update_cartesian_domains():
-    testee = FencilWithTemporaries(
-        fencil=ir.FencilDefinition(
-            id="f",
-            function_definitions=[],
-            params=[
-                im.sym(name)
-                for name in ("i", "j", "k", "inp", "out", "_gtmp_0", "_gtmp_1", "_gtmp_auto_domain")
-            ],
-            closures=[
-                ir.StencilClosure(
-                    domain=AUTO_DOMAIN,
-                    stencil=im.lambda_("foo_inp")(im.deref("foo_inp")),
-                    output=im.ref("_gtmp_1"),
-                    inputs=[im.ref("inp")],
-                ),
-                ir.StencilClosure(
-                    domain=AUTO_DOMAIN,
-                    stencil=im.ref("deref"),
-                    output=im.ref("_gtmp_0"),
-                    inputs=[im.ref("_gtmp_1")],
-                ),
-                ir.StencilClosure(
-                    domain=im.call("cartesian_domain")(
-                        *(
-                            im.call("named_range")(
-                                ir.AxisLiteral(value=a),
-                                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                im.ref(s),
-                            )
-                            for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
-                        )
-                    ),
-                    stencil=im.lambda_("baz_inp", "_lift_2")(im.deref(im.shift("I", 1)("_lift_2"))),
-                    output=im.ref("out"),
-                    inputs=[im.ref("inp"), im.ref("_gtmp_0")],
-                ),
-            ],
-        ),
+    expected = program_factory(
         params=[
-            im.sym("i"),
-            im.sym("j"),
-            im.sym("k"),
-            im.sym("inp"),
-            im.sym("out"),
+            im.sym("inp1", i_field_type),
+            im.sym("inp2", i_field_type),
+            im.sym("out", i_field_type),
         ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
-    )
-    expected = copy.deepcopy(testee)
-    assert expected.fencil.params.pop() == im.sym("_gtmp_auto_domain")
-    expected.fencil.closures[0].domain = ir.FunCall(
-        fun=im.ref("cartesian_domain"),
-        args=[
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value="IDim"),
-                    im.plus(
-                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
-                    ),
-                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
+        declarations=[itir.Temporary(id="__tmp_0", domain=domain, dtype=float_type)],
+        body=[
+            itir.IfStmt(
+                cond=im.literal_from_value(True),
+                true_branch=[
+                    itir.SetAt(
+                        target=im.ref("__tmp_0"),
+                        expr=im.as_fieldop("deref", domain)("inp1"),
+                        domain=domain,
+                    )
                 ],
-            )
-        ]
-        + [
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value=a),
-                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                    im.ref(s),
+                false_branch=[
+                    itir.SetAt(
+                        target=im.ref("__tmp_0"),
+                        expr=im.as_fieldop("deref", domain)("inp2"),
+                        domain=domain,
+                    )
                 ],
-            )
-            for a, s in (("JDim", "j"), ("KDim", "k"))
+            ),
+            itir.SetAt(
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
+            ),
         ],
     )
-    expected.fencil.closures[1].domain = ir.FunCall(
-        fun=im.ref("cartesian_domain"),
-        args=[
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value="IDim"),
-                    im.plus(
-                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
-                    ),
-                    im.plus(
-                        im.ref("i"),
-                        ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                    ),
-                ],
-            )
-        ]
-        + [
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                    im.ref(s),
-                ],
-            )
-            for a, s in (("JDim", "j"), ("KDim", "k"))
-        ],
-    )
-    actual = update_domains(testee, {"I": gtx.Dimension("IDim")})
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
     assert actual == expected
 
 
-def test_collect_tmps_info():
-    tmp_domain = ir.FunCall(
-        fun=im.ref("cartesian_domain"),
-        args=[
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value="IDim"),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                    ir.FunCall(
-                        fun=im.ref("plus"),
-                        args=[
-                            im.ref("i"),
-                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                        ],
+def test_tuple_different_domain(uids: utils.IDGeneratorPool):
+    domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
+    offset_provider = {}
+
+    def add_shifted(domain: itir.FunCall | None = None):
+        return im.as_fieldop(
+            im.lambda_("it1", "it2")(im.plus(im.deref("it1"), im.deref(im.shift(Ioff, 1)("it2")))),
+            domain,
+        )
+
+    params = [
+        im.sym("cond", ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+        im.sym("inp1", i_field_type),
+        im.sym("inp2", i_field_type),
+        im.sym("out", i_field_type),
+    ]
+    testee = program_factory(
+        params=params,
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.let(
+                    "val",
+                    im.if_("cond", im.make_tuple("inp1", "inp2"), im.make_tuple("inp2", "inp1")),
+                )(add_shifted(None)(im.tuple_get(0, "val"), im.tuple_get(1, "val"))),
+                domain=domain01,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    expected = program_factory(
+        params=params,
+        declarations=[
+            itir.Temporary(id="__tmp_0", domain=domain01, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain12, dtype=float_type),
+        ],
+        body=[
+            itir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_0")),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_1")),
+                        expr=im.make_tuple(im.ref("inp2")),
+                        domain=domain12,
                     ),
                 ],
-            )
-        ]
-        + [
-            ir.FunCall(
-                fun=im.ref("named_range"),
-                args=[
-                    ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                    im.ref(s),
+                false_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_0")),
+                        expr=im.make_tuple(im.ref("inp2")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_1")),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domain12,
+                    ),
                 ],
-            )
-            for a, s in (("JDim", "j"), ("KDim", "k"))
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=add_shifted(domain01)(
+                    im.ref("__tmp_0"),
+                    im.ref("__tmp_1"),
+                ),
+                domain=domain01,
+            ),
         ],
     )
-    testee = FencilWithTemporaries(
-        fencil=ir.FencilDefinition(
-            id="f",
-            function_definitions=[],
-            params=[
-                ir.Sym(id="i"),
-                ir.Sym(id="j"),
-                ir.Sym(id="k"),
-                ir.Sym(id="inp", dtype=("float64", False)),
-                ir.Sym(id="out", dtype=("float64", False)),
-                ir.Sym(id="_gtmp_0"),
-                ir.Sym(id="_gtmp_1"),
-            ],
-            closures=[
-                ir.StencilClosure(
-                    domain=tmp_domain,
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="foo_inp")],
-                        expr=ir.FunCall(
-                            fun=im.ref("deref"),
-                            args=[im.ref("foo_inp")],
-                        ),
-                    ),
-                    output=im.ref("_gtmp_1"),
-                    inputs=[im.ref("inp")],
-                ),
-                ir.StencilClosure(
-                    domain=tmp_domain,
-                    stencil=im.ref("deref"),
-                    output=im.ref("_gtmp_0"),
-                    inputs=[im.ref("_gtmp_1")],
-                ),
-                ir.StencilClosure(
-                    domain=ir.FunCall(
-                        fun=im.ref("cartesian_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=im.ref("named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                    im.ref(s),
-                                ],
-                            )
-                            for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
-                        ],
-                    ),
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
-                        expr=ir.FunCall(
-                            fun=im.ref("deref"),
-                            args=[
-                                ir.FunCall(
-                                    fun=ir.FunCall(
-                                        fun=im.ref("shift"),
-                                        args=[
-                                            ir.OffsetLiteral(value="I"),
-                                            ir.OffsetLiteral(value=1),
-                                        ],
-                                    ),
-                                    args=[im.ref("_lift_2")],
-                                )
-                            ],
-                        ),
-                    ),
-                    output=im.ref("out"),
-                    inputs=[im.ref("inp"), im.ref("_gtmp_0")],
-                ),
-            ],
-        ),
-        params=[
-            ir.Sym(id="i"),
-            ir.Sym(id="j"),
-            ir.Sym(id="k"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
-        ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
+    actual = cf.ConstantFolding.apply(
+        actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS
     )
-    expected = FencilWithTemporaries(
-        fencil=testee.fencil,
-        params=testee.params,
-        tmps=[
-            Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
-            Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
-        ],
-    )
-    actual = collect_tmps_info(testee, offset_provider={})
     assert actual == expected
+
+
+def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
+    domain01 = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain12 = im.domain("cartesian_domain", {IDim: (1, 2)})
+    domainm10 = im.domain("cartesian_domain", {IDim: (-1, 0)})
+    offset_provider = {}
+
+    def add_shifted(domain: itir.FunCall | None = None):
+        return im.as_fieldop(
+            im.lambda_("it1", "it2", "it3")(
+                im.plus(
+                    im.deref("it1"),
+                    im.plus(
+                        im.deref(im.shift(Ioff, 1)("it2")), im.deref(im.shift(Ioff, -1)("it3"))
+                    ),
+                )
+            ),
+            domain,
+        )
+
+    params = [
+        im.sym("cond", ts.ScalarType(kind=ts.ScalarKind.BOOL)),
+        im.sym("inp1", i_field_type),
+        im.sym("inp2", i_field_type),
+        im.sym("inp3", i_field_type),
+        im.sym("inp4", i_field_type),
+        im.sym("inp5", i_field_type),
+        im.sym("out", i_field_type),
+    ]
+    testee = program_factory(
+        params=params,
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.let(
+                    "val",
+                    im.if_(
+                        "cond",
+                        im.make_tuple(im.make_tuple("inp1", "inp2"), "inp3"),
+                        im.make_tuple(im.make_tuple("inp4", "inp5"), "inp1"),
+                    ),
+                )(
+                    add_shifted(None)(
+                        im.tuple_get(0, im.tuple_get(0, "val")),
+                        im.tuple_get(1, im.tuple_get(0, "val")),
+                        im.tuple_get(1, "val"),
+                    )
+                ),
+                domain=domain01,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
+
+    expected = program_factory(
+        params=params,
+        declarations=[
+            itir.Temporary(id="__tmp_0", domain=domain01, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain12, dtype=float_type),
+            itir.Temporary(id="__tmp_2", domain=domainm10, dtype=float_type),
+        ],
+        body=[
+            itir.IfStmt(
+                cond=im.ref("cond"),
+                true_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_0")),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_1")),
+                        expr=im.make_tuple(im.ref("inp2")),
+                        domain=domain12,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_2")),
+                        expr=im.make_tuple(im.ref("inp3")),
+                        domain=domainm10,
+                    ),
+                ],
+                false_branch=[
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_0")),
+                        expr=im.make_tuple(im.ref("inp4")),
+                        domain=domain01,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_1")),
+                        expr=im.make_tuple(im.ref("inp5")),
+                        domain=domain12,
+                    ),
+                    itir.SetAt(
+                        target=im.make_tuple(im.ref("__tmp_2")),
+                        expr=im.make_tuple(im.ref("inp1")),
+                        domain=domainm10,
+                    ),
+                ],
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=add_shifted(domain01)(
+                    im.ref("__tmp_0"),
+                    im.ref("__tmp_1"),
+                    im.ref("__tmp_2"),
+                ),
+                domain=domain01,
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    actual = ct.CollapseTuple.apply(actual, uids=uids)
+    actual = cf.ConstantFolding.apply(
+        actual, enabled_transformations=cf.ConstantFolding.Transformation.FOLD_ARITHMETIC_BUILTINS
+    )
+    assert actual == expected
+
+
+def test_domain_preservation(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    domain_tb = im.domain("cartesian_domain", {IDim: (0, 1)})
+    domain_fb = im.domain("cartesian_domain", {IDim: (1, 2)})
+    offset_provider = {}
+    testee = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus")(  # no domain here
+                    # smaller domain for the next two exprs, must not be re-inferred
+                    im.as_fieldop("deref", domain_tb)("inp"),
+                    im.as_fieldop("deref", domain_fb)("inp"),
+                ),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    expected = program_factory(
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
+        declarations=[
+            itir.Temporary(id="__tmp_0", domain=domain_tb, dtype=float_type),
+            itir.Temporary(id="__tmp_1", domain=domain_fb, dtype=float_type),
+        ],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_0"),
+                expr=im.as_fieldop("deref", domain_tb)("inp"),
+                domain=domain_tb,
+            ),
+            itir.SetAt(
+                target=im.ref("__tmp_1"),
+                expr=im.as_fieldop("deref", domain_fb)("inp"),
+                domain=domain_fb,
+            ),
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.op_as_fieldop("plus", domain)("__tmp_0", "__tmp_1"),
+                domain=domain,
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == expected
+
+
+def test_non_scan_projector(uids: utils.IDGeneratorPool):
+    domain = im.domain("cartesian_domain", {IDim: (0, 2)})
+    offset_provider = {}
+    stmt = itir.SetAt(
+        target=im.ref("out"),
+        expr=im.make_tuple(im.tuple_get(0, "inp")),
+        domain=domain,
+    )
+    testee = program_factory(
+        params=[
+            im.sym("inp", ts.TupleType(types=[i_field_type, float_type])),
+            im.sym("out", ts.TupleType(types=[i_field_type])),
+        ],
+        body=[stmt],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    # make sure the statement actually has a projector
+    projector, expr = ir_utils_misc.extract_projector(stmt.expr)
+    assert projector is not None
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == testee

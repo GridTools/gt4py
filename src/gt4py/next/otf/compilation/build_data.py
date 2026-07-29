@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -19,6 +13,8 @@ import enum
 import json
 import pathlib
 from typing import Final, Optional
+
+from gt4py._core import file_utils
 
 
 _DATAFILE_NAME: Final = "gt4py.json"
@@ -82,12 +78,16 @@ def contains_data(path: pathlib.Path) -> bool:
 def read_data(path: pathlib.Path) -> Optional[BuildData]:
     try:
         return BuildData.from_json(json.loads((path / _DATAFILE_NAME).read_text()))
-    except FileNotFoundError:
+    except (OSError, ValueError, KeyError, AttributeError):
+        # Missing file (OSError/FileNotFoundError), or one left truncated/corrupt
+        # by an interrupted write (json.JSONDecodeError is a ValueError; a missing
+        # dict key raises KeyError, a bad status name AttributeError) is treated
+        # as "no build data" so the caller rebuilds rather than crashing.
         return None
 
 
 def write_data(data: BuildData, path: pathlib.Path) -> None:
-    (path / _DATAFILE_NAME).write_text(json.dumps(data.to_json()))
+    file_utils.atomic_write_text(path / _DATAFILE_NAME, json.dumps(data.to_json()))
 
 
 def update_status(new_status: BuildStatus, path: pathlib.Path) -> None:

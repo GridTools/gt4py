@@ -1,46 +1,74 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from collections.abc import Callable
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Generic,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    runtime_checkable,
+)
 
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import languages
+from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
 
 
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
-SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
-TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
-SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
+if TYPE_CHECKING:
+    # Imported only for typing to avoid the import cycle with `otf.definitions`,
+    # which imports this module.
+    from gt4py.next.otf import definitions
+
+
+def fast_compilable_program_fingerprinter(program_def: definitions.CompilableProgramDef) -> str:
+    """
+    In-memory executor cache key: changes whenever the program needs recompilation.
+
+    The program is identified by its location- and type-agnostic semantic
+    fingerprint, while the offset providers are identified by the identity of
+    their connectivities, in iteration order. The order matters because the
+    generated bindings bake in the offset-provider order (see
+    ``extract_connectivity_args``), and the by-identity (rather than by-content)
+    comparison keeps this in-memory key cheap by not hashing the connectivity
+    tables.
+    """
+    prog_def_args = program_def.args
+    offset_provider = prog_def_args.offset_provider
+    return fingerprinting.lenient_fingerprinter(
+        (
+            itir.lenient_ir_fingerprinter(program_def.data),
+            prog_def_args.args,
+            prog_def_args.kwargs,
+            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
+            prog_def_args.column_axis,
+        )
+    )
+
+
+compilable_program_fingerprinter: Final[fingerprinting.Fingerprinter] = (
+    fingerprinting.strict_fingerprinter
+)
+
+
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramCall:
-    """Iterator IR representaion of a program together with arguments to be passed to it."""
-
-    program: itir.FencilDefinition
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgramSource(Generic[SrcL, SettingT]):
+class ProgramSource(Generic[CodeSpecT]):
     """
     Standalone source code translated from an IR along with information relevant for OTF compilation.
 
@@ -53,18 +81,11 @@ class ProgramSource(Generic[SrcL, SettingT]):
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
-    language: type[SrcL]
-    language_settings: SettingT
-
-    def __post_init__(self):
-        if not isinstance(self.language_settings, self.language.settings_class):
-            raise TypeError(
-                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
-            )
+    code_spec: CodeSpecT
 
 
 @dataclasses.dataclass(frozen=True)
-class BindingSource(Generic[SrcL, TgtL]):
+class BindingSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Companion source code for translated program source code.
 
@@ -78,9 +99,8 @@ class BindingSource(Generic[SrcL, TgtL]):
     library_deps: tuple[interface.LibraryDependency, ...]
 
 
-# TODO(ricoh): reconsider name in view of future backends producing standalone compilable ProgramSource code
 @dataclasses.dataclass(frozen=True)
-class CompilableSource(Generic[SrcL, SettingT, TgtL]):
+class ExtensionSource(Generic[CodeSpecT, TargetCodeSpecT]):
     """
     Encapsulate all the source code required for OTF compilation.
 
@@ -89,8 +109,8 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
     If bindings are required, it is recommended to create them in a separate step to ensure reusability.
     """
 
-    program_source: ProgramSource[SrcL, SettingT]
-    binding_source: Optional[BindingSource[SrcL, TgtL]]
+    program_source: ProgramSource[CodeSpecT]
+    binding_source: Optional[BindingSource[CodeSpecT, TargetCodeSpecT]]
 
     @property
     def library_deps(self) -> tuple[interface.LibraryDependency, ...]:
@@ -99,23 +119,41 @@ class CompilableSource(Generic[SrcL, SettingT, TgtL]):
         return _unique_libs(*self.program_source.library_deps, *self.binding_source.library_deps)
 
 
-class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
+CodeSpecT_co = TypeVar("CodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+TargetCodeSpecT_co = TypeVar("TargetCodeSpecT_co", bound=code_specs.SourceCodeSpec, covariant=True)
+
+
+class BuildSystemProject(Protocol[CodeSpecT_co, TargetCodeSpecT_co]):
     """
-    Use source code extracted from a ``CompilableSource`` to configure and build a GT4Py program.
+    Use source code extracted from an ``ExtensionSource`` to configure and build a GT4Py program.
 
     Should only be considered an OTF stage if used as an endpoint, as this only runs commands on source files
     and is not responsible for importing the results into Python.
     """
 
-    def build(self) -> None:
-        ...
+    def build(self) -> None: ...
 
 
-class CompiledProgram(Protocol):
-    """Executable python representation of a program."""
+ExecutableProgram: TypeAlias = Callable
 
-    def __call__(self, *args, **kwargs) -> None:
-        ...
+
+@runtime_checkable
+class CompilationArtifact(Protocol):
+    """The output of an ``OTFCompileWorkflow``.
+
+    Each backend defines its own concrete artifact dataclass; all share this
+    Protocol. Implementations are frozen dataclasses, picklable, and carry no
+    live process-bound state — that is reconstructed by ``load``, which
+    returns a directly-callable ``ExecutableProgram`` taking gt4py-shaped
+    arguments.
+
+    The one current exception is ``RoundtripArtifact`` when it is configured
+    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    whose role belongs at the runner / load-time seam, not in the artifact
+    itself.
+    """
+
+    def load(self) -> ExecutableProgram: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:
@@ -124,8 +162,14 @@ def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryD
 
     Examples:
     ---------
-    >>> libs_a = (interface.LibraryDependency("foo", "1.2.3"), interface.LibraryDependency("common", "1.0.0"))
-    >>> libs_b = (interface.LibraryDependency("common", "1.0.0"), interface.LibraryDependency("bar", "1.2.3"))
+    >>> libs_a = (
+    ...     interface.LibraryDependency("foo", "1.2.3"),
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ... )
+    >>> libs_b = (
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ...     interface.LibraryDependency("bar", "1.2.3"),
+    ... )
     >>> _unique_libs(*libs_a, *libs_b)
     (LibraryDependency(name='foo', version='1.2.3'), LibraryDependency(name='common', version='1.0.0'), LibraryDependency(name='bar', version='1.2.3'))
     """

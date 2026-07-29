@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import numpy as np
 
@@ -21,48 +15,19 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
         # FIXME(ben): dataset is missing invalid ranges (mostly nan outputs)
         # FIXME(ben): we're not properly testing different datatypes
         # builtin name, tuple of arguments
-        (
-            "abs",
-            ([-1, 1, -1.0, 1.0, 0, -0, 0.0, -0.0],),
-        ),
+        ("abs", ([-1, 1, -1.0, 1.0, 0, -0, 0.0, -0.0],)),
         (
             "minimum",
             (
                 [2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3],
-                [
-                    2,
-                    2.0,
-                    3.0,
-                    2.0,
-                    3,
-                    2,
-                    -2,
-                    -2.0,
-                    -3.0,
-                    -2.0,
-                    -3,
-                    -2,
-                ],
+                [2, 2.0, 3.0, 2.0, 3, 2, -2, -2.0, -3.0, -2.0, -3, -2],
             ),
         ),
         (
             "maximum",
             (
                 [2, 2.0, 2.0, 3.0, 2, 3, -2, -2.0, -2.0, -3.0, -2, -3],
-                [
-                    2,
-                    2.0,
-                    3.0,
-                    2.0,
-                    3,
-                    2,
-                    -2,
-                    -2.0,
-                    -3.0,
-                    -2.0,
-                    -3,
-                    -2,
-                ],
+                [2, 2.0, 3.0, 2.0, 3, 2, -2, -2.0, -3.0, -2.0, -3, -2],
             ),
         ),
         (
@@ -75,26 +40,11 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
             # ([6, 6.0, -6, 6.0, 7, -7.0, 4.8, 4], [2, 2.0, 2.0, -2, 3.0, -3, 1.2, -1.2]),
             ([2, 2.0], [2, 2.0]),
         ),
-        (
-            "sin",
-            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
-        ),
-        (
-            "cos",
-            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
-        ),
-        (
-            "tan",
-            ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],),
-        ),
-        (
-            "arcsin",
-            ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],),
-        ),
-        (
-            "arccos",
-            ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],),
-        ),
+        ("sin", ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],)),
+        ("cos", ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],)),
+        ("tan", ([0, 0.1, -0.01, np.pi, -2.0 / 3.0 * np.pi, 2.0 * np.pi, 3, 1000, -1000],)),
+        ("arcsin", ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],)),
+        ("arccos", ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],)),
         (
             "arctan",
             (
@@ -225,14 +175,8 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
                 ],
             ),
         ),
-        (
-            "arccosh",
-            ([1, 1.0, 1.2, 1.7, 2, 2.0, 100, 103.7, 1000, 1379.89],),
-        ),
-        (
-            "arctanh",
-            ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],),
-        ),
+        ("arccosh", ([1, 1.0, 1.2, 1.7, 2, 2.0, 100, 103.7, 1000, 1379.89],)),
+        ("arctanh", ([-1.0, -1, -0.7, -0.2, -0.0, 0, 0.0, 0.2, 0.7, 1, 1.0],)),
         (
             "sqrt",
             (
@@ -338,29 +282,14 @@ def math_builtin_test_data() -> list[tuple[str, tuple[list[int | float], ...]]]:
                 ],
             ),
         ),
-        (
-            "isfinite",
-            ([1000, 0, 1, np.pi, -np.inf, np.inf, np.nan, np.nan + 1],),
-        ),
-        (
-            "isinf",
-            ([1000, 0, 1, np.pi, -np.inf, np.inf, np.nan, np.nan + 1],),
-        ),
+        ("isfinite", ([1000, 0, 1, np.pi, -np.inf, np.inf, np.nan, np.nan + 1],)),
+        ("isinf", ([1000, 0, 1, np.pi, -np.inf, np.inf, np.nan, np.nan + 1],)),
         (
             "isnan",
             # TODO(BenWeber42): would be good to ensure we have nans with different bit patterns
             ([1000, 0, 1, np.pi, -np.inf, np.inf, np.nan, np.nan + 1],),
         ),
-        (
-            "floor",
-            ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],),
-        ),
-        (
-            "ceil",
-            ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],),
-        ),
-        (
-            "trunc",
-            ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],),
-        ),
+        ("floor", ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],)),
+        ("ceil", ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],)),
+        ("trunc", ([-3.4, -1.5, -0.6, -0.1, -0.0, 0.0, 0.1, 0.6, 1.5, 3.4],)),
     ]

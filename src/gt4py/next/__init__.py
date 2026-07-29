@@ -1,16 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 """
 GT4Py-NEXT - Performance portable and composable weather & climate stencils.
 
@@ -23,56 +18,189 @@ to create a streamlined user experience. `from module import *` can be used but 
 module in question is a submodule, defines `__all__` and exports many public API objects.
 """
 
-from . import common, ffront, iterator, program_processors, type_inference
-from .common import Dimension, DimensionKind, Domain, Field, GridType, UnitRange, domain, unit_range
-from .constructors import as_connectivity, as_field, empty, full, ones, zeros
+# ruff: noqa: F401
+from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
+from . import common, ffront, iterator, program_processors, typing
+from .common import (
+    CartesianConnectivity,
+    Connectivity,
+    Dimension,
+    DimensionKind,
+    Dims,
+    Domain,
+    Field,
+    GridType,
+    UnitRange,
+    as_non_staggered,
+    domain,
+    flip_staggered,
+    is_staggered,
+    unit_range,
+)
+from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
 from .embedded import (  # Just for registering field implementations
     nd_array_field as _nd_array_field,
 )
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
-from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here
-from .ffront.fbuiltins import FieldOffset
-from .iterator.embedded import (
-    NeighborTableOffsetProvider,
-    StridedNeighborOffsetProvider,
-    index_field,
-    np_as_located_field,
+from .ffront.fbuiltins import (
+    FieldOffset,
+    IndexType,
+    abs,  # noqa: A004 # shadowing
+    arccos,
+    arccosh,
+    arcsin,
+    arcsinh,
+    arctan,
+    arctanh,
+    astype,
+    bool,  # noqa: A004 # shadowing
+    broadcast,
+    cbrt,
+    ceil,
+    cos,
+    cosh,
+    exp,
+    float,  # noqa: A004 # shadowing
+    float32,
+    float64,
+    floor,
+    fmod,
+    gamma,
+    int,  # noqa: A004 # shadowing
+    int8,
+    int16,
+    int32,
+    int64,
+    isfinite,
+    isinf,
+    isnan,
+    log,
+    max_over,
+    maximum,
+    min_over,
+    minimum,
+    neg,
+    neighbor_sum,
+    power,
+    sin,
+    sinh,
+    sqrt,
+    tan,
+    tanh,
+    trunc,
+    tuple,  # noqa: A004 # shadowing
+    uint8,
+    uint16,
+    uint32,
+    uint64,
+    where,
 )
+from .otf.compiled_program import wait_for_compilation
+from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
+from .program_processors.runners.roundtrip import default as itir_python
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # submodules
     "common",
     "ffront",
     "iterator",
     "program_processors",
-    "type_inference",
+    "typing",
+    # from _core.definitions
+    "CUPY_DEVICE_TYPE",
+    "Device",
+    "DeviceType",
+    "is_scalar_type",
     # from common
     "Dimension",
     "DimensionKind",
+    "Dims",
     "Field",
+    "CartesianConnectivity",
+    "Connectivity",
     "GridType",
     "domain",
     "Domain",
     "unit_range",
     "UnitRange",
+    "is_staggered",
+    "flip_staggered",
+    "as_non_staggered",
     # from constructors
+    "FieldConstructor",
     "empty",
     "zeros",
     "ones",
     "full",
     "as_field",
     "as_connectivity",
-    # from iterator
-    "NeighborTableOffsetProvider",
-    "StridedNeighborOffsetProvider",
-    "index_field",
-    "np_as_located_field",
     # from ffront
     "FieldOffset",
     "field_operator",
     "program",
     "scan_operator",
-    *fbuiltins.__all__,
+    # from otf
+    "wait_for_compilation",
+    # from program_processor
+    "gtfn_cpu",
+    "gtfn_gpu",
+    "itir_python",
+    # from fbuiltins
+    "FieldOffset",
+    "IndexType",
+    "abs",
+    "arccos",
+    "arccosh",
+    "arcsin",
+    "arcsinh",
+    "arctan",
+    "arctanh",
+    "astype",
+    "bool",
+    "broadcast",
+    "cbrt",
+    "ceil",
+    "cos",
+    "cosh",
+    "exp",
+    "float",
+    "float32",
+    "float64",
+    "floor",
+    "fmod",
+    "gamma",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "isfinite",
+    "isinf",
+    "isnan",
+    "log",
+    "max_over",
+    "min_over",
+    "maximum",
+    "minimum",
+    "neg",
+    "neighbor_sum",
+    "power",
+    "sin",
+    "sinh",
+    "sqrt",
+    "tan",
+    "tanh",
+    "trunc",
+    "tuple",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "where",
 ]
+
+assert not (diff := set(fbuiltins.__all__) - set(__all__)), (
+    f"public fbuiltins member(s) not exported: {diff}"
+)

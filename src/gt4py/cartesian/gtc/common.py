@@ -1,22 +1,18 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import enum
 import functools
+import numbers
 import typing
+from abc import ABC
 from typing import (
     Any,
     ClassVar,
@@ -35,8 +31,9 @@ from typing import (
 import numpy as np
 
 from gt4py import eve
+from gt4py.cartesian import utils
 from gt4py.cartesian.gtc import ufuncs
-from gt4py.cartesian.gtc.utils import dimension_flags_to_names, flatten_list
+from gt4py.cartesian.gtc.utils import dimension_flags_to_names
 from gt4py.eve import datamodels
 
 
@@ -44,14 +41,14 @@ class GTCPreconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass precondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class GTCPostconditionError(eve.exceptions.EveError, RuntimeError):
     message_template = "GTC pass postcondition error: [{info}]"
 
     def __init__(self, *, expected: str, **kwargs: Any) -> None:
-        super().__init__(expected=expected, **kwargs)  # type: ignore
+        super().__init__(expected=expected, **kwargs)
 
 
 class AssignmentKind(eve.StrEnum):
@@ -66,7 +63,7 @@ class AssignmentKind(eve.StrEnum):
 
 @enum.unique
 class UnaryOperator(eve.StrEnum):
-    """Unary operator indentifier."""
+    """Unary operator identifier."""
 
     POS = "+"
     NEG = "-"
@@ -124,7 +121,7 @@ class DataType(eve.IntEnum):
         return self == self.BOOL
 
     def isinteger(self):
-        return self in (self.INT8, self.INT32, self.INT64)
+        return self in (self.INT8, self.INT16, self.INT32, self.INT64)
 
     def isfloat(self):
         return self in (self.FLOAT32, self.FLOAT64)
@@ -183,8 +180,17 @@ class NativeFunction(eve.StrEnum):
     FLOOR = "floor"
     CEIL = "ceil"
     TRUNC = "trunc"
+    ERF = "erf"
+    ERFC = "erfc"
+    ROUND = "round"
+    ROUND_AWAY_FROM_ZERO = "round_away_from_zero"
 
-    IR_OP_TO_NUM_ARGS: ClassVar[Dict["NativeFunction", int]]
+    INT32 = "int32"
+    INT64 = "int64"
+    FLOAT32 = "float32"
+    FLOAT64 = "float64"
+
+    IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
     def arity(self) -> int:
@@ -223,6 +229,14 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.FLOOR: 1,
         NativeFunction.CEIL: 1,
         NativeFunction.TRUNC: 1,
+        NativeFunction.INT32: 1,
+        NativeFunction.INT64: 1,
+        NativeFunction.FLOAT32: 1,
+        NativeFunction.FLOAT64: 1,
+        NativeFunction.ERF: 1,
+        NativeFunction.ERFC: 1,
+        NativeFunction.ROUND: 1,
+        NativeFunction.ROUND_AWAY_FROM_ZERO: 1,
     }.items()
 }
 
@@ -235,8 +249,8 @@ class LevelMarker(eve.StrEnum):
 
 @enum.unique
 class ExprKind(eve.IntEnum):
-    SCALAR: "ExprKind" = typing.cast("ExprKind", enum.auto())
-    FIELD: "ExprKind" = typing.cast("ExprKind", enum.auto())
+    SCALAR = typing.cast("ExprKind", enum.auto())
+    FIELD = typing.cast("ExprKind", enum.auto())
 
 
 class LocNode(eve.Node):
@@ -265,7 +279,9 @@ class Stmt(LocNode):
 
 def verify_condition_is_boolean(parent_node_cls: datamodels.DataModel, cond: Expr) -> None:
     if cond.dtype and cond.dtype is not DataType.BOOL:
-        raise ValueError("Condition in `{}` must be boolean.".format(type(parent_node_cls)))
+        raise ValueError(
+            f"Condition in `{type(parent_node_cls)}` must be boolean, got {cond.dtype} instead. Condition: {cond}."
+        )
 
 
 def verify_and_get_common_dtype(
@@ -273,28 +289,28 @@ def verify_and_get_common_dtype(
 ) -> Optional[DataType]:
     assert len(exprs) > 0
     if all(e.dtype is not DataType.AUTO for e in exprs):
-        dtypes: List[DataType] = [e.dtype for e in exprs]  # type: ignore # guaranteed to be not None
+        dtypes: List[DataType] = [e.dtype for e in exprs]  # guaranteed to be not None
         dtype = dtypes[0]
         if strict:
             if all(dt == dtype for dt in dtypes):
                 return dtype
-            else:
-                raise ValueError(
-                    f"Type mismatch in `{node_cls.__name__}`. Types are "
-                    + ", ".join(dt.name for dt in dtypes)
-                )
-        else:
-            # upcasting
-            return max(dt for dt in dtypes)
-    else:
-        return None
+
+            raise ValueError(
+                f"Type mismatch in `{node_cls.__name__}`. Types are "
+                + ", ".join(dt.name for dt in dtypes)
+            )
+
+        # upcasting
+        return max(dt for dt in dtypes)
+
+    return None
 
 
 def compute_kind(*values: Expr) -> ExprKind:
     if any(v.kind == ExprKind.FIELD for v in values):
         return ExprKind.FIELD
-    else:
-        return ExprKind.SCALAR
+
+    return ExprKind.SCALAR
 
 
 class Literal(eve.Node):
@@ -317,7 +333,7 @@ class CartesianOffset(eve.Node):
     k: int
 
     @classmethod
-    def zero(cls) -> "CartesianOffset":
+    def zero(cls) -> CartesianOffset:
         return cls(i=0, j=0, k=0)
 
     def to_dict(self) -> Dict[str, int]:
@@ -337,6 +353,34 @@ class VariableKOffset(eve.GenericNode, Generic[ExprT]):
             raise ValueError("Variable vertical index must be an integer expression")
 
 
+class AbsoluteKIndex(eve.GenericNode, Generic[ExprT]):
+    """Access a field with absolute K
+
+    Restrictions:
+    - Centered I/J
+    - No data dimensions
+    - Read-only
+    """
+
+    k: Union[int, ExprT]
+
+    def to_dict(self) -> Dict[str, Optional[int]]:
+        return {"i": 0, "j": 0, "k": None}
+
+    @datamodels.validator("k")
+    def offset_expr_is_int(self, _attribute: datamodels.Attribute, value: Any) -> None:
+        utils.warn_experimental_feature(
+            feature="Absolute indexing in `K`", ADR="experimental/indexing-absolute-k.md"
+        )
+        if isinstance(value, numbers.Real):
+            if not isinstance(value, int):
+                raise ValueError("Absolute vertical index literal must be an integer")
+        else:
+            value = typing.cast(Expr, value)
+            if value.dtype is not DataType.AUTO and not value.dtype.isinteger():
+                raise ValueError("Absolute vertical index must be an integer expression")
+
+
 class ScalarAccess(LocNode):
     name: eve.Coerced[eve.SymbolRef]
     kind: ExprKind = ExprKind.SCALAR
@@ -344,12 +388,12 @@ class ScalarAccess(LocNode):
 
 class FieldAccess(eve.GenericNode, Generic[ExprT, VariableKOffsetT]):
     name: eve.Coerced[eve.SymbolRef]
-    offset: Union[CartesianOffset, VariableKOffsetT]
+    offset: CartesianOffset | VariableKOffsetT | AbsoluteKIndex
     data_index: List[ExprT] = eve.field(default_factory=list)
     kind: ExprKind = ExprKind.FIELD
 
     @classmethod
-    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> "FieldAccess":
+    def centered(cls, *, name: str, loc: Optional[eve.SourceLocation] = None) -> FieldAccess:
         return cls(name=name, loc=loc, offset=CartesianOffset.zero())
 
     @datamodels.validator("data_index")
@@ -406,10 +450,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(
-        cls: Type[datamodels.DataModel],
-        instance: datamodels.DataModel,
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -557,9 +598,36 @@ class NativeFuncCall(eve.GenericNode, Generic[ExprT]):
 
 
 def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.RootValidator:
+    def _precision_to_datatype(func: NativeFunction) -> DataType:
+        if func == NativeFunction.INT32:
+            return DataType.INT32
+        if func == NativeFunction.INT64:
+            return DataType.INT64
+        if func == NativeFunction.FLOAT32:
+            return DataType.FLOAT32
+        if func == NativeFunction.FLOAT64:
+            return DataType.FLOAT64
+        raise NotImplementedError(f"Found unknown precision specification {func}")
+
     def _impl(cls: Type[NativeFuncCall], instance: NativeFuncCall) -> None:
-        if instance.func in (NativeFunction.ISFINITE, NativeFunction.ISINF, NativeFunction.ISNAN):
+        if instance.func in (
+            NativeFunction.ISFINITE,
+            NativeFunction.ISINF,
+            NativeFunction.ISNAN,
+        ):
             instance.dtype = DataType.BOOL  # type: ignore[attr-defined]
+        elif instance.func in (
+            NativeFunction.INT32,
+            NativeFunction.INT64,
+            NativeFunction.FLOAT32,
+            NativeFunction.FLOAT64,
+        ):
+            instance.dtype = _precision_to_datatype(instance.func)  # type: ignore[attr-defined]
+        elif instance.func == NativeFunction.POW:
+            # Use non-strict to derive return type as max(type(base), type(exponent))
+            common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=False)
+            if common_dtype:
+                instance.dtype = common_dtype  # type: ignore[attr-defined]
         else:
             # assumes all NativeFunction args have a common dtype
             common_dtype = verify_and_get_common_dtype(cls, instance.args, strict=strict)
@@ -572,7 +640,7 @@ def native_func_call_dtype_propagation(*, strict: bool = True) -> datamodels.Roo
 def validate_dtype_is_set() -> datamodels.RootValidator:
     def _impl(cls: Type[ExprT], instance: ExprT) -> None:
         dtype_nodes: List[ExprT] = []
-        for v in flatten_list(datamodels.astuple(instance)):
+        for v in utils.flatten(datamodels.astuple(instance)):
             if isinstance(v, eve.Node):
                 dtype_nodes.extend(v.walk_values().if_hasattr("dtype"))
 
@@ -582,14 +650,14 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
                 nodes_without_dtype.append(node)
 
         if len(nodes_without_dtype) > 0:
-            raise ValueError("Nodes without dtype detected {}".format(nodes_without_dtype))
+            raise ValueError(f"Nodes without dtype detected: {nodes_without_dtype}.")
 
     return _make_root_validator(_impl)
 
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
-        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+        if vertical_loop_type.__annotations__.get("loop_order") is not LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )
@@ -609,11 +677,16 @@ class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
         self.generic_visit(node, loop_order=loop_order, **kwargs)
 
     def visit_AssignStmt(
-        self, node: AssignStmt, *, loop_order: LoopOrder, symtable: Dict[str, Any], **kwargs: Any
+        self,
+        node: AssignStmt,
+        *,
+        loop_order: LoopOrder,
+        symtable: Dict[str, Any],
+        **kwargs: Any,
     ) -> None:
         decl = symtable.get(node.left.name, None)
         if decl is None:
-            raise ValueError("Symbol {} not found.".format(node.left.name))
+            raise ValueError(f"Symbol {node.left.name} not found.")
         if not isinstance(decl, self.decl_type):
             return None
 
@@ -670,7 +743,17 @@ def validate_lvalue_dims(
     return _make_root_validator(_impl)
 
 
-class AxisBound(eve.Node):
+class BaseAxisBound(eve.Node, ABC):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess, int]
+
+
+class RuntimeAxisBound(BaseAxisBound):
+    level: LevelMarker
+    offset: Union[ScalarAccess, FieldAccess]
+
+
+class AxisBound(BaseAxisBound):
     level: LevelMarker
     offset: int = 0
 
@@ -697,24 +780,24 @@ class AxisBound(eve.Node):
 
     def __lt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return (self.level == LevelMarker.START and other.level == LevelMarker.END) or (
             self.level == other.level and self.offset < other.offset
         )
 
     def __le__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return self < other or self == other
 
     def __gt__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return not self < other and not self == other
 
     def __ge__(self, other: AxisBound) -> bool:
         if not isinstance(other, AxisBound):
-            return NotImplemented
+            raise TypeError
         return not self < other
 
 
@@ -723,14 +806,13 @@ class HorizontalInterval(eve.Node):
 
     This is separate from `gtir.Interval` because the endpoints may
     be outside the compute domain.
-
     """
 
     start: Optional[AxisBound]
     end: Optional[AxisBound]
 
     @classmethod
-    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> "HorizontalInterval":
+    def compute_domain(cls, start_offset: int = 0, end_offset: int = 0) -> HorizontalInterval:
         return cls(start=AxisBound.start(start_offset), end=AxisBound.end(end_offset))
 
     @classmethod
@@ -740,7 +822,7 @@ class HorizontalInterval(eve.Node):
     @classmethod
     def at_endpt(
         cls, level: LevelMarker, start_offset: int, end_offset: Optional[int] = None
-    ) -> "HorizontalInterval":
+    ) -> HorizontalInterval:
         if end_offset is None:
             end_offset = start_offset + 1
         return cls(
@@ -899,17 +981,36 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.FLOOR: "floor",
         NativeFunction.CEIL: "ceil",
         NativeFunction.TRUNC: "trunc",
+        NativeFunction.INT32: "int32",
+        NativeFunction.INT64: "int64",
+        NativeFunction.FLOAT32: "float32",
+        NativeFunction.FLOAT64: "float64",
+        NativeFunction.ERF: "erf",
+        NativeFunction.ERFC: "erfc",
+        NativeFunction.ROUND: "round",
+        NativeFunction.ROUND_AWAY_FROM_ZERO: "round_away_from_zero",
     },
 }
 
 
 def op_to_ufunc(
     op: Union[
-        UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-    ]
+        UnaryOperator,
+        ArithmeticOperator,
+        ComparisonOperator,
+        LogicalOperator,
+        NativeFunction,
+    ],
 ) -> np.ufunc:
     if not isinstance(
-        op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)
+        op,
+        (
+            UnaryOperator,
+            ArithmeticOperator,
+            ComparisonOperator,
+            LogicalOperator,
+            NativeFunction,
+        ),
     ):
         raise TypeError(
             "Can only convert instances of GTC operators and supported native functions to typestr."
@@ -920,7 +1021,7 @@ def op_to_ufunc(
 @functools.lru_cache(maxsize=None)
 def typestr_to_data_type(typestr: str) -> DataType:
     if not isinstance(typestr, str) or len(typestr) < 3 or not typestr[2:].isnumeric():
-        return DataType.INVALID  # type: ignore
+        return DataType.INVALID
     table = {
         ("b", 1): DataType.BOOL,
         ("i", 1): DataType.INT8,
@@ -931,4 +1032,4 @@ def typestr_to_data_type(typestr: str) -> DataType:
         ("f", 8): DataType.FLOAT64,
     }
     key = (typestr[1], int(typestr[2:]))
-    return table.get(key, DataType.INVALID)  # type: ignore
+    return table.get(key, DataType.INVALID)

@@ -1,20 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
 from gt4py.next.iterator import ir
+from gt4py import eve
 
 
 def test_noninstantiable():
@@ -29,3 +24,29 @@ def test_str():
     expected = "λ(x) → x"
     actual = str(testee)
     assert actual == expected
+
+
+def test_fingerprint():
+    loc1 = eve.SourceLocation(filename="loc1", line=1, column=1)
+    loc2 = eve.SourceLocation(filename="loc2", line=1, column=1)
+    node1 = ir.SymRef(id="abc", location=loc1)
+    node2 = ir.SymRef(id="abc", location=loc2)
+    node3 = ir.SymRef(id="abcd", location=loc1)
+    assert ir.lenient_ir_fingerprinter(node1) == ir.lenient_ir_fingerprinter(node2)
+    assert ir.lenient_ir_fingerprinter(node1) != ir.lenient_ir_fingerprinter(node3)
+
+
+def test_fingerprint_nested():
+    def node_maker(fun: str, filename: str):
+        loc = eve.SourceLocation(filename=filename, line=1, column=1)
+        return ir.FunCall(
+            fun=ir.SymRef(id=fun, location=loc),
+            args=[ir.SymRef(id="arg", location=loc)],
+            location=loc,
+        )
+
+    node1 = node_maker("f1", "loc1")
+    node2 = node_maker("f1", "loc2")
+    node3 = node_maker("f3", "loc1")
+    assert ir.lenient_ir_fingerprinter(node1) == ir.lenient_ir_fingerprinter(node2)
+    assert ir.lenient_ir_fingerprinter(node1) != ir.lenient_ir_fingerprinter(node3)

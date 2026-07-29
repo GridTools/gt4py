@@ -1,46 +1,38 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """General utility functions. Some functionalities are directly imported from dependencies."""
 
-
 from __future__ import annotations
 
+import abc
+import collections
 import collections.abc
 import dataclasses
 import enum
 import functools
-import hashlib
+import io
 import itertools
 import operator
 import pickle
 import pprint
 import re
-import sys
 import types
 import typing
-import uuid
-import warnings
 
 import deepdiff
 import xxhash
-from boltons.iterutils import (  # noqa: F401
+from boltons.iterutils import (
     flatten as flatten,
     flatten_iter as flatten_iter,
     is_collection as is_collection,
 )
-from boltons.strutils import (  # noqa: F401
+from boltons.strutils import (
     a10n as a10n,
     asciify as asciify,
     format_int_list as format_int_list,
@@ -52,7 +44,9 @@ from boltons.strutils import (  # noqa: F401
 
 from . import extended_typing as xtyping
 from .extended_typing import (
+    TYPE_CHECKING,
     Any,
+    ArgsOnlyCallable,
     Callable,
     Collection,
     Dict,
@@ -75,14 +69,23 @@ from .type_definitions import NOTHING, NothingType
 
 
 try:
-    # For perfomance reasons, try to use cytoolz when possible (using cython)
+    # For performance reasons, try to use cytoolz when possible (using cython)
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 
 T = TypeVar("T")
+
+
+def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
+    try:
+        return next(iter(iterable))
+    except StopIteration as error:
+        if default is not NOTHING:
+            return cast(T, default)
+        raise error
 
 
 def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
@@ -92,7 +95,7 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         >>> checker = isinstancechecker((int, str))
         >>> checker(3)
         True
-        >>> checker('3')
+        >>> checker("3")
         True
         >>> checker(3.3)
         False
@@ -117,17 +120,17 @@ def attrchecker(*names: str) -> Callable[[Any], bool]:
 
     Examples:
         >>> from collections import namedtuple
-        >>> Point = namedtuple('Point', ['x', 'y'])
+        >>> Point = namedtuple("Point", ["x", "y"])
         >>> point = Point(1.0, 2.0)
-        >>> checker = attrchecker('x')
+        >>> checker = attrchecker("x")
         >>> checker(point)
         True
 
-        >>> checker = attrchecker('x', 'y')
+        >>> checker = attrchecker("x", "y")
         >>> checker(point)
         True
 
-        >>> checker = attrchecker('z')
+        >>> checker = attrchecker("z")
         >>> checker(point)
         False
 
@@ -144,19 +147,19 @@ def attrgetter_(*names: str, default: Any = NOTHING) -> Callable[[Any], Any]:
 
     Examples:
         >>> from collections import namedtuple
-        >>> Point = namedtuple('Point', ['x', 'y'])
+        >>> Point = namedtuple("Point", ["x", "y"])
         >>> point = Point(1.0, 2.0)
-        >>> getter = attrgetter_('x')
+        >>> getter = attrgetter_("x")
         >>> getter(point)
         1.0
 
         >>> import math
-        >>> getter = attrgetter_('z', default=math.nan)
+        >>> getter = attrgetter_("z", default=math.nan)
         >>> getter(point)
         nan
 
         >>> import math
-        >>> getter = attrgetter_('x', 'y', 'z', default=math.nan)
+        >>> getter = attrgetter_("x", "y", "z", default=math.nan)
         >>> getter(point)
         (1.0, 2.0, nan)
 
@@ -187,12 +190,12 @@ def getitem_(obj: Any, key: Any, default: Any = NOTHING) -> Any:
     Similar to :func:`operator.getitem()` but accepts a default value.
 
     Examples:
-        >>> d = {'a': 1}
-        >>> getitem_(d, 'a')
+        >>> d = {"a": 1}
+        >>> getitem_(d, "a")
         1
 
-        >>> d = {'a': 1}
-        >>> getitem_(d, 'b', 'default')
+        >>> d = {"a": 1}
+        >>> getitem_(d, "b", "default")
         'default'
 
     """
@@ -213,13 +216,13 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     Similar to :func:`operator.itemgetter()` but accepts a default value.
 
     Examples:
-        >>> d = {'a': 1}
-        >>> getter = itemgetter_('a')
+        >>> d = {"a": 1}
+        >>> getter = itemgetter_("a")
         >>> getter(d)
         1
 
-        >>> d = {'a': 1}
-        >>> getter = itemgetter_('b', 'default')
+        >>> d = {"a": 1}
+        >>> getter = itemgetter_("b", "default")
         >>> getter(d)
         'default'
 
@@ -227,8 +230,317 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) -> str:
+    """
+    Get the fully qualified name of an object.
+
+    This is useful for creating unique identifiers for objects that can be used
+    in fingerprinting or other identification scenarios.
+    """
+    if isinstance(obj, types.ModuleType):
+        return obj.__name__
+    return f"{obj.__module__}.{obj.__qualname__}"
+
+
 _P = ParamSpec("_P")
+_S = TypeVar("_S")
 _T = TypeVar("_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class IndexerCallable(Generic[_S, _T]):
+    """
+    An indexer class applying the wrapped function to the index arguments.
+
+    Examples:
+        >>> indexer = IndexerCallable(lambda x: x**2)
+        >>> indexer[3]
+        9
+
+        >>> indexer = IndexerCallable(lambda a, b: a + b)
+        >>> indexer[3, 4]
+        7
+    """
+
+    func: ArgsOnlyCallable[_S, _T]
+
+    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+        return self.func(*key) if isinstance(key, tuple) else self.func(key)
+
+
+_K = TypeVar("_K")
+_V = TypeVar("_V")
+
+
+class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
+    """
+    Base dict-like class using a value factory to compute default values per key.
+
+    This class is not intended to be used directly, but as a base for other classes.
+
+    Examples:
+        >>> class MyDefaultDict(CustomDefaultDictBase):
+        ...     def value_factory(self, key):
+        ...         return key * 2
+        >>> d = MyDefaultDict()
+        >>> d[1]
+        2
+        >>> d[2]
+        4
+        >>> d[1] = 10
+        >>> d[1]
+        10
+
+    """
+
+    __slots__ = ()
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+
+    def __missing__(self, key: _K) -> _V:
+        self[key] = value = self.value_factory(key)
+        return value
+
+    @abc.abstractmethod
+    def value_factory(self, key: _K) -> _V:
+        raise NotImplementedError
+
+
+class CustomMapping(collections.abc.MutableMapping[_K, _V]):
+    """
+    A custom mapping class that uses a key function to map keys to values.
+
+    This class allows for custom key functions to be used for indexing and
+    retrieving values, while maintaining a mapping-like interface.
+
+    Examples:
+        >>> mapping = CustomMapping(lambda x: hash(repr(x)))
+        >>> mapping[[1, 2]] = "first"
+        >>> mapping[[1, 2]]
+        'first'
+        >>> mapping[{1, 2}] = "second"
+        >>> mapping[{1, 2}]
+        'second'
+        >>> len(mapping)
+        2
+    """
+
+    __slots__ = ("key_func", "key_map", "value_map")
+
+    key_func: Callable[[_K], int]
+    key_map: dict[int, _K]
+    value_map: dict[int, _V]
+
+    def __init__(self, key: Callable[[_K], int]) -> None:
+        self.key_func = key
+        self.key_map = {}
+        self.value_map = {}
+
+    def __getitem__(self, key: _K) -> _V:
+        return self.value_map[self.key_func(key)]
+
+    def __setitem__(self, key: _K, value: _V) -> None:
+        data_key = self.key_func(key)
+        self.key_map[data_key] = key
+        self.value_map[data_key] = value
+
+    def __delitem__(self, key: _K) -> None:
+        custom_key = self.key_func(key)
+        del self.key_map[custom_key]
+        del self.value_map[custom_key]
+
+    def __len__(self) -> int:
+        return len(self.key_map)
+
+    def __iter__(self) -> Iterator[_K]:
+        for custom_key in self.key_map:
+            yield self.key_map[custom_key]
+
+    def __repr__(self) -> str:
+        return (
+            "{"
+            + ", ".join(f"{self.key_map[k]!r}: {self.value_map[k]!r}" for k in self.key_map)
+            + "}"
+        )
+
+    def internal_key(self, key: _K) -> int:
+        """Return the internal key used to store the value associated with `key`."""
+        return self.key_func(key)
+
+
+class HashableBy(Generic[_T]):
+    __slots__ = ("hashed_value", "value")
+
+    def __init__(self, hash_func: Callable[[_T], int], value: _T) -> None:
+        self.value = value
+        self.hashed_value = hash_func(value)
+
+    def __hash__(self) -> int:
+        return self.hashed_value
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, HashableBy)
+        return self.value is other.value or self.value == other.value
+
+    def __str__(self) -> str:
+        return (
+            f"{self.__class__.__name__}(value={self.value!r}, hashed_value={self.hashed_value!r})"
+        )
+
+
+@overload
+def hashable_by(func: Callable[[_T], int], value: _T) -> HashableBy[_T]: ...
+
+
+@overload
+def hashable_by(
+    func: Callable[[_T], int], value: NothingType = NOTHING
+) -> functools.partial[HashableBy[_T]]: ...
+
+
+def hashable_by(
+    func: Callable[[_T], int], value: _T | NothingType = NOTHING
+) -> HashableBy[_T] | functools.partial[HashableBy[_T]]:
+    """
+    Creates a wrapper that uses `func` to hash the value passed to it.
+    """
+    return (
+        HashableBy(func, value)  # type: ignore[arg-type] # checked in condition
+        if value is not NOTHING
+        else functools.partial(hashable_by, func)
+    )
+
+
+hashable_by_id = hashable_by(id)
+cached_hash = hashable_by(hash)
+
+
+@overload
+def optional_lru_cache(
+    func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
+
+
+@overload
+def optional_lru_cache(
+    func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Callable[_P, _T]: ...
+
+
+def optional_lru_cache(
+    func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
+    """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
+
+    Examples:
+        >>> @optional_lru_cache(typed=True)
+        ... def func(a, b):
+        ...     print(f"Inside func({a}, {b})")
+        ...     return a + b
+        >>> print(func(1, 3))
+        Inside func(1, 3)
+        4
+        >>> print(func(1, 3))
+        4
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+        >>> print(func([1], [3]))
+        Inside func([1], [3])
+        [1, 3]
+
+    Notes:
+        Based on :func:`typing._tp_cache`.
+    """
+
+    def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
+        if maxsize is None and not typed:
+            cached = functools.cache(func)
+        else:
+            cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+
+        @functools.wraps(func)
+        def inner(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return cached(*args, **kwargs)
+            except TypeError as error:
+                if error.args and error.args[0].startswith("unhashable"):
+                    # Catch errors due to non-hashable arguments and fallback to original function
+                    return func(*args, **kwargs)
+                else:
+                    raise error
+
+        return inner
+
+    return _decorator(func) if func is not None else _decorator
+
+
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
+
+    __hash__ = HashableBy.__hash__
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other or hash(self) == hash(other)
+
+
+# TODO(egparedes): it would be more efficient to implement the caching logic
+# here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
+# arguments.
+def lru_cache(
+    func: Optional[Callable[_P, _T]] = None,
+    *,
+    key: Optional[Callable[_P, int]] = None,
+    maxsize: Optional[int] = 128,
+    typed: bool = False,
+) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
+    """
+    Wrap :func:`functools.lru_cache` but allow customizing the cache key.
+
+    Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
+    implies `obj1 == obj2`, i.e. they are considered equal.
+
+    >>> @lru_cache(key=id)
+    ... def func(x):
+    ...     print("called")
+    ...     return x
+
+    >>> obj = object()
+    >>> func(obj) is obj
+    called
+    True
+    >>> func(obj) is obj
+    True
+    """
+
+    def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
+        if key:
+            if typed:
+                raise ValueError("Cannot use both 'key' and 'typed'")
+
+            @functools.lru_cache(maxsize=maxsize, typed=False)
+            def cached_func(*args: HashableBy, **kwargs: HashableBy) -> _T:
+                return func(*(arg.value for arg in args), **{k: v.value for k, v in kwargs.items()})
+
+            @functools.wraps(func)
+            def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
+                return cached_func(
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
+                )
+
+            inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
+
+            return typing.cast(Callable[_P, _T], inner)
+
+        return typing.cast(
+            Callable[_P, _T], functools.lru_cache(maxsize=maxsize, typed=typed)(func)
+        )
+
+    return _decorator(func) if func is not None else _decorator
 
 
 class fluid_partial(functools.partial):
@@ -241,18 +553,14 @@ class fluid_partial(functools.partial):
 @overload
 def with_fluid_partial(
     func: Literal[None] = None, *args: Any, **kwargs: Any
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
-    func: Callable[_P, _T], *args: Any, **kwargs: Any
-) -> Callable[_P, _T]:
-    ...
+def with_fluid_partial(func: Callable[_P, _T], *args: Any, **kwargs: Any) -> Callable[_P, _T]: ...
 
 
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+def with_fluid_partial(
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Add a `partial` attribute to the decorated function.
@@ -271,7 +579,6 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
         >>> @with_fluid_partial
         ... def add(a, b):
         ...     return a + b
-        ...
         >>> add.partial(1)(2)
         3
     """
@@ -283,66 +590,6 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
     return _decorator(func) if func is not None else _decorator
 
 
-@overload
-def optional_lru_cache(
-    func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
-
-
-@overload
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
-    func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[_P, _T]:
-    ...
-
-
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
-    func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
-    """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
-
-    Examples:
-        >>> @optional_lru_cache(typed=True)
-        ... def func(a, b):
-        ...     print(f"Inside func({a}, {b})")
-        ...     return a + b
-        ...
-        >>> print(func(1, 3))
-        Inside func(1, 3)
-        4
-        >>> print(func(1, 3))
-        4
-        >>> print(func([1], [3]))
-        Inside func([1], [3])
-        [1, 3]
-        >>> print(func([1], [3]))
-        Inside func([1], [3])
-        [1, 3]
-
-    Notes:
-        Based on :func:`typing._tp_cache`.
-    """
-
-    def _decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
-        cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
-
-        @functools.wraps(func)
-        def inner(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return cached(*args, **kwargs)
-            except TypeError as error:
-                if error.args and error.args[0].startswith("unhashable"):
-                    # Catch errors due to non-hashable arguments and fallback to original function
-                    return func(*args, **kwargs)
-                else:
-                    raise error
-
-        return inner
-
-    return _decorator(func) if func is not None else _decorator
-
-
 def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     """Class decorator to automatically register virtual subclasses.
 
@@ -350,15 +597,14 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         >>> import abc
         >>> class MyVirtualSubclassA:
         ...     pass
-        ...
         >>> class MyVirtualSubclassB:
-        ...    pass
-        ...
+        ...     pass
         >>> @register_subclasses(MyVirtualSubclassA, MyVirtualSubclassB)
         ... class MyBaseClass(abc.ABC):
-        ...    pass
-        ...
-        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(MyVirtualSubclassB, MyBaseClass)
+        ...     pass
+        >>> issubclass(MyVirtualSubclassA, MyBaseClass) and issubclass(
+        ...     MyVirtualSubclassB, MyBaseClass
+        ... )
         True
 
     """
@@ -395,35 +641,142 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+def singledispatcher(
+    default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Create a single-dispatch callable from a default and a registry of implementations.
+
+    This is a thin wrapper around :func:`functools.singledispatch` that allows
+    constructing a dispatcher from an existing mapping rather than decorating
+    individual functions.
+
+    Args:
+        default: The default implementation used when no type-specific handler
+            is found. If ``None``, the implementation registered for ``object``
+            in `implementations` is used as the default.
+        implementations: A mapping from types to their registered handler
+            functions. If `default` is ``None``, ``object`` must be present.
+
+    Returns:
+        A single-dispatch callable with the registered implementations.
+
+    Examples:
+        >>> def default_impl(x: Any) -> str:
+        ...     return f"default: {x}"
+        >>> def int_impl(x: int) -> str:
+        ...     return f"int: {x}"
+        >>> dispatch = singledispatcher(default_impl, implementations={int: int_impl})
+        >>> dispatch(3.14)
+        'default: 3.14'
+        >>> dispatch(42)
+        'int: 42'
+
+    """
+    if default is None:
+        if object not in implementations:
+            raise ValueError("A default implementation for 'object' must be provided.")
+        default = cast(Callable[P, T], implementations[object])
+    else:
+        if not callable(default):
+            raise ValueError(f"Default implementation must be callable, got '{default}'.")
+        if object in implementations:
+            raise ValueError(
+                "Default implementation for 'object' is already provided in 'implementations'."
+            )
+
+    assert callable(default)  # for mypy
+
+    if xtyping.is_single_dispatch_callable(default):
+        # `default` is itself a single-dispatch callable (e.g. a dispatcher used
+        # as the fallback to chain dispatchers). `functools.singledispatch`
+        # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
+        # holds ``register``/``registry`` -- onto the new dispatcher via
+        # ``update_wrapper``, aliasing the two. Registering the implementations
+        # below would then silently mutate ``default`` itself. Forward through a
+        # plain function (empty ``__dict__``) so the new dispatcher keeps its own
+        # independent registry.
+        inner_default = default
+
+        def default(*args: Any, **kwargs: Any) -> T:  # deliberately shadowing the parameter
+            return inner_default(*args, **kwargs)
+
+    result = functools.singledispatch(default)
+    for cls, func in implementations.items():
+        result.register(cls)(func)
+    return cast(xtyping.SingleDispatchCallable[P, T], result)
+
+
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the last
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry: dict[Any, Any] = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
+
+
+#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+#: therefore the resulting hash) is reproducible across Python versions,
+#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+_CONTENT_HASH_PICKLE_PROTOCOL: int = 5
+
+
+def content_hash(
+    *args: Any,
+    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
+    pickler_type: type[pickle.Pickler] = pickle.Pickler,
+) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
-    interpreter reboots) and it does not use hash customizations on user
-    classes (it uses `pickle` internally to get a byte stream).
+    interpreter reboots and Python versions) and it does not use hash
+    customizations on user classes (it uses `pickle` internally to get a byte
+    stream). The pickle protocol is pinned (:data:`CONTENT_HASH_PICKLE_PROTOCOL`)
+    so the byte stream does not depend on the running Python's default protocol.
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
-            from :mod:`hashlib` or canonical name (`str`) of the
-            hash algorithm as defined in :mod:`hashlib`.
-            Defaults to :class:`xxhash.xxh64`.
+            from :mod:`hashlib`. Defaults to :class:`xxhash.xxh64`.
 
     """
     if hash_algorithm is None:
         hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
-    elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
+    assert hash_algorithm is not None
 
-    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
-    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
+    buf = io.BytesIO()
+    pickler_type(buf, protocol=_CONTENT_HASH_PICKLE_PROTOCOL).dump(args)
+
+    hash_algorithm.update(buf.getvalue())
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
 
 
-ddiff = deepdiff.DeepDiff
-"""Shortcut for deepdiff.DeepDiff.
+ddiff = deepdiff.diff.DeepDiff
+"""Shortcut for deepdiff.diff.DeepDiff.
 
 Check https://zepworks.com/deepdiff/current/diff.html for more info.
 """
@@ -438,19 +791,15 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 
 
 def pprint_ddiff(
-    old: Any,
-    new: Any,
-    *,
-    pprint_opts: Optional[Dict[str, Any]] = None,
-    **kwargs: Any,
+    old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
 ) -> None:
-    """Pretty printing of deepdiff.DeepDiff objects.
+    """Pretty printing of deepdiff.diff.DeepDiff objects.
 
     Keyword Arguments:
         pprint_opts: kwargs dict with options for pprint.pprint.
     """
     pprint_opts = pprint_opts or {"indent": 2}
-    pprint.pprint(deepdiff.DeepDiff(old, new, **kwargs), **pprint_opts)
+    pprint.pprint(deepdiff.diff.DeepDiff(old, new, **kwargs), **pprint_opts)
 
 
 AnyWordsIterable = Union[str, Iterable[str]]
@@ -603,6 +952,10 @@ class Namespace(types.SimpleNamespace, Generic[T]):
 
     asdict = as_dict
 
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> T: ...
+
 
 class FrozenNamespace(Namespace[T]):
     """An immutable version of :class:`Namespace`.
@@ -642,76 +995,22 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
-class UIDGenerator:
-    """Simple unique id generator using different methods."""
+@dataclasses.dataclass(frozen=True)
+class SequentialIDGenerator:
+    """Simple sequential ID generator."""
 
-    prefix: Optional[str] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    width: Optional[int] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
-    warn_unsafe: Optional[bool] = (
-        dataclasses.field(default=None, kw_only=True)
-        if sys.version_info >= (3, 10)
-        else dataclasses.field(default=None)
-    )
+    prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
+    format: str = "{prefix}_{id}"
 
-    _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1), init=False
-    )
-    """Constantly increasing counter for generation of sequential unique ids."""
+    def __next__(self) -> str:
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
 
-    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a random globally unique id."""
-        width = width or self.width or 8
-        if width <= 4:
-            raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
-        prefix = prefix or self.prefix
-        u = uuid.uuid4()
-        s = str(u).replace("-", "")[:width]
-        return f"{prefix}_{s}" if prefix else f"{s}"
+    def next(self) -> str:
+        return self.__next__()
 
-    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a sequential unique id (for the current session)."""
-        width = width or self.width
-        if width is not None and width < 1:
-            raise ValueError(f"Width must be a positive number ({width} provided).")
-        prefix = prefix or self.prefix
-        count = next(self._counter)
-        s = f"{count:0{width}}" if width else f"{count}"
-        return f"{prefix}_{s}" if prefix else f"{s}"
-
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
-        """Reset generator counter.
-
-        It returns the same instance to allow resetting at initialization:
-
-        Example:
-            >>> generator = UIDGenerator().reset_sequence(3)
-
-        Notes:
-            If the new start value is lower than the last generated UID, new
-            IDs are not longer guaranteed to be unique.
-
-        """
-        if start < 0:
-            raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        if warn_unsafe is None:
-            warn_unsafe = self.warn_unsafe
-        if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})")
-        self._counter = itertools.count(start)
-
-        return self
-
-
-UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")
@@ -753,7 +1052,7 @@ class XIterable(Iterable[T]):
     def __iter__(self) -> Iterator[T]:
         return self.iterator
 
-    def map(self, func: Callable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
+    def map(self, func: Callable) -> XIterable[Any]:  # A003: shadowing a python builtin
         """Apply a callable to every iterator element.
 
         Equivalent to ``map(func, self)``.
@@ -793,9 +1092,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Invalid function or callable: '{func}'.")
         return XIterable(map(func, self.iterator))
 
-    def filter(  # noqa  # A003: shadowing a python builtin
-        self, func: Callable[..., bool]
-    ) -> XIterable[T]:
+    def filter(self, func: Callable[..., bool]) -> XIterable[T]:  # A003: shadowing a python builtin
         """Filter elements with callables.
 
         Equivalent to ``filter(func, self)``.
@@ -826,7 +1123,7 @@ class XIterable(Iterable[T]):
         Equivalent to ``xiter(item for item in self if isinstance(item, types))``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
             >>> list(it.if_isinstance(int, float))
             [1, 3.3]
 
@@ -839,7 +1136,7 @@ class XIterable(Iterable[T]):
         Equivalent to ``xiter(item for item in self if not isinstance(item, types))``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
             >>> list(it.if_not_isinstance(int, float))
             ['2', [4, 5], {6, 7}]
 
@@ -946,18 +1243,18 @@ class XIterable(Iterable[T]):
         Equivalent to ``filter(attrchecker(names), self)``.
 
         Examples:
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
-            >>> list(it.if_hasattr('__len__'))
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
+            >>> list(it.if_hasattr("__len__"))
             ['2', [4, 5], {6, 7}]
 
-            >>> it = xiter([1, '2', 3.3, [4, 5], {6, 7}])
-            >>> list(it.if_hasattr('__len__', 'index'))
+            >>> it = xiter([1, "2", 3.3, [4, 5], {6, 7}])
+            >>> list(it.if_hasattr("__len__", "index"))
             ['2', [4, 5]]
 
         """
         return XIterable(filter(attrchecker(*names), self.iterator))
 
-    def getattr(  # noqa  # A003: shadowing a python builtin
+    def getattr(  # A003: shadowing a python builtin
         self, *names: str, default: Any = NOTHING
     ) -> XIterable[Any]:
         """Get provided attributes from each item in a sequence.
@@ -972,13 +1269,13 @@ class XIterable(Iterable[T]):
 
         Examples:
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y'])
+            >>> Point = namedtuple("Point", ["x", "y"])
             >>> it = xiter([Point(1.0, -1.0), Point(2.0, -2.0), Point(3.0, -3.0)])
-            >>> list(it.getattr('y'))
+            >>> list(it.getattr("y"))
             [-1.0, -2.0, -3.0]
 
             >>> it = xiter([Point(1.0, -1.0), Point(2.0, -2.0), Point(3.0, -3.0)])
-            >>> list(it.getattr('x', 'z', default=None))
+            >>> list(it.getattr("x", "z", default=None))
             [(1.0, None), (2.0, None), (3.0, None)]
 
         """
@@ -995,16 +1292,18 @@ class XIterable(Iterable[T]):
 
         For detailed information check :func:`toolz.itertoolz.pluck` reference.
 
-            >>> it = xiter([('a', 1), ('b', 2), ('c', 3)])
+            >>> it = xiter([("a", 1), ("b", 2), ("c", 3)])
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter([
-            ...     dict(name="AA", age=20, country="US"),
-            ...     dict(name="BB", age=30, country="UK"),
-            ...     dict(name="CC", age=40, country="EU"),
-            ...     dict(country="CH")
-            ... ])
+            >>> it = xiter(
+            ...     [
+            ...         dict(name="AA", age=20, country="US"),
+            ...         dict(name="BB", age=30, country="UK"),
+            ...         dict(name="CC", age=40, country="EU"),
+            ...         dict(country="CH"),
+            ...     ]
+            ... )
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 
@@ -1027,12 +1326,12 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`itertools.chain` reference.
 
         Examples:
-            >>> it_a, it_b = xiter(range(2)), xiter(['a', 'b'])
+            >>> it_a, it_b = xiter(range(2)), xiter(["a", "b"])
             >>> list(it_a.chain(it_b))
             [0, 1, 'a', 'b']
 
             >>> it_a = xiter(range(2))
-            >>> list(it_a.chain(['a', 'b'], ['A', 'B']))
+            >>> list(it_a.chain(["a", "b"], ["A", "B"]))
             [0, 1, 'a', 'b', 'A', 'B']
 
         """
@@ -1040,10 +1339,7 @@ class XIterable(Iterable[T]):
         return XIterable(itertools.chain(self.iterator, *iterators))
 
     def diff(
-        self,
-        *others: Iterable,
-        default: Any = NOTHING,
-        key: Union[NOTHING, Callable] = NOTHING,
+        self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Diff iterators.
 
@@ -1096,7 +1392,7 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`itertools.product` reference.
 
         Examples:
-            >>> it_a, it_b = xiter([0, 1]), xiter(['a', 'b'])
+            >>> it_a, it_b = xiter([0, 1]), xiter(["a", "b"])
             >>> list(it_a.product(it_b))
             [(0, 'a'), (0, 'b'), (1, 'a'), (1, 'b')]
 
@@ -1179,7 +1475,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Only positive integer numbers are accepted (provided: {n}).")
         return XIterable(toolz.itertoolz.take_nth(n, self.iterator))
 
-    def zip(  # noqa  # A003: shadowing a python builtin
+    def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Zip iterators.
@@ -1193,16 +1489,16 @@ class XIterable(Iterable[T]):
 
         Examples:
             >>> it_a = xiter(range(3))
-            >>> it_b = ['a', 'b', 'c']
+            >>> it_b = ["a", "b", "c"]
             >>> list(it_a.zip(it_b))
             [(0, 'a'), (1, 'b'), (2, 'c')]
 
             >>> it = xiter(range(3))
-            >>> list(it.zip(['a', 'b', 'c'], ['A', 'B', 'C']))
+            >>> list(it.zip(["a", "b", "c"], ["A", "B", "C"]))
             [(0, 'a', 'A'), (1, 'b', 'B'), (2, 'c', 'C')]
 
             >>> it = xiter(range(5))
-            >>> list(it.zip(['a', 'b', 'c'], ['A', 'B', 'C'], fill=None))
+            >>> list(it.zip(["a", "b", "c"], ["A", "B", "C"], fill=None))
             [(0, 'a', 'A'), (1, 'b', 'B'), (2, 'c', 'C'), (3, None, None), (4, None, None)]
 
         """
@@ -1220,20 +1516,18 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`zip` reference.
 
         Examples:
-            >>> it = xiter([('a', 1), ('b', 2), ('c', 3)])
+            >>> it = xiter([("a", 1), ("b", 2), ("c", 3)])
             >>> list(it.unzip())
             [('a', 'b', 'c'), (1, 2, 3)]
 
         """
-        return XIterable(zip(*self.iterator))  # type: ignore  # mypy gets confused with *args
+        return XIterable(zip(*self.iterator))
 
     @typing.overload
-    def islice(self, __stop: int) -> XIterable[T]:
-        ...
+    def islice(self, __stop: int) -> XIterable[T]: ...
 
     @typing.overload
-    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]:
-        ...
+    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]: ...
 
     def islice(
         self,
@@ -1302,7 +1596,7 @@ class XIterable(Iterable[T]):
             >>> list(it.unique())
             [1, 2, 3]
 
-            >>> it = xiter(['cat', 'mouse', 'dog', 'hen'])
+            >>> it = xiter(["cat", "mouse", "dog", "hen"])
             >>> list(it.unique(key=len))
             ['cat', 'mouse']
 
@@ -1315,24 +1609,20 @@ class XIterable(Iterable[T]):
     @typing.overload
     def groupby(
         self, key: str, *other_keys: str, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
-    def groupby(self, key: List[Any], *, as_dict: bool = False) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    def groupby(
+        self, key: List[Any], *, as_dict: bool = False
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
     def groupby(
         self, key: Callable[[T], Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     def groupby(
-        self,
-        key: Union[str, List[Any], Callable[[T], Any]],
-        *attr_keys: str,
-        as_dict: bool = False,
+        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
     ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
         """Group a sequence by a given key.
 
@@ -1354,29 +1644,29 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`toolz.itertoolz.groupby` reference.
 
         Examples:
-            >>> it = xiter([(1.0, -1.0), (1.0,-2.0), (2.2, -3.0)])
+            >>> it = xiter([(1.0, -1.0), (1.0, -2.0), (2.2, -3.0)])
             >>> list(it.groupby([0]))
             [(1.0, [(1.0, -1.0), (1.0, -2.0)]), (2.2, [(2.2, -3.0)])]
 
             >>> data = [
-            ...     {'x': 1.0, 'y': -1.0, 'z': 1.0},
-            ...     {'x': 1.0, 'y': -2.0, 'z': 1.0},
-            ...     {'x': 2.2, 'y': -3.0, 'z': 2.2}
+            ...     {"x": 1.0, "y": -1.0, "z": 1.0},
+            ...     {"x": 1.0, "y": -2.0, "z": 1.0},
+            ...     {"x": 2.2, "y": -3.0, "z": 2.2},
             ... ]
-            >>> list(xiter(data).groupby(['x']))
+            >>> list(xiter(data).groupby(["x"]))
             [(1.0, [{'x': 1.0, 'y': -1.0, 'z': 1.0}, {'x': 1.0, 'y': -2.0, 'z': 1.0}]), (2.2, [{'x': 2.2, 'y': -3.0, 'z': 2.2}])]
-            >>> list(xiter(data).groupby(['x', 'z']))
+            >>> list(xiter(data).groupby(["x", "z"]))
             [((1.0, 1.0), [{'x': 1.0, 'y': -1.0, 'z': 1.0}, {'x': 1.0, 'y': -2.0, 'z': 1.0}]), ((2.2, 2.2), [{'x': 2.2, 'y': -3.0, 'z': 2.2}])]
 
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y', 'z'])
+            >>> Point = namedtuple("Point", ["x", "y", "z"])
             >>> data = [Point(1.0, -2.0, 1.0), Point(1.0, -2.0, 1.0), Point(2.2, 3.0, 2.0)]
-            >>> list(xiter(data).groupby('x'))
+            >>> list(xiter(data).groupby("x"))
             [(1.0, [Point(x=1.0, y=-2.0, z=1.0), Point(x=1.0, y=-2.0, z=1.0)]), (2.2, [Point(x=2.2, y=3.0, z=2.0)])]
-            >>> list(xiter(data).groupby('x', 'z'))
+            >>> list(xiter(data).groupby("x", "z"))
             [((1.0, 1.0), [Point(x=1.0, y=-2.0, z=1.0), Point(x=1.0, y=-2.0, z=1.0)]), ((2.2, 2.0), [Point(x=2.2, y=3.0, z=2.0)])]
 
-            >>> it = xiter(['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank'])
+            >>> it = xiter(["Alice", "Bob", "Charlie", "Dan", "Edith", "Frank"])
             >>> list(it.groupby(len))
             [(5, ['Alice', 'Edith', 'Frank']), (3, ['Bob', 'Dan']), (7, ['Charlie'])]
 
@@ -1439,8 +1729,12 @@ class XIterable(Iterable[T]):
             >>> it.reduce((lambda accu, i: accu + i), init=0)
             10
 
-            >>> it = xiter(['a', 'b', 'c', 'd', 'e'])
-            >>> sorted(it.reduce((lambda accu, item: (accu or set()) | {item} if item in 'aeiou' else accu)))
+            >>> it = xiter(["a", "b", "c", "d", "e"])
+            >>> sorted(
+            ...     it.reduce(
+            ...         (lambda accu, item: (accu or set()) | {item} if item in "aeiou" else accu)
+            ...     )
+            ... )
             ['a', 'e']
 
         """
@@ -1454,8 +1748,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[str, S]]:
-        ...
+    ) -> XIterable[Tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1466,8 +1759,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], S]]:
-        ...
+    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1477,8 +1769,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[str, S]:
-        ...
+    ) -> Dict[str, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1489,8 +1780,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[Tuple[str, ...], S]:
-        ...
+    ) -> Dict[Tuple[str, ...], S]: ...
 
     @typing.overload
     def reduceby(
@@ -1500,8 +1790,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1511,8 +1800,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1522,8 +1810,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1533,10 +1820,9 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
-    def reduceby(  # type: ignore[misc] # signatures 2 and 4 are not satified due to inconsistencies with type variables
+    def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
         key: Union[str, List[K], Callable[[T], K]],
@@ -1573,33 +1859,37 @@ class XIterable(Iterable[T]):
         For detailed information check :func:`toolz.itertoolz.reduceby` reference.
 
         Examples:
-            >>> it = xiter([(1.0, -1.0), (1.0,-2.0), (2.2, -3.0)])
+            >>> it = xiter([(1.0, -1.0), (1.0, -2.0), (2.2, -3.0)])
             >>> list(it.reduceby((lambda accu, _: accu + 1), [0], init=0))
             [(1.0, 2), (2.2, 1)]
 
             >>> data = [
-            ...     {'x': 1.0, 'y': -1.0, 'z': 1.0},
-            ...     {'x': 1.0, 'y': -2.0, 'z': 1.0},
-            ...     {'x': 2.2, 'y': -3.0, 'z': 2.2}
+            ...     {"x": 1.0, "y": -1.0, "z": 1.0},
+            ...     {"x": 1.0, "y": -2.0, "z": 1.0},
+            ...     {"x": 2.2, "y": -3.0, "z": 2.2},
             ... ]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ['x'], init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ["x"], init=0))
             [(1.0, 2), (2.2, 1)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ['x', 'z'], init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), ["x", "z"], init=0))
             [((1.0, 1.0), 2), ((2.2, 2.2), 1)]
 
             >>> from collections import namedtuple
-            >>> Point = namedtuple('Point', ['x', 'y', 'z'])
+            >>> Point = namedtuple("Point", ["x", "y", "z"])
             >>> data = [Point(1.0, -2.0, 1.0), Point(1.0, -2.0, 1.0), Point(2.2, 3.0, 2.0)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), 'x', init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), "x", init=0))
             [(1.0, 2), (2.2, 1)]
-            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), 'x', 'z', init=0))
+            >>> list(xiter(data).reduceby((lambda accu, _: accu + 1), "x", "z", init=0))
             [((1.0, 1.0), 2), ((2.2, 2.0), 1)]
 
-            >>> it = xiter(['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank'])
-            >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
+            >>> it = xiter(["Alice", "Bob", "Charlie", "Dan", "Edith", "Frank"])
+            >>> list(
+            ...     it.reduceby(
+            ...         lambda nvowels, name: nvowels + sum(i in "aeiou" for i in name), len, init=0
+            ...     )
+            ... )
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203, RST301  # sphinx.napoleon conventions confuse RST validator
+        """  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):

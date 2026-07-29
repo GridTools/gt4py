@@ -1,19 +1,14 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def _list_get(index: ir.Expr, lst: ir.Expr) -> ir.FunCall:
@@ -26,7 +21,7 @@ def _neighbors(offset: ir.Expr, it: ir.Expr) -> ir.FunCall:
 
 def test_list_get_neighbors():
     testee = _list_get(
-        ir.Literal(value="42", type="int32"),
+        im.literal("42", "int32"),
         _neighbors(ir.OffsetLiteral(value="foo"), ir.SymRef(id="bar")),
     )
 
@@ -36,10 +31,7 @@ def test_list_get_neighbors():
             ir.FunCall(
                 fun=ir.FunCall(
                     fun=ir.SymRef(id="shift"),
-                    args=[
-                        ir.OffsetLiteral(value="foo"),
-                        ir.OffsetLiteral(value=42),
-                    ],
+                    args=[ir.OffsetLiteral(value="foo"), ir.OffsetLiteral(value=42)],
                 ),
                 args=[ir.SymRef(id="bar")],
             )
@@ -52,13 +44,11 @@ def test_list_get_neighbors():
 
 def test_list_get_make_const_list():
     testee = _list_get(
-        ir.Literal(value="42", type="int32"),
-        ir.FunCall(
-            fun=ir.SymRef(id="make_const_list"), args=[ir.Literal(value="3.14", type="float64")]
-        ),
+        im.literal("42", "int32"),
+        ir.FunCall(fun=ir.SymRef(id="make_const_list"), args=[im.literal("3.14", "float64")]),
     )
 
-    expected = ir.Literal(value="3.14", type="float64")
+    expected = im.literal("3.14", "float64")
 
     actual = CollapseListGet().visit(testee)
     assert expected == actual

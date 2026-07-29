@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy as cp
 from typing import Any, Dict, Optional, Set, Union, cast
@@ -23,10 +17,7 @@ class MaskCollector(eve.NodeVisitor):
     """Collects the boolean expressions defining mask statements that are boolean fields."""
 
     def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
+        self, node: oir.AssignStmt, *, masks_to_inline: Dict[str, oir.Expr]
     ) -> None:
         if node.left.name in masks_to_inline:
             assert masks_to_inline[node.left.name] is None
@@ -72,22 +63,14 @@ class MaskInlining(eve.NodeTranslator):
     """
 
     def visit_FieldAccess(
-        self,
-        node: oir.FieldAccess,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
-        **kwargs: Any,
+        self, node: oir.FieldAccess, *, masks_to_inline: Dict[str, oir.Expr], **kwargs: Any
     ) -> oir.Expr:
         if node.name in masks_to_inline:
             return cp.copy(masks_to_inline[node.name])
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
     def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
-        **kwargs: Any,
+        self, node: oir.AssignStmt, *, masks_to_inline: Dict[str, oir.Expr], **kwargs: Any
     ) -> Union[oir.AssignStmt, eve.NothingType]:
         if node.left.name in masks_to_inline:
             return eve.NOTHING

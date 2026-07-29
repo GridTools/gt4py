@@ -1,64 +1,100 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
 import contextlib
-import contextvars as cvars
-from typing import Any
+import contextvars
+from collections.abc import Generator
+from typing import Any, TypeVar, overload
 
 import gt4py.eve as eve
 import gt4py.next.common as common
+import gt4py.next.embedded as gtx_embedded
+import gt4py.next.errors.exceptions as exceptions
 
 
-#: Column range used in column mode (`column_axis != None`) in the current embedded iterator
-#: closure execution context.
-closure_column_range: cvars.ContextVar[common.NamedRange] = cvars.ContextVar("column_range")
-
-_undefined_offset_provider: common.OffsetProvider = {}
-
-#: Offset provider dict in the current embedded execution context.
-offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
-    "offset_provider", default=_undefined_offset_provider
+_closure_column_range: contextvars.ContextVar[common.NamedRange] = contextvars.ContextVar(
+    "_column_range"
+)
+_offset_provider: contextvars.ContextVar[common.OffsetProvider] = contextvars.ContextVar(
+    "_offset_provider"
 )
 
 
+_T = TypeVar("_T")
+
+
+_NO_DEFAULT_SENTINEL: Any = object()
+
+
+@overload
+def get_closure_column_range() -> common.NamedRange: ...
+
+
+@overload
+def get_closure_column_range(default: _T) -> common.NamedRange | _T: ...
+
+
+def get_closure_column_range(default: _T = _NO_DEFAULT_SENTINEL) -> common.NamedRange | _T:
+    """Column range used in 'column mode' in the current embedded iterator closure execution context."""
+    result = _closure_column_range.get(default)
+    if result is _NO_DEFAULT_SENTINEL:
+        raise exceptions.EmbeddedExecutionError(
+            "No column range set in the current embedded iterator closure execution context."
+        )
+    return result
+
+
+@overload
+def get_offset_provider() -> common.OffsetProvider: ...
+
+
+@overload
+def get_offset_provider(default: _T) -> common.OffsetProvider | _T: ...
+
+
+def get_offset_provider(default: _T = _NO_DEFAULT_SENTINEL) -> common.OffsetProvider | _T:
+    """Offset provider used in the current embedded iterator closure execution context."""
+    result = _offset_provider.get(default)
+    if result is _NO_DEFAULT_SENTINEL:
+        raise exceptions.EmbeddedExecutionError(
+            "No offset provider set in the current embedded iterator closure execution context."
+        )
+    return result
+
+
 @contextlib.contextmanager
-def new_context(
+def update(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
-):
-    import gt4py.next.embedded.context as this_module
+) -> Generator[None, None, None]:
+    """Context handler updating the current embedded context with the provided values."""
 
-    updates: list[tuple[cvars.ContextVar[Any], Any]] = []
+    closure_token, offset_provider_token = None, None
     if closure_column_range is not eve.NOTHING:
-        updates.append((this_module.closure_column_range, closure_column_range))
+        assert not isinstance(closure_column_range, eve.NothingType)
+        closure_token = gtx_embedded.context._closure_column_range.set(closure_column_range)
     if offset_provider is not eve.NOTHING:
-        updates.append((this_module.offset_provider, offset_provider))
+        assert not isinstance(offset_provider, eve.NothingType)
+        offset_provider_token = gtx_embedded.context._offset_provider.set(offset_provider)
 
-    # Create new context with provided values
-    ctx = cvars.copy_context()
+    try:
+        yield None
+    finally:
+        if closure_column_range is not eve.NOTHING:
+            assert closure_token is not None
+            gtx_embedded.context._closure_column_range.reset(closure_token)
+        if offset_provider is not eve.NOTHING:
+            assert offset_provider_token is not None
+            gtx_embedded.context._offset_provider.reset(offset_provider_token)
 
-    def ctx_updater(*args):
-        for cvar, value in args:
-            cvar.set(value)
 
-    ctx.run(ctx_updater, *updates)
-
-    yield ctx
-
-
-def within_context() -> bool:
-    return offset_provider.get() is not _undefined_offset_provider
+def within_valid_context() -> bool:
+    return _offset_provider.get(SENTINEL := object()) is not SENTINEL

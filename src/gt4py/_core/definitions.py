@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -20,12 +14,12 @@ import enum
 import functools
 import math
 import numbers
-from typing import overload
 
 import numpy as np
 import numpy.typing as npt
 
 import gt4py.eve as eve
+from gt4py._core import types as core_types
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -34,6 +28,7 @@ from gt4py.eve.extended_typing import (
     Iterator,
     Literal,
     Protocol,
+    Self,
     Sequence,
     Tuple,
     Type,
@@ -42,53 +37,54 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     Union,
     cast,
+    overload,
 )
 
 
-if TYPE_CHECKING:
+try:
     import cupy as cp
+except ImportError:
+    cp = None
 
+if TYPE_CHECKING:
     CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
 
     JaxNDArray: TypeAlias = jnp.ndarray
 
+# The actual assignment happens after the definition of `DeviceType` enum.
+CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
+"""Type of the GPU accelerator device, if present."""
 
 # -- Scalar types supported by GT4Py --
-bool_ = np.bool_
 
-int8 = np.int8
-int16 = np.int16
-int32 = np.int32
-int64 = np.int64
 
-uint8 = np.uint8
-uint16 = np.uint16
-uint32 = np.uint32
-uint64 = np.uint64
-
-float32 = np.float32
-float64 = np.float64
-
-BoolScalar: TypeAlias = Union[bool_, bool]
+BoolScalar: TypeAlias = Union[core_types.bool, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], BoolScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    BoolScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
-IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
+IntScalar: TypeAlias = Union[
+    core_types.int8, core_types.int16, core_types.int32, core_types.int64, int
+]
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], IntScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    IntScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
-UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
+UnsignedIntScalar: TypeAlias = Union[
+    core_types.uint8, core_types.uint16, core_types.uint32, core_types.uint64
+]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
 UINT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], UnsignedIntScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    UnsignedIntScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
@@ -97,10 +93,11 @@ IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
-FloatingScalar: TypeAlias = Union[float32, float64, float]
+FloatingScalar: TypeAlias = Union[core_types.float32, core_types.float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], FloatingScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    FloatingScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
@@ -139,9 +136,7 @@ TensorShape: TypeAlias = Sequence[
 ]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
 
 
-def is_valid_tensor_shape(
-    value: Sequence[IntegralScalar],
-) -> TypeGuard[TensorShape]:
+def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:
     return isinstance(value, collections.abc.Sequence) and all(
         isinstance(v, numbers.Integral) and v > 0 for v in value
     )
@@ -165,28 +160,21 @@ class DTypeKind(eve.StrEnum):
 
 
 @overload
-def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]:
-    ...
+def dtype_kind(
+    sc_type: Type[IntT] | Type[BoolT],  # mypy doesn't distinguish IntT and BoolT
+) -> Literal[DTypeKind.INT, DTypeKind.BOOL]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]:
-    ...
+def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...  # type: ignore[overload-cannot-match] # precision blurring from mypy plugin seems to interfere
 
 
 @overload
-def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
-    ...
+def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]:
-    ...
-
-
-@overload
-def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
-    ...
+def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind: ...
 
 
 def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
@@ -277,23 +265,31 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt8DType(UnsignedIntDType[uint8]):
-    scalar_type: Final[Type[uint8]] = dataclasses.field(default=uint8, init=False)
+class UInt8DType(UnsignedIntDType[core_types.uint8]):
+    scalar_type: Final[Type[core_types.uint8]] = dataclasses.field(
+        default=core_types.uint8, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt16DType(UnsignedIntDType[uint16]):
-    scalar_type: Final[Type[uint16]] = dataclasses.field(default=uint16, init=False)
+class UInt16DType(UnsignedIntDType[core_types.uint16]):
+    scalar_type: Final[Type[core_types.uint16]] = dataclasses.field(
+        default=core_types.uint16, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt32DType(UnsignedIntDType[uint32]):
-    scalar_type: Final[Type[uint32]] = dataclasses.field(default=uint32, init=False)
+class UInt32DType(UnsignedIntDType[core_types.uint32]):
+    scalar_type: Final[Type[core_types.uint32]] = dataclasses.field(
+        default=core_types.uint32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt64DType(UnsignedIntDType[uint64]):
-    scalar_type: Final[Type[uint64]] = dataclasses.field(default=uint64, init=False)
+class UInt64DType(UnsignedIntDType[core_types.uint64]):
+    scalar_type: Final[Type[core_types.uint64]] = dataclasses.field(
+        default=core_types.uint64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -302,23 +298,31 @@ class SignedIntDType(DType[IntT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Int8DType(SignedIntDType[int8]):
-    scalar_type: Final[Type[int8]] = dataclasses.field(default=int8, init=False)
+class Int8DType(SignedIntDType[core_types.int8]):
+    scalar_type: Final[Type[core_types.int8]] = dataclasses.field(
+        default=core_types.int8, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int16DType(SignedIntDType[int16]):
-    scalar_type: Final[Type[int16]] = dataclasses.field(default=int16, init=False)
+class Int16DType(SignedIntDType[core_types.int16]):
+    scalar_type: Final[Type[core_types.int16]] = dataclasses.field(
+        default=core_types.int16, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int32DType(SignedIntDType[int32]):
-    scalar_type: Final[Type[int32]] = dataclasses.field(default=int32, init=False)
+class Int32DType(SignedIntDType[core_types.int32]):
+    scalar_type: Final[Type[core_types.int32]] = dataclasses.field(
+        default=core_types.int32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Int64DType(SignedIntDType[int64]):
-    scalar_type: Final[Type[int64]] = dataclasses.field(default=int64, init=False)
+class Int64DType(SignedIntDType[core_types.int64]):
+    scalar_type: Final[Type[core_types.int64]] = dataclasses.field(
+        default=core_types.int64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -327,18 +331,24 @@ class FloatingDType(DType[FloatingT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class Float32DType(FloatingDType[float32]):
-    scalar_type: Final[Type[float32]] = dataclasses.field(default=float32, init=False)
+class Float32DType(FloatingDType[core_types.float32]):
+    scalar_type: Final[Type[core_types.float32]] = dataclasses.field(
+        default=core_types.float32, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class Float64DType(FloatingDType[float64]):
-    scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
+class Float64DType(FloatingDType[core_types.float64]):
+    scalar_type: Final[Type[core_types.float64]] = dataclasses.field(
+        default=core_types.float64, init=False
+    )
 
 
 @dataclasses.dataclass(frozen=True)
-class BoolDType(DType[bool_]):
-    scalar_type: Final[Type[bool_]] = dataclasses.field(default=bool_, init=False)
+class BoolDType(DType[core_types.bool]):
+    scalar_type: Final[Type[core_types.bool]] = dataclasses.field(
+        default=core_types.bool, init=False
+    )
 
 
 DTypeLike = Union[DType, npt.DTypeLike]
@@ -360,8 +370,7 @@ class GTDimsInterface(Protocol):
     """
 
     @property
-    def __gt_dims__(self) -> Tuple[str, ...]:
-        ...
+    def __gt_dims__(self) -> Tuple[str, ...]: ...
 
 
 class GTOriginInterface(Protocol):
@@ -372,8 +381,7 @@ class GTOriginInterface(Protocol):
     """
 
     @property
-    def __gt_origin__(self) -> Tuple[int, ...]:
-        ...
+    def __gt_origin__(self) -> Tuple[int, ...]: ...
 
 
 # -- Device representation --
@@ -386,21 +394,18 @@ class DeviceType(enum.IntEnum):
 
     CPU = 1
     CUDA = 2
-    CPU_PINNED = 3
-    OPENCL = 4
-    VULKAN = 7
-    METAL = 8
-    VPI = 9
+    # CPU_PINNED = 3    # noqa: ERA001
+    # OPENCL = 4        # noqa: ERA001
+    # VULKAN = 7        # noqa: ERA001
+    # METAL = 8         # noqa: ERA001
+    # VPI = 9           # noqa: ERA001
     ROCM = 10
+    # CUDA_MANAGED = 13 # noqa: ERA001
+    # ONE_API = 14      # noqa: ERA001
 
 
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
 CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
-CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
-OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
-VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
-MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
-VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
 
 
@@ -408,12 +413,12 @@ DeviceTypeT = TypeVar(
     "DeviceTypeT",
     CPUDeviceTyping,
     CUDADeviceTyping,
-    CPUPinnedDeviceTyping,
-    OpenCLDeviceTyping,
-    VulkanDeviceTyping,
-    MetalDeviceTyping,
-    VPIDeviceTyping,
     ROCMDeviceTyping,
+)
+
+
+CUPY_DEVICE_TYPE = (
+    None if not cp else (DeviceType.ROCM if cp.cuda.runtime.is_hip else DeviceType.CUDA)
 )
 
 
@@ -432,6 +437,10 @@ class Device(Generic[DeviceTypeT]):
     device_type: DeviceTypeT
     device_id: int
 
+    @classmethod
+    def from_dlpack_device(cls: type[Self], dlpack_device: tuple[DeviceTypeT, int]) -> Self:
+        return cls(*dlpack_device)
+
     def __iter__(self) -> Iterator[DeviceTypeT | int]:
         yield self.device_type
         yield self.device_id
@@ -443,61 +452,53 @@ SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
 
 class NDArrayObject(Protocol):
     @property
-    def ndim(self) -> int:
-        ...
+    def ndim(self) -> int: ...
 
     @property
-    def shape(self) -> tuple[int, ...]:
-        ...
+    def shape(self) -> tuple[int, ...]: ...
 
     @property
-    def dtype(self) -> Any:
-        ...
+    def strides(self) -> tuple[int, ...]: ...
 
-    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject:
-        ...
+    @property
+    def dtype(self) -> Any: ...
 
-    def __getitem__(self, item: Any) -> NDArrayObject:
-        ...
+    @property
+    def itemsize(self) -> int: ...
 
-    def __abs__(self) -> NDArrayObject:
-        ...
+    def item(self) -> Any: ...
 
-    def __neg__(self) -> NDArrayObject:
-        ...
+    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject: ...
 
-    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def any(self) -> bool: ...
 
-    def __radd__(self, other: Any) -> NDArrayObject:
-        ...
+    def __getitem__(self, item: Any) -> NDArrayObject: ...
 
-    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __abs__(self) -> NDArrayObject: ...
 
-    def __rsub__(self, other: Any) -> NDArrayObject:
-        ...
+    def __neg__(self) -> NDArrayObject: ...
 
-    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __rmul__(self, other: Any) -> NDArrayObject:
-        ...
+    def __radd__(self, other: Any) -> NDArrayObject: ...
 
-    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __rfloordiv__(self, other: Any) -> NDArrayObject:
-        ...
+    def __rsub__(self, other: Any) -> NDArrayObject: ...
 
-    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __rtruediv__(self, other: Any) -> NDArrayObject:
-        ...
+    def __rmul__(self, other: Any) -> NDArrayObject: ...
 
-    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rfloordiv__(self, other: Any) -> NDArrayObject: ...
+
+    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rtruediv__(self, other: Any) -> NDArrayObject: ...
+
+    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
     def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
@@ -517,11 +518,8 @@ class NDArrayObject(Protocol):
     def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
-    def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __xor__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...

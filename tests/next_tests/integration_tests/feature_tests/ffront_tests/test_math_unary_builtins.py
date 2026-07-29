@@ -1,23 +1,19 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+import math
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import (
+    broadcast,
     cbrt,
     ceil,
     cos,
@@ -25,6 +21,7 @@ from gt4py.next import (
     exp,
     float64,
     floor,
+    gamma,
     int32,
     isfinite,
     isinf,
@@ -40,8 +37,8 @@ from gt4py.next import (
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+from next_tests.integration_tests.cases_utils import (
+    exec_alloc_descriptor,
 )
 
 
@@ -81,7 +78,9 @@ def test_mod(cartesian_case):
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
 
-    inp1 = cartesian_case.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
+    inp1 = cartesian_case.as_field(
+        [IDim], np.asarray(range(cartesian_case.default_sizes[IDim]), dtype=int32) - 5
+    )
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
     cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
@@ -134,6 +133,38 @@ def test_unary_neg(cartesian_case):
     cases.verify_with_default_data(cartesian_case, uneg, ref=lambda inp1: -inp1)
 
 
+def test_unary_pos(cartesian_case):
+    @gtx.field_operator
+    def upos(inp: cases.IField) -> cases.IField:
+        return +inp
+
+    cases.verify_with_default_data(cartesian_case, upos, ref=lambda inp1: inp1)
+
+
+def test_unary_neg_float_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_float() -> cases.IFloatField:
+        inp_f = broadcast(float(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    ref = cartesian_case.as_field([IDim], np.full(size, -1.0, dtype=float))
+    out = cases.allocate(cartesian_case, uneg_float, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_float, out=out, ref=ref)
+
+
+def test_unary_neg_bool_conversion(cartesian_case):
+    @gtx.field_operator
+    def uneg_bool() -> cases.IBoolField:
+        inp_f = broadcast(bool(-1), (IDim,))
+        return inp_f
+
+    size = cartesian_case.default_sizes[IDim]
+    ref = cartesian_case.as_field([IDim], np.full(size, True, dtype=bool))
+    out = cases.allocate(cartesian_case, uneg_bool, cases.RETURN)()
+    cases.verify(cartesian_case, uneg_bool, out=out, ref=ref)
+
+
 def test_unary_invert(cartesian_case):
     @gtx.field_operator
     def tilde_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
@@ -167,10 +198,9 @@ def test_basic_trig(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         basic_trig_fieldop,
-        ref=lambda inp1, inp2: np.sin(np.cos(inp1))
-        - np.sinh(np.cosh(inp2))
-        + np.tan(inp1)
-        - np.tanh(inp2),
+        ref=lambda inp1, inp2: (
+            np.sin(np.cos(inp1)) - np.sinh(np.cosh(inp2)) + np.tan(inp1) - np.tanh(inp2)
+        ),
     )
 
 
@@ -181,6 +211,16 @@ def test_exp_log(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, exp_log_fieldop, ref=lambda inp1, inp2: np.log(inp1) - np.exp(inp2)
+    )
+
+
+def test_gamma(cartesian_case):
+    @gtx.field_operator
+    def gamma_fieldop(inp1: cases.IFloatField) -> cases.IFloatField:
+        return gamma(inp1)
+
+    cases.verify_with_default_data(
+        cartesian_case, gamma_fieldop, ref=lambda inp1: np.vectorize(math.gamma)(inp1)
     )
 
 

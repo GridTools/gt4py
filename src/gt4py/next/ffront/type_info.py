@@ -1,24 +1,31 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-
-from functools import reduce
-from typing import Iterator, cast
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+import functools
+import inspect
+from collections.abc import Callable, Iterable
+from typing import Any, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common
+from gt4py.eve import datamodels
+from gt4py.next import common, utils
+from gt4py.next.ffront.type_specifications import ProgramType
 from gt4py.next.type_system import type_info
+
+
+named_collections_to_tuple_types = cast(
+    Callable[..., ts.TupleType],
+    utils.tree_map(
+        lambda x: x,
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
+    ),
+)
 
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
@@ -26,8 +33,8 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
 
 
 def promote_zero_dims(
-    function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
-) -> tuple[list, dict]:
+    function_type: ts.FunctionType, args: Sequence[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+) -> tuple[tuple, dict]:
     """
     Promote arg types to zero dimensional fields if compatible and required by function signature.
 
@@ -38,15 +45,15 @@ def promote_zero_dims(
         def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
             param_el = param
             for idx in path:
-                if not isinstance(param_el, ts.TupleType):
+                if not isinstance(param_el, ts.COLLECTION_TYPE_SPECS):
                     # The parameter has a different structure than the actual argument. Just return
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]
+                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
 
             if _is_zero_dim_field(param_el) and (
-                type_info.is_number(arg_el) or type_info.is_logical(arg_el)
+                type_info.is_arithmetic_scalar(arg_el) or type_info.is_logical(arg_el)
             ):
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
@@ -54,18 +61,24 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
+        res = type_info.tree_map_type(_as_field, with_path_arg=True)(arg)
+        assert isinstance(res, ts.TypeSpec)
+        return res
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+        zip(
+            list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()),
+            args,
+            strict=True,
+        )
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
     for name in set(function_type.kw_only_args.keys()) & set(kwargs.keys()):
         new_kwargs[name] = promote_arg(function_type.kw_only_args[name], kwargs[name])
 
-    return new_args, new_kwargs
+    return tuple(new_args), new_kwargs
 
 
 @type_info.return_type.register
@@ -74,7 +87,7 @@ def return_type_fieldop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     ret_type = type_info.return_type(
         fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs
     )
@@ -88,15 +101,13 @@ def canonicalize_program_or_fieldop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
-) -> tuple[list, dict]:
+    ignore_errors: bool = False,
+) -> tuple[tuple, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
         args,
         kwargs,
         ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
     )
 
 
@@ -106,23 +117,21 @@ def canonicalize_scanop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
-) -> tuple[list, dict]:
+    ignore_errors: bool = False,
+) -> tuple[tuple, dict]:
     (_, *cargs), ckwargs = type_info.canonicalize_arguments(
         scanop_type.definition,
         (None, *args),
         kwargs,
         ignore_errors=ignore_errors,
-        use_signature_ordering=use_signature_ordering,
     )
-    return cargs, ckwargs
+    return tuple(cargs), ckwargs
 
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ts_ffront.FieldOperatorType,
-    args: list[ts.TypeSpec],
+    args: Sequence[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
@@ -144,28 +153,44 @@ def function_signature_incompatibilities_fieldop(
     )
 
 
-def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType | ts.TupleType:
+def _tree_map_type_constructor_drop_python_type(
+    value: ts.CollectionTypeSpecT,
+    elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
+) -> ts.CollectionTypeSpecT:
+    result = type_info.tree_map_type_constructor(value, elems)
+    if isinstance(value, ts.NamedCollectionType):
+        result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
+    return result
+
+
+def _scan_param_promotion(
+    param: ts.TypeSpec, arg: ts.TypeSpec
+) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
     """
     Promote parameter of a scan pass to match dimensions of respective scan operator argument.
 
     More specifically: Given a scalar type `param` and a field type `arg` return a field with the
     dtype of the `param` and the dimensions of `arg`. If `param` is a composite of scalars
-    the promotion is element-wise.
+    the promotion is element-wise. If `arg` is a scalar, the result is a 0-d field.
 
     Example:
     --------
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ...     ts.FieldType(
+    ...         dims=[common.Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ...     ),
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
-            el_type = reduce(
-                lambda type_, idx: type_.types[idx], path, arg  # type: ignore[attr-defined]
+            el_type = functools.reduce(
+                lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
+                path,
+                arg,
             )
             return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
         except (IndexError, AttributeError):
@@ -175,7 +200,17 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    # Note: In the promotion of the scalar type to field type we drop the information about
+    # the original python type in NamedCollections as we want to be able to express compatibility
+    # between named collections of scalars and their structurally equivalent collection of fields.
+    # Once we support generic named collections, this special case will disappear.
+    res = type_info.tree_map_type(
+        _as_field,
+        result_collection_constructor=_tree_map_type_constructor_drop_python_type,
+        with_path_arg=True,
+    )(param)
+    assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
+    return res
 
 
 @type_info.function_signature_incompatibilities.register
@@ -235,8 +270,8 @@ def function_signature_incompatibilities_scanop(
     # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
         pos_only_args=[],
-        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
-        kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
+        pos_or_kw_args=promoted_params,
+        kw_only_args=promoted_kwparams,
         returns=ts.DeferredType(constraint=None),
     )
 
@@ -250,7 +285,7 @@ def function_signature_incompatibilities_scanop(
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    program_type: ts_ffront.ProgramType, args: tuple[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
         program_type.definition, args, kwargs, ignore_errors=True
@@ -277,7 +312,7 @@ def return_type_scanop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     carry_dtype = callable_type.definition.returns
     promoted_dims = common.promote_dims(
         *(
@@ -289,6 +324,117 @@ def return_type_scanop(
         #  field
         [callable_type.axis],
     )
-    return type_info.apply_to_primitive_constituents(
-        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
+    return cast(
+        ts.TypeSpec,
+        type_info.tree_map_type(lambda arg: ts.FieldType(dims=promoted_dims, dtype=arg))(
+            carry_dtype
+        ),
+    )
+
+
+def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.FunctionType:
+    """
+    Return the type of a callable when encountered in context of a program.
+
+    A callable can be a field-, scan-operator or a simple function (though the latter is not
+    implemented in the frontent). The program context is either inside of a program or even
+    outside the GT4Py where all callables behave as if they were called from inside a program.
+
+    For example a simple field operator like
+
+    ```
+    @field_operator
+    def identity(a: IField) -> IField: ...
+    ```
+
+    has the signature of the following program in the context of a program.
+
+    ```
+    @program
+    def identity(a: IField, *, out: IField) -> None: ...
+    ```
+    """
+    if isinstance(callable_type, ts_ffront.FieldOperatorType):
+        definition = callable_type.definition
+        return ProgramType(
+            definition=ts.FunctionType(
+                pos_only_args=definition.pos_only_args,
+                pos_or_kw_args=definition.pos_or_kw_args | {"out": definition.returns},
+                kw_only_args=definition.kw_only_args,
+                returns=ts.VoidType(),
+            )
+        )
+    elif isinstance(callable_type, ts_ffront.ScanOperatorType):
+        as_deferred_type_with_same_structure = type_info.tree_map_type(
+            lambda _: ts.DeferredType(constraint=None)
+        )
+        scan_pass_type = callable_type.definition
+        _, *non_carry_args = scan_pass_type.pos_or_kw_args.items()
+        pos_or_kw_args = dict(non_carry_args) | {"out": scan_pass_type.returns}
+        assert not scan_pass_type.pos_only_args
+        return ProgramType(
+            ts.FunctionType(
+                pos_only_args=[],
+                # TODO(tehrengruber): What we actually want is a generic type here, but we don't
+                #  have that concept yet.
+                pos_or_kw_args={
+                    k: as_deferred_type_with_same_structure(t) for k, t in pos_or_kw_args.items()
+                },
+                kw_only_args={
+                    k: as_deferred_type_with_same_structure(t)
+                    for k, t in scan_pass_type.kw_only_args.items()
+                },
+                returns=ts.VoidType(),
+            )
+        )
+    assert isinstance(callable_type, (ts.FunctionType, ts_ffront.ProgramType))
+    return callable_type
+
+
+def _signature_from_callable_in_program_context(
+    callable_type: ts.CallableType,
+) -> inspect.Signature:
+    if isinstance(callable_type, ts_ffront.ProgramType):
+        return _signature_from_callable_in_program_context(callable_type.definition)
+    elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
+        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        params = list(operator_signature.parameters.values())
+        if isinstance(callable_type, ts_ffront.ScanOperatorType):
+            params = params[1:]  # Remove the carry state arg
+        return inspect.Signature(
+            parameters=[*params, inspect.Parameter("out", inspect.Parameter.KEYWORD_ONLY)],
+            return_annotation=inspect.Signature.empty,
+        )
+    assert isinstance(callable_type, ts.FunctionType)
+    return inspect.Signature(
+        parameters=(
+            [
+                *(
+                    inspect.Parameter(name=str(i), kind=inspect.Parameter.POSITIONAL_ONLY)
+                    for i, type_ in enumerate(callable_type.pos_only_args)
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+                    for name, type_ in callable_type.pos_or_kw_args.items()
+                ),
+                *(
+                    inspect.Parameter(name=name, kind=inspect.Parameter.KEYWORD_ONLY)
+                    for name, type_ in callable_type.kw_only_args.items()
+                ),
+            ]
+        ),
+        return_annotation=callable_type.returns,
+    )
+
+
+def make_args_canonicalizer(
+    callable_type: ts.CallableType, **kwargs: Any
+) -> Callable[..., tuple[tuple, dict[str, Any]]]:
+    """
+    Create a call arguments canonicalizer function from a given signature.
+
+    See :ref:`utils.make_args_canonicalizer`.
+    """
+    return utils.make_args_canonicalizer(
+        _signature_from_callable_in_program_context(callable_type), **kwargs
     )

@@ -1,45 +1,52 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
 import operator
 from typing import Optional, Pattern
 
-import numpy as np
 import pytest
+import re
 
+from gt4py import next as gtx
+from gt4py._core import definitions as core_defs
+import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
     Domain,
     Infinity,
-    NamedRange,
     UnitRange,
     domain,
     named_range,
+    NamedRange,
     promote_dims,
     unit_range,
 )
 
-
-IDim = Dimension("IDim")
+C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
+V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
+E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
 ECDim = Dimension("ECDim")
+IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+IHalfDim = common.flip_staggered(IDim)
 
 
 @pytest.fixture
 def a_domain():
-    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+    return Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
 
 
 @pytest.fixture(params=[Infinity.POSITIVE, Infinity.NEGATIVE])
@@ -92,10 +99,12 @@ def test_unbounded_max_min(value):
     assert min(Infinity.NEGATIVE, value) == Infinity.NEGATIVE
 
 
-def test_empty_range():
+@pytest.mark.parametrize("empty_range", [UnitRange(1, 0), UnitRange(1, -1)])
+def test_empty_range(empty_range):
     expected = UnitRange(0, 0)
-    assert UnitRange(1, 1) == expected
-    assert UnitRange(1, -1) == expected
+
+    assert empty_range == expected
+    assert empty_range.is_empty()
 
 
 @pytest.fixture
@@ -242,12 +251,7 @@ def test_range_comparison(op, rng1, rng2, expected):
 
 
 @pytest.mark.parametrize(
-    "named_rng_like",
-    [
-        (IDim, (2, 4)),
-        (IDim, range(2, 4)),
-        (IDim, UnitRange(2, 4)),
-    ],
+    "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
 def test_named_range_like(named_rng_like):
     assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
@@ -255,6 +259,20 @@ def test_named_range_like(named_rng_like):
 
 def test_domain_length(a_domain):
     assert len(a_domain) == 3
+
+
+@pytest.mark.parametrize(
+    "empty_domain, expected",
+    [
+        (Domain(), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 10))), False),
+        (Domain(NamedRange(IDim, UnitRange(0, 0))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 0)), NamedRange(JDim, UnitRange(0, 1))), True),
+        (Domain(NamedRange(IDim, UnitRange(0, 1)), NamedRange(JDim, UnitRange(0, 0))), True),
+    ],
+)
+def test_empty_domain(empty_domain, expected):
+    assert empty_domain.is_empty() == expected
 
 
 @pytest.mark.parametrize(
@@ -314,16 +332,6 @@ def test_domain_intersection_different_dimensions(a_domain, second_domain, expec
     assert result_domain == expected
 
 
-def test_domain_intersection_reversed_dimensions(a_domain):
-    domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
-
-    with pytest.raises(
-        ValueError,
-        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
-    ):
-        a_domain & domain2
-
-
 @pytest.mark.parametrize(
     "index, expected",
     [
@@ -354,11 +362,7 @@ def test_domain_slice_indexing(a_domain, slice_obj, expected):
 
 
 @pytest.mark.parametrize(
-    "index, expected_result",
-    [
-        (JDim, (JDim, UnitRange(5, 15))),
-        (KDim, (KDim, UnitRange(20, 30))),
-    ],
+    "index, expected_result", [(JDim, (JDim, UnitRange(5, 15))), (KDim, (KDim, UnitRange(20, 30)))]
 )
 def test_domain_dimension_indexing(a_domain, index, expected_result):
     result = a_domain[index]
@@ -394,6 +398,41 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
+def test_domain_slice_at():
+    # Create a sample domain
+    domain = Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
+
+    # Test indexing with slices
+    result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 5)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with out-of-range slices
+    result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 10)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert result == expected_result
+
+    # Test indexing with incorrect types
+    with pytest.raises(TypeError):
+        domain.slice_at["a", 7, 25]
+
+    # Test indexing with incorrect number of indices
+    with pytest.raises(ValueError, match="not match the number of dimensions"):
+        domain.slice_at[slice(2, 5), slice(7, 10)]
+
+
 def test_domain_dim_index():
     dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
@@ -422,89 +461,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
             ),
         ),
         (
             Dimension("J"),
-            [(Dimension("X"), UnitRange(100, 110)), (Dimension("Z"), UnitRange(100, 110))],
+            [
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+            ],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("X"), UnitRange(100, 110)),
-                (Dimension("Z"), UnitRange(100, 110)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             Dimension("Foo"),
-            [(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(Dimension("X"), UnitRange(100, 110))],
             Domain(
-                (Dimension("I"), UnitRange(0, 10)),
-                (Dimension("J"), UnitRange(0, 10)),
-                (Dimension("K"), UnitRange(0, 10)),
+                NamedRange(Dimension("I"), UnitRange(0, 10)),
+                NamedRange(Dimension("J"), UnitRange(0, 10)),
+                NamedRange(Dimension("K"), UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -522,32 +564,40 @@ def test_domain_replace(index, named_ranges, domain, expected):
         assert new_domain == expected
 
 
-def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
-):
+def dimension_promotion_cases() -> list[
+    tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]
+]:
     raw_list = [
         # list of list of dimensions, expected result, expected error message
-        ([["I", "J"], ["I"]], ["I", "J"], None),
-        ([["I", "J"], ["J"]], ["I", "J"], None),
-        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
+        ([[IDim, JDim], [IDim]], [IDim, JDim], None),
+        ([[JDim], [IDim, JDim]], [IDim, JDim], None),
+        ([[JDim, KDim], [IDim, JDim]], [IDim, JDim, KDim], None),
         (
-            [["I", "J"], ["J", "I"]],
+            [[IDim, JDim], [JDim, IDim]],
             None,
-            r"The following dimensions appear in contradicting order: I, J.",
+            "Dimensions 'JDim[horizontal], IDim[horizontal]' are not ordered correctly, expected 'IDim[horizontal], JDim[horizontal]'.",
+        ),
+        ([[JDim, KDim], [IDim, KDim]], [IDim, JDim, KDim], None),
+        (
+            [[KDim, JDim], [IDim, KDim]],
+            None,
+            "Dimensions 'KDim[vertical], JDim[horizontal]' are not ordered correctly, expected 'JDim[horizontal], KDim[vertical]'.",
         ),
         (
-            [["I", "K"], ["J", "K"]],
+            [[JDim, V2E], [IDim, E2C2V, KDim]],
             None,
-            r"Could not determine order of the following dimensions: I, J",
+            "There are more than one dimension with DimensionKind 'LOCAL'.",
+        ),
+        ([[JDim, V2E], [IDim, KDim]], [IDim, JDim, V2E, KDim], None),
+        # a dimension and its staggered counterpart must not be promoted into the same field
+        (
+            [[IDim], [common.flip_staggered(IDim)]],
+            None,
+            "staggered counterpart must not appear together",
         ),
     ]
-    # transform dimension names into Dimension objects
     return [
-        (
-            [[Dimension(el) for el in arg] for arg in args],
-            [Dimension(el) for el in result] if result else result,
-            msg,
-        )
+        ([[el for el in arg] for arg in args], [el for el in result] if result else result, msg)
         for args, result, msg in raw_list
     ]
 
@@ -564,4 +614,182 @@ def test_dimension_promotion(
         with pytest.raises(Exception) as exc_info:
             promote_dims(*dim_list)
 
-        assert exc_info.match(expected_error_msg)
+        assert exc_info.match(re.escape(expected_error_msg))
+
+
+class TestBufferInfo:
+    def test_from_numpy_ndarray(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.ctypes.data
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.DeviceType.CPU
+        assert buffer_info.device.device_id == 0
+
+    def test_from_cupy_ndarray(self):
+        try:
+            import cp as cp
+        except ImportError:
+            pytest.skip("CuPy is not installed")
+
+        a = cp.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+
+        assert buffer_info.data_ptr == a.data.ptr
+        assert buffer_info.ndim == a.ndim
+        assert buffer_info.shape == a.shape
+        assert buffer_info.byte_strides == a.strides
+        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
+        assert buffer_info.device.device_type == core_defs.CUPY_DEVICE_TYPE
+        assert buffer_info.device.device_id == a.device.id
+
+    def test_hashes(self):
+        import numpy as np
+
+        a = np.asarray([1, 2, 3, 4, 5])
+        buffer_info = common.BufferInfo.from_ndarray(a)
+        assert hash(buffer_info) == buffer_info.hash_key
+
+        # Create a view with the same data pointer and shape
+        b = a[0:None]
+        assert np.allclose(a, b)
+        assert a is not b
+        assert hash(common.BufferInfo.from_ndarray(b)) == buffer_info.hash_key
+
+
+class TestCartesianConnectivity:
+    def test_for_translation(self):
+        offset = 5
+        I = common.Dimension("I")
+
+        result = common.CartesianConnectivity.for_translation(I, offset)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I
+        assert result.codomain == I
+        assert result.offset == offset
+
+    def test_for_relocation(self):
+        I = common.Dimension("I")
+        I_half = common.Dimension("I_half")
+
+        result = common.CartesianConnectivity.for_relocation(I, I_half)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.domain_dim == I_half
+        assert result.codomain == I
+        assert result.offset == 0
+
+    @pytest.mark.parametrize(
+        "dim, offset, exp_codomain, exp_offset",
+        [
+            (IDim, 3, IDim, 3),
+            (IDim, 2.0, IDim, 2),
+            (IDim, 0.5, IHalfDim, 1),
+            (IDim, -0.5, IHalfDim, 0),
+            (IDim, 1.5, IHalfDim, 2),
+            (IDim, -1.5, IHalfDim, -1),
+            (IHalfDim, 0.5, IDim, 0),
+            (IHalfDim, -0.5, IDim, -1),
+        ],
+    )
+    def test_connectivity_for_cartesian_shift(self, dim, offset, exp_codomain, exp_offset):
+        conn = common.connectivity_for_cartesian_shift(dim, offset)
+        assert conn.domain_dim == dim
+        assert conn.codomain == exp_codomain
+        assert conn.offset == exp_offset
+
+
+class TestDimensionComparisonOperators:
+    """Test Dimension comparison operators return correct Domain objects."""
+
+    def test_gt(self):
+        result = IDim > 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(4, Infinity.POSITIVE),))
+
+    def test_ge(self):
+        result = IDim >= 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(3, Infinity.POSITIVE),))
+
+    def test_lt(self):
+        result = IDim < 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(Infinity.NEGATIVE, 3),))
+
+    def test_le(self):
+        result = IDim <= 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(Infinity.NEGATIVE, 4),))
+
+    def test_eq_int(self):
+        result = IDim == 3
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(3, 4),))
+
+    def test_ne_int(self):
+        """Dimension.__ne__ with int raises NotImplementedError."""
+        with pytest.raises(NotImplementedError):
+            IDim != 3
+
+    def test_reverse_gt(self):
+        assert (5 > IDim) == (IDim < 5)
+
+    def test_reverse_ge(self):
+        assert (5 >= IDim) == (IDim <= 5)
+
+    def test_reverse_lt(self):
+        assert (5 < IDim) == (IDim > 5)
+
+    def test_reverse_le(self):
+        assert (5 <= IDim) == (IDim >= 5)
+
+    def test_reverse_eq(self):
+        assert (3 == IDim) == (IDim == 3)
+
+    def test_reverse_ne(self):
+        with pytest.raises(NotImplementedError):
+            3 != IDim
+
+
+class TestDomainAndOperator:
+    """Test Domain.__and__ (intersection)."""
+
+    def test_same_dim(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(3, 8),))
+        assert (d1 & d2) == Domain(dims=(IDim,), ranges=(UnitRange(3, 5),))
+
+    def test_different_dims(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(JDim,), ranges=(UnitRange(2, 4),))
+        result = d1 & d2
+        assert result == Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(2, 4)))
+
+
+class TestDomainOrOperator:
+    """Test Domain.__or__ (union) — 1D only."""
+
+    def test_same_dim_overlapping(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(3, 8),))
+        result = d1 | d2
+        assert result == Domain(dims=(IDim,), ranges=(UnitRange(0, 8),))
+
+    def test_same_dim_disjoint_raises(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 3),))
+        d2 = Domain(dims=(IDim,), ranges=(UnitRange(5, 8),))
+        with pytest.raises(NotImplementedError):
+            d1 | d2
+
+    def test_multidim_raises(self):
+        d1 = Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 3), UnitRange(0, 3)))
+        d2 = Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 8), UnitRange(5, 8)))
+        with pytest.raises(NotImplementedError):
+            d1 | d2
+
+    def test_different_dims_raises(self):
+        d1 = Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
+        with pytest.raises(NotImplementedError, match="different dimensions"):
+            d1 | d2

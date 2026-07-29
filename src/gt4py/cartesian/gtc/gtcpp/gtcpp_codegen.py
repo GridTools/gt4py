@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Collection, Dict, Optional, Union
+from typing import Any, Collection, Dict, Final, Optional, Union
 
 import numpy as np
 
@@ -106,7 +100,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             temp = temp_decls[accessor_ref.name]
             data_index = "+".join(
                 [
-                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i + 1 :], initial=1))}"
                     for i, index in enumerate(accessor_ref.data_index)
                 ]
             )
@@ -182,6 +176,14 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.FLOOR: "std::floor",
                 NativeFunction.CEIL: "std::ceil",
                 NativeFunction.TRUNC: "std::trunc",
+                NativeFunction.INT32: "std::int32_t",
+                NativeFunction.INT64: "std::int64_t",
+                NativeFunction.FLOAT32: "float",
+                NativeFunction.FLOAT64: "double",
+                NativeFunction.ERF: "std::erf",
+                NativeFunction.ERFC: "std::erfc",
+                NativeFunction.ROUND: "std::nearbyint",
+                NativeFunction.ROUND_AWAY_FROM_ZERO: "std::round",
             }[func]
         except KeyError as error:
             raise NotImplementedError(
@@ -190,7 +192,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     NativeFuncCall = as_mako("${func}(${','.join(args)})")
 
-    DATA_TYPE_TO_CODE = {
+    DATA_TYPE_TO_CODE: Final[dict[DataType, str]] = {
         DataType.BOOL: "bool",
         DataType.INT8: "std::int8_t",
         DataType.INT16: "std::int16_t",
@@ -208,7 +210,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 f"Not implemented DataType '{dtype.name}' encountered."
             ) from error
 
-    UNARY_OPERATOR_TO_CODE = {
+    UNARY_OPERATOR_TO_CODE: Final[dict[UnaryOperator, str]] = {
         UnaryOperator.NOT: "!",
         UnaryOperator.NEG: "-",
         UnaryOperator.POS: "+",
@@ -288,6 +290,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     Program = as_mako(
         """
+        #include <cstdint>
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/common/array.hpp>

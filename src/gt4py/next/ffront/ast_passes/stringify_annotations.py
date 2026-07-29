@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import ast
 from typing import Any, Optional
@@ -36,12 +30,14 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
     ...     return result
 
     >>> ast_node = ast.parse(inspect.getsource(foo))
-    >>> print(ast_node.body[0].args.args[0].annotation)
-    <ast.Subscript object at ...>
+    >>> print(
+    ...     f"_ {ast_node.body[0].args.args[0].annotation}"
+    ... )  # first character of output can not be ignored
+    _ ...Subscript...
 
     >>> ast_node = StringifyAnnotationsPass.apply(ast_node)
-    >>> print(ast_node.body[0].args.args[0].annotation)
-    <ast.Constant object at ...>
+    >>> print(f"_ {ast_node.body[0].args.args[0].annotation}")
+    _ ...Constant...
     """
 
     @classmethod

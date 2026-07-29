@@ -1,30 +1,23 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 """Definitions of basic Eve concepts."""
-
 
 from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Callable
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
-    Callable,
     ClassVar,
     Dict,
     Final,
@@ -222,27 +215,6 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
             setattr(new_node, k, v)
         return new_node
 
-    # TODO(egparedes): add useful hashes to base node
-    # # @property
-    # def content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def annex_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def node_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_content_id(self) -> int:
-    #     ...
-    #
-    # @property
-    # def instance_id(self) -> int:
-    #     ...
-
 
 NodeT = TypeVar("NodeT", bound="Node")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
@@ -257,13 +229,3 @@ class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from Da
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
-
-
-class VType(datamodels.FrozenModel):
-    # Unique name
-    name: str
-
-
-def eq_nonlocated(a: Node, b: Node) -> bool:
-    """Compare two nodes, ignoring their `SourceLocation` or `SourceLocationGroup`."""
-    return len(utils.ddiff(a, b, exclude_types=[SourceLocation, SourceLocationGroup])) == 0

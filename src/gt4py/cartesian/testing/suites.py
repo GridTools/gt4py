@@ -1,37 +1,30 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import inspect
 import sys
 import types
 from itertools import count, product
+from typing import Final
 
 import hypothesis as hyp
 import hypothesis.strategies as hyp_st
 import numpy as np
 import pytest
 
-import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py import cartesian as gt, cartesian as gt4pyc, storage as gt_storage
-from gt4py.cartesian import gtscript, utils as gt_utils
+from gt4py import storage as gt_storage
+from gt4py.cartesian import backend as gt_backend, gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
+from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
-from gt4py.storage.cartesian import utils as storage_utils
-
-from .input_strategies import (
+from gt4py.cartesian.testing.input_strategies import (
     SymbolKind,
     composite_implementation_strategy_factory,
     composite_strategy_factory,
@@ -39,7 +32,8 @@ from .input_strategies import (
     ndarray_shape_st,
     ndarray_st,
 )
-from .utils import annotate_function, standardize_dtype_dict
+from gt4py.cartesian.testing.utils import annotate_function, standardize_dtype_dict
+from gt4py.storage.cartesian import utils as storage_utils
 
 
 ParameterSet = type(pytest.param())
@@ -64,7 +58,14 @@ class SuiteMeta(type):
     to test a stencil definition and implementations using Hypothesis and pytest.
     """
 
-    required_members = {"domain_range", "symbols", "definition", "validation", "backends", "dtypes"}
+    required_members: Final[set[str]] = {
+        "domain_range",
+        "symbols",
+        "definition",
+        "validation",
+        "backends",
+        "dtypes",
+    }
 
     def collect_symbols(cls_name, cls_dict):
         domain_range = cls_dict["domain_range"]
@@ -173,7 +174,7 @@ class SuiteMeta(type):
                             generation_strategy=composite_strategy_factory(
                                 d, generation_strategy_factories
                             ),
-                            implementations=[],
+                            implementation=None,
                             test_id=len(cls_dict["tests"]),
                             definition=annotate_function(
                                 function=cls_dict["definition"],
@@ -205,14 +206,17 @@ class SuiteMeta(type):
 
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = test["marks"]
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
-                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
-                name += "".join(
-                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
-                )
+                name += "".join(f"_{key}_{value.name}" for key, value in test["dtypes"].items())
+
+                marks = test["marks"].copy()
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
+                # Run generation and implementation tests in the same group to ensure
+                # (thread-) safe parallelization of stencil tests.
+                marks.append(pytest.mark.xdist_group(name=f"{cls_name}_{name}"))
+
                 param = pytest.param(test, marks=marks, id=name)
                 pytest_params.append(param)
 
@@ -234,14 +238,17 @@ class SuiteMeta(type):
         runtime_pytest_params = []
         for test in cls_dict["tests"]:
             if test["suite"] == cls_name:
-                marks = test["marks"]
-                if gt4pyc.backend.from_name(test["backend"]).storage_info["device"] == "gpu":
-                    marks.append(pytest.mark.requires_gpu)
                 name = test["backend"]
                 name += "".join(f"_{key}_{value}" for key, value in test["constants"].items())
-                name += "".join(
-                    "_{}_{}".format(key, value.name) for key, value in test["dtypes"].items()
-                )
+                name += "".join(f"_{key}_{value.name}" for key, value in test["dtypes"].items())
+
+                marks = test["marks"].copy()
+                if gt_backend.from_name(test["backend"]).storage_info["device"] == "gpu":
+                    marks.append(pytest.mark.requires_gpu)
+                # Run generation and implementation tests in the same group to ensure
+                # (thread-) safe parallelization of stencil tests.
+                marks.append(pytest.mark.xdist_group(name=f"{cls_name}_{name}"))
+
                 runtime_pytest_params.append(
                     pytest.param(
                         test,
@@ -262,9 +269,7 @@ class SuiteMeta(type):
         missing_members = cls.required_members - cls_dict.keys()
         if len(missing_members) > 0:
             raise TypeError(
-                "Missing {missing} required members in '{name}' definition".format(
-                    missing=missing_members, name=cls_name
-                )
+                f"Missing {missing_members} required members in '{cls_name}' definition"
             )
         # Check class dict
         domain_range = cls_dict["domain_range"]
@@ -274,14 +279,14 @@ class SuiteMeta(type):
         assert isinstance(cls_dict["symbols"], collections.abc.Mapping), "Invalid 'symbols' mapping"
 
         # Check domain and ndims
-        assert 1 <= len(domain_range) <= 3 and all(
-            len(d) == 2 for d in domain_range
-        ), "Invalid 'domain_range' definition"
+        assert 1 <= len(domain_range) <= 3 and all(len(d) == 2 for d in domain_range), (
+            "Invalid 'domain_range' definition"
+        )
 
         if any(cls_name.endswith(suffix) for suffix in ("1D", "2D", "3D")):
-            assert cls_dict["ndims"] == int(
-                cls_name[-2:-1]
-            ), "Suite name does not match the actual 'ndims'"
+            assert cls_dict["ndims"] == int(cls_name[-2:-1]), (
+                "Suite name does not match the actual 'ndims'"
+            )
 
         # Check dtypes
         assert isinstance(
@@ -297,8 +302,8 @@ class SuiteMeta(type):
             raise TypeError("'backends' must be a sequence of strings")
         backends = [pytest.param(b) if isinstance(b, str) else b for b in backends]
         for b in backends:
-            if b.values[0] not in gt.backend.REGISTRY.names:
-                raise ValueError("backend '{backend}' not supported".format(backend=b))
+            if b.values[0] not in gt_backend.REGISTRY.names:
+                raise ValueError(f"Backend '{b}' not supported")
 
         # Check definition and validation functions
         if not isinstance(cls_dict["definition"], types.FunctionType):
@@ -329,7 +334,7 @@ class SuiteMeta(type):
         cls_dict["backends"] = [
             backend
             for backend in cls_dict["backends"]
-            if gt4pyc.backend.from_name(backend if isinstance(backend, str) else backend.values[0])
+            if gt_backend.from_name(backend if isinstance(backend, str) else backend.values[0])
             is not None
         ]
 
@@ -359,8 +364,8 @@ class SuiteMeta(type):
 
         assert set(input_names + parameter_names) == set(
             cls_dict["implementation_strategy_factories"].keys()
-        ), "Missing or invalid keys in 'symbols' mapping (generated: {})".format(
-            cls_dict["implementation_strategy_factories"].keys()
+        ), (
+            f"Missing or invalid keys in 'symbols' mapping (generated: {cls_dict['implementation_strategy_factories'].keys()})"
         )
 
         cls.parametrize_generation_tests(cls_name, cls_dict)
@@ -393,8 +398,8 @@ class StencilTestSuite(metaclass=SuiteMeta):
         .. code-block:: python
 
                     {
-                        'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int_, np.int64)
+                        "float_symbols": (np.float32, np.float64),
+                        "int_symbols": (int, np.int_, np.int64),
                     }
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
@@ -443,8 +448,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
     def _test_generation(cls, test, externals_dict):
         """Test source code generation for all *backends* and *stencil suites*.
 
-        The generated implementations are cached in a :class:`utils.ImplementationsDB`
-        instance, to avoid duplication of (potentially expensive) compilations.
+        The generated implementation is cached in the test context, to avoid duplication
+        of (potentially expensive) compilation.
+        Note: This caching introduces a dependency between tests, which is captured by an
+        `xdist_group` marker in combination with `--dist loadgroup` to ensure safe parallel
+        test execution.
         """
         backend_slug = gt_utils.slugify(test["backend"], valid_symbols="")
         implementation = gtscript.stencil(
@@ -470,10 +478,11 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     or ax == "K"
                     or field_info.boundary[i] >= cls.global_boundaries[name][i]
                 )
-        test["implementations"].append(implementation)
+        assert test["implementation"] is None
+        test["implementation"] = implementation
 
     @classmethod
-    def _run_test_implementation(cls, parameters_dict, implementation):  # noqa: C901  # too complex
+    def _run_test_implementation(cls, parameters_dict, implementation):  # too complex
         input_data, exec_info = parameters_dict
 
         origin = cls.origin
@@ -543,7 +552,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         # call implementation
         implementation(**test_values, origin=origin, domain=domain, exec_info=exec_info)
 
-        # for validation data, data is cropped to actually touched domain, so that origin offseting
+        # for validation data, data is cropped to actually touched domain, so that origin offsetting
         # does not have to be implemented for every test suite. This is done based on info
         # specified in test suite
         cropped_validation_values = {}
@@ -587,23 +596,23 @@ class StencilTestSuite(metaclass=SuiteMeta):
                     rtol=RTOL,
                     atol=ATOL,
                     equal_nan=EQUAL_NAN,
-                    err_msg="Wrong data in output field '{name}'".format(name=name),
+                    err_msg=f"Wrong data in output field '{name}'",
                 )
 
     @classmethod
     def _test_implementation(cls, test, parameters_dict):
         """Test computed values for implementations generated for all *backends* and *stencil suites*.
 
-        The generated implementations are reused from previous tests by means of a
-        :class:`utils.ImplementationsDB` instance shared at module scope.
+        The generated implementation was cached in the test context, to avoid duplication
+        of (potentially expensive) compilation.
+        Note: This caching introduces a dependency between tests, which is captured by an
+        `xdist_group` marker in combination with `--dist loadgroup` to ensure safe parallel
+        test execution.
         """
-        implementation_list = test["implementations"]
-        if not implementation_list:
-            pytest.skip(
-                "Cannot perform validation tests, since there are no valid implementations."
-            )
-        for implementation in implementation_list:
-            if not isinstance(implementation, StencilObject):
-                raise RuntimeError("Wrong function got from implementations_db cache!")
+        implementation = test["implementation"]
+        assert implementation is not None, (
+            "Stencil implementation not found. This usually means code generation failed."
+        )
+        assert isinstance(implementation, StencilObject)
 
-            cls._run_test_implementation(parameters_dict, implementation)
+        cls._run_test_implementation(parameters_dict, implementation)

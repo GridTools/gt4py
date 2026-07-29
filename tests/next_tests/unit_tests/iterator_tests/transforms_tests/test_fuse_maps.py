@@ -1,28 +1,23 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from gt4py.eve.pattern_matching import ObjectPattern as P
+from gt4py.next import utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import fuse_maps, inline_lambdas
 
 
 def _map(op: ir.Expr, *args: ir.Expr) -> ir.FunCall:
-    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[op]), args=[*args])
+    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="map_list"), args=[op]), args=[*args])
 
 
 def _map_p(op: ir.Expr | P, *args: ir.Expr | P) -> P:
-    return P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="map_"), args=[op]), args=[*args])
+    return P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="map_list"), args=[op]), args=[*args])
 
 
 def _reduce(op: ir.Expr, init: ir.Expr, *args: ir.Expr) -> ir.FunCall:
@@ -46,15 +41,7 @@ _p_sym = P(ir.Sym)
 _p_symref = P(ir.SymRef)
 
 
-def _apply_fuse_maps(ir: ir.Node) -> ir.Node:
-    result = fuse_maps.FuseMaps().visit(ir)
-    result = inline_lambdas.InlineLambdas.apply(
-        result
-    )  # FuseMaps does not inline everything which makes the expected result harder to test
-    return result
-
-
-def test_simple():
+def test_simple(uids: utils.IDGeneratorPool):
     testee = _map(
         ir.SymRef(id="plus"),
         ir.SymRef(id="a"),
@@ -83,11 +70,13 @@ def test_simple():
         ir.SymRef(id="c"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_with_lambdas():
+def test_simple_with_lambdas(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -116,11 +105,13 @@ def test_simple_with_lambdas():
         ir.SymRef(id="c"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_simple_reduce():
+def test_simple_reduce(uids: utils.IDGeneratorPool):
     testee = _reduce(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="init"),
@@ -149,11 +140,13 @@ def test_simple_reduce():
         ir.SymRef(id="b"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_nested():
+def test_nested(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         ir.SymRef(id="a"),
@@ -182,11 +175,7 @@ def test_nested():
                         fun=ir.SymRef(id="multiplies"),
                         args=[
                             _p_symref,
-                            P(
-                                ir.FunCall,
-                                fun=ir.SymRef(id="divides"),
-                                args=[_p_symref, _p_symref],
-                            ),
+                            P(ir.FunCall, fun=ir.SymRef(id="divides"), args=[_p_symref, _p_symref]),
                         ],
                     ),
                 ],
@@ -198,11 +187,13 @@ def test_nested():
         ir.SymRef(id="d"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)
 
 
-def test_multiple_maps_with_colliding_symbol_names():
+def test_multiple_maps_with_colliding_symbol_names(uids: utils.IDGeneratorPool):
     testee = _map(
         _wrap_in_lambda(ir.SymRef(id="plus"), "x", "y"),
         _map(
@@ -225,16 +216,8 @@ def test_multiple_maps_with_colliding_symbol_names():
                 ir.FunCall,
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    P(
-                        ir.FunCall,
-                        fun=ir.SymRef(id="multiplies"),
-                        args=[_p_symref, _p_symref],
-                    ),
-                    P(
-                        ir.FunCall,
-                        fun=ir.SymRef(id="multiplies"),
-                        args=[_p_symref, _p_symref],
-                    ),
+                    P(ir.FunCall, fun=ir.SymRef(id="multiplies"), args=[_p_symref, _p_symref]),
+                    P(ir.FunCall, fun=ir.SymRef(id="multiplies"), args=[_p_symref, _p_symref]),
                 ],
             ),
         ),
@@ -244,5 +227,7 @@ def test_multiple_maps_with_colliding_symbol_names():
         ir.SymRef(id="d"),
     )
 
-    actual = _apply_fuse_maps(testee)
+    result = fuse_maps.FuseMaps(uids=uids).visit(testee)
+    result = inline_lambdas.InlineLambdas.apply(result)
+    actual = result
     assert expected.match(actual)

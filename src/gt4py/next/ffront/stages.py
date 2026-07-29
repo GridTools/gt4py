@@ -1,0 +1,126 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""
+Definitions of the stages of the GT4Py frontend.
+
+Classes in this module contain different forms of field operator and program
+definitions, which are used as input or output of the different stages of
+the frontend.
+
+All classes containing a definition of a GT4Py computation in any form use the
+`Def` suffix. Definitions containing actual Python functions whose source code
+should be interpreted as GT4Py embedded domain-specific language have `DSL` in
+their name. Definitions containing definitions as an AST of one the internal GT4Py
+dialects contain `AST`.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import types
+import typing
+from typing import Any, Optional, TypeVar
+
+from gt4py.next import common, fingerprinting
+from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
+from gt4py.next.otf import arguments, toolchain
+
+
+@dataclasses.dataclass(frozen=True)
+class BaseStage: ...
+
+
+def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting.Deconstruction:
+    """
+    Deconstruct a Python function into its source definition and closure variables.
+
+    This should be enough for the use case of GT4Py DSL definitions, which are
+    expected to be pure functions without complicated closures. The full
+    :class:`SourceDefinition` (including filename and line/column offsets) is
+    fingerprinted, so that two textually identical operators defined at
+    different source locations are distinguished and do not share a cached
+    lowering with the wrong `SourceLocation`s.
+    """
+    return fingerprinting.Deconstruction.from_pieces(
+        source_utils.make_source_definition_from_function(func),
+        source_utils.get_closure_vars_from_function(func),
+        state=b"definition_function",
+    )
+
+
+#: Fingerprinter for the frontend stages: keeps source locations on AST nodes
+#: (the in-memory stage cache's lowered product bakes them in, so two textually
+#: identical operators at different locations must not share an entry) and
+#: fingerprints DSL definition functions by their source code and closure
+#: variables (instead of by qualified name).
+semantic_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
+        {types.FunctionType: _deconstruct_definition_function}
+    ),
+)
+
+
+#: Public alias for semantic_fingerprinter.
+fingerprinter = semantic_fingerprinter
+
+
+@dataclasses.dataclass(frozen=True)
+class DSLFieldOperatorDef(BaseStage):
+    definition: types.FunctionType
+    node_class: type[foast.OperatorNode] = foast.FieldOperator
+    attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
+    grid_type: Optional[common.GridType] = None
+    debug: bool = False
+
+
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    DSLFieldOperatorDef, arguments.CompileTimeArgs
+]
+
+
+@dataclasses.dataclass(frozen=True)
+class FOASTOperatorDef(BaseStage):
+    foast_node: foast.OperatorNode
+    closure_vars: dict[str, Any]
+    grid_type: Optional[common.GridType] = None
+    attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
+    debug: bool = False
+
+
+ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    FOASTOperatorDef, arguments.CompileTimeArgs
+]
+
+
+@dataclasses.dataclass(frozen=True)
+class DSLProgramDef(BaseStage):
+    definition: types.FunctionType
+    grid_type: Optional[common.GridType] = None
+    debug: bool = False
+
+
+ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    DSLProgramDef, arguments.CompileTimeArgs
+]
+
+
+@dataclasses.dataclass(frozen=True)
+class PASTProgramDef(BaseStage):
+    past_node: past.Program
+    closure_vars: dict[str, Any]
+    grid_type: Optional[common.GridType] = None
+    debug: bool = False
+
+
+ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+    PASTProgramDef, arguments.CompileTimeArgs
+]
+
+DSLDefinition = DSLFieldOperatorDef | DSLProgramDef
+DSLDefinitionT = TypeVar("DSLDefinitionT", DSLFieldOperatorDef, DSLProgramDef)

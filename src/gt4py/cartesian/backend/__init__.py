@@ -1,35 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from .base import (
-    REGISTRY,
-    Backend,
-    BaseBackend,
-    BasePyExtBackend,
-    CLIBackendMixin,
-    PurePythonBackendCLIMixin,
-    from_name,
-    register,
-)
+from warnings import warn
 
-
-try:
-    from .dace_backend import DaceCPUBackend, DaceGPUBackend
-except ImportError:
-    pass
-
-from .cuda_backend import CudaBackend
+from .base import REGISTRY, Backend, BaseBackend, BasePyExtBackend, from_name, register
+from .debug_backend import DebugBackend
 from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
 from .numpy_backend import NumpyBackend
@@ -41,17 +21,22 @@ __all__ = [
     "BaseBackend",
     "BaseModuleGenerator",
     "BasePyExtBackend",
-    "CLIBackendMixin",
-    "CudaBackend",
-    "GTGpuBackend",
+    "DebugBackend",
     "GTCpuIfirstBackend",
     "GTCpuKfirstBackend",
+    "GTGpuBackend",
     "NumpyBackend",
-    "PurePythonBackendCLIMixin",
     "from_name",
     "register",
 ]
 
 
-if "DaceCPUBackend" in globals():
-    __all__ += ["DaceCPUBackend", "DaceGPUBackend"]
+try:
+    from .dace_backend import DaceCPUBackend, DaceCPUKFirstBackend, DaceGPUBackend
+
+    __all__ += ["DaceCPUBackend", "DaceCPUKFirstBackend", "DaceGPUBackend"]
+except ImportError:
+    warn(
+        "GT4Py was unable to load DaCe. DaCe backends (`dace:cpu`, `dace:cpu_kfirst`, and `dace:gpu`) will not be available.",
+        stacklevel=2,
+    )

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -21,15 +15,15 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Literal, Union, cast
 
 import numpy as np
 
-import gt4py.cartesian.gtc.utils as gtc_utils
-import gt4py.storage.cartesian.utils as storage_utils
-from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
+from gt4py.storage.cartesian import utils as storage_utils
 
 
 try:
@@ -38,14 +32,14 @@ except ImportError:
     cupy = None
 
 FieldType = Union["cp.ndarray", np.ndarray]
-OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
+OriginType = Union[tuple[int, int, int], dict[str, tuple[int, ...]]]
 
 
 def _compute_domain_origin_cache_key(
-    field_args_info: Dict[str, Optional[ArgsInfo]],
-    parameter_args: Dict[str, Optional[Number]],
-    domain: Optional[Tuple[int, ...]],
-    origin: Optional[OriginType],
+    field_args_info: dict[str, ArgsInfo | None],
+    parameter_args: dict[str, Number | None],
+    domain: tuple[int, ...] | None,
+    origin: OriginType | None,
 ) -> int:
     field_data = tuple(
         (name, arg.array.shape, arg.origin or (0, 0, 0))
@@ -59,15 +53,15 @@ def _compute_domain_origin_cache_key(
 class ArgsInfo:
     device: str
     array: FieldType
-    original_object: Optional[Any] = None
-    origin: Optional[Tuple[int, ...]] = None
-    dimensions: Optional[Tuple[str, ...]] = None
+    original_object: Any | None = None
+    origin: tuple[int, ...] | None = None
+    dimensions: tuple[str, ...] | None = None
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
-) -> Dict[str, Optional[ArgsInfo]]:
-    array_infos: Dict[str, Optional[ArgsInfo]] = {}
+    field_args: dict[str, FieldType | None], device: Literal["cpu", "gpu"]
+) -> dict[str, ArgsInfo | None]:
+    array_infos: dict[str, ArgsInfo | None] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
@@ -92,8 +86,8 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[ArgsInfo]]
-) -> Dict[str, Optional[FieldType]]:
+    array_infos: dict[str, ArgsInfo | None],
+) -> dict[str, FieldType | None]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
 
@@ -101,9 +95,9 @@ def _extract_stencil_arrays(
 class FrozenStencil:
     """Stencil with pre-computed domain and origin for each field argument."""
 
-    stencil_object: "StencilObject"
-    origin: Dict[str, Tuple[int, ...]]
-    domain: Tuple[int, ...]
+    stencil_object: StencilObject
+    origin: dict[str, tuple[int, ...]]
+    domain: tuple[int, ...]
 
     def __post_init__(self):
         for name, field_info in self.stencil_object.field_info.items():
@@ -188,14 +182,13 @@ class StencilObject(abc.ABC):
         performance statistics. These include the stencil calls count, the
         cumulative time spent in all stencil calls, and the actual time spent
         in carrying out the computations.
-
     """
 
     # Those attributes are added to the class at loading time:
     _gt_id_: str
     definition_func: Callable[..., Any]
 
-    _domain_origin_cache: ClassVar[Dict[int, Tuple[Tuple[int, ...], Dict[str, Tuple[int, ...]]]]]
+    _domain_origin_cache: ClassVar[dict[int, tuple[tuple[int, ...], dict[str, tuple[int, ...]]]]]
     """Stores domain/origin pairs that have been used by hash."""
 
     def __new__(cls, *args, **kwargs):
@@ -214,26 +207,15 @@ class StencilObject(abc.ABC):
         return type(self) is type(other)
 
     def __str__(self) -> str:
-        result = """
-<StencilObject: {name}> [backend="{backend}"]
-    - I/O fields: {fields}
-    - Parameters: {params}
-    - Constants: {constants}
-    - Version: {version}
-    - Definition ({func}):
-{source}
-        """.format(
-            name=self.options["module"] + "." + self.options["name"],
-            version=self._gt_id_,
-            backend=self.backend,
-            fields=self.field_info,
-            params=self.parameter_info,
-            constants=self.constants,
-            func=self.definition_func,
-            source=self.source,
-        )
-
-        return result
+        return f"""
+<StencilObject: {self.options["module"] + "." + self.options["name"]}> [backend="{self.backend}"]
+    - I/O fields: {self.field_info}
+    - Parameters: {self.parameter_info}
+    - Constants: {self.constants}
+    - Version: {self._gt_id_}
+    - Definition ({self.definition_func}):
+{self.source}
+        """
 
     def __hash__(self) -> int:
         return int.from_bytes(type(self)._gt_id_.encode(), byteorder="little")
@@ -255,22 +237,22 @@ class StencilObject(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def field_info(self) -> Dict[str, FieldInfo]:
+    def field_info(self) -> dict[str, FieldInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def parameter_info(self) -> Dict[str, ParameterInfo]:
+    def parameter_info(self) -> dict[str, ParameterInfo]:
         pass
 
     @property
     @abc.abstractmethod
-    def constants(self) -> Dict[str, Any]:
+    def constants(self) -> dict[str, Any]:
         pass
 
     @property
     @abc.abstractmethod
-    def options(self) -> Dict[str, Any]:
+    def options(self) -> dict[str, Any]:
         pass
 
     @abc.abstractmethod
@@ -283,8 +265,8 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _make_origin_dict(
-        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None]
-    ) -> Dict[str, Tuple[int, ...]]:
+        origin: dict[str, tuple[int, ...]] | tuple[int, ...] | int | None,
+    ) -> dict[str, tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
                 # This is needed because the keys in origin are StringLiteral as of DaCe v0.14, and they
@@ -294,20 +276,20 @@ class StencilObject(abc.ABC):
             if origin is None:
                 return {}
             if isinstance(origin, collections.abc.Iterable):
-                return {"_all_": cast(Tuple[int, ...], Index.from_value(origin))}
+                return {"_all_": cast(tuple[int, ...], Index.from_value(origin))}
             if isinstance(origin, int):
-                return {"_all_": cast(Tuple[int, ...], Index.from_k(origin))}
+                return {"_all_": cast(tuple[int, ...], Index.from_k(origin))}
         except Exception:
             pass
 
-        raise ValueError("Invalid 'origin' value ({})".format(origin))
+        raise ValueError(f"Invalid 'origin' value ({origin})")
 
     @staticmethod
     def _get_max_domain(
-        array_infos: Dict[str, Optional[ArgsInfo]],
+        array_infos: dict[str, ArgsInfo | None],
         domain_infos: DomainInfo,
-        field_infos: Dict[str, FieldInfo],
-        origin: Dict[str, Tuple[int, ...]],
+        field_infos: dict[str, FieldInfo],
+        origin: dict[str, tuple[int, ...]],
         *,
         squeeze: bool = True,
     ) -> Shape:
@@ -349,12 +331,12 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(  # noqa: C901  # Function is too complex
+    def _validate_args(  # Function is too complex
         self,
-        arg_infos: Dict[str, Optional[ArgsInfo]],
-        param_args: Dict[str, Any],
-        domain: Tuple[int, ...],
-        origin: Dict[str, Tuple[int, ...]],
+        arg_infos: dict[str, ArgsInfo | None],
+        param_args: dict[str, Any],
+        domain: tuple[int, ...],
+        origin: dict[str, tuple[int, ...]],
     ) -> None:
         """
         Validate input arguments to _call_run.
@@ -376,27 +358,40 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except Exception:
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
+        except Exception as ex:
+            raise ValueError(f"Invalid 'domain' value ({domain})") from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
 
         if not domain <= (
-            max_domain := self._get_max_domain(
+            self._get_max_domain(
                 arg_infos, self.domain_info, self.field_info, origin, squeeze=False
             )
         ):
-            raise ValueError(
-                f"Compute domain too large (provided: {domain}, maximum: {max_domain})"
+            offending_fields = []
+            for name, info in self.field_info.items():
+                field_used_domain = self._get_max_domain(
+                    arg_infos, self.domain_info, {name: info}, origin, squeeze=False
+                )
+                if field_used_domain < domain:
+                    offending_fields.append((name, field_used_domain))
+
+            error = ValueError(
+                f"Compute domain too large for stencil {self.options['name']}: \n"
+                f"  Stencil domain is {domain} but field indexation leads to read outside of bounds.\n"
+                f"  Check region/horizontal offsets or interval/vertical offsets, or stencil domain.\n"
+                f"  Offending fields (name, size with offset removed): {offending_fields}"
             )
+
+            raise error
 
         if domain[2] < self.domain_info.min_sequential_axis_size:
             raise ValueError(
                 f"Compute domain too small. Sequential axis is {domain[2]}, but must be at least {self.domain_info.min_sequential_axis_size}."
             )
 
-        backend_cls = gt4pyc.backend.from_name(self.backend)
+        backend_cls = gt_backend.from_name(self.backend)
 
         # assert compatibility of fields with stencil
         for name, field_info in self.field_info.items():
@@ -405,9 +400,6 @@ class StencilObject(abc.ABC):
                     raise ValueError(f"Missing value for '{name}' field.")
                 arg_info = arg_infos[name]
                 assert arg_info is not None
-
-                backend_cls = gt4pyc.backend.from_name(self.backend)
-                assert backend_cls is not None
 
                 if not backend_cls.storage_info["is_optimal_layout"](
                     arg_info.array,
@@ -420,7 +412,8 @@ class StencilObject(abc.ABC):
                     warnings.warn(
                         f"The layout of the field '{name}' is not recommended for this backend."
                         f"This may lead to performance degradation. Please consider using the"
-                        f"provided allocators in `gt4py.storage`."
+                        f"provided allocators in `gt4py.storage`.",
+                        stacklevel=2,
                     )
 
                 field_dtype = self.field_info[name].dtype
@@ -443,7 +436,10 @@ class StencilObject(abc.ABC):
 
                 if (
                     arg_info.dimensions is not None
-                    and (*field_info.axes, *(str(d) for d in range(len(field_info.data_dims))))
+                    and (
+                        *field_info.axes,
+                        *(str(d) for d in range(len(field_info.data_dims))),
+                    )
                     != arg_info.dimensions
                 ):
                     raise ValueError(
@@ -491,10 +487,10 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _normalize_origins(
-        array_infos: Dict[str, Optional[ArgsInfo]],
-        field_infos: Dict[str, FieldInfo],
-        origin: Optional[OriginType],
-    ) -> Dict[str, Tuple[int, ...]]:
+        array_infos: dict[str, ArgsInfo | None],
+        field_infos: dict[str, FieldInfo],
+        origin: OriginType | None,
+    ) -> dict[str, tuple[int, ...]]:
         origin = StencilObject._make_origin_dict(origin)
         all_origin = origin.get("_all_", None)
         # Set an appropriate origin for all fields
@@ -507,9 +503,9 @@ class StencilObject(abc.ABC):
             if field_origin is not None:
                 field_origin_ndim = len(field_origin)
                 if field_origin_ndim != field_info.ndim:
-                    assert (
-                        field_origin_ndim == field_info.domain_ndim
-                    ), f"Invalid origin specification ({field_origin}) for '{name}' field."
+                    assert field_origin_ndim == field_info.domain_ndim, (
+                        f"Invalid origin specification ({field_origin}) for '{name}' field."
+                    )
                     origin[name] = (*field_origin, *((0,) * len(field_info.data_dims)))
 
             elif all_origin is not None:
@@ -518,7 +514,7 @@ class StencilObject(abc.ABC):
                     *((0,) * len(field_info.data_dims)),
                 )
             elif (info_origin := getattr(array_infos.get(name), "origin", None)) is not None:
-                origin[name] = info_origin  # type: ignore
+                origin[name] = info_origin
             else:
                 origin[name] = (0,) * field_info.ndim
 
@@ -526,13 +522,13 @@ class StencilObject(abc.ABC):
 
     def _call_run(
         self,
-        field_args: Dict[str, FieldType],
-        parameter_args: Dict[str, Any],
-        domain: Optional[Tuple[int, ...]],
-        origin: Optional[OriginType],
+        field_args: dict[str, FieldType],
+        parameter_args: dict[str, Any],
+        domain: tuple[int, ...] | None,
+        origin: OriginType | None,
         *,
         validate_args: bool = True,
-        exec_info: Optional[Dict[str, Any]] = None,
+        exec_info: dict[str, Any] | None = None,
     ) -> None:
         """Check and preprocess the provided arguments (called by :class:`StencilObject` subclasses).
 
@@ -565,8 +561,7 @@ class StencilObject(abc.ABC):
         """
         if exec_info is not None:
             exec_info["call_run_start_time"] = time.perf_counter()
-        backend_cls = gt4pyc.backend.from_name(self.backend)
-        assert backend_cls is not None
+        backend_cls = gt_backend.from_name(self.backend)
         device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)
 
@@ -599,7 +594,10 @@ class StencilObject(abc.ABC):
             exec_info["call_run_end_time"] = time.perf_counter()
 
     def freeze(
-        self: "StencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
+        self: StencilObject,
+        *,
+        origin: dict[str, tuple[int, ...]],
+        domain: tuple[int, ...],
     ) -> FrozenStencil:
         """Return a StencilObject wrapper with a fixed domain and origin for each argument.
 
@@ -626,7 +624,7 @@ class StencilObject(abc.ABC):
         """
         return FrozenStencil(self, origin, domain)
 
-    def clean_call_args_cache(self: "StencilObject") -> None:
+    def clean_call_args_cache(self: StencilObject) -> None:
         """Clean the argument cache.
 
         Returns

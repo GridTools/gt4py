@@ -1,18 +1,12 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.ffront import field_operator_ast as foast
+from gt4py.next.ffront import dialect_ast_enums, field_operator_ast as foast
 
 
 def compute_assign_indices(
@@ -52,9 +46,37 @@ def compute_assign_indices(
             starred_upper = idx + 1
             break
     if starred_lower is not None and starred_upper is not None:
-        return (
-            list(range(0, starred_lower))
-            + [(starred_lower, starred_upper)]
-            + list(range(starred_upper, num_elts))
-        )
+        return [
+            *list(range(0, starred_lower)),
+            (starred_lower, starred_upper),
+            *list(range(starred_upper, num_elts)),
+        ]
     return list(range(0, num_elts))  # no starred target
+
+
+def expr_to_index(expr: foast.Expr) -> int:
+    """
+    Convert an expression that represent an (integral) index to an int index.
+
+    Args:
+        expr: The expression to convert. Supported are literals of the form `+/-<int>`.
+
+    Returns:
+        The integer value of the index.
+
+    Raises:
+        ValueError: If the expression is not a valid index expression.
+    """
+    if isinstance(expr, foast.Constant):
+        return expr.value
+    if (
+        isinstance(expr, foast.UnaryOp)
+        and isinstance(expr.op, dialect_ast_enums.UnaryOperator)
+        and isinstance(expr.operand, foast.Constant)
+    ):
+        if expr.op is dialect_ast_enums.UnaryOperator.USUB:
+            return -expr.operand.value
+        if expr.op is dialect_ast_enums.UnaryOperator.UADD:
+            return expr.operand.value
+
+    raise ValueError(f"Not an index: '{expr}'.")

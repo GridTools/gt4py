@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from pathlib import Path
 
@@ -18,7 +12,7 @@ import gridtools_cpp
 import pytest
 import setuptools
 
-from gt4py.cartesian import config  # TODO required for getting boost path
+from gt4py.cartesian.backend import pyext_builder
 from gt4py.cartesian.gtc.gtcpp.gtcpp import GTApplyMethod, Intent, Program
 from gt4py.cartesian.gtc.gtcpp.gtcpp_codegen import GTCppCodegen
 from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import _extract_accessors
@@ -39,13 +33,13 @@ from .utils import match
 
 def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
-    tmp_src.write_text(code)
+    tmp_src.write_text(code, encoding="utf-8")
 
     extra_compile_args = ["-std=c++20"]
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],
-        include_dirs=[gridtools_cpp.get_include_dir(), config.build_settings["boost_include_path"]],
+        include_dirs=[gridtools_cpp.get_include_dir()],
         language="c++",
         extra_compile_args=extra_compile_args,
     )
@@ -55,22 +49,15 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    setuptools.setup(
-        name="test",
-        ext_modules=[
-            ext_module,
-        ],
-        script_args=args,
+    pyext_builder.setuptools_setup(
+        name="test", ext_modules=[ext_module], script_args=args, build_ext_class=None
     )
 
 
 def make_compilation_input_and_expected():
     return [
         (ProgramFactory(name="test"), r"auto test"),
-        (
-            ProgramFactory(functors__0__name="fun"),
-            r"struct fun",
-        ),
+        (ProgramFactory(functors__0__name="fun"), r"struct fun"),
         (
             ProgramFactory(
                 functors__0__applies=[],
@@ -88,10 +75,7 @@ def make_compilation_input_and_expected():
             ),
             r"inout_accessor<0, extent<1,\s*2,\s*-3,\s*-4,\s*10,\s*-10>",
         ),
-        (
-            ProgramFactory(),
-            r"void\s*apply\(",
-        ),
+        (ProgramFactory(), r"void\s*apply\("),
         (ProgramFactory(parameters=[FieldDeclFactory(name="my_param")]), r"my_param"),
         (
             ProgramFactory(
@@ -141,10 +125,7 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
             GTApplyMethodFactory(body__0__left__name="foo", body__0__right__name="bar"),
             r"foo.*=.*bar",
         ),
-        (
-            GTApplyMethodFactory(body__0=IfStmtFactory()),
-            r"if",
-        ),
+        (GTApplyMethodFactory(body__0=IfStmtFactory()), r"if"),
     ],
 )
 def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_regex):

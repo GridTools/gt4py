@@ -1,21 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.ffront.decorator import _deduce_grid_type
+from gt4py.next.ffront.transform_utils import _deduce_grid_type
 
 
 Dim = gtx.Dimension("Dim")
@@ -33,6 +27,14 @@ def test_domain_deduction_cartesian():
 def test_domain_deduction_unstructured():
     assert _deduce_grid_type(None, {UnstructuredOffset}) == gtx.GridType.UNSTRUCTURED
     assert _deduce_grid_type(None, {LocalDim}) == gtx.GridType.UNSTRUCTURED
+    # source and target share `.value` but differ in `.kind` -> not Cartesian
+    HDim = gtx.Dimension("X", kind=gtx.DimensionKind.HORIZONTAL)
+    VDim = gtx.Dimension("X", kind=gtx.DimensionKind.VERTICAL)
+    CrossKindOffset = gtx.FieldOffset("CrossKind", source=HDim, target=(VDim,))
+    assert _deduce_grid_type(None, {CrossKindOffset}) == gtx.GridType.UNSTRUCTURED
+    # LOCAL self-loop is unstructured
+    LocalSelfOffset = gtx.FieldOffset("LocalSelf", source=LocalDim, target=(LocalDim,))
+    assert _deduce_grid_type(None, {LocalSelfOffset}) == gtx.GridType.UNSTRUCTURED
 
 
 def test_domain_complies_with_request_cartesian():

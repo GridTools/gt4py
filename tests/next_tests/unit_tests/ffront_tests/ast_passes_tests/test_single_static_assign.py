@@ -1,18 +1,12 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 #
 import ast
@@ -108,7 +102,10 @@ def test_unpacking_swap():
     lines = ast.unparse(ssa_ast).split("\n")
     assert lines[0] == f"a{SEP}0 = 5"
     assert lines[1] == f"b{SEP}0 = 1"
-    assert lines[2] == f"(b{SEP}1, a{SEP}1) = (a{SEP}0, b{SEP}0)"
+    assert lines[2] in [
+        f"(b{SEP}1, a{SEP}1) = (a{SEP}0, b{SEP}0)",
+        f"b{SEP}1, a{SEP}1 = (a{SEP}0, b{SEP}0)",
+    ]  # unparse produces different parentheses in different Python versions
 
 
 def test_annotated_assign():

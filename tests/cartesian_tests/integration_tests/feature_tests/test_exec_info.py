@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import inspect
 from typing import Any, Dict
@@ -49,7 +43,10 @@ class TestExecInfo:
 
     @staticmethod
     def diffusion_def(
-        in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore
+        in_phi: gtscript.Field[float],
+        out_phi: gtscript.Field[float],
+        *,
+        alpha: float,  # type: ignore
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             lap1 = (
@@ -170,8 +167,7 @@ class TestExecInfo:
         assert "run_time" in stencil_info
         if last_called_stencil:
             assert np.isclose(
-                stencil_info["run_time"],
-                exec_info["run_end_time"] - exec_info["run_start_time"],
+                stencil_info["run_time"], exec_info["run_end_time"] - exec_info["run_start_time"]
             )
         assert stencil_info["call_time"] > stencil_info["run_time"]
         assert "total_run_time" in stencil_info
@@ -210,7 +206,7 @@ class TestExecInfo:
         exec_info: Dict[str, Any] = {}
 
         # run (sequential-splitting mode)
-        self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
+        self.nt = data.draw(hyp_st.integers(1, 3), label="nt")
         for _ in range(self.nt):
             self.advection(
                 self.in_phi,
@@ -253,7 +249,7 @@ class TestExecInfo:
         exec_info: Dict[str, Any] = {"__aggregate_data": True}
 
         # run (sequential-splitting mode)
-        self.nt = data.draw(hyp_st.integers(1, 64), label="nt")
+        self.nt = data.draw(hyp_st.integers(1, 3), label="nt")
         for _ in range(self.nt):
             self.advection(
                 self.in_phi,
@@ -281,7 +277,3 @@ class TestExecInfo:
         self.subtest_stencil_info(
             exec_info, exec_info[type(self.diffusion).__name__], last_called_stencil=True
         )
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

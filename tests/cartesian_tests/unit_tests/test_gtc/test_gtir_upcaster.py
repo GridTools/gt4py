@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import List
 
@@ -41,20 +35,27 @@ AN_UNIMPORTANT_LITERAL = LiteralFactory(value="", dtype=DataType.DEFAULT)
 
 
 def contains_cast_node(cast_node, expr):
-    # Checks if `expr` contains `cast_node`. If `cast_node` contains `expr=Placeholder()`
-    # we skip equality check of `expr` and `cast_node.expr`
+    """Checks if `expr` contains `cast_node`. If `cast_node` contains `expr=Placeholder()`
+    we skip equality check of `expr` and `cast_node.expr`."""
     return (
         len(
             expr.walk_values()
             .if_isinstance(Cast)
             .filter(
-                lambda node: node.dtype == cast_node.dtype
-                and (isinstance(cast_node.expr, Placeholder) or node.expr == cast_node.expr)
+                lambda node: (
+                    node.dtype == cast_node.dtype
+                    and (isinstance(cast_node.expr, Placeholder) or node.expr == cast_node.expr)
+                )
             )
             .to_list()
         )
         == 1
     )
+
+
+def contains_no_cast_nodes(expr):
+    """Checks that `expr` contains no `cast_node`s."""
+    return len(expr.walk_values().if_isinstance(Cast).to_list()) == 0
 
 
 def upcast_and_validate(expr, expected_cast_nodes):
@@ -66,6 +67,9 @@ def upcast_and_validate(expr, expected_cast_nodes):
 
     for cast in expected_cast_nodes:
         assert contains_cast_node(cast, result)
+
+    if not expected_cast_nodes:
+        assert contains_no_cast_nodes(result)
 
 
 def test_upcast_BinaryOp_BOOL_to_FLOAT():
@@ -99,11 +103,7 @@ def test_upcast_ParAssignStmt():
 
 
 def test_upcast_TernaryOp():
-    testee = TernaryOp(
-        cond=A_BOOL_LITERAL,
-        true_expr=A_INT64_LITERAL,
-        false_expr=A_FLOAT64_LITERAL,
-    )
+    testee = TernaryOp(cond=A_BOOL_LITERAL, true_expr=A_INT64_LITERAL, false_expr=A_FLOAT64_LITERAL)
     upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
 
 
@@ -129,4 +129,23 @@ def test_upcast_integers_division():
             Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="1", dtype=DataType.INT32)),
             Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="2", dtype=DataType.INT32)),
         ],
+    )
+
+
+def test_upcast_power_function():
+    testee = NativeFuncCall(func=NativeFunction.POW, args=[A_FLOAT64_LITERAL, A_INT64_LITERAL])
+    upcast_and_validate(
+        testee, []
+    )  # don't cast integer exponents of power function because of the base
+
+
+def test_upcast_power_function_arguments():
+    exponent = BinaryOp(
+        op=ArithmeticOperator.DIV,
+        left=LiteralFactory(value="1", dtype=DataType.INT32),
+        right=LiteralFactory(value="2", dtype=DataType.FLOAT32),
+    )
+    testee = NativeFuncCall(func=NativeFunction.POW, args=[A_FLOAT64_LITERAL, exponent])
+    upcast_and_validate(
+        testee, [Cast(dtype=DataType.FLOAT32, expr=LiteralFactory(value="1", dtype=DataType.INT32))]
     )

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from typing import Any, Dict, cast
 
@@ -18,6 +12,7 @@ import numpy as np
 import pytest
 
 from gt4py.cartesian.backend import REGISTRY as backend_registry
+from gt4py.cartesian.backend import from_name as backend_from_name
 from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.definitions import AccessKind
 from gt4py.cartesian.gtc import gtir, utils
@@ -48,7 +43,11 @@ def stencil_def(
             out = pa * fa + pb * fb - pc * fc  # type: ignore  # noqa
 
 
-field_info_val = {0: ("out", "fa"), 1: ("out", "fa", "fb"), 2: ("out", "fa", "fb", "fc")}
+field_info_val = {
+    0: ("out", "fa"),
+    1: ("out", "fa", "fb"),
+    2: ("out", "fa", "fb", "fc"),
+}
 parameter_info_val = {0: ("pa",), 1: ("pa", "pb"), 2: ("pa", "pb", "pc")}
 unreferenced_val = {0: ("pb", "fb", "pc", "fc"), 1: ("pc", "fc"), 2: ()}
 
@@ -115,14 +114,10 @@ def test_device_sync_option(backend_name, mode, device_sync):
     backend_cls = backend_registry[backend_name]
     builder = StencilBuilder(stencil_def, backend=backend_cls).with_externals({"MODE": mode})
     builder.options.backend_opts["device_sync"] = device_sync
+    builder.build()
     args_data = make_args_data_from_gtir(builder.gtir_pipeline)
-    module_generator = backend_cls.MODULE_GENERATOR_CLASS()
-    source = module_generator(
-        args_data,
-        builder,
-        pyext_module_name=builder.module_name,
-        pyext_file_path=str(builder.module_path),
-    )
+    module_generator = backend_cls.MODULE_GENERATOR_CLASS(builder)
+    source = module_generator(args_data)
 
     if device_sync:
         assert "cupy.cuda.Device(0).synchronize()" in source
@@ -168,5 +163,9 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
         assert build_info["load_time"] > 0.0
 
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+def test_bad_backend_feedback():
+    existing_backend = backend_from_name("numpy")
+    assert existing_backend
+
+    with pytest.raises(ValueError, match="Backend .* is not registered. Valid options are: .*"):
+        backend_from_name("xxxxx")

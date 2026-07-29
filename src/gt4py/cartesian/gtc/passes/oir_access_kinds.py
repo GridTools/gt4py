@@ -1,29 +1,23 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 from typing import Any, Dict
 
+from gt4py import eve
 from gt4py.cartesian.definitions import AccessKind
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, oir
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.passes.horizontal_masks import mask_overlap_with_extent
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
-from gt4py.eve.visitors import NodeVisitor
 
 
-class AccessKindComputer(NodeVisitor):
+class AccessKindComputer(eve.NodeVisitor):
     def _visit_Access(
         self, name, *, access: Dict[str, AccessKind], kind: AccessKind, **kwargs: Any
     ) -> None:
@@ -67,6 +61,9 @@ class AccessKindComputer(NodeVisitor):
         block_extents = compute_horizontal_block_extents(node)
         self.generic_visit(node, access=access, block_extents=block_extents)
         return access
+
+    def visit_RuntimeAxisBound(self, axis_bound: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        self.visit(axis_bound.offset, kind=AccessKind.READ, **kwargs)
 
 
 def compute_access_kinds(stencil: oir.Stencil) -> Dict[str, AccessKind]:

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -22,69 +16,67 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
-from gt4py.next.otf import languages, stages
+from gt4py._core import file_utils, locking
+from gt4py.next import config, errors, fingerprinting
+from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
-from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
+from gt4py.next.otf.compilation.build_systems import cmake
 
 
-SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
+CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
 
 
 @dataclasses.dataclass
 class CompiledbFactory(
-    compiler.BuildSystemProjectGenerator[
-        SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
-    ]
+    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
 ):
     """
-    Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
+    Create a CompiledbProject from an ``ExtensionSource`` stage object with given CMake settings.
 
     Use CMake to generate a compiledb with the required sequence of build commands.
-    Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
+    Generate a compiledb only if there isn't one for the given combination of cmake configuration
+    and library dependencies.
     """
 
-    cmake_build_type: cmake.BuildType = cmake.BuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
     def __call__(
         self,
-        source: stages.CompilableSource[
-            SrcL,
-            languages.LanguageWithHeaderFilesSettings,
-            languages.Python,
-        ],
-        cache_strategy: cache.Strategy,
+        source: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
             raise NotImplementedError(
                 "Compiledb build system project requires separate bindings code file."
             )
         name = source.program_source.entry_point.name
-        header_name = f"{name}.{source.program_source.language_settings.header_extension}"
-        bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
+        header_name = f"{name}.{source.program_source.code_spec.header_extension}"
+        bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
 
         cc_prototype_program_source = _cc_prototype_program_source(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
-            language=source.program_source.language,
-            language_settings=source.program_source.language_settings,
+            code_spec=source.program_source.code_spec,
         )
 
-        if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_strategy)
-        ):
-            compiledb_template = _cc_create_compiledb(
-                cc_prototype_program_source,
-                build_type=self.cmake_build_type,
-                cmake_flags=self.cmake_extra_flags or [],
-                cache_strategy=cache_strategy,
-            )
+        compiledb_template = _cc_get_compiledb(
+            self.renew_compiledb,
+            cc_prototype_program_source,
+            build_type=self.cmake_build_type,
+            cmake_flags=self.cmake_extra_flags or [],
+            cache_lifetime=cache_lifetime,
+        )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(
+                source,
+                cache_lifetime,
+                build_context_id=fingerprinting.strict_fingerprinter(self),
+            ),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
@@ -95,10 +87,24 @@ class CompiledbFactory(
         )
 
 
+def _relative_path_to_parent(current: pathlib.Path, parent: pathlib.Path) -> str:
+    """
+    Compute the relative path from a directory to its parent.
+
+    This is used to replace absolute paths in the compiledb with relative paths.
+    """
+    # Count the difference in depth between the two paths
+    dir_parts = len(current.parts)
+    parent_parts = len(parent.parts)
+    # Compute relative path to parent (upward path with '../' segments)
+    relative_path_to_parent = "/".join([".."] * (dir_parts - parent_parts))
+    if not relative_path_to_parent:  # If they're the same directory
+        relative_path_to_parent = "."
+    return relative_path_to_parent
+
+
 @dataclasses.dataclass()
-class CompiledbProject(
-    stages.BuildSystemProject[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]
-):
+class CompiledbProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]):
     """
     Compiledb build system for gt4py programs.
 
@@ -131,17 +137,24 @@ class CompiledbProject(
             self._run_build()
 
     def _write_files(self) -> None:
-        def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
+        def ignore_function(folder: str, children: list[str]) -> list[str]:
             pattern = r"((lib.*\.a)|(.*\.lib))"
-            libraries = [child for child in children if re.match(pattern, child)]
-            folders = [child for child in children if (pathlib.Path(folder) / child).is_dir()]
-            ignored = list(set(children) - set(libraries) - set(folders))
+            folder_path = pathlib.Path(folder)
+
+            ignored = []
+            for child in children:
+                if re.match(pattern, child):  # static library -> keep
+                    continue
+                if (folder_path / child).is_dir():  # folder -> keep
+                    continue
+                ignored.append(child)
+
             return ignored
 
         shutil.copytree(
             self.compile_commands_cache.parent,
             self.root_path,
-            ignore=ignore_not_libraries,
+            ignore=ignore_function,
             dirs_exist_ok=True,
         )
 
@@ -173,6 +186,24 @@ class CompiledbProject(
 
         (self.root_path / "compile_commands.json").write_text(json.dumps(compile_db))
 
+        (build_script_path := self.root_path / "build.sh").write_text(
+            "\n".join(
+                [
+                    "#!/bin/sh",
+                    'SCRIPT_DIR=$(dirname "$(readlink -f "$0")")',
+                    *(
+                        f"cd $SCRIPT_DIR/{entry['directory']} && {entry['command']}"
+                        for entry in compile_db
+                    ),
+                ]
+            )
+        )
+        try:
+            build_script_path.chmod(0o755)
+        except OSError:
+            # if setting permissions fails, it's not a problem
+            pass
+
         build_data.write_data(
             build_data.BuildData(
                 status=build_data.BuildStatus.CONFIGURED,
@@ -190,17 +221,18 @@ class CompiledbProject(
             with logfile.open(mode="w") as log_file_pointer:
                 for entry in compile_db:
                     log_file_pointer.write(entry["command"] + "\n")
+                    log_file_pointer.flush()
                     subprocess.check_call(
                         entry["command"],
-                        cwd=entry["directory"],
+                        cwd=self.root_path / entry["directory"],
                         shell=True,
                         stdout=log_file_pointer,
                         stderr=log_file_pointer,
                     )
         except subprocess.CalledProcessError as e:
             with logfile.open(mode="r") as log_file_pointer:
-                print(log_file_pointer.read())
-            raise e
+                log = log_file_pointer.read()
+            raise errors.CompilationError(log) from e
 
         build_data.update_status(new_status=build_data.BuildStatus.COMPILED, path=self.root_path)
 
@@ -216,78 +248,95 @@ def _cc_prototype_program_name(
 
 def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
-    build_type: cmake.BuildType,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    language: type[SrcL],
-    language_settings: languages.LanguageWithHeaderFilesSettings,
+    code_spec: code_specs.CPPLikeCodeSpec,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        language=language,
-        language_settings=language_settings,
+        code_spec=code_spec,
     )
 
 
-def _cc_find_compiledb(
-    prototype_program_source: stages.ProgramSource, cache_strategy: cache.Strategy
-) -> Optional[pathlib.Path]:
-    cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+def _cc_get_compiledb(
+    renew_compiledb: bool,
+    prototype_program_source: stages.ProgramSource,
+    build_type: config.CMakeBuildType,
+    cmake_flags: list[str],
+    cache_lifetime: config.BuildCacheLifetime,
+) -> pathlib.Path:
+    # Use the same prototype source (with empty bindings) for both locating and creating the
+    # compiledb, so `get_cache_folder` names the same folder in either path.
+    prototype_source: stages.ExtensionSource = stages.ExtensionSource(
+        prototype_program_source, stages.BindingSource(source_code="", library_deps=())
     )
-    compile_db_path = cache_path / "compile_commands.json"
+    cache_path = cache.get_cache_folder(prototype_source, cache_lifetime)
+
+    # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
+    # leading to compilation errors.
+    with locking.lock(cache_path):
+        if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
+            compiled_db = _cc_create_compiledb(
+                prototype_source=prototype_source,
+                build_type=build_type,
+                cmake_flags=cmake_flags,
+                cache_lifetime=cache_lifetime,
+            )
+
+            assert compiled_db.parent == cache_path
+
+        return compiled_db
+
+
+def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
+    compile_db_path = path / "compile_commands.json"
     if compile_db_path.exists():
+        try:
+            json.loads(compile_db_path.read_text())
+        except (OSError, ValueError):
+            # The template is shared by every program built with the same
+            # configuration; one left truncated/corrupt by an interrupted write
+            # would poison all of them. Drop it so the caller regenerates.
+            compile_db_path.unlink(missing_ok=True)
+            return None
         return compile_db_path
     return None
 
 
 def _cc_create_compiledb(
-    prototype_program_source: stages.ProgramSource,
-    build_type: cmake.BuildType,
+    prototype_source: stages.ExtensionSource,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    cache_strategy: cache.Strategy,
+    cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
-    name = prototype_program_source.entry_point.name
-    cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+    prototype_project = cmake.CMakeFactory(
+        cmake_generator_name="Ninja",
+        cmake_build_type=build_type,
+        cmake_extra_flags=cmake_flags,
+    )(
+        prototype_source,
+        cache_lifetime,
     )
 
-    header_ext = prototype_program_source.language_settings.header_extension
-    src_ext = prototype_program_source.language_settings.file_extension
-    prog_src_name = f"{name}.{header_ext}"
-    binding_src_name = f"{name}.{src_ext}"
-    cmake_languages = [cmake_lists.Language(name="CXX")]
-    if prototype_program_source.language is languages.Cuda:
-        cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
-
-    prototype_project = cmake.CMakeProject(
-        generator_name="Ninja",
-        build_type=build_type,
-        extra_cmake_flags=cmake_flags,
-        root_path=cache_path,
-        source_files={
-            **{name: "" for name in [binding_src_name, prog_src_name]},
-            "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name,
-                prototype_program_source.library_deps,
-                [binding_src_name, prog_src_name],
-                cmake_languages,
-            ),
-        },
-        program_name=name,
+    path = prototype_project.root_path
+    name = prototype_project.program_name
+    file_extension = prototype_source.program_source.code_spec.file_extension
+    binding_src_name = next(
+        name
+        for name in prototype_project.source_files.keys()
+        if name.endswith(f"_bindings.{file_extension}")
     )
 
     prototype_project.build()
 
-    log_file = cache_path / "log_compiledb.txt"
+    log_file = path / "log_compiledb.txt"
 
     with log_file.open("w") as log_file_pointer:
         commands_json_str = subprocess.check_output(
-            ["ninja", "-t", "compdb"],
-            cwd=cache_path / "build",
-            stderr=log_file_pointer,
+            ["ninja", "-t", "compdb"], cwd=path / "build", stderr=log_file_pointer
         ).decode("utf-8")
         commands = json.loads(commands_json_str)
 
@@ -298,19 +347,25 @@ def _cc_create_compiledb(
     assert compile_db
 
     for entry in compile_db:
-        entry["directory"] = entry["directory"].replace(str(cache_path), "$SRC_PATH")
+        relative_path_from_build_dir = _relative_path_to_parent(
+            pathlib.Path(entry["directory"]), path
+        )
+
+        # directory relative to current root directory
+        entry["directory"] = entry["directory"].replace(str(path), ".")
         entry["command"] = (
             entry["command"]
+            # this is the relative location of the ".o" (etc.) files, we move them to the top level build dir
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(cache_path), "$SRC_PATH")
+            # replace the absolute src path to a path relative to the current build folder
+            .replace(str(path), relative_path_from_build_dir)
             .replace(binding_src_name, "$BINDINGS_FILE")
             .replace(name, "$NAME")
-            .replace("-I$SRC_PATH/build/_deps", f"-I{cache_path}/build/_deps")
         )
         entry["file"] = (
             entry["file"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(str(cache_path), "$SRC_PATH")
+            .replace(str(path), "$SRC_PATH")
             .replace(binding_src_name, "$BINDINGS_FILE")
         )
         entry["output"] = (
@@ -320,6 +375,7 @@ def _cc_create_compiledb(
             .replace(name, "$NAME")
         )
 
-    compile_db_path = cache_path / "compile_commands.json"
-    compile_db_path.write_text(json.dumps(compile_db))
+    compile_db_path = path / "compile_commands.json"
+    file_utils.atomic_write_text(compile_db_path, json.dumps(compile_db))
+
     return compile_db_path

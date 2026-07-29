@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import math
 from typing import Callable, Optional
@@ -18,17 +12,22 @@ from typing import Callable, Optional
 import numpy as np
 import pytest
 
-import gt4py.next as gtx
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
-from gt4py.next.ffront.decorator import FieldOperator
+from gt4py.next.ffront import (
+    decorator,
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next import backend as next_backend
+from gt4py.next.otf import options
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+from next_tests.integration_tests.cases_utils import (
+    exec_alloc_descriptor,
 )
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -40,7 +39,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.ProgramExecutor]):
+def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Backend]):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -107,12 +106,15 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.Program
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
-    return FieldOperator(
-        foast_node=typed_foast_node,
-        closure_vars=closure_vars,
-        definition=None,
+    return decorator.FieldOperatorFromFoast(
+        definition_stage=None,
+        foast_stage=ffront_stages.FOASTOperatorDef(
+            foast_node=typed_foast_node,
+            closure_vars=closure_vars,
+            grid_type=None,
+        ),
+        compilation_options=options.CompilationOptions(),
         backend=backend,
-        grid_type=None,
     )
 
 
@@ -133,6 +135,6 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
 
     builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
 
-    builtin_field_op(*inps, out=out, offset_provider={})
+    builtin_field_op(*inps, out, offset_provider={})
 
     assert np.allclose(out.asnumpy(), expected)

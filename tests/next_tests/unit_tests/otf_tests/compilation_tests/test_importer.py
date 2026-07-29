@@ -1,18 +1,15 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
+import sys
 import textwrap
+
+import pytest
 
 from gt4py.next.otf.compilation import importer
 
@@ -26,5 +23,23 @@ def test_import_from_path(tmp_path):
     )
     file = tmp_path / "module.py"
     file.write_text(src_module, "utf-8")
-    module = importer.import_from_path(file)
+
+    imported_modules = set(sys.modules.keys())
+    module = importer.import_from_path(file, add_to_sys_modules=False)
     assert hasattr(module, "function")
+    assert "module" not in sys.modules
+    assert set(sys.modules.keys()) == imported_modules
+
+    module = importer.import_from_path(
+        file, add_to_sys_modules=True, sys_modules_prefix="_temp_test_prefix_"
+    )
+    assert hasattr(module, "function")
+    assert len(sys.modules.keys()) == len(imported_modules) + 1
+    assert "_temp_test_prefix_.module" in sys.modules
+
+    with pytest.raises(
+        ValueError, match="Cannot use 'sys_modules_prefix' if 'add_to_sys_modules' is False"
+    ):
+        importer.import_from_path(
+            file, add_to_sys_modules=False, sys_modules_prefix="_temp_test_prefix_"
+        )

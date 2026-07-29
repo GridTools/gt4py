@@ -1,30 +1,26 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import Optional
+from typing import Mapping, Optional, TypeVar
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
+from gt4py.next.iterator.type_system import inference as itir_inference
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
 #  and introduce a generic predicate argument for the `eligible_params` instead.
-def inline_lambda(  # noqa: C901  # see todo above
+def inline_lambda(  # see todo above
     node: ir.FunCall,
     opcount_preserving=False,
     force_inline_lift_args=False,
@@ -41,10 +37,9 @@ def inline_lambda(  # noqa: C901  # see todo above
         ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
         for i, param in enumerate(node.fun.params):
-            # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
-            #  ignore_shift(...)(it_sym)  # noqa: E800
+            # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
             if ref_counts[param.id] > 1 and not isinstance(
-                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
+                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral, ir.CartesianOffset)
             ):
                 eligible_params[i] = False
 
@@ -69,61 +64,78 @@ def inline_lambda(  # noqa: C901  # see todo above
     if node.fun.params and not any(eligible_params):
         return node
 
-    refs = set().union(
+    refs: set[str] = set().union(
         *(
             arg.pre_walk_values().if_isinstance(ir.SymRef).getattr("id").to_set()
             for arg, eligible in zip(node.args, eligible_params)
             if eligible
         )
     )
-    syms = node.fun.expr.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
+    syms: set[str] = node.fun.pre_walk_values().if_isinstance(ir.Sym).getattr("id").to_set()
     clashes = refs & syms
-    expr = node.fun.expr
+    fun = node.fun
     if clashes:
-        # TODO(tehrengruber): find a better way of generating new symbols
-        #  in `name_map` that don't collide with each other. E.g. this
-        #  must still work:
-        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: E800
-        name_map: dict[ir.SymRef, str] = {}
+        # TODO(tehrengruber): find a better way of generating new symbols in `name_map` that don't collide with each other. E.g. this must still work:
+        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
+        name_map: dict[str, str] = {}
 
-        def new_name(name):
-            while name in refs or name in syms or name in name_map.values():
-                name += "_"
-            return name
+        for sym in sorted(clashes):
+            name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
 
-        for sym in clashes:
-            name_map[sym] = new_name(sym)
-
-        expr = RenameSymbols().visit(expr, name_map=name_map)
+        # Let's rename the symbols (including params) of the function.
+        # If we would like to preserve the original param names, we could alternatively
+        # rename the eligible symrefs in `args`.
+        fun = RenameSymbols().visit(fun, name_map=name_map)
 
     symbol_map = {
         param.id: arg
-        for param, arg, eligible in zip(node.fun.params, node.args, eligible_params)
+        for param, arg, eligible in zip(fun.params, node.args, eligible_params)
         if eligible
     }
-    new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
+    new_expr = RemapSymbolRefs().visit(fun.expr, symbol_map=symbol_map)
 
     if all(eligible_params):
-        return new_expr
+        new_expr.location = node.location
     else:
-        return ir.FunCall(
+        new_expr = ir.FunCall(
             fun=ir.Lambda(
                 params=[
-                    param
-                    for param, eligible in zip(node.fun.params, eligible_params)
-                    if not eligible
+                    param for param, eligible in zip(fun.params, eligible_params) if not eligible
                 ],
                 expr=new_expr,
             ),
             args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
+            location=node.location,
         )
+    for attr in ("type", "recorded_shifts", "domain"):
+        if hasattr(node.annex, attr):
+            setattr(new_expr.annex, attr, getattr(node.annex, attr))
+    itir_inference.copy_type(from_=node, to=new_expr, allow_untyped=True)
+    return new_expr
+
+
+T = TypeVar("T", bound=ir.Expr)
+
+
+def rename_symbols(node: T, rename_map: Mapping[str, str | ir.SymRef]) -> T:
+    """
+    Given a node and a mapping from old symbol names to new symbol names, rename symbols.
+
+    >>> str(rename_symbols(im.plus("old_name", 1), {"old_name": "new_name"}))
+    'new_name + 1'
+    """
+    return inline_lambda(im.let(*rename_map.items())(node))
 
 
 @dataclasses.dataclass
-class InlineLambdas(NodeTranslator):
-    """Inline lambda calls by substituting every argument by its value."""
+class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
+    """
+    Inline lambda calls by substituting every argument by its value.
 
-    PRESERVED_ANNEX_ATTRS = ("type",)
+    Note: This pass preserves, but doesn't use the `type` `recorded_shifts`, `domain` annex.
+    """
+
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
 
     opcount_preserving: bool
 

@@ -1,33 +1,93 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
 import functools
 import inspect
-from builtins import bool, float, int, tuple
-from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
+import math
+import operator
+from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
+from typing import (
+    Any,
+    Callable,
+    Final,
+    Generic,
+    ParamSpec,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import numpy as np
-from numpy import float32, float64, int32, int64
+from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
-import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, embedded
-from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401
+from gt4py.next import common, named_collections
+from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
+
+
+__all__ = [  # noqa: RUF022 [unsorted-dunder-all] # type: ignore[attr-defined]
+    "bool",
+    "float",
+    "float32",
+    "float64",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "tuple",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "IndexType",
+    "neighbor_sum",
+    "max_over",
+    "min_over",
+    "where",
+    "broadcast",
+    "astype",
+    "abs",
+    "neg",
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+    "minimum",
+    "maximum",
+    "fmod",
+    "power",
+    "isfinite",
+    "isinf",
+    "isnan",
+]
 
 
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
@@ -36,11 +96,19 @@ PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 TYPE_BUILTINS = [
     common.Field,
     common.Dimension,
+    int8,
+    uint8,
+    int16,
+    uint16,
     int32,
+    uint32,
     int64,
+    uint64,
     float32,
     float64,
-] + PYTHON_TYPE_BUILTINS
+    *PYTHON_TYPE_BUILTINS,
+]  # TODO(tehrengruber): validate matches iterator.builtins.TYPE_BUILTINS?
+
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 # Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
@@ -58,11 +126,17 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
+    elif t is FieldOffset:
+        return ts.OffsetType
+    elif t is common.Connectivity:
+        return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
+    elif t is common.Domain:
+        return ts.DomainType
     elif t is type:
         return (
-            ts.FunctionType
+            ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
     elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
@@ -70,6 +144,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
         assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
         return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
+        return ts.NamedCollectionType
     else:
         raise AssertionError("Illegal type encountered.")
 
@@ -85,8 +161,9 @@ class BuiltInFunction(Generic[_R, _P]):
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
     function: Callable[_P, _R]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+        object.__setattr__(self, "__doc__", self.function.__doc__)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         impl = self.dispatch(*args)
@@ -128,14 +205,38 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-MaskT = TypeVar("MaskT", bound=common.Field)
-FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
+CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
+FieldT1 = TypeVar(
+    "FieldT1",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
+FieldT2 = TypeVar(
+    "FieldT2",
+    bound=Union[common.Field, core_defs.Scalar, Tuple, named_collections.CustomNamedCollection],
+)
 
 
 class WhereBuiltinFunction(
-    BuiltInFunction[_R, [MaskT, FieldT, FieldT]], Generic[_R, MaskT, FieldT]
+    BuiltInFunction[_R, [CondT, FieldT1, FieldT2]],
+    Generic[_R, CondT, FieldT1, FieldT2],
 ):
-    def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
+    @overload  # type: ignore[override] # this technically clashes with the superclass
+    def __call__(  # type: ignore[overload-overlap] # without both overloads mypy raises false positives
+        self,
+        cond: CondT,
+        true_field: common.Field | core_defs.ScalarT,
+        false_field: common.Field | core_defs.ScalarT,
+    ) -> common.Field: ...
+
+    @overload
+    def __call__(
+        self,
+        cond: CondT,
+        true_field: Tuple | core_defs.ScalarT,
+        false_field: Tuple | core_defs.ScalarT,
+    ) -> Tuple: ...
+
+    def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -146,71 +247,61 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(
-                where(mask, t, f) for t, f in zip(true_field, false_field)
-            )  # type: ignore[return-value] # `tuple` is not `_R`
-        return super().__call__(mask, true_field, false_field)
+            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+        return super().__call__(cond, true_field, false_field)
 
 
 @BuiltInFunction
-def neighbor_sum(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def neighbor_sum(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def max_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def min_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
 def broadcast(
-    field: common.Field | core_defs.ScalarT,
-    dims: tuple[common.Dimension, ...],
-    /,
+    field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    return common.field(
-        np.asarray(field)[
-            tuple([np.newaxis] * len(dims))
-        ],  # TODO(havogt) use FunctionField once available
-        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.infinite()] * len(dims))),
-    )
+    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
+    return field  # type: ignore[return-value] # see comment above
 
 
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
-    true_field: common.Field | core_defs.ScalarT | Tuple,
-    false_field: common.Field | core_defs.ScalarT | Tuple,
+    true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
+    false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
 ) -> common.Field | Tuple:
     raise NotImplementedError()
 
 
+@overload
+def astype(value: common.Field, type_: type, /) -> common.Field: ...
+
+
+@overload
+def astype(value: core_defs.ScalarT, type_: type, /) -> core_defs.ScalarT: ...
+
+
+@overload
+def astype(value: Tuple, type_: type, /) -> Tuple: ...
+
+
 @BuiltInFunction
 def astype(
-    value: common.Field | core_defs.ScalarT | Tuple,
-    type_: type,
-    /,
+    value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
 ) -> common.Field | core_defs.ScalarT | Tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
@@ -219,60 +310,103 @@ def astype(
     return core_defs.dtype(type_).scalar_type(value)
 
 
-UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
-
-UNARY_MATH_FP_BUILTIN_NAMES = [
-    "sin",
-    "cos",
-    "tan",
-    "arcsin",
-    "arccos",
-    "arctan",
-    "sinh",
-    "cosh",
-    "tanh",
-    "arcsinh",
-    "arccosh",
-    "arctanh",
-    "sqrt",
-    "exp",
-    "log",
-    "gamma",
-    "cbrt",
-    "floor",
-    "ceil",
-    "trunc",
-]
-
-UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
+_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
+UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
 
 
-def _make_unary_math_builtin(name):
+try:
+    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
+except ImportError:
+
+    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
+        # restore the input scalar type, which `math.gamma` widens to `float`
+        return cast(core_defs.ScalarT, type(value)(math.gamma(value)))
+
+
+_UNARY_MATH_FP_BUILTIN_IMPL: Final = {
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "arcsin": np.arcsin,
+    "arccos": np.arccos,
+    "arctan": np.arctan,
+    "sinh": np.sinh,
+    "cosh": np.cosh,
+    "tanh": np.tanh,
+    "arcsinh": np.arcsinh,
+    "arccosh": np.arccosh,
+    "arctanh": np.arctanh,
+    "sqrt": np.sqrt,
+    "exp": np.exp,
+    "log": np.log,
+    "gamma": _gamma,
+    "cbrt": np.cbrt,
+    "floor": np.floor,
+    "ceil": np.ceil,
+    "trunc": np.trunc,
+}
+UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
+
+_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
+    "isfinite": np.isfinite,
+    "isinf": np.isinf,
+    "isnan": np.isnan,
+}
+UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
+
+
+def _make_unary_math_builtin(name: str) -> BuiltInFunction:
+    _math_builtin = (
+        _UNARY_MATH_NUMBER_BUILTIN_IMPL
+        | _UNARY_MATH_FP_BUILTIN_IMPL
+        | _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL
+    )[name]
+
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
-        # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
-        # return getattr(math, name)(value)# noqa: E800 # commented code
-        raise NotImplementedError()
+        # TODO(havogt): enable tests in `test_math_builtin_execution.py`
+        assert core_defs.is_scalar_type(
+            value
+        )  # default implementation for scalars, Fields are handled via dispatch
+
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in (
-    UNARY_MATH_NUMBER_BUILTIN_NAMES
-    + UNARY_MATH_FP_BUILTIN_NAMES
-    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-):
-    _make_unary_math_builtin(f)
+abs = _make_unary_math_builtin("abs")  # noqa: A001 [shadowing]
+neg = _make_unary_math_builtin("neg")
+sin = _make_unary_math_builtin("sin")
+cos = _make_unary_math_builtin("cos")
+tan = _make_unary_math_builtin("tan")
+arcsin = _make_unary_math_builtin("arcsin")
+arccos = _make_unary_math_builtin("arccos")
+arctan = _make_unary_math_builtin("arctan")
+sinh = _make_unary_math_builtin("sinh")
+cosh = _make_unary_math_builtin("cosh")
+tanh = _make_unary_math_builtin("tanh")
+arcsinh = _make_unary_math_builtin("arcsinh")
+arccosh = _make_unary_math_builtin("arccosh")
+arctanh = _make_unary_math_builtin("arctanh")
+sqrt = _make_unary_math_builtin("sqrt")
+exp = _make_unary_math_builtin("exp")
+log = _make_unary_math_builtin("log")
+gamma = _make_unary_math_builtin("gamma")
+cbrt = _make_unary_math_builtin("cbrt")
+floor = _make_unary_math_builtin("floor")
+ceil = _make_unary_math_builtin("ceil")
+trunc = _make_unary_math_builtin("trunc")
+isfinite = _make_unary_math_builtin("isfinite")
+isinf = _make_unary_math_builtin("isinf")
+isnan = _make_unary_math_builtin("isnan")
+
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
-def _make_binary_math_builtin(name):
+def _make_binary_math_builtin(name: str) -> BuiltInFunction:
     def impl(
-        lhs: common.Field | core_defs.ScalarT,
-        rhs: common.Field | core_defs.ScalarT,
-        /,
+        lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
         assert core_defs.is_scalar_type(lhs)
@@ -280,11 +414,14 @@ def _make_binary_math_builtin(name):
         return getattr(np, name)(lhs, rhs)
 
     impl.__name__ = name
-    globals()[name] = BuiltInFunction(impl)
+    return BuiltInFunction(impl)
 
 
-for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
-    _make_binary_math_builtin(f)
+minimum = _make_binary_math_builtin("minimum")
+maximum = _make_binary_math_builtin("maximum")
+fmod = _make_binary_math_builtin("fmod")
+power = _make_binary_math_builtin("power")
+
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
@@ -300,14 +437,25 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
-    "as_offset",
-] + MATH_BUILTIN_NAMES
+    *MATH_BUILTIN_NAMES,
+]
+
+assert all(isinstance(globals()[f], BuiltInFunction) for f in FUN_BUILTIN_NAMES), (
+    "Missing builtin function"
+)
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
+should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"}
+actual_export = set(__all__)
+assert (diff := should_export - actual_export) == set(), (
+    f"Missing symbol(s) in 'fbuiltins.__all__': {diff}"
+)
+assert (diff := actual_export - should_export) == set(), (
+    f"Symbol(s) exported but not defined in 'fbuiltins': {diff}"
+)
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual
@@ -323,57 +471,53 @@ class FieldOffset(runtime.Offset):
     def _cache(self) -> dict:
         return {}
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
-    def __gt_type__(self):
+    def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target)
 
-    def __getitem__(self, offset: int) -> common.ConnectivityField:
+    def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
-        assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
-        assert current_offset_provider is not None
-        offset_definition = current_offset_provider[self.value]
+        from gt4py.next import embedded  # avoid circular import
 
-        connectivity: common.ConnectivityField
-        if isinstance(offset_definition, common.Dimension):
-            connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(
-            offset_definition, gtx.NeighborTableOffsetProvider
-        ) or common.is_connectivity_field(offset_definition):
-            unrestricted_connectivity = self.as_connectivity_field()
-            assert unrestricted_connectivity.domain.ndim > 1
-            named_index = (self.target[-1], offset)
-            connectivity = unrestricted_connectivity[named_index]
-        else:
-            raise NotImplementedError()
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.get_offset_provider(None)
+        assert current_offset_provider is not None
+        offset_definition = common.get_offset(current_offset_provider, self.value)
+
+        assert common.is_neighbor_table(offset_definition)
+        named_index = common.NamedIndex(self.target[-1], offset)
+        connectivity = offset_definition[named_index]
 
         return connectivity
 
-    def as_connectivity_field(self):
+    def as_connectivity_field(self) -> common.Connectivity:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
+        from gt4py.next import embedded  # avoid circular import
+
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.offset_provider.get(None)
+        current_offset_provider = embedded.context.get_offset_provider(None)
         assert current_offset_provider is not None
-        offset_definition = current_offset_provider[self.value]
+        offset_definition = common.get_offset(current_offset_provider, self.value)
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if common.is_connectivity_field(offset_definition):
+            if isinstance(offset_definition, common.Connectivity):
                 connectivity = offset_definition
-            elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
-                assert not offset_definition.has_skip_values
-                connectivity = gtx.as_connectivity(
-                    domain=self.target,
-                    codomain=self.source,
-                    data=offset_definition.table,
-                    dtype=offset_definition.index_type,
-                )
             else:
                 raise NotImplementedError()
 
             self._cache[cache_key] = connectivity
 
         return connectivity
+
+
+def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
+    return (
+        len(offset.target) == 1
+        and offset.source == offset.target[0]
+        and offset.source.kind == offset.target[0].kind
+        and offset.target[0].kind != common.DimensionKind.LOCAL
+    )

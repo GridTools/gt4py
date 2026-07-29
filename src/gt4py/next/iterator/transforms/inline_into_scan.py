@@ -1,17 +1,11 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
-
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+# FIXME[#1582](tehrengruber): This transformation is not used anymore. Decide on its fate.
 from typing import Sequence, TypeGuard
 
 from gt4py import eve
@@ -53,7 +47,9 @@ def _lambda_and_lift_inliner(node: ir.FunCall) -> ir.FunCall:
     return inlined
 
 
-class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineIntoScan(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Inline non-SymRef arguments into the scan.
 
@@ -91,15 +87,11 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
             new_scanpass_body = _lambda_and_lift_inliner(new_scanpass_body)
             new_scanpass = ir.Lambda(
-                params=[
-                    original_scanpass.params[0],
-                    *(ir.Sym(id=ref) for ref in refs_in_args),
-                ],
+                params=[original_scanpass.params[0], *(ir.Sym(id=ref) for ref in refs_in_args)],
                 expr=new_scanpass_body,
             )
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
-            result = ir.FunCall(fun=new_scan, args=[ir.SymRef(id=ref) for ref in refs_in_args])
-            return result
+            return ir.FunCall(fun=new_scan, args=[ir.SymRef(id=ref) for ref in refs_in_args])
         return self.generic_visit(node, **kwargs)

@@ -1,22 +1,17 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import copy
 
 import numpy as np
 import pytest
 
+from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 import gt4py.cartesian.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.cartesian.gtscript import Field, K
@@ -352,9 +347,7 @@ class TestAxesMismatch:
     @pytest.fixture
     def sample_stencil(self):
         @gtscript.stencil(backend="numpy")
-        def _stencil(
-            field_out: gtscript.Field[gtscript.IJ, np.float64],
-        ):
+        def _stencil(field_out: gtscript.Field[gtscript.IJ, np.float64]):
             with computation(FORWARD), interval(...):
                 field_out = 1.0
 
@@ -369,7 +362,7 @@ class TestAxesMismatch:
     def test_storage(self, sample_stencil):
         with pytest.raises(
             Exception,
-            match="Storage for '.*' has dimensions '.*' but the API signature expects '\[I, J\]'",
+            match="Storage for '.*' has dimensions '.*' but the API signature expects '\\[I, J\\]'",
         ):
             sample_stencil(
                 field_out=DimensionsWrapper(
@@ -391,9 +384,7 @@ class TestDataDimensions:
     @pytest.fixture
     def sample_stencil(self):
         @gtscript.stencil(backend=self.backend)
-        def _stencil(
-            field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
-        ):
+        def _stencil(field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))]):
             with computation(FORWARD), interval(...):
                 field_out[0, 0, 0][0] = 0.0
                 field_out[0, 0, 0][1] = 1.0
@@ -402,7 +393,7 @@ class TestDataDimensions:
 
     def test_mismatch(self, sample_stencil):
         with pytest.raises(
-            ValueError, match="Field '.*' expects data dimensions \(2,\) but got \(3,\)"
+            ValueError, match="Field '.*' expects data dimensions \\(2,\\) but got \\(3,\\)"
         ):
             sample_stencil(
                 field_out=gt_storage.empty(
@@ -414,6 +405,58 @@ class TestDataDimensions:
                 )
             )
 
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
+    def test_data_dimension_1d(self, backend: str):
+        @gtscript.stencil(backend=backend)
+        def data_dimension_1d(field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))]):
+            with computation(FORWARD), interval(...):
+                field_out[0, 0][0] = 42.0
+
+        ones = gt_storage.ones(
+            shape=(2, 3),
+            dimensions=["I", "J"],
+            dtype=(np.float64, (1,)),
+            backend=backend,
+            aligned_index=(0, 0),
+        )
+        data_dimension_1d(ones)
+        assert ones[0, 0][0] == 42.0
+
+    @pytest.mark.requires_dace
+    def test_data_dimension_1d_warning(self):
+        backend = "dace:cpu"
+
+        # Expect parsing to emit a warning
+        with pytest.warns(UserWarning, match="Accessing without a Literal is suspicious."):
+
+            @gtscript.stencil(backend=backend)
+            def data_dimension_1d_warning(
+                field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))], index: int
+            ):
+                with computation(FORWARD), interval(...):
+                    # 1. warn about accessing an array of static size 1 with a variable index
+                    # 2. add a runtime check and error out in case index != 0
+                    field_out[0, 0][index] = 42.0
+
+        ones = gt_storage.ones(
+            shape=(2, 3),
+            dimensions=["I", "J"],
+            dtype=(np.float64, (1,)),
+            backend=backend,
+            aligned_index=(0, 0),
+        )
+        data_dimension_1d_warning(ones, index=0)
+        assert ones[0, 0][0] == 42.0
+
+    def test_data_dimensions_1d_error(self):
+        # Expect out of bounds write to be caught at stencil parse time
+        with pytest.raises(GTScriptSyntaxError, match="Data index out of bounds."):
+
+            @gtscript.stencil(backend=self.backend)
+            def data_dimension_1d_error(field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))]):
+                with computation(FORWARD), interval(...):
+                    field_out[0, 0][1] = 42.0
+
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_origin_unchanged(backend):
@@ -423,18 +466,10 @@ def test_origin_unchanged(backend):
             outp = inp
 
     outp = gt_storage.ones(
-        backend=backend,
-        aligned_index=(1, 1, 1),
-        shape=(4, 4, 4),
-        dtype=float,
-        dimensions="IJK",
+        backend=backend, aligned_index=(1, 1, 1), shape=(4, 4, 4), dtype=float, dimensions="IJK"
     )
     inp = gt_storage.ones(
-        backend=backend,
-        aligned_index=(1,),
-        shape=(4,),
-        dtype=float,
-        dimensions="K",
+        backend=backend, aligned_index=(1,), shape=(4,), dtype=float, dimensions="K"
     )
 
     origin = {"_all_": (1, 1, 1), "inp": (1,)}
@@ -454,20 +489,12 @@ def test_permute_axes():
             outp = inp
 
     outp = gt_storage.ones(
-        backend="numpy",
-        aligned_index=(1, 1, 1),
-        shape=(4, 4, 4),
-        dtype=float,
-        dimensions="KJI",
+        backend="numpy", aligned_index=(1, 1, 1), shape=(4, 4, 4), dtype=float, dimensions="KJI"
     )
     outp_wrap = DimensionsWrapper(array=outp, dimensions="KJI")
 
     inp = gt_storage.from_array(
-        data=np.arange(4),
-        backend="numpy",
-        aligned_index=(1,),
-        dtype=float,
-        dimensions="K",
+        data=np.arange(4), backend="numpy", aligned_index=(1,), dtype=float, dimensions="K"
     )
 
     calc_damp(outp_wrap, inp)

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
@@ -19,21 +13,26 @@ import collections
 import dataclasses
 import enum
 import functools
-import numbers
+import math
+import sys
 import types
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import numpy as np
-import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping, utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
     Callable,
     ClassVar,
+    Final,
     Generic,
+    Literal,
+    NamedTuple,
     Never,
+    NoReturn,
     Optional,
     ParamSpec,
     Protocol,
@@ -41,8 +40,9 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
+    TypeVarTuple,
+    Unpack,
     cast,
-    extended_runtime_checkable,
     overload,
     runtime_checkable,
 )
@@ -50,8 +50,14 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+DimT_co = TypeVar("DimT_co", bound="Dimension", covariant=True)
+ShapeTs = TypeVarTuple("ShapeTs")
 
+
+class Dims(tuple[Unpack[ShapeTs]]): ...
+
+
+DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 
 Tag: TypeAlias = str
 
@@ -62,8 +68,11 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
+
+
+_DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,8 +80,80 @@ class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.value}[{self.kind}]"
+
+    def __call__(self, val: int) -> NamedIndex:
+        return NamedIndex(self, val)
+
+    def __add__(self, offset: int | float) -> Connectivity:
+        return connectivity_for_cartesian_shift(self, offset)
+
+    def __sub__(self, offset: int | float) -> Connectivity:
+        return self + (-offset)
+
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value and self.kind == value.kind
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            int_value = cast(core_defs.IntegralScalar, value)
+            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value != value.value or self.kind != value.kind
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            raise NotImplementedError(
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
+            )
+        return NotImplemented
+
+
+if TYPE_CHECKING:
+    # These exist as on-the fly replacements for Dimension instances
+    # (which are not types) during typechecking (with mypy). We can
+    # track up to four distinct dimensions at a time, everything beyond
+    # becomes AnyDim
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _AnyDim(Dimension): ...
 
 
 class Infinity(enum.Enum):
@@ -131,9 +212,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def infinite(
-        cls,
-    ) -> UnitRange:
+    def infinite(cls) -> UnitRange:
         return cls(Infinity.NEGATIVE, Infinity.POSITIVE)
 
     def __len__(self) -> int:
@@ -156,18 +235,21 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE
 
+    def is_empty(self) -> bool:
+        return (
+            self.start == 0 and self.stop == 0
+        )  # post_init ensures that empty is represented as UnitRange(0, 0)
+
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
 
     @overload
-    def __getitem__(self, index: int) -> int:
-        ...
+    def __getitem__(self, index: int) -> int: ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> UnitRange: ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -189,11 +271,12 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
-        return (
-            isinstance(value, core_defs.INTEGRAL_TYPES)
-            and value >= self.start
-            and value < self.stop
-        )
+        # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+        #   and remove int cast, once the related mypy bug (#16358) gets fixed
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return self.start <= cast(int, value) < self.stop
+        else:
+            return False
 
     def __le__(self, other: UnitRange) -> bool:
         return self.start >= other.start and self.stop <= other.stop
@@ -232,9 +315,16 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
 
 FiniteUnitRange: TypeAlias = UnitRange[int, int]
 
+_Rng = TypeVar(
+    "_Rng",
+    FiniteUnitRange,
+    UnitRange[Infinity, int],
+    UnitRange[int, Infinity],
+    UnitRange[Infinity, Infinity],
+)
 
 RangeLike: TypeAlias = (
-    UnitRange
+    _Rng
     | range
     | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
     | core_defs.IntegralScalar
@@ -266,12 +356,29 @@ def unit_range(r: RangeLike) -> UnitRange:
     raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
+class NamedRange(NamedTuple, Generic[_Rng]):
+    dim: Dimension
+    unit_range: _Rng
+
+    def __str__(self) -> str:
+        return f"{self.dim}={self.unit_range}"
+
+
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
-NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
-NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
-FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
+
+
+class NamedIndex(NamedTuple):
+    dim: Dimension
+    value: IntIndex
+
+    def __str__(self) -> str:
+        return f"{self.dim}={self.value}"
+
+
+FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -287,37 +394,22 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
 
 
-def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
-    return (
-        isinstance(v, tuple)
-        and len(v) == 2
-        and isinstance(v[0], Dimension)
-        and isinstance(v[1], UnitRange)
-    )
-
-
 def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
-    return UnitRange.is_finite(v[1])
+    return UnitRange.is_finite(v.unit_range)
 
 
-def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
-    return (
-        isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
+def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
+    return isinstance(obj, slice) and (
+        isinstance(obj.start, NamedIndex) and isinstance(obj.stop, NamedIndex)
     )
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
-    return (
-        is_int_index(v)
-        or is_named_range(v)
-        or is_named_index(v)
-        or isinstance(v, slice)
-        or v is Ellipsis
-    )
+    return is_int_index(v) or isinstance(v, (NamedRange, NamedIndex, slice)) or v is Ellipsis
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
+    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, NamedIndex)) for e in v)
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -328,27 +420,17 @@ def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSe
 
 def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
     # `cast` because mypy/typing doesn't special case 1-element tuples, i.e. `tuple[A|B] != tuple[A]|tuple[B]`
-    return cast(
-        AnyIndexSequence,
-        (index,) if is_any_index_element(index) else index,
-    )
+    return cast(AnyIndexSequence, (index,) if is_any_index_element(index) else index)
 
 
 def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
-    return (v[0], unit_range(v[1]))
-
-
-_Rng = TypeVar(
-    "_Rng",
-    UnitRange[int, int],
-    UnitRange[Infinity, int],
-    UnitRange[int, Infinity],
-    UnitRange[Infinity, Infinity],
-)
+    if isinstance(v, NamedRange):
+        return v
+    return NamedRange(v[0], unit_range(v[1]))
 
 
 @dataclasses.dataclass(frozen=True, init=False)
-class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
+class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
 
     dims: tuple[Dimension, ...]
@@ -356,16 +438,16 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
 
     def __init__(
         self,
-        *args: tuple[Dimension, _Rng],
+        *args: NamedRange[_Rng],
         dims: Optional[Sequence[Dimension]] = None,
         ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
-                raise ValueError("Either both none of 'dims' and 'ranges' must be specified.")
+                raise ValueError("Either specify both 'dims' and 'ranges' or neither.")
             if len(args) > 0:
                 raise ValueError(
-                    "No extra 'args' allowed when constructing fomr 'dims' and 'ranges'."
+                    "No extra 'args' allowed when constructing from 'dims' and 'ranges'."
                 )
 
             assert dims is not None and ranges is not None  # for mypy
@@ -385,7 +467,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
-            if not all(is_named_range(arg) for arg in args):
+            if not all(isinstance(arg, NamedRange) for arg in args):
                 raise ValueError(
                     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
                 )
@@ -396,9 +478,6 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")
 
-    def __len__(self) -> int:
-        return len(self.ranges)
-
     @property
     def ndim(self) -> int:
         return len(self.dims)
@@ -407,57 +486,55 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     def shape(self) -> tuple[int, ...]:
         return tuple(len(r) for r in self.ranges)
 
-    @classmethod
-    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
-        # classmethod since TypeGuards requires the guarded obj as separate argument
-        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+    @property
+    def size(self) -> Optional[int]:
+        return math.prod(self.shape) if all(UnitRange.is_finite(r) for r in self.ranges) else None
+
+    def __len__(self) -> int:
+        return len(self.ranges)
+
+    def __str__(self) -> str:
+        return f"Domain({', '.join(f'{e}' for e in self)})"
 
     @overload
-    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]:
-        ...
+    def __getitem__(self, index: int) -> NamedRange: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(  # noqa: F811 # redefine unused
-        self, index: Dimension
-    ) -> tuple[Dimension, _Rng]:
-        ...
+    def __getitem__(self, index: Dimension) -> NamedRange: ...
 
-    def __getitem__(  # noqa: F811 # redefine unused
-        self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
+        if isinstance(index, Dimension):
+            try:
+                index = self.dims.index(index)
+            except ValueError as ex:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         if isinstance(index, int):
-            return self.dims[index], self.ranges[index]
-        elif isinstance(index, slice):
+            return NamedRange(dim=self.dims[index], unit_range=self.ranges[index])
+        if isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
             return Domain(dims=dims_slice, ranges=ranges_slice)
-        elif isinstance(index, Dimension):
-            try:
-                index_pos = self.dims.index(index)
-                return self.dims[index_pos], self.ranges[index_pos]
-            except ValueError:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
-        else:
-            raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
+
+        raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: Domain) -> Domain:
         """
         Intersect `Domain`s, missing `Dimension`s are considered infinite.
 
         Examples:
-        ---------
-        >>> I = Dimension("I")
-        >>> J = Dimension("J")
+            >>> I = Dimension("I")
+            >>> J = Dimension("J")
 
-        >>> Domain((I, UnitRange(-1, 3))) & Domain((I, UnitRange(1, 6)))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+            >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
 
-        >>> Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4))) & Domain((I, UnitRange(1, 6)))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+            >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
+            ...     NamedRange(I, UnitRange(1, 6))
+            ... )
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
@@ -469,11 +546,82 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
-    def __str__(self) -> str:
-        return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+    def __or__(self, other: Domain) -> Domain:
+        """
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
 
-    def dim_index(self, dim: Dimension) -> Optional[int]:
-        return self.dims.index(dim) if dim in self.dims else None
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
+        )
+
+    @functools.cached_property
+    def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
+        """
+        Create a new domain by slicing the domain ranges at the provided relative slices.
+
+        Examples:
+            >>> I, J = Dimension("I"), Dimension("J")
+            >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
+            >>> domain.slice_at[2:3, 2:5]
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
+        """
+
+        def _domain_slicer(*args: slice) -> Domain:
+            if not all(isinstance(a, slice) for a in args):
+                raise TypeError(f"Indices must be 'slice's but got '{args}'")
+            if len(args) != len(self):
+                raise ValueError(
+                    f"Number of provided slices ({len(args)}) does not match the number of dimensions ({len(self)})."
+                )
+            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, args)])
+
+        return utils.IndexerCallable(_domain_slicer)
+
+    @classmethod
+    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+
+    def is_empty(self) -> bool:
+        return any(rng.is_empty() for rng in self.ranges)
+
+    @overload
+    def dim_index(self, dim: Dimension, *, allow_missing: Literal[False]) -> int: ...
+
+    @overload
+    def dim_index(
+        self, dim: Dimension, *, allow_missing: Literal[True] = True
+    ) -> Optional[int]: ...
+
+    def dim_index(self, dim: Dimension, *, allow_missing: bool = True) -> Optional[int]:
+        if dim in self.dims:
+            return self.dims.index(dim)
+        elif allow_missing:
+            return None
+        else:
+            raise ValueError(f"Dimension '{dim}' not found in Domain.")
 
     def pop(self, index: int | Dimension = -1) -> Domain:
         return self.replace(index)
@@ -486,7 +634,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             return self.replace(index, *named_ranges)
 
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
-        assert all(is_named_range(nr) for nr in named_ranges)
+        assert all(isinstance(nr, NamedRange) for nr in named_ranges)
         if isinstance(index, Dimension):
             dim_index = self.dim_index(index)
             if dim_index is None:
@@ -498,11 +646,18 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             )
         if index < 0:
             index += len(self.dims)
-        new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
-        dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
-        ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
+        new_dims = (arg.dim for arg in named_ranges) if len(named_ranges) > 0 else ()
+        new_ranges = (arg.unit_range for arg in named_ranges) if len(named_ranges) > 0 else ()
+        dims = self.dims[:index] + tuple(new_dims) + self.dims[index + 1 :]
+        ranges = self.ranges[:index] + tuple(new_ranges) + self.ranges[index + 1 :]
 
         return Domain(dims=dims, ranges=ranges)
+
+    def __getstate__(self) -> dict[str, Any]:
+        state = self.__dict__.copy()
+        # remove cached property
+        state.pop("slice_at", None)
+        return state
 
 
 FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
@@ -518,21 +673,20 @@ def domain(domain_like: DomainLike) -> Domain:
     Construct `Domain` from `DomainLike` object.
 
     Examples:
-    ---------
-    >>> I = Dimension("I")
-    >>> J = Dimension("J")
+        >>> I = Dimension("I")
+        >>> J = Dimension("J")
 
-    >>> domain(((I, (2, 4)), (J, (3, 5))))
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        >>> domain(((I, (2, 4)), (J, (3, 5))))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
-    >>> domain({I: (2, 4), J: (3, 5)})
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        >>> domain({I: (2, 4), J: (3, 5)})
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
-    >>> domain(((I, 2), (J, 4)))
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        >>> domain(((I, 2), (J, 4)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
 
-    >>> domain({I: 2, J: 4})
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        >>> domain({I: 2, J: 4})
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
@@ -542,10 +696,7 @@ def domain(domain_like: DomainLike) -> Domain:
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
                 dims=tuple(domain_like.keys()),
-                ranges=tuple(
-                    UnitRange(0, s)  # type: ignore[arg-type] # type of `s` is checked in condition
-                    for s in domain_like.values()
-                ),
+                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),
             )
         return Domain(
             dims=tuple(domain_like.keys()),
@@ -570,85 +721,88 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-            ...
+        def __call__(self, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]: ...
 
 
-# TODO(havogt): replace this protocol with the new `GTFieldInterface` protocol
-class NextGTDimsInterface(Protocol):
+# TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
+class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol):
     """
-    Protocol for objects providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+    Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to
-    :mod:`gt4py.cartesian`, where the labels are `str` s with implied semantics,
-    see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    Note:
+    - A default implementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
+    - No implementation of `__gt_origin__` is provided because of infinite fields.
     """
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        ...
-
-
-# TODO(egparedes): add support for this new protocol in the cartesian module
-class GTFieldInterface(Protocol):
-    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
 
     @property
     def __gt_domain__(self) -> Domain:
+        # TODO probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
+        # to allow implementations without having to import gtx.Domain.
         ...
 
+    @property
+    def __gt_dims__(self) -> tuple[str, ...]:
+        return tuple(d.value for d in self.__gt_domain__.dims)
 
-@extended_runtime_checkable
-class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
+
+@runtime_checkable
+class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
-    def domain(self) -> Domain:
-        ...
+    def domain(self) -> Domain: ...
 
     @property
-    def codomain(self) -> type[core_defs.ScalarT] | Dimension:
-        ...
+    def __gt_domain__(self) -> Domain:
+        return self.domain
 
     @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        ...
+    def codomain(self) -> type[core_defs.ScalarT] | Dimension: ...
 
     @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        ...
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]: ...
+
+    # TODO(havogt)
+    # This property is wrong, because for a function field we would not know to which NDArrayObject we want to convert
+    # at the very least, we need to take an allocator and rename this to `as_ndarray`.
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject: ...
 
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
-    @abc.abstractmethod
-    def asnumpy(self) -> np.ndarray:
-        ...
+    def __bool__(self) -> NoReturn:
+        raise TypeError(
+            "The truth value of a Field is ambiguous. For one element Fields use '.as_scalar()'."
+        )
 
     @abc.abstractmethod
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
+    @abc.abstractmethod
+    def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
+
+    @abc.abstractmethod
+    def restrict(self, item: AnyIndexSpec) -> Self: ...
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def __call__(
+        self,
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
+    ) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def __getitem__(self, item: AnyIndexSpec) -> Self: ...
 
     @abc.abstractmethod
-    def __abs__(self) -> Field:
-        ...
+    def __abs__(self) -> Field: ...
 
     @abc.abstractmethod
-    def __neg__(self) -> Field:
-        ...
+    def __neg__(self) -> Field: ...
 
     @abc.abstractmethod
     def __invert__(self) -> Field:
@@ -663,48 +817,49 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
+
+    @abc.abstractmethod
+    def __lt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __le__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __gt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __ge__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
 
     @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
@@ -719,130 +874,255 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         """Only defined for `Field` of value type `bool`."""
 
 
-def is_field(
-    v: Any,
-) -> TypeGuard[Field]:
-    # This function is introduced to localize the `type: ignore` because
-    # extended_runtime_checkable does not make the protocol runtime_checkable
-    # for mypy.
-    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-    return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
-
-
-@extended_runtime_checkable
+@runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None:
-        ...
+    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-def is_mutable_field(
-    v: Field,
-) -> TypeGuard[MutableField]:
-    # This function is introduced to localize the `type: ignore` because
-    # extended_runtime_checkable does not make the protocol runtime_checkable
-    # for mypy.
-    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-    return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
+#: Type alias for primitive numeric values (i.e. scalars or fields).
+NumericValue: TypeAlias = core_defs.Scalar | Field
+NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+    NumericValue
+)
+
+#: Type alias for any kind primitive value understood by GT4Py DSL.
+PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+    PrimitiveValue
+)
 
 
-class ConnectivityKind(enum.Flag):
-    MODIFY_DIMS = enum.auto()
-    MODIFY_RANK = enum.auto()
-    MODIFY_STRUCTURE = enum.auto()
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory."""
 
+    data_ptr: int
+    ndim: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    byte_strides: tuple[int, ...]
+    device: core_defs.Device
 
-@extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
-    @property
-    @abc.abstractmethod
-    def codomain(self) -> DimT:
-        ...
+    @classmethod
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
+        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
+        #   The current implementation is messy and only works for numpy and cupy.
+        try:
+            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
+        except AttributeError:
+            array_ns = sys.modules[ndarray.__class__.__module__]
 
-    @property
-    def kind(self) -> ConnectivityKind:
-        return (
-            ConnectivityKind.MODIFY_DIMS
-            | ConnectivityKind.MODIFY_RANK
-            | ConnectivityKind.MODIFY_STRUCTURE
+        array_byte_bounds_func = (
+            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
         )
 
+        data_ptr = array_byte_bounds_func(ndarray)[0]
+        ndim = ndarray.ndim
+        shape = ndarray.shape
+        byte_strides = ndarray.strides
+        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
+
+        try:
+            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
+        except AttributeError as err:
+            ns = ndarray.__class__.__module__
+            if ns.startswith("numpy"):
+                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+            elif ns.startswith("cupy"):
+                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
+            else:
+                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
+
+        return BufferInfo(
+            data_ptr=data_ptr,
+            ndim=ndim,
+            shape=shape,
+            elem_strides=elem_strides,
+            byte_strides=byte_strides,
+            device=device,
+        )
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash(
+            (
+                self.data_ptr,
+                self.ndim,
+                self.shape,
+                self.elem_strides,
+                self.byte_strides,
+                self.device,
+            )
+        )
+
+    def __hash__(self) -> int:
+        return self.hash_key
+
+
+@dataclasses.dataclass(frozen=True)
+class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
+    domain: tuple[Dimension, ...]
+    codomain: Dimension
+    skip_value: Optional[core_defs.IntegralScalar]
+    dtype: core_defs.DType
+
+    @property
+    def has_skip_values(self) -> bool:
+        return self.skip_value is not None
+
+
+@dataclasses.dataclass(frozen=True)
+class NeighborConnectivityType(ConnectivityType):
+    # TODO(havogt): refactor towards encoding this information in the local dimensions of the ConnectivityType.domain
+    max_neighbors: int
+
+    @property
+    def source_dim(self) -> Dimension:
+        return self.domain[0]
+
+    @property
+    def neighbor_dim(self) -> Dimension:
+        return self.domain[1]
+
+
+@runtime_checkable
+class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_co]):
+    @property
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        ...
+    def codomain(self) -> DimT_co:
+        """
+        The `codomain` is the set of all indices in a certain `Dimension`.
+
+        We use the `Dimension` itself to describe the (infinite) set of all indices.
+
+        Note:
+        We could restrict the infinite codomain to only the indices that are actually contained in the mapping.
+        Currently, this would just complicate implementation as we do not use this information.
+        """
+
+    def __gt_type__(self) -> ConnectivityType:
+        if is_neighbor_table(self):
+            return NeighborConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+                dtype=self.dtype,
+                skip_value=self.skip_value,
+                max_neighbors=self.ndarray.shape[1],
+            )
+        else:
+            return ConnectivityType(
+                domain=self.domain.dims,
+                codomain=self.codomain,
+                dtype=self.dtype,
+                skip_value=self.skip_value,
+            )
+
+    @abc.abstractmethod
+    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __neg__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __invert__(self) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __eq__(self, other: Any) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __ne__(self, other: Any) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __lt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __le__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __gt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __ge__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __or__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+        raise TypeError("'Connectivity' does not support this operation.")
 
 
-def is_connectivity_field(
-    v: Any,
-) -> TypeGuard[ConnectivityField]:
-    # This function is introduced to localize the `type: ignore` because
-    # extended_runtime_checkable does not make the protocol runtime_checkable
-    # for mypy.
-    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-    return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
+class GatherConnectivity(Connectivity[DimsT, DimT_co]):
+    """A `Connectivity` whose `premap` rearranges data via advanced indexing (a gather).
+
+    The defining contract is that the index map is materializable as an integer index table via
+    `ndarray` (table-backed today; in principle a function evaluated over the domain). The gather
+    algorithm (`embedded.nd_array_field._gather_premap`) is responsible for laying that table out
+    over the output domain. Affine connectivities (cartesian shifts / relocations) are *not*
+    `GatherConnectivity`: their `premap` is a compact domain relabel that moves no data and has no
+    `ndarray`. The affine-vs-gather distinction has no structural witness (an affine connectivity
+    still has an `ndarray` attribute, it just raises), so it is a nominal type, not a `Protocol`.
+    """
+
+    # TODO(havogt): This is a bare annotation, not an `@abc.abstractmethod`, on purpose. Making it
+    #  abstract would force `NdArrayConnectivityField` abstract too: with `GatherConnectivity` ahead
+    #  of `NdArrayField` in the MRO, the abstract `ndarray` shadows `NdArrayField`'s concrete one.
+    #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
+    #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
+    #  annotation documents the contract for type checkers with no runtime effect.
+    #  See also the TODO on `Field.ndarray`: ideally `ndarray` would not live on the abstract base.
+    ndarray: core_defs.NDArrayObject
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -852,61 +1132,124 @@ def field(
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
-) -> ConnectivityField:
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Connectivity:
     raise NotImplementedError
-
-
-@dataclasses.dataclass(frozen=True)
-class GTInfo:
-    definition: Any
-    ir: Any
-
-
-@dataclasses.dataclass(frozen=True)
-class Backend:
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-
-    # TODO : proper definition and implementation
-    def generate_operator(self, ir):
-        return ir
-
-
-@runtime_checkable
-class Connectivity(Protocol):
-    max_neighbors: int
-    has_skip_values: bool
-    origin_axis: Dimension
-    neighbor_axis: Dimension
-    index_type: type[int] | type[np.int32] | type[np.int64]
-
-    def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
-    ) -> Optional[int | np.integer]:
-        """Return neighbor index."""
 
 
 @runtime_checkable
 class NeighborTable(Connectivity, Protocol):
-    table: npt.NDArray
+    # TODO(havogt): work towards encoding this properly in the type
+    def __gt_type__(self) -> NeighborConnectivityType: ...
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
 
 
-OffsetProviderElem: TypeAlias = Dimension | Connectivity
+def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
+    if not isinstance(obj, Connectivity):
+        return False
+    domain_dims = obj.domain.dims
+    return (
+        len(domain_dims) == 2
+        and domain_dims[0].kind is DimensionKind.HORIZONTAL
+        and domain_dims[1].kind is DimensionKind.LOCAL
+    )
+
+
+OffsetProviderElem: TypeAlias = NeighborTable
+OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
+# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
+OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
+
+
+def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderElem) for el in obj.values())
+
+
+def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+    if not isinstance(obj, Mapping):
+        return False
+    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+
+
+def offset_provider_to_type(
+    offset_provider: OffsetProvider | OffsetProviderType,
+) -> OffsetProviderType:
+    return {
+        k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
+    }
+
+
+def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
+    """
+    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+
+    Note: All accesses of `OffsetProvider` or `OffsetProviderType` should go through this function.
+    """
+    # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
+    if offset_tag not in offset_provider:
+        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
+    return offset_provider[offset_tag]  # TODO return a valid dimension
+
+
+get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+
+
+def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+    """Determine if offset provider has an element for the given offset tag."""
+    try:
+        get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
+    except KeyError:
+        return False
+    return True
+
+
+def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+    """
+    Compute hash of an offset provider on the tuples of key and value id.
+
+    This function is unsafe since it uses the `id` of the values in the
+    offset provider, which could generate different hashes for two
+    offset providers that are semantically equal. It additionally relies
+    on the ordering of the items in the mapping, which could also lead to
+    different hashes for semantically equal offset providers.
+    """
+    return hash(tuple((k, id(v)) for k, v in offset_provider.items()))
+
+
+DomainDimT = TypeVar("DomainDimT", bound="Dimension")
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
-    dimension: DimT
+class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
+    domain_dim: DomainDimT
+    codomain: DimT
     offset: int = 0
+
+    def __init__(
+        self, domain_dim: DomainDimT, offset: int = 0, *, codomain: Optional[DimT] = None
+    ) -> None:
+        object.__setattr__(self, "domain_dim", domain_dim)
+        object.__setattr__(self, "codomain", codomain if codomain is not None else domain_dim)
+        object.__setattr__(self, "offset", offset)
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -919,13 +1262,12 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
+
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        return self.domain.dims
+        return Domain(dims=(self.domain_dim,), ranges=(UnitRange.infinite(),))
 
     @property
     def __gt_origin__(self) -> Never:
@@ -933,56 +1275,55 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
-    @functools.cached_property
-    def codomain(self) -> DimT:
-        return self.dimension
+    # This is a workaround to make this class concrete, since `codomain` is an
+    # abstract property of the `Connectivity` Protocol.
+    if not TYPE_CHECKING:
 
-    @functools.cached_property
-    def kind(self) -> ConnectivityKind:
-        return ConnectivityKind(0)
+        @functools.cached_property
+        def codomain(self) -> DimT:
+            raise RuntimeError("This property should be always set in the constructor.")
+
+    @property
+    def skip_value(self) -> None:
+        return None
 
     @classmethod
-    def from_offset(
-        cls,
-        definition: int,
-        /,
-        codomain: DimT,
-        *,
-        domain: Optional[DomainLike] = None,
-        dtype: Optional[core_defs.DTypeLike] = None,
-    ) -> CartesianConnectivity:
-        assert domain is None
-        assert dtype is None
-        return cls(codomain, definition)
+    def for_translation(
+        cls, dimension: DomainDimT, offset: int
+    ) -> CartesianConnectivity[DomainDimT, DomainDimT]:
+        return cast(CartesianConnectivity[DomainDimT, DomainDimT], cls(dimension, offset))
+
+    @classmethod
+    def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
+        return cls(new, codomain=old)
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):
-            if image_range[0] != self.codomain:
+            if image_range.dim != self.codomain:
                 raise ValueError(
-                    f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
+                    f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                 )
 
-            image_range = image_range[1]
+            image_range = image_range.unit_range
 
         assert isinstance(image_range, UnitRange)
-        return ((self.codomain, image_range - self.offset),)
+        return (named_range((self.domain_dim, image_range - self.offset)),)
 
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
+    def premap(
+        self,
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
+    ) -> Connectivity:
         raise NotImplementedError()
 
-    __call__ = remap
+    __call__ = premap
 
-    def restrict(self, index: AnyIndexSpec) -> core_defs.IntegralScalar:
-        if is_int_index(index):
-            return index + self.offset
+    def restrict(self, index: AnyIndexSpec) -> Never:
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
-
-
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique
@@ -991,80 +1332,74 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
-    """
-    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
+    """Find the canonical ordering of the dimensions in `dims`."""
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+    return sorted(
+        dims,
+        key=lambda dim: (
+            _DIM_KIND_ORDER[dim.kind],
+            as_non_staggered(dim).value,
+        ),
+    )
 
-    The resulting list of dimensions contains all dimensions of the arguments
-    in the order they originally appear. If no unique order exists or a
-    contradicting order is found an exception is raised.
 
-    A modified version (ensuring uniqueness of the order) of
-    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
-    is used to topologically sort the arguments.
-    >>> from gt4py.next.common import Dimension
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
-    True
-    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
-    """
-    # build a graph with the vertices being dimensions and edges representing
-    #  the order between two dimensions. The graph is encoded as a dictionary
-    #  mapping dimensions to their predecessors, i.e. a dictionary containing
-    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
-    #  (contrary to successors) we also use this directionality here.
-    graph: dict[Dimension, set[Dimension]] = {}
-    for dims in dims_list:
-        if len(dims) == 0:
-            continue
-        # create a vertex for each dimension
-        for dim in dims:
-            graph.setdefault(dim, set())
-        # add edges
-        predecessor = dims[0]
-        for dim in dims[1:]:
-            graph[dim].add(predecessor)
-            predecessor = dim
-
-    # modified version of Kahn's algorithm
-    topologically_sorted_list: list[Dimension] = []
-
-    # compute in-degree for each vertex
-    in_degree = {v: 0 for v in graph.keys()}
-    for v1 in graph:
-        for v2 in graph[v1]:
-            in_degree[v2] += 1
-
-    # process vertices with in-degree == 0
-    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
-    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
-        if len(zero_in_degree_vertex_list) != 1:
+def check_dims(dims: Sequence[Dimension]) -> None:
+    # A dimension and its staggered counterpart (i.e. sharing the same non-staggered base dimension)
+    # denote different grid locations and must not appear together in the same field/domain: mixing
+    # them is ambiguous (it makes `order_dimensions` non-total and produces duplicate backend tags).
+    seen: dict[Dimension, Dimension] = {}
+    for dim in dims:
+        base = as_non_staggered(dim)
+        if base in seen:
             raise ValueError(
-                f"Dimensions can not be promoted. Could not determine "
-                f"order of the following dimensions: "
-                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
+                f"Dimensions '{seen[base]}' and '{dim}' cannot be combined: a dimension and its "
+                f"staggered counterpart must not appear together in the same field or domain."
             )
-        v = zero_in_degree_vertex_list[0]
-        del in_degree[v]
-        topologically_sorted_list.insert(0, v)
-        # update in-degree
-        for predecessor in graph[v]:
-            in_degree[predecessor] -= 1
-
-    if len(in_degree.items()) > 0:
+        seen[base] = dim
+    if list(dims) != order_dimensions(dims):
         raise ValueError(
-            f"Dimensions can not be promoted. The following dimensions "
-            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
+            f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
         )
 
-    return topologically_sorted_list
+
+def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
+    """
+    Find an ordering of multiple lists of dimensions.
+
+    The resulting list contains all unique dimensions from the input lists,
+    sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
+    lexicographically by `Dimension.value`.
+
+    Examples:
+        >>> from gt4py.next.common import Dimension
+        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
+        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
+        >>> K = Dimension("K", DimensionKind.VERTICAL)
+        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> promote_dims([J, K], [I, K]) == [I, J, K]
+        True
+        >>> promote_dims([K, J], [I, K])
+        Traceback (most recent call last):
+        ...
+        ValueError: Dimensions 'K[vertical], J[horizontal]' are not ordered correctly, expected 'J[horizontal], K[vertical]'.
+        >>> promote_dims([I, K], [J, E2V]) == [I, J, E2V, K]
+        True
+        >>> promote_dims([I, E2C], [E2V, K])
+        Traceback (most recent call last):
+        ...
+        ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
+    """
+
+    for dims in dims_list:
+        check_dims(list(dims))
+    unique_dims = {dim for dims in dims_list for dim in dims}
+
+    promoted_dims = order_dimensions(unique_dims)
+    check_dims(promoted_dims)
+    return promoted_dims
 
 
 class FieldBuiltinFuncRegistry:
@@ -1075,11 +1410,11 @@ class FieldBuiltinFuncRegistry:
     dispatching (via ChainMap) to its parent's registries.
     """
 
-    _builtin_func_map: collections.ChainMap[
-        fbuiltins.BuiltInFunction, Callable
-    ] = collections.ChainMap()
+    _builtin_func_map: collections.ChainMap[fbuiltins.BuiltInFunction, Callable] = (
+        collections.ChainMap()
+    )
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._builtin_func_map = collections.ChainMap(
             {},  # New empty `dict` for new registrations on this class
             *[
@@ -1101,4 +1436,54 @@ class FieldBuiltinFuncRegistry:
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
-        return cls._builtin_func_map.get(func, NotImplemented)
+
+
+#: Numeric value used to represent missing values in connectivities.
+#: Equivalent to the `_FillValue` attribute in the UGRID Conventions
+#: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
+_DEFAULT_SKIP_VALUE: Final[int] = -1
+_STAGGERED_PREFIX = "_Staggered"
+
+
+def is_staggered(dim: Dimension) -> bool:
+    """Return whether `dim` is a staggered dimension."""
+    return dim.value.startswith(_STAGGERED_PREFIX)
+
+
+def flip_staggered(dim: Dimension) -> Dimension:
+    """Return the staggered counterpart of `dim`."""
+    if is_staggered(dim):
+        return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
+    else:
+        return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
+
+
+def as_non_staggered(dim: Dimension) -> Dimension:
+    """Return the non-staggered base dimension of `dim` (`dim` itself if already non-staggered)."""
+    if is_staggered(dim):
+        return flip_staggered(dim)
+    return dim
+
+
+def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
+    """
+    Build the connectivity that shifts `dim` by `offset`.
+
+    An integer `offset` shifts within `dim` (the codomain stays `dim`). A half-integer `offset`
+    (fractional part `0.5`) shifts to the staggered counterpart of `dim` (the codomain becomes
+    `flip_staggered(dim)`).
+
+    The half-integer case encodes the convention that a staggered index sits half a cell *below*
+    its base index (see ADR 0024): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
+    shifting out of a non-staggered dimension needs a `+1` index correction that shifting out of a
+    staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
+    `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.
+    """
+    integral_offset, staggered_offset = divmod(offset, 1)
+    if staggered_offset == 0.5:
+        if not is_staggered(dim):
+            integral_offset += 1
+        return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
+    else:
+        assert staggered_offset == 0
+        return CartesianConnectivity(dim, int(integral_offset), codomain=dim)

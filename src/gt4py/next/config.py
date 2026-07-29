@@ -1,0 +1,212 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
+import datetime
+import enum
+import os
+import pathlib
+import sys
+import warnings
+from typing import Final
+
+
+# Module-level UPPERCASE values are snapshotted and shipped verbatim to
+# compilation worker processes (see `gt4py.next.otf.runners`); keep them
+# picklable.
+
+
+class BuildCacheLifetime(enum.Enum):
+    SESSION = 1
+    PERSISTENT = 2
+
+
+class CMakeBuildType(enum.Enum):
+    """
+    CMake build types enum.
+
+    Member values have to be valid CMake syntax.
+    """
+
+    DEBUG = "Debug"
+    RELEASE = "Release"
+    REL_WITH_DEB_INFO = "RelWithDebInfo"
+    MIN_SIZE_REL = "MinSizeRel"
+
+
+class BuildJobsMode(enum.Enum):
+    """How ``BUILD_JOBS`` parallel compilation jobs are executed."""
+
+    #: Run compilation in the calling thread (no concurrency).
+    SERIAL = "serial"
+    #: Run compilation in a ``ThreadPoolExecutor``.
+    THREAD = "thread"
+    #: Run compilation in a ``ProcessPoolExecutor`` with the ``spawn`` start
+    #: method. Requires the backend's ``executor`` to be stdlib-picklable
+    #: (standard runners and factory-constructed variants are) and to return a
+    #: picklable ``CompilationArtifact``; backends that don't qualify (or that
+    #: customize ``Backend.compile``) are compiled in the calling thread
+    #: instead, with a warning.
+    PROCESS = "process"
+
+
+def env_flag_to_bool(name: str, default: bool) -> bool:
+    """Convert environment variable string variable to a bool value."""
+    flag_value = os.environ.get(name, None)
+    if flag_value is None:
+        return default
+    match flag_value.lower():
+        case "0" | "false" | "off":
+            return False
+        case "1" | "true" | "on":
+            return True
+        case _:
+            raise ValueError(
+                "Invalid GT4Py environment flag value: use '0 | false | off' or '1 | true | on'."
+            )
+
+
+def _process_cpu_count() -> int:
+    """Number of CPUs available to this process (respecting the affinity mask)."""
+    if sys.version_info >= (3, 13):
+        return os.process_cpu_count() or 1
+    if hasattr(os, "sched_getaffinity"):
+        return len(os.sched_getaffinity(0))
+    return os.cpu_count() or 1
+
+
+def env_flag_to_int(name: str, default: int) -> int:
+    """Convert environment variable string variable to an int value."""
+    flag_value = os.environ.get(name, None)
+    if flag_value is None:
+        return default
+    try:
+        return int(flag_value)
+    except ValueError:
+        raise ValueError(
+            f"Invalid GT4Py environment flag value: {flag_value} is not an integer."
+        ) from None
+
+
+#: Master debug flag
+#: Changes defaults for all the other options to be as helpful for debugging as possible.
+#: Does not override values set in environment variables.
+DEBUG: Final[bool] = env_flag_to_bool("GT4PY_DEBUG", default=False)
+
+
+#: Verbose flag for DSL compilation errors
+VERBOSE_EXCEPTIONS: bool = env_flag_to_bool(
+    "GT4PY_VERBOSE_EXCEPTIONS", default=True if DEBUG else False
+)
+
+
+#: Where generated code projects should be persisted.
+#: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
+BUILD_CACHE_DIR: pathlib.Path = (
+    pathlib.Path(os.environ.get("GT4PY_BUILD_CACHE_DIR", pathlib.Path.cwd())) / ".gt4py_cache"
+)
+
+
+def _get_build_cache_version_id() -> str:
+    return __import__("gt4py").__version__
+
+
+#: Version ID for the build cache. It should only be overridden by gt4py
+#: developers or advanced users when making changes requiring forced
+#: compatibility with previously cached builds.
+BUILD_CACHE_VERSION_ID: str = (
+    os.environ.get("GT4PY_BUILD_CACHE_VERSION_ID") or _get_build_cache_version_id()
+)
+
+
+#: Whether generated code projects should be kept around between runs.
+#: - SESSION: generated code projects get destroyed when the interpreter shuts down
+#: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
+BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
+    os.environ.get("GT4PY_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper()
+]
+
+
+#: Build type to be used when CMake is used to compile generated code.
+#: Might have no effect when CMake is not used as part of the toolchain.
+CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
+    os.environ.get("GT4PY_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
+]
+
+
+#: Experimental, use at your own risk: assume horizontal dimension has stride 1
+UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
+    "GT4PY_UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", default=False
+)
+
+
+#: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
+ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
+
+
+#: Number of parallel compilation jobs (0 = synchronous compilation).
+#: Defaults to the number of CPUs available to this process (respecting the
+#: affinity mask, e.g. under Slurm cpusets or container CPU limits), capped
+#: at 32 for huge (e.g. HPC) nodes.
+BUILD_JOBS: int = int(os.environ.get("GT4PY_BUILD_JOBS", min(_process_cpu_count(), 32)))
+
+#: Executor backing the async compilation pool.
+#: - ``BuildJobsMode.SERIAL``: compile in the calling thread (no concurrency;
+#:   also used when ``GT4PY_BUILD_JOBS<=0``).
+#: - ``BuildJobsMode.THREAD``: ``ThreadPoolExecutor``.
+#: - ``BuildJobsMode.PROCESS`` (default): ``ProcessPoolExecutor`` with ``spawn``
+#:   start method. See ``BuildJobsMode`` for the picklability requirements.
+BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
+    os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
+]
+
+#: User-defined level to enable metrics at lower or equal level.
+#: Enabling metrics collection will do extra synchronization and will have
+#: impact on runtime performance.
+COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
+
+
+#: File path to dump collected metrics at exit, if COLLECT_METRICS_LEVEL is enabled.
+#: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
+#: the current folder.
+DUMP_METRICS_AT_EXIT: str | None = None
+
+
+#: Filter out DaCe related warnings. If not set warnings will be suppressed if the
+#: code runs in no debug mode.
+SKIP_DACE_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_DACE_WARNINGS", default=not __debug__)
+
+
+if SKIP_DACE_WARNINGS:
+    # NOTE: Ideally we would suppress the warnings using context managers directly in
+    #   the backend. However, because this is not thread safe in Python versions before
+    #   3.14, we have to do it here.
+    warnings.filterwarnings(action="ignore", module=r"^dace(\..+)?")
+    warnings.filterwarnings(
+        action="ignore",
+        module=r"^gt4py.next.program_processors.runners.dace.transformations(\..+)?",
+    )
+
+
+def _init_dump_metrics_filename() -> str:
+    return f"gt4py_metrics_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+
+
+_dump_metrics_at_exit_env = os.environ.get("GT4PY_DUMP_METRICS_AT_EXIT", None)
+if _dump_metrics_at_exit_env is not None:
+    try:
+        if env_flag_to_bool("GT4PY_DUMP_METRICS_AT_EXIT", default=False):
+            DUMP_METRICS_AT_EXIT = _init_dump_metrics_filename()
+    except ValueError:
+        DUMP_METRICS_AT_EXIT = _dump_metrics_at_exit_env
+
+
+#: The default for whether to allow jit-compilation for a compiled program.
+#: This default can be overriden per program.
+ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)

@@ -1,16 +1,10 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2023, ETH Zurich
+# Copyright (c) 2014-2024, ETH Zurich
 # All rights reserved.
 #
-# This file is part of the GT4Py project and the GridTools framework.
-# GT4Py is free software: you can redistribute it and/or modify it under
-# the terms of the GNU General Public License as published by the
-# Free Software Foundation, either version 3 of the License, or any later
-# version. See the LICENSE.txt file at the top-level directory of this
-# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
-#
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
 
 import collections
 import dataclasses
@@ -142,7 +136,11 @@ def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
     """Hypothesis strategy for `dtype` scalar values in range [min_value, max_value]."""
     allow_infinity = not (np.isfinite(min_value) and np.isfinite(max_value))
 
-    if issubclass(dtype.type, numbers.Real):
+    if issubclass(dtype.type, numbers.Integral):
+        value_st = hyp_st.integers(min_value, max_value)
+    elif issubclass(
+        dtype.type, numbers.Real
+    ):  # after numbers.Integral because np.int32 is a subclass of numbers.Real
         value_st = hyp_st.floats(
             min_value,
             max_value,
@@ -150,8 +148,6 @@ def scalar_value_st(dtype, min_value, max_value, allow_nan=False):
             allow_nan=allow_nan,
             width=dtype.itemsize * 8,
         )
-    elif issubclass(dtype.type, numbers.Integral):
-        value_st = hyp_st.integers(min_value, max_value)
 
     return value_st.map(dtype.type)
 
