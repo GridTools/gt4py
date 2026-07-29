@@ -292,26 +292,12 @@ def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str
     return generated_code
 
 
-@pytest.mark.parametrize("transient_memory_mode", list(gtx_transformations.TransientMemoryMode))
-def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
-    on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
+def _test_transient_memory_mode(on_gpu, transient_memory_mode, custom_backend, monkeypatch):
     gpu_api_prefix = "hip" if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM else "cuda"
     gpu_malloc_marker = f"{gpu_api_prefix}Malloc("
     gpu_malloc_async_marker = f"{gpu_api_prefix}MallocAsync("
     gpu_free_marker = f"{gpu_api_prefix}Free("
     gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync("
-    external_memory_allocator = _WorkspaceRecordingAllocator()
-    workspace_requests = external_memory_allocator.requests
-
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": transient_memory_mode,
-        },
-        external_memory_allocator=external_memory_allocator,
-    )
 
     @gtx.field_operator
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
@@ -366,6 +352,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     assert len(transient_arrays) == 2
 
     generated_code = _parse_generated_code_from_sdfg(captured_sdfg, gpu_api_prefix)
+    workspace_requests = custom_backend.executor.compilation.external_memory_allocator.requests
 
     match transient_memory_mode:
         case gtx_transformations.TransientMemoryMode.EXTERNAL:
@@ -445,3 +432,33 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
                 assert any(marker in generated_code for marker in ("delete ", "free"))
 
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
+
+
+def test_transient_memory_mode(device_type, monkeypatch, subtests):
+    on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
+    external_memory_allocator = _WorkspaceRecordingAllocator()
+
+    # Note that the different custom backends are created here, and stored in an
+    # array, so that they are not garbage collected before all subtests run.
+    # This is needed to keep the `_compiled_programs` cache in a consistent state.
+    # Otherwise, it could happen that the same backend id is reused, for a different
+    # backend object, and the program is loaded from cache instead of being lowered.
+    configs = [
+        (
+            mode,
+            dace_wf_backend.make_dace_backend(
+                gpu=on_gpu,
+                async_sdfg_call=False,
+                optimization_args={
+                    "transient_memory_mode": mode,
+                },
+                external_memory_allocator=external_memory_allocator,
+            ),
+        )
+        for mode in gtx_transformations.TransientMemoryMode
+    ]
+
+    for mode, backend in configs:
+        with subtests.test(f"transient_memory_mode={mode}"):
+            _test_transient_memory_mode(on_gpu, mode, backend, monkeypatch)
+            external_memory_allocator.requests.clear()  # reset for next subtest
