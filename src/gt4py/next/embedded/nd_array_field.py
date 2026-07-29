@@ -190,6 +190,11 @@ class NdArrayField(
         return tuple(-r.start for r in self.domain.ranges)
 
     @functools.cached_property
+    def __dace_origin__(self) -> tuple[int, ...]:
+        assert common.Domain.is_finite(self.domain)
+        return tuple(r.start for r in self.domain.ranges)
+
+    @functools.cached_property
     def __gt_buffer_info__(self) -> common.BufferInfo:
         """
         Interface to retrieve the low-level description of a Field buffer.
