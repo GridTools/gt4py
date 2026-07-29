@@ -267,8 +267,25 @@ class NamespaceProxy(ts.TypeSpec):
     _object: PythonNamespaceObject
 
     def __getattr__(self, key: str) -> ts.TypeSpec:
-        value = getattr(self._object, key)
-        return from_value(value)
+        # `__getattr__` is called only when normal lookup fails. Two guards are
+        # needed so this never recurses:
+        #   1. Dunder probes: pickle / copy / cloudpickle look up things like
+        #      ``__setstate__``, ``__reduce_ex__``, ``__deepcopy__`` on freshly-
+        #      constructed instances *before* ``_object`` has been restored.
+        #      Forwarding them to ``self._object`` is both wrong and unbounded —
+        #      ``self._object`` itself would re-enter this method since
+        #      ``_object`` has not been assigned yet.
+        #   2. Any other attribute that arrives here before ``_object`` is bound:
+        #      use ``object.__getattribute__`` to consult the actual instance
+        #      dict so we reach base-class ``AttributeError`` rather than
+        #      recursing.
+        if key.startswith("_"):
+            raise AttributeError(key)
+        try:
+            obj = object.__getattribute__(self, "_object")
+        except AttributeError:
+            raise AttributeError(key) from None
+        return from_value(getattr(obj, key))
 
     def __deepcopy__(self, _: dict[int, Any]) -> NamespaceProxy:
         return NamespaceProxy(self._object)  # don't deep copy the module

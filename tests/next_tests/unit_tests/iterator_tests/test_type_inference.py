@@ -138,23 +138,33 @@ def expression_test_cases():
         # TODO: scan
         # map
         (
-            im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
+            im.map_list(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
             int_list_type,
         ),
         (
-            im.map_(im.ref("plus"))(im.call("make_const_list")(1), im.ref("b", int_list_type)),
+            im.map_list(im.ref("plus"))(im.call("make_const_list")(1), im.ref("b", int_list_type)),
             int_list_type,
         ),
         (
-            im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.call("make_const_list")(1)),
+            im.map_list(im.ref("plus"))(im.ref("a", int_list_type), im.call("make_const_list")(1)),
             int_list_type,
         ),
         (
-            im.map_(im.ref("plus"))(
+            im.map_list(im.ref("plus"))(
                 im.ref("a", int_list_type),
                 im.ref("b", ts.ListType(element_type=int_type, offset_type=V2EDim)),
             ),
             ts.ListType(element_type=int_type, offset_type=V2EDim),
+        ),
+        # tree_map_tuple
+        (
+            im.tree_map_tuple(im.ref("not_"))(
+                im.ref(
+                    "t",
+                    ts.TupleType(types=[bool_type, ts.TupleType(types=[bool_type, bool_type])]),
+                ),
+            ),
+            ts.TupleType(types=[bool_type, ts.TupleType(types=[bool_type, bool_type])]),
         ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),

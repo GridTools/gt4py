@@ -447,10 +447,21 @@ def metadata_based_deconstructor_fallback(obj: Any) -> Deconstruction:
         return object_deconstruct_fallback(obj)
 
 
+def _caller_module_name() -> Optional[str]:
+    # Like `collections.namedtuple`: the frame two levels up is the caller of
+    # the maker function this helper is called from.
+    try:
+        return sys._getframe(2).f_globals.get("__name__", "__main__")
+    except (AttributeError, ValueError):
+        return None
+
+
 def make_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
     *,
     fallback: Deconstructor,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
     """
     Create a deconstructor, optionally with customized per-type deconstruction.
@@ -458,35 +469,79 @@ def make_deconstructor(
     The returned deconstructor produces one level of an object as a
     `Deconstruction` (an `EmptyDeconstruction` for terminal
     objects) whose `state` is a byte tag (a domain-separation tag, optionally
-    followed by a payload).
-    Per-type deconstructors are dispatched on the object's MRO; `overrides`
-    take precedence over the default rules. Objects without a matching
-    deconstructor are handled by `fallback` (by default deconstructed through
-    their fields for dataclasses and datamodels, or via the standard
-    ``__reduce_ex__`` protocol).
-    """
+    followed by a payload). Per-type deconstructors are dispatched on the
+    object's MRO.
 
-    return eve_utils.singledispatcher(
+    Args:
+        overrides: Per-type deconstructors taking precedence over the default
+            rules.
+        fallback: Handles objects without a matching deconstructor (by default
+            deconstructed through their fields for dataclasses and datamodels,
+            or via the standard ``__reduce_ex__`` protocol).
+        name: Sets the returned dispatcher's ``__name__`` / ``__qualname__``.
+            Pass the name under which the deconstructor will be stored to make
+            it picklable by reference (e.g. for shipping an executor carrying
+            it to a process-pool worker); without it the dispatcher carries the
+            identity that ``functools.singledispatch`` copies from `fallback`,
+            so pickle would resolve it to the plain fallback function instead.
+        module: Sets the returned dispatcher's ``__module__``; defaults to the
+            caller's module (determined like in ``collections.namedtuple``).
+
+    Returns:
+        A single-dispatch deconstructor with the registered implementations.
+    """
+    deconstructor = eve_utils.singledispatcher(
         fallback,
         implementations={**_COMMON_DECONSTRUCTORS, **(overrides or {})},
     )
+    if name is not None:
+        deconstructor.__name__ = deconstructor.__qualname__ = name
+        if module is None:
+            module = _caller_module_name()
+    if module is not None:
+        deconstructor.__module__ = module
+    return deconstructor
 
 
 def make_strict_data_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
+    """Build a strict deconstructor with the standard per-type rules.
+
+    See `make_deconstructor` for the meaning of ``name`` and ``module``; a
+    deconstructor created without them is not picklable by reference.
+    """
+    if name is not None and module is None:
+        module = _caller_module_name()
     return make_deconstructor(
         overrides=STRICT_DECONSTRUCTORS | dict(overrides or {}),
         fallback=metadata_based_deconstructor_fallback,
+        name=name,
+        module=module,
     )
 
 
 def make_lenient_data_deconstructor(
     overrides: Optional[Mapping[type, Deconstructor]] = None,
+    *,
+    name: Optional[str] = None,
+    module: Optional[str] = None,
 ) -> Deconstructor:
+    """Build a lenient deconstructor with the standard per-type rules.
+
+    See `make_deconstructor` for the meaning of ``name`` and ``module``; a
+    deconstructor created without them is not picklable by reference.
+    """
+    if name is not None and module is None:
+        module = _caller_module_name()
     return make_deconstructor(
         overrides=LENIENT_DECONSTRUCTORS | dict(overrides or {}),
         fallback=metadata_based_deconstructor_fallback,
+        name=name,
+        module=module,
     )
 
 
@@ -661,7 +716,9 @@ Fingerprinter: TypeAlias = Callable[[Any], str]
 #: fallback). Identifies types, functions and modules by their qualified name,
 #: rejecting non-importable ones, and honors the
 #: ``gt4py_metadata(fingerprint=False)`` opt-out.
-strict_fingerprint_deconstructor: Final[Deconstructor] = make_strict_data_deconstructor()
+strict_fingerprint_deconstructor: Final[Deconstructor] = make_strict_data_deconstructor(
+    name="strict_fingerprint_deconstructor"
+)
 
 
 def fingerprint_aggregator(deconstruction: Deconstruction[str]) -> str:
@@ -712,7 +769,9 @@ strict_fingerprinter: Fingerprinter = make_fingerprinter(
 # unverified qualified name for dynamically-created types/modules, instead of
 # raising.
 
-lenient_fingerprint_deconstructor: Final[Deconstructor] = make_lenient_data_deconstructor()
+lenient_fingerprint_deconstructor: Final[Deconstructor] = make_lenient_data_deconstructor(
+    name="lenient_fingerprint_deconstructor"
+)
 
 #: Fingerprinter for in-memory (single-process) cache keys: like
 #: `strict_fingerprinter`, but tolerant of non-importable callables, types

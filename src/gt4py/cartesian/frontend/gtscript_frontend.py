@@ -1460,7 +1460,7 @@ class IRMaker(ast.NodeVisitor):
         op = self.visit(node.op)
         arg = self.visit(node.operand)
         if isinstance(arg, numbers.Number):
-            return eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
+            return eval(f"{op.python_symbol}{arg}")
 
         return nodes.UnaryOpExpr(
             op=op,
@@ -2090,7 +2090,7 @@ class GTScriptParser(ast.NodeVisitor):
 
     def __str__(self) -> str:
         result = "<GT4Py.GTScriptParser> {\n"
-        result += "\n".join("\t{}: {}".format(name, getattr(self, name)) for name in vars(self))
+        result += "\n".join(f"\t{name}: {getattr(self, name)}" for name in vars(self))
         result += "\n}"
         return result
 
@@ -2098,7 +2098,7 @@ class GTScriptParser(ast.NodeVisitor):
     def annotate_definition(
         definition: Callable,
         options: gt_definitions.BuildOptions | None = None,
-        externals=None,
+        externals: dict[str, Any] | None = None,
     ) -> Callable:
         """Annotate the function definition with dtypes, resolve externals and add default values.
 
@@ -2115,12 +2115,12 @@ class GTScriptParser(ast.NodeVisitor):
             GTScriptSyntaxError
 
         Returns:
-            definition (Callable): function to annotate
+            definition (Callable): annotated function
         """
         api_signature = []
         api_annotations = []
 
-        qualified_name = "{}.{}".format(definition.__module__, definition.__name__)
+        qualified_name = f"{definition.__module__}.{definition.__name__}"
         sig = inspect.signature(definition)
         for param in sig.parameters.values():
             if param.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -2274,7 +2274,7 @@ class GTScriptParser(ast.NodeVisitor):
                     wrong_imports.append(key)
 
         if wrong_imports:
-            raise GTScriptSyntaxError("Invalid 'import' statements ({})".format(wrong_imports))
+            raise GTScriptSyntaxError(f"Invalid 'import' statements ({wrong_imports})")
 
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=True, include_builtins=False
@@ -2312,6 +2312,16 @@ class GTScriptParser(ast.NodeVisitor):
                         loc=nodes.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
 
+        for key, value in nonlocal_symbols.items():
+            # Support @lazy_function() decorators by only evaluating them at this point
+            if (
+                callable(value)
+                and not hasattr(value, "_gtscript_")
+                and value.__qualname__.startswith("lazy_function.")
+            ):
+                value = value()
+                nonlocal_symbols[key] = value
+
         return nonlocal_symbols, imported_symbols
 
     @staticmethod
@@ -2329,7 +2339,7 @@ class GTScriptParser(ast.NodeVisitor):
             raise GTScriptDefinitionError(
                 name=name,
                 value="<unknown>",
-                message="Missing or invalid value for external symbol {name}".format(name=name),
+                message=f"Missing or invalid value for external symbol {name}",
                 loc=loc,
             ) from e
         return value
@@ -2380,7 +2390,7 @@ class GTScriptParser(ast.NodeVisitor):
                 if hasattr(value, "_gtscript_") and exhaustive:
                     assert callable(value)
                     nested_inlined_values = {
-                        "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
+                        f"{value._gtscript_['qualified_name']}.{item_name}": item_value
                         for item_name, item_value in value._gtscript_["nonlocals"].items()
                     }
                     resolved_values_list.extend(nested_inlined_values.items())
@@ -2557,7 +2567,7 @@ class GTScriptFrontend(Frontend):
     def prepare_stencil_definition(
         cls,
         definition: Callable,
-        externals,
+        externals: dict[str, Any],
         options: gt_definitions.BuildOptions | None = None,
     ) -> Callable:
         """Return an annotated version of the stencil definition.
