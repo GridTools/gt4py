@@ -1782,20 +1782,22 @@ def test_jax_jit_field_arguments():
 
 
 @pytest.mark.requires_jax
-def test_jax_jit_field_passthrough():
+def test_jax_pytree_roundtrip():
     jax = pytest.importorskip("jax")
 
     domain = common.domain({D0: (1, 3), D1: (2, 5)})
     field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
-    traced_domains = []
 
-    @jax.jit
-    def identity(f):
-        traced_domains.append(f.domain)
-        return f
+    children, treedef = jax.tree_util.tree_flatten(field)
 
-    result = identity(field)
+    assert len(children) == 1
+    assert children[0] is field.ndarray
 
-    assert traced_domains == [domain]  # the domain is static metadata, not a traced value
-    assert result.domain == domain
-    np.testing.assert_allclose(result.asnumpy(), field.asnumpy())
+    restored = jax.tree_util.tree_unflatten(treedef, children)
+    assert restored.domain == domain
+
+    other_field = common._field(
+        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
+    )
+    # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
+    assert jax.tree_util.tree_structure(other_field) != treedef
