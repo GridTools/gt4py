@@ -427,10 +427,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             arg_specialization_key,
         )
 
-        try:
-            compiled_program = self.compiled_programs[key]
+        # Note: a plain lookup, without a `KeyError` handler: everything raised while such a
+        # handler is active gets chained to it, and the dispatch miss with its opaque key then
+        # dominates the traceback and hides the actual failure.
+        compiled_program = self.compiled_programs.get(key)
 
-        except KeyError as e:
+        if compiled_program is None:
             if self._finish_compilation_job(key):
                 compiled_program = self.compiled_programs[key]
             elif enable_jit:
@@ -453,13 +455,24 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                     offset_provider=offset_provider,
                     enable_jit=False,
                     **canonical_kwargs,
-                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
+                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
 
             else:
-                raise RuntimeError("No program compiled for this set of static arguments.") from e
+                raise RuntimeError("No program compiled for this set of static arguments.")
 
         with compiled_program_call_context(self, key, args, kwargs, offset_provider):
             compiled_program(*args, **kwargs, offset_provider=offset_provider)
+
+    def _load_artifact(
+        self, artifact_future: concurrent.futures.Future[stages.CompilationArtifact]
+    ) -> stages.ExecutableProgram:
+        artifact = artifact_future.result()  # re-raises errors from the compilation worker
+        try:
+            return artifact.load()
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load the compiled program '{self.definition.__name__}'."
+            ) from e
 
     @functools.cached_property
     def _primitive_values_extractor(self) -> Callable | None:
@@ -581,9 +594,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             return False
 
         artifact_future = self._compilation_jobs.pop(key)
-        assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = artifact_future.result().load()
+        self.compiled_programs[key] = self._load_artifact(artifact_future)
         return True
 
     def _compile_variant(
@@ -660,7 +672,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result().load()
+            self.compiled_programs[key] = self._load_artifact(future)
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (
