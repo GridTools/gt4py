@@ -10,52 +10,11 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable
-from typing import (
-    TYPE_CHECKING,
-    Final,
-    Generic,
-    Optional,
-    Protocol,
-    TypeAlias,
-    TypeVar,
-    runtime_checkable,
-)
+from typing import Final, Generic, Optional, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from gt4py.next import common, fingerprinting
-from gt4py.next.iterator import ir as itir
+from gt4py.next import fingerprinting
 from gt4py.next.otf import code_specs
 from gt4py.next.otf.binding import interface
-
-
-if TYPE_CHECKING:
-    # Imported only for typing to avoid the import cycle with `otf.definitions`,
-    # which imports this module.
-    from gt4py.next.otf import definitions
-
-
-def fast_compilable_program_fingerprinter(program_def: definitions.CompilableProgramDef) -> str:
-    """
-    In-memory executor cache key: changes whenever the program needs recompilation.
-
-    The program is identified by its location- and type-agnostic semantic
-    fingerprint, while the offset providers are identified by the identity of
-    their connectivities, in iteration order. The order matters because the
-    generated bindings bake in the offset-provider order (see
-    ``extract_connectivity_args``), and the by-identity (rather than by-content)
-    comparison keeps this in-memory key cheap by not hashing the connectivity
-    tables.
-    """
-    prog_def_args = program_def.args
-    offset_provider = prog_def_args.offset_provider
-    return fingerprinting.lenient_fingerprinter(
-        (
-            itir.lenient_ir_fingerprinter(program_def.data),
-            prog_def_args.args,
-            prog_def_args.kwargs,
-            common.hash_offset_provider_items_by_id(offset_provider) if offset_provider else None,
-            prog_def_args.column_axis,
-        )
-    )
 
 
 compilable_program_fingerprinter: Final[fingerprinting.Fingerprinter] = (
