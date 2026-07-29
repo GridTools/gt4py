@@ -427,64 +427,46 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             arg_specialization_key,
         )
 
-        try:
-            compiled_program = self.compiled_programs[key]
-        except KeyError:
-            # The handler is empty on purpose: everything that could raise while it is active
-            # would be chained to this `KeyError`, whose opaque key then dominates the traceback
-            # and hides the actual failure. Leaving the handler clears the exception context.
-            pass
-        else:
-            with compiled_program_call_context(self, key, args, kwargs, offset_provider):
-                compiled_program(*args, **kwargs, offset_provider=offset_provider)
-            return
+        # Note: a plain lookup, without a `KeyError` handler: everything raised while such a
+        # handler is active gets chained to it, and the dispatch miss with its opaque key then
+        # dominates the traceback and hides the actual failure.
+        compiled_program = self.compiled_programs.get(key)
 
-        self._dispatch_miss(
-            key, args, kwargs, canonical_args, canonical_kwargs, offset_provider, enable_jit
-        )
+        if compiled_program is None:
+            if self._finish_compilation_job(key):
+                compiled_program = self.compiled_programs[key]
+            elif enable_jit:
+                assert self.argument_descriptor_mapping is not None
+                self._compile_variant(
+                    argument_descriptors=_make_argument_descriptors(
+                        self.program_type, self.argument_descriptor_mapping, args, kwargs
+                    ),
+                    # note: it is important to use the args before named collections are extracted
+                    #  as otherwise the implicit program generation from an operator fails
+                    arg_specialization_info=(
+                        tuple(type_translation.from_value(arg) for arg in canonical_args),
+                        {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
+                    ),
+                    offset_provider=offset_provider,
+                    call_key=key,
+                )
+                return self(
+                    *canonical_args,
+                    offset_provider=offset_provider,
+                    enable_jit=False,
+                    **canonical_kwargs,
+                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
 
-    def _dispatch_miss(
-        self,
-        key: CompiledProgramsKey,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        canonical_args: tuple[Any, ...],
-        canonical_kwargs: dict[str, Any],
-        offset_provider: common.OffsetProvider,
-        enable_jit: bool,
-    ) -> None:
-        """
-        Make the variant for `key` available and call it, or report why that is not possible.
-
-        Must be called outside of the `except KeyError` handler of `__call__`, such that failures
-        here are not chained to the dispatch miss.
-        """
-        if not self._finish_compilation_job(key):
-            if not enable_jit:
+            else:
                 raise RuntimeError(
                     f"No program compiled for this set of static arguments of "
                     f"'{self.definition.__name__}'{self._describe_argument_descriptors(key[0])}."
                     " Note that a variant is also selected by the identity of the"
                     " 'offset_provider' entries and, for generic programs, by the argument types."
                 )
-            assert self.argument_descriptor_mapping is not None
-            self._compile_variant(
-                argument_descriptors=_make_argument_descriptors(
-                    self.program_type, self.argument_descriptor_mapping, args, kwargs
-                ),
-                # note: it is important to use the args before named collections are extracted
-                #  as otherwise the implicit program generation from an operator fails
-                arg_specialization_info=(
-                    tuple(type_translation.from_value(arg) for arg in canonical_args),
-                    {k: type_translation.from_value(v) for k, v in canonical_kwargs.items()},
-                ),
-                offset_provider=offset_provider,
-                call_key=key,
-            )
 
-        return self(
-            *canonical_args, offset_provider=offset_provider, enable_jit=False, **canonical_kwargs
-        )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
+        with compiled_program_call_context(self, key, args, kwargs, offset_provider):
+            compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
     def _describe_argument_descriptors(self, descriptor_values: tuple[Hashable, ...]) -> str:
         exprs = [
