@@ -426,7 +426,11 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
-            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
+            # We skip
+            #  - `ScalarToSymbolPromotion` because we've seen validation issue in the past
+            #  - `ControlFlowRaising` because we already generate CFGs in stree -> SDFG
+            #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
 
         if do_cache:
@@ -485,11 +489,11 @@ class DaCeExtGenerator(BackendCodegen):
         manager = SDFGManager(self.backend.builder)
 
         sdfg = manager.sdfg_via_schedule_tree()
-        _specialize_transient_strides(
-            sdfg,
-            self.backend.storage_info,
-        )
-        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
+        _specialize_transient_strides(sdfg, self.backend.storage_info)
+        # We skip
+        #  - `ScalarToSymbolPromotion` because we've seen validation issues in the past
+        #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion", "LiftTrivialIf"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
