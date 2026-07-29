@@ -41,7 +41,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     tmp_src = tmp_path / "test.cpp"
     tmp_src.write_text(code)
 
-    extra_compile_args = ["-std=c++17"]
+    extra_compile_args = ["-std=c++20"]
     ext_module = setuptools.Extension(
         "test",
         [str(tmp_src.absolute())],

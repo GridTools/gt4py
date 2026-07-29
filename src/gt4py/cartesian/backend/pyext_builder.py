@@ -76,7 +76,7 @@ def get_gt_pyext_build_opts(
 
     extra_compile_args = dict(
         cxx=[
-            "-std=c++17",
+            "-std=c++20",
             "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-fvisibility=hidden",
             "-fPIC",
@@ -87,7 +87,7 @@ def get_gt_pyext_build_opts(
         ]
     )
     extra_compile_args["cuda"] = [
-        "-std=c++17",
+        "-std=c++20",
         "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
         "-DBOOST_PP_VARIADICS",
         "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
