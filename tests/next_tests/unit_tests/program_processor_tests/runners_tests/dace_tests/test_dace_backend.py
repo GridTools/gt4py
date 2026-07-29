@@ -296,6 +296,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         gpu=on_gpu,
         auto_optimize=True,
         async_sdfg_call=False,
+        cached_translation=False,
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },
