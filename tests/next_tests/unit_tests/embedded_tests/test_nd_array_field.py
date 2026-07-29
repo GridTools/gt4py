@@ -1758,3 +1758,44 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 
         assert result.domain == expected_domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_field_arguments():
+    jax = pytest.importorskip("jax")
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    a = common._field(
+        jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
+    )
+    b = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+
+    @jax.jit
+    def add(x, y):
+        return x + y
+
+    result = add(a, b)
+
+    assert isinstance(result, common.Field)
+    assert result.domain == domain
+    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_field_passthrough():
+    jax = pytest.importorskip("jax")
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+    traced_domains = []
+
+    @jax.jit
+    def identity(f):
+        traced_domains.append(f.domain)
+        return f
+
+    result = identity(field)
+
+    assert traced_domains == [domain]  # the domain is static metadata, not a traced value
+    assert result.domain == domain
+    np.testing.assert_allclose(result.asnumpy(), field.asnumpy())
