@@ -166,7 +166,8 @@ def convert_arg(arg: Any) -> Any:
         if len(origin) == 0:
             return arg.as_scalar()
         else:
-            return arg.ndarray, origin
+            # Difference between the two things.
+            return arg.ndarray, tuple(-s for s in origin)
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
     if isinstance(arg, np.bool_):
