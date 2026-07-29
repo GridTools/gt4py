@@ -8,6 +8,7 @@
 
 """Test the bindings stage of the dace backend workflow."""
 
+import copy
 import re
 import unittest.mock as mock
 
@@ -350,12 +351,15 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         no_op_top_level_map_processing,  # we need to keep the intermediate transient array
     )
 
+    prog = copy.copy(testee.with_backend(custom_backend))
+    prog._compiled_programs.compiled_programs.clear()  # clear any cached compiled programs to force recompilation
+
     # ``_WorkspaceRecordingAllocator`` is picklable (a module-level class),
     # so compilation would otherwise be dispatched to a worker process where
     # the ``DaCeTranslator.generate_sdfg`` monkeypatch above does not apply.
     # Force in-process compilation so the patched translator is observed.
     with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
-        testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
+        prog(a, b, out=out, offset_provider={})
 
     assert captured_sdfg is not None
     transient_arrays = [
