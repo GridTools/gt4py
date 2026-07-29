@@ -190,7 +190,6 @@ class GTFNBackendFactory(factory.Factory):
             name_device="gpu",
         )
         device_type = core_defs.DeviceType.CPU
-        key_function = stages.fast_compilable_program_fingerprinter
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory,
             cached_translation=True,
