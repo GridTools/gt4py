@@ -72,8 +72,6 @@ def get_gt_pyext_build_opts(
 
     gt_include_path = gt_config.build_settings["gt_include_path"]
 
-    import os
-
     extra_compile_args = dict(
         cxx=[
             "-std=c++20",
