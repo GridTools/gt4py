@@ -12,7 +12,7 @@ from typing import Any, Callable, Optional
 
 from gt4py import eve
 from gt4py.eve.extended_typing import Never, cast
-from gt4py.next import utils
+from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -304,19 +304,22 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
                     )(current_expr)
-                # `field(Dim + idx)`
+                # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.Name() as dim_name,
+                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.Dimension() as dim)),
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
-                    assert isinstance(dim_name.type, ts.DimensionType)
-                    dim = dim_name.type.dim
+                    conn = common.connectivity_for_cartesian_shift(dim, offset_index)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(
-                            im.deref(im.shift(im.cartesian_offset(dim), offset_index)("__it"))
+                            im.deref(
+                                im.shift(
+                                    im.cartesian_offset(conn.domain_dim, conn.codomain), conn.offset
+                                )("__it")
+                            )
                         )
                     )(current_expr)
                 # `field(Off)`

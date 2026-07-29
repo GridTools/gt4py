@@ -476,7 +476,6 @@ name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
-# dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
