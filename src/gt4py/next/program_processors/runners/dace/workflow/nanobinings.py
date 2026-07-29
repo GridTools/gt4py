@@ -178,3 +178,88 @@ def convert_arg(arg: Any) -> Any:
     # we should avoid going through the previous isinstance checks for detecting a scalar.
     # E.g. functools.cache on the arg type, returning a function that does the conversion
     return arg
+
+
+##########################################################
+#   CODE GEN
+
+
+def write_convert_code(
+    update_function_name: str,
+    prog: ir.Program,
+    use_metrics: bool,
+    offset_provider: Mapping[str, Any],
+    back_end: str,
+    offset_provider_name: str = "offset_provider",
+) -> str:
+    back_end = back_end.lower()
+    assert back_end in ["gtfn", "dace"]
+
+    function_args: list[str] = []
+    unpack_variables: list[str] = []
+
+    def _unpack_tuple(arg_name: str, tuple_len: int) -> list[str]:
+        tuple_args = [f"{arg_name}_{i}" for i in range(tuple_len)]
+        unpack_variables.append(f"{', '.join(tuple_args)}, = {arg_name}")
+        return tuple_args
+
+    def _extract_arg(var_name: str, param_type: ts.TypeSpec) -> str:
+        if isinstance(param_type, ts.TupleType):
+            member_names = _unpack_tuple(var_name, len(param_type.types))
+            tuple_expand_code = "("
+            for member_name, tuple_arg_type in zip(member_names, param_type.types):
+                tuple_expand_code += _extract_arg(member_name, tuple_arg_type)
+            tuple_expand_code += ")"
+            return tuple_expand_code
+
+        elif isinstance(param_type, ts.FieldType):
+            if len(param_type.dims) == 0:
+                # GTFN wants a field, dace a scalar.
+                return f"{var_name}," if back_end == "gtfn" else f"{var_name}.as_scalar(), "
+            else:
+                # Full array, the differences is where the origin comes from.
+                origin_prop = "__gt_origin__" if back_end == "gtfn" else "__dace_origin__"
+                return f"({var_name}.ndarray, {var_name}.{origin_prop}), "
+        elif isinstance(param_type, ts.ScalarType):
+            if param_type.kind == ts.ScalarKind.BOOL:
+                return f"bool({var_name}), "
+            else:
+                return f"{var_name}, "
+        else:
+            raise ValueError(f"Parameter `{var_name}` had unexpected type `{param_type}`")
+
+    # Now make the arguments.
+    tuple_def_code = "("
+    for param in prog.params:
+        arg_name = f"_auto_expand_name_{param.id}"
+        function_args.append(arg_name)
+        assert param.type is not None  # To make mypy happy.
+        tuple_def_code += _extract_arg(var_name=arg_name, param_type=param.type)
+
+    # Followed by the offset tables, note that this assumes that the order is stable, because we do not check it.
+    function_args.append(offset_provider_name)
+    for table_name in offset_provider:
+        tuple_def_code += f"({offset_provider_name}[{table_name}].ndarray, (0, 0)), "
+
+    # This is currently different and should probably be unified somehow.
+    if back_end == "gtfn":
+        raise NotImplementedError("Implement me")
+    else:
+        if use_metrics:
+            function_args.extend(
+                [gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME]
+            )
+            tuple_def_code += f"{gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL}, {gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME}, "
+
+    tuple_def_code += ")"
+
+    # Now writing the code
+    code_lines: list[str] = []
+    code_lines.append(
+        "from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon"
+    )
+    code_lines.append(f"def {update_function_name}({', '.join(function_args)}):")
+    code_lines.extend("\t" + unpack_line for unpack_line in unpack_variables)
+    code_lines.append(f"\treturn {tuple_def_code}")
+
+    return "\n".join(code_lines)
