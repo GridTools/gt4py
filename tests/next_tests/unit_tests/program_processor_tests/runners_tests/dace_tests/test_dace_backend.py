@@ -303,12 +303,10 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     external_memory_allocator = _WorkspaceRecordingAllocator()
     workspace_requests = external_memory_allocator.requests
 
-    # FIXME(edopao, egparedes): Not clear why the SDFG is cached although the backends are different.
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=True,
         async_sdfg_call=False,
-        cached_translation=False,
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },
