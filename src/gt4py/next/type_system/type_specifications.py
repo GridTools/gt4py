@@ -74,9 +74,9 @@ class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-    # Key of the connectivity in the offset provider. `None` for Cartesian shifts, which are
-    # resolved from `source`/`target` alone and never looked up in the offset provider.
-    name: Optional[str] = None
+    #: `None` for the offsets synthesized from `Dim + idx` dimension arithmetic, which are
+    #: resolved from `source`/`target` alone rather than looked up in the offset provider.
+    name: Optional[common.Tag] = None
 
     def __str__(self) -> str:
         return f"Offset[{self.source}, {self.target}]"
