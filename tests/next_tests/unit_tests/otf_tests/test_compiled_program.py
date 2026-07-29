@@ -198,6 +198,29 @@ def deferred_runner(monkeypatch):
     return runner
 
 
+class _NoOpRunner:
+    """A runner whose artifacts load to a no-op callable, i.e. nothing is really compiled."""
+
+    class _Artifact:
+        def load(self):
+            return lambda *args, **kwargs: None
+
+    def submit(self, task):
+        future = concurrent.futures.Future()
+        future.set_result(self._Artifact())
+        return future
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
+
+
+@pytest.fixture
+def noop_runner(monkeypatch):
+    runner = _NoOpRunner()
+    monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
+    return runner
+
+
 def _formatted_traceback(error: BaseException) -> str:
     return "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
@@ -235,15 +258,32 @@ def test_dispatch_miss_propagates_compilation_error(testee_prog, deferred_runner
     assert "KeyError" not in _formatted_traceback(exc_info.value)
 
 
-def test_dispatch_miss_without_jit_does_not_show_key_error(testee_prog, deferred_runner):
+def test_dispatch_miss_without_jit_names_static_args(testee_prog, deferred_runner):
     testee = testee_prog.with_compilation_options(enable_jit=False).compile(
         cond=[True], offset_provider={}
     )
 
-    with pytest.raises(RuntimeError, match="No program compiled") as exc_info:
+    with pytest.raises(RuntimeError, match=r"No program compiled.*'prog': cond=False") as exc_info:
         testee(cond=False, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
     assert "KeyError" not in _formatted_traceback(exc_info.value)
+
+
+def test_dispatch_miss_without_jit_names_static_domain(testee_prog, noop_runner):
+    testee = testee_prog.with_compilation_options(static_domains=True, enable_jit=True)
+    testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+
+    object.__setattr__(testee.compilation_options, "enable_jit", False)
+
+    with pytest.raises(RuntimeError, match=r"'prog': \(out\)\.domain=Domain"):
+        testee(cond=True, out=gtx.zeros(domain={TDim: 2}, dtype=bool), offset_provider={})
+
+
+def test_dispatch_miss_without_argument_descriptors(testee_prog):
+    testee = testee_prog.with_compilation_options(enable_jit=False)
+
+    with pytest.raises(RuntimeError, match=r"arguments of 'prog'\. Note that"):
+        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
 
 def _verify_program_has_expected_domain(
