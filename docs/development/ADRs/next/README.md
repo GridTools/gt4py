@@ -29,7 +29,7 @@ Writing a new ADR is simple:
 
 ### Type System
 
-- [0024 - Dtype-Generic Operators](0024-Dtype-Generic-Operators.md)
+- [0027 - Dtype-Generic Operators](0027-Dtype-Generic-Operators.md)
 
 ### Iterator IR #iterator
 
