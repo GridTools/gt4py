@@ -110,20 +110,21 @@ def _make_user_args(
             #  with GTFN. Also important, in that case we will add the symbol back, because we
             #  have to refer to it.
             origins: list[str] = []
+            found_needed_symbol = False
             for dim in param_type.dims:
                 rstart = str(gtx_dace_args.range_start_symbol(param_name, dim))
                 if rstart in sdfg_arglist:
                     assert rstart in sdfg.symbols
                     assert rstart not in sdfg.arrays
                     origins.append(rstart)
+                    found_needed_symbol = True
                 else:
                     # For certain reason the dimension parameter is not needed and thus not
                     #  included. For compatibility with GTFN we have to provide it, but ignore it.
-                    assert rstart not in sdfg.symbols
-                    assert rstart not in sdfg.arrays
+                    #  Note that it could still be inside the symbols table.
                     origins.append("")
 
-            return (param_name, tuple(origins))
+            return (param_name, tuple(origins) if found_needed_symbol else "")
 
     elif isinstance(param_type, ts.ScalarType):
         # A scalar name, so simply return the name of the parameter.
