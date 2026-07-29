@@ -41,6 +41,8 @@ def convert_args(
         gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME in fun.sdfg_program.sdfg.arrays
     )
 
+    process_fun = fun.update_sdfg_ctype_arglist
+
     def decorated_program(
         *args: Any,
         offset_provider: gtx_common.OffsetProvider,
@@ -64,7 +66,7 @@ def convert_args(
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
             }
             fun.sdfg_program(**this_call_args)
-        else:
+        elif False:
             # Almost GTFN compatible, the only reason why not are one dimensional arrays.
             args = gtx_dace_nano.convert_arg(args)
 
@@ -78,6 +80,11 @@ def convert_args(
                 args = (*args, metrics.get_current_level(), collect_time_arg)
 
             fun.sdfg_program.user_bind_call(*args)
+        else:
+            proc_arc = process_fun(  # type: ignore[call-arg]
+                *args, offset_provider, metrics.get_current_level(), collect_time_arg
+            )
+            fun.sdfg_program.user_bind_call(*proc_arc)
 
         if collect_time:
             metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())

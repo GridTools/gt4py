@@ -174,7 +174,7 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code[1])
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
@@ -217,7 +217,7 @@ class DaCeCompiler(
         return DaCeCompilationArtifact(
             sdfg_build_folder=sdfg_build_folder,
             library_path=library_path,
-            sdfg_json=json.dumps(inp.program_source.source_code),
+            sdfg_json=json.dumps(inp.program_source.source_code[1]),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,

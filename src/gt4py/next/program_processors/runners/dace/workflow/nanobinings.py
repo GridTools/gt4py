@@ -209,7 +209,7 @@ def write_convert_code(
             tuple_expand_code = "("
             for member_name, tuple_arg_type in zip(member_names, param_type.types):
                 tuple_expand_code += _extract_arg(member_name, tuple_arg_type)
-            tuple_expand_code += ")"
+            tuple_expand_code += "), "
             return tuple_expand_code
 
         elif isinstance(param_type, ts.FieldType):

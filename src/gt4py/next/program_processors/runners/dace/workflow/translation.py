@@ -27,6 +27,7 @@ from gt4py.next.program_processors.runners.dace import (
 )
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
+    factory as gtx_wfdfactory,
     nanobinings as gtx_dace_nano,
 )
 from gt4py.next.type_system import type_specifications as ts
@@ -455,11 +456,19 @@ class DaCeTranslator(
             inp.args.column_axis,
         )
 
-        arg_types = inp.args.args
-
         program_parameters = tuple(
             interface.Parameter(param.id, arg_type)
-            for param, arg_type in zip(program.params, arg_types)
+            for param, arg_type in zip(program.params, inp.args.args)
+        )
+
+        # NOTE: This is horrible wrong.
+        binding_code = gtx_dace_nano.write_convert_code(
+            update_function_name=gtx_wfdfactory._GT_DACE_BINDING_FUNCTION_NAME,
+            prog=program,
+            use_metrics=self.use_metrics,
+            offset_provider=inp.args.offset_provider,
+            back_end="dace",
+            offset_provider_name="offset_provider",
         )
 
         module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
@@ -471,7 +480,8 @@ class DaCeTranslator(
             #   `SDFG.from_json()` assigns fresh ids anyway. Keeping it would make the compile
             #   cache key depend on element creation order, so two structurally identical
             #   lowerings of the same program would not share a cached build.
-            source_code=_drop_element_ids(sdfg.to_json(hash=True)),
+            # NOTE: `source_code` should be a string, but it was never one, so we do not care.
+            source_code=(binding_code, _drop_element_ids(sdfg.to_json(hash=True))),  # type: ignore[arg-type]
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )
