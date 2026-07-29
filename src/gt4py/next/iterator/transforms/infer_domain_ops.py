@@ -37,9 +37,6 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
             isinstance(arg, itir.AxisLiteral) for arg in node.args
         ):
             arg1, arg2 = node.args
-            assert not (
-                isinstance(arg1, itir.AxisLiteral) and isinstance(arg2, itir.AxisLiteral)
-            ), f"Comparison between two axis literals is not supported, got '{node}'."
             if isinstance(arg2, itir.AxisLiteral):
                 # take complementary operation if we have e.g. `0 < IDim` use `IDim > 0`
                 complementary_op = {

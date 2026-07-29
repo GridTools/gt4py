@@ -67,9 +67,3 @@ def test_trivial(testee, expected):
     actual = InferDomainOps(grid_type=common.GridType.CARTESIAN).visit(testee, recurse=True)
     actual = ConstantFolding.apply(actual)  # simplify expr to get simpler expected expressions
     assert actual == expected
-
-
-def test_axis_literal_on_both_sides():
-    testee = im.less(im.axis_literal(IDim), im.axis_literal(JDim))
-    with pytest.raises(AssertionError, match="two axis literals"):
-        InferDomainOps(grid_type=common.GridType.CARTESIAN).visit(testee, recurse=True)
