@@ -53,6 +53,7 @@ Writing a new ADR is simple:
 - [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
 - [0027 - External Workspace Memory for DaCe Transients](0027-External_Workspace_Memory.md)
 - [0028 - Plain Builders Instead of factory-boy Factories](0028-Plain-Builders-Instead-of-Factories.md)
+- [0029 - Toolchain Naming and Pipeline Simplification](0029-Toolchain-Naming-and-Pipeline-Simplification.md)
 
 ### Python Integration
 

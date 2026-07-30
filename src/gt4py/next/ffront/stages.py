@@ -79,7 +79,7 @@ class DSLFieldOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLFieldOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = workflow.ProgramWithArgs[
     DSLFieldOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -93,7 +93,7 @@ class FOASTOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteFOASTOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
+ConcreteFOASTOperatorDef: typing.TypeAlias = workflow.ProgramWithArgs[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -105,7 +105,7 @@ class DSLProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
+ConcreteDSLProgramDef: typing.TypeAlias = workflow.ProgramWithArgs[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -118,7 +118,7 @@ class PASTProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcretePASTProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
+ConcretePASTProgramDef: typing.TypeAlias = workflow.ProgramWithArgs[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 

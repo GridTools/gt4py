@@ -109,7 +109,7 @@ def make_dace_compile_workflow(
     translation_step: stages.TranslationStep
     if cached_translation:
         translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
+            stages.CompilableProgram, artifacts.ProgramSource, str
         ].persistent(
             bare_translation,
             input_fingerprinter=fingerprinting.strict_fingerprinter,

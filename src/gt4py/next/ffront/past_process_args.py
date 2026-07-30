@@ -22,10 +22,10 @@ def transform_program_args(
     inp: ffront_stages.ConcretePASTProgramDef,
 ) -> ffront_stages.ConcretePASTProgramDef:
     rewritten_args, rewritten_kwargs = _process_args(
-        past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
+        past_node=inp.definition.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
-    return workflow.ConcreteArtifact(
-        data=inp.data,
+    return workflow.ProgramWithArgs(
+        definition=inp.definition,
         args=arguments.CompileTimeArgs(
             args=rewritten_args,
             kwargs=rewritten_kwargs,
