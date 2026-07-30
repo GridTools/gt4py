@@ -149,13 +149,13 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgram:
 
 def past_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[ConcretePASTProgramDef, stages.CompilableProgram]:
-    wf = workflow.make_step(past_to_gtir)
+) -> workflow.Step[ConcretePASTProgramDef, stages.CompilableProgram]:
+    """Return the `past_to_gtir` step, in-memory cached unless `cached` is unset."""
     if cached:
-        wf = workflow.CachedStep.in_memory(
-            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        return workflow.CachedStep.in_memory(
+            past_to_gtir, input_fingerprinter=ffront_stages.semantic_fingerprinter
         )
-    return wf
+    return past_to_gtir
 
 
 def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:

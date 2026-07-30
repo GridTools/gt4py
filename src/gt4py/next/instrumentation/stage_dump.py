@@ -25,7 +25,7 @@ Two limitations of the current implementation:
   environment, before it receives the parent's configuration. A programmatic
   `config.DUMP_STAGES = ...; enable()` therefore only dumps the frontend stages;
   `enable` warns about it.
-- Monolithic backends (e.g. `roundtrip`) have no `OTFCompileWorkflow` and
+- Monolithic backends (e.g. `roundtrip`) have no `CompilePipeline` and
   execute in a single unnamed step, so only their frontend stages are dumped.
 """
 

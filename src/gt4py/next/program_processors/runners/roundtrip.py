@@ -27,7 +27,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import artifacts, stages, workflow
+from gt4py.next.otf import artifacts, stages
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -254,7 +254,7 @@ class RoundtripArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.CompilableProgram, RoundtripArtifact]):
+class Roundtrip:
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Toolchain] = None
@@ -317,10 +317,10 @@ gtir = next_backend.Toolchain(
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     frontend=next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_gtir_factory(),
-        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        foast_to_itir=foast_to_gtir.foast_to_gtir_factory(cached=True),
         field_view_op_to_prog=foast_to_past.operator_to_program_factory(
-            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory()
+            foast_to_itir_step=foast_to_gtir.foast_to_gtir_factory()
         ),
     ),
 )
-foast_to_gtir_step = foast_to_gtir.adapted_foast_to_gtir_factory(cached=True)
+foast_to_gtir_step = foast_to_gtir.foast_to_gtir_factory(cached=True)

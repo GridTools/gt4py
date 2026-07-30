@@ -12,7 +12,6 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
@@ -24,15 +23,14 @@ from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conft
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
-    build_the_program = workflow.make_step(nanobind.ExtensionGenerator()).chain(
-        compiler.CPPCompiler(
-            cache_lifetime=config.BuildCacheLifetime.SESSION,
-            builder_factory=cmake.CMakeFactory(),
-            device_type=core_defs.DeviceType.CPU,
-            fingerprint_builder_factory=False,
-        )
+    generate_bindings = nanobind.ExtensionGenerator()
+    compile_extension = compiler.CPPCompiler(
+        cache_lifetime=config.BuildCacheLifetime.SESSION,
+        builder_factory=cmake.CMakeFactory(),
+        device_type=core_defs.DeviceType.CPU,
+        fingerprint_builder_factory=False,
     )
-    compiled_program = build_the_program(example_program_source).load()
+    compiled_program = compile_extension(generate_bindings(example_program_source)).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
@@ -45,14 +43,13 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
 
 def test_gtfn_cpp_with_compiledb(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
-    build_the_program = workflow.make_step(nanobind.ExtensionGenerator()).chain(
-        compiler.CPPCompiler(
-            cache_lifetime=config.BuildCacheLifetime.SESSION,
-            builder_factory=compiledb.CompiledbFactory(),
-            device_type=core_defs.DeviceType.CPU,
-        )
+    generate_bindings = nanobind.ExtensionGenerator()
+    compile_extension = compiler.CPPCompiler(
+        cache_lifetime=config.BuildCacheLifetime.SESSION,
+        builder_factory=compiledb.CompiledbFactory(),
+        device_type=core_defs.DeviceType.CPU,
     )
-    compiled_program = build_the_program(example_program_source).load()
+    compiled_program = compile_extension(generate_bindings(example_program_source)).load()
     buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
     tup = [
         (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),

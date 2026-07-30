@@ -18,7 +18,7 @@ from gt4py._core import filecache
 from gt4py.next import backend as next_backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -130,7 +130,7 @@ def make_gtfn_compile_workflow(
     unstructured_horizontal_has_unit_stride: bool | None = None,
     builder_factory: compiler.BuildSystemProjectGenerator | None = None,
     translation: gtfn_module.GTFNTranslationStep | None = None,
-) -> recipes.OTFCompileWorkflow:
+) -> next_backend.CompilePipeline:
     """
     Build the GTFN translation -> bindings -> compilation workflow.
 
@@ -187,13 +187,9 @@ def make_gtfn_compile_workflow(
     else:
         translation_step = bare_translation
 
-    return recipes.OTFCompileWorkflow(
+    return next_backend.CompilePipeline(
         translation=translation_step,
-        # `OTFCompileWorkflow` is not parameterized over the code spec, so its
-        # `bindings` field is typed for `ProgramSource[Any]` while
-        # `ExtensionGenerator` accepts only C++-like specs. Parameterizing the
-        # pipeline is the real fix and belongs with the pipeline rework.
-        bindings=nanobind.ExtensionGenerator(  # type: ignore[arg-type] # see comment above
+        bindings=nanobind.ExtensionGenerator(
             unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride
         ),
         compilation=GTFNCompiler(
@@ -209,8 +205,7 @@ def make_gtfn_backend(
     gpu: bool = False,
     name_postfix: str = "",
     translation: gtfn_module.GTFNTranslationStep | None = None,
-    backend: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
-    | None = None,
+    backend: workflow.Step[stages.CompilableProgram, artifacts.CompilationArtifact] | None = None,
 ) -> next_backend.Toolchain:
     """
     Build a GTFN toolchain for the given device.
