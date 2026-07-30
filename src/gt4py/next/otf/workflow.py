@@ -36,7 +36,7 @@ ArgsT = TypeVar("ArgsT")
 
 
 @dataclasses.dataclass
-class ConcreteArtifact(Generic[DefT, ArgsT]):
+class ProgramWithArgs(Generic[DefT, ArgsT]):
     """Pair of a program definition in any stage with the arguments it is compiled for.
 
     This is the envelope threaded through the definition-transforming half of
@@ -45,7 +45,7 @@ class ConcreteArtifact(Generic[DefT, ArgsT]):
     DSL-aware stage definitions in `otf.stages` import `ffront.stages`.
     """
 
-    data: DefT
+    definition: DefT
     args: ArgsT
 
 

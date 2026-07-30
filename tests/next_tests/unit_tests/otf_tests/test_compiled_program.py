@@ -90,8 +90,8 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works(testee_prog):
-    input_pair = workflow.ConcreteArtifact(
-        data=testee_prog.definition_stage,
+    input_pair = workflow.ProgramWithArgs(
+        definition=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
             kwargs={},
@@ -103,7 +103,7 @@ def test_inlining_of_scalars_works(testee_prog):
         ),
     )
 
-    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).definition
     _verify_program_has_expected_true_value(transformed)
 
 
@@ -123,14 +123,14 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         def load(self):
             return lambda *args, **kwargs: None
 
-    def pirate(program: workflow.ConcreteArtifact):
+    def pirate(program: workflow.ProgramWithArgs):
         # Replaces the gtfn otf_workflow: steals the compilable program, then
         # returns a dummy artifact whose materialization is a no-op callable.
         nonlocal hijacked_program
         hijacked_program = program
         return _NoOpArtifact()
 
-    hacked_gtfn_backend = gtfn.make_gtfn_backend(name_postfix="_custom", executor=pirate)
+    hacked_gtfn_backend = gtfn.make_gtfn_backend(name_postfix="_custom", backend=pirate)
 
     testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
     testee(
@@ -139,7 +139,7 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         offset_provider={},
     )
 
-    _verify_program_has_expected_true_value(hijacked_program.data)
+    _verify_program_has_expected_true_value(hijacked_program.definition)
 
 
 def test_different_static_args_work_after_backend_change(testee_prog):
@@ -298,8 +298,8 @@ def _verify_program_has_expected_domain(
 
 def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
-    input_pair = workflow.ConcreteArtifact(
-        data=testee_prog.definition_stage,
+    input_pair = workflow.ProgramWithArgs(
+        definition=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
             kwargs={},
@@ -311,7 +311,7 @@ def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPoo
         ),
     )
 
-    transformed = backend.DEFAULT_TRANSFORMS(input_pair).data
+    transformed = backend.DEFAULT_TRANSFORMS(input_pair).definition
     _verify_program_has_expected_domain(transformed, domain, uids)
 
 
