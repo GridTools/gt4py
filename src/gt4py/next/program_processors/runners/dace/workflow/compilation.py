@@ -22,7 +22,7 @@ import dace.codegen.compiler as dace_compiler
 from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
-from gt4py.next.otf import artifacts, workflow
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -267,16 +267,7 @@ class DaCeCompilationArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeCompiler(
-    workflow.ChainableWorkflowMixin[
-        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
-        DaCeCompilationArtifact,
-    ],
-    workflow.ReplaceEnabledWorkflowMixin[
-        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
-        DaCeCompilationArtifact,
-    ],
-):
+class DaCeCompiler:
     """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
     bind_func_name: str

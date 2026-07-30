@@ -36,13 +36,8 @@ from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.ffront.stages import (
-    ConcreteDSLFieldOperatorDef,
-    ConcreteFOASTOperatorDef,
-    DSLFieldOperatorDef,
-    FOASTOperatorDef,
-)
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.ffront.stages import DSLFieldOperatorDef, FOASTOperatorDef
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -100,21 +95,13 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
 
 def func_to_foast_factory(
     cached: bool = True,
-) -> workflow.Workflow[DSLFieldOperatorDef, FOASTOperatorDef]:
-    """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
-    wf = workflow.make_step(func_to_foast)
+) -> workflow.Step[DSLFieldOperatorDef, FOASTOperatorDef]:
+    """Return the `func_to_foast` step, in-memory cached unless `cached` is unset."""
     if cached:
-        wf = workflow.CachedStep.in_memory(
-            step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        return workflow.CachedStep.in_memory(
+            step=func_to_foast, input_fingerprinter=ffront_stages.semantic_fingerprinter
         )
-    return wf
-
-
-def adapted_func_to_foast_factory(
-    **kwargs: Any,
-) -> workflow.Workflow[ConcreteDSLFieldOperatorDef, ConcreteFOASTOperatorDef]:
-    """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
-    return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
+    return func_to_foast
 
 
 def _returned_value_location(foast_node: foast.FunctionDefinition) -> eve.SourceLocation:
