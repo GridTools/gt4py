@@ -23,15 +23,20 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeBackend(backend.Backend[Any]):
-    """DaCe backend with support for injecting an external workspace at load time."""
+class DaCeLoadingStep:
+    """
+    Loading step that injects an external workspace into the loaded program.
+
+    The workspace is owned by the caller, not by the toolchain; it is installed
+    onto the program wrapper before its first call, so that it is used when the
+    SDFG argument vector is constructed.
+    """
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
 
-    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
-        program = super().load_artifact(artifact)
+    def __call__(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
+        program = artifacts.load_artifact(artifact)
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
-        # Inject the backend-level workspace so it is used when arguments are constructed.
         program.set_external_workspace(self.external_workspace or {})
         return program
 
@@ -52,7 +57,7 @@ def make_dace_toolchain(
         [gtx_wfdfactory.DaCeConfig],
         workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact],
     ] = gtx_wfdfactory.make_dace_compiler,
-) -> DaCeBackend:
+) -> backend.Toolchain:
     """
     Build a DaCe toolchain.
 
@@ -74,14 +79,14 @@ def make_dace_toolchain(
     if cfg is None:
         cfg = gtx_wfdfactory.DaCeConfig()
 
-    return DaCeBackend(
+    return backend.Toolchain(
         name=f"run_dace_{cfg.device_name}{'_opt' if cfg.auto_optimize else ''}{name_postfix}",
-        executor=gtx_wfdfactory.make_dace_compile_workflow(
+        backend=gtx_wfdfactory.make_dace_compile_workflow(
             cfg, translation=translation, bindings=bindings, compilation=compilation
         ),
         allocator=cfg.make_allocator(),
-        transforms=backend.DEFAULT_TRANSFORMS,
-        external_workspace=cfg.external_workspace,
+        frontend=backend.DEFAULT_TRANSFORMS,
+        loading=DaCeLoadingStep(cfg.external_workspace),
     )
 
 
@@ -95,7 +100,7 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> DaCeBackend:
+) -> backend.Toolchain:
     """Customize the dace backend with the given configuration parameters.
 
     A flat-keyword front end for `make_dace_toolchain`, kept for existing
