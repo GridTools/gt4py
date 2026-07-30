@@ -119,10 +119,12 @@ def uncached_dace_cpu():
     The cache stores the optimized SDFG, so a second run of these tests would replay
     it and never call the transformation.
     """
-    executor = gtx_dace.run_dace_cpu.executor
+    compile_pipeline = gtx_dace.run_dace_cpu.backend
     return dataclasses.replace(
         gtx_dace.run_dace_cpu,
-        executor=dataclasses.replace(executor, translation=executor.translation.step),
+        backend=dataclasses.replace(
+            compile_pipeline, translation=compile_pipeline.translation.step
+        ),
     )
 
 

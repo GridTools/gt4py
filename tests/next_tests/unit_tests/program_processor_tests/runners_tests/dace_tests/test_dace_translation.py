@@ -425,7 +425,7 @@ def test_generate_sdfg_async_call_multi_state(
         assert not _are_streams_synchronized(sdfg)
 
 
-def _make_simple_field_operator_compilable_program() -> otf_workflow.ConcreteArtifact:
+def _make_simple_field_operator_compilable_program() -> otf_workflow.ProgramWithArgs:
     """Return a compilable program wrapping a minimal GTIR field operator."""
     ir = itir.Program(
         id="simple_field_operator",
@@ -443,8 +443,8 @@ def _make_simple_field_operator_compilable_program() -> otf_workflow.ConcreteArt
             ),
         ],
     )
-    return otf_workflow.ConcreteArtifact(
-        data=ir,
+    return otf_workflow.ProgramWithArgs(
+        definition=ir,
         args=otf_arguments.CompileTimeArgs(
             args=tuple(param.type for param in ir.params),
             kwargs={},
