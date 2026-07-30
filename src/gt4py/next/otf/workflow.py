@@ -20,6 +20,7 @@ from typing_extensions import Self
 from gt4py._core import definitions as core_defs, filecache
 from gt4py.eve.extended_typing import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
+from gt4py.next.instrumentation import hook_machinery
 
 
 StartT = TypeVar("StartT")
@@ -51,6 +52,28 @@ class ProgramWithArgs(Generic[DefT, ArgsT]):
 
     definition: DefT
     args: ArgsT
+
+
+@hook_machinery.event_hook
+def stage_hook(name: str, artifact: Any) -> None:
+    """
+    Event hook emitted when a named pipeline step produces an artifact.
+
+    It is emitted by the named step pipelines after each executed step, and by
+    `Toolchain.translate` for the translation step it runs directly. The step
+    names of the standard pipelines (`func_to_past`, `past_to_itir`,
+    `translation`, `bindings`, `compilation`, ...) are therefore observable.
+
+    A subscriber must declare its parameters with exactly these names, `name`
+    and `artifact`: the hook machinery validates the signature on registration
+    and rejects a mismatch.
+
+    Args:
+        name: Name of the step that just ran (its field name in the pipeline
+            dataclass, e.g. `past_to_itir` or `translation`).
+        artifact: The artifact returned by the step. It is passed through
+            opaquely and unformatted; subscribers decide how to inspect it.
+    """
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:
@@ -161,6 +184,7 @@ class NamedStepSequence(
         step_result: Any = inp
         for step_name in self.step_order:
             step_result = getattr(self, step_name)(step_result)
+            stage_hook(step_name, step_result)
         return step_result
 
     @functools.cached_property
@@ -192,6 +216,7 @@ class MultiWorkflow(
         step_result: Any = inp
         for step_name in self.step_order(inp):
             step_result = getattr(self, step_name)(step_result)
+            stage_hook(step_name, step_result)
         return step_result
 
     @abc.abstractmethod
@@ -395,3 +420,13 @@ def check_device_agreement(step: Any, device_type: core_defs.DeviceType, what: s
             f" with 'device_type=DeviceType.{device_type.name}' or leave it out to get"
             " the default."
         )
+
+
+if config.DUMP_STAGES is not None:
+    # Register the `GT4PY_DUMP_STAGES` subscriber so plain program runs dump their
+    # stage artifacts without any user code. Registering directly (instead of
+    # calling `stage_dump.enable()`) avoids re-importing this module while it is
+    # still being initialized.
+    from gt4py.next.instrumentation import stage_dump as _stage_dump
+
+    stage_hook.register(_stage_dump.dump_stage, name=_stage_dump.SUBSCRIBER_NAME)
