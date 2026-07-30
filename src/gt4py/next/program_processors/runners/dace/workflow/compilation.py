@@ -169,6 +169,13 @@ class DaCeCompilationArtifact:
     (``get_program_handle``) needs an SDFG instance to wrap into the
     returned ``CompiledSDFG``, and the build folder may not contain a
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+
+    The SDFG we store here is the one on which we called `SDFG.compile(return_program_handle=False)`.
+    Note that the `compile()` call has side effects, because it applies transformations
+    to the SDFG, in order to enable code generation for the target platform.
+    Since we pass `return_program_handle=False`, the `compile()` method does not
+    return a `CompiledSDFG` instance, therefore we cannot access `CompiledSDFG.sdfg`,
+    which would be the modified SDFG from which DaCe generates the C++/CUDA/HIP code.
     """
 
     library_path: pathlib.Path
