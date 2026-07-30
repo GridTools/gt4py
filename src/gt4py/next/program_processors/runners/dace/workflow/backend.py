@@ -17,7 +17,7 @@ import factory
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -32,7 +32,7 @@ class DaCeBackend(backend.Backend[Any]):
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
 
-    def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
+    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
         program = super().load_artifact(artifact)
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
         # Inject the backend-level workspace so it is used when arguments are constructed.

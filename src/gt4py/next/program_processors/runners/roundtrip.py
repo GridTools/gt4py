@@ -27,7 +27,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import definitions, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -225,7 +225,7 @@ class RoundtripArtifact:
     dispatch_backend: next_backend.Backend | None
     debug: bool
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         mod = _load_module(self.source_code, self.debug)
         fencil = getattr(mod, self.entry_point_name)
         captured_column_axis = self.column_axis
@@ -254,13 +254,13 @@ class RoundtripArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, RoundtripArtifact]):
+class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact]):
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: definitions.CompilableProgramDef) -> RoundtripArtifact:
+    def __call__(self, inp: stages.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
         source_code, entry_point_name = _generate_source(

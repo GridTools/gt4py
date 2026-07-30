@@ -13,7 +13,7 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -223,9 +223,9 @@ def _parse_gt_connectivities(
 
 
 def _create_sdfg_bindings(
-    program_source: stages.ProgramSource[code_specs.SDFGCodeSpec],
+    program_source: artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
+) -> artifacts.BindingSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
     to the SDFG calling convention.
@@ -282,19 +282,19 @@ def _create_sdfg_bindings(
         # arrays as well in SDFG fastcall.
         _parse_gt_connectivities(code, sdfg_arglist)
 
-    return stages.BindingSource(code.text, library_deps=tuple())
+    return artifacts.BindingSource(code.text, library_deps=tuple())
 
 
 def bind_sdfg(
-    inp: stages.ProgramSource[code_specs.SDFGCodeSpec],
+    inp: artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
+) -> artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
     Refer to `_create_sdfg_bindings` documentation.
     """
-    return stages.ExtensionSource(
+    return artifacts.ExtensionSource(
         program_source=inp,
         binding_source=_create_sdfg_bindings(inp, bind_func_name),
     )

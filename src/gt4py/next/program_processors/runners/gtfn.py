@@ -16,10 +16,10 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils
+from gt4py.next import backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import recipes, stages, workflow
+from gt4py.next.otf import artifacts, recipes, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -45,8 +45,8 @@ def convert_arg(arg: Any) -> Any:
 
 
 def convert_args(
-    inp: stages.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
-) -> stages.ExecutableProgram:
+    inp: artifacts.ExecutableProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> artifacts.ExecutableProgram:
     def decorated_program(
         *args: Any,
         offset_provider: dict[str, common.OffsetProviderElem],
@@ -106,7 +106,7 @@ def extract_connectivity_args(
 
 @dataclasses.dataclass(frozen=True)
 class GTFNCompilationArtifact(compiler.CPPCompilationArtifact):
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         return convert_args(super().load(), device=self.device_type)
 
 
@@ -148,7 +148,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
             translation=factory.LazyAttribute(
                 lambda o: workflow.CachedStep.persistent(
                     o.bare_translation,
-                    input_fingerprinter=stages.compilable_program_fingerprinter,
+                    input_fingerprinter=fingerprinting.strict_fingerprinter,
                     cache=filecache.FileCache(
                         cache.get_translation_cache_folder(
                             cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "gtfn"
@@ -164,7 +164,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource] = (
+    bindings: workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource] = (
         factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: nanobind.ExtensionGenerator(
                 unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
