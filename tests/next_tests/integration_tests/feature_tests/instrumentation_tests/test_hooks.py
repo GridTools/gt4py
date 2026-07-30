@@ -15,8 +15,9 @@ from typing import Any
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common, Dims, gtfn_cpu, typing as gtx_typing
+from gt4py.next import common, config, Dims, gtfn_cpu, typing as gtx_typing
 from gt4py.next.instrumentation import gpu_profiler, hooks
+from gt4py.next.otf import runners
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
@@ -241,3 +242,42 @@ def test_compile_variant_hook(backend: gtx_typing.Toolchain):
     assert hook_call_info["program_definition"] == prog.definition_stage
     assert hook_call_info["backend"] == backend.name
     assert hook_call_info["argument_descriptors"] == {"StaticArg": ["cond"]}
+
+
+@pytest.mark.parametrize(
+    "backend", [b for b in BACKENDS if b is not None], ids=lambda b: getattr(b, "name", str(b))
+)
+def test_stage_hook(backend: gtx_typing.Toolchain, monkeypatch):
+    emitted: list[tuple[str, str]] = []
+
+    def stage_callback(name: str, artifact: Any) -> None:
+        emitted.append((name, type(artifact).__name__))
+
+    # Compile in the calling thread, so the compile pipeline runs in this process
+    # (and therefore emits into this process' hook registry).
+    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL)
+    runners.reset_default_runner()
+    try:
+        hooks.stage_hook.register(stage_callback)
+        try:
+            prog.with_backend(backend).compile(cond=[True], offset_provider={})
+        finally:
+            hooks.stage_hook.remove(stage_callback)
+
+        assert [name for name, _ in emitted] == [
+            "func_to_past",
+            "past_lint",
+            "field_view_prog_args_transform",
+            "past_to_itir",
+            "translation",
+            "bindings",
+            "compilation",
+        ]
+        assert ("translation", "ProgramSource") in emitted
+
+        # After removing the subscriber nothing is emitted anymore.
+        emitted.clear()
+        prog.with_backend(backend).compile(cond=[False], offset_provider={})
+        assert emitted == []
+    finally:
+        runners.reset_default_runner()
