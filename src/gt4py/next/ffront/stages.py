@@ -29,7 +29,7 @@ from typing import Any, Optional, TypeVar
 
 from gt4py.next import common, fingerprinting
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
-from gt4py.next.otf import arguments, toolchain
+from gt4py.next.otf import arguments, workflow
 
 
 @dataclasses.dataclass(frozen=True)
@@ -79,7 +79,7 @@ class DSLFieldOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
     DSLFieldOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -93,7 +93,7 @@ class FOASTOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteFOASTOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -105,7 +105,7 @@ class DSLProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteDSLProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -118,7 +118,7 @@ class PASTProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcretePASTProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 

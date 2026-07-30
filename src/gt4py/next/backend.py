@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, definitions, stages, toolchain, workflow
+from gt4py.next.otf import arguments, artifacts, stages, toolchain, workflow
 
 
 def jit_to_aot_args(
@@ -34,8 +34,8 @@ def jit_to_aot_args(
 
 
 def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.JITArgs],
-    definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.CompileTimeArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
@@ -44,8 +44,8 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 @dataclasses.dataclass(frozen=True)
 class Transforms(
     workflow.MultiWorkflow[
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, definitions.ArgsDefinitionT],
-        definitions.CompilableProgramDef,
+        stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
+        stages.CompilableProgramDef,
     ]
 ):
     """
@@ -63,8 +63,8 @@ class Transforms(
     """
 
     aotify_args: workflow.Workflow[
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.JITArgs],
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.CompileTimeArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
     ] = dataclasses.field(default_factory=adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[
@@ -92,10 +92,10 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, definitions.CompilableProgramDef
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
-    def step_order(self, inp: definitions.ConcreteProgramDef) -> list[str]:
+    def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
@@ -147,19 +147,19 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
+    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[definitions.ConcreteProgramDef, definitions.CompilableProgramDef]
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
 
     def compile(
-        self, program: definitions.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
-    ) -> stages.ExecutableProgram:
+        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+    ) -> artifacts.ExecutableProgram:
         artifact = self.executor(
-            self.transforms(definitions.ConcreteProgramDef(data=program, args=compile_time_args))
+            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
         )
         return self.load_artifact(artifact)
 
-    def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
+    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
         """Load an artifact into an executable program.
 
         Backends may override this method to inject backend-specific runtime data

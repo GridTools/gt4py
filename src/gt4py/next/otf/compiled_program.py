@@ -32,7 +32,7 @@ from gt4py.next.ffront import (
     type_translation,
 )
 from gt4py.next.instrumentation import hook_machinery, metrics
-from gt4py.next.otf import arguments, compilation_tasks, runners, stages
+from gt4py.next.otf import arguments, artifacts, compilation_tasks, runners
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
 
@@ -157,7 +157,7 @@ def compiled_program_call_context(
 # In-flight compilations (future -> "program (backend)" label). Weak keys: a
 # future disappears here once its pool consumed or dropped it.
 _ongoing_compilations: weakref.WeakKeyDictionary[
-    concurrent.futures.Future[stages.CompilationArtifact], str
+    concurrent.futures.Future[artifacts.CompilationArtifact], str
 ] = weakref.WeakKeyDictionary()
 
 
@@ -360,12 +360,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
     # store for the compiled programs
-    compiled_programs: dict[CompiledProgramsKey, stages.ExecutableProgram] = dataclasses.field(
+    compiled_programs: dict[CompiledProgramsKey, artifacts.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
     )
 
     _compilation_jobs: dict[
-        CompiledProgramsKey, concurrent.futures.Future[stages.CompilationArtifact]
+        CompiledProgramsKey, concurrent.futures.Future[artifacts.CompilationArtifact]
     ] = dataclasses.field(default_factory=dict, init=False)
 
     @functools.cached_property
@@ -487,8 +487,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         )
 
     def _load_artifact(
-        self, artifact_future: concurrent.futures.Future[stages.CompilationArtifact]
-    ) -> stages.ExecutableProgram:
+        self, artifact_future: concurrent.futures.Future[artifacts.CompilationArtifact]
+    ) -> artifacts.ExecutableProgram:
         artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
             return self.backend.load_artifact(artifact)

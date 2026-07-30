@@ -28,7 +28,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import compilation as dace_wf_compilation
@@ -53,17 +53,17 @@ def _make_compilable_sdfg(name: str) -> dace.SDFG:
     return sdfg
 
 
-def _make_input(name: str) -> stages.ExtensionSource:
+def _make_input(name: str) -> artifacts.ExtensionSource:
     sdfg = _make_compilable_sdfg(name)
-    program_source = stages.ProgramSource(
+    program_source = artifacts.ProgramSource(
         entry_point=interface.Function(name=sdfg.name, parameters=()),
         source_code=sdfg.to_json(),
         library_deps=(),
-        code_spec=code_specs.SDFGCodeSpec(),
+        code_spec=artifacts.SDFGCodeSpec(),
     )
-    return stages.ExtensionSource(
+    return artifacts.ExtensionSource(
         program_source=program_source,
-        binding_source=stages.BindingSource(
+        binding_source=artifacts.BindingSource(
             source_code="def bind(*args, **kwargs):\n    return None\n",
             library_deps=(),
         ),
@@ -80,7 +80,7 @@ def _compiler() -> dace_wf_compilation.DaCeCompiler:
 
 
 def _build_folder(
-    comp: dace_wf_compilation.DaCeCompiler, inp: stages.ExtensionSource
+    comp: dace_wf_compilation.DaCeCompiler, inp: artifacts.ExtensionSource
 ) -> pathlib.Path:
     return gtx_cache.get_cache_folder(
         inp,
@@ -92,7 +92,7 @@ def _build_folder(
 @pytest.fixture
 def clean_build_folder(request):
     def factory(
-        comp: dace_wf_compilation.DaCeCompiler, inp: stages.ExtensionSource
+        comp: dace_wf_compilation.DaCeCompiler, inp: artifacts.ExtensionSource
     ) -> pathlib.Path:
         folder = _build_folder(comp, inp)
         shutil.rmtree(folder, ignore_errors=True)
