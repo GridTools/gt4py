@@ -332,7 +332,7 @@ class AllocatorNotPicklableError(TypeError):
     """
 
 
-def _assert_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
+def _check_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
     """Fail fast if ``allocator`` is not picklable.
 
     Args:
@@ -345,7 +345,7 @@ def _assert_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
         pickle.dumps(allocator)
     except Exception as error:  # pickle raises arbitrary exceptions
         raise AllocatorNotPicklableError(
-            f"external_memory_allocator {allocator!r} is not picklable: {error!s}."
+            f"external_memory_allocator {allocator!r} is not picklable: {error!r}."
             " The allocator is part of the compilation artifact and is pickled"
             " when compilation is offloaded to a worker process. Use a"
             " module-level class or functools.partial of picklable callables."
