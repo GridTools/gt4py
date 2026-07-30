@@ -16,19 +16,7 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
@@ -48,7 +36,6 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
-    gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -538,14 +525,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     terminate with a join state; the join state will represent the head state for next statement,
     from where to continue building the SDFG.
     """
-
-    _BUILTIN_HANDLERS: ClassVar[dict[str, str]] = {
-        "concat_where": "_visit_concat_where",
-        "if_": "_visit_if",
-        "index": "_visit_index",
-        "make_tuple": "_visit_make_tuple",
-        "tuple_get": "_visit_tuple_get",
-    }
 
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
@@ -1171,41 +1150,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         else:
             return target_state
 
-    def _visit_as_fieldop(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
-
-    def _visit_concat_where(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_concat_where.translate_concat_where(node, ctx, self)
-
-    def _visit_if(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_if(node, ctx, self)
-
-    def _visit_index(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_index(node, ctx, self)
-
-    def _visit_make_tuple(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_make_tuple(node, ctx, self)
-
-    def _visit_tuple_get(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_tuple_get(node, ctx, self)
-
-    def _visit_scalar_expr(
-        self, node: gtir.FunCall, ctx: SubgraphContext
-    ) -> gtir_to_sdfg_types.FieldopResult:
-        return gtir_to_sdfg_primitives.translate_scalar_expr(node, ctx, self)
-
     def _visit_let(
         self,
         node: gtir.FunCall,
@@ -1259,15 +1203,15 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if isinstance(node.fun, gtir.Lambda):
             return self._visit_let(node, ctx)
         if cpm.is_applied_as_fieldop(node):
-            return self._visit_as_fieldop(node, ctx)
+            return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
         # Name-matched builtins
         if isinstance(node.fun, gtir.SymRef):
             name = str(node.fun.id)
-            if handler_name := self._BUILTIN_HANDLERS.get(name):
-                return getattr(self, handler_name)(node, ctx)
+            if translator := gtir_to_sdfg_primitives.BUILTIN_TRANSLATORS.get(name):
+                return translator(node, ctx, self)
         # Fallback: scalar-valued expressions (e.g. math builtins like plus, cast_)
         if isinstance(node.type, ts.ScalarType):
-            return self._visit_scalar_expr(node, ctx)
+            return gtir_to_sdfg_primitives.translate_scalar_expr(node, ctx, self)
         raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Lambda(
