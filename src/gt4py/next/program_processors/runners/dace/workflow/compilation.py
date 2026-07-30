@@ -38,9 +38,11 @@ SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
 ]
 
 
-def _add_tx_markers(inp: SDFGExtensionSource) -> SDFGExtensionSource:
-    """Add GPU TX markers to the SDFG of the given extension source."""
-    sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionSource, dace.SDFG]:
+    """Add GPU TX markers to the SDFG of the given extension source.
+
+    Returns the modified extension source and the modified SDFG."""
+    sdfg = dace.SDFG.from_json(program_source.program_source.source_code)
 
     has_gpu_schedule = any(
         getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
@@ -48,7 +50,7 @@ def _add_tx_markers(inp: SDFGExtensionSource) -> SDFGExtensionSource:
     )
 
     if not has_gpu_schedule:
-        return inp  # No GPU schedule, no need to add TX markers.
+        return program_source, sdfg  # No GPU schedule, no need to add TX markers.
 
     sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
     for node, _ in sdfg.all_nodes_recursive():
@@ -56,12 +58,14 @@ def _add_tx_markers(inp: SDFGExtensionSource) -> SDFGExtensionSource:
         if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
             node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
-    json = gtx_wfdcommon.serialize_sdfg_as_json(sdfg)
+    sdfg_json = gtx_wfdcommon.serialize_sdfg_as_json(sdfg)
 
-    return dataclasses.replace(
-        inp,
-        program_source=dataclasses.replace(inp.program_source, source_code=json),
+    new_program_source = dataclasses.replace(
+        program_source,
+        program_source=dataclasses.replace(program_source.program_source, source_code=sdfg_json),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
     )
+
+    return new_program_source, sdfg
 
 
 class CompiledDaceProgram:
@@ -221,7 +225,9 @@ class DaCeCompiler(
         ):
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
-                inp = _add_tx_markers(inp)
+                inp, sdfg = _add_tx_markers(inp)
+            else:
+                sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
@@ -233,7 +239,6 @@ class DaCeCompiler(
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
             # Configure the SDFG build folder
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
             sdfg.build_folder = sdfg_build_folder
 
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library

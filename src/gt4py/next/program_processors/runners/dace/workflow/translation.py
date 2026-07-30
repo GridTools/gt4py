@@ -459,7 +459,7 @@ class DaCeTranslator(
 
         module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
-            source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),
+            source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )

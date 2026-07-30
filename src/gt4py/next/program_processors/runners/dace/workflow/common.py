@@ -17,7 +17,7 @@ from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
 
-def serialize_sdfg_as_json(sdfg: dace.SDFG) -> Any:
+def serialize_sdfg_as_json(sdfg: dace.SDFG) -> dict[str, Any]:
     """
     Serialize an SDFG to JSON while removing ``guid`` keys.
 
