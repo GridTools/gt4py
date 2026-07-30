@@ -4,8 +4,6 @@ import typing
 
 from gt4py import next as gtx
 from gt4py.next.otf import workflow
-from gt4py.next.ffront import field_operator_ast as foast, stages as ff_stages
-from gt4py import eve
 ```
 
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"><script src="https://spcl.github.io/dace/webclient2/dist/sdfv.js"></script>
@@ -13,40 +11,27 @@ from gt4py import eve
 
 ## Replace Steps
 
+Pipelines are frozen dataclasses whose fields are the steps, so a variant is built with `dataclasses.replace`.
+
 ```python
-cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
-    past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False)
+cached_lowering_toolchain = dataclasses.replace(
+    gtx.backend.DEFAULT_TRANSFORMS,
+    past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False),
 )
 ```
 
-## Skip Steps / Change Order
+## Skip Steps
+
+Which steps run is decided by `Transforms.__call__` from the type of the input definition; that selection is not configurable. Behavior is customized by replacing a step, so skipping one means replacing it with an identity step.
 
 ```python
-DUMMY_FOP = workflow.ProgramWithArgs(
-    definition=ff_stages.DSLFieldOperatorDef(definition=None), args=None
+skip_linting_transforms = dataclasses.replace(
+    gtx.backend.DEFAULT_TRANSFORMS,
+    past_lint=lambda past_def: past_def,  # identity step: linting skipped
 )
 ```
 
-```python
-gtx.backend.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
-```
-
-```python
-@dataclasses.dataclass(frozen=True)
-class SkipLinting(gtx.backend.Transforms):
-    def step_order(self, inp):
-        order = super().step_order(inp)
-        if "past_lint" in order:
-            order.remove("past_lint")  # not running "past_lint"
-        return order
-
-
-same_steps = dataclasses.asdict(gtx.backend.DEFAULT_TRANSFORMS)
-skip_linting_transforms = SkipLinting(**same_steps)
-skip_linting_transforms.step_order(DUMMY_FOP)
-```
-
-## Alternative Workflow
+## Alternative Pipeline
 
 A toolchain is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
 which holds the settings all steps must agree on: the device, the build type,
@@ -78,14 +63,16 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-pure_cpp2_workflow = gtfn.make_gtfn_compile_workflow(
+pure_cpp2_pipeline = gtfn.make_gtfn_compile_workflow(
     gtfn.GTFNConfig(cmake_build_type=gtx.config.CMakeBuildType.DEBUG, cached_translation=False),
     translation=lambda cfg: MyCodeGen(),
     bindings=lambda cfg: Cpp2BindingsGen(),
 )
 ```
 
-## Invent new Workflow Types
+## Invent new Pipeline Types
+
+A pipeline is just a frozen dataclass of steps with an explicit, fully typed `__call__`. Nothing else is needed, so a non-linear shape is written the same way as a linear one.
 
 ```mermaid
 graph LR
@@ -104,15 +91,11 @@ OUT_T = typing.TypeVar("OUT_T")
 
 
 @dataclasses.dataclass(frozen=True)
-class FullyModularDiamond(
-    workflow.ChainableWorkflowMixin[IN_T, OUT_T],
-    workflow.ReplaceEnabledWorkflowMixin[IN_T, OUT_T],
-    typing.Protocol[IN_T, OUT_T, A_T, B_T, X_T, Y_T],
-):
-    split: workflow.Workflow[IN_T, tuple[A_T, X_T]]
-    track_a: workflow.Workflow[A_T, B_T]
-    track_x: workflow.Workflow[X_T, Y_T]
-    combine: workflow.Workflow[tuple[B_T, Y_T], OUT_T]
+class Diamond(typing.Generic[IN_T, OUT_T, A_T, B_T, X_T, Y_T]):
+    split: workflow.Step[IN_T, tuple[A_T, X_T]]
+    track_a: workflow.Step[A_T, B_T]
+    track_x: workflow.Step[X_T, Y_T]
+    combine: workflow.Step[tuple[B_T, Y_T], OUT_T]
 
     def __call__(self, inp: IN_T) -> OUT_T:
         a, x = self.split(inp)
@@ -121,20 +104,10 @@ class FullyModularDiamond(
         return self.combine((b, y))
 
 
-@dataclasses.dataclass(frozen=True)
-class PartiallyModularDiamond(
-    workflow.ChainableWorkflowMixin[IN_T, OUT_T],
-    workflow.ReplaceEnabledWorkflowMixin[IN_T, OUT_T],
-    typing.Protocol[IN_T, OUT_T, A_T, B_T, X_T, Y_T],
-):
-    track_a: workflow.Workflow[A_T, B_T]
-    track_x: workflow.Workflow[X_T, Y_T]
-
-    def split(inp: IN_T) -> tuple[A_T, X_T]: ...
-
-    def combine(b: B_T, y: Y_T) -> OUT_T: ...
-
-    def __call__(inp: IN_T) -> OUT_T:
-        a, x = self.split(inp)
-        return self.combine(b=self.track_a(a), y=self.track_x(x))
+Diamond(
+    split=lambda inp: (inp, inp),
+    track_a=lambda a: a + 1,
+    track_x=lambda x: x * 2,
+    combine=lambda by: by[0] + by[1],
+)(3)
 ```

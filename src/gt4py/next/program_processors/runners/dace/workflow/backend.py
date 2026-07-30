@@ -51,11 +51,11 @@ def make_dace_toolchain(
     ] = gtx_wfdfactory.make_dace_translator,
     bindings: Callable[
         [gtx_wfdfactory.DaCeConfig],
-        workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource],
+        workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource],
     ] = gtx_wfdfactory.make_dace_bindings,
     compilation: Callable[
         [gtx_wfdfactory.DaCeConfig],
-        workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact],
+        workflow.Step[artifacts.ExtensionSource, artifacts.CompilationArtifact],
     ] = gtx_wfdfactory.make_dace_compiler,
 ) -> backend.Toolchain:
     """

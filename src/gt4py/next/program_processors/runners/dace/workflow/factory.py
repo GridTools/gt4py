@@ -18,7 +18,7 @@ from typing import Any, ClassVar, Final
 import gt4py
 from gt4py._core import filecache
 from gt4py.next import backend as next_backend, common, fingerprinting
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -139,7 +139,7 @@ def make_dace_translator(
 
 def make_dace_bindings(
     cfg: DaCeConfig, /
-) -> workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]:
+) -> workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]:
     """Build the step generating the bindings of the translated SDFG."""
     return functools.partial(bindings_step.bind_sdfg, bind_func_name=cfg.bind_func_name)
 
@@ -160,12 +160,12 @@ def make_dace_compile_workflow(
     *,
     translation: Callable[[DaCeConfig], stages.TranslationStep] = make_dace_translator,
     bindings: Callable[
-        [DaCeConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+        [DaCeConfig], workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]
     ] = make_dace_bindings,
     compilation: Callable[
-        [DaCeConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+        [DaCeConfig], workflow.Step[artifacts.ExtensionSource, artifacts.CompilationArtifact]
     ] = make_dace_compiler,
-) -> recipes.OTFCompileWorkflow:
+) -> next_backend.CompilePipeline:
     """
     Build the DaCe translation -> bindings -> compilation workflow.
 
@@ -211,6 +211,6 @@ def make_dace_compile_workflow(
             ),
         )
 
-    return recipes.OTFCompileWorkflow(
+    return next_backend.CompilePipeline(
         translation=translation_step, bindings=bindings(cfg), compilation=compilation_step
     )
