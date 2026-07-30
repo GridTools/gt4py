@@ -39,9 +39,11 @@ SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
 
 
 def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionSource, dace.SDFG]:
-    """Add GPU TX markers to the SDFG of the given extension source.
+    """
+    Add GPU TX markers to the SDFG of the given extension source.
 
-    Returns the modified extension source and the modified SDFG."""
+    Returns the modified extension source and the modified SDFG.
+    """
     sdfg = dace.SDFG.from_json(program_source.program_source.source_code)
 
     has_gpu_schedule = any(
