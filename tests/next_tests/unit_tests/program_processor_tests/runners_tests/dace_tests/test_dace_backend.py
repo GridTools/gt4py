@@ -22,7 +22,7 @@ dace = pytest.importorskip("dace")
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import runners, stages
+from gt4py.next.otf import arguments, artifacts, runners, stages
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
@@ -32,6 +32,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as dace_wf_common,
     decoration as dace_wf_decoration,
 )
+from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests import cases, cases_utils
 from next_tests.integration_tests.cases_utils import KDim
@@ -442,3 +443,30 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
                 assert any(marker in generated_code for marker in ("delete ", "free"))
 
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
+
+
+def test_translate_produces_sdfg_source():
+    """`Toolchain.translate` is the sanctioned partial run: frontend + translation only."""
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField) -> cases.IField:
+        return a
+
+    @gtx.program
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, out=out)
+
+    int_field = ts.FieldType(dims=[cases.IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
+    compile_time_args = arguments.CompileTimeArgs(
+        args=(int_field, int_field),
+        kwargs={},
+        offset_provider={},
+        column_axis=None,
+        argument_descriptor_contexts={},
+    )
+
+    source = dace_wf_backend.run_dace_cpu.translate(testee.definition_stage, compile_time_args)
+
+    assert isinstance(source, artifacts.ProgramSource)
+    assert source.code_spec.file_extension == "sdfg"
+    assert isinstance(dace.SDFG.from_json(source.source_code), dace.SDFG)
