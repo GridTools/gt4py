@@ -51,7 +51,8 @@ VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
         pytest.param(core_defs.DeviceType.CPU),
         pytest.param(core_defs.DeviceType.CUDA, marks=[pytest.mark.requires_gpu]),
         pytest.param(core_defs.DeviceType.ROCM, marks=[pytest.mark.requires_gpu]),
-    ]
+    ],
+    ids=["CPU", "CUDA", "ROCM"],
 )
 def device_type(request) -> str:
     return request.param

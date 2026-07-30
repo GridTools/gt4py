@@ -14,7 +14,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -33,18 +33,33 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
-def _add_tx_markers(sdfg: dace.SDFG) -> None:
+SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
+    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+]
+
+
+def _add_tx_markers(inp: SDFGExtensionSource) -> SDFGExtensionSource:
+    """Add GPU TX markers to the SDFG of the given extension source."""
+    sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
     has_gpu_schedule = any(
         getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
         for node, _ in sdfg.all_nodes_recursive()
     )
 
-    if has_gpu_schedule:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            # Also adds markers to map scopes that are NOT scheduled on GPU
-            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    if not has_gpu_schedule:
+        return inp  # No GPU schedule, no need to add TX markers.
+
+    sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    for node, _ in sdfg.all_nodes_recursive():
+        # Also adds markers to map scopes that are NOT scheduled on GPU
+        if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
+    return dataclasses.replace(
+        inp,
+        program_source=dataclasses.replace(inp.program_source, source_code=sdfg.to_json(hash=True)),
+    )
 
 
 class CompiledDaceProgram:
@@ -197,15 +212,14 @@ class DaCeCompiler(
         ):
             object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
-    def __call__(
-        self,
-        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> DaCeCompilationArtifact:
+    def __call__(self, inp: SDFGExtensionSource) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            # Add TX markers to the generated GPU code for trace visualization tools.
+            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                inp = _add_tx_markers(inp)
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
@@ -215,11 +229,10 @@ class DaCeCompiler(
                 build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-            sdfg.build_folder = sdfg_build_folder
 
-            # Add TX markers to the generated GPU code for trace visualization tools.
-            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
-                _add_tx_markers(sdfg)
+            # Configure the SDFG build folder
+            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            sdfg.build_folder = sdfg_build_folder
 
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library
             # path here so ``get_binary_name`` sees the same mode dace built under.
