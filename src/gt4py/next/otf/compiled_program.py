@@ -89,7 +89,7 @@ def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> 
 def compile_variant_hook(
     program_pool: CompiledProgramsPool,
     key: CompiledProgramsKey,
-    backend: gtx_backend.Backend,
+    backend: gtx_backend.Toolchain,
     argument_descriptors: ArgStaticDescriptorsByType,
     offset_provider: common.OffsetProviderType | common.OffsetProvider,
 ) -> None:
@@ -345,7 +345,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     to `compile` before it can be used.
     """
 
-    backend: gtx_backend.Backend
+    backend: gtx_backend.Toolchain
     definition_stage: ffront_stages.DSLDefinitionT
     # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
     #  scan operator. In the future it could also be the type of a generic program.

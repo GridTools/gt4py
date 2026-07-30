@@ -25,40 +25,36 @@ ArgsT = typing.TypeVar("ArgsT")
 class DataOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[workflow.ConcreteArtifact[S, ArgsT], workflow.ConcreteArtifact[T, ArgsT]],
+    workflow.Workflow[workflow.ProgramWithArgs[S, ArgsT], workflow.ProgramWithArgs[T, ArgsT]],
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(
-        self, inp: workflow.ConcreteArtifact[S, ArgsT]
-    ) -> workflow.ConcreteArtifact[T, ArgsT]:
-        return workflow.ConcreteArtifact(data=self.step(inp.data), args=inp.args)
+    def __call__(self, inp: workflow.ProgramWithArgs[S, ArgsT]) -> workflow.ProgramWithArgs[T, ArgsT]:
+        return workflow.ProgramWithArgs(definition=self.step(inp.definition), args=inp.args)
 
 
 @dataclasses.dataclass(frozen=True)
 class ArgsOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[workflow.ConcreteArtifact[DefT, S], workflow.ConcreteArtifact[DefT, T]],
+    workflow.Workflow[workflow.ProgramWithArgs[DefT, S], workflow.ProgramWithArgs[DefT, T]],
     Generic[DefT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(
-        self, inp: workflow.ConcreteArtifact[DefT, S]
-    ) -> workflow.ConcreteArtifact[DefT, T]:
-        return workflow.ConcreteArtifact(data=inp.data, args=self.step(inp.args))
+    def __call__(self, inp: workflow.ProgramWithArgs[DefT, S]) -> workflow.ProgramWithArgs[DefT, T]:
+        return workflow.ProgramWithArgs(definition=inp.definition, args=self.step(inp.args))
 
 
 @dataclasses.dataclass(frozen=True)
 class StripArgsAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[workflow.ConcreteArtifact[S, ArgsT], T],
+    workflow.Workflow[workflow.ProgramWithArgs[S, ArgsT], T],
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: workflow.ConcreteArtifact[S, ArgsT]) -> T:
-        return self.step(inp.data)
+    def __call__(self, inp: workflow.ProgramWithArgs[S, ArgsT]) -> T:
+        return self.step(inp.definition)

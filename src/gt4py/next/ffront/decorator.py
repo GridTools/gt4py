@@ -51,7 +51,7 @@ from gt4py.next.otf import arguments, compiled_program, options, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DEFAULT_BACKEND: next_backend.Backend | None = None
+DEFAULT_BACKEND: next_backend.Toolchain | None = None
 
 
 ProgramCallMetricsCollector = metrics.make_collector(
@@ -97,7 +97,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     # backend-specific compilation is keyed separately in the backend's own
     # caches, and fingerprinting the whole backend object graph is both wasteful
     # and fragile (it may hold non-importable callables, see also test doubles).
-    backend: Optional[next_backend.Backend] = dataclasses.field(
+    backend: Optional[next_backend.Toolchain] = dataclasses.field(
         metadata=utils.gt4py_metadata(fingerprint=False)
     )
     compilation_options: options.CompilationOptions
@@ -105,7 +105,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
-    def with_backend(self, backend: next_backend.Backend | None) -> Self:
+    def with_backend(self, backend: next_backend.Toolchain | None) -> Self:
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
@@ -247,7 +247,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: next_backend.Backend | None,
+        backend: next_backend.Toolchain | None,
         grid_type: common.GridType | None = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> Program:
@@ -264,8 +264,8 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
-        _ = self._frontend_transforms.past_lint(no_args_past).data
+        no_args_past = workflow.ProgramWithArgs(self.past_stage, arguments.CompileTimeArgs.empty())
+        _ = self._frontend_transforms.past_lint(no_args_past).definition
 
     @property
     def __name__(self) -> str:
@@ -287,19 +287,19 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = workflow.ConcreteArtifact(
+        no_args_def = workflow.ProgramWithArgs(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
-        return self._frontend_transforms.func_to_past(no_args_def).data
+        return self._frontend_transforms.func_to_past(no_args_def).definition
 
     @property
     def _frontend_transforms(self) -> next_backend.Transforms:
         if self.backend is None:
             return next_backend.DEFAULT_TRANSFORMS
-        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
+        # TODO(tehrengruber): This class relies heavily on `self.backend.frontend` being
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
-        assert isinstance(self.backend.transforms, next_backend.Transforms)
-        return self.backend.transforms
+        assert isinstance(self.backend.frontend, next_backend.Transforms)
+        return self.backend.frontend
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -307,15 +307,15 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = workflow.ConcreteArtifact(
-            data=ffront_stages.PASTProgramDef(
+        no_args_past = workflow.ProgramWithArgs(
+            definition=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
             ),
             args=arguments.CompileTimeArgs.empty(),
         )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
+        return self._frontend_transforms.past_to_itir(no_args_past).definition
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -504,7 +504,7 @@ def program(definition: Callable) -> Program: ...
 @typing.overload
 def program(
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Toolchain | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Callable[[Callable], Program]: ...
@@ -514,7 +514,7 @@ def program(
     definition: Callable | None = None,
     *,
     # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Toolchain | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Program | Callable[[Callable], Program]:
@@ -545,7 +545,8 @@ def program(
         program = Program.from_function(
             definition,
             backend=typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Toolchain | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type=grid_type,
             **compilation_options,
@@ -581,7 +582,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[next_backend.Backend],
+        backend: Optional[next_backend.Toolchain],
         grid_type: Optional[common.GridType] = None,
         *,
         operator_node_cls: type[foast.OperatorNode] = foast.FieldOperator,
@@ -607,10 +608,10 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            workflow.ConcreteArtifact(
-                data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
+            workflow.ProgramWithArgs(
+                definition=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
-        ).data
+        ).definition
 
     @property
     def __name__(self) -> str:
@@ -624,10 +625,10 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     def _frontend_transforms(self) -> next_backend.Transforms:
         if self.backend is None:
             return next_backend.DEFAULT_TRANSFORMS
-        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
+        # TODO(tehrengruber): This class relies heavily on `self.backend.frontend` being
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
-        assert isinstance(self.backend.transforms, next_backend.Transforms)
-        return self.backend.transforms
+        assert isinstance(self.backend.frontend, next_backend.Transforms)
+        return self.backend.frontend
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_stage.foast_node.type
@@ -731,7 +732,7 @@ class FieldOperatorFromFoast(FieldOperator):
 def field_operator(
     definition: Callable,
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Toolchain | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator: ...
 
@@ -739,7 +740,7 @@ def field_operator(
 @typing.overload
 def field_operator(
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Toolchain | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> Callable[[Callable], FieldOperator]: ...
 
@@ -747,7 +748,7 @@ def field_operator(
 def field_operator(
     definition: Callable | None = None,
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Toolchain | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
@@ -772,7 +773,8 @@ def field_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Toolchain | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,
             **compilation_options,
@@ -788,7 +790,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | eve.NothingType | None,
+    backend: next_backend.Toolchain | eve.NothingType | None,
     grid_type: common.GridType | None,
 ) -> FieldOperator: ...
 
@@ -815,7 +817,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | eve.NothingType | None,
+    backend: next_backend.Toolchain | eve.NothingType | None,
     grid_type: common.GridType | None,
 ) -> Callable[[Callable], FieldOperator]: ...
 
@@ -826,7 +828,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
+    backend: next_backend.Toolchain | None | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator | Callable[[Callable], FieldOperator]:
     """
@@ -863,7 +865,8 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Toolchain | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,
             operator_node_cls=foast.ScanOperator,

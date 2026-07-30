@@ -11,6 +11,8 @@ tags: [backend, bindings, build, compile, otf]
 
 This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
 
+Partially superseded by [0027 - Toolchain Naming and Pipeline Simplification](0027-Toolchain-Naming-and-Pipeline-Simplification.md) (workflow combinators and step-type naming).
+
 ## Context
 
 The on-the-fly compilation (OTFC) in gt4py encompasses everything necessary to go from an IR representation of a GT4Py program to an executable Python function. Depending on the chosen route, this may include:

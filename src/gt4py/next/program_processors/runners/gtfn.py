@@ -16,7 +16,7 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils, fingerprinting
+from gt4py.next import backend as next_backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import artifacts, recipes, workflow
@@ -179,7 +179,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
 class GTFNBackendFactory(factory.Factory):
     class Meta:
-        model = backend.Backend
+        model = next_backend.Toolchain
 
     class Params:
         name_device = "cpu"
@@ -197,9 +197,9 @@ class GTFNBackendFactory(factory.Factory):
         )
 
     name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    backend = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    frontend = next_backend.DEFAULT_TRANSFORMS
 
 
 run_gtfn = GTFNBackendFactory()

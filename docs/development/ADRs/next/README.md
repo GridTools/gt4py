@@ -48,6 +48,7 @@ Writing a new ADR is simple:
 - [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
 - [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
+- [0027 - Toolchain Naming and Pipeline Simplification](0027-Toolchain-Naming-and-Pipeline-Simplification.md)
 
 ### Python Integration
 
