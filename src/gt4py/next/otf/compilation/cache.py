@@ -13,7 +13,7 @@ import tempfile
 from typing import Final
 
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 
 
 #: Regex describing the folder names produced by `get_cache_folder` (use
@@ -48,7 +48,7 @@ def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
 
 
 def get_cache_folder(
-    ext_source: stages.ExtensionSource,
+    ext_source: artifacts.ExtensionSource,
     lifetime: config.BuildCacheLifetime,
     build_context_id: str = "",
 ) -> pathlib.Path:

@@ -18,7 +18,7 @@ from gt4py.next import utils
 from gt4py.next import errors, backend, broadcast, common
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import toolchain, arguments, compiled_program
+from gt4py.next.otf import arguments, compiled_program, workflow
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -88,7 +88,7 @@ def _verify_program_has_expected_true_value(program: itir.Program):
 
 
 def test_inlining_of_scalars_works(testee_prog):
-    input_pair = toolchain.ConcreteArtifact(
+    input_pair = workflow.ConcreteArtifact(
         data=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
@@ -121,7 +121,7 @@ def test_inlining_of_scalar_works_integration(testee_prog):
         def load(self):
             return lambda *args, **kwargs: None
 
-    def pirate(program: toolchain.ConcreteArtifact):
+    def pirate(program: workflow.ConcreteArtifact):
         # Replaces the gtfn otf_workflow: steals the compilable program, then
         # returns a dummy artifact whose materialization is a no-op callable.
         nonlocal hijacked_program
@@ -187,7 +187,7 @@ def _verify_program_has_expected_domain(
 
 def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
-    input_pair = toolchain.ConcreteArtifact(
+    input_pair = workflow.ConcreteArtifact(
         data=testee_prog.definition_stage,
         args=arguments.CompileTimeArgs(
             args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),

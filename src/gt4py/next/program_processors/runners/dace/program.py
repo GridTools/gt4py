@@ -18,7 +18,7 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, toolchain, workflow
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -44,7 +44,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # TODO(ricoh): connectivity tables required here for now.
         gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
-            toolchain.ConcreteArtifact(
+            workflow.ConcreteArtifact(
                 data=self.past_stage,
                 args=arguments.CompileTimeArgs(
                     args=tuple(p.type for p in self.past_stage.past_node.params),
