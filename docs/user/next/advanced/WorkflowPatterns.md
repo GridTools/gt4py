@@ -399,7 +399,7 @@ gtx.backend.DEFAULT_PROG_TRANSFORMS??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.run_gtfn_gpu.executor.otf_workflow??
+gtx.program_processors.runners.gtfn.run_gtfn_gpu.backend??
 ```
 
 ```python

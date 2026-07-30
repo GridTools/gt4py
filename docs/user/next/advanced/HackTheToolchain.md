@@ -22,8 +22,8 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-DUMMY_FOP = workflow.ConcreteArtifact(
-    data=ff_stages.DSLFieldOperatorDef(definition=None), args=None
+DUMMY_FOP = workflow.ProgramWithArgs(
+    definition=ff_stages.DSLFieldOperatorDef(definition=None), args=None
 )
 ```
 

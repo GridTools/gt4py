@@ -47,7 +47,7 @@ IDim = gtx.Dimension("IDim")
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_const_no_args_program(
-    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Toolchain
 ):
     @gtx.field_operator
     def const() -> gtx.Field[Dims[IDim], gtx.float64]:
@@ -69,7 +69,7 @@ def benchmark_const_no_args_program(
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_copy_01_arg_program(
-    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Toolchain
 ):
     @gtx.field_operator
     def identity_fop(
@@ -96,7 +96,7 @@ def benchmark_copy_01_arg_program(
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_01_arg_program(
-    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Toolchain
 ):
     @gtx.field_operator
     def identity_01_fop(
@@ -143,7 +143,7 @@ def benchmark_horizontal_copy_01_arg_program(
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_05_arg_program(
-    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Toolchain
 ):
     @gtx.field_operator
     def identity_05_fop(
@@ -202,7 +202,7 @@ def benchmark_horizontal_copy_05_arg_program(
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_25_arg_program(
-    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
+    benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Toolchain
 ):
     @gtx.field_operator
     def identity_25_fop(
