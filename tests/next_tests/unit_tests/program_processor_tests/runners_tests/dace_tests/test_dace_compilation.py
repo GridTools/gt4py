@@ -178,10 +178,24 @@ def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     assert restored == artifact
 
 
-def test_same_artifact(program_source):
-    """Same SDFG and compile settings must produce the same artifact."""
-    artifact_1, sdfg_1 = _run_compiler(program_source)
-    artifact_2, sdfg_2 = _run_compiler(program_source)
+@pytest.mark.parametrize("add_gpu_trace_markers", [False, True])
+def test_same_artifact(add_gpu_trace_markers, program_source):
+    """Same SDFG and compile settings must produce the same artifact.
+
+    We also test the case ``add_gpu_trace_markers=True`` to verify that the modified
+    SDFG has the same fingerprint, for the same input SDFG and compilation settings.
+    This way, we verify that the GUIDs elements are removed from the JSON source code.
+    """
+    artifact_1, sdfg_1 = _run_compiler(
+        program_source,
+        add_gpu_trace_markers=add_gpu_trace_markers,
+        device_type=core_defs.DeviceType.CUDA,
+    )
+    artifact_2, sdfg_2 = _run_compiler(
+        program_source,
+        add_gpu_trace_markers=add_gpu_trace_markers,
+        device_type=core_defs.DeviceType.CUDA,
+    )
 
     assert artifact_1.library_path == artifact_2.library_path
     assert (
