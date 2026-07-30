@@ -14,8 +14,8 @@ from typing import Final
 import factory
 
 from gt4py._core import definitions as core_defs, filecache
-from gt4py.next import config, fingerprinting
-from gt4py.next.otf import recipes, workflow
+from gt4py.next import backend as next_backend, config, fingerprinting
+from gt4py.next.otf import workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
@@ -31,7 +31,7 @@ _GT_DACE_BINDING_FUNCTION_NAME: Final[str] = "update_sdfg_args"
 
 class DaCeWorkflowFactory(factory.Factory):
     class Meta:
-        model = recipes.OTFCompileWorkflow
+        model = next_backend.CompilePipeline
 
     class Params:
         auto_optimize: bool = False

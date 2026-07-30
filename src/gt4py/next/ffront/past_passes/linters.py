@@ -6,11 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any
-
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
-from gt4py.next.ffront.stages import ConcretePASTProgramDef, PASTProgramDef
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.ffront.stages import PASTProgramDef
+from gt4py.next.otf import workflow
 
 
 def lint_misnamed_functions(
@@ -44,20 +42,15 @@ def lint_undefined_symbols(
     return inp
 
 
-def linter_factory(
-    cached: bool = True, adapter: bool = True
-) -> workflow.Workflow[PASTProgramDef, PASTProgramDef]:
-    wf: workflow.Workflow[PASTProgramDef, PASTProgramDef] = workflow.StepSequence(
-        (lint_misnamed_functions, lint_undefined_symbols)
-    )
+def lint_program(inp: ffront_stages.PASTProgramDef) -> ffront_stages.PASTProgramDef:
+    """Run all PAST program linters (in order)."""
+    return lint_undefined_symbols(lint_misnamed_functions(inp))
+
+
+def linter_factory(cached: bool = True) -> workflow.Step[PASTProgramDef, PASTProgramDef]:
+    """Return the PAST linting step, in-memory cached unless `cached` is unset."""
     if cached:
-        wf = workflow.CachedStep.in_memory(
-            step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        return workflow.CachedStep.in_memory(
+            step=lint_program, input_fingerprinter=ffront_stages.semantic_fingerprinter
         )
-    return wf
-
-
-def adapted_linter_factory(
-    **kwargs: Any,
-) -> workflow.Workflow[ConcretePASTProgramDef, ConcretePASTProgramDef]:
-    return toolchain.DataOnlyAdapter(linter_factory(**kwargs))
+    return lint_program

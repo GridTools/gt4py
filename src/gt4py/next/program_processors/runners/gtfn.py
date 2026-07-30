@@ -19,7 +19,7 @@ from gt4py._core import filecache
 from gt4py.next import backend as next_backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import artifacts, recipes, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -130,7 +130,7 @@ class GTFNCompilerFactory(factory.Factory):
 
 class GTFNCompileWorkflowFactory(factory.Factory):
     class Meta:
-        model = recipes.OTFCompileWorkflow
+        model = next_backend.CompilePipeline
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
@@ -162,7 +162,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource] = (
+    bindings: workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource] = (
         factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda o: nanobind.ExtensionGenerator(
                 unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride

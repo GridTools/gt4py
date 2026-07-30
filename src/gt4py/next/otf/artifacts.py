@@ -198,7 +198,7 @@ ExecutableProgram: TypeAlias = Callable
 
 @runtime_checkable
 class CompilationArtifact(Protocol):
-    """The output of an ``OTFCompileWorkflow``.
+    """The output of a ``CompilePipeline``.
 
     Each backend defines its own concrete artifact dataclass; all share this
     Protocol. Implementations are frozen dataclasses, picklable, and carry no
