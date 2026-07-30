@@ -1765,8 +1765,9 @@ class TestAssignmentSyntax:
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-    def test_datadims_direct_access(self):
-        # Check classic data dimensions are working
+
+class TestGlobalTablesWithDataDimensions:
+    def test_classic_data_dimensions_access(self) -> None:
         def data_dims(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.Field[(np.int32, (3, 3, 3))],
@@ -1776,7 +1777,8 @@ class TestAssignmentSyntax:
 
         parse_definition(data_dims, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Check .A on read
+    def test_dotA_read(self) -> None:
+        # NOTE: This should be merged with `.at()` syntax on fields.
         def at_read(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3, 3))],
@@ -1786,7 +1788,8 @@ class TestAssignmentSyntax:
 
         parse_definition(at_read, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Can't write to the field
+    def test_dotA_write_forbidden(self) -> None:
+        # NOTE: This should be merged with `.at()` syntax on fields.
         def at_write(
             in_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
@@ -1800,7 +1803,7 @@ class TestAssignmentSyntax:
         ):
             parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Can't index cartesian style
+    def test_cartesian_style_index_forbidden(self) -> None:
         def GlobalTable_access_as_IJK(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
@@ -1818,13 +1821,14 @@ class TestAssignmentSyntax:
                 module=self.__class__.__name__,
             )
 
-        # Check .A on read with a Field with data dimensions
+    def test_dotA_read_on_field(self) -> None:
+        # NOTE This should be banished in favor of `.at()`
         def data_dims_with_at(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
-            global_field: gtscript.Field[(np.int32, (3, 3, 3))],
+            in_field: gtscript.Field[(np.int32, (3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
-                out_field = global_field.A[1, 0, 2]
+                out_field = in_field.A[1, 0, 2]
 
         parse_definition(
             data_dims_with_at,
@@ -1832,7 +1836,7 @@ class TestAssignmentSyntax:
             module=self.__class__.__name__,
         )
 
-        # Forgetting to index data dimensions
+    def test_forgot_to_index_ddims(self) -> None:
         def data_dims_rhs_not_fully_indexed(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
@@ -1850,6 +1854,7 @@ class TestAssignmentSyntax:
                 module=self.__class__.__name__,
             )
 
+    def test_forgot_to_index_ddim_with_at(self) -> None:
         def data_dims_rhs_absolute_not_fully_indexed(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.Field[gtscript.IJK, (np.int32, (3))],
@@ -1866,6 +1871,24 @@ class TestAssignmentSyntax:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+    @pytest.mark.xfail(
+        reason="IR validation expects ddim sizes to be of type `int`",
+        raises=gt_frontend.GTScriptSyntaxError,
+    )
+    def test_ddims_with_numpy_type(self) -> None:
+        def data_dims_with_numpy_int_type(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            in_field: gtscript.Field[gtscript.IJK, (np.int32, (np.int32(3)))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = in_field.A[0]
+
+        parse_definition(
+            data_dims_with_numpy_int_type,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
 
 
 class TestNestedWithSyntax:

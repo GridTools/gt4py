@@ -2,6 +2,19 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.12] - 2026-07-10
+
+### Cartesian
+
+- Improve DaCe loop scheduling for CPU and CUDA backends.
+- Generate cleaner index-bound expressions in the DaCe backend.
+- Use descriptive loop names in the DaCe schedule tree for easier profiling and debugging.
+- Fix out-of-bounds reads for stencils using K-axis interfaces without extra vertical padding.
+
+### Next
+
+See commit history.
+
 ## [1.1.11] - 2026-06-18
 
 ### General
