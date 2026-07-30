@@ -221,7 +221,7 @@ class RoundtripArtifact:
     source_code: str
     entry_point_name: str
     column_axis: common.Dimension | None
-    dispatch_backend: next_backend.Backend | None
+    dispatch_backend: next_backend.Toolchain | None
     debug: bool
 
     def load(self) -> artifacts.ExecutableProgram:
@@ -253,17 +253,17 @@ class RoundtripArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact]):
+class Roundtrip(workflow.Workflow[stages.CompilableProgram, RoundtripArtifact]):
     debug: Optional[bool] = None
     use_embedded: bool = True
-    dispatch_backend: Optional[next_backend.Backend] = None
+    dispatch_backend: Optional[next_backend.Toolchain] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: stages.CompilableProgramDef) -> RoundtripArtifact:
+    def __call__(self, inp: stages.CompilableProgram) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
         source_code, entry_point_name = _generate_source(
-            inp.data,
+            inp.definition,
             offset_provider=inp.args.offset_provider,
             debug=debug,
             use_embedded=self.use_embedded,
@@ -280,41 +280,41 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact
 
 
 # TODO(tehrengruber): introduce factory
-default = next_backend.Backend(
+default = next_backend.Toolchain(
     name="roundtrip",
-    executor=Roundtrip(
+    backend=Roundtrip(
         transforms=functools.partial(
             itir_transforms.apply_common_transforms,
             extract_temporaries=False,
         )
     ),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=next_backend.DEFAULT_TRANSFORMS,
+    frontend=next_backend.DEFAULT_TRANSFORMS,
 )
-with_temporaries = next_backend.Backend(
+with_temporaries = next_backend.Toolchain(
     name="roundtrip_with_temporaries",
-    executor=Roundtrip(
+    backend=Roundtrip(
         transforms=functools.partial(
             itir_transforms.apply_common_transforms,
             extract_temporaries=True,
         )
     ),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=next_backend.DEFAULT_TRANSFORMS,
+    frontend=next_backend.DEFAULT_TRANSFORMS,
 )
-no_transforms = next_backend.Backend(
+no_transforms = next_backend.Toolchain(
     name="roundtrip",
-    executor=Roundtrip(transforms=lambda o, *, offset_provider: o),
+    backend=Roundtrip(transforms=lambda o, *, offset_provider: o),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=next_backend.DEFAULT_TRANSFORMS,
+    frontend=next_backend.DEFAULT_TRANSFORMS,
 )
 
 
-gtir = next_backend.Backend(
+gtir = next_backend.Toolchain(
     name="roundtrip_gtir",
-    executor=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),  # type: ignore[arg-type] # don't understand why mypy complains
+    backend=Roundtrip(transforms=itir_transforms.apply_fieldview_transforms),  # type: ignore[arg-type] # don't understand why mypy complains
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-    transforms=next_backend.Transforms(
+    frontend=next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_gtir_factory(),
         foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
         field_view_op_to_prog=foast_to_past.operator_to_program_factory(
