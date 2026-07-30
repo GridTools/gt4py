@@ -18,7 +18,7 @@ from unittest import mock
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments as otf_arguments, toolchain as otf_toolchain
@@ -474,8 +474,8 @@ def _increment_sdfg_guids(sdfg: dace.SDFG) -> None:
 def test_translation_source_code_invariant_under_guid_change():
     """SDFG `guid` changes must not alter the translation cache key.
 
-    `DaCeTranslator.__call__` drops `guid` values via `_drop_element_ids`
-    before storing the SDFG JSON in `ProgramSource.source_code`. This test
+    `DaCeTranslator.__call__` serializes the SDFG via `serialize_sdfg_as_json`,
+    which drops `guid` values, before storing the SDFG JSON in
     mocks `build_sdfg_from_gtir` so that the second lowering returns the same
     SDFG with all `guid` values incremented by one, and verifies that the
     resulting `source_code` strings are identical.
@@ -517,4 +517,11 @@ def test_translation_source_code_invariant_under_guid_change():
         first_source = translator(compilable_program)
         second_source = translator(compilable_program)
 
+    # different object identities, same content
+    assert first_source.source_code is not second_source.source_code
     assert first_source.source_code == second_source.source_code
+
+    assert first_source is not second_source
+    first_source_fingerprint = fingerprinting.strict_fingerprinter(first_source)
+    second_source_fingerprint = fingerprinting.strict_fingerprinter(second_source)
+    assert first_source_fingerprint == second_source_fingerprint

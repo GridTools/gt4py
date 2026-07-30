@@ -56,9 +56,11 @@ def _add_tx_markers(inp: SDFGExtensionSource) -> SDFGExtensionSource:
         if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
             node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
+    json = gtx_wfdcommon.serialize_sdfg_as_json(sdfg)
+
     return dataclasses.replace(
         inp,
-        program_source=dataclasses.replace(inp.program_source, source_code=sdfg.to_json(hash=True)),
+        program_source=dataclasses.replace(inp.program_source, source_code=json),
     )
 
 
