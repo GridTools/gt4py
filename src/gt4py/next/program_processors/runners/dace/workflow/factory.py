@@ -17,7 +17,7 @@ from typing import Any, ClassVar, Final, TypeAlias
 
 import gt4py
 from gt4py.next import backend as next_backend, config
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -129,7 +129,7 @@ def make_dace_translator(
 
 def make_dace_bindings(
     cfg: DaCeConfig, /
-) -> workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]:
+) -> workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]:
     """Build the step generating the bindings of the translated SDFG."""
     return functools.partial(bindings_step.bind_sdfg, bind_func_name=cfg.bind_func_name)
 
@@ -162,10 +162,10 @@ def make_dace_compiler(
 #: Step builders: callables creating a step from the toolchain configuration.
 DaCeTranslationBuilder: TypeAlias = Callable[[DaCeConfig], stages.TranslationStep]
 DaCeBindingsBuilder: TypeAlias = Callable[
-    [DaCeConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+    [DaCeConfig], workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]
 ]
 DaCeCompilationBuilder: TypeAlias = Callable[
-    [DaCeConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+    [DaCeConfig], workflow.Step[artifacts.ExtensionSource, artifacts.CompilationArtifact]
 ]
 
 
@@ -176,7 +176,7 @@ def make_dace_compile_workflow(
     translation: DaCeTranslationBuilder = make_dace_translator,
     bindings: DaCeBindingsBuilder = make_dace_bindings,
     compilation: DaCeCompilationBuilder = make_dace_compiler,
-) -> recipes.OTFCompileWorkflow:
+) -> next_backend.CompilePipeline:
     """
     Build the DaCe translation -> bindings -> compilation workflow.
 
@@ -209,6 +209,6 @@ def make_dace_compile_workflow(
             translation_step, "dace", cfg.cache_lifetime
         )
 
-    return recipes.OTFCompileWorkflow(
+    return next_backend.CompilePipeline(
         translation=translation_step, bindings=bindings(cfg), compilation=compilation_step
     )
