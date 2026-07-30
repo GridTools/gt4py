@@ -15,28 +15,25 @@ jupyter:
 
 ```python editable=true slideshow={"slide_type": ""}
 import dataclasses
-import re
 
 
 import gt4py.next as gtx
-
-import devtools
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-# How to read (toolchain) workflows
+# How to read (toolchain) pipelines
 
 <!-- #endregion -->
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-## Basic workflow (single step)
+## Basic step
 
 ```mermaid
 graph LR
 
-StageA -->|basic workflow| StageB
+StageA -->|step| StageB
 ```
 
 Where "Stage" describes any data structure, and where `StageA` contains all the input data and `StageB` contains all the output data.
@@ -59,7 +56,9 @@ simple_add_1(1)
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-This is already a (single step) workflow. We can build a more complex one by chaining it multiple times.
+This is already a step: the type `gtx.otf.workflow.Step[S, T]` is nothing but an alias of `Callable[[S], T]`, so every single-argument callable is a step and there is no base class, decorator or wrapper to apply.
+
+Composing steps is therefore plain Python:
 
 ```mermaid
 graph LR
@@ -70,49 +69,28 @@ inp(A: int) -->|simple_add_1| b(A + 1) -->|simple_add_1| c(A + 2) -->|simple_add
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-manual_add_3 = (
-    gtx.otf.workflow.StepSequence.start(simple_add_1).chain(simple_add_1).chain(simple_add_1)
-)
+add_3: gtx.otf.workflow.Step[int, int] = lambda inp: simple_add_1(simple_add_1(simple_add_1(inp)))
 
-manual_add_3(1)
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-### Simplest Composable Step
-
-All we have to do for chaining to work out of the box is add the `make_step` decorator!
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-@gtx.otf.workflow.make_step
-def chainable_add_1(inp: int) -> int:
-    return inp + 1
-```
-
-```python editable=true slideshow={"slide_type": ""}
-add_3 = chainable_add_1.chain(chainable_add_1).chain(chainable_add_1)
 add_3(1)
 ```
 
 ### Example in the Wild
 
 ```python
-gtx.ffront.func_to_past.func_to_past.steps.inner[0]??
+gtx.ffront.func_to_past.func_to_past??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
 ### Step with Parameters
 
-Sometimes we want to allow for different configurations of a step.
+Sometimes we want to allow for different configurations of a step. A frozen dataclass with a `__call__` gives us a configurable, immutable step.
 
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
 @dataclasses.dataclass(frozen=True)
-class MathOp(gtx.otf.workflow.ChainableWorkflowMixin[int, int]):
+class MathOp:
     op: str
     rhs: int = 0
 
@@ -126,7 +104,14 @@ class MathOp(gtx.otf.workflow.ChainableWorkflowMixin[int, int]):
         return lhs * rhs
 
 
-add_3_times_2 = MathOp("add", 3).chain(MathOp("mul", 2))
+add_3_step = MathOp("add", 3)
+times_2_step = MathOp("mul", 2)
+
+
+def add_3_times_2(inp: int) -> int:
+    return times_2_step(add_3_step(inp))
+
+
 add_3_times_2(1)
 ```
 
@@ -141,11 +126,10 @@ gtx.program_processors.runners.roundtrip.Roundtrip??
 ### Wrapper Steps
 
 Sometimes we want to make a step behave slightly differently without modifying the step itself. In this case we can wrap it into a wrapper step. These behave a little bit like (limited) decorators.
-Below we will go through the existing wrapper steps, which you might encounter.
 
 #### Caching / memoizing
 
-For example we might want to cach the output (memoize) for which we need to add a way of hashing the input:
+For example we might want to cache the output (memoize) for which we need to add a way of hashing the input:
 
 ```mermaid
 graph LR
@@ -156,24 +140,22 @@ inp(A: int) --> ha{{"input_fingerprinter(A)"}} --> h("hash(A)") --> ck{{"check c
 ck -->|hit| hit("in cache") --> out
 ```
 
-For this we can use the `CachedStep`, you will see something like below
+For this we can use the `CachedStep`, the one wrapper step the toolchain still has. You will see something like below
 
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-def debug_print(inp: int) -> int:
+def debug_print_and_calc(inp: int) -> int:
     print("cache miss!")
-    return inp
+    return add_3_times_2(inp)
 
 
 # NOTE: `CachedStep` keys the cache on a fingerprint of the step itself plus the
 # `input_fingerprinter` of the input. `.in_memory` pairs a `dict` cache with the
 # lenient fingerprinter, which hashes the step structurally -- so non-importable
 # callables (lambdas, closures) are fine for this single-process cache.
-debug_print_step = gtx.otf.workflow.make_step(debug_print)
-
 cached_calc = gtx.otf.workflow.CachedStep.in_memory(
-    step=debug_print_step.chain(add_3_times_2),
+    step=debug_print_and_calc,
     input_fingerprinter=lambda i: str(i),  # using ints as their own hash
 )
 
@@ -185,28 +167,28 @@ cached_calc(1)
 ### Example in the Wild
 
 ```python
-gtx.backend.DEFAULT_PROG_TRANSFORMS.past_lint??
+gtx.backend.DEFAULT_TRANSFORMS.past_lint??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-Though we execute the workflow three times we only get the debug print once, it worked! Btw, hashing is rarely that easy in the wild...
+Though we execute the step three times we only get the debug print once, it worked! Btw, hashing is rarely that easy in the wild...
 
-Let's say we want to make our calculation workflow compatible with string input. We can add a conversion step (which only works with strings).
+Let's say we want to make our calculation compatible with string input. We can add a conversion step (which only works with strings).
 
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-# A plain conversion step turning a string into an int, chained into the
-# workflow below and reused by `make_str_to_int(cached=True)`.
+# A plain conversion step turning a string into an int, composed into the
+# pipeline below and reused by `make_str_to_int(cached=True)`.
 def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
 
 
-to_int_step = gtx.otf.workflow.make_step(to_int)
+def str_calc(inp: str) -> int:
+    return add_3_times_2(to_int(inp))
 
-str_calc = to_int_step.chain(add_3_times_2)
 
 str_calc("1")
 ```
@@ -221,15 +203,15 @@ If a step is useful with different combinations of parameters and wrappers, give
 
 ```python editable=true slideshow={"slide_type": ""}
 @dataclasses.dataclass(frozen=True)
-class AnyStrToInt(gtx.otf.workflow.ChainableWorkflowMixin[str | int, int]):
-    inner_step: gtx.otf.workflow.Workflow[str, int] = to_int
+class AnyStrToInt:
+    inner_step: gtx.otf.workflow.Step[str, int] = to_int
 
     def __call__(self, inp: str | int) -> int:
         return self.inner_step(inp)
 
 
 def make_str_to_int(
-    *, cached: bool = False, step: gtx.otf.workflow.Workflow[str, int] = to_int
+    *, cached: bool = False, step: gtx.otf.workflow.Step[str, int] = to_int
 ) -> AnyStrToInt:
     if cached:
         step = gtx.otf.workflow.CachedStep.in_memory(step=step, input_fingerprinter=str)
@@ -247,155 +229,44 @@ uncached.inner_step
 gtx.ffront.past_passes.linters.linter_factory??
 ```
 
-<!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
+<!-- #region editable=true slideshow={"slide_type": ""} -->
 
-## Composition 1: Chaining
+## Named pipelines
 
-So far we have only seen compsition of workflows by chaining. Any sequence of steps can be represented as a chain. Chains can be built of smaller chains, so a Workflow could be composed and then reused in a bigger workflow.
+Real toolchain pipelines are frozen dataclasses whose fields are the named steps and whose `__call__` spells the composition out explicitly. There is no combinator machinery left: reading `__call__` tells you exactly which steps run and in which order, and the whole composition is statically typed.
 
-However, chains are of limited use in the real world, because it's a pain to access a specific step. This we might want to do in order to:
+There are two of them:
 
-- run that step in isolation for debugging or other purposes
-- build a new chain with a step swapped out (workflows are immutable).
+- `gtx.backend.Transforms` — the frontend pipeline, from a program definition in any stage to a `CompilableProgram`. Which of its steps run depends on the type of the input definition (a DSL program definition starts one step earlier than a PAST one), which is why its `__call__` is a `match` rather than a straight line.
+- `gtx.backend.CompilePipeline` — the compiled backends' `translation` / `bindings` / `compilation` pipeline.
 
-Imagine swapping out `sub_third` in `complicated_workflow` below (without copy pasting code):
-
-```python
-complicated_workflow = (
-    start_step.chain(first_sub_first.chain(first_sub_second).chain(first_sub_third))
-    .chain(second_sub_first.chain(second_sub_second))
-    .chain(last)
-)
-```
-
-```mermaid
-graph TD
-c{{complicated_workflow}} --> 0 --> s{{start_step}}
-c --> 1 -->|0| a1{{first_sub_first}}
-1 -->|1| a2{{first_sub_second}}
-1 -->|2| a3{{first_sub_third}}
-c --> 2 -->|0| b1{{second_sub_first}}
-2 -->|1| b2{{second_sub_second}}
-c --> 3 -->|0| l{{last}}
-```
-
-<!-- #endregion -->
-
-<!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
-
-## Composition 2: Sequence of Named Steps
-
-Let's say we want a string processing workflow where the intermediate stages are also of value on their own. We would want to access individual steps, specifically each step as it was configured for this workflow (with parameters, caching, etc identical).
-
-For this we can use `NamedStepSequence`, giving each step a name, by which we can access it later. For this we have to create a dataclass and derive from `NamedStepSequence`. Each step is then a field of the dataclass, type hinted as a `Workflow`. The resulting workflow will run the steps in order of their apperance in the class body.
-
-To use the same "complicated workflow" example from above:
-
-```python
-@dataclasses.dataclass(frozen=True)
-class FirstSub(gtx.otf.workflow.NamedStepSequence[B, E]):
-    first: Workflow[B, C]
-    second: Workflow[C, D]
-    third: Workflow[D, E]
-
-
-@dataclasses.dataclass(frozen=True)
-class SecondSub(gtx.otf.workflow.NamedStepSequence[E, G]):
-    first: Workflow[E, F]
-    second: Workflow[F, G]
-
-
-@dataclasses.dataclass(frozen=True)
-class ComplicatedWorkflow(gtx.otf.workflow.NamedStepSequence[A, F]):
-    start_step: Workflow[A, B]
-    first_sub: Workflow[B, E]
-    second_sub: Workflow[E, G]
-    last: Workflow[G, F]
-
-
-complicated_workflow = ComplicatedWorkflow(
-    start_step=start_step,
-    first_sub=FirstSub(first=first_sub_first, second=first_sub_second, third=first_sub_third),
-    second_sub=SecondSub(first=second_sub_first, second=second_sub_second),
-    last=last,
-)
-```
-
-```mermaid
-graph TD
-
-w{{complicated_workflow: ComplicatedWorkflow}} -->|".start_step"| a{{start_step}}
-w -->|".first_sub.first"| b{{first_sub_first}}
-w -->|".first_sub.second"| c{{first_sub_second}}
-w -->|".first_sub.third"| d{{first_sub_third}}
-w -->|".second_sub.first"| e{{second_sub_first}}
-w -->|".second_sub_second"| f{{second_sub_second}}
-w -->|".last"| g{{last}}
-```
+Naming the steps buys two things: they can be run in isolation for debugging, and a variant pipeline is one `dataclasses.replace` away, without touching the code that uses it.
 
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
-## Here we define how the steps are composed
-@dataclasses.dataclass(frozen=True)
-class StrProcess(gtx.otf.workflow.NamedStepSequence):
-    hexify_colors: gtx.otf.workflow.Workflow[str, str]
-    replace_tabs: gtx.otf.workflow.Workflow[str, str]
+## The steps are plain attributes, so they can be run on their own ...
+transforms = gtx.backend.DEFAULT_TRANSFORMS
+transforms.past_lint
+```
 
-
-## Here we define the steps themselves
-@dataclasses.dataclass(frozen=True)
-class HexifyColors(gtx.otf.workflow.ChainableWorkflowMixin):
-    color_scheme: dict[str, str] = dataclasses.field(
-        default_factory=lambda: {"blue": "#0000ff", "green": "#00ff00", "red": "#ff0000"}
-    )
-
-    def __call__(self, inp: str) -> str:
-        result = inp
-        for color, hexcode in self.color_scheme.items():
-            result = result.replace(color, hexcode)
-        return result
-
-
-def spaces_to_tabs(inp: str) -> str:
-    return re.sub(r"    ", r"\t", inp)
+```python editable=true slideshow={"slide_type": ""}
+## ... and a variant is built at composition time, never with per-call flags.
+dataclasses.replace(
+    transforms, past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False)
+)
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-Note that with all this there comes an extra feature: We can easily create variants with different steps, without having to change the code that will use the composed workflow. Even if the calling code calls steps in isolation!
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-CUSTOM_COLORS = {"blue": "#55aaff", "green": "#00ff00", "red": "#ff0000"}
-
-proc = StrProcess(
-    hexify_colors=HexifyColors(color_scheme=CUSTOM_COLORS), replace_tabs=spaces_to_tabs
-)
-
-proc("""
-p {
-    background-color: blue;
-    color: red;
-}
-""")
-```
-
-```python editable=true slideshow={"slide_type": ""}
-proc.hexify_colors("blue")
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-`NamedStepSequence`s still work with wrapper steps, parameters and chaining. They can also be nested. So for a complex workflow there would be innumerous possible variants. Therefore expect to often see them paired with factories.
+Both pipelines announce every step they run on the `gtx.otf.workflow.stage_hook` event hook, as `(name, artifact)` where `name` is the field name of the step. That is the sanctioned way to observe intermediate stages; setting `GT4PY_DUMP_STAGES=<dir>` registers a subscriber that writes each stage artifact to disk.
 
 <!-- #endregion -->
 
 ### Example in the Wild
 
 ```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_PROG_TRANSFORMS??
+gtx.backend.DEFAULT_TRANSFORMS??
 ```
 
 ```python

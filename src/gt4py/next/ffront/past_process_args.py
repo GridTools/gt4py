@@ -38,7 +38,7 @@ def transform_program_args(
 
 def transform_program_args_factory(
     cached: bool = True,
-) -> workflow.Workflow[ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef]:
+) -> workflow.Step[ffront_stages.ConcretePASTProgramDef, ffront_stages.ConcretePASTProgramDef]:
     wf = transform_program_args
     if cached:
         wf = workflow.CachedStep.in_memory(

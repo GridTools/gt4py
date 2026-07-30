@@ -18,7 +18,7 @@ contracts produce live in `gt4py.next.otf.artifacts`.
 
 from __future__ import annotations
 
-from typing import Protocol, TypeAlias, TypeVar
+from typing import TypeAlias, TypeVar
 
 from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.iterator import ir as itir
@@ -43,28 +43,13 @@ ConcreteProgramDef: TypeAlias = workflow.ProgramWithArgs[IRDefinitionT, ArgsDefi
 CompilableProgram: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
 
 
-class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[CompilableProgram, artifacts.ProgramSource[CodeSpecT]],
-    Protocol[CodeSpecT],
-):
-    """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
+#: Translate a compilable program to source code (CompilableProgram -> ProgramSource).
+TranslationStep: TypeAlias = workflow.Step[CompilableProgram, artifacts.ProgramSource[CodeSpecT]]
 
-    ...
-
-
-class CompilationStep(
-    workflow.Workflow[
-        artifacts.ExtensionSource[CodeSpecT, TargetCodeSpecT], artifacts.CompilationArtifact
-    ],
-    Protocol[CodeSpecT, TargetCodeSpecT],
-):
-    """Run the build system and produce an ``artifacts.CompilationArtifact``.
-
-    Each backend defines its own concrete artifact dataclass (frozen,
-    picklable, with a ``load`` method); they all satisfy the
-    ``artifacts.CompilationArtifact`` Protocol structurally.
-    """
-
-    def __call__(
-        self, source: artifacts.ExtensionSource[CodeSpecT, TargetCodeSpecT]
-    ) -> artifacts.CompilationArtifact: ...
+#: Run the build system and produce a loadable `artifacts.CompilationArtifact`.
+#: Each backend defines its own concrete artifact dataclass (frozen, picklable,
+#: with a `load` method); they all satisfy the `artifacts.CompilationArtifact`
+#: protocol structurally.
+CompilationStep: TypeAlias = workflow.Step[
+    artifacts.ExtensionSource[CodeSpecT, TargetCodeSpecT], artifacts.CompilationArtifact
+]
