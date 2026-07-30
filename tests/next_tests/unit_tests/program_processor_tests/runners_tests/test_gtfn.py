@@ -26,11 +26,13 @@ import unittest.mock
 import pytest
 
 import gt4py._core.definitions as core_defs
+import gt4py.next as gtx
 from gt4py.next import config, custom_layout_allocators
-from gt4py.next.otf import workflow
+from gt4py.next.otf import arguments, artifacts, workflow
 from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_make_gtfn_toolchain_device():
@@ -198,3 +200,37 @@ def test_prebuilt_toolchain_names_are_unique():
 
     assert gtfn.run_gtfn_no_transforms.name == "run_gtfn_cpu_no_transforms"
     assert len(set(names)) == len(names)
+
+
+IDim = gtx.Dimension("IDim")
+
+
+@gtx.field_operator
+def _copy_op(a: gtx.Field[gtx.Dims[IDim], gtx.float64]) -> gtx.Field[gtx.Dims[IDim], gtx.float64]:
+    return a
+
+
+@gtx.program
+def _copy_prog(
+    a: gtx.Field[gtx.Dims[IDim], gtx.float64], out: gtx.Field[gtx.Dims[IDim], gtx.float64]
+):
+    _copy_op(a, out=out)
+
+
+def test_translate_produces_cpp_source():
+    """`Toolchain.translate` is the sanctioned partial run: frontend + translation only."""
+    field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    compile_time_args = arguments.CompileTimeArgs(
+        args=(field_type, field_type),
+        kwargs={},
+        offset_provider={},
+        column_axis=None,
+        argument_descriptor_contexts={},
+    )
+
+    source = gtfn.run_gtfn.translate(_copy_prog.definition_stage, compile_time_args)
+
+    assert isinstance(source, artifacts.ProgramSource)
+    assert source.code_spec.file_extension == "cpp"
+    assert source.entry_point.name == "_copy_prog"
+    assert "_copy_prog" in source.source_code
