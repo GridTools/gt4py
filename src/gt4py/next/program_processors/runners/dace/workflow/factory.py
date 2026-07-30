@@ -12,8 +12,8 @@ import functools
 from typing import Any, Final
 
 from gt4py._core import definitions as core_defs, filecache
-from gt4py.next import config, fingerprinting
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next import backend as next_backend, config, fingerprinting
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import DaCeCompiler
@@ -70,7 +70,7 @@ def make_dace_compile_workflow(
     cached_translation: bool = False,
     cmake_build_type: config.CMakeBuildType | None = None,
     translation: DaCeTranslator | None = None,
-) -> recipes.OTFCompileWorkflow:
+) -> next_backend.CompilePipeline:
     """
     Build the DaCe translation -> bindings -> compilation workflow.
 
@@ -122,7 +122,7 @@ def make_dace_compile_workflow(
     else:
         translation_step = bare_translation
 
-    return recipes.OTFCompileWorkflow(
+    return next_backend.CompilePipeline(
         translation=translation_step,
         bindings=functools.partial(
             bindings_step.bind_sdfg, bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME
