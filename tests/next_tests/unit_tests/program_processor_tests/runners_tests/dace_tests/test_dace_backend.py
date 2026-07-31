@@ -445,7 +445,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
 
 
 def test_make_backend_rejects_pool_with_multi_stream(monkeypatch):
-    monkeypatch.setattr(config, "GT4PY_MAX_CONCURRENT_GPU_STREAMS", 4)
+    monkeypatch.setattr(config, "MAX_CONCURRENT_GPU_STREAMS", 4)
 
     with pytest.raises(
         ValueError,

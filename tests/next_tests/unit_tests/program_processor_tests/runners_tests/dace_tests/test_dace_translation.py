@@ -528,8 +528,8 @@ def test_translation_source_code_invariant_under_guid_change():
 
 
 def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream(monkeypatch):
-    """When GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0, the SDFG contains sync tasklets."""
-    monkeypatch.setattr(gtx_config, "GT4PY_MAX_CONCURRENT_GPU_STREAMS", 4)
+    """When MAX_CONCURRENT_GPU_STREAMS > 0, the SDFG contains sync tasklets."""
+    monkeypatch.setattr(gtx_config, "MAX_CONCURRENT_GPU_STREAMS", 4)
 
     program_name = "field_ir_multi_stream_sync"
     ir = itir.Program(
@@ -587,8 +587,8 @@ def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream(monkeypatch):
 
 
 def test_generate_sdfg_skips_stream_sync_for_single_stream(monkeypatch):
-    """When GT4PY_MAX_CONCURRENT_GPU_STREAMS == 0, no sync tasklets are added."""
-    monkeypatch.setattr(gtx_config, "GT4PY_MAX_CONCURRENT_GPU_STREAMS", 0)
+    """When MAX_CONCURRENT_GPU_STREAMS == 0, no sync tasklets are added."""
+    monkeypatch.setattr(gtx_config, "MAX_CONCURRENT_GPU_STREAMS", 0)
 
     program_name = "field_ir_single_stream"
     ir = itir.Program(
