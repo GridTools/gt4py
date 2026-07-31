@@ -167,8 +167,6 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(program_source):
 def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     artifact = dace_wf_compilation.DaCeCompilationArtifact(
         sdfg_build_folder=tmp_path,
-        library_path=tmp_path / "build" / "libprogram.so",
-        sdfg_json="{}",
         binding_source_code="def update_sdfg_args(*a, **k): ...",
         bind_func_name="update_sdfg_args",
         device_type=core_defs.DeviceType.CPU,
@@ -198,7 +196,8 @@ def test_same_artifact(add_gpu_trace_markers, program_source):
         device_type=core_defs.DeviceType.CUDA,
     )
 
-    assert artifact_1.library_path == artifact_2.library_path
+    assert artifact_1.sdfg_build_folder == artifact_2.sdfg_build_folder
+    assert artifact_1 == artifact_2
     assert (
         sdfg_1.hash_sdfg() == sdfg_2.hash_sdfg()
     )  # might contain different GUIDs, `hash_sdfg()` ignores them
@@ -213,7 +212,7 @@ def test_apply_tx_markers_changes_artifact(program_source):
         program_source, device_type=core_defs.DeviceType.CUDA, add_gpu_trace_markers=True
     )
 
-    assert artifact_base.library_path != artifact_with_markers.library_path
+    assert artifact_base.sdfg_build_folder != artifact_with_markers.sdfg_build_folder
 
 
 # `CXXFLAGS`, `CUDAFLAGS` and `HIPFLAGS` feed `compiler.cpu.args`, `compiler.cuda.args`
@@ -245,7 +244,7 @@ def test_compiler_flags_change_artifact(
 
     # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
     # so `get_cache_folder` names two distinct artifacts.
-    assert artifact_default.library_path != artifact_custom.library_path
+    assert artifact_default.sdfg_build_folder != artifact_custom.sdfg_build_folder
 
 
 def test_cmake_build_type_changes_artifact(program_source):
@@ -262,4 +261,4 @@ def test_cmake_build_type_changes_artifact(program_source):
     )
     artifact_debug, _ = _run_compiler(program_source, cmake_build_type=config.CMakeBuildType.DEBUG)
 
-    assert artifact_release.library_path != artifact_debug.library_path
+    assert artifact_release.sdfg_build_folder != artifact_debug.sdfg_build_folder
