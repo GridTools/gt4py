@@ -1207,7 +1207,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a5"
-source = { git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg#720bff4ff9a354d5b78f4679edf061f4f79e62a8" }
+source = { git = "https://github.com/philip-paul-mueller/dace?branch=nanobind-compiled-sdfg#6b58997eadc046d1afe9990427869c0388d2f728" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
