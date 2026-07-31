@@ -231,7 +231,7 @@ def _process_argument(
         is_scalar = isinstance(param_type, ts.ScalarType)
         is_bool = param_type.kind == ts.ScalarKind.BOOL if is_scalar else False  # type: ignore[attr-defined]
         tuple_types = (
-            param_type.types if (is_tuple := isinstance(param_type, ts.TupleType)) else None
+            tuple(param_type.types) if (is_tuple := isinstance(param_type, ts.TupleType)) else None
         )
 
     if is_tuple:
@@ -241,8 +241,8 @@ def _process_argument(
         for tuple_member, tuple_member_type in zip(tuple_members, tuple_types):
             processed_tuple_members += _process_argument(  # type: ignore[operator]
                 argument=tuple_member,
-                param_type=tuple_member_type,  # type: ignore[arg-type]
-                unpacked_variables=unpacked_variables,  # type: ignore[arg-type]
+                param_type=tuple_member_type,
+                unpacked_variables=unpacked_variables,
                 backend=backend,
             )
 
