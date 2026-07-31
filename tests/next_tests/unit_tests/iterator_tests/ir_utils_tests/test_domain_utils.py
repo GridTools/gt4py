@@ -15,6 +15,7 @@ from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
 
 I = common.Dimension("I")
+IHalf = common.flip_staggered(I)
 J = common.Dimension("J")
 K = common.Dimension("J", kind=common.DimensionKind.VERTICAL)
 Vertex = common.Dimension("Vertex")
@@ -127,6 +128,29 @@ def test_domain_intersection():
     expected = im.domain(common.GridType.CARTESIAN, {I: (5, 7), J: (4, 8)})
     result = domain_utils.domain_intersection(domain0, domain1, domain2)
     assert result.as_expr() == expected
+
+
+def test_domain_intersection_with_empty_stays_empty():
+    # Empty domains are the intersection's absorbing element. Dropping them (as the union does)
+    # would yield a non-empty result.
+    non_empty = _make_domain({I: (0, 10)})
+    empty = _make_domain({I: (1, 1)})
+
+    assert domain_utils.domain_intersection(empty, non_empty).empty()
+    assert domain_utils.domain_intersection(non_empty, empty).empty()
+
+
+def test_domain_intersection_empty_with_infinite_range():
+    # An empty range intersected with a half-infinite one must stay empty. Dropping the empty
+    # range would leak the `InfinityLiteral` bound into the result.
+    empty = _make_domain({I: (1, 1)})
+    half_infinite = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN, ranges={I: right_infinity_range}
+    )
+
+    result = domain_utils.domain_intersection(empty, half_infinite)
+    assert result.empty()
+    assert result.ranges[I].stop != itir.InfinityLiteral.POSITIVE
 
 
 def test_domain_union_then_intersection():
@@ -267,6 +291,47 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
     )
     end_domain = init_domain.translate(shift_chain, offset_provider).as_expr()
     assert end_domain == expected_end_domain
+
+
+@pytest.mark.parametrize("as_type", [False, True])
+def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
+    # With `symbolic_domain_sizes` the translated range is taken from the provided size
+    # expression instead of the connectivity table. This makes `translate` work for a type-only
+    # `OffsetProviderType` (which has no table) as well as a runtime `OffsetProvider`.
+    offset_provider = {
+        "V2E": constructors.as_connectivity(
+            domain={Vertex: (0, 4), V2EDim: 1},
+            codomain=Edge,
+            data=np.asarray([0, 1, 2, 3], dtype=fbuiltins.IndexType).reshape((4, 1)),
+        )
+    }
+    if as_type:
+        offset_provider = common.offset_provider_to_type(offset_provider)
+
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 4)})
+    )
+    translated = domain.translate(
+        [itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0)],
+        offset_provider,
+        symbolic_domain_sizes={"Edge": im.ref("num_edges")},
+    )
+
+    expected = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, im.ref("num_edges"))})
+    assert translated.as_expr() == expected
+
+
+def test_translate_staggered_cartesian_offset():
+    shift = (im.cartesian_offset(I, IHalf), im.ensure_offset(1))
+
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.CARTESIAN, {I: (0, 10)})
+    )
+    translated = domain.translate(shift, {})
+
+    assert translated == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.CARTESIAN, {IHalf: (im.plus(0, 1), im.plus(10, 1))})
+    )
 
 
 def test_non_contiguous_domain_warning(monkeypatch):

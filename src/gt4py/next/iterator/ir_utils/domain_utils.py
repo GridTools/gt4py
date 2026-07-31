@@ -65,14 +65,12 @@ def _unstructured_translate_range_statically(
     tag: str,
     val: itir.OffsetLiteral
     | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
-    offset_provider: common.OffsetProvider,
+    connectivity: common.NeighborTable,
     expr: itir.Expr | None = None,
 ) -> SymbolicRange:
     """
     Translate `range_` using static connectivity information from `offset_provider`.
     """
-    assert common.is_offset_provider(offset_provider)
-    connectivity = offset_provider[tag]
     assert common.is_neighbor_table(connectivity)
     skip_value = connectivity.skip_value
 
@@ -181,36 +179,48 @@ class SymbolicDomain:
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
         symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     ) -> SymbolicDomain:
-        offset_provider_type = common.offset_provider_to_type(offset_provider)
-
         dims = list(self.ranges.keys())
         new_ranges = {dim: self.ranges[dim] for dim in dims}
         if len(shift) == 0:
             return self
         if len(shift) == 2:
             off, val = shift
+
             if isinstance(off, itir.CartesianOffset):
                 if val is trace_shifts.Sentinel.VALUE:
-                    raise NotImplementedError("Dynamic offsets not supported.")
+                    raise NotImplementedError("Dynamic cartesian offsets not supported.")
                 assert isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
-                dom = misc.dim_from_axis_literal(off.domain)
-                cod = misc.dim_from_axis_literal(off.codomain)
-                assert dom == cod  # relocation (staggering) is not supported here
-                new_ranges[dom] = SymbolicRange.translate(self.ranges[dom], val.value)
-                return SymbolicDomain(self.grid_type, new_ranges)
-            assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
-            connectivity_type = common.get_offset_type(offset_provider_type, off.value)
 
-            if isinstance(connectivity_type, common.NeighborConnectivityType):
-                # unstructured shift
+                old_dim = misc.dim_from_axis_literal(off.domain)
+                new_dim = misc.dim_from_axis_literal(off.codomain)
+
+                assert new_dim not in new_ranges or old_dim == new_dim
+
+                new_range = SymbolicRange.translate(self.ranges[old_dim], val.value)
+                new_ranges = dict(
+                    (dim, range_) if dim != old_dim else (new_dim, new_range)
+                    for dim, range_ in new_ranges.items()
+                )
+            else:
+                assert isinstance(off, itir.OffsetLiteral) and isinstance(off.value, str)
                 assert (
                     isinstance(val, itir.OffsetLiteral) and isinstance(val.value, int)
                 ) or val in [
                     trace_shifts.Sentinel.ALL_NEIGHBORS,
                     trace_shifts.Sentinel.VALUE,
                 ]
-                old_dim = connectivity_type.source_dim
-                new_dim = connectivity_type.codomain
+
+                connectivity: common.NeighborTable | common.NeighborConnectivityType
+                if common.is_offset_provider(offset_provider):
+                    connectivity = common.get_offset(offset_provider, off.value)
+                    old_dim = connectivity.domain.dims[0]
+                    new_dim = connectivity.codomain
+                else:
+                    assert common.is_offset_provider_type(offset_provider)
+                    connectivity = common.get_offset_type(offset_provider, off.value)
+                    old_dim = connectivity.domain[0]
+                    new_dim = connectivity.codomain
+
                 assert new_dim not in new_ranges or old_dim == new_dim
                 if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
                     new_range = SymbolicRange(
@@ -218,18 +228,20 @@ class SymbolicDomain:
                         im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
                     )
                 else:
-                    assert common.is_offset_provider(offset_provider)
-                    assert not isinstance(val, itir.CartesianOffset)  # offset value, never a node
+                    assert common.is_neighbor_table(connectivity)
                     new_range = _unstructured_translate_range_statically(
-                        new_ranges[old_dim], off.value, val, offset_provider, self.as_expr()
+                        new_ranges[old_dim],
+                        off.value,
+                        val,  # type: ignore[arg-type] # mypy not smart enough
+                        connectivity,
+                        self.as_expr(),
                     )
 
                 new_ranges = dict(
                     (dim, range_) if dim != old_dim else (new_dim, new_range)
                     for dim, range_ in new_ranges.items()
                 )
-            else:
-                raise AssertionError()
+
             return SymbolicDomain(self.grid_type, new_ranges)
         elif len(shift) > 2:
             return self.translate(shift[0:2], offset_provider, symbolic_domain_sizes).translate(
@@ -244,34 +256,44 @@ def _reduce_ranges(
     start_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
     stop_reduce_op: Callable[[itir.Expr, itir.Expr], itir.Expr],
 ) -> SymbolicRange:
-    """
-    Uses start_op and stop_op to fold the start and stop of a list of ranges.
-
-    This function only computes the correct value if the (non-empty) ranges are either
-    overlapping / adjacent or empty, as calculation is by means of the convex hull. Non-static
-    ranges may not be empty for now.
-    """
-    non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
-    if len(non_empty_ranges) == 0:
-        return ranges[0]  # all empty -> empty
-    elif len(non_empty_ranges) == 1:
-        # the reduction of a single range is the range itself
-        return non_empty_ranges[0]
-    else:
-        start = functools.reduce(start_reduce_op, [range_.start for range_ in non_empty_ranges])
-        stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in non_empty_ranges])
+    """Uses start_op and stop_op to fold the start and stop of a list of ranges."""
+    start = functools.reduce(start_reduce_op, [range_.start for range_ in ranges])
+    stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in ranges])
     # constant fold to keep the tree small and so translated bounds (e.g. `0 + 1`) collapse to a
     # literal (we deliberately do not fold in `translate`)
     start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
     return SymbolicRange(start, stop)
 
 
-_range_union = functools.partial(
-    _reduce_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum
-)
-_range_intersection = functools.partial(
-    _reduce_ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum
-)
+def _range_union(*ranges: SymbolicRange) -> SymbolicRange:
+    """
+    Return the union of a list of ranges, computed as the convex hull.
+
+    This only computes the correct value if the non-empty ranges are overlapping or adjacent.
+    An empty range is the identity element of the union, so empty ranges are dropped rather than
+    fed into the convex hull, which would otherwise over-approximate (e.g. `[10, 10[ | [11, 11[`
+    is empty, but its convex hull is `[10, 11[`). Emptiness is only decidable for static ranges;
+    non-static ranges may not be empty for now.
+    """
+    non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
+    if not non_empty_ranges:
+        return ranges[0]  # all empty -> empty
+    return _reduce_ranges(*non_empty_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum)
+
+
+def _range_intersection(*ranges: SymbolicRange) -> SymbolicRange:
+    """
+    Return the intersection of a list of ranges.
+
+    An empty range is the absorbing element of the intersection, so it is returned directly.
+    Folding it into `max`/`min` instead would give a wrong (possibly non-empty, possibly
+    unbounded) result, e.g. `[1, 1[ & [0, inf[` would yield `[1, inf[`. Emptiness is only
+    decidable for static ranges; non-static ranges may not be empty for now.
+    """
+    for range_ in ranges:
+        if range_.empty():
+            return range_
+    return _reduce_ranges(*ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum)
 
 
 def _reduce_domains(

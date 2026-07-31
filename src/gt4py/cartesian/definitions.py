@@ -70,13 +70,7 @@ class FieldInfo:
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
-            access=self.access.name,
-            boundary=repr(self.boundary),
-            axes=repr(self.axes),
-            data_dims=repr(self.data_dims),
-            dtype=repr(self.dtype),
-        )
+        return f"FieldInfo(access=AccessKind.{self.access.name}, boundary={self.boundary!r}, axes={self.axes!r}, data_dims={self.data_dims!r}, dtype={self.dtype!r})"
 
     @functools.cached_property
     def domain_mask(self):
@@ -101,9 +95,7 @@ class ParameterInfo:
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "ParameterInfo(access=AccessKind.{access}, dtype={dtype})".format(
-            access=self.access.name, dtype=repr(self.dtype)
-        )
+        return f"ParameterInfo(access=AccessKind.{self.access.name}, dtype={self.dtype!r})"
 
 
 @attribkwclass

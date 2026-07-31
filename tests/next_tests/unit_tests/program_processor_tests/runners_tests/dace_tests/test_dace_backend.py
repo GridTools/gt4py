@@ -15,6 +15,7 @@ dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
+from gt4py.next.otf import runners
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
 )
@@ -27,8 +28,9 @@ from next_tests.integration_tests.cases_utils import KDim
 @pytest.fixture(
     params=[
         pytest.param(core_defs.DeviceType.CPU),
-        pytest.param(core_defs.DeviceType.CUDA, marks=pytest.mark.requires_gpu),
-    ]
+        pytest.param(core_defs.CUPY_DEVICE_TYPE, marks=pytest.mark.requires_gpu),
+    ],
+    ids=["CPU", "GPU"],
 )
 def device_type(request) -> str:
     return request.param
@@ -99,8 +101,11 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         unstructured_horizontal_has_unit_stride=on_gpu,
         use_metrics=True,
     )
-    testee.with_backend(custom_backend).compile(offset_provider={})
-    gtx.wait_for_compilation()
+    # The monkeypatched transformation functions exist only in this process, so
+    # compilation must not be offloaded to a worker.
+    with mock.patch.object(runners, "get_default_runner", return_value=runners.SerialRunner()):
+        testee.with_backend(custom_backend).compile(offset_provider={})
+        gtx.wait_for_compilation()
 
     # check call to `gt_gpu_transformation()`
     if on_gpu:

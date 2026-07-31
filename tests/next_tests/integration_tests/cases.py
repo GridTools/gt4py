@@ -58,7 +58,9 @@ from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-imp
     E2VDim,
     Edge,
     IDim,
+    IHalfDim,
     JDim,
+    JHalfDim,
     KDim,
     KHalfDim,
     V2EDim,
@@ -74,6 +76,7 @@ from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-imp
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IHalfDim], np.int32]  # type: ignore [valid-type]
 JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
@@ -501,6 +504,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
+    offset_provider: Optional[OffsetProvider] = None,
     comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
@@ -515,6 +519,8 @@ def verify_with_default_data(
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
             of the fieldview code, after applying ``.ndarray`` on the fields.
+        offset_provider: An override for the test case's offset_provider.
+            Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
@@ -528,7 +534,7 @@ def verify_with_default_data(
         *inps,
         **kwfields,
         ref=ref(*ref_args),
-        offset_provider=case.offset_provider,
+        offset_provider=offset_provider,
         comparison=comparison,
     )
 
@@ -731,7 +737,9 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
-                KHalfDim: grid_descriptor.sizes[3],
+                IHalfDim: grid_descriptor.sizes[0] - 1,
+                JHalfDim: grid_descriptor.sizes[1] - 1,
+                KHalfDim: grid_descriptor.sizes[2] - 1,
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,

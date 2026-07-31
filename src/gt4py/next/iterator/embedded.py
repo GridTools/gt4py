@@ -587,16 +587,11 @@ def execute_shift(
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
         return cast(IncompletePosition, pos) | {tag: new_entry}
 
-    # a `CartesianConnectivity` tag is a self-describing cartesian shift (e.g. from a
-    # `CartesianOffset` IR node); named offsets are resolved through the offset provider
     if isinstance(tag, common.CartesianConnectivity):
-        assert tag.domain_dim == tag.codomain  # relocation (staggering) is not supported here
         new_pos = copy.copy(pos)
-        key = tag.domain_dim.value
-        if common.is_int_index(value := new_pos[key]):
-            new_pos[key] = value + index + tag.offset
-        else:
-            raise AssertionError()
+        value = new_pos.pop(tag.domain_dim.value)
+        assert common.is_int_index(value)
+        new_pos[tag.codomain.value] = value + index + tag.offset
         return new_pos
     offset_implementation = common.get_offset(offset_provider, tag)
     if common.is_neighbor_table(offset_implementation):
@@ -1471,8 +1466,8 @@ def _get_offset(*lists: _List | _ConstList) -> Optional[runtime.Offset]:
     raise AssertionError("All lists must have the same offset.")
 
 
-@builtins.map_.register(EMBEDDED)
-def map_(op):
+@builtins.map_list.register(EMBEDDED)
+def map_list(op):
     def impl_(*lists):
         offset = _get_offset(*lists)
         if offset is None:

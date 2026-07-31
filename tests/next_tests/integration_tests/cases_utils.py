@@ -51,6 +51,14 @@ __all__ = [
 ]
 
 
+def _no_backend_executor(*args: Any, **kwargs: Any) -> None:
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+def _no_backend_allocator(*args: Any, **kwargs: Any) -> None:
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
 class NoBackend(next_backend.Backend):
     """Temporary default backend to not accidentally test the wrong backend."""
 
@@ -68,8 +76,8 @@ class NoBackend(next_backend.Backend):
 
 no_backend = NoBackend(
     name="no_backend",
-    executor=lambda *args, **kwargs: None,
-    allocator=lambda *args, **kwargs: None,
+    executor=_no_backend_executor,
+    allocator=_no_backend_allocator,
     # TODO(tehrengruber): We don't want any transformations, but since `decorator.FieldOperator`
     #  and `decorator.Program` unconditionally do linting on construction we need the
     #  transformations. When this is up to the backend we can remove this again.
@@ -146,9 +154,11 @@ DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
 IDim = gtx.Dimension("IDim")
+IHalfDim = common.flip_staggered(IDim)
 JDim = gtx.Dimension("JDim")
+JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
-KHalfDim = gtx.Dimension("KHalf", kind=gtx.DimensionKind.VERTICAL)
+KHalfDim = common.flip_staggered(KDim)
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
@@ -182,11 +192,11 @@ class CartesianGridDescriptor(Protocol):
 
 
 def simple_cartesian_grid(
-    sizes: int | tuple[int, int, int, int] = (5, 7, 9, 11),
+    sizes: int | tuple[int, int, int, int] = (5, 7, 9),
 ) -> CartesianGridDescriptor:
     if isinstance(sizes, int):
-        sizes = (sizes,) * 4
-    assert len(sizes) == 4, "sizes must be a tuple of four integers"
+        sizes = (sizes,) * 3
+    assert len(sizes) == 3, "sizes must be a tuple of three integers"
 
     offset_provider = {}
 

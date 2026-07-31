@@ -95,6 +95,7 @@ def _sdfg_add_arrays_and_edges(
     inputs: set[str] | dict[str, dtypes.typeclass],
     outputs: set[str] | dict[str, dtypes.typeclass],
     origins: dict[str, tuple[int, ...]],
+    domain: tuple[int, ...],
 ) -> None:
     for name, array in inner_sdfg.arrays.items():
         if array.transient:
@@ -129,12 +130,20 @@ def _sdfg_add_arrays_and_edges(
                 if axis not in axes:
                     continue
                 o = origin[index]
-                e = field_info[name].boundary.lower_indices[cartesian_index]
+                lower, upper = field_info[name].boundary[cartesian_index]
                 s = inner_sdfg.arrays[name].shape[index]
-                ranges.append(
-                    # s - 1 because ranges are inclusive
-                    (o - max(0, e), o - max(0, e) + s - 1, 1)
-                )
+                if axis == CartesianSpace.Axis.K.name:
+                    d = domain[cartesian_index]
+                    ranges.append(
+                        # max(0, lower) because ...
+                        # d - 1 because ranges are inclusive
+                        (o - max(0, lower), o + upper + d - 1, 1)
+                    )
+                else:
+                    ranges.append(
+                        # s - 1 because ranges are inclusive
+                        (o - max(0, lower), o - max(0, lower) + s - 1, 1)
+                    )
                 index += 1
 
             # Add data dimensions to the range
@@ -264,7 +273,7 @@ def freeze_origin_domain_sdfg(
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
-        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin
+        field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin, domain
     )
 
     # in special case of empty domain, remove entire SDFG.
@@ -417,7 +426,11 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
-            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
+            # We skip
+            #  - `ScalarToSymbolPromotion` because we've seen validation issue in the past
+            #  - `ControlFlowRaising` because we already generate CFGs in stree -> SDFG
+            #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
 
         if do_cache:
@@ -476,11 +489,11 @@ class DaCeExtGenerator(BackendCodegen):
         manager = SDFGManager(self.backend.builder)
 
         sdfg = manager.sdfg_via_schedule_tree()
-        _specialize_transient_strides(
-            sdfg,
-            self.backend.storage_info,
-        )
-        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
+        _specialize_transient_strides(sdfg, self.backend.storage_info)
+        # We skip
+        #  - `ScalarToSymbolPromotion` because we've seen validation issues in the past
+        #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion", "LiftTrivialIf"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the

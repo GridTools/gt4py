@@ -459,10 +459,7 @@ class DaCeTranslator(
 
         module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
-            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-            #   which makes the JSON serialization stable.
-            source_code=sdfg.to_json(hash=True),
+            source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )
