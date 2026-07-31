@@ -86,12 +86,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
+        # TODO(phimuell): Find out how to not abuse `source_code` to pass the bindings to later stages.
         sdfg = dace.SDFG.from_json(
             otf_workflow_translation.replace(  # type: ignore[union-attr]
                 disable_itir_transforms=True,
                 disable_field_origin_on_program_arguments=True,
                 use_metrics=False,
-            )(gtir_stage).source_code
+            )(gtir_stage).source_code[1]
         )
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
