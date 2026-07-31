@@ -12,7 +12,6 @@ import dataclasses
 import json
 import os
 import pathlib
-import pickle
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
 from typing import Any, Final, TypeAlias
@@ -26,11 +25,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
-from gt4py.next.program_processors.runners.dace.transformations.auto_optimize import (
-    AllocationRequest,
-    ExternalMemoryAllocator,
-    ExternalWorkspace,
-)
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -77,7 +71,7 @@ def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionS
     return new_program_source, sdfg
 
 
-def workspace_storage_to_device_mapping(storage: dace.StorageType) -> core_defs.DeviceType:
+def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
     if storage == dace.StorageType.CPU_Heap:
         device = core_defs.DeviceType.CPU
     elif storage == dace.StorageType.GPU_Global:
@@ -90,14 +84,14 @@ def workspace_storage_to_device_mapping(storage: dace.StorageType) -> core_defs.
 
 
 def _validate_external_workspace(
-    storage: dace.StorageType, request: AllocationRequest, wsp: ExternalWorkspace
+    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface, storage: dace.StorageType, nbytes: int
 ) -> None:
-    """Validate that ``wsp`` satisfies ``request`` for ``storage``.
+    """Validate that the provided ``wsp`` workspace satisfies the requirements.
 
     Args:
         storage: SDFG storage type the workspace buffer is being installed for.
-        request: Allocation request that was issued.
-        wsp: External workspace returned by the external allocator.
+        nbytes: Size in bytes required.
+        wsp: The external workspace to check.
 
     Raises:
         TypeError: If ``wsp`` exposes neither ``__array_interface__`` nor
@@ -111,28 +105,12 @@ def _validate_external_workspace(
             f"{storage!r}, which does not expose `__array_interface__` or "
             f"`__cuda_array_interface__`."
         )
-    nbytes = getattr(wsp, "nbytes", None)
-    if nbytes is not None and nbytes < request.nbytes:
-        raise ValueError(
-            f"External memory allocator returned a buffer of {nbytes} bytes for storage "
-            f"{storage!r}, but at least {request.nbytes} were required."
-        )
-    # Validate alignment against the base pointer DaCe will hand to the SDFG
-    # (see ``dace.dtypes.array_interface_ptr``). The ``data`` field is
-    # optional on the host array interface; if it is missing the alignment
-    # contract is trust-based and the check is skipped, mirroring ``nbytes``.
-    interface = (
-        getattr(wsp, "__cuda_array_interface__", None)
-        if storage == dace.StorageType.GPU_Global
-        else getattr(wsp, "__array_interface__", None)
-    )
-    data = interface.get("data") if interface is not None else None
-    if data is not None and request.alignment > 1 and data[0] % request.alignment != 0:
-        raise ValueError(
-            f"External memory allocator returned a buffer for storage {storage!r} "
-            f"whose base pointer ({data[0]}) is not aligned to the required "
-            f"{request.alignment} bytes."
-        )
+    if (wsp_nbytes := getattr(wsp, "nbytes", None)) is not None:
+        if wsp_nbytes < nbytes:
+            raise ValueError(
+                f"External workspace buffer is {wsp_nbytes} bytes for storage "
+                f"{storage!r}, but at least {nbytes} bytes were required."
+            )
 
 
 class CompiledDaceProgram:
@@ -161,15 +139,15 @@ class CompiledDaceProgram:
     #       never updated.
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
-    external_memory_allocator: ExternalMemoryAllocator | None
-    external_workspaces: dict[dace.StorageType, ExternalWorkspace]
+    external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
+        None  # This attribute is set at runtime, before the first call.
+    )
 
     def __init__(
         self,
         program: dace.CompiledSDFG,
         bind_func_name: str,
         binding_source_code: str,
-        external_memory_allocator: ExternalMemoryAllocator | None = None,
     ):
         self.sdfg_program = program
 
@@ -189,56 +167,22 @@ class CompiledDaceProgram:
         # Since the SDFG hasn't been called yet.
         self.csdfg_argv = None
         self.csdfg_init_argv = None
-        self.external_memory_allocator = external_memory_allocator
-        self.external_workspaces = {}
 
-    def _configure_external_workspaces(self, **kwargs: Any) -> None:
-        if self.external_workspaces:
-            # We already allocated the external workspaces, no need to do it again.
-            return
-
-        # DaCe computes workspace sizes during ``initialize`` and stores them
-        # for subsequent ``get_workspace_sizes``/``set_workspace`` calls.
+    def _configure_external_workspace(self, **kwargs: Any) -> None:
         self.sdfg_program.initialize(**kwargs)
         if workspace_sizes := self.sdfg_program.get_workspace_sizes():
-            if self.external_memory_allocator is None:
-                raise ValueError(
-                    "SDFG requires external workspaces, but no allocator was provided."
+            if self.external_workspace is None:
+                raise RuntimeError(
+                    "External workspace is not set. Please call `set_external_workspace()`"
+                    " before the first call to the program."
                 )
             for storage, required_nbytes in workspace_sizes.items():
-                device = workspace_storage_to_device_mapping(storage)
-                request = AllocationRequest(nbytes=required_nbytes, device=device)
-                workspace = self.external_memory_allocator.allocate(request)
-                _validate_external_workspace(storage, request, workspace)
+                device = _map_storage_to_device(storage)
+                workspace = self.external_workspace.get(device)
+                if workspace is None:
+                    raise RuntimeError(f"External workspace for device {device} not found.")
+                _validate_external_workspace(workspace, storage, required_nbytes)
                 self.sdfg_program.set_workspace(storage, workspace)
-                # Keep the workspace buffers alive as long as the compiled program lives.
-                self.external_workspaces[storage] = workspace
-
-    def finalize(self) -> None:
-        """Release external workspaces.
-
-        Finalizes the underlying ``sdfg_program`` and calls ``deallocate``
-        once per allocated storage type. Safe to call multiple times: after
-        the first call the per-storage workspace buffers are dropped from
-        ``external_workspaces`` and subsequent calls are no-ops. A ``None``
-        allocator performs no work but still clears any externally-installed
-        workspaces.
-
-        Failures during deallocation are surfaced as warnings rather than
-        raised, so that one failing buffer does not prevent the remaining
-        workspaces from being released.
-        """
-        if self.external_memory_allocator is not None:
-            for wsp in self.external_workspaces.values():
-                try:
-                    self.external_memory_allocator.deallocate(wsp)
-                except Exception:
-                    warnings.warn(
-                        f"Failed to deallocate external workspace "
-                        f"({type(wsp).__name__!r}); it may be leaked.",
-                        stacklevel=1,
-                    )
-        self.external_workspaces = {}
 
     def construct_arguments(self, **kwargs: Any) -> None:
         """
@@ -247,7 +191,7 @@ class CompiledDaceProgram:
         """
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
-            self._configure_external_workspaces(**kwargs)
+            self._configure_external_workspace(**kwargs)
         # Note we only care about `csdfg_argv` (normal call), since we have to update it,
         #  we ensure that it is a `list`.
         self.csdfg_argv = [*csdfg_argv]
@@ -280,39 +224,6 @@ class CompiledDaceProgram:
         assert result is None
 
 
-class AllocatorNotPicklableError(TypeError):
-    """Raised when an ``external_memory_allocator`` cannot be pickled.
-
-    The allocator is part of the compilation artifact and is pickled when
-    compilation is offloaded to a worker process. Allocators that can not be
-    pickled -- typically closures, lambdas, or classes defined inside a
-    function -- would otherwise degrade silently to in-process compilation
-    via a generic runner warning. This error surfaces the contract failure
-    early, at backend construction, with the original :mod:`pickle` error
-    chained as ``__cause__``.
-    """
-
-
-def _check_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
-    """Fail fast if ``allocator`` is not picklable.
-
-    Args:
-        allocator: The allocator to probe; must not be ``None``.
-
-    Raises:
-        AllocatorNotPicklableError: If ``pickle.dumps(allocator)`` raises.
-    """
-    try:
-        pickle.dumps(allocator)
-    except Exception as error:  # pickle raises arbitrary exceptions
-        raise AllocatorNotPicklableError(
-            f"external_memory_allocator {allocator!r} is not picklable: {error!r}."
-            " The allocator is part of the compilation artifact and is pickled"
-            " when compilation is offloaded to a worker process. Use a"
-            " module-level class or functools.partial of picklable callables."
-        ) from error
-
-
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
     """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself.
@@ -335,7 +246,6 @@ class DaCeCompilationArtifact:
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
-    external_memory_allocator: ExternalMemoryAllocator | None = None
 
     def load(self) -> stages.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
@@ -343,12 +253,7 @@ class DaCeCompilationArtifact:
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
         sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
-        program = CompiledDaceProgram(
-            sdfg_program,
-            self.bind_func_name,
-            self.binding_source_code,
-            external_memory_allocator=self.external_memory_allocator,
-        )
+        program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
 
@@ -369,11 +274,6 @@ class DaCeCompiler(
     bind_func_name: str
     cache_lifetime: config.BuildCacheLifetime
     device_type: core_defs.DeviceType
-    #: Allocator providing external workspace memory when
-    #: ``transient_memory_mode`` is ``EXTERNAL``. Must be picklable (a
-    #: module-level class or :py:func:`functools.partial` of picklable
-    #: callables is recommended); probed at construction time.
-    external_memory_allocator: ExternalMemoryAllocator | None = None
     add_gpu_trace_markers: bool = dataclasses.field(
         default_factory=lambda: config.ADD_GPU_TRACE_MARKERS
     )
@@ -384,13 +284,6 @@ class DaCeCompiler(
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        # The allocator is part of the compilation artifact and is pickled
-        # when compilation is offloaded to a worker process. Probe it here,
-        # at backend construction, so a non-picklable allocator (closure,
-        # lambda, local class) fails fast with an actionable error instead
-        # of silently degrading to in-process compilation.
-        if self.external_memory_allocator is not None:
-            _check_allocator_picklable(self.external_memory_allocator)
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
@@ -450,7 +343,6 @@ class DaCeCompiler(
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
-            external_memory_allocator=self.external_memory_allocator,
         )
 
 

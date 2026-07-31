@@ -11,6 +11,7 @@
 import dataclasses
 import re
 import unittest.mock as mock
+from typing import Any
 
 import numpy as np
 import pytest
@@ -28,6 +29,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 )
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
+    common as dace_wf_common,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -47,7 +49,7 @@ def device_type(request) -> gtx.DeviceType:
     return request.param
 
 
-@pytest.mark.parametrize("auto_optimize", [False, True])
+@pytest.mark.parametrize("auto_optimize", [False, True], ids=["NO_AUTO_OPT", "AUTO_OPT"])
 def test_make_backend(auto_optimize, device_type, monkeypatch):
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
 
@@ -160,23 +162,29 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         mock_top_level_dataflow_hook2.assert_not_called()
 
 
-class _RecordingAllocator:
-    """Minimal `ExternalMemoryAllocator` for backend-wiring tests.
+def _make_external_workspace(
+    device_type: core_defs.DeviceType, *, nbytes: int = 2**20
+) -> dace_wf_common.ExternalWorkspace:
+    """Return a sufficiently large array-like workspace for ``device_type``."""
+    if device_type == core_defs.CUPY_DEVICE_TYPE:
+        cupy = pytest.importorskip("cupy")
+        return cupy.empty(nbytes, dtype=cupy.uint8)
+    return np.empty(nbytes, dtype=np.uint8)
 
-    Only the identity of the allocator matters here (it is threaded through
-    to ``executor.compilation.external_memory_allocator``); ``allocate`` is
-    never called by these tests.
+
+class _RecordingWorkspace:
+    """Minimal picklable array-like workspace for backend-wiring tests.
+
+    Only the identity of the workspace matters here (it is stored on the
+    backend instance); the array interface is never consumed by these tests.
     """
 
-    def allocate(self, request: gtx_auto_optimize.AllocationRequest):
-        raise AssertionError("backend-wiring tests must not call allocate")
-
-    def deallocate(self, buffer) -> None:
-        raise AssertionError("backend-wiring tests must not call deallocate")
+    nbytes: int = 1024
+    __array_interface__: dict[str, Any] = {"shape": (1024,), "typestr": "|u1", "version": 3}
 
 
-def test_make_backend_accepts_external_allocator_with_external_mode():
-    external_memory_allocator = _RecordingAllocator()
+def test_make_backend_accepts_external_workspace_with_external_mode():
+    workspace = _RecordingWorkspace()
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
@@ -185,33 +193,33 @@ def test_make_backend_accepts_external_allocator_with_external_mode():
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },
-        external_memory_allocator=external_memory_allocator,
+        external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
-    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
+    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
-def test_make_backend_infers_external_mode_when_allocator_is_provided():
-    external_memory_allocator = _RecordingAllocator()
+def test_make_backend_infers_external_mode_when_workspace_is_provided():
+    workspace = _RecordingWorkspace()
 
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
         async_sdfg_call=False,
-        external_memory_allocator=external_memory_allocator,
+        external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
     assert (
         backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.EXTERNAL
     )
-    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
+    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
-def test_make_backend_warns_external_allocator_without_external_mode():
-    external_memory_allocator = _RecordingAllocator()
+def test_make_backend_warns_external_workspace_without_external_mode():
+    workspace = _RecordingWorkspace()
 
-    with pytest.warns(UserWarning, match="External memory allocator provided"):
+    with pytest.warns(UserWarning, match="External memory workspace provided"):
         backend = dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
@@ -219,7 +227,7 @@ def test_make_backend_warns_external_allocator_without_external_mode():
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
-            external_memory_allocator=external_memory_allocator,
+            external_workspace={core_defs.DeviceType.CPU: workspace},
         )
 
     # Explicit mode stays as requested by the caller; backend only warns.
@@ -227,40 +235,7 @@ def test_make_backend_warns_external_allocator_without_external_mode():
         backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.POOL
     )
-    assert backend.executor.compilation.external_memory_allocator is external_memory_allocator
-
-
-class _WorkspaceRecordingAllocator:
-    """Minimal picklable `ExternalMemoryAllocator` that records every request.
-
-    Allocations are recorded as ``(nbytes, device)`` tuples in ``requests``;
-    ``deallocate`` is a no-op. Defined at module scope so the allocator can
-    be pickled when compilation is dispatched to a worker process.
-    """
-
-    def __init__(self) -> None:
-        self.requests: list[tuple[int, core_defs.DeviceType]] = []
-
-    def allocate(self, request: gtx_auto_optimize.AllocationRequest):
-        # Overallocate by `request.alignment - 1` bytes and slices forward to the
-        # nearest aligned boundary, using `request.alignment` directly. This makes
-        # the returned buffer deterministically aligned to the requested value
-        # (256 by default) for any workspace size — both host (`__array_interface__`)
-        # and device (`__cuda_array_interface__`) paths.
-        self.requests.append((request.nbytes, request.device))
-        if request.device == core_defs.CUPY_DEVICE_TYPE:
-            import cupy as cp
-
-            raw = cp.empty(request.nbytes + request.alignment - 1, dtype=cp.uint8)
-            offset = (-raw.__cuda_array_interface__["data"][0]) % request.alignment
-            return raw[offset : offset + request.nbytes]
-
-        raw = np.empty(request.nbytes + request.alignment - 1, dtype=np.uint8)
-        offset = (-raw.__array_interface__["data"][0]) % request.alignment
-        return raw[offset : offset + request.nbytes]
-
-    def deallocate(self, buffer) -> None:
-        pass
+    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -300,8 +275,12 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     gpu_malloc_async_marker = f"{gpu_api_prefix}MallocAsync("
     gpu_free_marker = f"{gpu_api_prefix}Free("
     gpu_free_async_marker = f"{gpu_api_prefix}FreeAsync("
-    external_memory_allocator = _WorkspaceRecordingAllocator()
-    workspace_requests = external_memory_allocator.requests
+    # External mode requires a workspace buffer upfront; other modes do not use one.
+    external_workspace = (
+        {device_type: _make_external_workspace(device_type)}
+        if transient_memory_mode == gtx_transformations.TransientMemoryMode.EXTERNAL
+        else None
+    )
 
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
@@ -310,7 +289,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },
-        external_memory_allocator=external_memory_allocator,
+        external_workspace=external_workspace,
     )
 
     @gtx.field_operator
@@ -357,10 +336,8 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         no_op_top_level_map_processing,  # we need to keep the intermediate transient array
     )
 
-    # ``_WorkspaceRecordingAllocator`` is picklable (a module-level class),
-    # so compilation would otherwise be dispatched to a worker process where
-    # the ``DaCeTranslator.generate_sdfg`` monkeypatch above does not apply.
-    # Force in-process compilation so the patched translator is observed.
+    # The workspace buffer (if any) lives in the main process, so compilation
+    # is forced in-process so the patched translator is observed.
     with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
         testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
 
@@ -383,7 +360,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             assert "set_external_memory" in generated_code
             assert "__dace_get_external_memory_size_" in generated_code
             if on_gpu:
-                # Workspace must come from the external allocator, not from runtime GPU alloc/free.
+                # Workspace must come from the external mapping, not from runtime GPU alloc/free.
                 assert not any(
                     marker in generated_code
                     for marker in (gpu_malloc_marker, gpu_malloc_async_marker)
@@ -391,16 +368,11 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
                 assert not any(
                     marker in generated_code for marker in (gpu_free_marker, gpu_free_async_marker)
                 )
-                expected_device = core_defs.CUPY_DEVICE_TYPE
             else:
                 # CPU external mode should route transient workspace setup via
                 # external-memory API calls rather than host malloc/free calls.
                 assert any(marker in generated_code for marker in ("new ", "malloc"))
                 assert any(marker in generated_code for marker in ("delete ", "free"))
-                expected_device = core_defs.DeviceType.CPU
-
-            assert workspace_requests
-            assert all(device == expected_device for _, device in workspace_requests)
 
         case gtx_transformations.TransientMemoryMode.POOL:
             assert all(
@@ -409,7 +381,6 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             )
             assert "set_external_memory" not in generated_code
             assert "__dace_get_external_memory_size_" not in generated_code
-            assert not workspace_requests
             if on_gpu:
                 # Pool mode on GPU should rely on pooled/async allocation APIs.
                 assert all(
@@ -437,7 +408,6 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             # `PERSISTENT` and `SCOPED` mode use the same memory APIs, but in different contexts.
             assert "set_external_memory" not in generated_code
             assert "__dace_get_external_memory_size_" not in generated_code
-            assert not workspace_requests
             if on_gpu:
                 # Persistent and scoped mode on GPU should rely on sync allocation APIs.
                 assert all(

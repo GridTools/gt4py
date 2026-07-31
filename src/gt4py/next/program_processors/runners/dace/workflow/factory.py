@@ -17,7 +17,6 @@ from gt4py._core import definitions as core_defs, filecache
 from gt4py.next import config
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import (
     DaCeCompilationStepFactory,
@@ -36,7 +35,6 @@ class DaCeWorkflowFactory(factory.Factory):
 
     class Params:
         auto_optimize: bool = False
-        external_memory_allocator: gtx_transformations.ExternalMemoryAllocator | None = None
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
@@ -75,6 +73,5 @@ class DaCeWorkflowFactory(factory.Factory):
         bind_func_name=_GT_DACE_BINDING_FUNCTION_NAME,
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         device_type=factory.SelfAttribute("..device_type"),
-        external_memory_allocator=factory.SelfAttribute("..external_memory_allocator"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )

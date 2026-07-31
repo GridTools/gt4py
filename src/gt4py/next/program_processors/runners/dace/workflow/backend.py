@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from typing import Any, Final
 
@@ -16,8 +17,27 @@ import factory
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
+from gt4py.next.otf import stages
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as gtx_wfdcommon,
+    decoration as gtx_wfddecoration,
+    factory as gtx_wfdfactory,
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class DaCeBackend(backend.Backend[Any]):
+    """DaCe backend with support for injecting an external workspace at load time."""
+
+    external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
+
+    def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
+        program = super().load_artifact(artifact)
+        assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
+        # Inject the backend-level workspace so it is used when arguments are constructed.
+        program.set_external_workspace(self.external_workspace or {})
+        return program
 
 
 class DaCeBackendFactory(factory.Factory):
@@ -31,12 +51,11 @@ class DaCeBackendFactory(factory.Factory):
     """
 
     class Meta:
-        model = backend.Backend
+        model = DaCeBackend
 
     class Params:
         name_device = "cpu"
         name_postfix = ""
-        external_memory_allocator: gtx_transformations.ExternalMemoryAllocator | None = None
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
@@ -44,11 +63,10 @@ class DaCeBackendFactory(factory.Factory):
         )
         device_type = core_defs.DeviceType.CPU
         otf_workflow = factory.SubFactory(
-            DaCeWorkflowFactory,
+            gtx_wfdfactory.DaCeWorkflowFactory,
             cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
-            external_memory_allocator=factory.SelfAttribute("..external_memory_allocator"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
 
@@ -56,6 +74,7 @@ class DaCeBackendFactory(factory.Factory):
     executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
+    external_workspace = None
 
 
 def make_dace_backend(
@@ -63,7 +82,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
-    external_memory_allocator: gtx_transformations.ExternalMemoryAllocator | None = None,
+    external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
@@ -78,11 +97,8 @@ def make_dace_backend(
             of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
-        external_memory_allocator: Allocator used to provide workspace memory
-            when `transient_memory_mode` is `EXTERNAL`. Threaded through the
-            backend workflow and called once per SDFG storage type when
-            arguments are constructed; see
-            `gtx_transformations.ExternalMemoryAllocator` for the contract.
+        external_workspace: Workspace memory externally allocated, which is used
+            for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -119,18 +135,18 @@ def make_dace_backend(
         else None
     }
 
-    if external_memory_allocator is None:
+    if external_workspace is None:
         if (
             optimization_args.get("transient_memory_mode")
             is gtx_transformations.TransientMemoryMode.EXTERNAL
         ):
             raise ValueError(
-                "External memory allocator must be provided when 'transient_memory_mode' is 'EXTERNAL'."
+                "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
             )
     elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
         if transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
             warnings.warn(
-                f"External memory allocator provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
+                f"External memory workspace provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
                 stacklevel=2,
             )
     else:
@@ -141,7 +157,7 @@ def make_dace_backend(
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
-        external_memory_allocator=external_memory_allocator,
+        external_workspace=external_workspace,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,

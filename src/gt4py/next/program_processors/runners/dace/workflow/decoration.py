@@ -94,10 +94,9 @@ class DaCeDecoratedProgram:
                 metrics.COMPUTE_METRIC, self._collect_time_arg[0].item()
             )
 
-    def finalize(self) -> None:
-        """Forward teardown to the underlying ``CompiledDaceProgram``.
+    def set_external_workspace(self, external_workspace: gtx_wfdcommon.ExternalWorkspace) -> None:
+        """Set the external workspace for the underlying compiled program.
 
-        Allows the generic otf pool -- which only sees this callable -- to
-        release external-memory workspaces when the pool is finalized.
+        This method should be called before the first call to the program.
         """
-        self._fun.finalize()
+        self._fun.external_workspace = external_workspace

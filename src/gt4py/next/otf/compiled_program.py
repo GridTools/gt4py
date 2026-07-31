@@ -85,31 +85,6 @@ def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> 
         return source_key
 
 
-def _finalize_compiled_programs(
-    programs: dict[CompiledProgramsKey, stages.ExecutableProgram],
-) -> None:
-    """Best-effort cleanup of compiled programs when their pool is deleted.
-
-    Invoked via :py:func:`weakref.finalize` on a
-    :py:class:`CompiledProgramsPool`. The pool holds each compiled program
-    as a generic :py:data:`stages.ExecutableProgram` (a backend-specific
-    callable, e.g. the DaCe ``DaCeDecoratedProgram``); backends that
-    own external resources expose a ``finalize()`` method, which is forwarded
-    to the underlying compiled object. Failures are surfaced as warnings
-    rather than raised, because finalizers cannot propagate exceptions.
-    """
-    for program in programs.values():
-        if finalize := getattr(program, "finalize", None):
-            try:
-                finalize()
-            except Exception:
-                warnings.warn(
-                    f"Compiled program {type(program).__name__!r} raised during "
-                    f"pool teardown; its resources may be leaked.",
-                    stacklevel=1,
-                )
-
-
 @hook_machinery.event_hook
 def compile_variant_hook(
     program_pool: CompiledProgramsPool,
@@ -400,12 +375,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         return self.definition_stage.definition
 
     def __post_init__(self) -> None:
-        # Best-effort teardown: when this pool is deleted (and its ``compiled_programs``
-        # dict goes with it), finalize any compiled program that exposes a ``finalize()``
-        # method. Registered first so a ``__post_init__`` that fails validation
-        # still installs teardown for whatever is already cached.
-        weakref.finalize(self, _finalize_compiled_programs, self.compiled_programs)
-
         # TODO(havogt): We currently don't support pos_only or kw_only args at the program level.
         # This check makes sure we don't miss updating this code if we add support for them in the future.
         assert not self.program_type.definition.kw_only_args
@@ -614,7 +583,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         artifact_future = self._compilation_jobs.pop(key)
         assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = artifact_future.result().load()
+        self.compiled_programs[key] = self.backend.load_artifact(artifact_future.result())
         return True
 
     def _compile_variant(
@@ -691,7 +660,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result().load()
+            self.compiled_programs[key] = self.backend.load_artifact(future.result())
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (
