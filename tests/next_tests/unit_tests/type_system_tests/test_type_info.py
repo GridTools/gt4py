@@ -488,3 +488,23 @@ def test_xtuple_is_not_compatible_with_regular_tuple():
     assert type_info.is_concretizable(
         ts.XVarArgType(element_type=scalar_type), ts.XTupleType(types=[scalar_type])
     )
+
+
+def test_vararg_is_compatible_with_uniform_tuple():
+    scalar_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    other_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    vararg_type = ts.VarArgType(element_type=scalar_type)
+
+    assert type_info.is_compatible_type(vararg_type, ts.TupleType(types=[scalar_type, scalar_type]))
+    assert type_info.is_compatible_type(ts.TupleType(types=[scalar_type, scalar_type]), vararg_type)
+    assert type_info.is_compatible_type(vararg_type, ts.TupleType(types=[]))
+    assert not type_info.is_compatible_type(
+        vararg_type, ts.TupleType(types=[scalar_type, other_type])
+    )
+    assert not type_info.is_compatible_type(vararg_type, ts.XTupleType(types=[scalar_type]))
+    assert not type_info.is_compatible_type(
+        ts.XVarArgType(element_type=scalar_type), ts.TupleType(types=[scalar_type])
+    )
+    assert type_info.is_compatible_type(
+        ts.XVarArgType(element_type=scalar_type), ts.XTupleType(types=[scalar_type])
+    )

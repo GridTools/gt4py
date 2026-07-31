@@ -142,6 +142,29 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_var_len_tuple_comprehension_explicit_program(cartesian_case):
+    # A hand-written program with concrete tuple annotations wrapping a field operator
+    # declared with variable-length tuples.
+    @gtx.field_operator
+    def scale_tracers(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    @gtx.program
+    def testee(
+        tracers: tuple[cases.IField, cases.IField],
+        factor: int32,
+        out: tuple[cases.IField, cases.IField],
+    ):
+        scale_tracers(tracers, factor, out=out)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
 def test_tuple_comprehension_other_fo(cartesian_case):
     @gtx.field_operator
     def inner(tracer: cases.IField, factor: int32) -> cases.IField:

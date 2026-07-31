@@ -164,7 +164,7 @@ class XTupleType(TupleType):
 
 class XVarArgType(VarArgType):
     def __str__(self) -> str:
-        return f"XTuple[{self.element_type}, ...]"
+        return f"XVarArgTuple[{self.element_type}]"
 
 
 class AnyPythonType:

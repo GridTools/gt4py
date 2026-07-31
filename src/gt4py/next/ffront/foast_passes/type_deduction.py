@@ -12,9 +12,8 @@ from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import common, errors
 from gt4py.eve.extended_typing import NestedTuple
-from gt4py.next import errors
+from gt4py.next import common, errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -457,9 +456,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     ) from ex
                 new_type = types[index]
             case ts.VarArgType(element_type=element_type):
-                new_type = (
-                    element_type  # TODO: we only temporarily allow any index for vararg types
-                )
+                try:
+                    # The length of a variable-length tuple is only known when the concrete
+                    # arguments are available, so the index can not be bounds-checked here.
+                    foast_utils.expr_to_index(node.index)
+                except ValueError as ex:
+                    raise errors.DSLError(
+                        node.location,
+                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
+                    ) from ex
+                new_type = element_type
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -915,18 +921,24 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     "elements to have the same type."
                 )
             new_mapper = deduce_mapper(element_types[0])
+            tuple_type_cls = (
+                ts.XTupleType if isinstance(iterable.type, ts.XTupleType) else ts.TupleType
+            )
             result = foast.TupleComprehension(
                 inner=new_mapper,
                 iterable=iterable,
                 location=node.location,
-                type=ts.TupleType(types=[new_mapper.element_expr.type for _ in element_types]),
+                type=tuple_type_cls(types=[new_mapper.element_expr.type for _ in element_types]),
             )
             return result
         elif isinstance(iterable.type, ts.VarArgType):
             element_type = iterable.type.element_type
             new_mapper = deduce_mapper(element_type)
             element_expr = new_mapper.element_expr
-            return_type = ts.VarArgType(element_type=element_expr.type)
+            vararg_type_cls = (
+                ts.XVarArgType if isinstance(iterable.type, ts.XVarArgType) else ts.VarArgType
+            )
+            return_type = vararg_type_cls(element_type=element_expr.type)
 
             return foast.TupleComprehension(
                 inner=new_mapper,

@@ -344,6 +344,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
+        if isinstance(node.type, (ts.XTupleType, ts.XVarArgType)):
+            # TODO(SF-N): lower element-wise operations on 'XTuple's
+            raise NotImplementedError(
+                f"Lowering of element-wise operator '{node.op}' on 'XTuple's is not "
+                "implemented yet."
+            )
         return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
