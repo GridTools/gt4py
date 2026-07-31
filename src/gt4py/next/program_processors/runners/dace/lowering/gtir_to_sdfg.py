@@ -969,7 +969,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         node_params: Sequence[gtir.Sym],
         symbolic_params: set[str] | None,
         use_transient_storage: bool,
-    ) -> None:
+    ) -> list[str]:
         """
         Helper function to add storage for node parameters and connectivity tables.
 
@@ -985,10 +985,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         """
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
+        sdfg_args = []
         for param in node_params:
             gt_symbol_name = str(param.id)
             assert isinstance(param.type, (ts.DataType))
-            _ = self._add_storage(
+            sdfg_args += self._add_storage(
                 sdfg=sdfg,
                 symbolic_params=symbolic_params,
                 name=gt_symbol_name,
@@ -1017,6 +1018,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 transient=True,
             )
 
+        # The list of the SDFG "arguments", i.e. the non transient arrays. Note that
+        #  tuple arguments are flatten and their name is mangled and no longer matches
+        #  the name in the signature of the field operator / program. Furthermore,
+        #  after optimization they might no longer be needed and are removed from
+        #  `sdfg.arglist()`, but can still be passed, to the call operator.
+        return [arg_name for arg_name, _ in sdfg_args]
+
     def visit_Program(self, node: gtir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
 
@@ -1036,7 +1044,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #   We do this to allow lowering of scalar expressions in let-statements,
         #   that only depend on scalar parameters, as dace symbolic expressions
         #   mapped to symbols on a nested SDFG.
-        self._add_sdfg_params(sdfg, node.params, symbolic_params=None, use_transient_storage=False)
+        sdfg_arg_names = self._add_sdfg_params(
+            sdfg, node.params, symbolic_params=None, use_transient_storage=False
+        )
 
         # visit one statement at a time and expand the SDFG from the current head state
         scope_symbols = {str(p.id): p.type for p in node.params if isinstance(p.type, ts.DataType)}
@@ -1058,9 +1068,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert isinstance(nsdfg.arrays[data], dace.data.Array)
                 nsdfg.arrays.pop(data)
 
-        # The SDFG explicitly does not support positional arguments. The "official way" to call it
-        #  is by using `user_args`. However, they can only be set after optimization.
-        sdfg.arg_names = []
+        # NOTE: A program uses the `user_args` mechanism to perform the call. So,
+        #   technically these arguments is not needed. However, the orchestrator needs
+        #   it to work. Note that in the following list, tuple arguments to the
+        #   program/fieldop are expanded.
+        sdfg.arg_names = sdfg_arg_names
 
         return sdfg
 
