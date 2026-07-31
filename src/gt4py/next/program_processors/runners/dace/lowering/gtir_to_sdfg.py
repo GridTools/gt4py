@@ -1347,6 +1347,146 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
 
 
+def make_user_args(
+    prog: gtir.Program,
+    sdfg: dace.SDFG,
+    offset_provider_type: gtx_common.OffsetProviderType,
+) -> list[Union[str, tuple[Union[str, Tuple], ...]]]:
+    """Computes the `user_args` field for `sdfg`.
+
+    This allows the SDFG to expose a GTFN compatible call signature. Note that this
+    function needs a fully build SDFG and that the signature it creates is only based
+    on the one specified by `prog` and includes the offset provider arguments.
+
+    Param:
+        prog: The program to process.
+        sdfg: The generated SDFG.
+        offset_provider_type: The offset provider types.
+    """
+
+    def _make_user_args(
+        sdfg: dace.SDFG,
+        sdfg_arglist: Mapping[str, dace.data.Data],
+        param_name: str,
+        param_type: ts.TypeSpec,
+    ) -> Union[str, tuple[Union[str, Tuple], ...]]:
+        if param_type is None:
+            ValueError(f"Expected that parameter `{param_name}` carries a type.")
+
+        if isinstance(param_type, ts.TupleType):
+            return tuple(
+                _make_user_args(
+                    sdfg=sdfg,
+                    sdfg_arglist=sdfg_arglist,
+                    param_name=f"{param_name}_{i}",
+                    param_type=tuple_arg_type,
+                )
+                for i, tuple_arg_type in enumerate(param_type.types)
+            )
+
+        elif param_name not in sdfg_arglist:
+            # There are two reasons for this case:
+            #   1) The argument is a symbol/scalar that is not used in the generated code.
+            #   2) The argument was demoted, see `demote_fields` argument of `gt_auto_optimize()`
+            #       and was not put back.
+
+            # This will not only work for a scalar argument, but also for fields/tuples, as it
+            #  will ignore everything beneath it. It will still be passed, but the bindings
+            #  will not consider it.
+            # TODO(phimuell): Consider updating the bindings generator such that it also
+            #   does not forward them.
+            return ""
+
+        elif isinstance(param_type, ts.FieldType):
+            if param_name not in sdfg.arrays:
+                ValueError(
+                    f"Not not find array parameter `{param_name}` in the SDFG array registry."
+                )
+            if param_name not in sdfg_arglist:
+                ValueError(
+                    f"Did not find array parameter `{param_name}` in the SDFG argument list."
+                )
+
+            sdfg_arg_desc: dace.data.Data = sdfg.arrays[param_name]
+            if sdfg_arg_desc.transient:
+                ValueError(f"GT4Py parameter `{param_name}` is a transient.")
+
+            if len(param_type.dims) == 0:
+                # Zero Dimensional Array:
+                #  Will be passed as scalar, i.e. `zero_dim_array.as_scalar()`, this "unpacking" is
+                #  performed by the argument pre-processing function, see `bindings.py`. This is
+                #  different from GTFN where it is passed as a normal array.
+                assert isinstance(sdfg_arg_desc, dace.data.Scalar)
+                return param_name
+
+            else:
+                # Full array:
+                #  It will be passed as `(array_name_in_sdfg, (domain_start...))`. Note that the
+                #  bindings will extract the `domain_stop...` symbols from the shape of the array,
+                #  which is `domain_stop - domain_start` and the explicitly passed `domain_start`
+                #  symbols.
+                #  This is signature compatible with GTFN, but GTFN passes `-domain_sytart`.
+                assert isinstance(sdfg_arg_desc, dace.data.Array)
+                origins: list[str] = []
+                found_needed_symbol = False
+                for dim in param_type.dims:
+                    rstart = str(gtx_dace_args.range_start_symbol(param_name, dim))
+                    if rstart in sdfg_arglist:
+                        assert rstart in sdfg.symbols
+                        assert rstart not in sdfg.arrays
+                        origins.append(rstart)
+                        found_needed_symbol = True
+                    else:
+                        # For certain reason the dimension parameter is not needed and thus not
+                        #  included. For compatibility with GTFN we have to provide it, but ignore it.
+                        #  Note that it could still be inside the symbols table.
+                        origins.append("")
+
+                return (param_name, tuple(origins) if found_needed_symbol else "")
+
+        elif isinstance(param_type, ts.ScalarType):
+            # A scalar name, so simply return the name of the parameter.
+            if not (param_name in sdfg.arrays or param_name in sdfg.symbols):
+                ValueError(
+                    f"Not not find scalar parameter `{param_name}` in the SDFG array/symbol registry."
+                )
+            if param_name not in sdfg_arglist:
+                ValueError(
+                    f"Did not find scalar parameter `{param_name}` in the SDFG argument list."
+                )
+            return param_name
+
+        else:
+            raise ValueError(f"Parameter `{param_name}` had unexpected type `{param_type}`")
+
+    sdfg_arglist = sdfg.arglist().copy()  # For caching.
+
+    # Now process the input arguments (fields and scalars).
+    user_args = [
+        _make_user_args(
+            sdfg=sdfg,
+            sdfg_arglist=sdfg_arglist,
+            param_name=param.id,
+            param_type=param.type,  # type: ignore[arg-type]  # Never `None`
+        )
+        for param in prog.params
+    ]
+
+    # Now add the offset providers. We assume here that the order of the offset_providers
+    #  is included in the hash, i.e. that we can rely that it is stable and if it changes
+    #  the program is recompiled. GTFN has a similar assumption.
+    # If the offset provider is not used, we ignore the argument. The origin is always
+    #  zero and not used inside the SDFG.
+    user_args.extend(
+        (offset_arg_name, ("", "")) if offset_arg_name in sdfg_arglist else ""
+        for offset_arg_name in map(
+            gtx_dace_args.connectivity_identifier, offset_provider_type.keys()
+        )
+    )
+
+    return user_args
+
+
 def build_sdfg_from_gtir(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
@@ -1384,6 +1524,13 @@ def build_sdfg_from_gtir(
     sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
+
+    # Now add the GTFN compatible call signature to it.
+    sdfg.user_args = make_user_args(
+        prog=ir,
+        sdfg=sdfg,
+        offset_provider_type=offset_provider_type,
+    )
 
     sdfg.validate()
     return sdfg

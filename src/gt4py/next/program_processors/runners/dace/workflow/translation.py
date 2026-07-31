@@ -174,6 +174,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
 
     The execution time is measured in seconds and represented as a 'float64' value.
     It is written to the global array 'SDFG_ARG_METRIC_COMPUTE_TIME'.
+
+    Note:
+        This function will add the arguments related to the metric to `user_args`.
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
@@ -270,6 +273,13 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
+
+    # Update `user_args`.
+    sdfg.user_args = [
+        *sdfg.user_args,
+        gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL,
+        gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME,
+    ]
 
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
@@ -438,8 +448,6 @@ class DaCeTranslator(
 
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
-
-        sdfg.user_args = gtx_dace_nano.make_user_args(sdfg, ir, self.use_metrics, offset_provider)
 
         return sdfg
 
