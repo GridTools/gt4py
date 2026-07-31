@@ -25,8 +25,8 @@ import shutil
 
 import pytest
 
-
 dace = pytest.importorskip("dace")
+from dace.codegen import compiler as dace_compiler
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
@@ -114,12 +114,21 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
     build_folder = clean_build_folder(comp, inp)
 
     artifact = comp(inp)
-    assert artifact.library_path.is_file()
+    assert artifact.sdfg_build_folder.is_dir()
+
+    sdfg = dace.SDFG.from_file(artifact.sdfg_build_folder / "program.sdfgz")
+    library_path = dace_compiler.get_binary_name(
+            object_folder=artifact.sdfg_build_folder, sdfg_name=sdfg.name
+    )
 
     # Simulate a build interrupted mid-link: truncated library, no completion marker.
-    artifact.library_path.write_bytes(b"\x00" * 64)
+    library_path.write_bytes(b"\x00" * 64)
     (build_folder / dace_wf_compilation._COMPILE_COMPLETE_MARKER).unlink()
 
     recovered = comp(inp)
-
-    ctypes.CDLL(str(recovered.library_path))  # raises OSError if still truncated
+    recovered_sdfg = dace.SDFG.from_file(recovered.sdfg_build_folder / "program.sdfgz")
+    assert artifact.sdfg_build_folder == recovered.sdfg_build_folder
+    recovered_library_path = dace_compiler.get_binary_name(
+            object_folder=recovered.sdfg_build_folder, sdfg_name=recovered_sdfg.name
+    )
+    ctypes.CDLL(str(recovered_library_path))  # raises OSError if still truncated
