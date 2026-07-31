@@ -33,7 +33,7 @@ def convert_args(
     collect_time_arg = np.array(
         [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
     )
-    argument_preprocessing_function = fun.update_sdfg_ctype_arglist
+    argument_preprocessing_function = fun.argument_preprocessing_function
 
     def decorated_program(
         *args: Any,
@@ -43,11 +43,11 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        proc_arc = argument_preprocessing_function(  # type: ignore[call-arg]
-            args,  # type: ignore[arg-type]
-            offset_provider,  # type: ignore[arg-type]
-            metrics.get_current_level(),  # type: ignore[arg-type]
-            collect_time_arg,  # type: ignore[arg-type]
+        proc_arc = argument_preprocessing_function(
+            args,
+            offset_provider,
+            metrics.get_current_level(),
+            collect_time_arg,
         )
         fun.sdfg_program.user_bind_call(*proc_arc)
 
