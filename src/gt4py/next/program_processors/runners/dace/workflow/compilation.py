@@ -280,6 +280,39 @@ class CompiledDaceProgram:
         assert result is None
 
 
+class AllocatorNotPicklableError(TypeError):
+    """Raised when an ``external_memory_allocator`` cannot be pickled.
+
+    The allocator is part of the compilation artifact and is pickled when
+    compilation is offloaded to a worker process. Allocators that can not be
+    pickled -- typically closures, lambdas, or classes defined inside a
+    function -- would otherwise degrade silently to in-process compilation
+    via a generic runner warning. This error surfaces the contract failure
+    early, at backend construction, with the original :mod:`pickle` error
+    chained as ``__cause__``.
+    """
+
+
+def _check_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
+    """Fail fast if ``allocator`` is not picklable.
+
+    Args:
+        allocator: The allocator to probe; must not be ``None``.
+
+    Raises:
+        AllocatorNotPicklableError: If ``pickle.dumps(allocator)`` raises.
+    """
+    try:
+        pickle.dumps(allocator)
+    except Exception as error:  # pickle raises arbitrary exceptions
+        raise AllocatorNotPicklableError(
+            f"external_memory_allocator {allocator!r} is not picklable: {error!r}."
+            " The allocator is part of the compilation artifact and is pickled"
+            " when compilation is offloaded to a worker process. Use a"
+            " module-level class or functools.partial of picklable callables."
+        ) from error
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
     """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself.
@@ -317,39 +350,6 @@ class DaCeCompilationArtifact:
             external_memory_allocator=self.external_memory_allocator,
         )
         return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
-
-
-class AllocatorNotPicklableError(TypeError):
-    """Raised when an ``external_memory_allocator`` cannot be pickled.
-
-    The allocator is part of the compilation artifact and is pickled when
-    compilation is offloaded to a worker process. Allocators that can not be
-    pickled -- typically closures, lambdas, or classes defined inside a
-    function -- would otherwise degrade silently to in-process compilation
-    via a generic runner warning. This error surfaces the contract failure
-    early, at backend construction, with the original :mod:`pickle` error
-    chained as ``__cause__``.
-    """
-
-
-def _check_allocator_picklable(allocator: ExternalMemoryAllocator) -> None:
-    """Fail fast if ``allocator`` is not picklable.
-
-    Args:
-        allocator: The allocator to probe; must not be ``None``.
-
-    Raises:
-        AllocatorNotPicklableError: If ``pickle.dumps(allocator)`` raises.
-    """
-    try:
-        pickle.dumps(allocator)
-    except Exception as error:  # pickle raises arbitrary exceptions
-        raise AllocatorNotPicklableError(
-            f"external_memory_allocator {allocator!r} is not picklable: {error!r}."
-            " The allocator is part of the compilation artifact and is pickled"
-            " when compilation is offloaded to a worker process. Use a"
-            " module-level class or functools.partial of picklable callables."
-        ) from error
 
 
 @dataclasses.dataclass(frozen=True)
