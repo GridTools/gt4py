@@ -76,7 +76,7 @@ def _create_sdfg_bindings(
     code_lines: list[str] = []
     if eval_mode:
         code_lines.append(
-            "from gt4py.next.program_processors.runners.dace.workflow import nanobinings as gtx_wfdnanobindings"
+            "from gt4py.next.program_processors.runners.dace.workflow import bindings as gtx_wfdbindings"
         )
 
     code_lines.append(f"def {bind_func_name}(")
@@ -87,7 +87,7 @@ def _create_sdfg_bindings(
     code_lines.append("):")
 
     if eval_mode:
-        code_lines.append("\treturn gtx_wfdnanobindings._perform_argument_processing(")
+        code_lines.append("\treturn gtx_wfdbindings._perform_argument_processing(")
         code_lines.append("\t\targs=args,")
         code_lines.append("\t\toffset_provider=offset_provider,")
         code_lines.append(f"\t\tmetric_level={gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL},")
