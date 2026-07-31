@@ -85,7 +85,9 @@ def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> 
         return source_key
 
 
-def _finalize_compiled_programs(programs: stages.ExecutableProgram | dict[Any, Any]) -> None:
+def _finalize_compiled_programs(
+    programs: dict[CompiledProgramsKey, stages.ExecutableProgram],
+) -> None:
     """Best-effort cleanup of compiled programs when their pool is deleted.
 
     Invoked via :py:func:`weakref.finalize` on a
@@ -96,19 +98,16 @@ def _finalize_compiled_programs(programs: stages.ExecutableProgram | dict[Any, A
     to the underlying compiled object. Failures are surfaced as warnings
     rather than raised, because finalizers cannot propagate exceptions.
     """
-    values = programs.values() if isinstance(programs, dict) else (programs,)
-    for program in values:
-        finalize = getattr(program, "finalize", None)
-        if finalize is None:
-            continue
-        try:
-            finalize()
-        except Exception:
-            warnings.warn(
-                f"Compiled program {type(program).__name__!r} raised during "
-                f"pool teardown; its resources may be leaked.",
-                stacklevel=1,
-            )
+    for program in programs.values():
+        if finalize := getattr(program, "finalize", None):
+            try:
+                finalize()
+            except Exception:
+                warnings.warn(
+                    f"Compiled program {type(program).__name__!r} raised during "
+                    f"pool teardown; its resources may be leaked.",
+                    stacklevel=1,
+                )
 
 
 @hook_machinery.event_hook
@@ -401,17 +400,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         return self.definition_stage.definition
 
     def __post_init__(self) -> None:
-        # Best-effort teardown: when this pool is deleted (and its
-        # ``compiled_programs`` dict goes with it), finalize any compiled
-        # program that exposes a ``finalize()`` method so backends that own
-        # external resources -- e.g. the DaCe external-memory allocator --
-        # can release them. The dict is passed by reference so the
-        # finalizer walks the live collection (programs may be added after
-        # registration); the pool is held weakly so this does not extend
-        # its lifetime. Mirrors the finalizer registered in
-        # ``metrics_source_key`` (which avoids id reuse once a pool dies).
-        #
-        # Registered first so a ``__post_init__`` that fails validation
+        # Best-effort teardown: when this pool is deleted (and its ``compiled_programs``
+        # dict goes with it), finalize any compiled program that exposes a ``finalize()``
+        # method. Registered first so a ``__post_init__`` that fails validation
         # still installs teardown for whatever is already cached.
         weakref.finalize(self, _finalize_compiled_programs, self.compiled_programs)
 

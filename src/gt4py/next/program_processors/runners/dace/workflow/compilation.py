@@ -77,7 +77,7 @@ def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionS
     return new_program_source, sdfg
 
 
-def _map_workspace_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
+def workspace_storage_to_device_mapping(storage: dace.StorageType) -> core_defs.DeviceType:
     if storage == dace.StorageType.CPU_Heap:
         device = core_defs.DeviceType.CPU
     elif storage == dace.StorageType.GPU_Global:
@@ -206,7 +206,7 @@ class CompiledDaceProgram:
                     "SDFG requires external workspaces, but no allocator was provided."
                 )
             for storage, required_nbytes in workspace_sizes.items():
-                device = _map_workspace_storage_to_device(storage)
+                device = workspace_storage_to_device_mapping(storage)
                 request = AllocationRequest(nbytes=required_nbytes, device=device)
                 workspace = self.external_memory_allocator.allocate(request)
                 _validate_external_workspace(storage, request, workspace)
@@ -390,7 +390,7 @@ class DaCeCompiler(
         # lambda, local class) fails fast with an actionable error instead
         # of silently degrading to in-process compilation.
         if self.external_memory_allocator is not None:
-            _assert_allocator_picklable(self.external_memory_allocator)
+            _check_allocator_picklable(self.external_memory_allocator)
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
