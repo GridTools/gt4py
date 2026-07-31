@@ -247,7 +247,7 @@ class DaCeCompiler(
         return DaCeCompilationArtifact(
             sdfg_build_folder=sdfg_build_folder,
             library_path=library_path,
-            sdfg_json=json.dumps(inp.program_source.source_code[1]),
+            sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
