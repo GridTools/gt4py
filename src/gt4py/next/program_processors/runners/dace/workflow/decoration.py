@@ -8,19 +8,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import stages
-from gt4py.next.program_processors.runners.dace import sdfg_callable
-from gt4py.next.program_processors.runners.dace.workflow import (
-    common as gtx_wfdcommon,
-    nanobinings as gtx_dace_nano,
-)
+from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
 if TYPE_CHECKING:
@@ -37,11 +33,7 @@ def convert_args(
     collect_time_arg = np.array(
         [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
     )
-    collect_args_present = (
-        gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME in fun.sdfg_program.sdfg.arrays
-    )
-
-    process_fun = fun.update_sdfg_ctype_arglist
+    argument_preprocessing_function = fun.update_sdfg_ctype_arglist
 
     def decorated_program(
         *args: Any,
@@ -51,43 +43,13 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        if False:
-            # Simply forward the call.
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
-
-            this_call_args = sdfg_callable.get_sdfg_args(
-                fun.sdfg_program.sdfg,
-                offset_provider,
-                *flat_args,
-                filter_args=False,
-            )
-            this_call_args |= {
-                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
-                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: collect_time_arg,
-            }
-            fun.sdfg_program(**this_call_args)
-        elif False:
-            # Almost GTFN compatible, the only reason why not are one dimensional arrays.
-            args = gtx_dace_nano.convert_arg(args)
-
-            # This is technically compatible with GTFN's handling and it also has the
-            #  same assumptions backed in.
-            args = args + tuple(
-                gtx_dace_nano.convert_arg(table) for table in offset_provider.values()
-            )
-
-            if collect_args_present:
-                args = (*args, metrics.get_current_level(), collect_time_arg)
-
-            fun.sdfg_program.user_bind_call(*args)
-        else:
-            proc_arc = process_fun(  # type: ignore[call-arg]
-                args,  # type: ignore[arg-type]
-                offset_provider,  # type: ignore[arg-type]
-                metrics.get_current_level(),  # type: ignore[arg-type]
-                collect_time_arg,  # type: ignore[arg-type]
-            )
-            fun.sdfg_program.user_bind_call(*proc_arc)
+        proc_arc = argument_preprocessing_function(  # type: ignore[call-arg]
+            args,  # type: ignore[arg-type]
+            offset_provider,  # type: ignore[arg-type]
+            metrics.get_current_level(),  # type: ignore[arg-type]
+            collect_time_arg,  # type: ignore[arg-type]
+        )
+        fun.sdfg_program.user_bind_call(*proc_arc)
 
         if collect_time:
             metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())
