@@ -84,7 +84,7 @@ def get_gt_pyext_build_opts(
     extra_compile_args = dict(
         cxx=[
             "-std=c++20",
-            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+            f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
             "-fvisibility=hidden",
             "-fPIC",
             # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
@@ -96,10 +96,7 @@ def get_gt_pyext_build_opts(
     )
     extra_compile_args["cuda"] = [
         "-std=c++20",
-        "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-        "-DBOOST_PP_VARIADICS",
-        "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-        "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
+        f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:

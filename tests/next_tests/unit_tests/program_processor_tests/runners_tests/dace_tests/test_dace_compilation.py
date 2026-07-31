@@ -79,7 +79,8 @@ def _make_sdfg_with_gpu_map() -> dace.SDFG:
     return sdfg
 
 
-def _make_extension_source() -> stages.ExtensionSource:
+@pytest.fixture
+def program_source() -> dace_wf_compilation.SDFGExtensionSource:
     """A real `ExtensionSource` wrapping the GPU SDFG, as the dace translation step emits.
 
     Using a real source (rather than a `MagicMock`) lets the unmocked `get_cache_folder`
@@ -96,17 +97,16 @@ def _make_extension_source() -> stages.ExtensionSource:
 
 
 def _run_compiler(
+    inp: stages.ExtensionSource,
     *,
     add_gpu_trace_markers: bool = False,
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.RELEASE,
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
-) -> tuple[dace_wf_compilation.DaCeCompilationArtifact, dace.SDFG, mock.MagicMock]:
-    """Run `DaCeCompiler` on a GPU SDFG with compilation stubbed out.
+) -> tuple[dace_wf_compilation.DaCeCompilationArtifact, dace.SDFG]:
+    """Run `DaCeCompiler` on the provided `program_source` with compilation stubbed out.
 
-    Returns the compilation artifact, the SDFG which was compiled, and the spy wrapping `_add_tx_markers`.
+    Returns the compilation artifact and the SDFG which was compiled.
     """
-    inp = _make_extension_source()
-
     compiler = dace_wf_compilation.DaCeCompiler(
         bind_func_name="bind",
         cache_lifetime=config.BuildCacheLifetime.SESSION,
@@ -116,11 +116,6 @@ def _run_compiler(
     )
 
     with (
-        mock.patch.object(
-            dace_wf_compilation,
-            "_add_tx_markers",
-            wraps=dace_wf_compilation._add_tx_markers,
-        ) as spy_add_tx_markers,
         mock.patch.object(dace.SDFG, "compile", autospec=True) as compile_mock,
         mock.patch.object(
             dace_wf_compilation.locking, "lock", lambda *args, **kwargs: contextlib.nullcontext()
@@ -135,18 +130,15 @@ def _run_compiler(
         artifact = compiler(inp)
         compile_input = compile_mock.call_args.args[0]
 
-    return artifact, compile_input, spy_add_tx_markers
+    return artifact, compile_input
 
 
-def test_compiler_applies_tx_markers_for_gpu():
+def test_compiler_applies_tx_markers_for_gpu(program_source):
     """On a CUDA target with the flag on, the compiler applies the markers to the SDFG."""
-    _, compile_input, spy = _run_compiler(
-        add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
+    _, compile_input = _run_compiler(
+        program_source, add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CUDA
     )
 
-    spy.assert_called_once()
-    # The SDFG that was marked is the very one passed on to compilation.
-    assert spy.call_args.args[0] is compile_input
     assert compile_input.instrument == _TX
     map_entries = [
         n for n, _ in compile_input.all_nodes_recursive() if isinstance(n, dace_nodes.MapEntry)
@@ -154,23 +146,21 @@ def test_compiler_applies_tx_markers_for_gpu():
     assert map_entries and all(me.instrument == _TX for me in map_entries)
 
 
-def test_compiler_skips_tx_markers_when_flag_disabled():
+def test_compiler_skips_tx_markers_when_flag_disabled(program_source):
     """With the flag off the compiler must not touch instrumentation, even on CUDA."""
-    _, compile_input, spy = _run_compiler(
-        add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
+    _, compile_input = _run_compiler(
+        program_source, add_gpu_trace_markers=False, device_type=core_defs.DeviceType.CUDA
     )
 
-    spy.assert_not_called()
     assert compile_input.instrument == _NONE
 
 
-def test_compiler_skips_tx_markers_for_non_gpu_device():
+def test_compiler_skips_tx_markers_for_non_gpu_device(program_source):
     """On a CPU target the markers must not be applied even with the flag on."""
-    _, compile_input, spy = _run_compiler(
-        add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
+    _, compile_input = _run_compiler(
+        program_source, add_gpu_trace_markers=True, device_type=core_defs.DeviceType.CPU
     )
 
-    spy.assert_not_called()
     assert compile_input.instrument == _NONE
 
 
@@ -189,6 +179,43 @@ def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     assert restored == artifact
 
 
+@pytest.mark.parametrize("add_gpu_trace_markers", [False, True])
+def test_same_artifact(add_gpu_trace_markers, program_source):
+    """Same SDFG and compile settings must produce the same artifact.
+
+    We also test the case ``add_gpu_trace_markers=True`` to verify that the modified
+    SDFG has the same fingerprint, for the same input SDFG and compilation settings.
+    This way, we verify that the GUIDs elements are removed from the JSON source code.
+    """
+    artifact_1, sdfg_1 = _run_compiler(
+        program_source,
+        add_gpu_trace_markers=add_gpu_trace_markers,
+        device_type=core_defs.DeviceType.CUDA,
+    )
+    artifact_2, sdfg_2 = _run_compiler(
+        program_source,
+        add_gpu_trace_markers=add_gpu_trace_markers,
+        device_type=core_defs.DeviceType.CUDA,
+    )
+
+    assert artifact_1.library_path == artifact_2.library_path
+    assert (
+        sdfg_1.hash_sdfg() == sdfg_2.hash_sdfg()
+    )  # might contain different GUIDs, `hash_sdfg()` ignores them
+
+
+def test_apply_tx_markers_changes_artifact(program_source):
+    """Different instrumentation settings must produce a different artifact."""
+    artifact_base, _ = _run_compiler(
+        program_source, device_type=core_defs.DeviceType.CUDA, add_gpu_trace_markers=False
+    )
+    artifact_with_markers, _ = _run_compiler(
+        program_source, device_type=core_defs.DeviceType.CUDA, add_gpu_trace_markers=True
+    )
+
+    assert artifact_base.library_path != artifact_with_markers.library_path
+
+
 # `CXXFLAGS`, `CUDAFLAGS` and `HIPFLAGS` feed `compiler.cpu.args`, `compiler.cuda.args`
 # and `compiler.cuda.hip_args` respectively (see `set_dace_config`).
 @pytest.mark.parametrize(
@@ -198,9 +225,12 @@ def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
         (core_defs.DeviceType.CUDA, "CUDAFLAGS"),
         (core_defs.DeviceType.ROCM, "HIPFLAGS"),
     ],
+    ids=["CPU", "CUDA", "HIP"],
 )
-def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_flags_env):
-    """Different compiler flags must produce a different build folder.
+def test_compiler_flags_change_artifact(
+    device_type, compiler_flags_env, program_source, monkeypatch
+):
+    """Different compiler flags must produce a different artifact.
 
     The flags are captured in `dace_config_nondefaults`, whose fingerprint the compiler
     passes to `get_cache_folder` as the `build_context_id`. That id is appended to the
@@ -208,18 +238,18 @@ def test_compiler_flags_change_build_folder(monkeypatch, device_type, compiler_f
     build cache.
     """
     monkeypatch.delenv(compiler_flags_env, raising=False)
-    artifact_default, _, _ = _run_compiler(device_type=device_type)
+    artifact_default, _ = _run_compiler(program_source, device_type=device_type)
 
     monkeypatch.setenv(compiler_flags_env, "-O0 -some-custom-flag")
-    artifact_custom, _, _ = _run_compiler(device_type=device_type)
+    artifact_custom, _ = _run_compiler(program_source, device_type=device_type)
 
     # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
-    # so `get_cache_folder` names two distinct build folders.
+    # so `get_cache_folder` names two distinct artifacts.
     assert artifact_default.library_path != artifact_custom.library_path
 
 
-def test_cmake_build_type_changes_build_folder():
-    """Different cmake build types must produce a different SDFG build folder.
+def test_cmake_build_type_changes_artifact(program_source):
+    """Different cmake build types must produce a different SDFG artifact.
 
     The cmake build type is part of the DaCe configuration captured in
     `dace_config_nondefaults`, whose fingerprint is passed to `get_cache_folder`
@@ -227,7 +257,9 @@ def test_cmake_build_type_changes_build_folder():
     changing the build type lands the SDFG build in a different folder of the
     build cache.
     """
-    artifact_release, _, _ = _run_compiler(cmake_build_type=config.CMakeBuildType.RELEASE)
-    artifact_debug, _, _ = _run_compiler(cmake_build_type=config.CMakeBuildType.DEBUG)
+    artifact_release, _ = _run_compiler(
+        program_source, cmake_build_type=config.CMakeBuildType.RELEASE
+    )
+    artifact_debug, _ = _run_compiler(program_source, cmake_build_type=config.CMakeBuildType.DEBUG)
 
     assert artifact_release.library_path != artifact_debug.library_path
