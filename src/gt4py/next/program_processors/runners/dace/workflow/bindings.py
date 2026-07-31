@@ -235,7 +235,8 @@ def _process_argument(
         )
 
     if is_tuple:
-        assert tuple_types is not None and isinstance(argument, tuple)  # Make MyPy happy
+        assert isinstance(tuple_types, tuple)
+        assert isinstance(argument, tuple) if eval_mode else isinstance(argument, str)
         tuple_members = _perfom_tuple_unpacking(argument, len(tuple_types), unpacked_variables)  # type: ignore[arg-type]
         processed_tuple_members: Union[str, tuple[Any, ...]] = tuple() if eval_mode else "("
         for tuple_member, tuple_member_type in zip(tuple_members, tuple_types):
