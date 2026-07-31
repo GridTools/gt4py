@@ -114,7 +114,7 @@ def _process_offset_providers(
     # And that there is no difference between GTFN and DaCe
     processed_offset_providers: Union[str, tuple[Any, ...]] = tuple() if eval_mode else ""
     for table_name in offset_provider:
-        command = f"(offset_provider[{table_name}].ndarray, (0, 0)), "
+        command = f"(offset_provider['{table_name}'].ndarray, (0, 0)), "
         processed_offset_providers += eval(command) if eval_mode else command  # type: ignore[operator]
     return processed_offset_providers
 
