@@ -12,8 +12,7 @@ from types import ModuleType
 
 
 #: Keeps references to dynamically loaded modules alive for the lifetime of the
-#: process. Required for nanobind extension modules, which must outlive the
-#: functions imported from them (see PR #2431). Append-only.
+#: process.
 _loaded_modules: list[ModuleType] = []
 
 
