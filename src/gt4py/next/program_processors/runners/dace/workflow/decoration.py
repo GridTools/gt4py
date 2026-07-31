@@ -82,7 +82,10 @@ def convert_args(
             fun.sdfg_program.user_bind_call(*args)
         else:
             proc_arc = process_fun(  # type: ignore[call-arg]
-                *args, offset_provider, metrics.get_current_level(), collect_time_arg
+                args,  # type: ignore[arg-type]
+                offset_provider,  # type: ignore[arg-type]
+                metrics.get_current_level(),  # type: ignore[arg-type]
+                collect_time_arg,  # type: ignore[arg-type]
             )
             fun.sdfg_program.user_bind_call(*proc_arc)
 

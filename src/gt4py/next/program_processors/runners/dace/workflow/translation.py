@@ -468,7 +468,7 @@ class DaCeTranslator(
             use_metrics=self.use_metrics,
             offset_provider=inp.args.offset_provider,
             back_end="dace",
-            offset_provider_name="offset_provider",
+            eval_mode=False,
         )
 
         module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
