@@ -117,8 +117,13 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
     assert artifact.sdfg_build_folder.is_dir()
 
     sdfg = dace.SDFG.from_file(artifact.sdfg_build_folder / "program.sdfgz")
+    # Resolve the folder mode from the build folder itself: the compile step runs
+    # inside `dace_context()` where `compiler.build_folder_mode` may differ from
+    # the ambient configuration of this process.
     library_path = dace_compiler.get_binary_name(
-            object_folder=artifact.sdfg_build_folder, sdfg_name=sdfg.name
+        object_folder=artifact.sdfg_build_folder,
+        sdfg_name=sdfg.name,
+        folder_mode=dace_compiler.get_folder_mode(artifact.sdfg_build_folder),
     )
 
     # Simulate a build interrupted mid-link: truncated library, no completion marker.
@@ -129,6 +134,8 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
     recovered_sdfg = dace.SDFG.from_file(recovered.sdfg_build_folder / "program.sdfgz")
     assert artifact.sdfg_build_folder == recovered.sdfg_build_folder
     recovered_library_path = dace_compiler.get_binary_name(
-            object_folder=recovered.sdfg_build_folder, sdfg_name=recovered_sdfg.name
+        object_folder=recovered.sdfg_build_folder,
+        sdfg_name=recovered_sdfg.name,
+        folder_mode=dace_compiler.get_folder_mode(recovered.sdfg_build_folder),
     )
     ctypes.CDLL(str(recovered_library_path))  # raises OSError if still truncated

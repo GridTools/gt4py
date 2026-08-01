@@ -16,7 +16,7 @@ from gt4py import next as gtx
 from gt4py.eve import codegen
 from gt4py.next import common as gtx_common, config as gtx_config, int32, neighbor_sum
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import code_specs, runners as otf_runners, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
@@ -266,13 +266,18 @@ def test_bind_sdfg_stage():
 _dace_compile_call = dace_workflow.compilation.DaCeCompiler.__call__
 
 
-def _capture_binding_source(monkeypatch) -> dict:
+@pytest.fixture
+def captured_binding_source(monkeypatch) -> dict:
     """Monkeypatch `DaCeCompiler.__call__` to capture the binding source it receives.
 
     Also force in-process compilation, otherwise the compilation would run in a
-    worker process where the monkeypatch is not effective.
+    worker process where the monkeypatch is not effective. Since the default
+    runner is a process-wide singleton created on first use, it must be discarded
+    as well: an earlier test may already have created a process pool, which would
+    ignore the `BUILD_JOBS` override.
     """
     monkeypatch.setattr(gtx_config, "BUILD_JOBS", 0)
+    otf_runners.reset_default_runner()
     captured: dict = {}
 
     def mocked_compile_call(self, inp):
@@ -280,7 +285,10 @@ def _capture_binding_source(monkeypatch) -> dict:
         return _dace_compile_call(self, inp)
 
     monkeypatch.setattr(dace_workflow.compilation.DaCeCompiler, "__call__", mocked_compile_call)
-    return captured
+    yield captured
+    # Discard the serial runner created under the `BUILD_JOBS` override, so that
+    # later tests resolve a runner from the restored configuration again.
+    otf_runners.reset_default_runner()
 
 
 def _expected_cartesian_binding_source(use_metrics: bool) -> str:
@@ -323,7 +331,7 @@ def {_bind_func_name}(
 @pytest.mark.parametrize(
     "use_zero_origin", [False, True], ids=["no_zero_origin", "use_zero_origin"]
 )
-def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
+def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, captured_binding_source):
     M, N, K = (30, 20, 10)
 
     @gtx.field_operator
@@ -350,7 +358,6 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
-    captured = _capture_binding_source(monkeypatch)
 
     test_case = cases.Case.from_cartesian_grid_descriptor(
         cases_utils.simple_cartesian_grid(),
@@ -380,9 +387,9 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     # The binding source only depends on the program parameters and the offset
     # providers; in particular it is independent of `use_zero_origin`, since the
     # origin is always passed and, if not needed, ignored on the SDFG side.
-    assert codegen.format_python_source(captured["binding_source"]) == codegen.format_python_source(
-        _expected_cartesian_binding_source(use_metrics)
-    )
+    assert codegen.format_python_source(
+        captured_binding_source["binding_source"]
+    ) == codegen.format_python_source(_expected_cartesian_binding_source(use_metrics))
 
 
 def _expected_unstructured_binding_source(
@@ -413,7 +420,7 @@ def {_bind_func_name}(
 @pytest.mark.parametrize(
     "use_zero_origin", [False, True], ids=["no_zero_origin", "use_zero_origin"]
 )
-def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
+def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, captured_binding_source):
     @gtx.field_operator
     def testee_op(a: cases.VField) -> cases.VField:
         tmp = neighbor_sum(a(E2V), axis=E2VDim)
@@ -429,7 +436,6 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         use_metrics=use_metrics,
         use_zero_origin=use_zero_origin,
     )
-    captured = _capture_binding_source(monkeypatch)
 
     SIMPLE_MESH = cases_utils.simple_mesh(None)
     offset_provider = SIMPLE_MESH.offset_provider
@@ -454,6 +460,8 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     program(a, b, offset_provider=offset_provider)
     assert np.all(b.asnumpy() == ref)
 
-    assert codegen.format_python_source(captured["binding_source"]) == codegen.format_python_source(
+    assert codegen.format_python_source(
+        captured_binding_source["binding_source"]
+    ) == codegen.format_python_source(
         _expected_unstructured_binding_source(use_metrics, offset_provider)
     )
