@@ -18,7 +18,7 @@ from unittest import mock
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, fingerprinting
+from gt4py.next import common as gtx_common, config as gtx_config, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments as otf_arguments, toolchain as otf_toolchain
@@ -525,3 +525,100 @@ def test_translation_source_code_invariant_under_guid_change():
     first_source_fingerprint = fingerprinting.strict_fingerprinter(first_source)
     second_source_fingerprint = fingerprinting.strict_fingerprinter(second_source)
     assert first_source_fingerprint == second_source_fingerprint
+
+
+def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream(monkeypatch):
+    """When GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0, the SDFG contains sync tasklets."""
+    monkeypatch.setattr(gtx_config, "GT4PY_MAX_CONCURRENT_GPU_STREAMS", 4)
+
+    program_name = "field_ir_multi_stream_sync"
+    ir = itir.Program(
+        id=program_name,
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=core_defs.DeviceType.CUDA,
+        auto_optimize=False,
+        async_sdfg_call=False,
+    )
+
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in sdfg.symbols
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in sdfg.symbols
+
+    state_names = {s.label for s in sdfg.states()}
+    assert "external_ws_sync_entry" in state_names
+    assert "external_ws_sync_exit" in state_names
+
+    entry_tasklets = [
+        n
+        for s in sdfg.states()
+        for n in s.nodes()
+        if isinstance(n, dace_nodes.Tasklet) and n.label == "external_ws_sync_entry_tlet"
+    ]
+    exit_tasklets = [
+        n
+        for s in sdfg.states()
+        for n in s.nodes()
+        if isinstance(n, dace_nodes.Tasklet) and n.label == "external_ws_sync_exit_tlet"
+    ]
+    assert len(entry_tasklets) == 1
+    assert len(exit_tasklets) == 1
+    entry_code = entry_tasklets[0].code.as_string
+    exit_code = exit_tasklets[0].code.as_string
+    assert "cudaStreamWaitEvent" in entry_code
+    assert "cudaEventRecord" in exit_code
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in entry_code
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in exit_code
+
+
+def test_generate_sdfg_skips_stream_sync_for_single_stream(monkeypatch):
+    """When GT4PY_MAX_CONCURRENT_GPU_STREAMS == 0, no sync tasklets are added."""
+    monkeypatch.setattr(gtx_config, "GT4PY_MAX_CONCURRENT_GPU_STREAMS", 0)
+
+    program_name = "field_ir_single_stream"
+    ir = itir.Program(
+        id=program_name,
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=core_defs.DeviceType.CUDA,
+        auto_optimize=False,
+        async_sdfg_call=False,
+    )
+
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT not in sdfg.symbols
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in sdfg.symbols
+
+    state_names = {s.label for s in sdfg.states()}
+    assert "external_ws_sync_entry" not in state_names
+    assert "external_ws_sync_exit" not in state_names

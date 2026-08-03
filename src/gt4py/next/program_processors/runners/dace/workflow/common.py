@@ -34,6 +34,14 @@ SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
+#: SDFG scalar argument name for the GT4Py-owned cross-call workspace event.
+SDFG_ARG_EXTERNAL_WS_EVENT: Final[str] = "__external_ws_event"
+
+
+#: SDFG scalar argument name for the external synchronization stream pointer.
+SDFG_ARG_EXTERNAL_SYNC_STREAM: Final[str] = "__external_sync_stream"
+
+
 ExternalWorkspace: TypeAlias = dict[
     core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
 ]
@@ -148,7 +156,15 @@ def set_dace_config(
     #  end of the SDFG call. To correct for that we are using either
     #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
     #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
-    dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
+    #
+    # GT4Py can optionally request multi-stream scheduling via
+    # ``GT4PY_MAX_CONCURRENT_GPU_STREAMS``. A value of ``0`` keeps the historical
+    # behavior (default stream only, ``max_concurrent_streams=-1``); larger values
+    # enable DaCe's internal stream pool.
+    max_concurrent_streams = (
+        -1 if gtx_config.MAX_CONCURRENT_GPU_STREAMS == 0 else gtx_config.MAX_CONCURRENT_GPU_STREAMS
+    )
+    dace.Config.set("compiler.cuda.max_concurrent_streams", value=max_concurrent_streams)
 
     # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
