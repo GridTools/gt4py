@@ -27,22 +27,17 @@ if TYPE_CHECKING:
 
 def _validate_external_sync_stream(
     stream: Any,
-    device_type: core_defs.DeviceType,
 ) -> None:
     """Validate that ``stream`` is a usable external synchronization stream.
 
     Args:
         stream: The object the user provided as external sync stream.
-        device_type: Target device type for the compiled program.
 
     Raises:
         TypeError: If ``stream`` is not a ``cupy.cuda.Stream``.
-        ValueError: If the target device is not GPU, or if the stream's device
-            does not match the target device, or if the stream handle is invalid.
+        ValueError: If the stream's device does not match the target device, or
+            if the stream handle is invalid.
     """
-    if device_type == core_defs.DeviceType.CPU:
-        raise ValueError("external_sync_stream is not supported on CPU targets.")
-
     import cupy as cp
 
     if cp is None or not isinstance(stream, cp.cuda.Stream):
@@ -143,12 +138,11 @@ class DaCeDecoratedProgram:
 
         This method should be called before the first call to the program.
         """
-        if external_sync_stream is not None:
-            _validate_external_sync_stream(external_sync_stream, self._device_type)
-            self.external_sync_stream = external_sync_stream
-        elif self._device_type == core_defs.DeviceType.CPU:
-            raise ValueError(
-                "external_sync_stream is required for CPU targets when "
-                "multi-stream synchronization tasklets are present in the SDFG."
-            )
+        if external_sync_stream is None:
+            return
+
+        if self._device_type == core_defs.DeviceType.CPU:
+            raise ValueError("Stream synchronization is not supported for CPU target.")
+
+        _validate_external_sync_stream(external_sync_stream)
         self._fun.external_sync_stream = external_sync_stream

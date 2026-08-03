@@ -84,6 +84,7 @@ class DaCeBackendFactory(factory.Factory):
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
     external_workspace = None
+    external_sync_stream = None
 
 
 def make_dace_backend(
@@ -180,23 +181,17 @@ def make_dace_backend(
             "or 'persistent', or set `GT4PY_MAX_CONCURRENT_GPU_STREAMS=0`."
         )
 
-    base_backend = DaCeBackendFactory(
+    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
+        external_sync_stream=external_sync_stream,
         otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
         otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
-    )
-    return DaCeBackend(
-        name=base_backend.name,  # type: ignore[arg-type] # factory-boy typing not precise enough
-        executor=base_backend.executor,  # type: ignore[arg-type]
-        allocator=base_backend.allocator,
-        transforms=base_backend.transforms,
-        external_sync_stream=external_sync_stream,
     )
 
 
