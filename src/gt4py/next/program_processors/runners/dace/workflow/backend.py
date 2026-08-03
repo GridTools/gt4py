@@ -27,16 +27,25 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeBackend(backend.Backend[Any]):
-    """DaCe backend with support for injecting an external workspace at load time."""
+class DaCeBackend(backend.Backend):
+    """DaCe backend with support for injecting external resources at load time.
+
+    These resources are intentionally kept out of the executor workflow: the workflow
+    (and its `DaCeCompiler`) is pickled when compilation is offloaded to a worker
+    process, while a `cupy.cuda.Stream` cannot be pickled. These resource are instead
+    stored on the backend object, which lives in the calling process, and passed
+    through to `DaCeCompilationArtifact.load()`.
+    """
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
+    external_sync_stream: Any | None = None
 
     def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
         program = super().load_artifact(artifact)
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
         # Inject the backend-level workspace so it is used when arguments are constructed.
         program.set_external_workspace(self.external_workspace or {})
+        program.set_external_sync_stream(self.external_sync_stream)
         return program
 
 
@@ -83,11 +92,12 @@ def make_dace_backend(
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
+    external_sync_stream: Any | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
 
     Args:
@@ -99,6 +109,11 @@ def make_dace_backend(
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
+        external_sync_stream: Optional `cupy.cuda.Stream` used as cross-stream
+            synchronization anchor for `transient_memory_mode="external"` when
+            `GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0`. Stored on the backend object
+            (not the picklable executor) and passed to the compiled program at
+            load time.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -154,7 +169,18 @@ def make_dace_backend(
             gtx_transformations.TransientMemoryMode.EXTERNAL
         )
 
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
+    if (
+        optimization_args.get("transient_memory_mode")
+        is gtx_transformations.TransientMemoryMode.POOL
+        and config.MAX_CONCURRENT_GPU_STREAMS > 0
+    ):
+        raise ValueError(
+            "DaCe backend does not implement in-order memory allocations and "
+            "multi-stream scheduling together. Use `transient_memory_mode='external'` "
+            "or 'persistent', or set `GT4PY_MAX_CONCURRENT_GPU_STREAMS=0`."
+        )
+
+    base_backend = DaCeBackendFactory(
         gpu=gpu,
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
@@ -164,6 +190,13 @@ def make_dace_backend(
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
         otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
+    return DaCeBackend(
+        name=base_backend.name,  # type: ignore[arg-type] # factory-boy typing not precise enough
+        executor=base_backend.executor,  # type: ignore[arg-type]
+        allocator=base_backend.allocator,
+        transforms=base_backend.transforms,
+        external_sync_stream=external_sync_stream,
     )
 
 

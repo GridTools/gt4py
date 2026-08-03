@@ -31,6 +31,10 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 
 
+SDFG_ARG_EXTERNAL_WS_EVENT = gtx_wfdcommon.SDFG_ARG_EXTERNAL_WS_EVENT
+SDFG_ARG_EXTERNAL_SYNC_STREAM = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
+
+
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
@@ -152,6 +156,10 @@ class CompiledDaceProgram:
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
         None  # This attribute is set at runtime, before the first call.
     )
+    external_sync_stream: Any | None = (
+        None  # This attribute is set at runtime, before the first call.
+    )
+    _sync_event: Any | None = None
 
     def __init__(
         self,
@@ -194,14 +202,38 @@ class CompiledDaceProgram:
                 _validate_external_workspace(workspace, storage, required_nbytes)
                 self.sdfg_program.set_workspace(storage, workspace)
 
+    def _configure_external_sync_stream(self) -> None:
+        if SDFG_ARG_EXTERNAL_WS_EVENT in self.sdfg_program.sdfg.symbols:
+            import cupy as cp
+
+            self._sync_event = cp.cuda.Event()
+
+    def _add_stream_sync_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Add external workspace event/stream handles to SDFG kwargs if needed."""
+        if self._sync_event is None:
+            return kwargs
+
+        # Pass the raw pointer values as 64-bit integers. DaCe receives them as
+        # `dace.uint64` scalar symbols and the tasklets cast them to the
+        # appropriate CUDA/HIP handle types. When no external stream was
+        # provided, `0` selects the CUDA/HIP default stream.
+        stream_ptr = 0 if self.external_sync_stream is None else self.external_sync_stream.ptr
+        kwargs = kwargs | {
+            SDFG_ARG_EXTERNAL_WS_EVENT: self._sync_event.ptr,
+            SDFG_ARG_EXTERNAL_SYNC_STREAM: stream_ptr,
+        }
+        return kwargs
+
     def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed argument
         vectors in `self.csdfg_args`, to call them use `self.fast_call()`.
         """
+        kwargs = self._add_stream_sync_kwargs(kwargs)
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
             self._configure_external_workspace(**kwargs)
+            self._configure_external_sync_stream()
         # Note we only care about `csdfg_argv` (normal call), since we have to update it,
         #  we ensure that it is a `list`.
         self.csdfg_argv = [*csdfg_argv]
