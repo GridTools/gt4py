@@ -103,8 +103,8 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
-def add_external_workspace_stream_sync(sdfg: dace.SDFG, gpu: bool) -> None:
-    """Fence external workspaces across concurrent GPU streams.
+def add_external_stream_sync(sdfg: dace.SDFG, gpu: bool) -> None:
+    """Synchronize SDFG execution with externally managed stream.
 
     Inserts entry and exit tasklets that use CUDA/HIP events to ensure:
 
@@ -445,10 +445,10 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
 
+        add_external_stream_sync(sdfg, on_gpu)
+
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
-
-        add_external_workspace_stream_sync(sdfg, on_gpu)
 
         return sdfg
 
