@@ -75,7 +75,11 @@ def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
     if storage == dace.StorageType.CPU_Heap:
         device = core_defs.DeviceType.CPU
     elif storage == dace.StorageType.GPU_Global:
-        assert core_defs.CUPY_DEVICE_TYPE is not None
+        if core_defs.CUPY_DEVICE_TYPE is None:
+            raise ValueError(
+                f"Can not map storage type '{storage}' to a device: no GPU device"
+                " type is configured ('core_defs.CUPY_DEVICE_TYPE' is None)."
+            )
         device = core_defs.CUPY_DEVICE_TYPE
     else:
         raise ValueError(f"Unsupported storage type '{storage}' for external workspace allocation.")
@@ -89,19 +93,20 @@ def _validate_external_workspace(
     """Validate that the provided ``wsp`` workspace satisfies the requirements.
 
     Args:
+        wsp: The external workspace to check.
         storage: SDFG storage type the workspace buffer is being installed for.
         nbytes: Size in bytes required.
-        wsp: The external workspace to check.
 
     Raises:
         TypeError: If ``wsp`` exposes neither ``__array_interface__`` nor
             ``__cuda_array_interface__``.
-        ValueError: If ``wsp`` is smaller than ``request.nbytes`` or its
-            base pointer is not aligned to ``request.alignment`` bytes.
+        ValueError: If ``wsp`` exposes ``nbytes`` and it is smaller than the
+            required ``nbytes``. Buffers that do not expose ``nbytes`` are
+            accepted on a trust basis (their size can not be checked here).
     """
     if not (xtyping.supports_array_interface(wsp) or xtyping.supports_cuda_array_interface(wsp)):
         raise TypeError(
-            f"External memory allocator returned {type(wsp).__name__!r} for storage "
+            f"External workspace is {type(wsp).__name__!r} for storage "
             f"{storage!r}, which does not expose `__array_interface__` or "
             f"`__cuda_array_interface__`."
         )

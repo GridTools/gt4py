@@ -31,9 +31,10 @@ class DaCeDecoratedProgram:
     On the first call the full SDFG argument vector is constructed via
     ``CompiledDaceProgram.construct_arguments``; subsequent calls only update
     the argument vector in place through the binding function generated for the
-    program. Teardown is forwarded to the underlying ``CompiledDaceProgram``
-    so that the generic otf pool -- which only sees this callable -- can
-    release external-memory workspaces when the pool is finalized.
+    program. External workspace memory (when the SDFG uses
+    ``TransientMemoryMode.EXTERNAL``) is installed onto the underlying
+    ``CompiledDaceProgram`` before the first call via `set_external_workspace`;
+    its lifetime is owned by the caller, not by this wrapper.
     """
 
     def __init__(

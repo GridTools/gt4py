@@ -125,13 +125,15 @@ class TransientMemoryMode(str, enum.Enum):
     - `POOL`: Transients are allocated in a memory pool, associated to the GPU
         default stream. These allocations are managed by an asynchronous allocator,
         since all memory is allocated and freed in stream order.
-    - `EXTERNAL`: Transients are allocated and deallocated by an external allocator.
-        This strategy allows to reuse a workspace memory for multiple SDFGs, relying
-        on sequential execution of the programs on the default stream.
+    - `EXTERNAL`: Transients are backed by workspace memory supplied directly
+        by the caller (one buffer per storage type, threaded through the DaCe
+        backend). This strategy allows to reuse a workspace memory across
+        multiple SDFGs, relying on sequential execution of the programs on the
+        default stream; the caller owns the workspace lifetime.
     Note:
         The `EXTERNAL` strategy requires that the `external_workspace` attribute
-        of the dace backend workflow is set, because it is needed at runtime to
-        install the memory pointers for transient arrays.
+        of the dace backend is set, because it is needed at runtime to install
+        the memory pointers for transient arrays.
     """
 
     SCOPED = "SCOPED"

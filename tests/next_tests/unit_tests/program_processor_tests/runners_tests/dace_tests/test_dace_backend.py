@@ -30,6 +30,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
+    decoration as dace_wf_decoration,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -269,6 +270,15 @@ def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str
 
 @pytest.mark.parametrize("transient_memory_mode", list(gtx_transformations.TransientMemoryMode))
 def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
+    """Each ``TransientMemoryMode`` reaches codegen with the expected memory API.
+
+    The test inspects the *generated* host/device code (via
+    ``sdfg.generate_code()``) for allocation/free markers such as
+    ``cudaMalloc``/``cudaFree`` (sync), ``cudaMallocAsync``/``cudaFreeAsync``
+    (pool), or ``set_external_memory``/``__dace_get_external_memory_size_``
+    (external). These assertions are on DaCe's codegen output and may need to
+    be updated if a DaCe upgrade changes the emitted strings.
+    """
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
     gpu_api_prefix = "hip" if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM else "cuda"
     gpu_malloc_marker = f"{gpu_api_prefix}Malloc("
@@ -339,7 +349,12 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     # The workspace buffer (if any) lives in the main process, so compilation
     # is forced in-process so the patched translator is observed.
     with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
-        testee.with_backend(custom_backend)(a, b, out=out, offset_provider={})
+        prog = testee.with_backend(custom_backend).compile(offset_provider={})
+
+    prog(a, b, out=out)
+    assert len(prog._compiled_programs.compiled_programs) == 1
+    _, decorated_program = next(iter(prog._compiled_programs.compiled_programs.items()))
+    assert isinstance(decorated_program, dace_wf_decoration.DaCeDecoratedProgram)
 
     assert captured_sdfg is not None
     transient_arrays = [
@@ -355,6 +370,11 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         case gtx_transformations.TransientMemoryMode.EXTERNAL:
             assert all(
                 tdesc.lifetime == dace.AllocationLifetime.External for _, tdesc in transient_arrays
+            )
+            # load_artifact injected the backend-level workspace onto the program wrapper.
+            assert (
+                decorated_program._fun.external_workspace[device_type]
+                is external_workspace[device_type]
             )
             # External mode wires explicit workspace API calls in generated host code.
             assert "set_external_memory" in generated_code
