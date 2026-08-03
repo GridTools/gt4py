@@ -90,7 +90,6 @@ class DaCeBackendFactory(factory.Factory):
 def make_dace_backend(
     gpu: bool,
     auto_optimize: bool = True,
-    async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     external_sync_stream: Any | None = None,
@@ -104,17 +103,16 @@ def make_dace_backend(
     Args:
         gpu: Enable GPU transformations and code generation.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
-        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
-            of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
-        external_sync_stream: Optional `cupy.cuda.Stream` used as cross-stream
-            synchronization anchor for `transient_memory_mode="external"` when
+        external_sync_stream: Optional `cupy.cuda.Stream`, owned by the caller,
+            which is used to synchronize the SDFG entry/exit points, when
             `GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0`. Stored on the backend object
             (not the picklable executor) and passed to the compiled program at
-            load time.
+            load time. When `GT4PY_MAX_CONCURRENT_GPU_STREAMS == 0` this stream
+            is ignored and the default stream is used, with asynchronuous execution.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -186,7 +184,6 @@ def make_dace_backend(
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
         external_sync_stream=external_sync_stream,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
@@ -198,21 +195,17 @@ def make_dace_backend(
 run_dace_cpu = make_dace_backend(
     gpu=False,
     auto_optimize=True,
-    async_sdfg_call=False,
 )
 run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
     auto_optimize=False,
-    async_sdfg_call=False,
 )
 
 run_dace_gpu = make_dace_backend(
     gpu=True,
     auto_optimize=True,
-    async_sdfg_call=True,
 )
 run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
     auto_optimize=False,
-    async_sdfg_call=True,
 )
