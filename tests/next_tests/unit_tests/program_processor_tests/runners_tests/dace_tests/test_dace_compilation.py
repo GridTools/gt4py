@@ -398,7 +398,7 @@ def test_construct_arguments_rejects_buffer_without_array_interface():
         workspace_sizes={dace.StorageType.CPU_Heap: 64},
     )
 
-    with pytest.raises(TypeError, match="does not expose `__array_interface__`"):
+    with pytest.raises(TypeError, match="must expose `__array_interface__`"):
         program.construct_arguments(alpha=1)
 
     program.sdfg_program.set_workspace.assert_not_called()
