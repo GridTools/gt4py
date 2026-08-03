@@ -104,18 +104,23 @@ def _validate_external_workspace(
             required ``nbytes``. Buffers that do not expose ``nbytes`` are
             accepted on a trust basis (their size can not be checked here).
     """
-    if not (xtyping.supports_array_interface(wsp) or xtyping.supports_cuda_array_interface(wsp)):
-        raise TypeError(
-            f"External workspace is {type(wsp).__name__!r} for storage "
-            f"{storage!r}, which does not expose `__array_interface__` or "
-            f"`__cuda_array_interface__`."
-        )
-    if (wsp_nbytes := getattr(wsp, "nbytes", None)) is not None:
-        if wsp_nbytes < nbytes:
-            raise ValueError(
-                f"External workspace buffer is {wsp_nbytes} bytes for storage "
-                f"{storage!r}, but at least {nbytes} bytes were required."
+    if storage == dace.StorageType.GPU_Global:
+        if not xtyping.supports_cuda_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__cuda_array_interface__` (got {type(wsp).__name__!r})."
             )
+    elif storage == dace.StorageType.CPU_Heap:
+        if not xtyping.supports_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__array_interface__` (got {type(wsp).__name__!r})."
+            )
+    else:
+        raise ValueError(f"Unsupported storage type {storage!r} for external workspace allocation.")
+
+    if (wsp_nbytes := getattr(wsp, "nbytes", None)) is not None and wsp_nbytes < nbytes:
+        raise ValueError(
+            f"External workspace buffer is {wsp_nbytes} bytes for storage {storage!r}, but at least {nbytes} bytes were required."
+        )
 
 
 class CompiledDaceProgram:
