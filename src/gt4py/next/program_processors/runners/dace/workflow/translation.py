@@ -623,6 +623,7 @@ class DaCeTranslator(
             offset_provider_type=inp.args.offset_provider,  # type: ignore[arg-type]
             bind_func_name=gtx_wfdfactory._GT_DACE_BINDING_FUNCTION_NAME,
             use_metrics=self.use_metrics,
+            sdfg=sdfg,
             backend="dace",
         )
 

@@ -9,11 +9,14 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Literal
+from typing import Any, Container, Literal, Optional
+
+import dace
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir
 from gt4py.next.otf import code_specs, stages
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_sdfg_args
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
 
@@ -42,6 +45,7 @@ def _create_sdfg_bindings(
     offset_provider_type: gtx_common.OffsetProviderType,
     bind_func_name: str,
     use_metrics: bool,
+    sdfg: Optional[dace.SDFG],
     backend: Literal["gtfn", "dace"],
 ) -> str:
     """
@@ -62,6 +66,9 @@ def _create_sdfg_bindings(
         use_metrics: If metric support was added to the underlying compiled code.
             In that case the last two arguments of the generated function signature
             are ignored and also not included in the output.
+        sdfg: If provided and `backend` is `dace` then only the offset providers that
+            are used in the SDFG are processed, otherwise `None` is passed.
+            This is compatible with the `user_args` signature.
         backend: For which backend the generated function should be used.
     """
     assert backend in ["gtfn", "dace"]
@@ -88,7 +95,16 @@ def _create_sdfg_bindings(
         assert process_arg_stmt.strip().endswith(",")
     assert process_arg_stmt.strip().endswith(",")
 
-    process_arg_stmt += _process_offset_providers(offset_provider_type)
+    needed_offset_providers: Optional[Container[str]] = None
+    if backend == "dace" and sdfg is not None:
+        sdfg_arglist = sdfg.arglist()
+        needed_offset_providers = {
+            table_name
+            for table_name in offset_provider_type
+            if gtx_sdfg_args.connectivity_identifier(table_name) in sdfg_arglist
+        }
+
+    process_arg_stmt += _process_offset_providers(offset_provider_type, needed_offset_providers)
 
     process_arg_stmt += _process_metric_arguments(
         metric_level_arg_name=gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL,
@@ -191,12 +207,22 @@ def _process_argument(
 
 def _process_offset_providers(
     offset_provider_type: gtx_common.OffsetProviderType,
+    needed_offset_providers: Optional[Container[str]],
 ) -> str:
+
+    if needed_offset_providers is None:
+        needed_offset_providers = set(offset_provider_type.keys())
+
     # Assumes that the order of the offset providers is stable.
-    # TODO(phimuell): Ignore the ones that are not needed.
-    return ", ".join(
-        f"(offset_provider['{table_name}'].ndarray, (0, 0))" for table_name in offset_provider_type
-    )
+    processed_offset_providers = ""
+    for table_name in offset_provider_type:
+        if table_name in needed_offset_providers:
+            processed_offset_providers += f"(offset_provider['{table_name}'].ndarray, (0, 0))"
+        else:
+            processed_offset_providers += "None"
+        processed_offset_providers += ", "
+
+    return processed_offset_providers
 
 
 def _process_metric_arguments(
