@@ -403,7 +403,7 @@ def gt_set_gpu_blocksize(
 
     configured_maps = 0
     for state in sdfg.states():
-        scope_dict: Union[None, dict[Any, Any]] = None
+        scope_dict: Union[dict[Any, Any], None] = None
         cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id
         for node in state.nodes():
