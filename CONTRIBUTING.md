@@ -145,7 +145,7 @@ We recommended you to use `nox` for running the test suite in different environm
 nox --list
 
 # Run a specific session
-nox -s "test_cartesian-3.11(internal, cpu)"
+nox -s "test_cartesian-3.12(internal, cpu)"
 ```
 
 Check `nox` documentation (`nox --help`) for the complete reference.
