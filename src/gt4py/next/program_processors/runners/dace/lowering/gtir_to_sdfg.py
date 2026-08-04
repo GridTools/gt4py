@@ -1018,11 +1018,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 transient=True,
             )
 
-        # The list of the SDFG "arguments", i.e. the non transient arrays. Note that
+        # The list of the SDFG arguments", i.e. the non transient arrays. Note that
         #  tuple arguments are flatten and their name is mangled and no longer matches
-        #  the name in the signature of the field operator / program. Furthermore,
-        #  after optimization they might no longer be needed and are removed from
-        #  `sdfg.arglist()`, but can still be passed, to the call operator.
+        #  the name in the signature of the field operator / program. Also note that
+        #  scalar arguments after optimization might no longer be needed and have been
+        #  pruned from the SDFG. Also the domain related symbols are not included.
+        # NOTE: The dispatch code does not use it, instead the `user_args` are used.
         return [arg_name for arg_name, _ in sdfg_args]
 
     def visit_Program(self, node: gtir.Program) -> dace.SDFG:

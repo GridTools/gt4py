@@ -9,9 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Literal, Mapping, Optional, Sequence, Union, overload
-
-import numpy as np
+from typing import Any, Literal
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir
@@ -44,7 +42,6 @@ def _create_sdfg_bindings(
     offset_provider_type: gtx_common.OffsetProviderType,
     bind_func_name: str,
     use_metrics: bool,
-    eval_mode: bool,
     backend: Literal["gtfn", "dace"],
 ) -> str:
     """
@@ -53,11 +50,10 @@ def _create_sdfg_bindings(
     The returned string can be passed to exec to then dynamically create a function to
     perform the translation. The function will have the same signature as
     `argument_processing_function()` and have the name `bind_func_name`.
-    The translation function targets the `user_args` interface of the SDFG.
+    The function that is generated targets the interface defined through the
+    `user_args` defined interface of the SDFG.
 
-    The function has experimental support for GTFN. Furthermore, it is also possible
-    to create only a dispatch function, i.e. the returned function only forwards the
-    processing to an actual function. This is only useful for debugging.
+    The function has experimental support for GTFN.
 
     Args:
         prog: The program definition.
@@ -66,19 +62,11 @@ def _create_sdfg_bindings(
         use_metrics: If metric support was added to the underlying compiled code.
             In that case the last two arguments of the generated function signature
             are ignored and also not included in the output.
-        eval_mode: If `False` the generated function will dispatch to a real Python
-            function that performs the processing instead of a function that is fully
-            code generated.
         backend: For which backend the generated function should be used.
     """
     assert backend in ["gtfn", "dace"]
 
     code_lines: list[str] = []
-    if eval_mode:
-        code_lines.append(
-            "from gt4py.next.program_processors.runners.dace.workflow import bindings as gtx_wfdbindings"
-        )
-
     code_lines.append(f"def {bind_func_name}(")
     code_lines.append("\targs,")
     code_lines.append("\toffset_provider,")
@@ -86,42 +74,30 @@ def _create_sdfg_bindings(
     code_lines.append(f"\t{gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME},")
     code_lines.append("):")
 
-    if eval_mode:
-        code_lines.append("\treturn gtx_wfdbindings._perform_argument_processing(")
-        code_lines.append("\t\targs=args,")
-        code_lines.append("\t\toffset_provider=offset_provider,")
-        code_lines.append(f"\t\tmetric_level={gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL},")
-        code_lines.append(f"\t\truntime_return_value={gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME},")
-        code_lines.append(f"\t\tuse_metrics={use_metrics},")
-        code_lines.append(f"\t\tbackend='{backend}',")
-        code_lines.append("\t)")
-
-    else:
-        expanded_args: list[str] = [f"__gtx_expanded_names_{param.id}" for param in prog.params]
-        unpacked_variables: list[str] = [", ".join(expanded_args) + ", = args"]
-        process_arg_stmt = ""
-        for arg_name, param in zip(expanded_args, prog.params):
-            assert param.type is not None
-            process_arg_stmt += _process_argument(
-                argument=arg_name,
-                param_type=param.type,
-                unpacked_variables=unpacked_variables,
-                backend=backend,
-            )
-            assert process_arg_stmt.strip().endswith(",")
-        assert process_arg_stmt.strip().endswith(",")
-        process_arg_stmt += _process_offset_providers(  # type: ignore[operator]
-            offset_provider=offset_provider_type, eval_mode=False
-        )
-        process_arg_stmt += _process_metric_arguments(
-            metric_level=gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL,
-            compute_time_argument=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME,
-            eval_mode=False,
+    expanded_args = [f"__gtx_expanded_names_{param.id}" for param in prog.params]
+    unpacked_variables = [", ".join(expanded_args) + ", = args"]
+    process_arg_stmt = ""
+    for arg_name, param in zip(expanded_args, prog.params):
+        assert param.type is not None
+        process_arg_stmt += _process_argument(
+            argument=arg_name,
+            param_type=param.type,
+            unpacked_variables=unpacked_variables,
             backend=backend,
-            use_metrics=use_metrics,
         )
-        code_lines.extend(("\t" + s for s in unpacked_variables))
-        code_lines.append(f"\treturn ({process_arg_stmt})")
+        assert process_arg_stmt.strip().endswith(",")
+    assert process_arg_stmt.strip().endswith(",")
+
+    process_arg_stmt += _process_offset_providers(offset_provider_type)
+
+    process_arg_stmt += _process_metric_arguments(
+        metric_level_arg_name=gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL,
+        compute_time_arg_name=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME,
+        backend=backend,
+        use_metrics=use_metrics,
+    )
+    code_lines.extend(("\t" + s for s in unpacked_variables))
+    code_lines.append(f"\treturn ({process_arg_stmt})")
 
     return "\n".join(code_lines)
 
@@ -156,187 +132,85 @@ def bind_sdfg(
     )
 
 
-@overload
-def _perfom_tuple_unpacking(
-    tuple_argument: tuple[Any, ...],
-    tuple_len: int,
-    unpacked_variables: None,
-) -> tuple[Any, ...]: ...
-
-
-@overload
 def _perfom_tuple_unpacking(
     tuple_argument: str,
     tuple_len: int,
     unpacked_variables: list[str],
-) -> list[str]: ...
+) -> list[str]:
+    assert tuple_len > 0
+    unpacked_arguments = [f"{tuple_argument}_{i}" for i in range(tuple_len)]
+    # Trailing comma is needed to handle 1 element tuples correctly.
+    unpacked_variables.append(f"{', '.join(unpacked_arguments)}, = {tuple_argument}")
+    return unpacked_arguments
 
 
-def _perfom_tuple_unpacking(
-    tuple_argument: Union[tuple[Any, ...], str],
-    tuple_len: int,
-    unpacked_variables: Optional[list[str]],
-) -> Union[tuple[Any, ...], list[str]]:
-    if unpacked_variables is None:
-        # Eval mode: Simply unpack the tuple.
-        assert isinstance(tuple_argument, tuple) and len(tuple_argument) == tuple_len
-        return tuple_argument
-    else:
-        # Generation mode: Write a line that performs the unpacking and adds it to
-        #   `unpacked_variables` and return their names.
-        assert isinstance(tuple_argument, str) and len(tuple_argument) > 0
-        unpacked_arguments = [f"{tuple_argument}_{i}" for i in range(tuple_len)]
-        unpacked_variables.append(f"{', '.join(unpacked_arguments)}, = {tuple_argument}")
-        return unpacked_arguments
-
-
-@overload
-def _process_argument(
-    argument: Any,
-    param_type: None,
-    unpacked_variables: None,
-    backend: Literal["gtfn", "dace"],
-) -> tuple[Any, ...]: ...
-
-
-@overload
 def _process_argument(
     argument: str,
     param_type: ts.TypeSpec,
     unpacked_variables: list[str],
     backend: Literal["gtfn", "dace"],
-) -> str: ...
+) -> str:
 
-
-def _process_argument(
-    argument: Union[Any, str],
-    param_type: Optional[ts.TypeSpec],
-    unpacked_variables: Optional[list[str]],
-    backend: Literal["gtfn", "dace"],
-) -> Union[tuple[Any, ...], str]:
-
-    tuple_types: Optional[Sequence[Any]]
-    if unpacked_variables is None:
-        assert param_type is None
-        eval_mode = True
-        is_field = hasattr(argument, "__gt_origin__")
-        is_scalar = True  # No other choice
-        is_bool = isinstance(argument, (np.bool_, bool))
-        tuple_types = (None,) * len(argument) if (is_tuple := isinstance(argument, tuple)) else None
-
-    else:
-        assert param_type is not None
-        eval_mode = False
-        is_field = isinstance(param_type, ts.FieldType)
-        is_scalar = isinstance(param_type, ts.ScalarType)
-        is_bool = param_type.kind == ts.ScalarKind.BOOL if is_scalar else False  # type: ignore[attr-defined]
-        tuple_types = (
-            tuple(param_type.types) if (is_tuple := isinstance(param_type, ts.TupleType)) else None
+    processed_argument = ""
+    if isinstance(param_type, ts.TupleType):
+        tuple_member_types = param_type.types
+        tuple_members = _perfom_tuple_unpacking(
+            argument, len(tuple_member_types), unpacked_variables
         )
-
-    if is_tuple:
-        assert isinstance(tuple_types, tuple)
-        assert isinstance(argument, tuple) if eval_mode else isinstance(argument, str)
-        tuple_members = _perfom_tuple_unpacking(argument, len(tuple_types), unpacked_variables)  # type: ignore[arg-type]
-        processed_tuple_members: Union[str, tuple[Any, ...]] = tuple() if eval_mode else "("
-        for tuple_member, tuple_member_type in zip(tuple_members, tuple_types):
-            processed_tuple_members += _process_argument(  # type: ignore[operator]
+        processed_argument = "("
+        for tuple_member, tuple_member_type in zip(tuple_members, param_type.types):
+            processed_argument += _process_argument(
                 argument=tuple_member,
                 param_type=tuple_member_type,
                 unpacked_variables=unpacked_variables,
                 backend=backend,
             )
+        processed_argument += ")"
 
-        # The trailing commas are intentionally and are needed for symmetry reasons. See
-        #  also the note in `_perform_argument_processing()`.
-        return (processed_tuple_members,) if eval_mode else (processed_tuple_members + "),")  # type: ignore[operator]
-
-    command: str
-    if is_field:
-        argument_name = "argument" if eval_mode else argument
-        if (len(argument.domain) == 0) if eval_mode else (len(param_type.dims) == 0):  # type: ignore[union-attr]
+    elif isinstance(param_type, ts.FieldType):
+        if len(param_type.dims) == 0:
             # GTFN wants a field, dace a scalar.
-            command = f"{argument_name}" if backend == "gtfn" else f"{argument_name}.as_scalar()"
+            processed_argument = argument if backend == "gtfn" else f"{argument}.as_scalar()"
         else:
             # Full array, the differences is where the origin comes from.
-            origin_prop = "__gt_origin__" if backend == "gtfn" else "__dace_origin__"
-            command = f"({argument_name}.ndarray, ({argument_name}.{origin_prop}))"
+            origin_method = "__gt_origin__" if backend == "gtfn" else "__dace_origin__"
+            processed_argument = f"({argument}.ndarray, ({argument}.{origin_method}))"
 
-    elif is_scalar:
-        command = "{cast}({arg})".format(
-            arg="argument" if eval_mode else argument,
-            cast=("bool" if is_bool and backend == "gtfn" else ""),
+    elif isinstance(param_type, ts.ScalarType):
+        processed_argument = (
+            f"bool({argument})"
+            if param_type.kind == ts.ScalarKind.BOOL and backend == "gtfn"
+            else argument
         )
     else:
-        assert isinstance(argument, str)
         raise ValueError(f"Parameter `{argument}` had unexpected type `{param_type}`")
 
-    command += ", "  # Comma is intentional.
-    return eval(command) if eval_mode else command
+    assert processed_argument
+    return processed_argument + ", "
 
 
 def _process_offset_providers(
-    offset_provider: Union[gtx_common.OffsetProvider, gtx_common.OffsetProviderType],
-    eval_mode: bool,
-) -> Union[str, tuple[Any, ...]]:
+    offset_provider_type: gtx_common.OffsetProviderType,
+) -> str:
     # Assumes that the order of the offset providers is stable.
-    # And that there is no difference between GTFN and DaCe
-    processed_offset_providers: Union[str, tuple[Any, ...]] = tuple() if eval_mode else ""
-    for table_name in offset_provider:
-        command = f"(offset_provider['{table_name}'].ndarray, (0, 0)), "
-        processed_offset_providers += eval(command) if eval_mode else command  # type: ignore[operator]
-    return processed_offset_providers
+    # TODO(phimuell): Ignore the ones that are not needed.
+    return ", ".join(
+        f"(offset_provider['{table_name}'].ndarray, (0, 0))" for table_name in offset_provider_type
+    )
 
 
 def _process_metric_arguments(
-    metric_level: Union[str, int],
-    compute_time_argument: Union[str, Any],
-    eval_mode: bool,
-    backend: str,
+    metric_level_arg_name: str,
+    compute_time_arg_name: str,
+    backend: Literal["gtfn", "dace"],
     use_metrics: bool,
-) -> Union[str, Any]:
+) -> str:
 
     if not use_metrics:
-        return tuple() if eval_mode else ""
+        return ""
 
     # This is currently different and should probably be unified somehow.
     if backend == "gtfn":
-        raise NotImplementedError("Implement me")
+        raise NotImplementedError()
     else:
-        if eval_mode:
-            assert not (isinstance(metric_level, str) or isinstance(compute_time_argument, str))
-            return (metric_level, compute_time_argument)
-        else:
-            assert isinstance(metric_level, str) and isinstance(compute_time_argument, str)
-            return f"{metric_level}, {compute_time_argument}, "
-
-
-def _perform_argument_processing(
-    args: tuple[Any, ...],
-    offset_provider: Mapping[str, Any],
-    metric_level: int,
-    runtime_return_value: Any,
-    use_metrics: bool,  # Not in generated signature, but must be provided.
-    backend: str,  # Not part but must be provided.
-) -> tuple[Any, ...]:
-
-    # NOTE: Although the loop bellow looks like it could be turned into into a tuple
-    #   comprehension it would lead to an error. This is related to the output type
-    #   of `_process_argument()`. In essence it boils down to `append()` (comprehension)
-    #   and `extend()` (loop).
-    processed_arguments: tuple[Any, ...] = tuple()
-    for arg in args:
-        processed_arguments += _process_argument(  # type: ignore[call-overload]
-            argument=arg, param_type=None, unpacked_variables=None, backend=backend
-        )
-    processed_arguments += _process_offset_providers(  # type: ignore[operator]
-        offset_provider=offset_provider, eval_mode=True
-    )
-    processed_arguments += _process_metric_arguments(  # type: ignore[operator]
-        metric_level=metric_level,
-        compute_time_argument=runtime_return_value,
-        eval_mode=True,
-        backend=backend,
-        use_metrics=use_metrics,
-    )
-    return processed_arguments
+        return f"{metric_level_arg_name}, {compute_time_arg_name}, "

@@ -43,13 +43,13 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        proc_arc = argument_preprocessing_function(
+        processed_args = argument_preprocessing_function(
             args,
             offset_provider,
             metrics.get_current_level(),
             collect_time_arg,
         )
-        fun.sdfg_program.user_bind_call(*proc_arc)
+        fun.sdfg_program.user_bind_call(*processed_args)
 
         if collect_time:
             metrics.add_sample_to_current_source(metrics.COMPUTE_METRIC, collect_time_arg[0].item())

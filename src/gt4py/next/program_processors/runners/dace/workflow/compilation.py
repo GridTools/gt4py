@@ -98,12 +98,14 @@ class CompiledDaceProgram:
     def __call__(self, **kwargs: Any) -> None:
         """Call the compiled SDFG with the given arguments.
 
-        Note that this function will not use the user argument entry point. Furthermore,
-        using it requires exact knowledge of the SDFG argument names. In short: using it
-        is most certainly an error.
+        A `CompiledDaceProgram` should not be called directly. Instead
+        `gt4py.next.program_processors.runners.dace.workflow.decoration.convert_args()`
+        should be used to obtain a callable.
         """
-        result = self.sdfg_program(**kwargs)
-        assert result is None
+        raise NotImplementedError(
+            "A `CompiledDaceProgram` can not be called directly. Instead use "
+            "`gt4py.next.program_processors.runners.dace.workflow.decoration.convert_args()`."
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,7 +147,7 @@ class DaCeCompiler(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
     # We store the non-default values of `dace.Config` in order to include it in the stage fingerprint
-    # NOTE: They do not include the non default keys set through environment variables.
+    # NOTE: They do not include the non default keys set through DaCe environment variables.
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
@@ -160,7 +162,6 @@ class DaCeCompiler(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            # TODO(phimuell): Extraction of the binding code is missing.
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
                 inp, sdfg = _add_tx_markers(inp)

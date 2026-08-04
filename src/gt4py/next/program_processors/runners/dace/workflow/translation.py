@@ -624,7 +624,6 @@ class DaCeTranslator(
             bind_func_name=gtx_wfdfactory._GT_DACE_BINDING_FUNCTION_NAME,
             use_metrics=self.use_metrics,
             backend="dace",
-            eval_mode=False,
         )
 
         # NOTE: The source code is typed as `str` but we will put the json representation
