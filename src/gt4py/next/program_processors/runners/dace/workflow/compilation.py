@@ -212,7 +212,11 @@ class CompiledDaceProgram:
         # `dace.uint64` scalar symbols and the tasklets cast them to the
         # appropriate CUDA/HIP handle types. When no external stream was
         # provided, the CUDA/HIP default stream is used.
-        stream_ptr = cp.cuda.Stream(null=True).ptr if self.external_sync_stream is None else self.external_sync_stream.ptr
+        stream_ptr = (
+            cp.cuda.Stream(null=True).ptr
+            if self.external_sync_stream is None
+            else self.external_sync_stream.ptr
+        )
         kwargs = kwargs | {
             SDFG_ARG_EXTERNAL_WS_EVENT: self._sync_event.ptr,
             SDFG_ARG_EXTERNAL_SYNC_STREAM: stream_ptr,

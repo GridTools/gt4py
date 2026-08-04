@@ -162,6 +162,7 @@ def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> N
         )
         return
 
+    original_start = sdfg.start_block
     event_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_WS_EVENT
     stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
 
@@ -222,7 +223,6 @@ def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> N
 
     # Wire the entry state before the original start block and the exit state
     # after all original sink nodes.
-    original_start = sdfg.start_block
     sdfg.add_edge(entry_state, original_start, dace.InterstateEdge())
     sdfg.start_block = sdfg.node_id(entry_state)
 
