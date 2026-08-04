@@ -457,8 +457,8 @@ def test_construct_arguments_skips_size_check_when_nbytes_missing():
 class _FakeStream:
     """Stand-in for a ``cupy.cuda.Stream`` that does not require a GPU."""
 
-    def __init__(self, ptr: int = 42, device_id: int = 0) -> None:
-        self.ptr = ptr
+    def __init__(self, ptr: int = 42, device_id: int = 0, null: bool = False) -> None:
+        self.ptr = 0 if null else ptr
         self.device_id = device_id
 
 

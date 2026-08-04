@@ -82,12 +82,15 @@ stream, preserving the historical asynchronous single-stream execution.
 
 ### Validation
 
-- `external_sync_stream` is validated during compiled-program construction:
+- `external_sync_stream` is validated during compiled-program construction when
+  it is not `None`:
   - Rejected on CPU targets.
   - Must be a `cupy.cuda.Stream`.
   - Must be on the current GPU device.
   - Must pass `cudaStreamQuery` (accepting both `cudaSuccess` and
     `cudaErrorNotReady`).
+- When `max_concurrent_gpu_streams == 0`, `external_sync_stream` is ignored even
+  if provided, so no validation occurs.
 - The combination `transient_memory_mode=POOL` and
   `max_concurrent_gpu_streams >= 1` is rejected in `make_dace_backend`,
   because the existing GPU memory-pool pass assumes default-stream ordering and
