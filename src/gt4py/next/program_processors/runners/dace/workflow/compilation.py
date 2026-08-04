@@ -211,8 +211,8 @@ class CompiledDaceProgram:
         # Pass the raw pointer values as 64-bit integers. DaCe receives them as
         # `dace.uint64` scalar symbols and the tasklets cast them to the
         # appropriate CUDA/HIP handle types. When no external stream was
-        # provided, `0` selects the CUDA/HIP default stream.
-        stream_ptr = 0 if self.external_sync_stream is None else self.external_sync_stream.ptr
+        # provided, the CUDA/HIP default stream is used.
+        stream_ptr = cp.cuda.Stream(null=True).ptr if self.external_sync_stream is None else self.external_sync_stream.ptr
         kwargs = kwargs | {
             SDFG_ARG_EXTERNAL_WS_EVENT: self._sync_event.ptr,
             SDFG_ARG_EXTERNAL_SYNC_STREAM: stream_ptr,
@@ -317,6 +317,7 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
+    max_concurrent_gpu_streams: int = 0
     # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
@@ -324,6 +325,7 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
+            max_concurrent_gpu_streams=self.max_concurrent_gpu_streams,
         ):
             object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
@@ -331,6 +333,7 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
+            max_concurrent_gpu_streams=self.max_concurrent_gpu_streams,
         ):
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:

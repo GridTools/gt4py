@@ -439,9 +439,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
 
 
-def test_make_backend_rejects_pool_with_multi_stream(monkeypatch):
-    monkeypatch.setattr(config, "MAX_CONCURRENT_GPU_STREAMS", 4)
-
+def test_make_backend_rejects_pool_with_multi_stream():
     with pytest.raises(
         ValueError,
         match="in-order memory allocations and multi-stream scheduling",
@@ -449,23 +447,20 @@ def test_make_backend_rejects_pool_with_multi_stream(monkeypatch):
         dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
+            max_concurrent_gpu_streams=4,
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
         )
 
 
-def test_make_backend_stores_external_sync_stream():
-    class _FakeStream:
-        ptr = 1234
-        device_id = 0
-
-    stream = _FakeStream()
-    backend = dace_wf_backend.make_dace_backend(
-        gpu=False,
-        auto_optimize=True,
-        external_sync_stream=stream,
-    )
-
-    assert isinstance(backend, dace_wf_backend.DaCeBackend)
-    assert backend.external_sync_stream is stream
+def test_make_backend_rejects_negative_max_concurrent_gpu_streams():
+    with pytest.raises(
+        ValueError,
+        match="max_concurrent_gpu_streams must be >= 0",
+    ):
+        dace_wf_backend.make_dace_backend(
+            gpu=False,
+            auto_optimize=True,
+            max_concurrent_gpu_streams=-1,
+        )

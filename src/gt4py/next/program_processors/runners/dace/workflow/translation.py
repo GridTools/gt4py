@@ -15,7 +15,7 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.otf import code_specs, definitions, stages, workflow
@@ -103,10 +103,22 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
-def add_external_stream_sync(sdfg: dace.SDFG, gpu: bool) -> None:
-    """Synchronize SDFG execution with externally managed stream.
+def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> None:
+    """Synchronize SDFG execution with an externally managed stream.
 
-    Inserts entry and exit tasklets that use CUDA/HIP events to ensure:
+    Args:
+        sdfg: The DaCe SDFG to modify.
+        gpu: ``True`` when the target device is a GPU; CPU targets are a no-op.
+        n_streams: Number of concurrent internal GPU streams to use.
+            ``0`` disables multi-stream scheduling and executes asynchronously on
+            the default CUDA/HIP stream. Values ``>= 1`` enable DaCe's internal
+            stream pool and add event-based synchronization with an external
+            stream. The external stream pointer is passed at runtime as the SDFG
+            argument ``gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM``; ``0`` means
+            the default stream.
+
+    This function inserts entry and exit tasklets that use CUDA/HIP events to
+    ensure, when ``n_streams >= 1``:
 
     - Internal DaCe streams do not start until the external sync stream has
       finished with the workspace from the previous call.
@@ -118,8 +130,8 @@ def add_external_stream_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     ``gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM`` (the external stream pointer,
     or ``0`` for the default stream).
 
-    This function is a no-op unless the target is GPU and
-    ``GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0``.
+    This function is a no-op unless the target is GPU, the SDFG contains GPU
+    schedules, and ``n_streams >= 1``.
     """
     if not gpu:
         return
@@ -131,14 +143,13 @@ def add_external_stream_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
-    n_streams = config.MAX_CONCURRENT_GPU_STREAMS
     if n_streams == 0:
         # No multi-stream scheduling; no need for stream synchronization.
         # Default to asynchronous SDFG call on GPU.
         # NOTE: We are using the default stream this means that _**currently**_ the launch is
         #   already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
         #   for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
-        #   Thus to be absolutely sure we will no set all streams, DaCe uses to the default
+        #   Thus to be absolutely sure we will set all streams DaCe uses to the default
         #   stream.
         # NOTE: Another important note here is, that it looks as if no synchronization
         #   what soever between states is generated if the default stream is used. This
@@ -372,17 +383,25 @@ class DaCeTranslator(
     auto_optimize_args: dict[str, Any] | None
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
+    max_concurrent_gpu_streams: int
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_concurrent_gpu_streams < 0:
+            raise ValueError("max_concurrent_gpu_streams must be >= 0.")
 
     def generate_sdfg(
         self,
         *args: Any,
         **kwargs: Any,
     ) -> dace.SDFG:
-        with gtx_wfdcommon.dace_context(device_type=self.device_type):
+        with gtx_wfdcommon.dace_context(
+            device_type=self.device_type,
+            max_concurrent_gpu_streams=self.max_concurrent_gpu_streams,
+        ):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
     def _generate_sdfg_without_configuring_dace(
@@ -445,7 +464,11 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
 
-        add_external_stream_sync(sdfg, on_gpu)
+        add_external_stream_sync(
+            sdfg,
+            gpu=on_gpu,
+            n_streams=self.max_concurrent_gpu_streams,
+        )
 
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
