@@ -39,6 +39,7 @@ class DaCeBackend(backend.Backend):
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
     external_sync_stream: Any | None = None
+    max_concurrent_gpu_streams: int = 0
 
     def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
         program = super().load_artifact(artifact)
@@ -76,6 +77,7 @@ class DaCeBackendFactory(factory.Factory):
             cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
+            max_concurrent_gpu_streams=factory.SelfAttribute("..max_concurrent_gpu_streams"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
 
@@ -85,6 +87,7 @@ class DaCeBackendFactory(factory.Factory):
     transforms = backend.DEFAULT_TRANSFORMS
     external_workspace = None
     external_sync_stream = None
+    max_concurrent_gpu_streams = 0
 
 
 def make_dace_backend(
@@ -93,6 +96,7 @@ def make_dace_backend(
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     external_sync_stream: Any | None = None,
+    max_concurrent_gpu_streams: int = 0,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
@@ -108,11 +112,17 @@ def make_dace_backend(
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         external_sync_stream: Optional `cupy.cuda.Stream`, owned by the caller,
-            which is used to synchronize the SDFG entry/exit points, when
-            `GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0`. Stored on the backend object
+            which is used to synchronize the SDFG entry/exit points when
+            `max_concurrent_gpu_streams >= 1`. Stored on the backend object
             (not the picklable executor) and passed to the compiled program at
-            load time. When `GT4PY_MAX_CONCURRENT_GPU_STREAMS == 0` this stream
-            is ignored and the default stream is used, with asynchronuous execution.
+            load time. When `max_concurrent_gpu_streams == 0` this stream is
+            ignored and the default stream is used, with asynchronous execution.
+        max_concurrent_gpu_streams: Number of concurrent internal GPU streams to
+            request from DaCe. ``0`` (default) disables multi-stream scheduling
+            and executes asynchronously on the default stream. Values ``>= 1``
+            enable DaCe's internal stream pool and add event-based synchronization
+            with `external_sync_stream` (or the default stream if none is given).
+            Ignored on CPU targets.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -171,12 +181,12 @@ def make_dace_backend(
     if (
         optimization_args.get("transient_memory_mode")
         is gtx_transformations.TransientMemoryMode.POOL
-        and config.MAX_CONCURRENT_GPU_STREAMS > 0
+        and max_concurrent_gpu_streams > 0
     ):
         raise ValueError(
             "DaCe backend does not implement in-order memory allocations and "
             "multi-stream scheduling together. Use `transient_memory_mode='external'` "
-            "or 'persistent', or set `GT4PY_MAX_CONCURRENT_GPU_STREAMS=0`."
+            "or 'persistent', or set `max_concurrent_gpu_streams=0`."
         )
 
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
@@ -184,6 +194,7 @@ def make_dace_backend(
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
         external_sync_stream=external_sync_stream,
+        max_concurrent_gpu_streams=max_concurrent_gpu_streams,
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,

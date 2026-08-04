@@ -150,20 +150,6 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
 ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
 
-#: Maximum number of concurrent GPU streams, currently only used by the DaCe backend.
-#: - ``0`` (default): use the CUDA/HIP default stream only.
-#: - ``N > 0``: allow DaCe to schedule GPU kernels on up to ``N`` concurrent
-#:   internal streams. When combined with ``transient_memory_mode="external"``,
-#:   the external workspace is fenced across calls using CUDA/HIP events.
-#: Values ``< 0`` are rejected. Ignored on CPU targets.
-_MAX_CONCURRENT_GPU_STREAMS_RAW: int = env_flag_to_int(
-    "GT4PY_MAX_CONCURRENT_GPU_STREAMS", default=0
-)
-if _MAX_CONCURRENT_GPU_STREAMS_RAW < 0:
-    raise ValueError("GT4PY_MAX_CONCURRENT_GPU_STREAMS must be >= 0")
-MAX_CONCURRENT_GPU_STREAMS: Final[int] = _MAX_CONCURRENT_GPU_STREAMS_RAW
-
-
 #: Number of parallel compilation jobs (0 = synchronous compilation).
 #: Defaults to the number of CPUs available to this process (respecting the
 #: affinity mask, e.g. under Slurm cpusets or container CPU limits), capped

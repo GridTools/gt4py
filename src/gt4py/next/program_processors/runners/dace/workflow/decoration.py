@@ -138,11 +138,11 @@ class DaCeDecoratedProgram:
 
         This method should be called before the first call to the program.
         """
-        if external_sync_stream is None:
-            return
-
         if self._device_type == core_defs.DeviceType.CPU:
             raise ValueError("Stream synchronization is not supported for CPU target.")
+        
+        if external_sync_stream is None:
+            return
 
         _validate_external_sync_stream(external_sync_stream)
         self._fun.external_sync_stream = external_sync_stream

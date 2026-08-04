@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Edoardo Paone (@edopao)
 - **Created**: 2026-07-28
-- **Updated**: 2026-07-28
+- **Updated**: 2026-08-04
 
 ## Context
 
@@ -35,10 +35,13 @@ We introduce an optional multi-stream safety layer with the following design.
 
 ### Configuration
 
-- Add `GT4PY_MAX_CONCURRENT_GPU_STREAMS` to `gt4py.next.config`. It maps to
-  DaCe's `compiler.cuda.max_concurrent_streams`. A value of `0` keeps the
-  historical default-stream-only behavior (DaCe value `-1`); values `> 0` enable
-  DaCe's internal stream pool. Negative values are rejected at import time.
+- Add `max_concurrent_gpu_streams` as a parameter to `DaCeWorkflowFactory` and
+  the `make_dace_backend` helper. It maps to DaCe's
+  `compiler.cuda.max_concurrent_streams`. A value of `0` keeps the historical
+  default-stream-only behavior (DaCe value `-1`); values `>= 1` enable DaCe's
+  internal stream pool. Negative values are rejected at backend construction
+  time (the validation lives in `DaCeTranslator.__post_init__`, which is reached
+  by both direct translator creation and the backend factory).
 - The setting is ignored on CPU targets.
 
 ### External sync stream
@@ -48,13 +51,15 @@ We introduce an optional multi-stream safety layer with the following design.
 - The stream is stored on a DaCe-specific `Backend` subclass
   (`DaCeBackend`) instead of the picklable executor workflow, because
   `cupy.cuda.Stream` is not picklable. The stream is injected at compiled-program
-  load time via `DaCeCompilationArtifact.load(external_sync_stream=...)`.
-- If no stream is provided, the CUDA/HIP default stream (`0`) is used implicitly
-  as the synchronization anchor.
+  load time via `DaCeCompilationArtifact.load()`.
+- If no stream is provided and `max_concurrent_gpu_streams >= 1`, the CUDA/HIP
+  default stream (`0`) is used implicitly as the synchronization anchor.
+- When `max_concurrent_gpu_streams == 0`, `external_sync_stream` is ignored and
+  the SDFG executes asynchronously on the default stream.
 
 ### Synchronization mechanism
 
-When `GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0` and the SDFG contains GPU schedules,
+When `max_concurrent_gpu_streams >= 1` and the SDFG contains GPU schedules,
 GT4Py injects two CUDA/HIP tasklets into the generated SDFG:
 
 - **Entry tasklet** (`external_ws_sync_entry_tlet`): every internal DaCe stream
@@ -71,6 +76,10 @@ The tasklets reference two SDFG scalar symbols:
 
 Both are passed to the SDFG as `uint64` scalar arguments.
 
+When `max_concurrent_gpu_streams == 0`, no event tasklets are generated. Instead,
+GT4Py emits DaCe init code that forces all internal streams to the default
+stream, preserving the historical asynchronous single-stream execution.
+
 ### Validation
 
 - `external_sync_stream` is validated during compiled-program construction:
@@ -80,7 +89,7 @@ Both are passed to the SDFG as `uint64` scalar arguments.
   - Must pass `cudaStreamQuery` (accepting both `cudaSuccess` and
     `cudaErrorNotReady`).
 - The combination `transient_memory_mode=POOL` and
-  `GT4PY_MAX_CONCURRENT_GPU_STREAMS > 0` is rejected in `make_dace_backend`,
+  `max_concurrent_gpu_streams >= 1` is rejected in `make_dace_backend`,
   because the existing GPU memory-pool pass assumes default-stream ordering and
   could hand out overlapping pool regions to concurrent kernels.
 
@@ -95,8 +104,8 @@ Both are passed to the SDFG as `uint64` scalar arguments.
 
 - External workspace mode becomes safe with concurrent GPU streams, enabling the
   halo-exchange overlap use case.
-- Default behavior is unchanged: `GT4PY_MAX_CONCURRENT_GPU_STREAMS=0` produces
-  the same SDFG as before.
+- Default behavior is unchanged: `max_concurrent_gpu_streams=0` produces the same
+  SDFG as before.
 - The feature introduces additional CUDA/HIP event overhead per call, but only
   when multi-stream scheduling is explicitly requested.
 - The `cupy` dependency for stream validation is isolated to GPU execution paths;
