@@ -10,6 +10,7 @@
 
 import dataclasses
 import re
+import sys
 import unittest.mock as mock
 from typing import Any
 
@@ -30,6 +31,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
+    compilation as dace_wf_compilation,
     decoration as dace_wf_decoration,
 )
 
@@ -464,3 +466,109 @@ def test_make_backend_rejects_negative_max_concurrent_gpu_streams():
             auto_optimize=True,
             max_concurrent_gpu_streams=-1,
         )
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("external_sync_stream_ptr", [None, 7])
+def test_external_sync_stream_reaches_sdfg_call(external_sync_stream_ptr: int | None):
+    """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
+    import cupy as cp
+
+    external_sync_stream = (
+        None if external_sync_stream_ptr is None else cp.cuda.Stream(non_blocking=True)
+    )
+    expected_stream_ptr = (
+        cp.cuda.Stream(null=True).ptr if external_sync_stream is None else external_sync_stream.ptr
+    )
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=True,
+        auto_optimize=True,
+        external_sync_stream=external_sync_stream,
+        max_concurrent_gpu_streams=4,
+    )
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        tmp = a + b
+        return tmp + 1
+
+    @gtx.program
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
+        testee_op(a, b, out=out)
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        cases_utils.simple_cartesian_grid(),
+        backend=backend,
+        allocator=backend,
+    )
+    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, testee, "out")()
+
+    captured_kwargs: dict[str, Any] = {}
+    original_construct_arguments = dace_wf_compilation.CompiledDaceProgram.construct_arguments
+
+    def _capture_construct_arguments(self, **kwargs: Any) -> None:
+        captured_kwargs.update(kwargs)
+        return original_construct_arguments(self, **kwargs)
+
+    with mock.patch.object(
+        dace_wf_compilation.CompiledDaceProgram,
+        "construct_arguments",
+        _capture_construct_arguments,
+    ):
+        testee.with_backend(backend)(a, b, out=out, offset_provider={})
+
+    assert captured_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == expected_stream_ptr
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in captured_kwargs
+    assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
+
+
+@pytest.mark.requires_gpu
+def test_default_stream_ignores_external_sync_stream():
+    """When max_concurrent_gpu_streams=0 the SDFG call does not receive an external stream."""
+    import cupy as cp
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=True,
+        auto_optimize=True,
+        external_sync_stream=cp.cuda.Stream(non_blocking=True),
+        max_concurrent_gpu_streams=0,
+    )
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        tmp = a + b
+        return tmp + 1
+
+    @gtx.program
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
+        testee_op(a, b, out=out)
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        cases_utils.simple_cartesian_grid(),
+        backend=backend,
+        allocator=backend,
+    )
+    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, testee, "out")()
+
+    captured_kwargs: dict[str, Any] = {}
+    original_construct_arguments = dace_wf_compilation.CompiledDaceProgram.construct_arguments
+
+    def _capture_construct_arguments(self, **kwargs: Any) -> None:
+        captured_kwargs.update(kwargs)
+        return original_construct_arguments(self, **kwargs)
+
+    with mock.patch.object(
+        dace_wf_compilation.CompiledDaceProgram,
+        "construct_arguments",
+        _capture_construct_arguments,
+    ):
+        testee.with_backend(backend)(a, b, out=out, offset_provider={})
+
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in captured_kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT not in captured_kwargs
+    assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
