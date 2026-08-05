@@ -9,11 +9,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
