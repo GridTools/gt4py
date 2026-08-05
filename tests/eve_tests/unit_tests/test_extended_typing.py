@@ -14,6 +14,7 @@ import types
 import typing
 
 import pytest
+import typing_extensions
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
@@ -416,3 +417,50 @@ def test_is_single_dispatch_callable():
     # Plain callables and non-callables are rejected.
     assert not xtyping.is_single_dispatch_callable(lambda _: None)
     assert not xtyping.is_single_dispatch_callable(42)
+
+
+# -- PEP 695 type aliases --
+type SampleIntAlias = int
+type SampleChainedAlias = SampleIntAlias
+type SampleGenericAlias[T] = Tuple[T, T]
+type SampleRecursiveAlias = SampleRecursiveAlias
+
+
+def test_is_type_alias():
+    # Both the native 'typing' class and the 'typing_extensions' backport have to be
+    # recognized: they are distinct classes and a native alias is not an instance
+    # of the backport.
+    assert xtyping.is_type_alias(SampleIntAlias)
+    assert xtyping.is_type_alias(typing_extensions.TypeAliasType("Backported", str))
+
+    assert not xtyping.is_type_alias(int)
+    assert not xtyping.is_type_alias(List[int])
+    assert not xtyping.is_type_alias(SampleGenericAlias[int])
+
+
+def test_eval_type_alias():
+    assert xtyping.eval_type_alias(SampleIntAlias) is int
+    assert xtyping.eval_type_alias(SampleChainedAlias) is int
+    assert xtyping.eval_type_alias(SampleGenericAlias[int]) == Tuple[int, int]
+
+
+def test_eval_type_alias_passes_through_non_aliases():
+    for annotation in (int, List[int], xtyping.Any, None):
+        assert xtyping.eval_type_alias(annotation) is annotation
+
+
+def test_eval_type_alias_with_undefined_value():
+    # Alias values are evaluated lazily, so the name is only looked up here.
+    type LazyAlias = _defined_later  # noqa: F821 [undefined-name]  # defined below
+
+    with pytest.raises(NameError):
+        xtyping.eval_type_alias(LazyAlias)
+
+    _defined_later = int
+
+    assert xtyping.eval_type_alias(LazyAlias) is int
+
+
+def test_eval_type_alias_with_recursive_alias():
+    with pytest.raises(TypeError, match="cannot be resolved"):
+        xtyping.eval_type_alias(SampleRecursiveAlias)

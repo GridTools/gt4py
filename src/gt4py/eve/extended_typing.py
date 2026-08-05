@@ -162,6 +162,7 @@ SingleTypeAnnotation = Union[
     Type,
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+    _typing.TypeAliasType,
 ]
 
 SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
@@ -405,6 +406,69 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """
     return (
         isinstance(obj, type) and (obj not in _ArtefactTypes) and (type(obj) not in _ArtefactTypes)
+    )
+
+
+#: Both implementations of PEP 695 type aliases. They are distinct classes, and a native
+#: ``type X = ...`` alias is not an instance of the ``typing_extensions`` backport (nor
+#: the other way round), so both of them have to be checked.
+_TypeAliasTypes: Final[tuple[type, ...]] = (
+    _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
+)
+
+#: Upper bound for the number of resolution steps in `eval_type_alias`, to avoid
+#: hanging on recursive aliases like ``type A = A``.
+_MAX_TYPE_ALIAS_DEPTH: Final = 64
+
+
+def is_type_alias(obj: Any) -> TypeGuard[TypeAliasType]:
+    """Check if an object is a PEP 695 type alias (``type X = ...``)."""
+    return isinstance(obj, _TypeAliasTypes)
+
+
+def eval_type_alias(annotation: Any) -> Any:
+    """Replace a PEP 695 type alias by the annotation it stands for.
+
+    Chained aliases are followed until a non-alias annotation is reached, and
+    parametrized generic aliases (``MyAlias[int]``) get their type parameters
+    substituted. Any other annotation is returned unchanged (as the identical
+    object), so callers can use an identity check to find out whether anything
+    was actually resolved.
+
+    Note that alias values are evaluated lazily by the interpreter, so this is
+    the point where the names used in the alias definition are looked up for
+    the first time.
+
+    Args:
+        annotation: Any type annotation.
+
+    Returns:
+        The annotation the alias stands for, or `annotation` itself.
+
+    Raises:
+        NameError: If the alias value references a name which is not defined yet.
+        TypeError: If the alias is recursive, nested too deeply, or cannot be
+            parametrized with the given type arguments.
+
+    Examples:
+        >>> type MyInt = int
+        >>> eval_type_alias(MyInt)
+        <class 'int'>
+
+        >>> eval_type_alias(float)
+        <class 'float'>
+    """
+    for _ in range(_MAX_TYPE_ALIAS_DEPTH):
+        if is_type_alias(annotation):
+            annotation = annotation.__value__
+        elif is_type_alias(alias := get_origin(annotation)):
+            annotation = alias.__value__[get_args(annotation)]
+        else:
+            return annotation
+
+    raise TypeError(
+        f"Type alias '{annotation}' cannot be resolved (recursive or nested too deeply)."
     )
 
 
