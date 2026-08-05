@@ -87,7 +87,7 @@ def _create_sdfg_bindings(
     code_lines: list[str] = []
     code_lines.append("_PAIR_OF_ZEROS = (0, 0)")
     code_lines.append(
-        f"def {bind_func_name}(args, offset_provider, {gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL}, {gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME}):"
+        f"def {bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):"
     )
 
     unpacked_program_arguments: list[Optional[str]] = [
@@ -108,7 +108,6 @@ def _create_sdfg_bindings(
 
         if is_offset_arg_name(real_arg_name):
             assert arg_name is None
-
             offset_name = get_offset_name_from_prog_arg_name(real_arg_name)
             if is_offset_used(offset_name):
                 positional_arguments += (
@@ -128,8 +127,8 @@ def _create_sdfg_bindings(
     assert positional_arguments.strip().endswith(",")
 
     positional_arguments, kwargs_arguments = _process_metric_arguments(
-        metric_level_arg_name=gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL,
-        compute_time_arg_name=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME,
+        metric_level_arg_name="metrics_level",
+        compute_time_arg_name="runtime_return_value",
         positional_arguments=positional_arguments,
         kwargs_arguments=kwargs_arguments,
         backend=backend,

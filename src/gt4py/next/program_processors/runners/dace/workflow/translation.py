@@ -641,7 +641,11 @@ class DaCeTranslator(
         ]
 
         # Offset provider arguments
-        # NOTE: The prefixing is
+        # NOTE: The prefixing is important for the binding stages and used as the sole
+        #   criteria to determine if a parameter is a connection or not. Furthermore,
+        #   the name, i.e. the thing after `@`, is used to find out where to find the
+        #   table in the offset provider. This means we are no longer dependent on the
+        #   ordering of `offset_providers`.
         for name, connectivity_type in offset_provider_type.items():
             if isinstance(connectivity_type, common.NeighborConnectivityType):
                 if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
