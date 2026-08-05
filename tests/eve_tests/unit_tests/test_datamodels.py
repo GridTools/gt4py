@@ -40,7 +40,7 @@ import factory
 import pytest
 import pytest_factoryboy as pytfboy
 
-from gt4py.eve import datamodels, utils
+from gt4py.eve import datamodels, exceptions, utils
 
 
 T = TypeVar("T")
@@ -1007,6 +1007,19 @@ def test_field_metadata():
     assert Model.__datamodel_fields__.value.metadata["my_metadata"] == "META"
 
 
+# Nested models for the 'frozen="strict"' tests. They have to live at module level:
+# this file uses PEP 563 annotations, and forward references are resolved against
+# module globals only, so a class defined inside a test method is not visible.
+@datamodels.datamodel(frozen="strict")
+class StrictFrozenInner:
+    value: int
+
+
+@datamodels.datamodel(frozen=True)
+class PlainFrozenInner:
+    values: List[int]
+
+
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
@@ -1065,6 +1078,39 @@ class TestDatamodelOptions:
         string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
 
         assert hash(FrozenModel(value=string_value)) == hash(FrozenModel(value=string_value))
+
+    def test_strict_frozen_with_hashable_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            value: int
+            name: str
+
+        assert StrictModel.__datamodel_params__.frozen is True
+        assert StrictModel.__datamodel_params__.strict_frozen is True
+        assert hash(StrictModel(value=1, name="a")) == hash(StrictModel(value=1, name="a"))
+
+    def test_strict_frozen_rejects_unhashable_fields(self):
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class StrictModelWithList:
+                values: List[int]
+
+    def test_strict_frozen_accepts_nested_strict_frozen_model(self):
+        @datamodels.datamodel(frozen="strict")
+        class Outer:
+            inner: StrictFrozenInner
+
+        assert hash(Outer(inner=StrictFrozenInner(value=1))) == hash(
+            Outer(inner=StrictFrozenInner(value=1))
+        )
+
+    def test_strict_frozen_rejects_non_strict_datamodel_field(self):
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class Outer:
+                inner: PlainFrozenInner
 
 
 # Test module functions

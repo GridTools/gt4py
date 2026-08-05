@@ -1218,7 +1218,12 @@ def _make_datamodel(
             if is_datamodel(f_attr.type):
                 if getattr(f_attr.type, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True:
                     continue
-            elif xtyping.is_hashable_type(f_attr.type):
+            # Check the types the annotation actually stands for: a parametrized
+            # generic alias like 'List[int]' is itself a hashable object, so asking
+            # it directly would wrongly accept a mutable 'list' field.
+            elif (represented_types := xtyping.get_represented_types(f_attr.type)) and all(
+                xtyping.is_type_with_custom_hash(t) for t in represented_types
+            ):
                 continue
             unhashable_fields.add(f_attr.name)
 
