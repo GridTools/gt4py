@@ -12,6 +12,7 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
+from types import UnionType
 from typing import (
     Any,
     Callable,
@@ -23,6 +24,8 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
+    get_origin,
     overload,
 )
 
@@ -138,10 +141,12 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or get_origin(t) is tuple:
         return ts.TupleType
-    elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
+    # 'Union[A, B]' and 'A | B' are different runtime objects: the latter is a
+    # 'types.UnionType', which carries no '__origin__' at all.
+    elif get_origin(t) in (Union, UnionType):
+        types = [_type_conversion_helper(e) for e in get_args(t)]
         assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
         return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
     elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
