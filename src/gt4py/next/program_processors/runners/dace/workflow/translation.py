@@ -121,6 +121,10 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
             argument ``gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM``; ``0`` means
             the default stream.
 
+    This function operates on the top-level SDFG produced for a GT4Py program.
+    It rewrites the control flow around ``sdfg.start_block`` and the original
+    sink nodes, which is only valid for that top-level SDFG.
+
     This function inserts entry and exit tasklets that use CUDA/HIP events to
     establish a bidirectional barrier between the external sync stream and the
     internal DaCe streams when ``n_streams >= 1``:
