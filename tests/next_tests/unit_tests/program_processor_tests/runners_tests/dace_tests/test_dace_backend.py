@@ -506,26 +506,21 @@ def test_multi_streams_sychronizes_on_anchor_stream(async_sdfg_call: bool, with_
     out = cases.allocate(test_case, testee, "out")()
 
     captured_kwargs: dict[str, Any] = {}
-    original_construct_arguments = dace_wf_compilation.CompiledDaceProgram.construct_arguments
+    dace_construct_arguments = dace.codegen.compiled_sdfg.CompiledSDFG.construct_arguments
 
     def _capture_construct_arguments(self, **kwargs: Any) -> None:
         captured_kwargs.update(kwargs)
-        return original_construct_arguments(self, **kwargs)
+        return dace_construct_arguments(self, **kwargs)
 
     with mock.patch.object(
-        dace_wf_compilation.CompiledDaceProgram,
+        dace.codegen.compiled_sdfg.CompiledSDFG,
         "construct_arguments",
         _capture_construct_arguments,
     ):
         testee.with_backend(backend)(a, b, out=out, offset_provider={})
 
-    if not cp.cuda.runtime.is_hip:
-        # FIXME(edopao): The captured kwargs does not contain the external stream
-        #   pointer on HIP, even though it is passed to the SDFG call.
-        #   This is likely a DaCe HIP backend issue, as the same test passes on CUDA.
-        assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in captured_kwargs
-        assert captured_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == expected_stream_ptr
-
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in captured_kwargs
+    assert captured_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == expected_stream_ptr
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
 
 
@@ -560,14 +555,14 @@ def test_default_stream_ignores_external_sync_stream():
     out = cases.allocate(test_case, testee, "out")()
 
     captured_kwargs: dict[str, Any] = {}
-    original_construct_arguments = dace_wf_compilation.CompiledDaceProgram.construct_arguments
+    dace_construct_arguments = dace.codegen.compiled_sdfg.CompiledSDFG.construct_arguments
 
     def _capture_construct_arguments(self, **kwargs: Any) -> None:
         captured_kwargs.update(kwargs)
-        return original_construct_arguments(self, **kwargs)
+        return dace_construct_arguments(self, **kwargs)
 
     with mock.patch.object(
-        dace_wf_compilation.CompiledDaceProgram,
+        dace.codegen.compiled_sdfg.CompiledSDFG,
         "construct_arguments",
         _capture_construct_arguments,
     ):
