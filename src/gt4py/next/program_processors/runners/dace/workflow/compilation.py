@@ -200,7 +200,7 @@ class CompiledDaceProgram:
                 _validate_external_workspace(workspace, storage, required_nbytes)
                 self.sdfg_program.set_workspace(storage, workspace)
 
-    def _add_stream_sync_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+    def _add_sync_stream_kwarg(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Add external sync stream handle to SDFG kwargs if needed."""
         import cupy as cp
 
@@ -224,7 +224,7 @@ class CompiledDaceProgram:
         vectors in `self.csdfg_args`, to call them use `self.fast_call()`.
         """
         if SDFG_ARG_EXTERNAL_SYNC_STREAM in self.sdfg_program.sdfg.symbols:
-            kwargs = self._add_stream_sync_kwargs(kwargs)
+            kwargs = self._add_sync_stream_kwarg(kwargs)
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
             self._configure_external_workspace(**kwargs)

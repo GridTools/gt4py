@@ -247,11 +247,11 @@ def test_translation_source_code_invariant_under_guid_change():
     assert first_source_fingerprint == second_source_fingerprint
 
 
-def test_generate_sdfg_skips_stream_sync_for_default_stream():
-    """When max_concurrent_gpu_streams == 0, no sync tasklets are added."""
-    program_name = "field_ir_single_stream"
+@pytest.mark.parametrize("async_sdfg_call", [False, True], ids=["BLOCKING", "ASYNC"])
+def test_translation_for_default_stream(async_sdfg_call: bool):
+    """When max_concurrent_gpu_streams == 0, the SDFG either runs async or synchronizes on the default stream."""
     ir = itir.Program(
-        id=program_name,
+        id="testee",
         declarations=[],
         function_definitions=[],
         params=[
@@ -272,22 +272,48 @@ def test_generate_sdfg_skips_stream_sync_for_default_stream():
         offset_provider={},
         device_type=core_defs.DeviceType.CUDA,
         auto_optimize=False,
+        async_sdfg_call=async_sdfg_call,
     )
 
     assert _are_streams_set_to_default_stream(sdfg)
     assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in sdfg.symbols
 
     state_names = {s.label for s in sdfg.states()}
-    assert "sync_entry" not in state_names
-    assert "sync_exit" not in state_names
+
+    if async_sdfg_call:
+        assert "sync_entry" not in state_names
+        assert "sync_exit" not in state_names
+    else:
+        assert "sync_entry" in state_names
+        assert "sync_exit" in state_names
+
+        entry_tasklets = [
+            n
+            for s in sdfg.states()
+            for n in s.nodes()
+            if isinstance(n, dace_nodes.Tasklet) and n.label == "sync_entry_tlet"
+        ]
+        exit_tasklets = [
+            n
+            for s in sdfg.states()
+            for n in s.nodes()
+            if isinstance(n, dace_nodes.Tasklet) and n.label == "sync_exit_tlet"
+        ]
+        assert len(entry_tasklets) == 1
+        assert len(exit_tasklets) == 1
+        entry_code = entry_tasklets[0].code.as_string
+        exit_code = exit_tasklets[0].code.as_string
+        assert "cudaStreamSynchronize" in entry_code
+        assert "cudaStreamSynchronize" in exit_code
+        assert "cudaStreamDefault" in entry_code
+        assert "cudaStreamDefault" in exit_code
 
 
 @pytest.mark.parametrize("async_sdfg_call", [False, True], ids=["BLOCKING", "ASYNC"])
-def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream(async_sdfg_call: bool):
+def test_translation_adds_stream_sync_tasklets_for_multi_stream(async_sdfg_call: bool):
     """When max_concurrent_gpu_streams > 0, the SDFG contains entry/exit sync tasklets."""
-    program_name = "field_ir_multi_stream_sync"
     ir = itir.Program(
-        id=program_name,
+        id="testee",
         declarations=[],
         function_definitions=[],
         params=[

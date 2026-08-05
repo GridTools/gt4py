@@ -122,25 +122,29 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
             the default stream.
 
     This function inserts entry and exit tasklets that use CUDA/HIP events to
-    ensure, when ``n_streams >= 1``:
+    establish a bidirectional barrier between the external sync stream and the
+    internal DaCe streams when ``n_streams >= 1``:
 
-    - Internal DaCe streams do not start until the external sync stream has
-      finished with the workspace from the previous call.
-    - The external sync stream does not proceed until all internal streams have
-      finished with the workspace from this call.
+    - The entry tasklet records events on the external stream and makes every
+      internal stream wait on them, so that internal kernels do not start until
+      the external stream has finished any prior work on the workspace.
+    - The exit tasklet records per-stream done events on each internal stream
+      and makes the external stream wait on them, so the external stream does
+      not proceed until all internal streams have finished the current call.
+
+    Cross-call ordering on the external stream is the caller's responsibility;
+    GT4Py only orders the internal streams with respect to the external stream
+    within each SDFG call.
 
     The tasklets reference the SDFG symbol `gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM`
     (the external stream pointer, or ``0`` for the default stream).
 
     This function is a no-op unless the target is GPU, the SDFG contains GPU
-    schedules, and ``n_streams >= 1``.
+    schedules, and ``n_streams >= 1`` (or ``blocking`` is ``True``).
     """
     if not gpu:
-        if blocking:
-            # CPU targets are always synchronous; no need for a synchronization barrier.
-            return
-        else:
-            raise ValueError("Asynchronization SDFG call is not supported for CPU target.")
+        # CPU targets are always synchronous; no synchronization tasklets are needed.
+        return
 
     if not _has_gpu_schedule(sdfg):
         # No GPU kernels means no CUDA headers are imported; skip sync tasklets.
@@ -214,10 +218,11 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
 
     if blocking:
         # Synchronous barrier: synchronize on the external stream.
-        for code in [entry_code, exit_code]:
-            code += (
-                f"\n{dace_gpu_backend}StreamSynchronize(({dace_gpu_backend}Stream_t){stream_arg});"
-            )
+        sync_statement = (
+            f"\n{dace_gpu_backend}StreamSynchronize(({dace_gpu_backend}Stream_t){stream_arg});"
+        )
+        entry_code += sync_statement
+        exit_code += sync_statement
 
     entry_state = sdfg.add_state("sync_entry", is_start_block=True)
     entry_state.add_tasklet(

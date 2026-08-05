@@ -25,9 +25,7 @@ if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace.workflow.compilation import CompiledDaceProgram
 
 
-def _validate_external_sync_stream(
-    stream: Any,
-) -> None:
+def _validate_external_sync_stream(stream: Any) -> None:
     """Validate that ``stream`` is a usable external synchronization stream.
 
     Args:
@@ -38,21 +36,46 @@ def _validate_external_sync_stream(
         ValueError: If the stream's device does not match the target device, or
             if the stream handle is invalid.
     """
-    import cupy as cp
+    try:
+        import cupy as cp
+    except ImportError as exc:
+        raise RuntimeError("cupy is required to validate an external stream.") from exc
 
-    if cp is None or not isinstance(stream, cp.cuda.Stream):
-        raise TypeError("external_sync_stream must be a cupy.cuda.Stream.")
+    if cp.cuda.runtime.is_hip:
+        cupy_backend = cp.hip
+        stream_type_name = "cupy.hip.Stream"
+    else:
+        cupy_backend = cp.cuda
+        stream_type_name = "cupy.cuda.Stream"
 
-    current_device_id = cp.cuda.Device().id
+    if not isinstance(stream, cupy_backend.Stream):
+        raise TypeError(f"external_sync_stream must be a {stream_type_name}.")
+
+    if cp.cuda.runtime.is_hip:
+        cupy_stream_query = cupy_backend.runtime.hipStreamQuery
+        cupy_stream_valid_codes = (
+            cupy_backend.runtime.hipSuccess,
+            cupy_backend.runtime.hipErrorNotReady,
+        )
+    else:
+        cupy_stream_query = cupy_backend.runtime.cudaStreamQuery
+        cupy_stream_valid_codes = (
+            cupy_backend.runtime.cudaSuccess,
+            cupy_backend.runtime.cudaErrorNotReady,
+        )
+
+    current_device_id = cupy_backend.Device().id
     if stream.device_id != current_device_id:
         raise ValueError(
             f"external_sync_stream is on device {stream.device_id}, "
             f"but the current device is {current_device_id}."
         )
 
-    result = cp.cuda.runtime.cudaStreamQuery(stream.ptr)
-    if result not in (cp.cuda.runtime.cudaSuccess, cp.cuda.runtime.cudaErrorNotReady):
-        raise ValueError(f"external_sync_stream failed cudaStreamQuery with error {result}.")
+    result = cupy_stream_query(stream.ptr)
+    if result not in cupy_stream_valid_codes:
+        raise ValueError(
+            f"external_sync_stream failed {cupy_stream_query.__name__} with error {result}."
+        )
 
 
 class DaCeDecoratedProgram:

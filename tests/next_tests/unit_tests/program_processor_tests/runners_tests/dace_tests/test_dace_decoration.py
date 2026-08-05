@@ -64,6 +64,7 @@ def _make_decorated_program(
 def test_set_external_sync_stream_rejects_non_cupy_stream(monkeypatch):
     """A non-cupy stream object raises TypeError."""
     fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.runtime.is_hip = False
     fake_cupy_module.cuda.Stream = _FakeStream
     monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
 
@@ -76,6 +77,7 @@ def test_set_external_sync_stream_rejects_non_cupy_stream(monkeypatch):
 def test_set_external_sync_stream_rejects_cpu_target(monkeypatch):
     """A CPU target does not support an external sync stream."""
     fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.runtime.is_hip = False
     fake_cupy_module.cuda.Stream = _FakeStream
     monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
 
@@ -88,6 +90,7 @@ def test_set_external_sync_stream_rejects_cpu_target(monkeypatch):
 def test_set_external_sync_stream_accepts_valid_stream(monkeypatch):
     """A valid cupy stream is stored on the underlying compiled program."""
     fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.runtime.is_hip = False
     fake_cupy_module.cuda.Stream = _FakeStream
     fake_cupy_module.cuda.Device.return_value.id = 0
     fake_cupy_module.cuda.runtime.cudaSuccess = 0
