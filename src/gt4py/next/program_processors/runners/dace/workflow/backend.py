@@ -39,7 +39,6 @@ class DaCeBackend(backend.Backend):
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
     external_sync_stream: Any | None = None
-    max_concurrent_gpu_streams: int = 0
 
     def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
         program = super().load_artifact(artifact)
@@ -80,14 +79,12 @@ class DaCeBackendFactory(factory.Factory):
             max_concurrent_gpu_streams=factory.SelfAttribute("..max_concurrent_gpu_streams"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
+        max_concurrent_gpu_streams = 0
 
     name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
     executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
-    external_workspace = None
-    external_sync_stream = None
-    max_concurrent_gpu_streams = 0
 
 
 def make_dace_backend(
