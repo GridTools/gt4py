@@ -353,8 +353,7 @@ def datamodel(  # redefinition of unused symbol
             ``__delattr__()`` methods should not be defined in the class.
         match_args: If ``True`` (default) and ``__match_args__`` is not already defined in the class,
             set ``__match_args__`` on the class to support PEP 634 (Structural Pattern Matching).
-            It is a tuple of all positional-only ``__init__`` parameter names on
-            Python 3.10 and later. Ignored on older Python versions.
+            It is a tuple of all positional-only ``__init__`` parameter names.
         kw_only: If ``True`` (default is ``False``), make all fields keyword-only in the generated
             ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
         slots: slots: If ``True`` (the default is ``False``), ``__slots__`` attribute will be generated

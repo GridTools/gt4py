@@ -201,14 +201,13 @@ Unsupported operand type(s) for +: 'Field[[IDim], float64]' and 'Field[[IDim], b
 
 ## Python-version caveat
 
-The supported floor is Python 3.10, so the diagnostics code carries a few
-forward-compat shims; respect them:
+The supported floor is Python 3.12, so `Self`, `BaseException.add_note` (PEP
+678\) and every `ast` node up to 3.12 can be used directly.
 
-- Import `Self` from `gt4py.eve.extended_typing`, not `typing` (3.11+ only).
-- `DSLError.add_note` works on every Python because `DSLError` defines it;
-  don't rely on `add_note` for *other* `GT4PyError`s — it is a builtin only on
-  3.11+.
-- The catalogue must not reference `ast` nodes added after 3.10 (e.g.
-  `ast.TryStar`) unconditionally — that breaks import on 3.10.
+The diagnostics code still carries shims written for the old 3.10 floor —
+a `sys.version_info < (3, 11)` `add_note` fallback in `errors/exceptions.py` and
+a `TODO(havogt)` in `ffront/dialect_parser.py` deferring `ast.TryStar`. They are
+dead on every supported version and are being removed; do not add new ones.
 
-These spots are flagged with `TODO(havogt)`.
+Nodes introduced *after* 3.12 (for example `ast.TemplateStr` for PEP 750
+t-strings, 3.14) still cannot be referenced unconditionally in the catalogue.

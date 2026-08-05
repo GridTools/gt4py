@@ -1023,7 +1023,7 @@ class PlainFrozenInner:
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
-        import attr  # Missing library stubs for Python 3.10)
+        import attr
 
         @datamodels.datamodel(frozen=True)
         class FrozenModel:
