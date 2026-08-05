@@ -1018,11 +1018,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 transient=True,
             )
 
-        # The list of the SDFG arguments", i.e. the non transient arrays. Note that
-        #  tuple arguments are flatten and their name is mangled and no longer matches
-        #  the name in the signature of the field operator / program. Also note that
-        #  scalar arguments after optimization might no longer be needed and have been
-        #  pruned from the SDFG. Also the domain related symbols are not included.
+        # The list of the SDFG arguments, i.e. the global arrays, scalars and free symbols.
+        #  Note that tuple arguments are flattened and their name is mangled and no longer
+        #  matches the name in the signature of the field operator / program.
+        #  Also note that some scalar arguments (which are lowered to symbols) listed in
+        #  this signature are might not be part of the generated C-API, as unused symbols
+        #  are exluded from it and might have been pruned from the SDFG during optimization.
         # NOTE: The dispatch code does not use it, instead the `user_args` are used.
         return [arg_name for arg_name, _ in sdfg_args]
 

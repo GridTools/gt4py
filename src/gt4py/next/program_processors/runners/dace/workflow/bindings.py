@@ -97,11 +97,8 @@ def _create_sdfg_bindings(
 
     needed_offset_providers: Optional[Container[str]] = None
     if backend == "dace" and sdfg is not None:
-        sdfg_arglist = sdfg.arglist()
         needed_offset_providers = {
-            table_name
-            for table_name in offset_provider_type
-            if gtx_sdfg_args.connectivity_identifier(table_name) in sdfg_arglist
+            aname for aname in sdfg.arglist() if gtx_sdfg_args.is_connectivity_identifier(aname)
         }
 
     process_arg_stmt += _process_offset_providers(offset_provider_type, needed_offset_providers)
