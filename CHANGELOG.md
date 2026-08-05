@@ -2,6 +2,24 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0] - 2026-08-05
+
+### General
+
+- Drop support for Python 3.10 and 3.11.
+- Update `dace` dependency to `2.0.0a5`.
+
+### Cartesian
+
+- Add `gtscript.lazy_function` decorator that delays parsing of annotated gtscript functions until first use, enabling types that are not fully defined at import time.
+- Update the C++ standard to C++20 for generated code.
+- Fix derived math functions in the DaCe backend to respect literal float precision, matching Fortran behavior.
+- Avoid long compilation times in the DaCe backend by skipping a costly simplification pass.
+
+### Next
+
+See commit history.
+
 ## [1.1.12] - 2026-07-10
 
 ### Cartesian
