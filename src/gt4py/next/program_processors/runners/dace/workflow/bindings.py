@@ -69,7 +69,7 @@ def _create_sdfg_bindings(
         backend: For which backend the generated function should be used.
     """
     assert backend in ["gtfn", "dace"]
-    assert backend == "dace" and sdfg is not None
+    assert backend == "dace" or sdfg is None
 
     if backend == "dace":
         is_offset_arg_name = lambda arg_name: arg_name.startswith("@")  # noqa: E731 [lambda-assignment]
