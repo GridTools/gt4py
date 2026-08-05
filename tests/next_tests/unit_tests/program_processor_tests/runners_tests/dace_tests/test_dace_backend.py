@@ -28,8 +28,9 @@ from next_tests.integration_tests.cases_utils import KDim
 @pytest.fixture(
     params=[
         pytest.param(core_defs.DeviceType.CPU),
-        pytest.param(core_defs.DeviceType.CUDA, marks=pytest.mark.requires_gpu),
-    ]
+        pytest.param(core_defs.CUPY_DEVICE_TYPE, marks=pytest.mark.requires_gpu),
+    ],
+    ids=["CPU", "GPU"],
 )
 def device_type(request) -> str:
     return request.param
