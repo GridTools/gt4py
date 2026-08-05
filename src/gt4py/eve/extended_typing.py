@@ -506,6 +506,11 @@ def get_represented_types(
     def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
         return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
 
+    # PEP 695 aliases are opaque objects which no other branch below matches, so an
+    # unresolved one would silently yield an empty tuple. Nested aliases are covered
+    # for free, since the generic branches recurse through this same function.
+    type_annotation = eval_type_alias(type_annotation)
+
     if type_annotation is Ellipsis:
         return ()
 

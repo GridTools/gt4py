@@ -26,11 +26,13 @@ from gt4py.eve.extended_typing import (
     FrozenSet,
     List,
     Mapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
     Type,
     TypeVar,
+    Union,
 )
 
 
@@ -464,3 +466,48 @@ def test_eval_type_alias_with_undefined_value():
 def test_eval_type_alias_with_recursive_alias():
     with pytest.raises(TypeError, match="cannot be resolved"):
         xtyping.eval_type_alias(SampleRecursiveAlias)
+
+
+# -- get_represented_types --
+class SampleReprA: ...
+
+
+class SampleReprB: ...
+
+
+type SampleUnionAlias = SampleReprA | SampleReprB
+type SampleNestedUnionAlias = SampleUnionAlias | int
+
+
+def test_get_represented_types():
+    assert xtyping.get_represented_types(int) == (int,)
+    assert xtyping.get_represented_types(Union[SampleReprA, SampleReprB]) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(SampleReprA | SampleReprB) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(List[int]) == (list,)
+
+
+def test_get_represented_types_resolves_type_aliases():
+    # An unresolved alias would silently yield an empty tuple, which turns every
+    # downstream 'isinstance()' check against the result into a constant 'False'.
+    assert xtyping.get_represented_types(SampleIntAlias) == (int,)
+    assert xtyping.get_represented_types(SampleUnionAlias) == (SampleReprA, SampleReprB)
+    assert xtyping.get_represented_types(SampleNestedUnionAlias) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )
+
+
+def test_get_represented_types_with_alias_nested_in_annotation():
+    assert xtyping.get_represented_types(Optional[SampleIntAlias]) == (int, type(None))
+    assert xtyping.get_represented_types(Union[SampleUnionAlias, int]) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )

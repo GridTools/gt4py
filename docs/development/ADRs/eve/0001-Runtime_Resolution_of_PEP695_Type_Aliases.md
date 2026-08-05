@@ -7,7 +7,7 @@ tags: [typing, datamodels]
 - **Status**: valid
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-08-05
-- **Updated**: 2026-08-05
+- **Updated**: 2026-08-06
 
 In the context of users writing `type MyField = Field[...]` in datamodel and DSL annotations, facing the fact that `TypeAliasType` is an opaque object which no runtime introspection helper unwraps, we decided to resolve aliases at the existing annotation-dispatch funnels through a single `eve.extended_typing.eval_type_alias` helper, to achieve uniform support at every nesting depth without eagerly rewriting stored annotations, accepting that an alias whose value is not yet defined is only validated on first instantiation.
 
@@ -32,7 +32,11 @@ Note that PEP 695 _generics_ (`class Model[T](DataModel)`) already work unchange
 ## Decision
 
 1. `gt4py.eve.extended_typing` owns the concept, exposing `is_type_alias(obj)` (checking both the `typing` class and the `typing_extensions` backport) and `eval_type_alias(annotation)`. The latter follows alias chains, substitutes type parameters for parametrized generic aliases, returns the identical object for non-aliases, and raises `TypeError` for recursive or over-nested aliases.
-2. Resolution happens at the **annotation-dispatch funnels**, not at annotation-storage time: `eve.type_validation.SimpleTypeValidatorFactory.__call__` and `eve.datamodels.core._make_type_converter`. Both already recurse into type arguments, so nesting is covered for free, and the stored annotation keeps the alias name for reprs and introspection.
+
+2. Resolution happens at the **annotation-dispatch funnels**, not at annotation-storage time: `eve.type_validation.SimpleTypeValidatorFactory.__call__`, `eve.datamodels.core._make_type_converter` and `eve.extended_typing.get_represented_types`. All three already recurse into type arguments, so nesting is covered for free, and the stored annotation keeps the alias name for reprs and introspection.
+
+   A funnel left out of this list does not raise: it falls through to whatever its no-match branch is. For `get_represented_types` that branch returns an empty tuple, which turns every downstream `isinstance()` against the result into a constant `False`. When adding a new consumer that dispatches on annotation shape, wire it in here.
+
 3. A `NameError` from `eval_type_alias` is a **signal, not an error** inside `eve`: `type_validation` lets it propagate, and `datamodels.field_type_validator_factory` catches it and installs the existing `ForwardRefValidator`, deferring validation to the first instantiation, which is the same treatment string forward references already get.
 
 ## Consequences
@@ -47,6 +51,7 @@ Harder, and accepted:
 - A field annotated with an alias whose value is not yet resolvable is validated on first instantiation instead of at class definition, so its errors surface later than for other fields. Its error message also reports the bare field name rather than the qualified `Model.field` one, matching the pre-existing behavior for forward references.
 - `ClassVar` hidden behind an alias (`type CV = ClassVar[int]`) is not detected as a class variable by `datamodels`. This is not supported and no attempt is made to detect it.
 - The resolution depth is capped (64 steps) so that recursive aliases fail fast instead of hanging.
+- Support is for aliases used **as annotations**. An existing `X: TypeAlias = SomeClass` which is also used as a runtime value — as a base class, a constructor, or an `isinstance()` argument — cannot be mechanically rewritten to `type X = ...`, because a `TypeAliasType` is not the class it stands for. `common.Tag` (subclassed at `iterator/embedded.py:102`) is one such case. This fails loudly at import, so it is not a silent hazard, but it does mean ruff's `UP040` cannot be enabled repo-wide.
 
 ## Alternatives considered
 
