@@ -34,10 +34,6 @@ SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
-#: SDFG scalar argument name for the GT4Py-owned cross-call workspace event.
-SDFG_ARG_EXTERNAL_WS_EVENT: Final[str] = "__external_ws_event"
-
-
 #: SDFG scalar argument name for the external synchronization stream pointer.
 SDFG_ARG_EXTERNAL_SYNC_STREAM: Final[str] = "__external_sync_stream"
 

@@ -93,6 +93,7 @@ class DaCeBackendFactory(factory.Factory):
 def make_dace_backend(
     gpu: bool,
     auto_optimize: bool = True,
+    async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     external_sync_stream: Any | None = None,
@@ -107,6 +108,8 @@ def make_dace_backend(
     Args:
         gpu: Enable GPU transformations and code generation.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
+        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
+            of GPU kernel execution with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
@@ -195,6 +198,7 @@ def make_dace_backend(
         external_workspace=external_workspace,
         external_sync_stream=external_sync_stream,
         max_concurrent_gpu_streams=max_concurrent_gpu_streams,
+        otf_workflow__bare_translation__async_sdfg_call=async_sdfg_call,
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,

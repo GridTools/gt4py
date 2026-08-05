@@ -63,6 +63,7 @@ def _translate_gtir_to_sdfg(
     auto_optimize: bool,
     use_metrics: bool = False,
     max_concurrent_gpu_streams: int = 0,
+    async_sdfg_call: bool = True,
 ) -> dace.SDFG:
     with dace.config.set_temporary("cache", value="hash"):
         # we use the SDFG hash in build cache to avoid clashes between CPU and GPU SDFGs
@@ -70,6 +71,7 @@ def _translate_gtir_to_sdfg(
             device_type=device_type,
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
+            async_sdfg_call=async_sdfg_call,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
             max_concurrent_gpu_streams=max_concurrent_gpu_streams,
@@ -203,6 +205,7 @@ def test_translation_source_code_invariant_under_guid_change():
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=False,
         auto_optimize_args=None,
+        async_sdfg_call=True,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
         max_concurrent_gpu_streams=0,
@@ -244,64 +247,6 @@ def test_translation_source_code_invariant_under_guid_change():
     assert first_source_fingerprint == second_source_fingerprint
 
 
-def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream():
-    """When max_concurrent_gpu_streams > 0, the SDFG contains sync tasklets."""
-    program_name = "field_ir_multi_stream_sync"
-    ir = itir.Program(
-        id=program_name,
-        declarations=[],
-        function_definitions=[],
-        params=[
-            itir.Sym(id="x", type=IFTYPE),
-            itir.Sym(id="y", type=IFTYPE),
-        ],
-        body=[
-            itir.SetAt(
-                expr=im.op_as_fieldop("plus")("x", 1.0),
-                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
-                target=itir.SymRef(id="y"),
-            ),
-        ],
-    )
-
-    sdfg = _translate_gtir_to_sdfg(
-        ir=ir,
-        offset_provider={},
-        device_type=core_defs.DeviceType.CUDA,
-        auto_optimize=False,
-        max_concurrent_gpu_streams=4,
-    )
-
-    assert not _are_streams_set_to_default_stream(sdfg)
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in sdfg.symbols
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in sdfg.symbols
-
-    state_names = {s.label for s in sdfg.states()}
-    assert "external_ws_sync_entry" in state_names
-    assert "external_ws_sync_exit" in state_names
-
-    entry_tasklets = [
-        n
-        for s in sdfg.states()
-        for n in s.nodes()
-        if isinstance(n, dace_nodes.Tasklet) and n.label == "external_ws_sync_entry_tlet"
-    ]
-    exit_tasklets = [
-        n
-        for s in sdfg.states()
-        for n in s.nodes()
-        if isinstance(n, dace_nodes.Tasklet) and n.label == "external_ws_sync_exit_tlet"
-    ]
-    assert len(entry_tasklets) == 1
-    assert len(exit_tasklets) == 1
-    entry_code = entry_tasklets[0].code.as_string
-    exit_code = exit_tasklets[0].code.as_string
-    assert "cudaStreamWaitEvent" in entry_code
-    assert "cudaEventRecord" in exit_code
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in entry_code
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in exit_code
-
-
 def test_generate_sdfg_skips_stream_sync_for_default_stream():
     """When max_concurrent_gpu_streams == 0, no sync tasklets are added."""
     program_name = "field_ir_single_stream"
@@ -330,9 +275,73 @@ def test_generate_sdfg_skips_stream_sync_for_default_stream():
     )
 
     assert _are_streams_set_to_default_stream(sdfg)
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT not in sdfg.symbols
     assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in sdfg.symbols
 
     state_names = {s.label for s in sdfg.states()}
-    assert "external_ws_sync_entry" not in state_names
-    assert "external_ws_sync_exit" not in state_names
+    assert "sync_entry" not in state_names
+    assert "sync_exit" not in state_names
+
+
+@pytest.mark.parametrize("async_sdfg_call", [False, True], ids=["BLOCKING", "ASYNC"])
+def test_generate_sdfg_adds_stream_sync_tasklets_for_multi_stream(async_sdfg_call: bool):
+    """When max_concurrent_gpu_streams > 0, the SDFG contains entry/exit sync tasklets."""
+    program_name = "field_ir_multi_stream_sync"
+    ir = itir.Program(
+        id=program_name,
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=core_defs.DeviceType.CUDA,
+        auto_optimize=False,
+        max_concurrent_gpu_streams=4,
+        async_sdfg_call=async_sdfg_call,
+    )
+
+    assert not _are_streams_set_to_default_stream(sdfg)
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in sdfg.symbols
+
+    state_names = {s.label for s in sdfg.states()}
+    assert "sync_entry" in state_names
+    assert "sync_exit" in state_names
+
+    entry_tasklets = [
+        n
+        for s in sdfg.states()
+        for n in s.nodes()
+        if isinstance(n, dace_nodes.Tasklet) and n.label == "sync_entry_tlet"
+    ]
+    exit_tasklets = [
+        n
+        for s in sdfg.states()
+        for n in s.nodes()
+        if isinstance(n, dace_nodes.Tasklet) and n.label == "sync_exit_tlet"
+    ]
+    assert len(entry_tasklets) == 1
+    assert len(exit_tasklets) == 1
+    entry_code = entry_tasklets[0].code.as_string
+    exit_code = exit_tasklets[0].code.as_string
+    assert "cudaStreamWaitEvent" in entry_code
+    assert "cudaEventRecord" in exit_code
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in entry_code
+
+    if async_sdfg_call:
+        assert "cudaStreamSynchronize" not in entry_code
+        assert "cudaStreamSynchronize" not in exit_code
+    else:
+        assert "cudaStreamSynchronize" in entry_code
+        assert "cudaStreamSynchronize" in exit_code

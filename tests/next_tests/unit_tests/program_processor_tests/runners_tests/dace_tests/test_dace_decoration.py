@@ -34,18 +34,10 @@ class _FakeStream:
         self.device_id = device_id
 
 
-class _FakeEvent:
-    """Stand-in for a ``cupy.cuda.Event`` that does not require a GPU."""
-
-    def __init__(self, ptr: int = 99) -> None:
-        self.ptr = ptr
-
-
 def _make_sdfg_with_stream_sync_symbols() -> dace.SDFG:
-    """Return a minimal SDFG whose symbols contain the stream-sync symbols."""
+    """Return a minimal SDFG whose symbols contain the sync-stream symbol."""
     sdfg = dace.SDFG("stream_sync_program")
     state = sdfg.add_state("state", is_start_block=True)
-    sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT, dace.uint64)
     sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM, dace.uint64)
     # Add a no-op tasklet so the SDFG is not empty.
     state.add_tasklet(
