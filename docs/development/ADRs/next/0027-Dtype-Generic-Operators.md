@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-06-15
-- **Updated**: 2026-06-15
+- **Updated**: 2026-08-05
 
 Field operators (and programs calling them) may be **generic in the field dtype**,
 spelled with a native value-constrained `typing.TypeVar` so the same annotation is
@@ -62,11 +62,23 @@ A new `DataType` subclass carrying `name` and `constraints: tuple[ScalarType, ..
 - **Identity is the name**, scoped to one operator signature. Two *distinct*
   same-named `TypeVar` objects in one signature are rejected at parse time (with PEP
   695 this is impossible by construction). As a frozen eve `DataModel` it gets
-  deterministic `eq`/`hash`/`content_hash` for cache keys.
+  deterministic `eq`/`hash`/`content_hash` for cache keys; constraints are
+  canonicalized (sorted, deduplicated) so their spelling does not affect identity.
 - `ts.DeferredType` is **not** replaced. The two mechanisms coexist: `DeferredType`
   means "not yet inferred" (and currently also encodes the scan operators' *dims*
   genericity); `TypeVarType` means "universally quantified over the constraint set".
-  A single `type_info.is_generic` predicate recognizes both.
+  A single recursive `type_info.is_generic` predicate recognizes both, at any
+  nesting depth.
+
+### Generic traversal of type specifications
+
+Recursive algorithms over `TypeSpec` trees (`is_generic`, `substitute_type_vars`,
+...) share a single one-level traversal (`iter_type_children` /
+`map_type_children`) whose notion of children is derived from datamodel
+introspection, so `TypeSpec` subclasses defined outside the type system are
+covered without registration. Only *structural* algorithms sit on this API;
+per-type *semantics* (binding, promotion, dtype extraction) remain explicit
+per-type dispatch by design.
 
 ### Decisions D1–D5
 
