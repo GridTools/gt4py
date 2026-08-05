@@ -43,7 +43,7 @@ def convert_args(
         if out is not None:
             args = (*args, out)
 
-        processed_args = argument_preprocessing_function(
+        processed_args, _ = argument_preprocessing_function(
             args,
             offset_provider,
             metrics.get_current_level(),
