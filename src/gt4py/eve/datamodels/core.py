@@ -224,11 +224,18 @@ def field_type_validator_factory(
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
-        else:
+
+        try:
             simple_validator = factory(type_annotation, name, required=True)
-            return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
-            )
+        except NameError:
+            # A PEP 695 type alias ('type X = ...') is evaluated lazily and may
+            # reference a name which does not exist yet at class creation time.
+            # Defer the creation of the validator, as done for forward references.
+            return ForwardRefValidator(factory)
+
+        return ValidatorAdapter(
+            simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
+        )
 
     return _field_type_validator_factory
 
@@ -972,6 +979,9 @@ def _make_data_model_class_getitem() -> classmethod:
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
+    if (resolved_annotation := xtyping.eval_type_alias(type_annotation)) is not type_annotation:
+        return _make_type_converter(resolved_annotation, name)
+
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)

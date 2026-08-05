@@ -1287,3 +1287,70 @@ def test_datamodel_abc_virtual_subclasses():
     assert isinstance(Model(value=1), datamodels.DataModelABC)
     assert not issubclass(Plain, datamodels.DataModelABC)
     assert not isinstance(Plain(), datamodels.DataModelABC)
+
+
+# -- PEP 695 type aliases --
+type SampleAliasInt = int
+type SampleAliasNested = typing.List[SampleAliasInt]
+type SampleAliasPair[T] = typing.Tuple[T, T]
+
+
+def test_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: SampleAliasInt
+
+    assert Model(value=1).value == 1
+    with pytest.raises(TypeError, match="Model.value"):
+        Model(value="1")
+
+
+def test_nested_type_alias_field():
+    class Model(datamodels.DataModel):
+        direct: SampleAliasNested
+        inline: typing.List[SampleAliasInt]
+        parametrized: SampleAliasPair[int]
+
+    model = Model(direct=[1], inline=[2], parametrized=(3, 4))
+    assert model.direct == [1]
+
+    with pytest.raises(TypeError, match="Model.inline"):
+        Model(direct=[1], inline=["2"], parametrized=(3, 4))
+
+
+def test_coerced_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: datamodels.Coerced[SampleAliasInt]
+
+    assert Model(value="42").value == 42
+
+
+def test_type_alias_field_with_undefined_value_is_deferred():
+    # The alias value is evaluated lazily, so the class body must not fail even
+    # though 'DefinedLater' does not exist yet. Validation happens on the first
+    # instantiation, like for forward references.
+    #
+    # This is 'exec'-ed instead of written inline because this test module uses
+    # 'from __future__ import annotations', which would turn the annotation into
+    # the string 'LazyAlias' and exercise the plain forward-reference path
+    # instead of the type-alias one. 'dont_inherit=True' is required for the
+    # same reason: 'exec()' inherits the '__future__' flags of the calling module.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: LazyAlias
+
+class DefinedLater:
+    pass
+"""
+    namespace: Dict[str, Any] = {}
+    exec(compile(source, "<test_type_alias_deferral>", "exec", dont_inherit=True), namespace)
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=DefinedLater()).value, DefinedLater)
+    # Note: the deferred validator reports the bare field name instead of the
+    # qualified 'Model.value', as it does for regular forward references.
+    with pytest.raises(TypeError, match="'value' must be"):
+        Model(value=1)
