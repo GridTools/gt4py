@@ -476,11 +476,15 @@ def test_external_sync_stream_reaches_sdfg_call(
     """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
     import cupy as cp
 
+    cupy_backend = cp.hip if cp.cuda.runtime.is_hip else cp.cuda
+
     external_sync_stream = (
-        None if external_sync_stream_ptr is None else cp.cuda.Stream(non_blocking=True)
+        None if external_sync_stream_ptr is None else cupy_backend.Stream(non_blocking=True)
     )
     expected_stream_ptr = (
-        cp.cuda.Stream(null=True).ptr if external_sync_stream is None else external_sync_stream.ptr
+        cupy_backend.Stream(null=True).ptr
+        if external_sync_stream is None
+        else external_sync_stream.ptr
     )
 
     backend = dace_wf_backend.make_dace_backend(
@@ -533,10 +537,12 @@ def test_default_stream_ignores_external_sync_stream():
     """When max_concurrent_gpu_streams=0 the SDFG call does not receive an external stream."""
     import cupy as cp
 
+    cupy_backend = cp.hip if cp.cuda.runtime.is_hip else cp.cuda
+
     backend = dace_wf_backend.make_dace_backend(
         gpu=True,
         auto_optimize=True,
-        external_sync_stream=cp.cuda.Stream(non_blocking=True),
+        external_sync_stream=cupy_backend.Stream(non_blocking=True),
         max_concurrent_gpu_streams=0,
     )
 
