@@ -473,8 +473,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         argument types.
 
         Right now this is the case for scan operators (genericity communicated via
-        `DeferredType` parameters created in `type_info.type_in_program_context`) and for
-        operators with a generic dtype (type variable).
+        `DeferredType` parameters created in `ffront_type_info.type_in_program_context`) and
+        for operators with a generic dtype (type variable).
         """
         return type_info.is_generic(self.program_type.definition)
 

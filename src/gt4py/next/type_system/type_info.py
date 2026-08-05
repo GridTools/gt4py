@@ -93,9 +93,10 @@ def _map_field_value(value: Any, transform: Callable[[ts.TypeSpec], ts.TypeSpec]
 
 
 def _field_names(symbol_type: ts.TypeSpec) -> Iterator[str]:
-    # `__datamodel_fields__` is a namespace exposing each field as an attribute, so a field
-    # named like one of its accessors (e.g. `NamedCollectionType.keys`) shadows that accessor.
-    yield from vars(type(symbol_type).__datamodel_fields__)
+    # The fields namespace exposes each field as an attribute, so a field named like one of
+    # its accessors (e.g. `NamedCollectionType.keys`) shadows that accessor; go through
+    # `vars` instead of `.keys()`.
+    yield from vars(eve_datamodels.fields(type(symbol_type)))
 
 
 def iter_type_children(symbol_type: ts.TypeSpec) -> Iterator[ts.TypeSpec]:
@@ -125,9 +126,9 @@ def map_type_children(
     """
     Reconstruct ``symbol_type`` with ``transform`` applied to each immediate `TypeSpec` child.
 
-    The children are the same as in :func:`iter_type_children`; all other fields are kept
+    The children are the same as in `iter_type_children`; all other fields are kept
     unchanged. If no child changes (by identity), ``symbol_type`` itself is returned.
-    Together with :func:`iter_type_children` this forms the generic one-level traversal API
+    Together with `iter_type_children` this forms the generic one-level traversal API
     on which recursive algorithms over the type system are built (`is_generic`,
     `substitute_type_vars`, ...).
     """
@@ -145,7 +146,7 @@ def is_generic(symbol_type: ts.TypeSpec) -> bool:
     Figure out if a type contains parts that are only known when concrete arguments are given.
 
     Recurses into composite types, reporting ``True`` if any nested part is a `DeferredType` or
-    `TypeVarType`. Unlike :func:`is_concrete` (a shallow top-level check), this is deep, so a
+    `TypeVarType`. Unlike `is_concrete` (a shallow top-level check), this is deep, so a
     tuple with a nested `DeferredType` is both concrete and generic.
 
     Note: this returns ``True`` for a bare ``astype`` constructor type, whose ``definition``
@@ -749,7 +750,7 @@ def bind_type_vars(
         >>> print(binding["T"])
         float64
     """
-    return _merge_bindings(_bind(param, arg) for param, arg in zip(params, args))
+    return _merge_bindings(_bind(param, arg) for param, arg in zip(params, args, strict=True))
 
 
 def substitute_type_vars(
