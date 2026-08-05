@@ -76,9 +76,10 @@ Recursive algorithms over `TypeSpec` trees (`is_generic`, `substitute_type_vars`
 ...) share a single one-level traversal (`iter_type_children` /
 `map_type_children`) whose notion of children is derived from datamodel
 introspection, so `TypeSpec` subclasses defined outside the type system are
-covered without registration. Only *structural* algorithms sit on this API;
-per-type *semantics* (binding, promotion, dtype extraction) remain explicit
-per-type dispatch by design.
+covered without registration (`TypeVarType` is a leaf — its constraints are
+metadata, not children). Only *structural* algorithms sit on this API; per-type
+*semantics* (binding, promotion, dtype extraction) remain explicit per-type
+dispatch by design.
 
 ### Decisions D1–D5
 

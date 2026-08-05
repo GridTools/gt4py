@@ -453,6 +453,16 @@ class TestTypeVarType:
             name="T", constraints=(float32_type, float32_type, float64_type)
         )
 
+    def test_is_traversal_leaf(self):
+        # constraints are metadata, not type children
+        assert list(type_info.iter_type_children(float_var)) == []
+        assert (
+            type_info.map_type_children(
+                float_var, lambda _: ts.ScalarType(kind=ts.ScalarKind.INT32)
+            )
+            is float_var
+        )
+
     def test_is_generic(self):
         assert type_info.is_generic(float_var)
         assert type_info.is_generic(ts.FieldType(dims=[TDim], dtype=float_var))

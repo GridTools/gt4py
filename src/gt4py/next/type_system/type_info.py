@@ -109,7 +109,12 @@ def iter_type_children(symbol_type: ts.TypeSpec) -> Iterator[ts.TypeSpec]:
     argument and return types of a `FunctionType`, and the signature (``definition``) of the
     callable wrapper types (field operators etc.) -- including `TypeSpec` subclasses defined
     outside this module, without requiring registration here.
+
+    `TypeVarType` is a leaf: its constraints describe which dtypes the variable may take and
+    are not part of the type's structure.
     """
+    if isinstance(symbol_type, ts.TypeVarType):
+        return
     for name in _field_names(symbol_type):
         value = getattr(symbol_type, name)
         if isinstance(value, ts.TypeSpec):
@@ -126,12 +131,14 @@ def map_type_children(
     """
     Reconstruct ``symbol_type`` with ``transform`` applied to each immediate `TypeSpec` child.
 
-    The children are the same as in `iter_type_children`; all other fields are kept
-    unchanged. If no child changes (by identity), ``symbol_type`` itself is returned.
-    Together with `iter_type_children` this forms the generic one-level traversal API
-    on which recursive algorithms over the type system are built (`is_generic`,
-    `substitute_type_vars`, ...).
+    The children are the same as in `iter_type_children` (in particular, `TypeVarType` is a
+    leaf); all other fields are kept unchanged. If no child changes (by identity),
+    ``symbol_type`` itself is returned. Together with `iter_type_children` this forms the
+    generic one-level traversal API on which recursive algorithms over the type system are
+    built (`is_generic`, `substitute_type_vars`, ...).
     """
+    if isinstance(symbol_type, ts.TypeVarType):
+        return symbol_type
     changes: dict[str, Any] = {}
     for name in _field_names(symbol_type):
         value = getattr(symbol_type, name)
