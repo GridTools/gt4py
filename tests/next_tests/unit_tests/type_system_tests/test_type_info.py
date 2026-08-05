@@ -443,6 +443,15 @@ class TestTypeVarType:
         assert float_var != ts.TypeVarType(name="S", constraints=(float32_type, float64_type))
         # constraint order is canonicalized, so it is not part of the identity
         assert float_var == ts.TypeVarType(name="T", constraints=(float64_type, float32_type))
+        # also for same-kind constraints differing only in shape
+        float64_shaped = ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[2])
+        assert ts.TypeVarType(
+            name="T", constraints=(float64_type, float64_shaped)
+        ) == ts.TypeVarType(name="T", constraints=(float64_shaped, float64_type))
+        # duplicate constraints are dropped (`typing.TypeVar` does not dedup its constraints)
+        assert float_var == ts.TypeVarType(
+            name="T", constraints=(float32_type, float32_type, float64_type)
+        )
 
     def test_is_generic(self):
         assert type_info.is_generic(float_var)

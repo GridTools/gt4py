@@ -107,8 +107,14 @@ class ScalarType(DataType):
 
 def _canonicalize_constraints(constraints: Sequence[ScalarType]) -> tuple[ScalarType, ...]:
     # A value-constrained type variable resolves to exactly one of its constraints, so their
-    # order carries no meaning; canonicalize it to make `TypeVarType` identity order-insensitive.
-    return tuple(sorted(constraints, key=lambda c: c.kind))
+    # order and multiplicity carry no meaning; canonicalize to make `TypeVarType` identity
+    # order- and duplication-insensitive. Dedup by equality: a shaped `ScalarType` is not
+    # hashable (`shape` is a list).
+    unique: list[ScalarType] = []
+    for c in constraints:
+        if c not in unique:
+            unique.append(c)
+    return tuple(sorted(unique, key=lambda c: (c.kind, c.shape is not None, tuple(c.shape or ()))))
 
 
 class TypeVarType(DataType):
