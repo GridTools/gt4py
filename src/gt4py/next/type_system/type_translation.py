@@ -127,6 +127,18 @@ def make_type(type_: type) -> ts.TypeSpec:
     raise ValueError(f"Type {type_} not supported")
 
 
+def _resolve_type_alias(type_hint: Any) -> Any:
+    """Resolve a PEP 695 type alias, reporting its failures the way annotations do."""
+    try:
+        return xtyping.eval_type_alias(type_hint)
+    except NameError as error:
+        raise ValueError(
+            f"Type annotation '{type_hint}' has undefined forward references."
+        ) from error
+    except TypeError as error:
+        raise ValueError(f"Type annotation '{type_hint}' is not a valid type alias.") from error
+
+
 def canonicalize_type_hint(
     type_hint: Any,
     *,
@@ -147,6 +159,9 @@ def canonicalize_type_hint(
                 f"Type annotation '{type_hint}' has undefined forward references."
             ) from error
 
+    # Canonicalize PEP 695 type aliases ('type X = ...')
+    type_hint = _resolve_type_alias(type_hint)
+
     # Cannonicalize 'Annotated' annotations
     extra_args = []
     if typing.get_origin(type_hint) is typing.Annotated:
@@ -156,6 +171,8 @@ def canonicalize_type_hint(
             collections.abc.Callable,  # type:ignore[arg-type] # see https://github.com/python/mypy/issues/14928
         ):
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
+        # An 'Annotated' annotation may in turn wrap a type alias
+        type_hint = _resolve_type_alias(type_hint)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
