@@ -49,7 +49,16 @@ from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
 PYTHON_AST_VERSION: Final = (3, 12)
-ELLIPSIS_TYPE = getattr(ast, "Ellipsis", types.EllipsisType)
+
+
+def _is_ellipsis_node(node: ast.AST) -> bool:
+    """Check whether an AST node is the '...' literal.
+
+    'ast.Ellipsis' is a deprecated alias scheduled for removal in Python 3.14, and
+    'types.EllipsisType' is the type of the '...' object itself, not of its AST node,
+    so neither is usable as an 'isinstance()' target here.
+    """
+    return isinstance(node, ast.Constant) and node.value is Ellipsis
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -1359,7 +1368,7 @@ class IRMaker(ast.NodeVisitor):
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
-        if any(isinstance(cn, ELLIPSIS_TYPE) for cn in index_nodes):
+        if any(_is_ellipsis_node(cn) for cn in index_nodes):
             return None
 
         # Determine if we are using the new-style axis syntax, or the old style.
