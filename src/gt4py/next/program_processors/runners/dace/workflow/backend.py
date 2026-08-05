@@ -198,7 +198,7 @@ def make_dace_backend(
         external_workspace=external_workspace,
         external_sync_stream=external_sync_stream,
         max_concurrent_gpu_streams=max_concurrent_gpu_streams,
-        otf_workflow__bare_translation__async_sdfg_call=async_sdfg_call,
+        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
