@@ -277,7 +277,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop: tir.SequentialVerticalLoop | tir.ParallelVerticalLoop
         if loop_order == common.LoopOrder.PARALLEL:
             loop = tir.ParallelVerticalLoop(
-                iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
+                iteration_variable=tir.Axis.K.iteration_symbol(),
                 bounds_k=bounds,
                 schedule=_resolve_map_schedule(self._device_type),
                 children=[],
@@ -285,7 +285,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             )
         else:
             loop = tir.SequentialVerticalLoop(
-                iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
+                iteration_variable=tir.Axis.K.iteration_symbol(),
                 bounds_k=bounds,
                 loop_order=loop_order,
                 children=[],
