@@ -476,9 +476,9 @@ def test_external_sync_stream_reaches_sdfg_call(
     """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
     import cupy as cp
 
-    sync_stream = None if external_sync_stream_ptr is None else cupy.cuda.Stream(non_blocking=True)
+    sync_stream = None if external_sync_stream_ptr is None else cp.cuda.Stream(non_blocking=True)
     expected_stream_ptr = (
-        cupy.cuda.Stream(null=True).ptr if sync_stream is None else sync_stream.ptr
+        cp.cuda.Stream(null=True).ptr if sync_stream is None else sync_stream.ptr
     )
 
     backend = dace_wf_backend.make_dace_backend(
