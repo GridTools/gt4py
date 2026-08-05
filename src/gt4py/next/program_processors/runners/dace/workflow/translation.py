@@ -136,7 +136,11 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
     schedules, and ``n_streams >= 1``.
     """
     if not gpu:
-        return
+        if blocking:
+            # CPU targets are always synchronous; no need for a synchronization barrier.
+            return
+        else:
+            raise ValueError("Asynchronization SDFG call is not supported for CPU target.")
 
     if not _has_gpu_schedule(sdfg):
         # No GPU kernels means no CUDA headers are imported; skip sync tasklets.
@@ -170,7 +174,7 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
             # Fully asynchronous execution: no tasklets needed.
             return
 
-        sync_code = "/* No synchronization needed, using default stream */"
+        entry_code = exit_code = "/* No synchronization needed, using default stream */"
     else:
         # Add a scalar symbol for the stream handle. It is passed as a 64-bit integer
         # pointer from Python and cast to the appropriate CUDA/HIP handle type inside
@@ -179,9 +183,23 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         if stream_arg not in sdfg.symbols:
             sdfg.add_symbol(stream_arg, dace.uint64)
 
-        # Asynchronous barrier: record per-stream done events and make the external
-        # stream wait on them.
-        sync_code = "\n".join(
+        # Asynchronous entry barrier: make the internal streams wait on the external stream.
+        entry_code = "\n".join(
+            [
+                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
+                f"({dace_gpu_backend}Stream_t){stream_arg});",
+                "}",
+                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                f"    {dace_gpu_backend}StreamWaitEvent(__state->gpu_context->streams[i], "
+                f"__state->gpu_context->events[i], 0);",
+                "}",
+            ]
+        )
+
+        # Asynchronous exit barrier: record per-stream done events and make the
+        # external stream wait on them.
+        exit_code = "\n".join(
             [
                 f"for (int i = 0; i < {n_streams}; ++i) {{",
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
@@ -196,16 +214,17 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
 
     if blocking:
         # Synchronous barrier: synchronize on the external stream.
-        sync_code += (
-            f"\n{dace_gpu_backend}StreamSynchronize(({dace_gpu_backend}Stream_t){stream_arg});"
-        )
+        for code in [entry_code, exit_code]:
+            code += (
+                f"\n{dace_gpu_backend}StreamSynchronize(({dace_gpu_backend}Stream_t){stream_arg});"
+            )
 
     entry_state = sdfg.add_state("sync_entry", is_start_block=True)
     entry_state.add_tasklet(
         "sync_entry_tlet",
         inputs=set(),
         outputs=set(),
-        code=sync_code,
+        code=entry_code,
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
@@ -215,10 +234,15 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         "sync_exit_tlet",
         inputs=set(),
         outputs=set(),
-        code=sync_code,
+        code=exit_code,
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
+
+    # NOTE: When synchronization is done through the Tasklet explicitly,
+    #   we can disable synchronization for the SDFG state.
+    entry_state.nosync = blocking
+    exit_state.nosync = blocking
 
     # Wire the entry state before the original start block and the exit state
     # after all original sink nodes.

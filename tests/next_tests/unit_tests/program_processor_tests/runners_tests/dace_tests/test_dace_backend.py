@@ -10,7 +10,6 @@
 
 import dataclasses
 import re
-import sys
 import unittest.mock as mock
 from typing import Any
 
