@@ -468,15 +468,16 @@ def test_make_backend_rejects_negative_max_concurrent_gpu_streams():
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize("external_sync_stream_ptr", [None, 7])
-@pytest.mark.parametrize("async_sdfg_call", [False, True])
-def test_external_sync_stream_reaches_sdfg_call(
-    external_sync_stream_ptr: int | None, async_sdfg_call: bool
-):
+@pytest.mark.parametrize("async_sdfg_call", [False, True], ids=["BLOCKING", "ASYNC"])
+@pytest.mark.parametrize("with_sync_stream", [False, True], ids=["sync_default_stream", "sync_external_stream"])
+def test_multi_streams_sychronizes_on_anchor_stream(async_sdfg_call: bool, with_sync_stream: bool):
     """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
     import cupy as cp
 
-    sync_stream = None if external_sync_stream_ptr is None else cp.cuda.Stream(non_blocking=True)
+    # TODO(edopao): Increase this limit once the DaCe HIP backend supports multi-streams.
+    num_streams = 1 if cp.cuda.runtime.is_hip else 4
+
+    sync_stream = cp.cuda.Stream(non_blocking=True) if with_sync_stream else None
     expected_stream_ptr = (
         cp.cuda.Stream(null=True).ptr if sync_stream is None else sync_stream.ptr
     )
@@ -486,7 +487,7 @@ def test_external_sync_stream_reaches_sdfg_call(
         auto_optimize=True,
         async_sdfg_call=async_sdfg_call,
         external_sync_stream=sync_stream,
-        max_concurrent_gpu_streams=4,
+        max_concurrent_gpu_streams=num_streams,
     )
 
     @gtx.field_operator
