@@ -188,8 +188,7 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         # pointer from Python and cast to the appropriate CUDA/HIP handle type inside
         # the generated tasklets.
         stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
-        if stream_arg not in sdfg.symbols:
-            sdfg.add_symbol(stream_arg, dace.uint64)
+        sdfg.add_symbol(stream_arg, dace.uint64)
 
         # Asynchronous entry barrier: make the internal streams wait on the external stream.
         entry_code = "\n".join(

@@ -93,9 +93,7 @@ def test_set_external_sync_stream_accepts_valid_stream(monkeypatch):
     fake_cupy_module.cuda.runtime.is_hip = False
     fake_cupy_module.cuda.Stream = _FakeStream
     fake_cupy_module.cuda.Device.return_value.id = 0
-    fake_cupy_module.cuda.runtime.cudaSuccess = 0
-    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
-    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
+    fake_cupy_module.cuda.runtime.streamQuery.return_value = 0
     monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
 
     stream = _FakeStream(ptr=7, device_id=0)

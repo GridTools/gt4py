@@ -41,6 +41,9 @@ def _validate_external_sync_stream(stream: Any) -> None:
     except ImportError as exc:
         raise RuntimeError("cupy is required to validate an external stream.") from exc
 
+    if not isinstance(stream, cp.cuda.Stream):
+        raise TypeError("external_sync_stream must be a cupy.cuda.Stream.")
+
     current_device_id = cp.cuda.Device().id
     if stream.device_id != current_device_id:
         raise ValueError(
