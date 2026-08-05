@@ -103,12 +103,16 @@ def _has_gpu_schedule(sdfg: dace.SDFG) -> bool:
     )
 
 
-def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> None:
+def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams: int) -> None:
     """Synchronize SDFG execution with an externally managed stream.
 
     Args:
         sdfg: The DaCe SDFG to modify.
         gpu: ``True`` when the target device is a GPU; CPU targets are a no-op.
+        blocking: Select whether the SDFG call should block before returning,
+            until the SDFG execution has completed; or it should return immediately
+            without blocking, thus letting the GPU kernels run on the GPU device
+            while the control flow returns to the caller.
         n_streams: Number of concurrent internal GPU streams to use.
             ``0`` disables multi-stream scheduling and executes asynchronously on
             the default CUDA/HIP stream. Values ``>= 1`` enable DaCe's internal
@@ -125,10 +129,8 @@ def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> N
     - The external sync stream does not proceed until all internal streams have
       finished with the workspace from this call.
 
-    The tasklets reference two SDFG scalar symbols:
-    ``gtx_wfdcommon.SDFG_ARG_EXTERNAL_WS_EVENT`` (a GT4Py-owned event) and
-    ``gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM`` (the external stream pointer,
-    or ``0`` for the default stream).
+    The tasklets reference the SDFG symbol `gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM`
+    (the external stream pointer, or ``0`` for the default stream).
 
     This function is a no-op unless the target is GPU, the SDFG contains GPU
     schedules, and ``n_streams >= 1``.
@@ -143,9 +145,11 @@ def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> N
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
 
+    original_start = sdfg.start_block
+
     if n_streams == 0:
-        # No multi-stream scheduling; no need for stream synchronization.
-        # Default to asynchronous SDFG call on GPU.
+        # No multi-stream scheduling; no need for a synchronization barrier on the
+        # internal streams. Run all GPU kernels on the default stream.
         # NOTE: We are using the default stream this means that _**currently**_ the launch is
         #   already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
         #   for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
@@ -156,67 +160,62 @@ def add_external_stream_sync(sdfg: dace.SDFG, *, gpu: bool, n_streams: int) -> N
         #   might lead to problems if a GPU kernel computes something that is needed for a
         #   condition of an interstate edge. However, we should not have that case.
         # TODO(phimuell, edopao): Make sure if this is really the case.
+        stream_arg = f"{dace_gpu_backend}StreamDefault"
         sdfg.append_init_code(
-            f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+            f"__dace_gpu_set_all_streams(__state, {stream_arg});",
             location="cuda",
         )
-        return
 
-    original_start = sdfg.start_block
-    event_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_WS_EVENT
-    stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
+        if not blocking:
+            # Fully asynchronous execution: no tasklets needed.
+            return
 
-    # Add scalar symbols for the event and stream handles. These are passed as
-    # 64-bit integer pointers from Python and cast to the appropriate CUDA/HIP
-    # handle types inside the generated tasklets.
-    if event_arg not in sdfg.symbols:
-        sdfg.add_symbol(event_arg, dace.uint64)
-    if stream_arg not in sdfg.symbols:
-        sdfg.add_symbol(stream_arg, dace.uint64)
+        sync_code = "/* No synchronization needed, using default stream */"
+    else:
+        # Add a scalar symbol for the stream handle. It is passed as a 64-bit integer
+        # pointer from Python and cast to the appropriate CUDA/HIP handle type inside
+        # the generated tasklets.
+        stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
+        if stream_arg not in sdfg.symbols:
+            sdfg.add_symbol(stream_arg, dace.uint64)
 
-    # Entry tasklet: every internal stream waits on the cross-call event.
-    entry_code = "\n".join(
-        [
-            f"for (int i = 0; i < {n_streams}; ++i) {{",
-            f"    {dace_gpu_backend}StreamWaitEvent(__state->gpu_context->streams[i], "
-            f"({dace_gpu_backend}Event_t){event_arg}, 0);",
-            "}",
-        ]
-    )
+        # Asynchronous barrier: record per-stream done events and make the external
+        # stream wait on them.
+        sync_code = "\n".join(
+            [
+                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
+                f"__state->gpu_context->streams[i]);",
+                "}",
+                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                f"    {dace_gpu_backend}StreamWaitEvent(({dace_gpu_backend}Stream_t){stream_arg}, "
+                f"__state->gpu_context->events[i], 0);",
+                "}",
+            ]
+        )
 
-    # Exit tasklet: record per-stream done events, make the external stream wait
-    # on them, then record the cross-call event on the external stream.
-    exit_code = "\n".join(
-        [
-            f"for (int i = 0; i < {n_streams}; ++i) {{",
-            f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
-            f"__state->gpu_context->streams[i]);",
-            "}",
-            f"for (int i = 0; i < {n_streams}; ++i) {{",
-            f"    {dace_gpu_backend}StreamWaitEvent(({dace_gpu_backend}Stream_t){stream_arg}, "
-            f"__state->gpu_context->events[i], 0);",
-            "}",
-            f"{dace_gpu_backend}EventRecord(({dace_gpu_backend}Event_t){event_arg}, "
-            f"({dace_gpu_backend}Stream_t){stream_arg});",
-        ]
-    )
+    if blocking:
+        # Synchronous barrier: synchronize on the external stream.
+        sync_code += (
+            f"\n{dace_gpu_backend}StreamSynchronize(({dace_gpu_backend}Stream_t){stream_arg});"
+        )
 
-    entry_state = sdfg.add_state("external_ws_sync_entry", is_start_block=True)
+    entry_state = sdfg.add_state("sync_entry", is_start_block=True)
     entry_state.add_tasklet(
-        "external_ws_sync_entry_tlet",
+        "sync_entry_tlet",
         inputs=set(),
         outputs=set(),
-        code=entry_code,
+        code=sync_code,
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
 
-    exit_state = sdfg.add_state("external_ws_sync_exit")
+    exit_state = sdfg.add_state("sync_exit")
     exit_state.add_tasklet(
-        "external_ws_sync_exit_tlet",
+        "sync_exit_tlet",
         inputs=set(),
         outputs=set(),
-        code=exit_code,
+        code=sync_code,
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
@@ -381,6 +380,7 @@ class DaCeTranslator(
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
+    async_sdfg_call: bool
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
     max_concurrent_gpu_streams: int
@@ -464,9 +464,10 @@ class DaCeTranslator(
                 sdfg, constant_symbols, validate=True
             )
 
-        add_external_stream_sync(
+        add_synchronization(
             sdfg,
             gpu=on_gpu,
+            blocking=(not self.async_sdfg_call),
             n_streams=self.max_concurrent_gpu_streams,
         )
 

@@ -462,18 +462,10 @@ class _FakeStream:
         self.device_id = device_id
 
 
-class _FakeEvent:
-    """Stand-in for a ``cupy.cuda.Event`` that does not require a GPU."""
-
-    def __init__(self, ptr: int = 99) -> None:
-        self.ptr = ptr
-
-
-def _make_sdfg_with_stream_sync_symbols() -> dace.SDFG:
-    """Return a minimal SDFG whose arglist contains the stream-sync symbols."""
-    sdfg = dace.SDFG("stream_sync_program")
+def _make_sdfg_with_sync_stream_symbol() -> dace.SDFG:
+    """Return a minimal SDFG whose arglist contains the sync-stream symbol."""
+    sdfg = dace.SDFG("sync_stream_program")
     state = sdfg.add_state("state", is_start_block=True)
-    sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT, dace.uint64)
     sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM, dace.uint64)
     # Add a no-op tasklet so the SDFG is not empty.
     state.add_tasklet(
@@ -483,11 +475,10 @@ def _make_sdfg_with_stream_sync_symbols() -> dace.SDFG:
     return sdfg
 
 
-def test_compiled_program_creates_event_when_sdfg_has_sync_symbols(monkeypatch):
-    """If the SDFG contains the event symbol, construct_arguments creates a cupy Event."""
+def test_compiled_program_adds_sync_stream_kwarg(monkeypatch):
+    """construct_arguments forwards the stream pointer value to the SDFG."""
     fake_cupy_module = mock.MagicMock()
     fake_cupy_module.cuda.Stream = _FakeStream
-    fake_cupy_module.cuda.Event.return_value = _FakeEvent(123)
     fake_cupy_module.cuda.Device.return_value.id = 0
     fake_cupy_module.cuda.runtime.cudaSuccess = 0
     fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
@@ -495,36 +486,7 @@ def test_compiled_program_creates_event_when_sdfg_has_sync_symbols(monkeypatch):
     monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
 
     compiled_sdfg = mock.MagicMock()
-    compiled_sdfg.sdfg = _make_sdfg_with_stream_sync_symbols()
-    compiled_sdfg.sdfg.build_folder = "/tmp"
-    compiled_sdfg.construct_arguments.return_value = ([], [])
-
-    program = dace_wf_compilation.CompiledDaceProgram(
-        compiled_sdfg,
-        bind_func_name="update_sdfg_args",
-        binding_source_code="def update_sdfg_args(*a, **k): ...",
-    )
-    program.external_sync_stream = _FakeStream(ptr=7, device_id=0)
-    with mock.patch.object(program, "_configure_external_workspace"):
-        program.construct_arguments(some_arg=1)
-
-    assert program._sync_event is not None
-    assert program._sync_event.ptr == 123
-
-
-def test_compiled_program_adds_stream_sync_kwargs(monkeypatch):
-    """construct_arguments forwards event/stream pointer values to the SDFG."""
-    fake_cupy_module = mock.MagicMock()
-    fake_cupy_module.cuda.Stream = _FakeStream
-    fake_cupy_module.cuda.Event.return_value = _FakeEvent(123)
-    fake_cupy_module.cuda.Device.return_value.id = 0
-    fake_cupy_module.cuda.runtime.cudaSuccess = 0
-    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
-    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
-    monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
-
-    compiled_sdfg = mock.MagicMock()
-    compiled_sdfg.sdfg = _make_sdfg_with_stream_sync_symbols()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
     compiled_sdfg.sdfg.build_folder = "/tmp"
     compiled_sdfg.construct_arguments.return_value = ([], [])
 
@@ -539,7 +501,7 @@ def test_compiled_program_adds_stream_sync_kwargs(monkeypatch):
         program.construct_arguments(some_arg=1)
 
     call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
-    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT] == 123
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
     assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 7
 
 
@@ -547,7 +509,6 @@ def test_compiled_program_uses_default_stream_when_none_set(monkeypatch):
     """When no external stream is set, the default stream pointer (0) is forwarded."""
     fake_cupy_module = mock.MagicMock()
     fake_cupy_module.cuda.Stream = _FakeStream
-    fake_cupy_module.cuda.Event.return_value = _FakeEvent(123)
     fake_cupy_module.cuda.Device.return_value.id = 0
     fake_cupy_module.cuda.runtime.cudaSuccess = 0
     fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
@@ -555,7 +516,7 @@ def test_compiled_program_uses_default_stream_when_none_set(monkeypatch):
     monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
 
     compiled_sdfg = mock.MagicMock()
-    compiled_sdfg.sdfg = _make_sdfg_with_stream_sync_symbols()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
     compiled_sdfg.sdfg.build_folder = "/tmp"
     compiled_sdfg.construct_arguments.return_value = ([], [])
 
@@ -570,5 +531,5 @@ def test_compiled_program_uses_default_stream_when_none_set(monkeypatch):
         program.construct_arguments(some_arg=1)
 
     call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
-    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT] == 123
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
     assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 0

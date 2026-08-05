@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Edoardo Paone (@edopao)
 - **Created**: 2026-07-28
-- **Updated**: 2026-08-04
+- **Updated**: 2026-08-05
 
 ## Context
 
@@ -31,7 +31,7 @@ for external workspace mode.
 
 ## Decision
 
-We introduce an optional multi-stream safety layer with the following design.
+We introduce an optional synchronization layer with the following design.
 
 ### Configuration
 
@@ -42,7 +42,11 @@ We introduce an optional multi-stream safety layer with the following design.
   internal stream pool. Negative values are rejected at backend construction
   time (the validation lives in `DaCeTranslator.__post_init__`, which is reached
   by both direct translator creation and the backend factory).
-- The setting is ignored on CPU targets.
+- Add `async_sdfg_call` as a parameter to `make_dace_backend`. When `True`
+  (default), the SDFG call returns immediately and GPU kernels run concurrently
+  with the Python driver; when `False`, the SDFG call blocks until the GPU work
+  has completed.
+- The settings are ignored on CPU targets.
 
 ### External sync stream
 
@@ -62,19 +66,22 @@ We introduce an optional multi-stream safety layer with the following design.
 When `max_concurrent_gpu_streams >= 1` and the SDFG contains GPU schedules,
 GT4Py injects two CUDA/HIP tasklets into the generated SDFG:
 
-- **Entry tasklet** (`external_ws_sync_entry_tlet`): every internal DaCe stream
-  waits on a GT4Py-owned cross-call event before touching the external workspace.
-- **Exit tasklet** (`external_ws_sync_exit_tlet`):
-  1. Record per-stream done events on each internal stream.
-  2. Make the external sync stream wait on all those events.
-  3. Record the cross-call event on the external sync stream.
+- **Entry tasklet** (`sync_entry_tlet`): records per-stream done events on each
+  internal DaCe stream and makes the external sync stream wait on them before
+  touching the external workspace.
+- **Exit tasklet** (`sync_exit_tlet`): records per-stream done events on each
+  internal stream and makes the external sync stream wait on them before the SDFG
+  call returns.
 
-The tasklets reference two SDFG scalar symbols:
+When `async_sdfg_call=False`, both tasklets additionally call
+`cudaStreamSynchronize` on the external sync stream, so the SDFG call blocks
+until all GPU work has completed.
 
-- `__external_ws_event`: a `cupy.cuda.Event` owned by `CompiledDaceProgram`.
+The tasklets reference the following SDFG scalar symbol:
+
 - `__external_sync_stream`: the integer pointer of the external stream (or `0`).
 
-Both are passed to the SDFG as `uint64` scalar arguments.
+It is passed to the SDFG as a `uint64` scalar argument.
 
 When `max_concurrent_gpu_streams == 0`, no event tasklets are generated. Instead,
 GT4Py emits DaCe init code that forces all internal streams to the default
@@ -120,9 +127,6 @@ stream, preserving the historical asynchronous single-stream execution.
   defeats the purpose of multi-stream scheduling.
 - **Per-call stream argument**: more flexible, but requires changing the
   decorated program call signature and was not needed for the primary use case.
-- **Store events in generated device code**: rejected because events must be
-  created and destroyed from host code; a host-side Python object is needed for
-  proper lifecycle management.
 
 ## References
 

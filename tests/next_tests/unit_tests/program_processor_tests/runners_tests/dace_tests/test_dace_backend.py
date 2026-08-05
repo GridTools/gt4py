@@ -470,7 +470,10 @@ def test_make_backend_rejects_negative_max_concurrent_gpu_streams():
 
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("external_sync_stream_ptr", [None, 7])
-def test_external_sync_stream_reaches_sdfg_call(external_sync_stream_ptr: int | None):
+@pytest.mark.parametrize("async_sdfg_call", [False, True])
+def test_external_sync_stream_reaches_sdfg_call(
+    external_sync_stream_ptr: int | None, async_sdfg_call: bool
+):
     """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
     import cupy as cp
 
@@ -484,6 +487,7 @@ def test_external_sync_stream_reaches_sdfg_call(external_sync_stream_ptr: int | 
     backend = dace_wf_backend.make_dace_backend(
         gpu=True,
         auto_optimize=True,
+        async_sdfg_call=async_sdfg_call,
         external_sync_stream=external_sync_stream,
         max_concurrent_gpu_streams=4,
     )
@@ -520,8 +524,8 @@ def test_external_sync_stream_reaches_sdfg_call(external_sync_stream_ptr: int | 
     ):
         testee.with_backend(backend)(a, b, out=out, offset_provider={})
 
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in captured_kwargs
     assert captured_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == expected_stream_ptr
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT in captured_kwargs
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
 
 
@@ -570,5 +574,4 @@ def test_default_stream_ignores_external_sync_stream():
         testee.with_backend(backend)(a, b, out=out, offset_provider={})
 
     assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in captured_kwargs
-    assert dace_wf_common.SDFG_ARG_EXTERNAL_WS_EVENT not in captured_kwargs
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
