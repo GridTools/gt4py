@@ -110,12 +110,14 @@ def _make_testee_arguments() -> tuple[tuple, gtx_common.OffsetProvider]:
     return args, offset_provider
 
 
-def _create_testee_bindings(use_metrics: bool, backend: str = "dace") -> str:
+def _create_testee_bindings(
+    use_metrics: bool, backend: str = "dace", with_sdfg: bool = True
+) -> str:
     return dace_wf_bindings._create_sdfg_bindings(
         program_parameters=_make_testee_parameters(),
         bind_func_name=_bind_func_name,
         use_metrics=use_metrics,
-        sdfg=_make_testee_sdfg(),
+        sdfg=_make_testee_sdfg() if with_sdfg else None,
         backend=backend,
     )
 
@@ -127,8 +129,9 @@ def _compile_bindings(binding_source: str):
     return namespace[_bind_func_name]
 
 
-def _expected_testee_binding_source(use_metrics: bool) -> str:
+def _expected_testee_binding_source(use_metrics: bool, e2v_used: bool = False) -> str:
     metric_args = "metrics_level, runtime_return_value, " if use_metrics else ""
+    e2v_arg = "(offset_provider['E2V'].ndarray, _PAIR_OF_ZEROS)" if e2v_used else "None"
     return f"""\
 _PAIR_OF_ZEROS = (0, 0)
 def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):
@@ -146,7 +149,7 @@ def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value
             (__gtx_expanded_names_t_2.ndarray, (__gtx_expanded_names_t_2.__dace_origin__)),
         ),
         (offset_provider['V2E'].ndarray, _PAIR_OF_ZEROS),
-        None,
+        {e2v_arg},
         {metric_args}
     ), {{}}
 """
@@ -213,10 +216,19 @@ def test_binding_function_processes_arguments(use_metrics):
         assert processed[8] is compute_time
 
 
+def test_create_sdfg_bindings_without_sdfg():
+    """Without an SDFG every offset provider is treated as used."""
+    binding_source = _create_testee_bindings(use_metrics=False, with_sdfg=False)
+
+    assert codegen.format_python_source(binding_source) == codegen.format_python_source(
+        _expected_testee_binding_source(use_metrics=False, e2v_used=True)
+    )
+
+
 def test_create_sdfg_bindings_gtfn_not_supported():
     """The GTFN flavour of the bindings generator is not implemented (yet)."""
-    with pytest.raises((AssertionError, NotImplementedError)):
-        _create_testee_bindings(use_metrics=False, backend="gtfn")
+    with pytest.raises(NotImplementedError):
+        _create_testee_bindings(use_metrics=False, backend="gtfn", with_sdfg=False)
 
 
 @pytest.mark.parametrize("use_metrics", [False, True], ids=["no_metrics", "use_metrics"])
