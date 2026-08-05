@@ -29,7 +29,7 @@ from gt4py.next.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnchainComparesPass,
 )
-from gt4py.next.ffront.dialect_parser import DialectParser
+from gt4py.next.ffront.dialect_parser import DialectParser, type_from_annotation
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
@@ -182,7 +182,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         # check deduced matches annotated return type
         if "return" in annotations:
-            annotated_return_type = type_translation.from_type_hint(annotations["return"])
+            annotated_return_type = type_from_annotation(
+                annotations["return"],
+                foast_node.location,
+                description="return type annotation",
+            )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
@@ -235,7 +239,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        new_type = type_from_annotation(
+            annotation, loc, description=f"type annotation for parameter '{node.arg}'"
+        )
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
@@ -313,7 +319,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
-            target_type = type_translation.from_type_hint(annotation, globalns=context)
+            target_type = type_from_annotation(
+                annotation,
+                self.get_location(node.annotation),
+                description="variable type annotation",
+                globalns=context,
+            )
         else:
             target_type = ts.DeferredType()
 

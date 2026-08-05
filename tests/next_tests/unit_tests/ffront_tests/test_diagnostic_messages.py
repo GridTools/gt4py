@@ -180,3 +180,38 @@ def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
     assert errors.DSLError.code is None
+
+
+def test_unsupported_parameter_annotation_is_located():
+    def bad_param(a: list[float64]) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(bad_param)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.code == "invalid-annotation"
+    assert err.location is not None
+    rendered = str(err)
+    assert "a: list[float64]" in rendered
+    assert "Hint:" in rendered
+
+
+def test_unsupported_return_annotation_is_located():
+    def bad_return(a: gtx.Field[[IDim], float64]) -> list[float64]:
+        return a
+
+    err = parse_error(bad_return)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.location is not None
+    assert "return type annotation" in err.message
+
+
+def test_invalid_annotation_keeps_the_underlying_reason_as_a_note():
+    def mistyped(a: gtx.Field) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(mistyped)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert any("Field type requires two arguments" in note for note in err.notes)
