@@ -37,8 +37,7 @@ def test_external_mode_with_external_stream():
     backend = dace_wf_backend.make_dace_backend(
         gpu=True,
         auto_optimize=True,
-        cached_translation=False,
-        max_concurrent_gpu_streams=4,
+        max_concurrent_gpu_streams=2,
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },
@@ -74,8 +73,7 @@ def test_external_mode_with_default_stream_anchor():
     backend = dace_wf_backend.make_dace_backend(
         gpu=True,
         auto_optimize=True,
-        cached_translation=False,
-        max_concurrent_gpu_streams=4,
+        max_concurrent_gpu_streams=2,
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },

@@ -476,10 +476,6 @@ def test_multi_streams_sychronizes_on_anchor_stream(async_sdfg_call: bool, with_
     """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
     import cupy as cp
 
-    # The DaCe HIP backend currently crashes when `num_streams == 4`.
-    # TODO(edopao): Increase this limit once the DaCe HIP backend supports multi-streams.
-    num_streams = 2 if cp.cuda.runtime.is_hip else 4
-
     sync_stream = cp.cuda.Stream(non_blocking=True) if with_sync_stream else None
     expected_stream_ptr = cp.cuda.Stream(null=True).ptr if sync_stream is None else sync_stream.ptr
 
@@ -488,7 +484,7 @@ def test_multi_streams_sychronizes_on_anchor_stream(async_sdfg_call: bool, with_
         auto_optimize=True,
         async_sdfg_call=async_sdfg_call,
         external_sync_stream=sync_stream,
-        max_concurrent_gpu_streams=num_streams,
+        max_concurrent_gpu_streams=2,
     )
 
     @gtx.field_operator
