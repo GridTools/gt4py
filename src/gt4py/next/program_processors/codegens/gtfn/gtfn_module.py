@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import artifacts, stages, workflow
+from gt4py.next.otf import artifacts, stages
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -37,16 +37,7 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNTranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProgram,
-        artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec],
-    ],
-    workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram,
-        artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec],
-    ],
-):
+class GTFNTranslationStep:
     code_spec: Optional[artifacts.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True

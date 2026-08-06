@@ -18,7 +18,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import artifacts, stages, workflow
+from gt4py.next.otf import artifacts, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
@@ -341,16 +341,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeTranslator(
-    workflow.ChainableWorkflowMixin[
-        stages.CompilableProgram,
-        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
-    ],
-    workflow.ReplaceEnabledWorkflowMixin[
-        stages.CompilableProgram,
-        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
-    ],
-):
+class DaCeTranslator:
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
