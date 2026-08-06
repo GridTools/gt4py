@@ -307,7 +307,7 @@ class HorizontalIntervalParser(IntervalParser):
 class VerticalIntervalParser(IntervalParser):
     """Parse Python AST interval syntax in the form of a Slice.
 
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    Corner cases: an ellipsis (`...`) constant refers to the entire interval, and
     if an `ast.Subscript` is passed, this parses its slice attribute.
     """
 
@@ -353,7 +353,7 @@ class VerticalIntervalParser(IntervalParser):
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
 
-        if isinstance(node, ast.Constant) and node.value is Ellipsis:
+        if _is_ellipsis_node(node):
             interval = nodes.AxisInterval.full_interval()
             interval.loc = loc
             return interval
@@ -748,8 +748,7 @@ class CallInliner(ast.NodeTransformer):
 
     def visit_Expr(self, node: ast.Expr):
         """Ignore pure string statements in callee."""
-        pure_str_types = (ast.Constant,) + ((ast.Str,) if hasattr(ast, "Str") else ())
-        if not isinstance(node.value, pure_str_types):
+        if not isinstance(node.value, ast.Constant):
             return super().visit(node.value)
 
 

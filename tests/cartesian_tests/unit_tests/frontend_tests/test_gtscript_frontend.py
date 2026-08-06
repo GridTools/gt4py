@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import ast
 import inspect
 import functools
 import textwrap
@@ -2490,8 +2491,6 @@ class TestEllipsisNodeDetection:
         "source, expected", [("...", True), ("1", False), ("None", False), ("x", False)]
     )
     def test_is_ellipsis_node(self, source, expected):
-        import ast
-
         node = ast.parse(source, mode="eval").body
         assert gt_frontend._is_ellipsis_node(node) is expected
 
