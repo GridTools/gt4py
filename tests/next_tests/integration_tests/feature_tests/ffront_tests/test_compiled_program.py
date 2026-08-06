@@ -190,6 +190,22 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     assert np.allclose(out.ndarray, np.cumsum(inp.ndarray))
 
 
+@pytest.mark.uses_scan
+def test_compile_scan_tuple_args_is_generic(cartesian_case):
+    """A scan operator is generic even if its deferred parts only appear nested inside tuples."""
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0, 0), backend=cartesian_case.backend)
+    def testee(
+        carry: tuple[gtx.int32, gtx.int32], inp: tuple[gtx.int32, gtx.int32]
+    ) -> tuple[gtx.int32, gtx.int32]:
+        return carry[0] + inp[0], carry[1] + inp[1]
+
+    with pytest.raises(ValueError, match="precompile generic program"):
+        testee.compile(offset_provider=cartesian_case.offset_provider)
+
+
 def test_compile_domain(cartesian_case, compile_testee_domain):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")

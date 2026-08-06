@@ -104,7 +104,9 @@ class MemletExpr:
 
     @property
     def gt_dtype(self) -> ts.ScalarType | ts.ListType:
-        return self.gt_field.dtype
+        dtype = self.gt_field.dtype
+        assert ti.is_concrete_dtype(dtype)
+        return dtype
 
     def __post_init__(self) -> None:
         if isinstance(self.gt_dtype, ts.ListType):
