@@ -127,7 +127,7 @@ class IntervalParser(gt_meta.ASTPass):
 
     def _make_axis_bound(
         self,
-        value: Union[int, None, gtscript.AxisIndex, nodes.AxisBound, nodes.VarRef],
+        value: Union[int, gtscript.AxisIndex, nodes.AxisBound, nodes.VarRef, None],
         endpt: nodes.LevelMarker,
     ) -> nodes.AxisBound | nodes.RuntimeAxisBound:
         if isinstance(value, nodes.AxisBound):
