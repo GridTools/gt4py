@@ -14,13 +14,14 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any, Final
+from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
@@ -33,18 +34,93 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
-def _add_tx_markers(sdfg: dace.SDFG) -> None:
+SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
+    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+]
+
+
+def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionSource, dace.SDFG]:
+    """
+    Add GPU TX markers to the SDFG of the given extension source.
+
+    Returns the modified extension source and the modified SDFG.
+    """
+    sdfg = dace.SDFG.from_json(program_source.program_source.source_code)
+
     has_gpu_schedule = any(
         getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
         for node, _ in sdfg.all_nodes_recursive()
     )
 
-    if has_gpu_schedule:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            # Also adds markers to map scopes that are NOT scheduled on GPU
-            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    if not has_gpu_schedule:
+        return program_source, sdfg  # No GPU schedule, no need to add TX markers.
+
+    sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    for node, _ in sdfg.all_nodes_recursive():
+        # Also adds markers to map scopes that are NOT scheduled on GPU
+        if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
+    sdfg_json = gtx_wfdcommon.serialize_sdfg_as_json(sdfg)
+
+    new_program_source = dataclasses.replace(
+        program_source,
+        program_source=dataclasses.replace(program_source.program_source, source_code=sdfg_json),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
+    )
+
+    return new_program_source, sdfg
+
+
+def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
+    if storage == dace.StorageType.CPU_Heap:
+        device = core_defs.DeviceType.CPU
+    elif storage == dace.StorageType.GPU_Global:
+        if core_defs.CUPY_DEVICE_TYPE is None:
+            raise ValueError(
+                f"Can not map storage type '{storage}' to a device: no GPU device"
+                " type is configured ('core_defs.CUPY_DEVICE_TYPE' is None)."
+            )
+        device = core_defs.CUPY_DEVICE_TYPE
+    else:
+        raise ValueError(f"Unsupported storage type '{storage}' for external workspace allocation.")
+
+    return device
+
+
+def _validate_external_workspace(
+    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface, storage: dace.StorageType, nbytes: int
+) -> None:
+    """Validate that the provided ``wsp`` workspace satisfies the requirements.
+
+    Args:
+        wsp: The external workspace to check.
+        storage: SDFG storage type the workspace buffer is being installed for.
+        nbytes: Size in bytes required.
+
+    Raises:
+        TypeError: If ``wsp`` exposes neither ``__array_interface__`` nor
+            ``__cuda_array_interface__``.
+        ValueError: If ``wsp`` exposes ``nbytes`` and it is smaller than the
+            required ``nbytes``. Buffers that do not expose ``nbytes`` are
+            accepted on a trust basis (their size can not be checked here).
+    """
+    if storage == dace.StorageType.GPU_Global:
+        if not xtyping.supports_cuda_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__cuda_array_interface__` (got {type(wsp).__name__!r})."
+            )
+    elif storage == dace.StorageType.CPU_Heap:
+        if not xtyping.supports_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__array_interface__` (got {type(wsp).__name__!r})."
+            )
+    else:
+        raise ValueError(f"Unsupported storage type {storage!r} for external workspace allocation.")
+
+    if (wsp_nbytes := getattr(wsp, "nbytes", None)) is not None and wsp_nbytes < nbytes:
+        raise ValueError(
+            f"External workspace buffer is {wsp_nbytes} bytes for storage {storage!r}, but at least {nbytes} bytes were required."
+        )
 
 
 class CompiledDaceProgram:
@@ -73,6 +149,9 @@ class CompiledDaceProgram:
     #       never updated.
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
+    external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
+        None  # This attribute is set at runtime, before the first call.
+    )
 
     def __init__(
         self,
@@ -99,6 +178,22 @@ class CompiledDaceProgram:
         self.csdfg_argv = None
         self.csdfg_init_argv = None
 
+    def _configure_external_workspace(self, **kwargs: Any) -> None:
+        self.sdfg_program.initialize(**kwargs)
+        if workspace_sizes := self.sdfg_program.get_workspace_sizes():
+            if self.external_workspace is None:
+                raise RuntimeError(
+                    "External workspace is not set. Please call `set_external_workspace()`"
+                    " before the first call to the program."
+                )
+            for storage, required_nbytes in workspace_sizes.items():
+                device = _map_storage_to_device(storage)
+                workspace = self.external_workspace.get(device)
+                if workspace is None:
+                    raise RuntimeError(f"External workspace for device {device} not found.")
+                _validate_external_workspace(workspace, storage, required_nbytes)
+                self.sdfg_program.set_workspace(storage, workspace)
+
     def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed argument
@@ -106,6 +201,7 @@ class CompiledDaceProgram:
         """
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
+            self._configure_external_workspace(**kwargs)
         # Note we only care about `csdfg_argv` (normal call), since we have to update it,
         #  we ensure that it is a `list`.
         self.csdfg_argv = [*csdfg_argv]
@@ -146,6 +242,13 @@ class DaCeCompilationArtifact:
     (``get_program_handle``) needs an SDFG instance to wrap into the
     returned ``CompiledSDFG``, and the build folder may not contain a
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+
+    The SDFG we store here is the one on which we called `SDFG.compile(return_program_handle=False)`.
+    Note that the `compile()` call has side effects, because it applies transformations
+    to the SDFG, in order to enable code generation for the target platform.
+    Since we pass `return_program_handle=False`, the `compile()` method does not
+    return a `CompiledSDFG` instance, therefore we cannot access `CompiledSDFG.sdfg`,
+    which would be the modified SDFG from which DaCe generates the C++/CUDA/HIP code.
     """
 
     library_path: pathlib.Path
@@ -161,7 +264,7 @@ class DaCeCompilationArtifact:
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
         sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
-        return gtx_wfddecoration.convert_args(program, device=self.device_type)
+        return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -197,15 +300,16 @@ class DaCeCompiler(
         ):
             object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
-    def __call__(
-        self,
-        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> DaCeCompilationArtifact:
+    def __call__(self, inp: SDFGExtensionSource) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            # Add TX markers to the generated GPU code for trace visualization tools.
+            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                inp, sdfg = _add_tx_markers(inp)
+            else:
+                sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
@@ -215,11 +319,9 @@ class DaCeCompiler(
                 build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
-            sdfg.build_folder = sdfg_build_folder
 
-            # Add TX markers to the generated GPU code for trace visualization tools.
-            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
-                _add_tx_markers(sdfg)
+            # Configure the SDFG build folder
+            sdfg.build_folder = sdfg_build_folder
 
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library
             # path here so ``get_binary_name`` sees the same mode dace built under.
