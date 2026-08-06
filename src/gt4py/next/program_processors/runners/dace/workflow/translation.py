@@ -179,8 +179,7 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         )
 
         if not blocking:
-            # Fully asynchronous execution: no tasklets needed.
-            return
+            return  # Fully asynchronous execution: no tasklets needed.
 
         entry_code = exit_code = "/* No synchronization needed, using default stream */"
     else:
@@ -190,14 +189,18 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
         sdfg.add_symbol(stream_arg, dace.uint64)
 
+        # FIXME(edopao): There is an implict assumption below that `gpu_context->num_events`
+        #   is equal or larger than `gpu_context->num_streams`. This is True, but
+        #   it would be better to add a runtime check.
+
         # Asynchronous entry barrier: make the internal streams wait on the external stream.
         entry_code = "\n".join(
             [
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"({dace_gpu_backend}Stream_t){stream_arg});",
                 "}",
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(__state->gpu_context->streams[i], "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
@@ -208,11 +211,11 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         # external stream wait on them.
         exit_code = "\n".join(
             [
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"__state->gpu_context->streams[i]);",
                 "}",
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(({dace_gpu_backend}Stream_t){stream_arg}, "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
