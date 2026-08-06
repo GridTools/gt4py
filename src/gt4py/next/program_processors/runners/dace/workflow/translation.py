@@ -179,7 +179,7 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"({dace_gpu_backend}Stream_t){stream_arg});",
                 "}",
-                "for (int i = 0; i < __state->gpu_context->num_streams; ++i) {",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(__state->gpu_context->streams[i], "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
@@ -194,7 +194,7 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"__state->gpu_context->streams[i]);",
                 "}",
-                "for (int i = 0; i < __state->gpu_context->num_streams; ++i) {",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(({dace_gpu_backend}Stream_t){stream_arg}, "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
