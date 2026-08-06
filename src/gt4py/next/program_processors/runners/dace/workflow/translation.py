@@ -172,6 +172,10 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         stream_arg = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
         sdfg.add_symbol(stream_arg, dace.uint64)
 
+        # FIXME(edopao): There is an implict assumption below that `gpu_context->num_events`
+        #   is equal or larger than `gpu_context->num_streams`. This is True, but
+        #   it would be better to add a runtime check.
+
         # Asynchronous entry barrier: make the internal streams wait on the external stream.
         entry_code = "\n".join(
             [

@@ -66,14 +66,12 @@ class CPPCompilationArtifact:
     def load(self) -> stages.ExecutableProgram:
         """Import the .so and return the raw entry point.
 
-        Must run in the process that will call the returned program: the
-        module is registered in that process's ``sys.modules`` under the
-        ``gt4py.__compiled_programs__.`` prefix.
+        Must run in the process that will call the returned program:
+        ``import_from_path`` keeps a reference to the imported module alive for
+        the lifetime of the process, since nanobind requires the module to
+        outlive its functions (see PR #2431).
         """
-        m = importer.import_from_path(
-            self.src_dir / self.module,
-            sys_modules_prefix="gt4py.__compiled_programs__.",
-        )
+        m = importer.import_from_path(self.src_dir / self.module, keep_reference=True)
         return getattr(m, self.entry_point_name)
 
 
