@@ -175,11 +175,11 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         # Asynchronous entry barrier: make the internal streams wait on the external stream.
         entry_code = "\n".join(
             [
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"({dace_gpu_backend}Stream_t){stream_arg});",
                 "}",
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_streams; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(__state->gpu_context->streams[i], "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
@@ -190,11 +190,11 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
         # external stream wait on them.
         exit_code = "\n".join(
             [
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_events; ++i) {",
                 f"    {dace_gpu_backend}EventRecord(__state->gpu_context->events[i], "
                 f"__state->gpu_context->streams[i]);",
                 "}",
-                f"for (int i = 0; i < {n_streams}; ++i) {{",
+                "for (int i = 0; i < __state->gpu_context->num_streams; ++i) {",
                 f"    {dace_gpu_backend}StreamWaitEvent(({dace_gpu_backend}Stream_t){stream_arg}, "
                 f"__state->gpu_context->events[i], 0);",
                 "}",
