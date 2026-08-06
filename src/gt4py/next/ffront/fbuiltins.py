@@ -146,9 +146,10 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
     # 'Union[A, B]' and 'A | B' are different runtime objects: the latter is a
     # 'types.UnionType', which carries no '__origin__' at all.
     elif get_origin(t) in (Union, UnionType):
-        types = [_type_conversion_helper(e) for e in get_args(t)]
-        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
-        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+        member_types = [_type_conversion_helper(e) for e in get_args(t)]
+        assert all(type(m) is type and issubclass(m, ts.TypeSpec) for m in member_types)
+        # `cast` to break the recursion
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(member_types))
     elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
         return ts.NamedCollectionType
     else:
