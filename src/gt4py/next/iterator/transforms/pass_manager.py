@@ -34,7 +34,10 @@ from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_scalar import InlineScalar
 from gt4py.next.iterator.transforms.merge_let import MergeLet
-from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
+from gt4py.next.iterator.transforms.normalize_shifts import (
+    CanonicalizeShiftOffsets,
+    NormalizeShifts,
+)
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 from gt4py.next.iterator.type_system.inference import infer
 
@@ -181,6 +184,7 @@ def apply_common_transforms(
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
+    ir = CanonicalizeShiftOffsets().visit(ir)
 
     ir = infer_domain.infer_program(
         ir,
@@ -300,6 +304,7 @@ def apply_fieldview_transforms(
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
     ir = ConstantFolding.apply(ir)  # type: ignore[assignment]  # always an itir.Program
+    ir = CanonicalizeShiftOffsets().visit(ir)
 
     ir = infer_domain.infer_program(
         ir,
