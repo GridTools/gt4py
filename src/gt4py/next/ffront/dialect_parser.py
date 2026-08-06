@@ -28,8 +28,6 @@ DialectRootT = TypeVar("DialectRootT")
 #: what to use instead. Constructs not listed here get a generic message naming
 #: the `ast` class. Keep the hints actionable: name the closest supported
 #: alternative, not just the restriction.
-# TODO(havogt): add 'ast.TryStar' ('try*' statement, Python >=3.11) once the
-#  Python floor is >=3.12; referencing it unconditionally breaks import on 3.10.
 _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.For: (
         "'for' loop",
@@ -58,6 +56,10 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
         ("Define a separate function decorated with '@field_operator' instead.",),
     ),
     ast.Try: ("'try' statement", ("Exception handling is not available inside GT4Py functions.",)),
+    ast.TryStar: (
+        "'try*' statement",
+        ("Exception handling is not available inside GT4Py functions.",),
+    ),
     ast.Raise: (
         "'raise' statement",
         ("Exception handling is not available inside GT4Py functions.",),
