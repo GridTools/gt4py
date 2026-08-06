@@ -1112,6 +1112,30 @@ class TestDatamodelOptions:
             class Outer:
                 inner: PlainFrozenInner
 
+    def test_strict_frozen_rejects_union_wrapped_unhashable_fields(self):
+        # A union member must satisfy the same rules as a bare annotation, otherwise
+        # 'Optional[...]' would be a trivial way around the check.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class OptionalNonStrictModel:
+                inner: Optional[PlainFrozenInner] = None
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class OptionalListModel:
+                values: Optional[List[int]] = None
+
+    def test_strict_frozen_accepts_optional_and_literal_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            value: Optional[int] = None
+            mode: Literal["a", "b"] = "a"
+            inner: Optional[StrictFrozenInner] = None
+
+        assert hash(StrictModel()) == hash(StrictModel())
+
 
 # Test module functions
 def test_info_functions():
