@@ -1057,6 +1057,16 @@ def gt_gpu_apply_mempool(sdfg: dace.SDFG) -> None:
     Args:
         sdfg: The SDFG that should be processed.
     """
+
+    # TODO(phimuell): Reverse once the new codegen has caught up.
+    gpu_backend = dace.Config.get("compiler.cuda.backend")
+    if gpu_backend != "cuda":
+        warnings.warn(
+            f"GPU Memory-Pool is only implemented for `CUDA` and not for `{gpu_backend}`.",
+            stacklevel=0,
+        )
+        return
+
     for _, _, desc in sdfg.arrays_recursive():
         if (
             isinstance(desc, dace.data.Array)
