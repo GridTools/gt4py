@@ -14,7 +14,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any
+from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -30,18 +30,44 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 
 
-def _add_tx_markers(sdfg: dace.SDFG) -> None:
+_COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
+
+
+SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
+    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+]
+
+
+def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionSource, dace.SDFG]:
+    """
+    Add GPU TX markers to the SDFG of the given extension source.
+
+    Returns the modified extension source and the modified SDFG.
+    """
+    sdfg = dace.SDFG.from_json(program_source.program_source.source_code)
+
     has_gpu_schedule = any(
         getattr(node, "schedule", dace.dtypes.ScheduleType.Default) in dace.dtypes.GPU_SCHEDULES
         for node, _ in sdfg.all_nodes_recursive()
     )
 
-    if has_gpu_schedule:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            # Also adds markers to map scopes that are NOT scheduled on GPU
-            if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    if not has_gpu_schedule:
+        return program_source, sdfg  # No GPU schedule, no need to add TX markers.
+
+    sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+    for node, _ in sdfg.all_nodes_recursive():
+        # Also adds markers to map scopes that are NOT scheduled on GPU
+        if isinstance(node, (dace.nodes.MapEntry, dace.sdfg.SDFGState)):
+            node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
+
+    sdfg_json = gtx_wfdcommon.serialize_sdfg_as_json(sdfg)
+
+    new_program_source = dataclasses.replace(
+        program_source,
+        program_source=dataclasses.replace(program_source.program_source, source_code=sdfg_json),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
+    )
+
+    return new_program_source, sdfg
 
 
 class CompiledDaceProgram:
@@ -137,15 +163,21 @@ class CompiledDaceProgram:
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
-    """Result of a DaCe compilation: build folder + library path + SDFG bindings + the SDFG itself.
+    """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself.
 
     The SDFG is carried inline as JSON because dace's load path
     (``get_program_handle``) needs an SDFG instance to wrap into the
     returned ``CompiledSDFG``, and the build folder may not contain a
     ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
+
+    The SDFG we store here is the one on which we called `SDFG.compile(return_program_handle=False)`.
+    Note that the `compile()` call has side effects, because it applies transformations
+    to the SDFG, in order to enable code generation for the target platform.
+    Since we pass `return_program_handle=False`, the `compile()` method does not
+    return a `CompiledSDFG` instance, therefore we cannot access `CompiledSDFG.sdfg`,
+    which would be the modified SDFG from which DaCe generates the C++/CUDA/HIP code.
     """
 
-    build_folder: pathlib.Path
     library_path: pathlib.Path
     sdfg_json: str
     binding_source_code: str
@@ -195,14 +227,17 @@ class DaCeCompiler(
         ):
             object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
-    def __call__(
-        self,
-        inp: stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
-    ) -> DaCeCompilationArtifact:
+    def __call__(self, inp: SDFGExtensionSource) -> DaCeCompilationArtifact:
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
         ):
+            # Add TX markers to the generated GPU code for trace visualization tools.
+            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                inp, sdfg = _add_tx_markers(inp)
+            else:
+                sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
             sdfg_build_folder = gtx_cache.get_cache_folder(
@@ -212,24 +247,34 @@ class DaCeCompiler(
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
-            sdfg = dace.SDFG.from_json(inp.program_source.source_code)
-
-            # Add TX markers to the generated GPU code for trace visualization tools.
-            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
-                _add_tx_markers(sdfg)
-
+            # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
-            with locking.lock(sdfg_build_folder):
-                sdfg.compile(validate=False, return_program_handle=False)
+
             # ``build_folder_mode`` is set by ``dace_context``; resolve the library
             # path here so ``get_binary_name`` sees the same mode dace built under.
             library_path = dace_compiler.get_binary_name(
                 object_folder=sdfg_build_folder, sdfg_name=sdfg.name
             )
 
+            with locking.lock(sdfg_build_folder):
+                # With `compiler.use_cache=True` dace reuses a cached library on mere
+                # *existence*, without validating it; an interrupted build can leave a
+                # truncated, unloadable library behind. The marker is written only
+                # after a completed compile: no marker -> drop the stale library so
+                # dace rebuilds it instead of handing it out.
+                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                if not marker.exists():
+                    for stale in (
+                        library_path,
+                        *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
+                    ):
+                        stale.unlink(missing_ok=True)
+                marker.unlink(missing_ok=True)
+                sdfg.compile(validate=False, return_program_handle=False)
+                marker.touch()
+
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
-            build_folder=sdfg_build_folder,
             library_path=library_path,
             sdfg_json=json.dumps(inp.program_source.source_code),
             binding_source_code=inp.binding_source.source_code,

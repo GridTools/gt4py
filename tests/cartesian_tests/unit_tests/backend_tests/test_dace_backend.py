@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.eve import SymbolRef
 import os
 import pytest
 
@@ -15,7 +14,6 @@ pytest.importorskip("dace")
 
 
 from dace import nodes
-from dace import sdfg as dace_sdfg
 from dace.sdfg.state import LoopRegion
 import dace.sdfg.analysis.schedule_tree.treenodes as tn
 

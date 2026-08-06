@@ -392,5 +392,3 @@ E2CDim = Dimension("E2C", kind=DimensionKind.LOCAL)
 E2C = FieldOffset("E2C", source=C, target=(E, E2CDim))
 E2C2VDim = Dimension("E2C2V", kind=DimensionKind.LOCAL)
 E2C2V = FieldOffset("E2C2V", source=V, target=(E, E2C2VDim))
-Coff = FieldOffset("Coff", source=C, target=(C,))  # delete this?
-Koff = FieldOffset("Koff", source=K, target=(K,))

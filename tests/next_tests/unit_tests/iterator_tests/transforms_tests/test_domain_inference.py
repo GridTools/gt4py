@@ -1331,6 +1331,113 @@ def test_nested_concat_where_two_dimensions():
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
 
 
+def test_concat_where_shift_in_never_selected_branch():
+    # Regression test for #2205: the never-selected `K >= 10` branch has an empty domain `[10, 10)`;
+    # its shifted access `a[K+1]` must not over-extend `a` from `[0, 10)` to `[0, 11)`, which can
+    # happen if the accessed domain is computed naively by deriving the domain union of `[10, 10)`
+    # `[11, 11)` as ``[min(10, 11), max(10, 11))``.
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 10)})
+    cond_lt = im.domain(common.GridType.CARTESIAN, {KDim: (itir.InfinityLiteral.NEGATIVE, 9)})
+    cond_ge = im.domain(common.GridType.CARTESIAN, {KDim: (10, itir.InfinityLiteral.POSITIVE)})
+    diff = im.lambda_("t")(im.minus(im.deref("t"), im.deref(im.shift(Koff, 1)("t"))))
+
+    domain_lt = im.domain(common.GridType.CARTESIAN, {KDim: (0, 9)})
+    domain_never = im.domain(common.GridType.CARTESIAN, {KDim: (10, 10)})  # empty
+    domain_eq = im.domain(common.GridType.CARTESIAN, {KDim: (9, 10)})
+
+    testee = im.concat_where(
+        cond_lt,
+        im.as_fieldop(diff)("a"),
+        im.concat_where(cond_ge, im.as_fieldop(diff)("a"), im.as_fieldop("deref")("a")),
+    )
+    expected = im.concat_where(
+        cond_lt,
+        im.as_fieldop(diff, domain_lt)("a"),
+        im.concat_where(
+            cond_ge,
+            im.as_fieldop(diff, domain_never)("a"),
+            im.as_fieldop("deref", domain_eq)("a"),
+        ),
+    )
+    expected_domains = {"a": domain}  # `[0, 10)`, not the over-extended `[0, 11)`
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider={}
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_concat_where_shift_in_never_selected_branch_shared():
+    # Regression test for #2205, `let`-bound variant: the shifted value is shared via a `let` and
+    # referenced from the never-selected `K >= 10` branch (empty domain `[10, 10)`), which must not
+    # over-extend `a` from `[0, 10)` to `[0, 11)`.
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, 10)})
+    cond_lt = im.domain(common.GridType.CARTESIAN, {KDim: (itir.InfinityLiteral.NEGATIVE, 9)})
+    cond_ge = im.domain(common.GridType.CARTESIAN, {KDim: (10, itir.InfinityLiteral.POSITIVE)})
+    diff = im.lambda_("t")(im.minus(im.deref("t"), im.deref(im.shift(Koff, 1)("t"))))
+
+    domain_diff = im.domain(common.GridType.CARTESIAN, {KDim: (0, 9)})
+    domain_eq = im.domain(common.GridType.CARTESIAN, {KDim: (9, 10)})
+
+    testee = im.let("diff", im.as_fieldop(diff)("a"))(
+        im.concat_where(
+            cond_lt,
+            "diff",
+            im.concat_where(cond_ge, "diff", im.as_fieldop("deref")("a")),
+        )
+    )
+    expected = im.let("diff", im.as_fieldop(diff, domain_diff)("a"))(
+        im.concat_where(
+            cond_lt,
+            "diff",
+            im.concat_where(cond_ge, "diff", im.as_fieldop("deref", domain_eq)("a")),
+        )
+    )
+    expected_domains = {"a": domain}  # `[0, 10)`, not the over-extended `[0, 11)`
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider={}
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_offset_provider):
+    # Regression test for #2205, unstructured variant: shifting the never-selected branch's empty
+    # `Edge: [1, 1)` range must not raise.
+    domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+    cond = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, itir.InfinityLiteral.POSITIVE)})
+    stencil_e2v = im.lambda_("it")(im.deref(im.shift("E2V", 0)("it")))
+
+    domain_empty = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, 1)})
+    domain_a = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 0)})
+    domain_b = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
+
+    testee = im.concat_where(cond, im.as_fieldop(stencil_e2v)("a"), im.as_fieldop("deref")("b"))
+    expected = im.concat_where(
+        cond, im.as_fieldop(stencil_e2v, domain_empty)("a"), im.as_fieldop("deref", domain_b)("b")
+    )
+    expected_domains = {
+        "a": domain_a,
+        "b": domain_b,
+    }
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee,
+        domain_utils.SymbolicDomain.from_expr(domain),
+        offset_provider=unstructured_offset_provider,
+    )
+
+    folded_call = constant_fold_domain_exprs(actual_call)
+    assert expected == folded_call
+    assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
 def test_broadcast():
     testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value="IDim")))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
