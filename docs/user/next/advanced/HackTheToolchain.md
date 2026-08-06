@@ -22,8 +22,8 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-DUMMY_FOP = workflow.ConcreteArtifact(
-    data=ff_stages.DSLFieldOperatorDef(definition=None), args=None
+DUMMY_FOP = workflow.ProgramWithArgs(
+    definition=ff_stages.DSLFieldOperatorDef(definition=None), args=None
 )
 ```
 
@@ -57,7 +57,7 @@ class Cpp2BindingsGen: ...
 
 class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
     translation: workflow.Workflow[
-        gtx.otf.stages.CompilableProgramDef, gtx.otf.artifacts.ProgramSource
+        gtx.otf.stages.CompilableProgram, gtx.otf.artifacts.ProgramSource
     ] = MyCodeGen()
     bindings: workflow.Workflow[
         gtx.otf.artifacts.ProgramSource, gtx.otf.artifacts.ExtensionSource

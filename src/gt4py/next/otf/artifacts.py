@@ -207,7 +207,7 @@ class CompilationArtifact(Protocol):
     arguments.
 
     The one current exception is ``RoundtripArtifact`` when it is configured
-    with a ``dispatch_backend``: that field holds a ``Backend`` reference
+    with a ``dispatch_backend``: that field holds a ``Toolchain`` reference
     whose role belongs at the runner / load-time seam, not in the artifact
     itself.
     """

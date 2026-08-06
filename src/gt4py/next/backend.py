@@ -45,7 +45,7 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 class Transforms(
     workflow.MultiWorkflow[
         stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
-        stages.CompilableProgramDef,
+        stages.CompilableProgram,
     ]
 ):
     """
@@ -92,14 +92,14 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgram
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
     def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
-        match inp.data:
+        match inp.definition:
             case ffront_stages.DSLFieldOperatorDef():
                 steps.extend(
                     [
@@ -140,22 +140,27 @@ class Transforms(
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
-# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
-#  `Backend` -> `Toolchain`
-#  `transforms` -> `frontend_transforms`
-#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
-class Backend(Generic[core_defs.DeviceTypeT]):
+class Toolchain(Generic[core_defs.DeviceTypeT]):
+    """
+    Complete pipeline from a program definition to an executable program.
+
+    The `frontend` workflow transforms any supported program definition into a
+    `CompilableProgram`, which the `backend` workflow then compiles into a
+    loadable compilation artifact. The `allocator` describes the device the
+    compiled program expects its buffers on.
+    """
+
     name: str
-    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    backend: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
+    frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram]
 
     def compile(
         self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> artifacts.ExecutableProgram:
-        artifact = self.executor(
-            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
+        artifact = self.backend(
+            self.frontend(stages.ConcreteProgramDef(definition=program, args=compile_time_args))
         )
         return artifact.load()
 

@@ -15,7 +15,7 @@ import factory
 
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config
+from gt4py.next import backend as next_backend, common, config
 from gt4py.next.program_processors.runners.dace.workflow.factory import DaCeWorkflowFactory
 
 
@@ -23,14 +23,14 @@ class DaCeBackendFactory(factory.Factory):
     """
     Workflow factory for the GTIR-DaCe backend.
 
-    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
+    Several parameters are inherithed from `next_backend.Toolchain`, see below the specific ones.
 
     Args:
         auto_optimize: Enables the SDFG transformation pipeline.
     """
 
     class Meta:
-        model = backend.Backend
+        model = next_backend.Toolchain
 
     class Params:
         name_device = "cpu"
@@ -50,9 +50,9 @@ class DaCeBackendFactory(factory.Factory):
         auto_optimize = factory.Trait(name_postfix="_opt")
 
     name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
+    backend = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    frontend = next_backend.DEFAULT_TRANSFORMS
 
 
 def make_dace_backend(
@@ -64,7 +64,7 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+) -> next_backend.Toolchain:
     """Customize the dace backend with the given configuration parameters.
 
     Args:
