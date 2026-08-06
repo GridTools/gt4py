@@ -8,14 +8,16 @@
 
 """Tests for the compilation stage of the dace backend workflow.
 
-Covers the GPU TX-marker instrumentation and the picklability of
-``DaCeCompilationArtifact``.
+Covers the GPU TX-marker instrumentation and external workspace handling of
+``CompiledDaceProgram`` / ``DaCeCompilationArtifact``.
 """
 
 import contextlib
 import pathlib
 import pickle
+import sys
 import unittest.mock as mock
+from typing import Any
 
 import pytest
 
@@ -27,7 +29,10 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
-from gt4py.next.program_processors.runners.dace.workflow import compilation as dace_wf_compilation
+from gt4py.next.program_processors.runners.dace.workflow import (
+    common as dace_wf_common,
+    compilation as dace_wf_compilation,
+)
 
 
 _TX = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
@@ -165,6 +170,7 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(program_source):
 
 
 def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
+    """The artifact is picklable and does not carry runtime workspace buffers."""
     artifact = dace_wf_compilation.DaCeCompilationArtifact(
         library_path=tmp_path / "build" / "libprogram.so",
         sdfg_json="{}",
@@ -262,3 +268,268 @@ def test_cmake_build_type_changes_artifact(program_source):
     artifact_debug, _ = _run_compiler(program_source, cmake_build_type=config.CMakeBuildType.DEBUG)
 
     assert artifact_release.library_path != artifact_debug.library_path
+
+
+def _make_compiled_program(
+    *,
+    external_workspace: dict[core_defs.DeviceType, Any] | None = None,
+    workspace_sizes: dict[Any, int] | None = None,
+):
+    if workspace_sizes is None:
+        workspace_sizes = {}
+
+    sdfg = mock.MagicMock()
+    sdfg.arglist.return_value = {}
+    sdfg.build_folder = "build-folder"
+
+    sdfg_program = mock.MagicMock()
+    sdfg_program.sdfg = sdfg
+    sdfg_program.get_workspace_sizes.return_value = workspace_sizes
+    sdfg_program.construct_arguments.return_value = ((), ())
+
+    compiled_program = dace_wf_compilation.CompiledDaceProgram(
+        program=sdfg_program,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k):\n    return None\n",
+    )
+    if external_workspace is not None:
+        compiled_program.external_workspace = external_workspace
+    return compiled_program
+
+
+def test_construct_arguments_without_external_workspace():
+    """If the SDFG does not need a workspace, `construct_arguments` works without it."""
+    program = _make_compiled_program(
+        external_workspace=None, workspace_sizes={}
+    )  # no workspace needed
+
+    program.construct_arguments(alpha=1)
+
+    program.sdfg_program.initialize.assert_called_once()
+    program.sdfg_program.get_workspace_sizes.assert_called_once()
+    program.sdfg_program.set_workspace.assert_not_called()
+    program.sdfg_program.construct_arguments.assert_called_once()
+
+
+def test_construct_arguments_installs_external_workspace():
+    """If the SDFG needs a workspace, `construct_arguments` installs it from the mapping."""
+    workspace = _make_array_buffer(nbytes=128)
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: workspace},
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    program.construct_arguments(alpha=1)
+
+    assert program.sdfg_program.initialize.call_count == 1
+    assert program.sdfg_program.get_workspace_sizes.call_count == 1
+
+    set_workspace_call = program.sdfg_program.set_workspace.call_args
+    assert set_workspace_call.args[0] == dace.StorageType.CPU_Heap
+    assert set_workspace_call.args[1] is workspace
+
+
+def test_construct_arguments_raises_when_workspace_missing():
+    """If the SDFG needs a workspace but none is provided, raise early."""
+    program = _make_compiled_program(
+        external_workspace=None, workspace_sizes={dace.StorageType.CPU_Heap: 128}
+    )
+
+    with pytest.raises(RuntimeError, match="External workspace is not set"):
+        program.construct_arguments(alpha=1)
+
+
+def test_construct_arguments_raises_when_workspace_missing_for_device():
+    """If a required device workspace is absent from the mapping, raise early."""
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: _make_array_buffer(nbytes=128)},
+        workspace_sizes={dace.StorageType.GPU_Global: 128},
+    )
+    with mock.patch.object(
+        dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
+    ):
+        with pytest.raises(RuntimeError, match="External workspace for device .* not found"):
+            program.construct_arguments(alpha=1)
+
+
+def test_construct_arguments_propagates_validation_error_for_too_small_buffer():
+    """A workspace that is too small for the requested storage is rejected."""
+    workspace = _make_array_buffer(nbytes=64)
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: workspace},
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    with pytest.raises(ValueError, match="at least 128 bytes were required"):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_propagates_validation_error_for_invalid_storage():
+    """An unsupported storage type is rejected during device mapping."""
+    workspace = _make_array_buffer(nbytes=128)
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: workspace},
+        workspace_sizes={dace.StorageType.CPU_Pinned: 128},
+    )
+
+    with pytest.raises(ValueError, match="Unsupported storage type"):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def _make_array_buffer(*, nbytes: int, cuda: bool = False) -> mock.MagicMock:
+    """A minimal array-like buffer accepted by ``_validate_external_workspace``.
+
+    Exposes ``__array_interface__`` (host) or ``__cuda_array_interface__``
+    (device); ``nbytes`` matches the requested size.
+    """
+    buffer = mock.MagicMock()
+    buffer.nbytes = nbytes
+    interface = {"shape": (nbytes,), "typestr": "|u1", "version": 3}
+    setattr(buffer, "__cuda_array_interface__" if cuda else "__array_interface__", interface)
+    return buffer
+
+
+def test_construct_arguments_rejects_buffer_without_array_interface():
+    """The workspace must expose an array interface that ``set_workspace`` can consume."""
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: "not-an-array"},
+        workspace_sizes={dace.StorageType.CPU_Heap: 64},
+    )
+
+    with pytest.raises(TypeError, match="must expose `__array_interface__`"):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_not_called()
+
+
+def test_construct_arguments_accepts_cpu_workspace():
+    """A host workspace with matching size is accepted and installed."""
+    workspace = _make_array_buffer(nbytes=128)
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: workspace},
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_called_once()
+    assert program.sdfg_program.set_workspace.call_args.args[1] is workspace
+
+
+def test_construct_arguments_accepts_gpu_workspace():
+    """A device workspace with matching size is accepted and installed."""
+    workspace = _make_array_buffer(nbytes=128, cuda=True)
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CUDA: workspace},
+        workspace_sizes={dace.StorageType.GPU_Global: 128},
+    )
+    with mock.patch.object(
+        dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
+    ):
+        program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_called_once()
+    assert program.sdfg_program.set_workspace.call_args.args[0] == dace.StorageType.GPU_Global
+    assert program.sdfg_program.set_workspace.call_args.args[1] is workspace
+
+
+class _ArrayBufferWithoutNbytes:
+    __array_interface__ = {"shape": (128,), "typestr": "|u1", "version": 3}
+
+
+def test_construct_arguments_skips_size_check_when_nbytes_missing():
+    """When the buffer lacks ``nbytes`` the size contract is trust-based."""
+    program = _make_compiled_program(
+        external_workspace={core_defs.DeviceType.CPU: _ArrayBufferWithoutNbytes()},
+        workspace_sizes={dace.StorageType.CPU_Heap: 128},
+    )
+
+    # Must not raise even though the size cannot be verified.
+    program.construct_arguments(alpha=1)
+
+    program.sdfg_program.set_workspace.assert_called_once()
+
+
+class _FakeStream:
+    """Stand-in for a ``cupy.cuda.Stream`` that does not require a GPU."""
+
+    def __init__(self, ptr: int = 42, device_id: int = 0, null: bool = False) -> None:
+        self.ptr = 0 if null else ptr
+        self.device_id = device_id
+
+
+def _make_sdfg_with_sync_stream_symbol() -> dace.SDFG:
+    """Return a minimal SDFG whose arglist contains the sync-stream symbol."""
+    sdfg = dace.SDFG("sync_stream_program")
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM, dace.uint64)
+    # Add a no-op tasklet so the SDFG is not empty.
+    state.add_tasklet(
+        "noop", inputs=set(), outputs=set(), code="", language=dace.dtypes.Language.CPP
+    )
+    sdfg.validate()
+    return sdfg
+
+
+def test_compiled_program_adds_sync_stream_kwarg(monkeypatch):
+    """construct_arguments forwards the stream pointer value to the SDFG."""
+    fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.Stream = _FakeStream
+    fake_cupy_module.cuda.Device.return_value.id = 0
+    fake_cupy_module.cuda.runtime.cudaSuccess = 0
+    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
+    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
+    monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
+
+    compiled_sdfg = mock.MagicMock()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
+    compiled_sdfg.sdfg.build_folder = "/tmp"
+    compiled_sdfg.construct_arguments.return_value = ([], [])
+
+    program = dace_wf_compilation.CompiledDaceProgram(
+        compiled_sdfg,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+    )
+    program.external_sync_stream = _FakeStream(ptr=7, device_id=0)
+
+    with mock.patch.object(program, "_configure_external_workspace"):
+        program.construct_arguments(some_arg=1)
+
+    call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 7
+
+
+def test_compiled_program_uses_default_stream_when_none_set(monkeypatch):
+    """When no external stream is set, the default stream pointer (0) is forwarded."""
+    fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.Stream = _FakeStream
+    fake_cupy_module.cuda.Device.return_value.id = 0
+    fake_cupy_module.cuda.runtime.cudaSuccess = 0
+    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
+    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
+    monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
+
+    compiled_sdfg = mock.MagicMock()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
+    compiled_sdfg.sdfg.build_folder = "/tmp"
+    compiled_sdfg.construct_arguments.return_value = ([], [])
+
+    program = dace_wf_compilation.CompiledDaceProgram(
+        compiled_sdfg,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+    )
+    # No external stream set.
+
+    with mock.patch.object(program, "_configure_external_workspace"):
+        program.construct_arguments(some_arg=1)
+
+    call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 0

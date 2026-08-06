@@ -39,6 +39,7 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
             lambda: config.CMAKE_BUILD_TYPE
         )
+        max_concurrent_gpu_streams: int = 0
 
         cached_translation = factory.Trait(
             translation=factory.LazyAttribute(
@@ -59,6 +60,7 @@ class DaCeWorkflowFactory(factory.Factory):
             DaCeTranslationStepFactory,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
+            max_concurrent_gpu_streams=factory.SelfAttribute("..max_concurrent_gpu_streams"),
         )
 
     translation = factory.LazyAttribute(lambda o: o.bare_translation)
@@ -74,4 +76,5 @@ class DaCeWorkflowFactory(factory.Factory):
         cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         device_type=factory.SelfAttribute("..device_type"),
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
+        max_concurrent_gpu_streams=factory.SelfAttribute("..max_concurrent_gpu_streams"),
     )

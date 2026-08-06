@@ -8,11 +8,12 @@
 
 import contextlib
 import os
-from typing import Any, Final, Generator, Optional
+from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
@@ -33,9 +34,25 @@ SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
+#: SDFG scalar argument name for the external synchronization stream pointer.
+SDFG_ARG_EXTERNAL_SYNC_STREAM: Final[str] = "__external_sync_stream"
+
+
+ExternalWorkspace: TypeAlias = dict[
+    core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+]
+""" Mapping from device types to array-like objects.
+
+    The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
+    as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
+    or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
+"""
+
+
 def set_dace_config(
     device_type: core_defs.DeviceType,
     cmake_build_type: Optional[gtx_config.CMakeBuildType] = None,
+    max_concurrent_gpu_streams: int = 0,
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
@@ -46,6 +63,10 @@ def set_dace_config(
     Args:
         device_type: Target device type, needed for compiler config.
         cmake_build_type: CMake build type, needed for compiler config.
+        max_concurrent_gpu_streams: Number of concurrent internal GPU streams to
+            request from DaCe. ``0`` disables multi-stream scheduling and uses
+            the default stream; values ``>= 1`` enable DaCe's internal stream pool.
+            Ignored on CPU targets.
 
     Note:
         For every thread DaCe will maintain a separate set of configuration. Thus,
@@ -158,7 +179,13 @@ def set_dace_config(
     #  end of the SDFG call. To correct for that we are using either
     #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
     #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
-    dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
+    #
+    # GT4Py can optionally request multi-stream scheduling via
+    # ``max_concurrent_gpu_streams``. A value of ``0`` keeps the historical
+    # behavior (default stream only, ``max_concurrent_streams=-1``); larger values
+    # enable DaCe's internal stream pool.
+    max_concurrent_streams = -1 if max_concurrent_gpu_streams == 0 else max_concurrent_gpu_streams
+    dace.Config.set("compiler.cuda.max_concurrent_streams", value=max_concurrent_streams)
 
     # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
@@ -188,13 +215,22 @@ def set_dace_config(
 
 
 @contextlib.contextmanager
-def dace_context(**kwargs: Any) -> Generator[None, None, None]:
+def dace_context(
+    *,
+    device_type: core_defs.DeviceType,
+    cmake_build_type: Optional[gtx_config.CMakeBuildType] = None,
+    max_concurrent_gpu_streams: int = 0,
+) -> Generator[None, None, None]:
     """Create a DaCe configuration context and calls `set_dace_config()`.
 
     For more information see the description of `set_dace_config()`.
     """
     with dace.config.temporary_config():
-        set_dace_config(**kwargs)
+        set_dace_config(
+            device_type=device_type,
+            cmake_build_type=cmake_build_type,
+            max_concurrent_gpu_streams=max_concurrent_gpu_streams,
+        )
         yield
 
 
