@@ -472,7 +472,7 @@ url = 'https://gridtools.github.io/pypi/'
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 dace = [
-  {git = "https://github.com/philip-paul-mueller/dace", branch = "phimuell__new-gpu-codegen-dev"}
+  {git = "https://github.com/edopao/dace", branch = "phimuell__new-gpu-codegen-dev"}
 ]
 
 # -- versioningit --

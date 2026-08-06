@@ -908,11 +908,12 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.3.36"
-source = { git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev#fe326334ff71cb4b65fec9860d9f95907caf1870" }
+source = { git = "https://github.com/edopao/dace?branch=phimuell__new-gpu-codegen-dev#174ba69039147d7b4b8ee1feab1a1f73ee1526a6" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
     { name = "fparser" },
+    { name = "ml-dtypes" },
     { name = "networkx" },
     { name = "numpy" },
     { name = "packaging" },
@@ -1441,7 +1442,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/philip-paul-mueller/dace?branch=phimuell__new-gpu-codegen-dev" },
+    { name = "dace", git = "https://github.com/edopao/dace?branch=phimuell__new-gpu-codegen-dev" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
