@@ -12,17 +12,16 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import nodes as dace_nodes, subsets as dace_subsets
+from dace import data as dace_data, nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
-from gt4py.next.iterator.ir_utils import (
-    common_pattern_matcher as cpm,
-    domain_utils,
-    ir_makers as im,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace import (
+    library_nodes as gtx_dace_library_nodes,
+    sdfg_args as gtx_dace_args,
+)
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_dataflow,
     gtir_domain,
@@ -261,8 +260,7 @@ def translate_as_fieldop(
         if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
             # the input value (a scalar or a field slice) on the output domain.
-            stencil_expr = im.lambda_("a")(im.deref("a"))
-            stencil_expr.expr.type = node.type.dtype
+            return translate_broadcast(node, ctx, sdfg_builder)
         else:
             # Special usage of 'deref' with field argument, to access the field
             # on the given domain. It copies a subset of the source field.
@@ -290,6 +288,162 @@ def translate_as_fieldop(
     return _create_field_operator(
         ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )
+
+
+def translate_broadcast(
+    node: gtir.Node,
+    ctx: gtir_to_sdfg.SubgraphContext,
+    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
+) -> gtir_to_sdfg_types.FieldopData:
+    """Translates a broadcast expression which writes a scalar value on the field domain."""
+    assert isinstance(node, gtir.FunCall)
+    assert cpm.is_call_to(node.fun, "as_fieldop")
+
+    if not isinstance(node.type, ts.FieldType):
+        raise NotImplementedError("Unexpected 'as_filedop' with tuple output in SDFG lowering.")
+
+    assert isinstance(node.type.dtype, ts.ScalarType)
+    field_dtype = gtx_dace_args.as_dace_type(node.type.dtype)
+
+    assert len(node.args) == 1
+    bcast_arg = node.args[0]
+
+    fun_node = node.fun
+    assert len(fun_node.args) == 2
+    fieldop_expr, fieldop_domain_expr = fun_node.args
+    assert cpm.is_ref_to(fieldop_expr, "deref")
+
+    # TODO:
+    #   - Include the dimensions of the output, such that we can generate the Map correctly
+    #       this is needed for expansion of the broadcast node such that we can order them correctly.
+    #       This information is stored in `field_dims`.
+
+    # Parse the domain of the field operator.
+    assert isinstance(fieldop_domain_expr.type, ts.DomainType)
+    field_domain = gtir_domain.get_field_domain(
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+    )
+
+    # The memory layout of the output field follows the field operator compute domain.
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+    assert field_dims == node.type.dims
+    field_name, field_desc = sdfg_builder.add_temp_array(ctx.sdfg, field_shape, field_dtype)
+    field_node = ctx.state.add_access(field_name)
+
+    # Retrieve the scalar argument, which could be either a literal value or the
+    # result of a scalar expression.
+    # TODO: The name should not be derived from a tasklet
+    bcast_node_name = sdfg_builder.unique_lib_node_name("broadcast")
+
+    # The destination array was allocated to fit everything.
+    bcast_result_subset = dace_subsets.Range.from_array(field_desc)
+    bcast_value_subset: dace_subsets.Subset | None = None
+
+    # Which dimensions in `bcast_value` corresponds to the ones in `cast_result`.
+    broadcast_in_dims: list[int]
+
+    if isinstance(bcast_arg, gtir.Literal):
+        assert isinstance(bcast_arg.type, ts.ScalarType)
+        bcast_value_tlet, connector_mapping = sdfg_builder.add_tasklet(
+            bcast_node_name,  # Ensures association between node name and Tasklet name.
+            sdfg=ctx.sdfg,
+            state=ctx.state,
+            inputs=set(),
+            outputs={"__out"},
+            code=f"__out = {bcast_arg.value}",
+        )
+        bcast_value_name, bcast_value_desc = sdfg_builder.add_temp_scalar(
+            ctx.sdfg, gtx_dace_args.as_dace_type(bcast_arg.type)
+        )
+        bcast_value = ctx.state.add_access(bcast_value_name)
+        ctx.state.add_edge(
+            bcast_value_tlet,
+            connector_mapping["__out"],
+            bcast_value,
+            None,
+            dace.Memlet(data=bcast_value_name, subset="0"),
+        )
+        broadcast_in_dims = []
+
+    elif isinstance(
+        arg := _parse_fieldop_arg(bcast_arg, ctx, sdfg_builder, field_domain),
+        gtir_dataflow.MemletExpr,
+    ):
+        if isinstance(arg.gt_dtype, ts.ScalarType):
+            # Broadcasting a scalar that is not a literal.
+            assert isinstance(arg.dc_node.desc(ctx.sdfg), dace_data.Scalar)
+            bcast_value = arg.dc_node
+            broadcast_in_dims = []
+        else:
+            assert isinstance(arg.gt_dtype, ts.ListType)
+            raise NotImplementedError("Broadcast of lists is not supported.")
+
+    else:
+        # TODO: What is the exact difference between this case and the one above?
+
+        bcast_value = arg.field
+        bcast_value_desc = bcast_value.desc(ctx.sdfg)
+        if isinstance(bcast_value_desc, dace_data.Scalar):
+            broadcast_in_dims = []
+        else:
+            # Broadcasting a "vector", i.e. adding missing non local dimensions.
+            assert isinstance(arg.field.desc(ctx.sdfg), dace_data.Array)
+            bcast_value_gtdims = arg.get_field_type().dims
+            bcast_result_gtdim_map = {dim: i for i, dim in enumerate(field_dims)}
+            bcast_value_origins = [o for _, o in arg.field_domain]
+            bcast_result_origins = field_origin
+            bcast_result_subset_size = bcast_result_subset.size()
+
+            # Use the dimensions to find out how we have to broadcast.
+            broadcast_in_dims = []
+            bcast_value_subset_components: list[str] = []
+            for bcast_value_dim, bcast_value_gtdim in enumerate(bcast_value_gtdims):
+                # Which dimension of the input should go to which dimension in the output.
+                bcast_result_dim = bcast_result_gtdim_map[bcast_value_gtdim]
+                broadcast_in_dims.append(bcast_result_dim)
+
+                # Find the correction that should be applied to the input.
+                bcast_value_origin = bcast_value_origins[bcast_value_dim]
+                bcast_result_origin = bcast_result_origins[bcast_result_dim]
+                bcast_dim_size = bcast_result_subset_size[bcast_result_dim]
+                start_pos = f"({bcast_result_origin}) - ({bcast_value_origin})"
+
+                bcast_value_subset_components.append(
+                    f"({start_pos}):(({start_pos}) + ({bcast_dim_size}))"
+                )
+
+            bcast_value_subset = dace_subsets.Range.from_string(
+                ", ".join(bcast_value_subset_components)
+            )
+
+    bcast_node = gtx_dace_library_nodes.Broadcast(
+        name=bcast_node_name,
+        broadcast_in_dims=broadcast_in_dims,
+        params=field_dims,
+        debuginfo=gtir_to_sdfg_utils.debug_info(node),
+    )
+    ctx.state.add_node(bcast_node)
+
+    # If not specified differently use the whole `bcast_value` content.
+    if bcast_value_subset is None:
+        bcast_value_subset = dace_subsets.Range.from_array(bcast_value.desc(ctx.sdfg))
+
+    ctx.state.add_edge(
+        bcast_value,
+        None,
+        bcast_node,
+        "_inp",
+        dace.Memlet(data=bcast_value.data, subset=bcast_value_subset),
+    )
+    ctx.state.add_edge(
+        bcast_node,
+        "_outp",
+        field_node,
+        None,
+        dace.Memlet(data=field_name, subset=bcast_result_subset),
+    )
+
+    return gtir_to_sdfg_types.FieldopData(field_node, node.type, tuple(field_origin))
 
 
 def _construct_if_branch_output(
@@ -740,6 +894,7 @@ if TYPE_CHECKING:
     # Use type-checking to assert that all translator functions implement the `PrimitiveTranslator` protocol
     __primitive_translators: list[PrimitiveTranslator] = [
         translate_as_fieldop,
+        translate_broadcast,
         translate_concat_where,
         translate_if,
         translate_index,
