@@ -19,6 +19,7 @@ from dace.transformation import dataflow as dace_dataflow
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
@@ -992,6 +993,9 @@ def _gt_auto_post_processing(
 
         case TransientMemoryMode.SCOPED:
             pass
+
+        case _ as unreachable:
+            xtyping.assert_never(unreachable)
 
     if validate_all:
         sdfg.validate()
