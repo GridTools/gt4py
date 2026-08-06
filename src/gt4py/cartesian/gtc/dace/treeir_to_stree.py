@@ -120,6 +120,12 @@ class TreeIRToScheduleTree(eve.NodeVisitor):
         with ContextPushPop(ctx, while_scope):
             self.visit(node.children, ctx=ctx)
 
+    def visit_For(self, node: tir.For, ctx: Context) -> None:
+        for_scope = tn.ForScope(loop=_loop_region_for_over_data_dim(node), children=[])
+
+        with ContextPushPop(ctx, for_scope):
+            self.visit(node.children, ctx=ctx)
+
     def visit_TreeRoot(self, node: tir.TreeRoot) -> tn.ScheduleTreeRoot:
         """Construct a schedule tree from TreeIR."""
         tree = tn.ScheduleTreeRoot(
@@ -164,3 +170,21 @@ def _loop_region_while(node: tir.While) -> LoopRegion:
     :return: DaCe LoopRegion to use in `tn.WhileScope`
     """
     return LoopRegion(label=f"while_loop_{id(node)}", condition_expr=CodeBlock(node.condition_code))
+
+
+def _loop_region_for_over_data_dim(node: tir.For) -> LoopRegion:
+    """
+    Translates a for-loop over a data dimension into a Dace LoopRegion to be used in `tn.ForScope`.
+
+    :param node: For loop to translate
+    :return: DaCe LoopRegion to use in `tn.ForScope`
+    """
+    plus_minus = "+" if (iter_step := node.iter_step) > 0 else "-"
+    comparison = "<" if iter_step > 0 else ">"
+    return LoopRegion(
+        label=f"for_loop_data_dim_{id(node)}",
+        loop_var=(index_name := node.index_name),
+        initialize_expr=CodeBlock(f"{index_name} = {node.iter_start}"),
+        condition_expr=CodeBlock(f"{index_name} {comparison} {node.iter_stop}"),
+        update_expr=CodeBlock(f"{index_name} = {index_name} {plus_minus} {abs(iter_step)}"),
+    )
