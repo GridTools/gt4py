@@ -92,14 +92,9 @@ def set_dace_config(
     #   creating any further sub-folder to compile the SDFG.
     dace.Config.set("cache", value="single")
 
-    # Workaround to disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
-    # TODO(edopao): revisit this workaround once it is possible to disable GPU detection in DaCe.
-    # (see https://github.com/spcl/dace/pull/2424)
+    # Disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
     if device_arch := gtx_compilation_common.get_device_arch():
-        dace.Config.set(
-            "compiler.extra_cmake_args",
-            value=f"-DLOCAL_CUDA_ARCHITECTURES={device_arch}",
-        )
+        dace.Config.set("compiler.cuda.cuda_arch", value=device_arch)
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
