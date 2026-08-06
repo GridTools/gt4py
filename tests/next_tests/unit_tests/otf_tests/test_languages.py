@@ -8,14 +8,14 @@
 
 import pytest
 
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 
 
 def test_header_files_settings_with_cpp_accepted():
-    stages.ProgramSource(
+    artifacts.ProgramSource(
         entry_point=interface.Function(name="basic_settings_with_cpp", parameters=[]),
         source_code="",
         library_deps=(),
-        code_spec=code_specs.CPPCodeSpec(),
+        code_spec=artifacts.CPPCodeSpec(),
     )

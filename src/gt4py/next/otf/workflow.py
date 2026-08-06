@@ -31,6 +31,22 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 DataT = TypeVar("DataT")
 ArgT = TypeVar("ArgT")
+DefT = TypeVar("DefT")
+ArgsT = TypeVar("ArgsT")
+
+
+@dataclasses.dataclass
+class ConcreteArtifact(Generic[DefT, ArgsT]):
+    """Pair of a program definition in any stage with the arguments it is compiled for.
+
+    This is the envelope threaded through the definition-transforming half of
+    the toolchain. It deliberately lives in this DSL-neutral bottom module:
+    `ffront.stages` parameterizes it at module-import time, while the
+    DSL-aware stage definitions in `otf.stages` import `ffront.stages`.
+    """
+
+    data: DefT
+    args: ArgsT
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:

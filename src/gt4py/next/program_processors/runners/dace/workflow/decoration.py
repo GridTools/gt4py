@@ -16,7 +16,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 def convert_args(
     fun: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-) -> stages.ExecutableProgram:
+) -> artifacts.ExecutableProgram:
     # Retieve metrics level from GT4Py environment variable.
     collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
     collect_time_arg = np.array(
