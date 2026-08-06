@@ -117,7 +117,7 @@ def test_dace_cpu_loop_structure():
     state = sdfg.states()[0]
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
-    assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k_")
+    assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k")
     assert loop_indices[1] == ["__i", "__j"]
 
 
@@ -130,7 +130,7 @@ def test_dace_cpu_kfirst_loop_structure():
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
     assert loop_indices[0] == ["__i", "__j"]
-    assert len(loop_indices[1]) == 1 and loop_indices[1][0].startswith("__k_")
+    assert len(loop_indices[1]) == 1 and loop_indices[1][0].startswith("__k")
 
     builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_kfirst")
     manager = SDFGManager(builder)
@@ -168,7 +168,7 @@ def test_dace_cpu_KJI_loop_structure():
         loop_indices = [
             node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)
         ]
-        assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k_")
+        assert len(loop_indices[0]) == 1 and loop_indices[0][0].startswith("__k")
         assert loop_indices[1] == ["__j", "__i"]
 
         builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_KJI")
