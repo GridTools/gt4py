@@ -32,6 +32,12 @@ class CustomInt32DType:
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 
+# -- PEP 695 type aliases --
+type IFloatFieldAlias = gtx.Field[gtx.Dims[IDim], float]
+type ChainedFieldAlias = IFloatFieldAlias
+type GenericFieldAlias[T] = gtx.Field[gtx.Dims[IDim], T]
+type RecursiveAlias = RecursiveAlias
+
 
 @pytest.mark.parametrize(
     "value,expected",
@@ -464,3 +470,28 @@ def test_unsafe_cast_to(value, type_, expected):
     result = type_translation.unsafe_cast_to(value, type_)
     assert result == expected
     assert type(result) is type(expected)
+
+
+def test_type_alias_annotations():
+    expected = ts.FieldType(
+        dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
+    )
+
+    assert type_translation.from_type_hint(IFloatFieldAlias) == expected
+    assert type_translation.from_type_hint(ChainedFieldAlias) == expected
+    assert type_translation.from_type_hint(GenericFieldAlias[np.float64]) == expected
+
+    # Aliases nested inside another annotation
+    assert type_translation.from_type_hint(
+        tuple[IFloatFieldAlias, IFloatFieldAlias]
+    ) == ts.TupleType(types=[expected, expected])
+
+
+def test_invalid_type_alias_annotations():
+    type LazyAlias = _never_defined  # noqa: F821 [undefined-name]  # intentionally undefined
+
+    with pytest.raises(ValueError, match="undefined forward references"):
+        type_translation.from_type_hint(LazyAlias)
+
+    with pytest.raises(ValueError, match="not a valid type alias"):
+        type_translation.from_type_hint(RecursiveAlias)

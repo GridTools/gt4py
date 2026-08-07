@@ -199,6 +199,20 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             ):  # see https://github.com/python/cpython/issues/105499
                 type_annotation = typing.Union[type_annotation.__args__]
 
+            # PEP 695 type aliases ('type X = ...') stand for another annotation whose
+            # value is only evaluated on demand. A 'NameError' raised here means the
+            # alias references a name which does not exist yet, and is deliberately not
+            # converted: 'datamodels' defers the creation of the validator when it sees
+            # one, in the same way it does for forward references.
+            try:
+                resolved_annotation = xtyping.eval_type_alias(type_annotation)
+            except TypeError as error:
+                raise exceptions.EveValueError(
+                    f"{type_annotation} type annotation is not supported."
+                ) from error
+            if resolved_annotation is not type_annotation:
+                return make_recursive(resolved_annotation)
+
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
                 assert not xtyping.get_args(type_annotation)

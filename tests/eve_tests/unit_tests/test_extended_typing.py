@@ -14,6 +14,7 @@ import types
 import typing
 
 import pytest
+import typing_extensions
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
@@ -25,11 +26,13 @@ from gt4py.eve.extended_typing import (
     FrozenSet,
     List,
     Mapping,
+    Optional,
     Sequence,
     Set,
     Tuple,
     Type,
     TypeVar,
+    Union,
 )
 
 
@@ -416,3 +419,95 @@ def test_is_single_dispatch_callable():
     # Plain callables and non-callables are rejected.
     assert not xtyping.is_single_dispatch_callable(lambda _: None)
     assert not xtyping.is_single_dispatch_callable(42)
+
+
+# -- PEP 695 type aliases --
+type SampleIntAlias = int
+type SampleChainedAlias = SampleIntAlias
+type SampleGenericAlias[T] = Tuple[T, T]
+type SampleRecursiveAlias = SampleRecursiveAlias
+
+
+def test_is_type_alias():
+    # Both the native 'typing' class and the 'typing_extensions' backport have to be
+    # recognized: they are distinct classes and a native alias is not an instance
+    # of the backport.
+    assert xtyping.is_type_alias(SampleIntAlias)
+    assert xtyping.is_type_alias(typing_extensions.TypeAliasType("Backported", str))
+
+    assert not xtyping.is_type_alias(int)
+    assert not xtyping.is_type_alias(List[int])
+    assert not xtyping.is_type_alias(SampleGenericAlias[int])
+
+
+def test_eval_type_alias():
+    assert xtyping.eval_type_alias(SampleIntAlias) is int
+    assert xtyping.eval_type_alias(SampleChainedAlias) is int
+    assert xtyping.eval_type_alias(SampleGenericAlias[int]) == Tuple[int, int]
+
+
+def test_eval_type_alias_passes_through_non_aliases():
+    for annotation in (int, List[int], xtyping.Any, None):
+        assert xtyping.eval_type_alias(annotation) is annotation
+
+
+def test_eval_type_alias_with_undefined_value():
+    # Alias values are evaluated lazily, so the name is only looked up here.
+    type LazyAlias = _defined_later  # noqa: F821 [undefined-name]  # defined below
+
+    with pytest.raises(NameError):
+        xtyping.eval_type_alias(LazyAlias)
+
+    _defined_later = int
+
+    assert xtyping.eval_type_alias(LazyAlias) is int
+
+
+def test_eval_type_alias_with_recursive_alias():
+    with pytest.raises(TypeError, match="cannot be resolved"):
+        xtyping.eval_type_alias(SampleRecursiveAlias)
+
+
+# -- get_represented_types --
+class SampleReprA: ...
+
+
+class SampleReprB: ...
+
+
+type SampleUnionAlias = SampleReprA | SampleReprB
+type SampleNestedUnionAlias = SampleUnionAlias | int
+
+
+def test_get_represented_types():
+    assert xtyping.get_represented_types(int) == (int,)
+    assert xtyping.get_represented_types(Union[SampleReprA, SampleReprB]) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(SampleReprA | SampleReprB) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(List[int]) == (list,)
+
+
+def test_get_represented_types_resolves_type_aliases():
+    # An unresolved alias would silently yield an empty tuple, which turns every
+    # downstream 'isinstance()' check against the result into a constant 'False'.
+    assert xtyping.get_represented_types(SampleIntAlias) == (int,)
+    assert xtyping.get_represented_types(SampleUnionAlias) == (SampleReprA, SampleReprB)
+    assert xtyping.get_represented_types(SampleNestedUnionAlias) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )
+
+
+def test_get_represented_types_with_alias_nested_in_annotation():
+    assert xtyping.get_represented_types(Optional[SampleIntAlias]) == (int, type(None))
+    assert xtyping.get_represented_types(Union[SampleUnionAlias, int]) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )

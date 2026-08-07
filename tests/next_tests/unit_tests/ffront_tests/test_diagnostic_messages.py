@@ -180,3 +180,64 @@ def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
     assert errors.DSLError.code is None
+
+
+def test_unsupported_parameter_annotation_is_located():
+    def bad_param(a: list[float64]) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(bad_param)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.code == "invalid-annotation"
+    assert err.location is not None
+    rendered = str(err)
+    assert "a: list[float64]" in rendered
+    assert "Hint:" in rendered
+
+
+def test_unsupported_return_annotation_is_located():
+    def bad_return(a: gtx.Field[[IDim], float64]) -> list[float64]:
+        return a
+
+    err = parse_error(bad_return)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.location is not None
+    assert "return type annotation" in err.message
+
+
+def test_unsupported_variable_annotation_is_located():
+    def bad_var(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        tmp: list[float64] = a
+        return tmp
+
+    err = parse_error(bad_var)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert "variable type annotation" in err.message
+    rendered = str(err)
+    assert "tmp: list[float64]" in rendered
+    # The carets cover the annotation only, not the whole statement.
+    assert re.search(r"\| +\^{13}", rendered), rendered
+
+
+def test_valid_variable_annotation_is_accepted():
+    # Regression test: the annotation of a valid declaration is turned into a
+    # location-less 'ast.Constant' by 'StringifyAnnotationsPass', so asking for
+    # its source location used to crash before the pass preserved it.
+    def annotated(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        tmp: float64 = 1.0
+        return a + tmp
+
+    FieldOperatorParser.apply_to_function(annotated)
+
+
+def test_invalid_annotation_keeps_the_underlying_reason_as_a_note():
+    def mistyped(a: gtx.Field) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(mistyped)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert any("Field type requires two arguments" in note for note in err.notes)
