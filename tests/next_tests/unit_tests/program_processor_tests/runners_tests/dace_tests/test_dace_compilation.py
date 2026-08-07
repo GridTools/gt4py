@@ -15,6 +15,7 @@ Covers the GPU TX-marker instrumentation and external workspace handling of
 import contextlib
 import pathlib
 import pickle
+import sys
 import unittest.mock as mock
 from typing import Any
 
@@ -29,6 +30,7 @@ from gt4py.next import config
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import (
+    common as dace_wf_common,
     compilation as dace_wf_compilation,
 )
 
@@ -450,3 +452,84 @@ def test_construct_arguments_skips_size_check_when_nbytes_missing():
     program.construct_arguments(alpha=1)
 
     program.sdfg_program.set_workspace.assert_called_once()
+
+
+class _FakeStream:
+    """Stand-in for a ``cupy.cuda.Stream`` that does not require a GPU."""
+
+    def __init__(self, ptr: int = 42, device_id: int = 0, null: bool = False) -> None:
+        self.ptr = 0 if null else ptr
+        self.device_id = device_id
+
+
+def _make_sdfg_with_sync_stream_symbol() -> dace.SDFG:
+    """Return a minimal SDFG whose arglist contains the sync-stream symbol."""
+    sdfg = dace.SDFG("sync_stream_program")
+    state = sdfg.add_state("state", is_start_block=True)
+    sdfg.add_symbol(dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM, dace.uint64)
+    # Add a no-op tasklet so the SDFG is not empty.
+    state.add_tasklet(
+        "noop", inputs=set(), outputs=set(), code="", language=dace.dtypes.Language.CPP
+    )
+    sdfg.validate()
+    return sdfg
+
+
+def test_compiled_program_adds_sync_stream_kwarg(monkeypatch):
+    """construct_arguments forwards the stream pointer value to the SDFG."""
+    fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.Stream = _FakeStream
+    fake_cupy_module.cuda.Device.return_value.id = 0
+    fake_cupy_module.cuda.runtime.cudaSuccess = 0
+    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
+    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
+    monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
+
+    compiled_sdfg = mock.MagicMock()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
+    compiled_sdfg.sdfg.build_folder = "/tmp"
+    compiled_sdfg.construct_arguments.return_value = ([], [])
+
+    program = dace_wf_compilation.CompiledDaceProgram(
+        compiled_sdfg,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+    )
+    program.external_sync_stream = _FakeStream(ptr=7, device_id=0)
+
+    with mock.patch.object(program, "_configure_external_workspace"):
+        program.construct_arguments(some_arg=1)
+
+    call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 7
+
+
+def test_compiled_program_uses_default_stream_when_none_set(monkeypatch):
+    """When no external stream is set, the default stream pointer (0) is forwarded."""
+    fake_cupy_module = mock.MagicMock()
+    fake_cupy_module.cuda.Stream = _FakeStream
+    fake_cupy_module.cuda.Device.return_value.id = 0
+    fake_cupy_module.cuda.runtime.cudaSuccess = 0
+    fake_cupy_module.cuda.runtime.cudaErrorNotReady = 600
+    fake_cupy_module.cuda.runtime.cudaStreamQuery.return_value = 0
+    monkeypatch.setitem(sys.modules, "cupy", fake_cupy_module)
+
+    compiled_sdfg = mock.MagicMock()
+    compiled_sdfg.sdfg = _make_sdfg_with_sync_stream_symbol()
+    compiled_sdfg.sdfg.build_folder = "/tmp"
+    compiled_sdfg.construct_arguments.return_value = ([], [])
+
+    program = dace_wf_compilation.CompiledDaceProgram(
+        compiled_sdfg,
+        bind_func_name="update_sdfg_args",
+        binding_source_code="def update_sdfg_args(*a, **k): ...",
+    )
+    # No external stream set.
+
+    with mock.patch.object(program, "_configure_external_workspace"):
+        program.construct_arguments(some_arg=1)
+
+    call_kwargs = compiled_sdfg.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in call_kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == 0

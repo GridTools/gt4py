@@ -25,6 +25,37 @@ if TYPE_CHECKING:
     from gt4py.next.program_processors.runners.dace.workflow.compilation import CompiledDaceProgram
 
 
+def _validate_external_sync_stream(stream: Any) -> None:
+    """Validate that ``stream`` is a usable external synchronization stream.
+
+    Args:
+        stream: The object the user provided as external sync stream.
+
+    Raises:
+        TypeError: If ``stream`` is not a ``cupy.cuda.Stream``.
+        ValueError: If the stream's device does not match the target device, or
+            if the stream handle is invalid.
+    """
+    try:
+        import cupy as cp
+    except ImportError as exc:
+        raise RuntimeError("cupy is required to validate an external stream.") from exc
+
+    if not isinstance(stream, cp.cuda.Stream):
+        raise TypeError("external_sync_stream must be a cupy.cuda.Stream.")
+
+    current_device_id = cp.cuda.Device().id
+    if stream.device_id != current_device_id:
+        raise ValueError(
+            f"external_sync_stream is on device {stream.device_id}, "
+            f"but the current device is {current_device_id}."
+        )
+
+    result = cp.cuda.runtime.streamQuery(stream.ptr)
+    if result != 0:  # 0 means success, i.e. stream is valid and idle
+        raise ValueError(f"external_sync_stream failed 'streamQuery' with error code '{result}'.")
+
+
 class DaCeDecoratedProgram:
     """A compiled DaCe program wrapped as a GT4Py-callable ``ExecutableProgram``.
 
@@ -49,6 +80,7 @@ class DaCeDecoratedProgram:
             [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
         )
         # We use the callback function provided by the compiled program to update the SDFG arglist.
+        self._device_type = device_type
         self._update_sdfg_call_args = functools.partial(
             fun.update_sdfg_ctype_arglist, device_type, fun.sdfg_argtypes
         )
@@ -101,3 +133,17 @@ class DaCeDecoratedProgram:
         This method should be called before the first call to the program.
         """
         self._fun.external_workspace = external_workspace
+
+    def set_external_sync_stream(self, external_sync_stream: Any | None) -> None:
+        """Set the external sync stream for the underlying compiled program.
+
+        This method should be called before the first call to the program.
+        """
+        if external_sync_stream is None:
+            return
+
+        if self._device_type == core_defs.DeviceType.CPU:
+            raise ValueError("Stream synchronization is not supported for CPU target.")
+
+        _validate_external_sync_stream(external_sync_stream)
+        self._fun.external_sync_stream = external_sync_stream

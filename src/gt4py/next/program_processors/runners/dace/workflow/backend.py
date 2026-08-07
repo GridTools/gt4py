@@ -27,16 +27,25 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeBackend(backend.Backend[Any]):
-    """DaCe backend with support for injecting an external workspace at load time."""
+class DaCeBackend(backend.Backend):
+    """DaCe backend with support for injecting external resources at load time.
+
+    These resources are intentionally kept out of the executor workflow: the workflow
+    (and its `DaCeCompiler`) is pickled when compilation is offloaded to a worker
+    process, while a `cupy.cuda.Stream` cannot be pickled. These resource are instead
+    stored on the backend object, which lives in the calling process, and passed
+    through to `DaCeCompilationArtifact.load()`.
+    """
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
+    external_sync_stream: Any | None = None
 
     def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
         program = super().load_artifact(artifact)
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
         # Inject the backend-level workspace so it is used when arguments are constructed.
         program.set_external_workspace(self.external_workspace or {})
+        program.set_external_sync_stream(self.external_sync_stream)
         return program
 
 
@@ -67,14 +76,15 @@ class DaCeBackendFactory(factory.Factory):
             cached_translation=True,
             device_type=factory.SelfAttribute("..device_type"),
             auto_optimize=factory.SelfAttribute("..auto_optimize"),
+            max_concurrent_gpu_streams=factory.SelfAttribute("..max_concurrent_gpu_streams"),
         )
         auto_optimize = factory.Trait(name_postfix="_opt")
+        max_concurrent_gpu_streams = 0
 
     name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
     executor = factory.LazyAttribute(lambda o: o.otf_workflow)
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
     transforms = backend.DEFAULT_TRANSFORMS
-    external_workspace = None
 
 
 def make_dace_backend(
@@ -83,11 +93,13 @@ def make_dace_backend(
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
+    external_sync_stream: Any | None = None,
+    max_concurrent_gpu_streams: int = 0,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
 
     Args:
@@ -99,6 +111,18 @@ def make_dace_backend(
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
+        external_sync_stream: Optional `cupy.cuda.Stream`, owned by the caller,
+            which is used to synchronize the SDFG entry/exit points when
+            `max_concurrent_gpu_streams >= 1`. Stored on the backend object
+            (not the picklable executor) and passed to the compiled program at
+            load time. When `max_concurrent_gpu_streams == 0` this stream is
+            ignored and the default stream is used, with asynchronous execution.
+        max_concurrent_gpu_streams: Number of concurrent internal GPU streams to
+            request from DaCe. ``0`` (default) disables multi-stream scheduling
+            and executes asynchronously on the default stream. Values ``>= 1``
+            enable DaCe's internal stream pool and add event-based synchronization
+            with `external_sync_stream` (or the default stream if none is given).
+            Ignored on CPU targets.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
         use_metrics: Add SDFG instrumentation to collect the metric for stencil
@@ -154,11 +178,24 @@ def make_dace_backend(
             gtx_transformations.TransientMemoryMode.EXTERNAL
         )
 
+    if (
+        optimization_args.get("transient_memory_mode")
+        is gtx_transformations.TransientMemoryMode.POOL
+        and max_concurrent_gpu_streams > 0
+    ):
+        raise ValueError(
+            "DaCe backend does not implement in-order memory allocations and "
+            "multi-stream scheduling together. Use `transient_memory_mode='external'` "
+            "or 'persistent', or set `max_concurrent_gpu_streams=0`."
+        )
+
     return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
         gpu=gpu,
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
+        external_sync_stream=external_sync_stream,
+        max_concurrent_gpu_streams=max_concurrent_gpu_streams,
+        otf_workflow__bare_translation__async_sdfg_call=async_sdfg_call,
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
@@ -170,21 +207,17 @@ def make_dace_backend(
 run_dace_cpu = make_dace_backend(
     gpu=False,
     auto_optimize=True,
-    async_sdfg_call=False,
 )
 run_dace_cpu_noopt = make_dace_backend(
     gpu=False,
     auto_optimize=False,
-    async_sdfg_call=False,
 )
 
 run_dace_gpu = make_dace_backend(
     gpu=True,
     auto_optimize=True,
-    async_sdfg_call=True,
 )
 run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
     auto_optimize=False,
-    async_sdfg_call=True,
 )

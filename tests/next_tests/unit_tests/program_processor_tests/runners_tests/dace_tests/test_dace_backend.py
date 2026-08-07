@@ -30,6 +30,7 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
+    compilation as dace_wf_compilation,
     decoration as dace_wf_decoration,
 )
 
@@ -108,7 +109,6 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=auto_optimize,
-        async_sdfg_call=True,
         optimization_args=optimization_args,
         unstructured_horizontal_has_unit_stride=on_gpu,
         use_metrics=True,
@@ -190,7 +190,6 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },
@@ -206,7 +205,6 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
         external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
@@ -224,7 +222,6 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         backend = dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
-            async_sdfg_call=False,
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
@@ -295,7 +292,6 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=True,
-        async_sdfg_call=False,
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },
@@ -441,4 +437,136 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
                 assert any(marker in generated_code for marker in ("new ", "malloc"))
                 assert any(marker in generated_code for marker in ("delete ", "free"))
 
+    assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
+
+
+def test_make_backend_rejects_pool_with_multi_stream():
+    with pytest.raises(
+        ValueError,
+        match="in-order memory allocations and multi-stream scheduling",
+    ):
+        dace_wf_backend.make_dace_backend(
+            gpu=False,
+            auto_optimize=True,
+            max_concurrent_gpu_streams=4,
+            optimization_args={
+                "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
+            },
+        )
+
+
+def test_make_backend_rejects_negative_max_concurrent_gpu_streams():
+    with pytest.raises(
+        ValueError,
+        match="max_concurrent_gpu_streams must be >= 0",
+    ):
+        dace_wf_backend.make_dace_backend(
+            gpu=False,
+            auto_optimize=True,
+            max_concurrent_gpu_streams=-1,
+        )
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("async_sdfg_call", [False, True], ids=["BLOCKING", "ASYNC"])
+@pytest.mark.parametrize(
+    "with_sync_stream", [False, True], ids=["sync_default_stream", "sync_external_stream"]
+)
+def test_multi_streams_sychronizes_on_anchor_stream(async_sdfg_call: bool, with_sync_stream: bool):
+    """The external sync stream pointer (or default stream 0) is passed to the SDFG call."""
+    import cupy as cp
+
+    sync_stream = cp.cuda.Stream(non_blocking=True) if with_sync_stream else None
+    expected_stream_ptr = cp.cuda.Stream(null=True).ptr if sync_stream is None else sync_stream.ptr
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=True,
+        auto_optimize=True,
+        async_sdfg_call=async_sdfg_call,
+        external_sync_stream=sync_stream,
+        max_concurrent_gpu_streams=2,
+    )
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        tmp = a + b
+        return tmp + 1
+
+    @gtx.program
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
+        testee_op(a, b, out=out)
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        cases_utils.simple_cartesian_grid(),
+        backend=backend,
+        allocator=backend,
+    )
+    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, testee, "out")()
+
+    captured_kwargs: dict[str, Any] = {}
+    dace_construct_arguments = dace.codegen.compiled_sdfg.CompiledSDFG.construct_arguments
+
+    def _capture_construct_arguments(self, **kwargs: Any) -> None:
+        captured_kwargs.update(kwargs)
+        return dace_construct_arguments(self, **kwargs)
+
+    with mock.patch.object(
+        dace.codegen.compiled_sdfg.CompiledSDFG,
+        "construct_arguments",
+        _capture_construct_arguments,
+    ):
+        testee.with_backend(backend)(a, b, out=out, offset_provider={})
+
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in captured_kwargs
+    assert captured_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM] == expected_stream_ptr
+    assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)
+
+
+@pytest.mark.requires_gpu
+def test_default_stream_ignores_external_sync_stream():
+    """When max_concurrent_gpu_streams=0 the SDFG call does not receive an external stream."""
+    import cupy as cp
+
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=True,
+        auto_optimize=True,
+        external_sync_stream=cp.cuda.Stream(non_blocking=True),
+        max_concurrent_gpu_streams=0,
+    )
+
+    @gtx.field_operator
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        tmp = a + b
+        return tmp + 1
+
+    @gtx.program
+    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
+        testee_op(a, b, out=out)
+
+    test_case = cases.Case.from_cartesian_grid_descriptor(
+        cases_utils.simple_cartesian_grid(),
+        backend=backend,
+        allocator=backend,
+    )
+    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, testee, "out")()
+
+    captured_kwargs: dict[str, Any] = {}
+    dace_construct_arguments = dace.codegen.compiled_sdfg.CompiledSDFG.construct_arguments
+
+    def _capture_construct_arguments(self, **kwargs: Any) -> None:
+        captured_kwargs.update(kwargs)
+        return dace_construct_arguments(self, **kwargs)
+
+    with mock.patch.object(
+        dace.codegen.compiled_sdfg.CompiledSDFG,
+        "construct_arguments",
+        _capture_construct_arguments,
+    ):
+        testee.with_backend(backend)(a, b, out=out, offset_provider={})
+
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in captured_kwargs
     assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy() + 1)

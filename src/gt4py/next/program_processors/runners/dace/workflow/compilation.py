@@ -31,6 +31,9 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 
 
+SDFG_ARG_EXTERNAL_SYNC_STREAM = gtx_wfdcommon.SDFG_ARG_EXTERNAL_SYNC_STREAM
+
+
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
@@ -152,6 +155,9 @@ class CompiledDaceProgram:
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
         None  # This attribute is set at runtime, before the first call.
     )
+    external_sync_stream: Any | None = (
+        None  # This attribute is set at runtime, before the first call.
+    )
 
     def __init__(
         self,
@@ -194,11 +200,31 @@ class CompiledDaceProgram:
                 _validate_external_workspace(workspace, storage, required_nbytes)
                 self.sdfg_program.set_workspace(storage, workspace)
 
+    def _add_sync_stream_kwarg(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Add external sync stream handle to SDFG kwargs if needed."""
+        import cupy as cp
+
+        # Pass the raw pointer value as 64-bit integer. DaCe receives it as a
+        # `dace.uint64` scalar symbol and the tasklets cast it to the
+        # appropriate CUDA/HIP handle type. When no external stream was
+        # provided, the CUDA/HIP default stream is used.
+        stream_ptr = (
+            cp.cuda.Stream(null=True).ptr
+            if self.external_sync_stream is None
+            else self.external_sync_stream.ptr
+        )
+        kwargs = kwargs | {
+            SDFG_ARG_EXTERNAL_SYNC_STREAM: stream_ptr,
+        }
+        return kwargs
+
     def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed argument
         vectors in `self.csdfg_args`, to call them use `self.fast_call()`.
         """
+        if SDFG_ARG_EXTERNAL_SYNC_STREAM in self.sdfg_program.sdfg.symbols:
+            kwargs = self._add_sync_stream_kwarg(kwargs)
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
             self._configure_external_workspace(**kwargs)
@@ -290,6 +316,7 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
+    max_concurrent_gpu_streams: int = 0
     # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
@@ -297,6 +324,7 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
+            max_concurrent_gpu_streams=self.max_concurrent_gpu_streams,
         ):
             object.__setattr__(self, "dace_config_nondefaults", dace.Config._data.nondefaults())
 
@@ -304,6 +332,7 @@ class DaCeCompiler(
         with gtx_wfdcommon.dace_context(
             device_type=self.device_type,
             cmake_build_type=self.cmake_build_type,
+            max_concurrent_gpu_streams=self.max_concurrent_gpu_streams,
         ):
             # Add TX markers to the generated GPU code for trace visualization tools.
             if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
