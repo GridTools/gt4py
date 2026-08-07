@@ -8,15 +8,13 @@
 
 from __future__ import annotations
 
-import functools
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common
 from gt4py.next.instrumentation import metrics
-from gt4py.next.program_processors.runners.dace import sdfg_callable
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 
 
@@ -44,13 +42,10 @@ class DaCeDecoratedProgram:
     ) -> None:
         self._fun = fun
         # Retrieve metrics level from GT4Py environment variable.
+        # TODO(phimuell): Should the check be in the call or at construction.
         self._collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
         self._collect_time_arg = np.array(
             [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
-        )
-        # We use the callback function provided by the compiled program to update the SDFG arglist.
-        self._update_sdfg_call_args = functools.partial(
-            fun.update_sdfg_ctype_arglist, device_type, fun.sdfg_argtypes
         )
 
     def __call__(
@@ -62,33 +57,13 @@ class DaCeDecoratedProgram:
         if out is not None:
             args = (*args, out)
 
-        try:
-            # Not the first call.
-            #  We will only update the argument vector  for the normal call.
-            # NOTE: If this is the first time then we will generate an exception because
-            #   `fun.csdfg_args` is `None`
-            # TODO(phimuell, edopao): Think about refactor the code such that the update
-            #   of the argument vector is a Method of the `CompiledDaceProgram`.
-            self._update_sdfg_call_args(args, self._fun.csdfg_argv, offset_provider)  # type: ignore[arg-type]  # Will error out in first call.
-
-        except TypeError:
-            # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
-            assert self._fun.csdfg_argv is None and self._fun.csdfg_init_argv is None
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
-            this_call_args = sdfg_callable.get_sdfg_args(
-                self._fun.sdfg_program.sdfg,
-                offset_provider,
-                *flat_args,
-                filter_args=False,
-            )
-            this_call_args |= {
-                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
-                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
-            }
-            self._fun.construct_arguments(**this_call_args)
-
-        # Perform the call to the SDFG.
-        self._fun.fast_call()
+        processed_args, _ = self._fun.argument_preprocessing_function(
+            args,
+            offset_provider,
+            metrics.get_current_level(),
+            self._collect_time_arg,
+        )
+        self._fun.sdfg_program.user_bind_call(*processed_args)
 
         if self._collect_time:
             metrics.add_sample_to_current_source(
