@@ -73,6 +73,9 @@ LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
 TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
+# PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
+type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]
+
 
 # --- Parsing ---
 def test_untyped_arg():
@@ -95,6 +98,19 @@ def test_mistyped_arg():
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
     assert any("Field type requires two arguments, got 0" in note for note in exc_info.value.notes)
+
+
+def test_type_alias_arg():
+    """PEP 695 type aliases are accepted in parameter and return annotations."""
+
+    def with_alias(inp: TFloatFieldAlias) -> TFloatFieldAlias:
+        return inp
+
+    parsed = FieldOperatorParser.apply_to_function(with_alias)
+
+    assert parsed.params[0].type == ts.FieldType(
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
+    )
 
 
 def test_return_type():
