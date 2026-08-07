@@ -774,27 +774,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     ]
                 )
 
-            if isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XVarArgType):
+            elif (
+                isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XVarArgType)
+            ) or (isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XTupleType)):
                 raise errors.DSLError(
                     node.location,
                     f"Element-wise operator '{node.op}' can not be applied between a fixed-length "
                     f"tuple and a variable-length tuple: '{left.type}' and '{right.type}'.",
                 )
-            if isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XTupleType):
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' can not be applied between a variable-length "
-                    f"tuple and a fixed-length tuple: '{left.type}' and '{right.type}'.",
-                )
 
-            if isinstance(left_type, ts.XTupleType):
+            elif isinstance(left_type, ts.XTupleType):
                 return ts.XTupleType(
                     types=[
                         tuple_element_type(deduce(left_el_type, right_type))
                         for left_el_type in left_type.types
                     ]
                 )
-            if isinstance(right_type, ts.XTupleType):
+            elif isinstance(right_type, ts.XTupleType):
                 return ts.XTupleType(
                     types=[
                         tuple_element_type(deduce(left_type, right_el_type))
@@ -802,17 +798,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     ]
                 )
 
-            if isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XVarArgType):
+            elif isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XVarArgType):
                 raise errors.DSLError(
                     node.location,
                     f"Element-wise operator '{node.op}' can not be applied between two "
                     f"variable-length tuples: '{left.type}' and '{right.type}'.",
                 )
-            if isinstance(left_type, ts.XVarArgType):
+            elif isinstance(left_type, ts.XVarArgType):
                 return ts.XVarArgType(
                     element_type=vararg_element_type(deduce(left_type.element_type, right_type))
                 )
-            if isinstance(right_type, ts.XVarArgType):
+            elif isinstance(right_type, ts.XVarArgType):
                 return ts.XVarArgType(
                     element_type=vararg_element_type(deduce(left_type, right_type.element_type))
                 )
