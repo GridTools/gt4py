@@ -162,7 +162,9 @@ SingleTypeAnnotation = Union[
     Type,
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+    # Both PEP 695 type alias implementations, for the same reason as in `_TypeAliasTypes`
     _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
 ]
 
 SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
@@ -459,6 +461,7 @@ def eval_type_alias(annotation: Any) -> Any:
         >>> eval_type_alias(float)
         <class 'float'>
     """
+    original_annotation = annotation
     for _ in range(_MAX_TYPE_ALIAS_DEPTH):
         if is_type_alias(annotation):
             annotation = annotation.__value__
@@ -468,7 +471,7 @@ def eval_type_alias(annotation: Any) -> Any:
             return annotation
 
     raise TypeError(
-        f"Type alias '{annotation}' cannot be resolved (recursive or nested too deeply)."
+        f"Type alias '{original_annotation}' cannot be resolved (recursive or nested too deeply)."
     )
 
 
@@ -502,9 +505,10 @@ def get_represented_types(
     localns: Optional[Dict[str, Any]] = None,
 ) -> tuple[type, ...]:
     """Return a tuple with all the actual types contained in a type annotation."""
+    recurse = _functools.partial(get_represented_types, globalns=globalns, localns=localns)
 
     def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
-        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+        return _functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
 
     # PEP 695 aliases are opaque objects which no other branch below matches, so an
     # unresolved one would silently yield an empty tuple. Nested aliases are covered
@@ -519,16 +523,14 @@ def get_represented_types(
 
     if isinstance(type_annotation, TypeVar):
         if type_annotation.__bound__:
-            return get_represented_types(type_annotation.__bound__)
+            return recurse(type_annotation.__bound__)
         if type_annotation.__constraints__:
             return recurse_all(type_annotation.__constraints__)
         if typevar_default := getattr(type_annotation, "__default__", None):
-            return get_represented_types(typevar_default)
+            return recurse(typevar_default)
 
     if isinstance(type_annotation, ForwardRef):
-        return get_represented_types(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
+        return recurse(eval_forward_ref(type_annotation, globalns=globalns, localns=localns))
 
     # Generic types
     origin_type = get_origin(type_annotation)

@@ -976,10 +976,42 @@ def _make_data_model_class_getitem() -> classmethod:
     return classmethod(__class_getitem__)
 
 
+@dataclasses.dataclass(**_dataclass_opts)
+class DeferredTypeConverter:
+    """Type converter for annotations which cannot be resolved at class creation time.
+
+    A PEP 695 type alias (``type X = ...``) is evaluated lazily and may reference a
+    name which does not exist yet, so the actual converter is created the first time
+    a value is coerced, mirroring what `ForwardRefValidator` does for validators.
+    """
+
+    type_annotation: TypeAnnotation
+    """Unresolved annotation of the field."""
+
+    name: str
+    """Qualified name of the field, used in error messages."""
+
+    converter: Union[TypeConverter, None] = None
+    """Actual type converter created after resolving the annotation."""
+
+    def __call__(self, value: Any) -> Any:
+        if self.converter is None:
+            self.converter = _make_type_converter(self.type_annotation, self.name)
+        return self.converter(value)
+
+
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
-    if (resolved_annotation := xtyping.eval_type_alias(type_annotation)) is not type_annotation:
+    try:
+        resolved_annotation = xtyping.eval_type_alias(type_annotation)
+    except NameError:
+        # A PEP 695 type alias ('type X = ...') is evaluated lazily and may
+        # reference a name which does not exist yet at class creation time.
+        # Defer the creation of the converter, as done for the type validators.
+        return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
+
+    if resolved_annotation is not type_annotation:
         return _make_type_converter(resolved_annotation, name)
 
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):

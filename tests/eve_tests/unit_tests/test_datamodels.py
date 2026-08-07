@@ -1354,3 +1354,28 @@ class DefinedLater:
     # qualified 'Model.value', as it does for regular forward references.
     with pytest.raises(TypeError, match="'value' must be"):
         Model(value=1)
+
+
+def test_coerced_type_alias_field_with_undefined_value_is_deferred():
+    # Same as above for coerced fields: the converter is created on the first
+    # coercion instead of at class creation. See the note there on 'exec()'.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: datamodels.Coerced[LazyAlias]
+
+class DefinedLater:
+    def __init__(self, value):
+        self.value = value
+"""
+    namespace: Dict[str, Any] = {}
+    exec(
+        compile(source, "<test_coerced_type_alias_deferral>", "exec", dont_inherit=True), namespace
+    )
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=42).value, DefinedLater)
+    assert Model(value=42).value.value == 42
