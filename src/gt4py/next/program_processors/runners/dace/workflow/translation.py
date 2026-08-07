@@ -160,27 +160,10 @@ def add_synchronization(sdfg: dace.SDFG, *, gpu: bool, blocking: bool, n_streams
     original_start = sdfg.start_block
 
     if n_streams == 0:
-        # No multi-stream scheduling; no need for a synchronization barrier on the
-        # internal streams. Run all GPU kernels on the default stream.
-        # NOTE: We are using the default stream this means that _**currently**_ the launch is
-        #   already asynchronous, see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120)
-        #   for more. However, DaCe still [generates streams internally](https://github.com/spcl/dace/blob/54c935cfe74a52c5107dc91680e6201ddbf86821/dace/codegen/targets/cuda.py#L467).
-        #   Thus to be absolutely sure we will set all streams DaCe uses to the default
-        #   stream.
-        # NOTE: Another important note here is, that it looks as if no synchronization
-        #   what soever between states is generated if the default stream is used. This
-        #   might lead to problems if a GPU kernel computes something that is needed for a
-        #   condition of an interstate edge. However, we should not have that case.
-        # TODO(phimuell, edopao): Make sure if this is really the case.
-        stream_arg = f"{dace_gpu_backend}StreamDefault"
-        sdfg.append_init_code(
-            f"__dace_gpu_set_all_streams(__state, {stream_arg});",
-            location="cuda",
-        )
-
         if not blocking:
             return  # Fully asynchronous execution: no tasklets needed.
 
+        stream_arg = f"{dace_gpu_backend}StreamDefault"
         entry_code = exit_code = "/* No synchronization needed, using default stream */"
     else:
         # Add a scalar symbol for the stream handle. It is passed as a 64-bit integer

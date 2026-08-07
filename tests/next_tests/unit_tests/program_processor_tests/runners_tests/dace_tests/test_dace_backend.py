@@ -30,7 +30,6 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
-    compilation as dace_wf_compilation,
     decoration as dace_wf_decoration,
 )
 
@@ -276,6 +275,13 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     (external). These assertions are on DaCe's codegen output and may need to
     be updated if a DaCe upgrade changes the emitted strings.
     """
+
+    if (
+        device_type == core_defs.DeviceType.ROCM
+        and transient_memory_mode == gtx_transformations.TransientMemoryMode.POOL
+    ):
+        pytest.xfail("The DaCe ROCm backend does not support GPU memory pool yet.")
+
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
     gpu_api_prefix = "hip" if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM else "cuda"
     gpu_malloc_marker = f"{gpu_api_prefix}Malloc("

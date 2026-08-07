@@ -132,19 +132,6 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     assert constant_symbols == expected
 
 
-def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
-    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
-        return False
-
-    return (
-        re.match(
-            r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
-            sdfg.init_code["cuda"].as_string,
-        )
-        is not None
-    )
-
-
 def _make_simple_field_operator_compilable_program() -> otf_toolchain.ConcreteArtifact:
     """Return a compilable program wrapping a minimal GTIR field operator."""
     ir = itir.Program(
@@ -274,8 +261,6 @@ def test_translation_for_default_stream(async_sdfg_call: bool):
         auto_optimize=False,
         async_sdfg_call=async_sdfg_call,
     )
-
-    assert _are_streams_set_to_default_stream(sdfg)
     assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM not in sdfg.symbols
 
     state_names = {s.label for s in sdfg.states()}
@@ -337,8 +322,6 @@ def test_translation_adds_stream_sync_tasklets_for_multi_stream(async_sdfg_call:
         max_concurrent_gpu_streams=4,
         async_sdfg_call=async_sdfg_call,
     )
-
-    assert not _are_streams_set_to_default_stream(sdfg)
     assert dace_wf_common.SDFG_ARG_EXTERNAL_SYNC_STREAM in sdfg.symbols
 
     state_names = {s.label for s in sdfg.states()}
