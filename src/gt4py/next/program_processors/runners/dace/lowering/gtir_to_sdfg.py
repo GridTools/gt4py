@@ -1022,8 +1022,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #  Note that tuple arguments are flattened and their name is mangled and no longer
         #  matches the name in the signature of the field operator / program.
         #  Also note that some scalar arguments (which are lowered to symbols) listed in
-        #  this signature are might not be part of the generated C-API, as unused symbols
-        #  are exluded from it and might have been pruned from the SDFG during optimization.
+        #  this signature might not be part of the generated C-API, as unused symbols are
+        #  pruned from the SDFG during optimization.
         # NOTE: The dispatch code does not use it, instead the `user_args` are used.
         return [arg_name for arg_name, _ in sdfg_args]
 

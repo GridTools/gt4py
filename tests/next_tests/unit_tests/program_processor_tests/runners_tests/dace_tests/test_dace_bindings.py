@@ -113,7 +113,7 @@ def _make_testee_arguments() -> tuple[tuple, gtx_common.OffsetProvider]:
 def _create_testee_bindings(
     use_metrics: bool, backend: str = "dace", with_sdfg: bool = True
 ) -> str:
-    return dace_wf_bindings._create_sdfg_bindings(
+    return dace_wf_bindings._create_binding_function(
         program_parameters=_make_testee_parameters(),
         bind_func_name=_bind_func_name,
         use_metrics=use_metrics,
@@ -156,7 +156,7 @@ def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value
 
 
 @pytest.mark.parametrize("use_metrics", [False, True], ids=["no_metrics", "use_metrics"])
-def test_create_sdfg_bindings_source(use_metrics):
+def test_create_binding_function_source(use_metrics):
     """The generated source is fully unrolled from the entry-point parameters.
 
     Offset providers appear at their parameter position: as a `(buffer, origin)`
@@ -216,7 +216,7 @@ def test_binding_function_processes_arguments(use_metrics):
         assert processed[8] is compute_time
 
 
-def test_create_sdfg_bindings_without_sdfg():
+def test_create_binding_function_without_sdfg():
     """Without an SDFG every offset provider is treated as used."""
     binding_source = _create_testee_bindings(use_metrics=False, with_sdfg=False)
 
@@ -225,7 +225,7 @@ def test_create_sdfg_bindings_without_sdfg():
     )
 
 
-def test_create_sdfg_bindings_gtfn_not_supported():
+def test_create_binding_function_gtfn_not_supported():
     """The GTFN flavour of the bindings generator is not implemented (yet)."""
     with pytest.raises(NotImplementedError):
         _create_testee_bindings(use_metrics=False, backend="gtfn", with_sdfg=False)

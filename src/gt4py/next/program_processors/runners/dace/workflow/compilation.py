@@ -119,6 +119,7 @@ class DaCeCompilationArtifact:
 
     def load(self) -> stages.ExecutableProgram:
         sdfg_program = dace_compiler.load_precompiled_sdfg(self.sdfg_build_folder, sdfg=None)
+        sdfg_program.gpu_error_check = False  # Not useful in asynchronous launches.
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.convert_args(program, device=self.device_type)
 
