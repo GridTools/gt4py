@@ -1025,30 +1025,49 @@ def _is_strictly_immutable_type(type_annotation: TypeAnnotation) -> bool:
     """Check whether an annotation only admits strictly immutable (hashable) values.
 
     A datamodel qualifies only if it is itself defined with ``frozen="strict"``;
-    any other type qualifies if it defines a custom ``__hash__``. Annotations
-    standing for several types (unions, type variables, forward references) are
-    checked member by member with the same rules, so that wrapping a type in a
-    union does not weaken the check.
+    any other plain type qualifies if it defines a custom ``__hash__``. Composite
+    annotations are decomposed and every part is checked with the same rules, so
+    that neither wrapping a type in a union nor hiding it in a generic container
+    (whose hash folds in the hashes of its items) weakens the check. Annotations
+    that cannot be resolved to any concrete type (``Any``, unbound type variables,
+    unresolved forward references) are conservatively rejected.
     """
     if is_datamodel(type_annotation):
         return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
 
-    if xtyping.get_origin(type_annotation) is Literal:
+    origin_type = xtyping.get_origin(type_annotation)
+    type_args = xtyping.get_args(type_annotation)
+
+    if origin_type is Literal:
         # 'Literal' arguments are values, not types.
-        return all(
-            xtyping.is_type_with_custom_hash(type(arg)) for arg in xtyping.get_args(type_annotation)
+        return all(xtyping.is_type_with_custom_hash(type(arg)) for arg in type_args)
+
+    if origin_type is Union or origin_type is types.UnionType:
+        # 'Union[A, B]' and 'A | B' are different runtime objects before Python 3.14.
+        # A union is immutable only if every one of its members is.
+        return bool(type_args) and all(map(_is_strictly_immutable_type, type_args))
+
+    if origin_type is not None:
+        # Parametrized generic alias ('tuple[int, ...]', 'List[int]', ...). The alias
+        # itself is a hashable object, so it has to be decomposed: both the container
+        # type and every type argument must be strictly immutable, since the hash of
+        # a container folds in the hashes of the items it holds.
+        return _is_strictly_immutable_type(origin_type) and all(
+            _is_strictly_immutable_type(arg) for arg in type_args if arg is not Ellipsis
         )
 
-    # Check the types the annotation actually stands for: a parametrized generic
-    # alias like 'List[int]' is itself a hashable object, so asking it directly
-    # would wrongly accept a mutable 'list' field.
-    represented_types = xtyping.get_represented_types(type_annotation)
-    if not represented_types:
-        return False
-    if represented_types == (type_annotation,):  # plain type, already known not to be a datamodel
-        return xtyping.is_type_with_custom_hash(represented_types[0])
+    if xtyping.is_actual_type(type_annotation):  # plain type, already known not to be a datamodel
+        return xtyping.is_type_with_custom_hash(type_annotation)
 
-    return all(map(_is_strictly_immutable_type, represented_types))
+    # Anything else (type variables, forward references, ...) is checked through the
+    # concrete types it stands for, if any. Forward references that cannot be resolved
+    # at this point do not prove anything, so they are rejected.
+    try:
+        represented_types = xtyping.get_represented_types(type_annotation)
+    except NameError:
+        return False
+
+    return bool(represented_types) and all(map(_is_strictly_immutable_type, represented_types))
 
 
 def _make_datamodel(

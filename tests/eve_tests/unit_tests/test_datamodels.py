@@ -1127,6 +1127,31 @@ class TestDatamodelOptions:
             class OptionalListModel:
                 values: Optional[List[int]] = None
 
+    def test_strict_frozen_rejects_container_wrapped_unhashable_fields(self):
+        # A 'tuple' is hashable only if its items are, so the type arguments of a
+        # generic container must satisfy the same rules as a bare annotation.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TupleOfListsModel:
+                values: Tuple[List[int], ...]
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TupleOfNonStrictModels:
+                inners: Tuple[PlainFrozenInner, ...]
+
+    def test_strict_frozen_rejects_unresolved_forward_reference(self):
+        # A self-reference cannot be resolved while the class is being created, so it
+        # cannot be proven immutable: the check must reject it instead of raising the
+        # bare 'NameError' coming from the annotation resolution.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class RecursiveModel:
+                child: Optional[RecursiveModel] = None
+
     def test_strict_frozen_accepts_optional_and_literal_fields(self):
         @datamodels.datamodel(frozen="strict")
         class StrictModel:
@@ -1135,6 +1160,15 @@ class TestDatamodelOptions:
             inner: Optional[StrictFrozenInner] = None
 
         assert hash(StrictModel()) == hash(StrictModel())
+
+    def test_strict_frozen_accepts_container_of_immutable_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            values: Tuple[int, ...]
+            inners: Tuple[StrictFrozenInner, ...] = ()
+
+        model = StrictModel(values=(1, 2), inners=(StrictFrozenInner(value=1),))
+        assert hash(model) == hash(StrictModel(values=(1, 2), inners=(StrictFrozenInner(value=1),)))
 
 
 # Test module functions
