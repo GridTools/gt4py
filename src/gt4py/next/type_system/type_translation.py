@@ -386,6 +386,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         # since those should be handled as general custom types.
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
+        if isinstance(value, common.XTuple):
+            return ts.XTupleType(types=elems)
         return ts.TupleType(types=elems)
     elif isinstance(value, PythonNamespaceObject):
         return NamespaceProxy(value)

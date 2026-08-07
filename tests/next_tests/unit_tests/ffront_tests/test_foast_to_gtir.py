@@ -559,6 +559,88 @@ def test_fixed_len_tuple_comprehension_tuple_target_mixed_element_types():
         FieldOperatorParser.apply_to_function(foo)
 
 
+def test_elementwise_binop_fixed_xtuple():
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+        b: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+    ):
+        return a * b
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.op_as_fieldop("multiplies")(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_fixed_xtuple_scalar_broadcast():
+    def foo(a: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]], factor: float64):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.op_as_fieldop("multiplies")(im.tuple_get(0, "a"), "factor"),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), "factor"),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_nested_xtuple_scalar_broadcast():
+    def foo(
+        a: gtx.XTuple[
+            gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+            gtx.Field[[TDim], float64],
+        ],
+        factor: float64,
+    ):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    inner = im.tuple_get(0, "a")
+    reference = im.make_tuple(
+        im.make_tuple(
+            im.op_as_fieldop("multiplies")(im.tuple_get(0, inner), "factor"),
+            im.op_as_fieldop("multiplies")(im.tuple_get(1, inner), "factor"),
+        ),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), "factor"),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_var_len_xtuple_scalar_broadcast():
+    def foo(a: gtx.XTuple[gtx.Field[[TDim], float64], ...], factor: float64):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_0")(
+                im.op_as_fieldop("multiplies")("__elementwise_0", "factor")
+            )
+        )
+    )("a")
+
+    assert lowered.expr == reference
+
+
 def test_unary_minus():
     def foo(inp: gtx.Field[[TDim], float64]):
         return -inp

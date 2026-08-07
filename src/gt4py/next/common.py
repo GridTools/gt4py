@@ -57,7 +57,85 @@ ShapeTs = TypeVarTuple("ShapeTs")
 class Dims(tuple[Unpack[ShapeTs]]): ...
 
 
-class XTuple(tuple[Unpack[ShapeTs]]): ...
+class XTuple(tuple[Unpack[ShapeTs]]):
+    """
+    Tuple on which binary arithmetic and logical operators apply element-wise.
+
+    Non-tuple operands (e.g. scalars, fields) are broadcast against the tuple structure.
+    Nested element-wise behavior requires nested `XTuple`s; plain `tuple` operands are
+    rejected, mirroring the type deduction rules of the DSL.
+    """
+
+    def _elementwise_op(self, other: Any, op: Callable[[Any, Any], Any]) -> XTuple:
+        self_elems: tuple[Any, ...] = tuple(self)
+        if isinstance(other, XTuple):
+            other_elems: tuple[Any, ...] = tuple(other)
+            if len(self_elems) != len(other_elems):
+                raise ValueError(
+                    f"Element-wise operations require 'XTuple's of equal length, "
+                    f"got {len(self_elems)} and {len(other_elems)}."
+                )
+            return XTuple(op(el, other_el) for el, other_el in zip(self_elems, other_elems))
+        if isinstance(other, tuple):
+            raise TypeError("Element-wise operations require 'XTuple' operands, got 'tuple'.")
+        return XTuple(op(el, other) for el in self_elems)
+
+    def __add__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a + b)
+
+    def __radd__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b + a)
+
+    def __sub__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a - b)
+
+    def __rsub__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b - a)
+
+    def __mul__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a * b)
+
+    def __rmul__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b * a)
+
+    def __truediv__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a / b)
+
+    def __rtruediv__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b / a)
+
+    def __floordiv__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a // b)
+
+    def __rfloordiv__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b // a)
+
+    def __mod__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a % b)
+
+    def __rmod__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b % a)
+
+    def __pow__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a**b)
+
+    def __and__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a & b)
+
+    def __rand__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b & a)
+
+    def __or__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a | b)
+
+    def __ror__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b | a)
+
+    def __xor__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: a ^ b)
+
+    def __rxor__(self, other: Any) -> XTuple:
+        return self._elementwise_op(other, lambda a, b: b ^ a)
 
 
 DimsT = TypeVar("DimsT", bound=Dims, covariant=True)

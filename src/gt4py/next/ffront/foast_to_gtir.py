@@ -344,12 +344,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             raise NotImplementedError(f"Unary operator '{node.op}' is not supported.")
 
     def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
-        if isinstance(node.type, (ts.XTupleType, ts.XVarArgType)):
-            # TODO(SF-N): lower element-wise operations on 'XTuple's
-            raise NotImplementedError(
-                f"Lowering of element-wise operator '{node.op}' on 'XTuple's is not "
-                "implemented yet."
-            )
         return self._lower_and_map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
@@ -620,18 +614,96 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _lower_and_map(self, op: itir.Lambda | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         return _map(
-            op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
+            op,
+            tuple(self.visit(arg, **kwargs) for arg in args),
+            tuple(arg.type for arg in args),
+            uids=self.uid_generator,
         )
+
+
+def _map_elementwise(
+    op: itir.Lambda | str,
+    lowered_args: tuple,
+    original_arg_types: tuple[ts.TypeSpec, ...],
+    uids: utils.IDGeneratorPool,
+) -> itir.FunCall:
+    """
+    Apply `op` element-wise over 'XTuple' arguments, broadcasting non-tuple arguments.
+
+    Fixed-length tuple arguments are expanded directly, such that the tuple structure ends up
+    outside of the stencils, i.e. a tuple of `as_fieldop`s. Variable-length tuple arguments are
+    lowered to the `map_tuple` builtin, which is expanded into `make_tuple` by 'ExpandTupleMaps'
+    once the concrete length is known.
+    """
+    if any(isinstance(t, ts.XTupleType) for t in original_arg_types):
+        # All tuple arguments are fixed-length tuples of equal length (ensured by type deduction).
+        lengths = {len(t.types) for t in original_arg_types if isinstance(t, ts.XTupleType)}
+        assert len(lengths) == 1 and not any(
+            isinstance(t, ts.XVarArgType) for t in original_arg_types
+        )
+        (length,) = lengths
+
+        # Let-bind the tuple arguments to avoid duplicating their expressions per element.
+        bindings: list[tuple[str, itir.Expr]] = []
+        bound_args: list[itir.Expr] = []
+        for arg, arg_type in zip(lowered_args, original_arg_types):
+            if isinstance(arg_type, ts.XTupleType):
+                name = next(uids["__elementwise"])
+                bindings.append((name, arg))
+                bound_args.append(im.ref(name))
+            else:
+                bound_args.append(arg)
+
+        elements = [
+            _map(
+                op,
+                tuple(
+                    im.tuple_get(i, arg) if isinstance(arg_type, ts.XTupleType) else arg
+                    for arg, arg_type in zip(bound_args, original_arg_types)
+                ),
+                tuple(
+                    arg_type.types[i] if isinstance(arg_type, ts.XTupleType) else arg_type
+                    for arg_type in original_arg_types
+                ),
+                uids=uids,
+            )
+            for i in range(length)
+        ]
+        return im.let(*bindings)(im.make_tuple(*elements))
+
+    # Exactly one variable-length tuple argument (ensured by type deduction).
+    (vararg_index,) = (i for i, t in enumerate(original_arg_types) if isinstance(t, ts.XVarArgType))
+    vararg_type = original_arg_types[vararg_index]
+    assert isinstance(vararg_type, ts.XVarArgType)
+    param = next(uids["__elementwise"])
+    body = _map(
+        op,
+        tuple(im.ref(param) if i == vararg_index else arg for i, arg in enumerate(lowered_args)),
+        tuple(
+            vararg_type.element_type if i == vararg_index else t
+            for i, t in enumerate(original_arg_types)
+        ),
+        uids=uids,
+    )
+    return im.call(im.call("map_tuple")(im.lambda_(param)(body)))(lowered_args[vararg_index])
 
 
 def _map(
     op: itir.Lambda | str,
     lowered_args: tuple,
     original_arg_types: tuple[ts.TypeSpec, ...],
+    uids: Optional[utils.IDGeneratorPool] = None,
 ) -> itir.FunCall:
     """
     Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
+
+    Element-wise operations on 'XTuple' arguments are expanded such that the tuple structure ends
+    up outside of the stencils (see `_map_elementwise`).
     """
+    if any(isinstance(t, (ts.XTupleType, ts.XVarArgType)) for t in original_arg_types):
+        assert uids is not None
+        return _map_elementwise(op, lowered_args, original_arg_types, uids)
+
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
         for arg_type in original_arg_types

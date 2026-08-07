@@ -140,12 +140,14 @@ def tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
 ) -> ts.CollectionTypeSpecT:
+    # Note: `type(value)(...)` preserves the concrete tuple subclass (e.g. `XTupleType`) so that
+    # element-wise-tuple semantics are not silently dropped when a tuple type is reconstructed.
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
         if isinstance(value, ts.NamedCollectionType)
-        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+        else type(value)(types=list(elems))  # type: ignore[return-value]
     )
 
 

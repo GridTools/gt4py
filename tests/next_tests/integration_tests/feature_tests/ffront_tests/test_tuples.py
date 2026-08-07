@@ -240,6 +240,84 @@ def test_tuple_vararg(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_xtuple(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+        b: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+    ) -> gtx.XTuple[cases.IFloatField, cases.IFloatField]:
+        return a * b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b: tuple(x * y for x, y in zip(a, b)),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_nested_xtuple(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
+        b: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+    ) -> gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField]:
+        return a * b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b: ((a[0][0] * b[0], a[0][1] * b[0]), a[1] * b[1]),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, cases.IFloatField], factor: float
+    ) -> gtx.XTuple[cases.IFloatField, cases.IFloatField]:
+        return a * factor + a
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: tuple(el * f + el for el in a),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_var_len_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, ...], factor: float
+    ) -> gtx.XTuple[cases.IFloatField, ...]:
+        return a * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: tuple(el * f for el in a),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_nested_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
+        factor: float,
+    ) -> gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField]:
+        return a * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: ((a[0][0] * f, a[0][1] * f), a[1] * f),
+    )
+
+
+@pytest.mark.uses_tuple_args
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
