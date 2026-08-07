@@ -8,11 +8,12 @@
 
 import contextlib
 import os
-from typing import Any, Final, Generator, Optional
+from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
@@ -31,6 +32,17 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 
 SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
+
+
+ExternalWorkspace: TypeAlias = dict[
+    core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+]
+""" Mapping from device types to array-like objects.
+
+    The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
+    as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
+    or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
+"""
 
 
 def set_dace_config(
