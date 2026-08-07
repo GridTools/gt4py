@@ -34,53 +34,57 @@ import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
-if _sys.version_info >= (3, 9):
-    # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]
-        dict as Dict,
-        frozenset as FrozenSet,
-        list as List,
-        set as Set,
-        tuple as Tuple,
-        type as Type,
-    )
-    from collections import (
-        ChainMap as ChainMap,
-        Counter as Counter,
-        OrderedDict as OrderedDict,
-        defaultdict as defaultdict,
-        deque as deque,
-    )
-    from collections.abc import (
-        AsyncGenerator as AsyncGenerator,
-        AsyncIterable as AsyncIterable,
-        AsyncIterator as AsyncIterator,
-        Awaitable as Awaitable,
-        ByteString as ByteString,
-        Callable as Callable,
-        Collection as Collection,
-        Container as Container,
-        Coroutine as Coroutine,
-        Generator as Generator,
-        ItemsView as ItemsView,
-        Iterable as Iterable,
-        Iterator as Iterator,
-        KeysView as KeysView,
-        Mapping as Mapping,
-        MappingView as MappingView,
-        MutableMapping as MutableMapping,
-        MutableSequence as MutableSequence,
-        MutableSet as MutableSet,
-        Reversible as Reversible,
-        Sequence as Sequence,
-        Set as AbstractSet,
-        ValuesView as ValuesView,
-    )
-    from contextlib import (
-        AbstractAsyncContextManager as AsyncContextManager,
-        AbstractContextManager as ContextManager,
-    )
-    from re import Match as Match, Pattern as Pattern
+# The standard library has supported PEP 585 (Type Hinting Generics In Standard
+# Collections) since Python 3.9, so the deprecated 'typing' aliases star-imported above
+# are replaced here by the standard collection types. This block must stay *below* the
+# star imports, since it deliberately rebinds names those imports also define; the
+# 'isort: split' marker keeps the import sorter from hoisting it.
+# isort: split
+from builtins import (  # type: ignore[assignment]
+    dict as Dict,
+    frozenset as FrozenSet,
+    list as List,
+    set as Set,
+    tuple as Tuple,
+    type as Type,
+)
+from collections import (
+    ChainMap as ChainMap,
+    Counter as Counter,
+    OrderedDict as OrderedDict,
+    defaultdict as defaultdict,
+    deque as deque,
+)
+from collections.abc import (
+    AsyncGenerator as AsyncGenerator,
+    AsyncIterable as AsyncIterable,
+    AsyncIterator as AsyncIterator,
+    Awaitable as Awaitable,
+    ByteString as ByteString,
+    Callable as Callable,
+    Collection as Collection,
+    Container as Container,
+    Coroutine as Coroutine,
+    Generator as Generator,
+    ItemsView as ItemsView,
+    Iterable as Iterable,
+    Iterator as Iterator,
+    KeysView as KeysView,
+    Mapping as Mapping,
+    MappingView as MappingView,
+    MutableMapping as MutableMapping,
+    MutableSequence as MutableSequence,
+    MutableSet as MutableSet,
+    Reversible as Reversible,
+    Sequence as Sequence,
+    Set as AbstractSet,
+    ValuesView as ValuesView,
+)
+from contextlib import (
+    AbstractAsyncContextManager as AsyncContextManager,
+    AbstractContextManager as ContextManager,
+)
+from re import Match as Match, Pattern as Pattern
 
 
 # These fallbacks are useful for public symbols not exported by default.

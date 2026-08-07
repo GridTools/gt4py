@@ -119,13 +119,15 @@ except errors.DSLError as err:
     raise
 ```
 
-`DSLError.add_note` overrides `BaseException.add_note` to route the note into
-the structured `notes` field instead of `__notes__`: the traceback machinery
-(and therefore pytest and IPython/Jupyter) prints the exception via
-`str(err)`, which already renders the structured notes, so writing `__notes__`
-as well would duplicate them. The seam is wired at `func_to_foast`
-(`ffront/func_to_foast.py`); add it at later stages as they gain useful
-context.
+This is the stock `BaseException.add_note`, so the breadcrumb lands in
+`__notes__`, not in the structured `notes` field — `notes` is reserved for
+content authored at the raise site. The two have different renderers:
+`DSLError.__str__` emits only the structured parts, while `__notes__` is
+printed by the traceback machinery (and therefore by pytest and
+IPython/Jupyter). The excepthook in `errors/excepthook.py` replaces that
+machinery, so it appends `__notes__` itself. The seam is wired at
+`func_to_foast` (`ffront/func_to_foast.py`); add it at later stages as they
+gain useful context.
 
 ### 5. Always: a test
 
@@ -201,14 +203,11 @@ Unsupported operand type(s) for +: 'Field[[IDim], float64]' and 'Field[[IDim], b
 
 ## Python-version caveat
 
-The supported floor is Python 3.10, so the diagnostics code carries a few
-forward-compat shims; respect them:
+The supported floor is Python 3.12, so `Self`, `BaseException.add_note` (PEP
+678\) and every `ast` node up to 3.12 can be used directly.
 
-- Import `Self` from `gt4py.eve.extended_typing`, not `typing` (3.11+ only).
-- `DSLError.add_note` works on every Python because `DSLError` defines it;
-  don't rely on `add_note` for *other* `GT4PyError`s — it is a builtin only on
-  3.11+.
-- The catalogue must not reference `ast` nodes added after 3.10 (e.g.
-  `ast.TryStar`) unconditionally — that breaks import on 3.10.
+The diagnostics code carries no version shims left over from the old 3.10
+floor; do not add new ones.
 
-These spots are flagged with `TODO(havogt)`.
+Nodes introduced *after* 3.12 (for example `ast.TemplateStr` for PEP 750
+t-strings, 3.14) still cannot be referenced unconditionally in the catalogue.

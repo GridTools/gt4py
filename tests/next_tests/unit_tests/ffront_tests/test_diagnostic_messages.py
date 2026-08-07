@@ -15,13 +15,14 @@ rendered diagnostic, so that the quality of error messages cannot silently
 regress. When changing a message, update the expectation here alongside.
 """
 
+import ast
 import re
-import sys
 
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import errors, float32, float64
+from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
@@ -74,6 +75,40 @@ def test_while_loop_names_construct_and_alternative():
     rendered = str(err)
     assert "while True:" in rendered
     assert "Note: Only a subset of Python is valid inside GT4Py functions." in rendered
+
+
+def test_try_statement_names_construct():
+    # TODO(egparedes): cover 'try: ... except <Type>: ...' here once it is diagnosed
+    # correctly. 'try/finally' below is one of the only two shapes that reach the
+    # catalogue; the far more common 'except ValueError:' form is intercepted by
+    # closure-variable type deduction first (see the TODO in 'func_to_foast'), so this
+    # test must not be read as covering 'try' statements in general.
+    def with_try(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        try:
+            a = a + 1.0
+        finally:
+            pass
+        return a
+
+    err = parse_error(with_try)
+
+    assert isinstance(err, errors.UnsupportedPythonFeatureError)
+    assert err.message == "Unsupported Python syntax: 'try' statement."
+    assert any("Exception handling" in hint for hint in err.hints)
+
+
+def test_try_star_statement_is_catalogued():
+    # 'try*' cannot be reached through the frontend: it always names an exception
+    # type in its 'except*' clause, and that name is rejected as an unsupported
+    # closure variable before the AST is visited. Pin the catalogue entry itself,
+    # so the construct is named correctly if it ever does surface.
+    node = ast.parse("try:\n    pass\nexcept* ValueError:\n    pass").body[0]
+    assert isinstance(node, ast.TryStar)
+
+    feature, hints = dialect_parser._describe_unsupported_feature(node)
+
+    assert feature == "'try*' statement"
+    assert any("Exception handling" in hint for hint in hints)
 
 
 def test_unlisted_construct_falls_back_to_ast_name():
@@ -149,17 +184,6 @@ def test_add_note_uses_pep678_notes():
 
     assert err.__notes__ == ["Extra context."]
     assert err.notes == []
-
-
-@pytest.mark.skipif(
-    sys.version_info >= (3, 11),
-    reason="On >=3.11 the traceback machinery renders '__notes__'; 'str()' does not.",
-)
-def test_add_note_folded_into_str_on_py310():
-    err = errors.DSLError(None, "A message.")
-    err.add_note("Extra context.")
-
-    assert "Extra context." in str(err)
 
 
 def test_toolchain_step_attaches_definition_context():

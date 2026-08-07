@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import ast
 import inspect
 import functools
 import textwrap
@@ -2480,3 +2481,22 @@ class TestIteratorAccess:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+
+class TestEllipsisNodeDetection:
+    # 'ast.Ellipsis' is removed in Python 3.14 and 'types.EllipsisType' is the type of
+    # the '...' object rather than of its AST node, so this must not go back to being
+    # an 'isinstance()' check against either of them.
+    @pytest.mark.parametrize(
+        "source, expected", [("...", True), ("1", False), ("None", False), ("x", False)]
+    )
+    def test_is_ellipsis_node(self, source, expected):
+        node = ast.parse(source, mode="eval").body
+        assert gt_frontend._is_ellipsis_node(node) is expected
+
+    def test_ellipsis_index_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b[...] = field_a
+
+        parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)

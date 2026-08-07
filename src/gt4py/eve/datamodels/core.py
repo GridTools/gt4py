@@ -351,10 +351,12 @@ def datamodel(  # redefinition of unused symbol
         frozen: If ``True`` (default is ``False``), assigning to fields will generate an exception.
             This emulates read-only frozen instances. The ``__setattr__()`` and
             ``__delattr__()`` methods should not be defined in the class.
+            The special value ``"strict"`` additionally requires every field annotation
+            to stand for strictly immutable values (other ``frozen="strict"`` datamodels
+            or types defining a custom ``__hash__``), raising ``EveTypeError`` otherwise.
         match_args: If ``True`` (default) and ``__match_args__`` is not already defined in the class,
             set ``__match_args__`` on the class to support PEP 634 (Structural Pattern Matching).
-            It is a tuple of all positional-only ``__init__`` parameter names on
-            Python 3.10 and later. Ignored on older Python versions.
+            It is a tuple of all positional-only ``__init__`` parameter names.
         kw_only: If ``True`` (default is ``False``), make all fields keyword-only in the generated
             ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
         slots: slots: If ``True`` (the default is ``False``), ``__slots__`` attribute will be generated
@@ -1019,6 +1021,55 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
 
+def _is_strictly_immutable_type(type_annotation: TypeAnnotation) -> bool:
+    """Check whether an annotation only admits strictly immutable (hashable) values.
+
+    A datamodel qualifies only if it is itself defined with ``frozen="strict"``;
+    any other plain type qualifies if it defines a custom ``__hash__``. Composite
+    annotations are decomposed and every part is checked with the same rules, so
+    that neither wrapping a type in a union nor hiding it in a generic container
+    (whose hash folds in the hashes of its items) weakens the check. Annotations
+    that cannot be resolved to any concrete type (``Any``, unbound type variables,
+    unresolved forward references) are conservatively rejected.
+    """
+    if is_datamodel(type_annotation):
+        return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
+
+    origin_type = xtyping.get_origin(type_annotation)
+    type_args = xtyping.get_args(type_annotation)
+
+    if origin_type is Literal:
+        # 'Literal' arguments are values, not types.
+        return all(xtyping.is_type_with_custom_hash(type(arg)) for arg in type_args)
+
+    if origin_type is Union or origin_type is types.UnionType:
+        # 'Union[A, B]' and 'A | B' are different runtime objects before Python 3.14.
+        # A union is immutable only if every one of its members is.
+        return bool(type_args) and all(map(_is_strictly_immutable_type, type_args))
+
+    if origin_type is not None:
+        # Parametrized generic alias ('tuple[int, ...]', 'List[int]', ...). The alias
+        # itself is a hashable object, so it has to be decomposed: both the container
+        # type and every type argument must be strictly immutable, since the hash of
+        # a container folds in the hashes of the items it holds.
+        return _is_strictly_immutable_type(origin_type) and all(
+            _is_strictly_immutable_type(arg) for arg in type_args if arg is not Ellipsis
+        )
+
+    if xtyping.is_actual_type(type_annotation):  # plain type, already known not to be a datamodel
+        return xtyping.is_type_with_custom_hash(type_annotation)
+
+    # Anything else (type variables, forward references, ...) is checked through the
+    # concrete types it stands for, if any. Forward references that cannot be resolved
+    # at this point do not prove anything, so they are rejected.
+    try:
+        represented_types = xtyping.get_represented_types(type_annotation)
+    except NameError:
+        return False
+
+    return bool(represented_types) and all(map(_is_strictly_immutable_type, represented_types))
+
+
 def _make_datamodel(
     cls: Type[_T],
     *,
@@ -1213,18 +1264,16 @@ def _make_datamodel(
 
     # Final checks and postprocessing
     if strict_frozen:
-        unhashable_fields = set()
-        for f_attr in new_cls.__attrs_attrs__:
-            if is_datamodel(f_attr.type):
-                if getattr(f_attr.type, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True:
-                    continue
-            elif xtyping.is_hashable_type(f_attr.type):
-                continue
-            unhashable_fields.add(f_attr.name)
-
-        if unhashable_fields:
+        mutable_fields = [
+            f_attr.name
+            for f_attr in new_cls.__attrs_attrs__
+            if not _is_strictly_immutable_type(f_attr.type)
+        ]
+        if mutable_fields:
+            names = ", ".join(f"'{name}'" for name in mutable_fields)
             raise exceptions.EveTypeError(
-                f"Some fields ({unhashable_fields}) can not be considered strictly immutable."
+                f"Fields ({names}) of datamodel '{new_cls.__name__}' "
+                "can not be considered strictly immutable."
             )
 
     if "__attrs_init__" in new_cls.__dict__:

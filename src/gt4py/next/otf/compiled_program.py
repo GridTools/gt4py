@@ -190,7 +190,12 @@ def wait_for_compilation() -> None:
     if len(failures) == 1:
         raise failures[0][1]
     if failures:
-        # TODO(havogt): raise ExceptionGroup once Python 3.10 is dropped.
+        # TODO(havogt): raise an ExceptionGroup here. The 3.10 floor that originally
+        # blocked this is gone (PEP 654 is available on the 3.12 floor), so only the
+        # flattening below still loses information: failures 2..n survive as 'repr'
+        # text and '__cause__'/'__traceback__' carry the first failure alone. Left as
+        # is because it changes the documented 'Raises:' contract of this public
+        # function from 'RuntimeError' to 'ExceptionGroup', which callers may catch.
         raise RuntimeError(
             "Multiple compilations failed: "
             + "; ".join(f"'{label}': {error!r}" for label, error in failures)
