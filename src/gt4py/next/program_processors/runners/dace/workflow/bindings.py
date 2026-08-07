@@ -12,6 +12,7 @@ from typing import Any, Literal, Optional, Sequence
 
 import dace
 
+from gt4py.eve import codegen as eve_codegen
 from gt4py.next import common as gtx_common
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
@@ -88,71 +89,66 @@ def _create_binding_function(
     else:
         raise NotImplementedError()
 
-    code_lines: list[str] = []
-    code_lines.append("_PAIR_OF_ZEROS = (0, 0)")
-    code_lines.append(
+    code = eve_codegen.TextBlock()
+
+    # The actual interface function.
+    code.append(
         f"def {bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):"
-    )
-
-    unpacked_program_arguments: list[Optional[str]] = [
-        None if is_offset_arg_name(param.name) else f"__gtx_expanded_names_{param.name}"
-        for param in program_parameters
-    ]
-
-    # These are all statements that are inside the processing functions.
-    function_statements: list[str] = []
-
-    function_statements.append(
-        ", ".join(arg for arg in unpacked_program_arguments if arg is not None) + ", = args"
     )
 
     positional_arguments = ""
     kwargs_arguments: dict[str, str] = {}
 
-    for arg_name, param in zip(unpacked_program_arguments, program_parameters, strict=True):
-        assert param.type_ is not None
-        real_arg_name = param.name
-
-        if is_offset_arg_name(real_arg_name):
-            assert arg_name is None
-            offset_name = get_offset_name_from_prog_arg_name(real_arg_name)
-            if is_offset_used(offset_name):
-                positional_arguments += (
-                    f"(offset_provider['{offset_name}'].ndarray, _PAIR_OF_ZEROS), "
-                )
-            else:
-                positional_arguments += "None, "
-        else:
-            assert isinstance(arg_name, str)
-            positional_arguments += _process_argument(
-                argument=arg_name,
-                param_type=param.type_,
-                function_statements=function_statements,
-                backend=backend,
-            )
-        assert positional_arguments.strip().endswith(",")
-    assert positional_arguments.strip().endswith(",")
-
-    # Handle the metric
-    if use_metrics:
-        positional_arguments, kwargs_arguments = _process_metric_arguments(
-            metric_level_arg_name="metrics_level",
-            compute_time_arg_name="runtime_return_value",
-            positional_arguments=positional_arguments,
-            kwargs_arguments=kwargs_arguments,
-            backend=backend,
+    with code.indented():
+        # Unpack the actual program arguments, but exclude the offset ones.
+        unpacked_program_arguments: list[Optional[str]] = [
+            None if is_offset_arg_name(param.name) else f"__gtx_expanded_names_{param.name}"
+            for param in program_parameters
+        ]
+        code.append(
+            ", ".join(arg for arg in unpacked_program_arguments if arg is not None) + ", = args"
         )
 
-    # Write the unpacked_variables
-    code_lines.extend(("\t" + s for s in function_statements))
+        for arg_name, param in zip(unpacked_program_arguments, program_parameters, strict=True):
+            assert param.type_ is not None
+            real_arg_name = param.name
 
-    code_lines.append(
-        f"\treturn ({positional_arguments}), {{"
-        + ", ".join(f"'{k}': {v}" for k, v in kwargs_arguments.items())
-        + "}"
-    )
+            if is_offset_arg_name(real_arg_name):
+                assert arg_name is None
+                offset_name = get_offset_name_from_prog_arg_name(real_arg_name)
+                if is_offset_used(offset_name):
+                    positional_arguments += f"(offset_provider['{offset_name}'].ndarray, (0, 0)), "
+                else:
+                    positional_arguments += "None, "
+            else:
+                assert isinstance(arg_name, str)
+                positional_arguments += _process_argument(
+                    code=code,
+                    argument=arg_name,
+                    param_type=param.type_,
+                    backend=backend,
+                )
+            assert positional_arguments.strip().endswith(",")
+        assert positional_arguments.strip().endswith(",")
 
-    return "\n".join(code_lines)
+        # Handle the metric
+        if use_metrics:
+            positional_arguments, kwargs_arguments = _process_metric_arguments(
+                metric_level_arg_name="metrics_level",
+                compute_time_arg_name="runtime_return_value",
+                positional_arguments=positional_arguments,
+                kwargs_arguments=kwargs_arguments,
+                backend=backend,
+            )
+
+        # Now write the return statement.
+        code.append(
+            f"return ({positional_arguments}), {{"
+            + ", ".join(f"'{k}': {v}" for k, v in kwargs_arguments.items())
+            + "}"
+        )
+
+    return code.text
 
 
 def bind_sdfg(
@@ -185,37 +181,37 @@ def bind_sdfg(
 
 
 def _perfom_tuple_unpacking(
+    code: eve_codegen.TextBlock,
     tuple_argument: str,
     tuple_len: int,
-    unpacked_variables: list[str],
 ) -> list[str]:
     assert tuple_len > 0
     unpacked_arguments = [f"{tuple_argument}_{i}" for i in range(tuple_len)]
     # Trailing comma is needed to handle 1 element tuples correctly.
-    unpacked_variables.append(f"{', '.join(unpacked_arguments)}, = {tuple_argument}")
+    code.append(f"{', '.join(unpacked_arguments)}, = {tuple_argument}")
     return unpacked_arguments
 
 
 def _process_argument(
+    code: eve_codegen.TextBlock,
     argument: str,
     param_type: ts.TypeSpec,
-    function_statements: list[str],
     backend: Literal["gtfn", "dace"],
 ) -> str:
     processed_argument = ""
     if isinstance(param_type, ts.TupleType):
         tuple_member_types = param_type.types
         tuple_members = _perfom_tuple_unpacking(
-            argument,
-            len(tuple_member_types),
-            function_statements,
+            code=code,
+            tuple_argument=argument,
+            tuple_len=len(tuple_member_types),
         )
         processed_argument = "("
         for tuple_member, tuple_member_type in zip(tuple_members, param_type.types):
             processed_argument += _process_argument(
+                code=code,
                 argument=tuple_member,
                 param_type=tuple_member_type,
-                function_statements=function_statements,
                 backend=backend,
             )
         processed_argument += ")"
@@ -238,7 +234,7 @@ def _process_argument(
     else:
         raise ValueError(f"Parameter `{argument}` had unexpected type `{param_type}`")
 
-    assert processed_argument
+    assert processed_argument.strip()
     return processed_argument + ", "
 
 

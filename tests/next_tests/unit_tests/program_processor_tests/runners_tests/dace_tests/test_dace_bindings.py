@@ -131,9 +131,8 @@ def _compile_bindings(binding_source: str):
 
 def _expected_testee_binding_source(use_metrics: bool, e2v_used: bool = False) -> str:
     metric_args = "metrics_level, runtime_return_value, " if use_metrics else ""
-    e2v_arg = "(offset_provider['E2V'].ndarray, _PAIR_OF_ZEROS)" if e2v_used else "None"
+    e2v_arg = "(offset_provider['E2V'].ndarray, (0, 0))" if e2v_used else "None"
     return f"""\
-_PAIR_OF_ZEROS = (0, 0)
 def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):
     __gtx_expanded_names_a, __gtx_expanded_names_s, __gtx_expanded_names_flag, __gtx_expanded_names_zd, __gtx_expanded_names_t, = args
     __gtx_expanded_names_t_0, __gtx_expanded_names_t_1, __gtx_expanded_names_t_2, = __gtx_expanded_names_t
@@ -148,7 +147,7 @@ def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value
             ((__gtx_expanded_names_t_1_0.ndarray, (__gtx_expanded_names_t_1_0.__dace_origin__)),),
             (__gtx_expanded_names_t_2.ndarray, (__gtx_expanded_names_t_2.__dace_origin__)),
         ),
-        (offset_provider['V2E'].ndarray, _PAIR_OF_ZEROS),
+        (offset_provider['V2E'].ndarray, (0, 0)),
         {e2v_arg},
         {metric_args}
     ), {{}}
@@ -288,7 +287,6 @@ def captured_binding_source(monkeypatch) -> dict:
 def _expected_cartesian_binding_source(use_metrics: bool) -> str:
     metric_args = "metrics_level, runtime_return_value, " if use_metrics else ""
     return f"""\
-_PAIR_OF_ZEROS = (0, 0)
 def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):
     __gtx_expanded_names_a, __gtx_expanded_names_b, __gtx_expanded_names_M, __gtx_expanded_names_N, __gtx_expanded_names_K, __gtx_expanded_names_out, = args
     __gtx_expanded_names_a_0, __gtx_expanded_names_a_1, = __gtx_expanded_names_a
@@ -389,13 +387,10 @@ def _expected_unstructured_binding_source(
     # The connectivities appear in offset-provider order; only 'E2V' and 'V2E' are
     # used by the program, all others are passed as ignored placeholders.
     offset_provider_args = "".join(
-        f"(offset_provider['{name}'].ndarray, _PAIR_OF_ZEROS), "
-        if name in ("E2V", "V2E")
-        else "None, "
+        f"(offset_provider['{name}'].ndarray, (0, 0)), " if name in ("E2V", "V2E") else "None, "
         for name in offset_provider
     )
     return f"""\
-_PAIR_OF_ZEROS = (0, 0)
 def {_bind_func_name}(args, offset_provider, metrics_level, runtime_return_value):
     __gtx_expanded_names_a, __gtx_expanded_names_b, = args
     return (

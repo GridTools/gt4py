@@ -372,7 +372,8 @@ def make_user_args(
 
         if param_name.startswith("@"):
             # We found an connectivity argument so we add it. Note that we add it
-            #  regardless if it is needed or not, we do this for compatibility with GTFN.
+            #  regardless if it is needed or not, in addition we also add the offset,
+            #  that is ignored. This is done for GTFN compatibility.
             # NOTE: If changed the bindings function must be updated.
             assert isinstance(param_type, ts.FieldType)
             sdfg_connectivity_name = gtx_dace_args.connectivity_identifier(param_name[1:])
