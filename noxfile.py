@@ -321,11 +321,18 @@ def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
     install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
     session.run(
         "pytest",
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
         "typing_tests",
         *session.posargs,
     )
