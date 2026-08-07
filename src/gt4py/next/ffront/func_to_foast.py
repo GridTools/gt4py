@@ -197,6 +197,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
         self._check_not_a_reserved_name(node.name, loc)
+        # TODO(egparedes): run the unsupported-syntax scan before this loop. Typing the
+        # closure variables first means a name that only appears in unsupported syntax
+        # is reported as a bad closure variable instead of as the construct that
+        # introduced it -- e.g. 'try: ... except ValueError: ...' raises "Unexpected
+        # object 'ValueError' ..." spanning the whole signature, rather than the
+        # 'try'-statement diagnostic catalogued in 'dialect_parser'.
         closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
             try:

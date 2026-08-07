@@ -78,6 +78,11 @@ def test_while_loop_names_construct_and_alternative():
 
 
 def test_try_statement_names_construct():
+    # TODO(egparedes): cover 'try: ... except <Type>: ...' here once it is diagnosed
+    # correctly. 'try/finally' below is one of the only two shapes that reach the
+    # catalogue; the far more common 'except ValueError:' form is intercepted by
+    # closure-variable type deduction first (see the TODO in 'func_to_foast'), so this
+    # test must not be read as covering 'try' statements in general.
     def with_try(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
         try:
             a = a + 1.0
@@ -98,10 +103,10 @@ def test_try_star_statement_is_catalogued():
     # closure variable before the AST is visited. Pin the catalogue entry itself,
     # so the construct is named correctly if it ever does surface.
     node = ast.parse("try:\n    pass\nexcept* ValueError:\n    pass").body[0]
+    assert isinstance(node, ast.TryStar)
 
     feature, hints = dialect_parser._describe_unsupported_feature(node)
 
-    assert isinstance(node, ast.TryStar)
     assert feature == "'try*' statement"
     assert any("Exception handling" in hint for hint in hints)
 
