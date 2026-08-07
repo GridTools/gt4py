@@ -8,10 +8,12 @@
 
 
 import dataclasses
+import functools
+import warnings
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never, cast
+from gt4py.eve.extended_typing import Never
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -259,6 +261,73 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
+    def _bind_tuple_comprehension_target(
+        self,
+        comprehension_target: itir.Sym | tuple,
+        element_expr: itir.Expr,
+        iterable_element: itir.Expr | str,
+    ) -> itir.Expr:
+        """Return ``element_expr`` with the comprehension target bound to one element."""
+        # For `2.0 * local_el + scalar_el for local_el, scalar_el in iterable`:
+        # - `comprehension_target`: `(local_el, scalar_el)`
+        # - `element_expr`: `2.0 * local_el + scalar_el`
+        # - `iterable_element` is the current element from `iterable`
+        # Returns `let local_el = iterable_element[0], scalar_el = iterable_element[1]
+        # in element_expr`.
+        if not isinstance(comprehension_target, tuple):
+            return im.let(comprehension_target, iterable_element)(element_expr)
+
+        flat_targets = utils.flatten_nested_tuple(comprehension_target)
+        nested_target_values = utils.tree_map(
+            lambda _, path: functools.reduce(
+                lambda element, index: im.tuple_get(index, element), path, iterable_element
+            ),
+            with_path_arg=True,
+        )(comprehension_target)
+
+        flat_target_values = utils.flatten_nested_tuple(nested_target_values)  # type: ignore[arg-type]
+
+        target_bindings = tuple(zip(flat_targets, flat_target_values, strict=True))
+        return im.let(*target_bindings)(element_expr)  # type: ignore[arg-type]
+
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        # e.g. tuple(2.0 * el for el in (a, a))` or `tuple(2.0 * el for el in (a(V2E), a(V2E)))`
+        # `tuple(2.0 * local_el + scalar_el for local_el, scalar_el in ((a(V2E), b), (c(V2E), d)))`.
+        # Only homogeneous (fixed-length and variable-length) tuples are supported.
+        comprehension_target = self.visit(node.inner.target, **kwargs)
+        element_expr = self.visit(node.inner.element_expr, **kwargs)
+        iterable_expr = self.visit(node.iterable, **kwargs)
+        iterable_type = node.iterable.type
+
+        def lower_body_for_iterable_element(iterable_element: itir.Expr | str) -> itir.Expr:
+            return self._bind_tuple_comprehension_target(
+                comprehension_target, element_expr, iterable_element
+            )
+
+        if isinstance(iterable_type, ts.TupleType):
+            assert isinstance(node.type, ts.TupleType)
+            iterable_value_name = next(self.uid_generator["__tuple_comprh"])
+
+            fixed_tuple_elements = [
+                lower_body_for_iterable_element(im.tuple_get(element_index, iterable_value_name))
+                for element_index in range(len(iterable_type.types))
+            ]
+
+            result_tuple = im.make_tuple(*fixed_tuple_elements)
+            return im.let(iterable_value_name, iterable_expr)(result_tuple)
+
+        assert isinstance(iterable_type, ts.VarArgType)
+        assert isinstance(node.type, ts.VarArgType)
+        if not isinstance(comprehension_target, tuple):
+            map_tuple_lambda = im.lambda_(comprehension_target)(element_expr)
+        else:
+            iterable_element_param = next(self.uid_generator["__tuple_comprh"])
+            map_tuple_lambda = im.lambda_(iterable_element_param)(
+                lower_body_for_iterable_element(iterable_element_param)
+            )
+
+        return im.call(im.call("map_tuple")(map_tuple_lambda))(iterable_expr)
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
@@ -301,8 +370,23 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
                     assert isinstance(offset_name.type, ts.OffsetType)
+                    if fbuiltins.is_cartesian_offset(offset_name.type):
+                        # Deprecated: Cartesian shift via the subscript syntax `field(Off[i])`.
+                        # We deduce the dimension from the offset type and emit a self-describing
+                        # `CartesianOffset` (cf. the `Dim + idx` and `as_offset` cases).
+                        warnings.warn(
+                            f"Cartesian shifts via the subscript syntax 'field({offset_name.id}[i])' "
+                            f"are deprecated; use 'field({offset_name.type.source.value} + i)' instead.",
+                            DeprecationWarning,
+                            stacklevel=2,
+                        )
+                        dim = offset_name.type.source
+                        shift_offset: itir.CartesianOffset | str = im.cartesian_offset(dim)
+                    else:
+                        # Unstructured neighbor selection, resolved through the offset provider.
+                        shift_offset = offset_name.id
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(shift_offset, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
@@ -513,10 +597,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.literal(str(val), target_type)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
-            type_ = cast(
-                ts.CollectionTypeSpec, type_
-            )  # This shouldn't be needed after the previous isinstance() check
+        if isinstance(type_, (ts.TupleType, ts.NamedCollectionType)):
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val
@@ -533,18 +614,96 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _lower_and_map(self, op: itir.Lambda | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         return _map(
-            op, tuple(self.visit(arg, **kwargs) for arg in args), tuple(arg.type for arg in args)
+            op,
+            tuple(self.visit(arg, **kwargs) for arg in args),
+            tuple(arg.type for arg in args),
+            uids=self.uid_generator,
         )
+
+
+def _map_elementwise(
+    op: itir.Lambda | str,
+    lowered_args: tuple,
+    original_arg_types: tuple[ts.TypeSpec, ...],
+    uids: utils.IDGeneratorPool,
+) -> itir.FunCall:
+    """
+    Apply `op` element-wise over 'XTuple' arguments, broadcasting non-tuple arguments.
+
+    Fixed-length tuple arguments are expanded directly, such that the tuple structure ends up
+    outside of the stencils, i.e. a tuple of `as_fieldop`s. Variable-length tuple arguments are
+    lowered to the `map_tuple` builtin, which is expanded into `make_tuple` by 'ExpandTupleMaps'
+    once the concrete length is known.
+    """
+    if any(isinstance(t, ts.XTupleType) for t in original_arg_types):
+        # All tuple arguments are fixed-length tuples of equal length (ensured by type deduction).
+        lengths = {len(t.types) for t in original_arg_types if isinstance(t, ts.XTupleType)}
+        assert len(lengths) == 1 and not any(
+            isinstance(t, ts.XVarArgType) for t in original_arg_types
+        )
+        (length,) = lengths
+
+        # Let-bind the tuple arguments to avoid duplicating their expressions per element.
+        bindings: list[tuple[str, itir.Expr]] = []
+        bound_args: list[itir.Expr] = []
+        for arg, arg_type in zip(lowered_args, original_arg_types):
+            if isinstance(arg_type, ts.XTupleType):
+                name = next(uids["__elementwise"])
+                bindings.append((name, arg))
+                bound_args.append(im.ref(name))
+            else:
+                bound_args.append(arg)
+
+        elements = [
+            _map(
+                op,
+                tuple(
+                    im.tuple_get(i, arg) if isinstance(arg_type, ts.XTupleType) else arg
+                    for arg, arg_type in zip(bound_args, original_arg_types)
+                ),
+                tuple(
+                    arg_type.types[i] if isinstance(arg_type, ts.XTupleType) else arg_type
+                    for arg_type in original_arg_types
+                ),
+                uids=uids,
+            )
+            for i in range(length)
+        ]
+        return im.let(*bindings)(im.make_tuple(*elements))
+
+    # Exactly one variable-length tuple argument (ensured by type deduction).
+    (vararg_index,) = (i for i, t in enumerate(original_arg_types) if isinstance(t, ts.XVarArgType))
+    vararg_type = original_arg_types[vararg_index]
+    assert isinstance(vararg_type, ts.XVarArgType)
+    param = next(uids["__elementwise"])
+    body = _map(
+        op,
+        tuple(im.ref(param) if i == vararg_index else arg for i, arg in enumerate(lowered_args)),
+        tuple(
+            vararg_type.element_type if i == vararg_index else t
+            for i, t in enumerate(original_arg_types)
+        ),
+        uids=uids,
+    )
+    return im.call(im.call("map_tuple")(im.lambda_(param)(body)))(lowered_args[vararg_index])
 
 
 def _map(
     op: itir.Lambda | str,
     lowered_args: tuple,
     original_arg_types: tuple[ts.TypeSpec, ...],
+    uids: Optional[utils.IDGeneratorPool] = None,
 ) -> itir.FunCall:
     """
     Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
+
+    Element-wise operations on 'XTuple' arguments are expanded such that the tuple structure ends
+    up outside of the stencils (see `_map_elementwise`).
     """
+    if any(isinstance(t, (ts.XTupleType, ts.XVarArgType)) for t in original_arg_types):
+        assert uids is not None
+        return _map_elementwise(op, lowered_args, original_arg_types, uids)
+
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
         for arg_type in original_arg_types

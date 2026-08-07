@@ -87,6 +87,20 @@ def _make_type_string_for_container(cls: type) -> str:
             ),
         ),
         (
+            gtx.XTuple[bool, typing.Tuple[int, float]],
+            ts.XTupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.TupleType(
+                        types=[
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
+                            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
+                        ]
+                    ),
+                ]
+            ),
+        ),
+        (
             gtx.Field[[IDim], float],
             ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
@@ -209,15 +223,20 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint("foo")
 
     # Tuples
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(typing.Tuple)
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(tuple)
+    # Bare `tuple` and `typing.Tuple` (unparameterized) both return a DeferredType.
+    assert type_translation.from_type_hint(typing.Tuple) == ts.DeferredType(constraint=ts.TupleType)
+    assert type_translation.from_type_hint(tuple) == ts.DeferredType(constraint=ts.TupleType)
 
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(tuple[int, ...])
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(typing.Tuple["float", ...])
+    # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarArgType.
+    assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+    assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    assert type_translation.from_type_hint(gtx.XTuple[int, ...]) == ts.XVarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
 
     # Fields
     with pytest.raises(ValueError, match="Field type requires two arguments"):

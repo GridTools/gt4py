@@ -148,6 +148,25 @@ class TupleType(DataType):
         return len(self.types)
 
 
+class VarArgType(DataType):
+    """Represents a variable number of arguments of the same type."""
+
+    element_type: DataType
+
+    def __str__(self) -> str:
+        return f"VarArg[{self.element_type}]"
+
+
+class XTupleType(TupleType):
+    def __str__(self) -> str:
+        return f"XTuple[{', '.join(map(str, self.types))}]"
+
+
+class XVarArgType(VarArgType):
+    def __str__(self) -> str:
+        return f"XVarArgTuple[{self.element_type}]"
+
+
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
 
