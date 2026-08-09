@@ -133,6 +133,12 @@ class CompiledDaceProgram:
         None  # This attribute is set at runtime, before the first call.
     )
 
+    # Whether the SDFG has transients with `AllocationLifetime.External`, i.e. whether
+    # the caller has to install a workspace before the program can run. Determined
+    # once at load time so that the (non-trivial) workspace configuration is only
+    # performed for the programs that actually need it.
+    requires_external_workspace: bool
+
     def __init__(
         self,
         program: dace.CompiledSDFG,
@@ -140,6 +146,10 @@ class CompiledDaceProgram:
         binding_source_code: str,
     ):
         self.sdfg_program = program
+        self.requires_external_workspace = any(
+            desc.lifetime == dace.dtypes.AllocationLifetime.External
+            for _, _, desc in program.sdfg.arrays_recursive()
+        )
 
         # The binding source code is Python tailored to this specific SDFG.
         # We dynamically compile that function and add it to the compiled program.
@@ -152,7 +162,31 @@ class CompiledDaceProgram:
             program.sdfg.build_folder
         )
 
-    def _configure_external_workspace(self, **kwargs: Any) -> None:
+    def configure_external_workspace(self, **kwargs: Any) -> None:
+        """Install the caller-provided workspace buffers on the compiled SDFG.
+
+        This eagerly initializes the SDFG state, queries the required workspace
+        size per storage type and hands the matching buffer of
+        `self.external_workspace` to DaCe. It has to run before the first call,
+        because an SDFG with external transients refuses to run with no
+        workspace installed.
+
+        The required sizes depend on the symbol values passed here, so they are
+        only valid for calls made with the same symbols. This is called once,
+        with the arguments of the first call; keeping the workspace large enough
+        for subsequent calls is the caller's responsibility.
+
+        Args:
+            kwargs: The SDFG call arguments. Only the free symbols among them are
+                used; the remaining entries are ignored by DaCe.
+
+        Raises:
+            RuntimeError: If the SDFG needs a workspace but none was set for the
+                required device.
+            TypeError: If a workspace buffer exposes no suitable array interface.
+            ValueError: If a workspace buffer is too small, or is required for an
+                unsupported storage type.
+        """
         self.sdfg_program.initialize(**kwargs)
         if workspace_sizes := self.sdfg_program.get_workspace_sizes(**kwargs):
             if self.external_workspace is None:
