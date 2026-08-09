@@ -85,6 +85,7 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
+from .trivial_map_dimension_folding import TrivialMapDimensionFolding
 from .utils import gt_configure_transient_lifetime
 
 
@@ -121,6 +122,7 @@ __all__ = [
     "SplitAccessNode",
     "SplitConsumerMemlet",
     "TransientMemoryMode",
+    "TrivialMapDimensionFolding",
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
