@@ -21,6 +21,7 @@ Analysis is required to generate valid code (complying with the parallel model)
 
 from __future__ import annotations
 
+import numbers
 from typing import Any, Dict, List, Set, Tuple, Type
 
 from gt4py import eve
@@ -197,7 +198,7 @@ class Decl(LocNode):  # TODO probably Stmt
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: Tuple[numbers.Integral, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):

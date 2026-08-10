@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import numbers
 from typing import List, Optional, Tuple, Union
 
 from gt4py import eve
@@ -58,7 +59,7 @@ class FieldDecl(Decl):
     """General field shared across HorizontalBlocks."""
 
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: Tuple[numbers.Integral, ...] = eve.field(default_factory=tuple)
     extent: Extent
 
 
@@ -74,7 +75,7 @@ class TemporaryDecl(Decl):
     padding: Buffer added to compute domain as field size.
     """
 
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: Tuple[numbers.Integral, ...] = eve.field(default_factory=tuple)
     dimensions: Tuple[bool, bool, bool]
     offset: Tuple[int, int]
     padding: Tuple[int, int]
