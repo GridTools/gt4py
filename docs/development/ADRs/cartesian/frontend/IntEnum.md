@@ -8,6 +8,7 @@ class MyEnum(IntEnum):
     A = 42
     B = 1000
 
+
 @gtscript.stencil
 def enum(field: gtscript.Field[float], order: MyEnum):  # type: ignore
     with computation(PARALLEL), interval(0, 1):
