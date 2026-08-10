@@ -33,6 +33,7 @@ from typing import (
 import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
+from gt4py.cartesian.definitions import LITERAL_INT_PRECISION
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_builder import DefIRBuilder
@@ -2173,8 +2174,11 @@ class GTScriptParser(ast.NodeVisitor):
             ):
                 dtype_annotation = np.dtype(param.annotation)
             elif param.annotation in _ENUM_REGISTER.values():
-                dtype_annotation = (
-                    gt_definitions.get_integer_default_type()
+                literal_int_precision = (
+                    options.literal_int_precision if options else LITERAL_INT_PRECISION
+                )
+                dtype_annotation = gt_definitions.get_integer_type(
+                    literal_int_precision
                 )  # We will replace all enums with `int`
             elif param.annotation is inspect.Signature.empty:
                 dtype_annotation = None

@@ -21,11 +21,12 @@ import numpy as np
 
 from gt4py.cartesian import backend as gt_backend
 from gt4py.cartesian.definitions import (
+    LITERAL_INT_PRECISION,
     AccessKind,
     DomainInfo,
     FieldInfo,
     ParameterInfo,
-    get_integer_default_type,
+    get_integer_type,
 )
 from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtc import utils as gtc_utils
@@ -572,9 +573,14 @@ class StencilObject(abc.ABC):
         device = backend_cls.storage_info["device"]
 
         # Normalize `gtscript.enum` to integers
+        literal_int_precision = (
+            self.options["literal_int_precision"]
+            if "literal_int_precision" in self.options
+            else LITERAL_INT_PRECISION
+        )
         for name, value in parameter_args.items():
             if type(value) in gtscript_frontend._ENUM_REGISTER.values():
-                parameter_args[name] = get_integer_default_type()(value.value)
+                parameter_args[name] = get_integer_type(literal_int_precision)(value.value)
 
         array_infos = _extract_array_infos(field_args, device)
         cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
