@@ -214,6 +214,112 @@ def test_write_back_buffer_elimination_unrelated_reader():
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
 
 
+def test_write_back_buffer_elimination_view_of_tmp():
+    """A View of `tmp` must keep the write back.
+
+    The View has its own descriptor, whose strides are the ones of the contiguous
+    `tmp` and not the ones of `b`; nothing updates them.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_back_view_of_tmp"))
+
+    for name in ["a", "c"]:
+        sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(100, 100), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(10, 10), dtype=dace.float64, transient=True)
+    sdfg.add_view("v", shape=(10, 10), dtype=dace.float64)
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i1": "0:10", "__i2": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i1, __i2]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("tmp[__i1, __i2]")},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    state2.add_nedge(
+        state2.add_access("tmp"),
+        state2.add_access("b"),
+        dace.Memlet("tmp[0:10, 0:10] -> [11:21, 22:32]"),
+    )
+    view_node = state2.add_access("v")
+    state2.add_edge(
+        state2.add_access("tmp"), None, view_node, "views", dace.Memlet("tmp[0:10, 0:10]")
+    )
+    state2.add_mapped_tasklet(
+        "consumer",
+        map_ranges={"__i1": "0:10", "__i2": "0:10"},
+        inputs={"__in": dace.Memlet("v[__i1, __i2]")},
+        code="__out = __in * 2.0",
+        outputs={"__out": dace.Memlet("c[__i1, __i2]")},
+        input_nodes={view_node},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+
+
+def test_write_back_buffer_elimination_view_of_tmp_in_map():
+    """A View of `tmp` inside a Map must keep the write back.
+
+    Such a View refers to `tmp` through the MapEntry, i.e. there is no AccessNode
+    of `tmp` next to it.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_back_view_of_tmp_in_map"))
+
+    sdfg.add_array("a", shape=(8, 8), dtype=dace.float64, transient=False)
+    sdfg.add_array("c", shape=(8, 8), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(16, 16), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(8, 8), dtype=dace.float64, transient=True)
+    sdfg.add_view("v", shape=(8,), dtype=dace.float64, strides=(sdfg.arrays["tmp"].strides[0],))
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i1": "0:8", "__i2": "0:8"},
+        inputs={"__in": dace.Memlet("a[__i1, __i2]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("tmp[__i1, __i2]")},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    state2.add_nedge(
+        state2.add_access("tmp"),
+        state2.add_access("b"),
+        dace.Memlet("tmp[0:8, 0:8] -> [8:16, 8:16]"),
+    )
+
+    # For every column the consumer builds a View of that column of `tmp`.
+    tmp_node = state2.add_access("tmp")
+    map_entry, map_exit = state2.add_map("consumer", ndrange={"__i2": "0:8"})
+    view_node = state2.add_access("v")
+    map_entry.add_in_connector("IN_tmp")
+    map_entry.add_out_connector("OUT_tmp")
+    state2.add_edge(tmp_node, None, map_entry, "IN_tmp", dace.Memlet("tmp[0:8, __i2]"))
+    state2.add_edge(map_entry, "OUT_tmp", view_node, "views", dace.Memlet("tmp[0:8, __i2]"))
+    tasklet = state2.add_tasklet(
+        "reduce",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = 0.0\nfor __k in range(8):\n    __out = __out + __in[__k]",
+        language=dace.dtypes.Language.Python,
+    )
+    state2.add_edge(view_node, None, tasklet, "__in", dace.Memlet("v[0:8]"))
+    map_exit.add_in_connector("IN_c")
+    map_exit.add_out_connector("OUT_c")
+    state2.add_edge(tasklet, "__out", map_exit, "IN_c", dace.Memlet("c[0, __i2]"))
+    state2.add_edge(map_exit, "OUT_c", state2.add_access("c"), None, dace.Memlet("c[0, 0:8]"))
+    sdfg.validate()
+
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+
+
 def _mk_map_consumer_sdfg(inner_memlet_uses_tmp: bool) -> dace.SDFG:
     """`tmp` is written back into `b` and additionally consumed inside nested Maps."""
     sdfg = dace.SDFG(util.unique_name("write_back_map_consumer"))

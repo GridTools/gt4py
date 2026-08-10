@@ -17,10 +17,40 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 from dace.transformation import pass_pipeline as dace_ppl
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+
+
+def _find_viewed_data(sdfg: dace.SDFG) -> set[str]:
+    """Collects the names of all data that some View in `sdfg` refers to.
+
+    A View does not necessarily refer to an AccessNode, inside a Map scope it refers
+    to its data through the MapEntry, so `utils.track_view()` can not be used. The
+    name is therefore taken from the Memlet of the View edge, which is the name of
+    the viewed data unless the Memlet is expressed relative to the View itself, in
+    which case the AccessNode on the other side of the edge supplies it.
+
+    Views of Views need no special handling, every View contributes the data it
+    refers to directly, so the second View of such a tower contributes the name of
+    the underlying data.
+    """
+    viewed: set[str] = set()
+    for state in sdfg.states():
+        for view_node in state.data_nodes():
+            if not gtx_transformations.utils.is_view(view_node, sdfg):
+                continue
+            view_edge = dace_sdutils.get_view_edge(state, view_node)
+            if view_edge is None:
+                # The View can not be resolved, so assume it refers to anything.
+                return set(sdfg.arrays.keys())
+            if view_edge.data.data is not None:
+                viewed.add(view_edge.data.data)
+            other_node = view_edge.src if view_edge.dst is view_node else view_edge.dst
+            if isinstance(other_node, dace_nodes.AccessNode):
+                viewed.add(other_node.data)
+    return viewed
 
 
 @dace_properties.make_properties
@@ -95,8 +125,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         the transient `T`, `wb_edge` is the edge that copies `T` into the global `G`
         and `wb_state` is the state that contains `wb_edge`. For every candidate the
         function guarantees that:
-        - `T` is a non view, non scalar transient and all its AccessNodes are on the
-            top level of their state, i.e. none of them is inside a Map.
+        - `T` is a non view, non scalar transient that is not viewed by any View, and
+            all its AccessNodes are on the top level of their state, i.e. none of them
+            is inside a Map.
         - `wb_edge` is the only edge that connects `T` with a non transient array and
             it copies `T` in full, into a range of `G` of the same size. `G` is not a
             view and has the same number of dimensions as `T`.
@@ -111,6 +142,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             sdfg: The SDFG to scan.
             reachable: Result of the `StateReachability` pass for `sdfg`.
         """
+        viewed_data = _find_viewed_data(sdfg)
+
         candidates = []
         for tmp_name, tmp_desc in sdfg.arrays.items():
             if not tmp_desc.transient:
@@ -118,6 +151,14 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if isinstance(tmp_desc, dace_data.Scalar):
                 continue
             if gtx_transformations.utils.is_view(tmp_desc, sdfg):
+                continue
+            # A View of `T` has its own descriptor, whose strides were derived from
+            #  the ones of `T`. After the rewrite the View would refer to `G` but
+            #  still carry the strides of `T`. Neither `gt_propagate_strides_of()`,
+            #  which only descends into NestedSDFGs, nor `gt_change_strides()`, which
+            #  ignores Views of non transient data, would update it. Repairing the
+            #  Views is not attempted, such a `T` is conservatively rejected instead.
+            if tmp_name in viewed_data:
                 continue
 
             locations = [
