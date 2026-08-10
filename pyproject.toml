@@ -203,11 +203,6 @@ plugins = ['gt4py.next.type_system.mypy_plugin']
 show_column_numbers = true
 show_error_codes = true
 warn_redundant_casts = true
-# `warn_unused_configs` reports every override that the current invocation did not
-# reach, so it fires on any partial run: `mypy src/` never reaches the
-# `typing_tests.*` sections, and the `typing_tests` suite never reaches the
-# cartesian ones. The note is part of mypy's output, which breaks the exact-output
-# assertions in `typing_tests/`.
 warn_unused_configs = false
 warn_unused_ignores = true
 
