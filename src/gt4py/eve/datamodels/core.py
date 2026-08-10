@@ -183,7 +183,7 @@ class ForwardRefValidator:
     factory: type_val.TypeValidatorFactory
     """Type factory used to create the actual field validator."""
 
-    validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
+    validator: Union[type_val.FixedTypeValidator, NothingType, None] = NOTHING
     """Actual type validator created after resolving the forward references."""
 
     def __call__(self, instance: DataModel, attribute: Attribute, value: Any) -> None:
@@ -456,10 +456,10 @@ else:
             cls,
             /,
             *,
-            repr: (bool | None | Literal["inherited"]) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
-            eq: bool | None | Literal["inherited"] = "inherited",
-            order: bool | None | Literal["inherited"] = "inherited",
-            unsafe_hash: bool | None | Literal["inherited"] = "inherited",
+            repr: (bool | Literal["inherited"] | None) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
+            eq: bool | Literal["inherited"] | None = "inherited",
+            order: bool | Literal["inherited"] | None = "inherited",
+            unsafe_hash: bool | Literal["inherited"] | None = "inherited",
             frozen: bool | Literal["strict", "inherited"] = "inherited",
             match_args: bool | Literal["inherited"] = "inherited",
             kw_only: bool | Literal["inherited"] = "inherited",
