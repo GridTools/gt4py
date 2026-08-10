@@ -219,13 +219,23 @@ def test_non_deprecated_aliases_are_still_re_exported(name, expected):
     ],
 )
 def test_deprecated_typing_alias_still_resolves_in_forward_refs(name, replacement, args):
-    # 'eval_forward_ref' binds the name 'typing' to 'extended_typing', but a user writing
-    # 'typing.List[int]' means the real (deprecated but valid) 'typing' alias, so it must
-    # keep resolving rather than hitting the guard above.
-    resolved = xtyping.eval_forward_ref(f"typing.{name}[{args}]")
+    # These names stay valid in user-written annotations, so resolving a forward
+    # reference must not hit the rejection above. Both the bare and the 'typing.'-
+    # qualified spelling normalize to the *builtin* generic, which is what resolving
+    # through this module has always produced.
+    expected_args = tuple(eval(a) for a in args.split(", "))
 
-    assert xtyping.get_origin(resolved) is getattr(builtins, replacement)
-    assert xtyping.get_args(resolved) == tuple(eval(a) for a in args.split(", "))
+    for ref in (f"{name}[{args}]", f"typing.{name}[{args}]"):
+        resolved = xtyping.eval_forward_ref(ref)
+
+        assert xtyping.get_origin(resolved) is getattr(builtins, replacement)
+        assert xtyping.get_args(resolved) == expected_args
+        # A builtin generic alias, not the deprecated 'typing._GenericAlias' object.
+        assert type(resolved) is types.GenericAlias
+
+    # An explicit 'globalns' is left alone, so the bare name is not injected there.
+    with pytest.raises(NameError):
+        xtyping.eval_forward_ref(f"{name}[{args}]", globalns={})
 
 
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))

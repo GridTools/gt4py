@@ -17,6 +17,7 @@ from __future__ import annotations
 # ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
+import builtins as _builtins
 import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import functools as _functools
@@ -101,20 +102,29 @@ for _alias in _DEPRECATED_TYPING_ALIASES:
     globals().pop(_alias, None)
 del _alias
 
+# The names are still valid in user-written annotations, and resolving a forward
+# reference through this module has always normalized them to the builtin generic
+# ('typing.List[int]' -> 'list[int]'). Keep that mapping available to the forward-ref
+# machinery below, which would otherwise either raise or hand back the deprecated
+# 'typing' object.
+_DEPRECATED_ALIAS_REPLACEMENTS: Final[Mapping[str, Any]] = {
+    name: getattr(_builtins, replacement)
+    for name, replacement in _DEPRECATED_TYPING_ALIASES.items()
+}
+
 
 class _ForwardRefTypingNamespace:
     """Namespace bound to the name 'typing' while evaluating forward references.
 
-    Annotations are resolved through this module, so that 'typing_extensions'
-    definitions take priority and the standard collection types are used. The
-    deprecated builtin aliases are not re-exported here, but they remain perfectly
-    valid in user-written annotations, so 'typing.List[int]' and friends fall back
-    to the real 'typing' module instead of raising.
+    Annotations resolve through this module, so that 'typing_extensions' definitions
+    take priority and the standard collection types are used. The deprecated builtin
+    aliases are not re-exported here, but they stay valid in user-written annotations,
+    so 'typing.List[int]' resolves to 'list[int]' rather than raising.
     """
 
     def __getattr__(self, name: str) -> Any:
-        if name in _DEPRECATED_TYPING_ALIASES:
-            return getattr(_typing, name)
+        if (replacement := _DEPRECATED_ALIAS_REPLACEMENTS.get(name)) is not None:
+            return replacement
         return getattr(_sys.modules[__name__], name)
 
 
@@ -156,12 +166,10 @@ def __dir__() -> list[str]:
 
         import typing_extensions
 
-        orig_dir = typing.__dir__()
-        self_func.__cached_dir = [
-            name
-            for name in [*orig_dir, *(n for n in typing_extensions.__dir__() if n not in orig_dir)]
-            if name not in _DEPRECATED_TYPING_ALIASES
-        ]
+        # Everything reachable through '__getattr__' plus this module's own definitions,
+        # minus the aliases '__getattr__' explicitly rejects.
+        names = {*typing.__dir__(), *typing_extensions.__dir__(), *globals()}
+        self_func.__cached_dir = sorted(names - _DEPRECATED_TYPING_ALIASES.keys())
 
     return self_func.__cached_dir
 
@@ -428,11 +436,8 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
-
-# `Any` is a class since Python 3.11
-if isinstance(_typing.Any, type):  # Python >= 3.11
-    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
+# `Any` is a class since Python 3.11, which is below the supported floor.
+_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias, _typing.Any)
 
 # `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
@@ -742,6 +747,13 @@ def eval_forward_ref(
     safe_localns = {**localns} if localns else {}
     safe_localns.setdefault("typing", _FORWARD_REF_TYPING_NS)
     safe_localns.setdefault("NoneType", type(None))
+
+    if globalns is None:
+        # Without an explicit 'globalns' the reference is resolved in this module's
+        # namespace, which used to spell the deprecated aliases as the builtin generics.
+        # They are no longer defined here, so re-add them for this evaluation only; a
+        # caller-provided 'globalns' is left untouched, exactly as before.
+        globalns = {**globals(), **_DEPRECATED_ALIAS_REPLACEMENTS}
 
     actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
