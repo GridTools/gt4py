@@ -1924,10 +1924,6 @@ class TestGlobalTablesWithDataDimensions:
                 module=self.__class__.__name__,
             )
 
-    @pytest.mark.xfail(
-        reason="IR validation expects ddim sizes to be of type `int`",
-        raises=gt_frontend.GTScriptSyntaxError,
-    )
     def test_ddims_with_numpy_type(self) -> None:
         def data_dims_with_numpy_int_type(
             out_field: gtscript.Field[gtscript.IJK, np.int32],

@@ -731,6 +731,24 @@ def test_higher_dim_scalar_stencil(backend) -> None:
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_ddims_with_numpy_type(backend: str) -> None:
+    @gtscript.stencil(backend=backend)
+    def data_dims_with_numpy_int_type(
+        out_field: gtscript.Field[gtscript.IJK, np.int32],  # type: ignore
+        in_field: gtscript.Field[gtscript.IJK, (np.int32, (np.int32(3)))],  # type: ignore
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field.A[0]
+
+    in_field = gt_storage.ones((2, 2, 4), (np.int32, (np.int32(3))), backend=backend)
+    out_field = gt_storage.zeros((2, 2, 4), np.int32, backend=backend)
+
+    data_dims_with_numpy_int_type(out_field, in_field)
+    cpu_output = storage_utils.cpu_copy(out_field)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 1)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_native_function_call_stencil(backend) -> None:
     field_in = gt_storage.ones(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)

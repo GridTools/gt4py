@@ -8,6 +8,7 @@
 
 import enum
 import functools
+import numbers
 import os
 import platform
 from dataclasses import dataclass
@@ -66,7 +67,7 @@ class FieldInfo:
     access: AccessKind
     boundary: Boundary
     axes: Tuple[str, ...]
-    data_dims: Tuple[int, ...]
+    data_dims: Tuple[numbers.Integral, ...]
     dtype: numpy.dtype
 
     def __repr__(self):
