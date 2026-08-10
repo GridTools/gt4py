@@ -218,9 +218,7 @@ def view_targets_after_lowering(monkeypatch):
         targets.append(_view_targets(sdfg))
         return original(sdfg, *args, **kwargs)
 
-    monkeypatch.setattr(
-        gtx_transformations.auto_optimize, "gt_auto_optimize", gt_auto_optimize
-    )
+    monkeypatch.setattr(gtx_transformations.auto_optimize, "gt_auto_optimize", gt_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", gt_auto_optimize)
     return targets
 
@@ -241,9 +239,7 @@ def test_write_back_buffer_elimination_from_lowering(
 
     expected_base = inp.asnumpy() + 1.0
     np.testing.assert_allclose(base_out.asnumpy(), expected_base)
-    np.testing.assert_allclose(
-        scaled_out.asnumpy(), expected_base * (2.0 if flag == 1 else 3.0)
-    )
+    np.testing.assert_allclose(scaled_out.asnumpy(), expected_base * (2.0 if flag == 1 else 3.0))
 
 
 def test_write_back_buffer_elimination_selects_unviewed_data(
@@ -292,6 +288,4 @@ def test_write_back_buffer_elimination_selects_unviewed_data(
 
     expected_base = inp.asnumpy() + 1.0
     np.testing.assert_allclose(base_out.asnumpy(), expected_base)
-    np.testing.assert_allclose(
-        reduced_out.asnumpy(), expected_base[C2E_TABLE].sum(axis=1)
-    )
+    np.testing.assert_allclose(reduced_out.asnumpy(), expected_base[C2E_TABLE].sum(axis=1))
