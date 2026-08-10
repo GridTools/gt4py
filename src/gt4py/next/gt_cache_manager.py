@@ -111,13 +111,15 @@ class BuildDir:
 
 @dataclasses.dataclass(frozen=True)
 class ProgramStatus:
-    """What the next run of one program does with each of the two caches.
+    """What the next run of one program can do with each of the two caches.
 
     Translation and build are cached separately and hit or miss independently, so
-    they are reported as two verdicts rather than one. Both are per program name:
-    a program is compiled once per variant, and which variant the next run asks
-    for depends on a fingerprint taken at run time, so the presence of an entry
-    for a name is the strongest available signal.
+    they are reported as two verdicts rather than one. Both are counted per
+    program name, which is all the caches record about their contents, while a
+    hit is decided by a fingerprint taken at run time. `replays` and `recompiles`
+    are therefore not symmetric: `not replays` and `recompiles` are guarantees,
+    since nothing on disk can serve this program, while the opposite only says
+    that something on disk could serve it.
     """
 
     program: str
@@ -470,8 +472,8 @@ def _cmd_status(args: argparse.Namespace) -> int:
                     f"{status.usable_build_dirs}"
                     if status.build_dirs == status.usable_build_dirs
                     else f"{status.usable_build_dirs} (+{status.build_dirs - status.usable_build_dirs} stale)",
-                    "REPLAY" if status.replays else "re-translate",
-                    "recompile" if status.recompiles else "reuse",
+                    "may replay" if status.replays else "will re-translate",
+                    "will recompile" if status.recompiles else "may reuse",
                 )
                 for status in statuses
             ],
@@ -479,9 +481,9 @@ def _cmd_status(args: argparse.Namespace) -> int:
     sys.stdout.flush()  # keep the table above the warnings when both go to a terminal
     if dangerous := [s for s in statuses if s.replays and s.recompiles]:
         print(
-            f"\nWARNING: {len(dangerous)} program(s) will recompile while replaying a cached"
-            " translation. The library gets a fresh mtime although a changed transformation or"
-            " pass does NOT run.",
+            f"\nWARNING: {len(dangerous)} program(s) will recompile and may replay a cached"
+            " translation while doing so. The library then gets a fresh mtime although a changed"
+            " transformation or pass never runs.",
             file=sys.stderr,
         )
     if stale := sum(s.build_dirs - s.usable_build_dirs for s in statuses):
@@ -503,7 +505,7 @@ def _cmd_status(args: argparse.Namespace) -> int:
     replaying = [status for status in statuses if status.replays]
     if args.fail_if_cached and replaying:
         print(
-            f"error: {len(replaying)} program(s) would replay a cached translation.",
+            f"error: {len(replaying)} program(s) may replay a cached translation.",
             file=sys.stderr,
         )
         return EXIT_NOTHING_DONE
@@ -612,14 +614,18 @@ def _make_parser(prog: str | None = None) -> argparse.ArgumentParser:
         "status",
         help="Report what the next run does with each cache.",
         description=(
-            "Report, per program, whether the next run replays a cached translation or"
-            " re-translates, and whether it reuses a finished build or recompiles."
-            " Build folders that are unfinished or were built under another build-cache"
-            " version are counted as stale, since the next run cannot hit them."
-            " Both verdicts are per program name: which variant of a program the next run"
-            " asks for depends on a fingerprint taken at run time, so a cached entry for a"
-            " name means a hit is possible, not certain. Translation cache entries record"
-            " no version, so unlike build folders they cannot be told apart that way."
+            "Report, per program, what the next run can do with each cache."
+            " The verdicts are deliberately asymmetric, because only one direction can be"
+            " known: 'will re-translate' and 'will recompile' are guarantees, since nothing"
+            " on disk can serve that program; 'may replay' and 'may reuse' only say that"
+            " something on disk could. Whether it is actually hit depends on a fingerprint"
+            " taken at run time over the lowered program and its arguments, which this tool"
+            " does not have. So a cached entry left over from an earlier version of the"
+            " program source is reported as 'may replay' although editing that source"
+            " already invalidated it. Build folders that are unfinished, or were built"
+            " under another build-cache version, are counted as stale instead, because their"
+            " name records the version; translation cache entries record none, so they"
+            " cannot be told apart that way."
         ),
     )
     status_parser.add_argument(

@@ -41,8 +41,19 @@ still replay. Require it to pass **before** launching an expensive job. Drop
 rebuild too.
 
 `status` reports the two caches separately, because they hit and miss
-independently: `TRANSLATION` is `REPLAY` or `re-translate`, `BUILD` is `reuse` or
-`recompile`. Only the translation column decides whether a changed pass runs.
+independently. Only the `TRANSLATION` column decides whether a changed pass runs,
+and its two verdicts are **not** equally strong:
+
+- `will re-translate` is a guarantee — nothing on disk can serve this program.
+- `may replay` only says something on disk could. Whether it is hit depends on a
+  fingerprint taken at run time over the lowered program and its arguments, which
+  the tool cannot compute.
+
+So `may replay` is a reason to delete, never evidence that a run replayed. It
+shows up for entries that are already invalid — after editing the program source,
+or after the gt4py version changed — because entries record neither. That is the
+safe direction: deleting an entry that would not have been hit costs nothing.
+`BUILD` reads the same way (`will recompile` is a guarantee, `may reuse` is not).
 
 Without `--yes`, `delete` lists what it matched and asks for confirmation on a
 terminal; use `--dry-run` to preview and `--yes` in scripts and job files, where
@@ -55,10 +66,10 @@ Worked example — a new dace transformation, measured on one dycore program:
 
 ```bash
 gt4py-next-cache status --program 'apply_divergence_damping*'
-# -> TRANSLATION: REPLAY   BUILD: reuse
+# -> TRANSLATION: may replay   BUILD: may reuse
 gt4py-next-cache delete --program 'apply_divergence_damping*' --yes
 gt4py-next-cache status --program 'apply_divergence_damping*' --fail-if-cached
-# -> TRANSLATION: re-translate, exit 0
+# -> TRANSLATION: will re-translate, exit 0  <- this one is a guarantee
 srun ...   # now the pass actually runs
 ```
 
