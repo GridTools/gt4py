@@ -364,19 +364,14 @@ def _infer_concat_where(
     actual_domains: AccessedDomains = {}
     cond, true_field, false_field = expr.args
     symbolic_cond = domain_utils.SymbolicDomain.from_expr(cond)
-    cond_complement = domain_utils.domain_complement(symbolic_cond)
 
-    for arg in [true_field, false_field]:
+    for is_true_branch, arg in [(True, true_field), (False, false_field)]:
 
         @tree_map
         def mapper(d: NonTupleDomainAccess):
             if isinstance(d, DomainAccessDescriptor):
                 return d
-            promoted_cond = domain_utils.promote_domain(
-                symbolic_cond if arg == true_field else cond_complement,  # noqa: B023 # function is never used outside the loop
-                d.ranges.keys(),
-            )
-            return domain_utils.domain_intersection(d, promoted_cond)
+            return domain_utils.concat_where_branch_domain(d, symbolic_cond, is_true_branch)  # noqa: B023 # function is never used outside the loop
 
         domain_ = mapper(domain)
 

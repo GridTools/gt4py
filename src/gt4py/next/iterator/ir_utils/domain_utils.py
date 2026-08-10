@@ -353,6 +353,20 @@ def promote_domain(
     return SymbolicDomain(domain.grid_type, dims_dict)
 
 
+def concat_where_branch_domain(
+    domain: SymbolicDomain, cond: SymbolicDomain, is_true_branch: bool
+) -> SymbolicDomain:
+    """
+    Return the part of `domain` on which one branch of a `concat_where` is selected.
+
+    Note: the complement is taken before promoting to the dimensions of `domain`, since
+    `domain_complement` requires each range to be infinite on exactly one side, which a
+    promoted dimension is not.
+    """
+    region = cond if is_true_branch else domain_complement(cond)
+    return domain_intersection(domain, promote_domain(region, domain.ranges.keys()))
+
+
 def is_finite(range_or_domain: SymbolicRange | SymbolicDomain) -> bool:
     """
     Return whether a range is unbounded in (at least) one direction.

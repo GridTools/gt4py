@@ -214,6 +214,30 @@ def test_promote_domain(testee_ranges, dimensions, expected_ranges):
         assert promoted == expected
 
 
+def test_concat_where_branch_domain_complements_before_promoting():
+    """Promoting first makes the complement undefined, so the order is not free.
+
+    `domain_complement` requires each range to be infinite on exactly one side, which
+    a promoted dimension is not.
+    """
+    domain = _make_domain({I: (0, 10), J: (0, 10)})
+    cond = domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN,
+        ranges={J: domain_utils.SymbolicRange(5, itir.InfinityLiteral.POSITIVE)},
+    )
+
+    assert domain_utils.concat_where_branch_domain(domain, cond, True).as_expr() == im.domain(
+        common.GridType.CARTESIAN, {I: (0, 10), J: (5, 10)}
+    )
+    assert domain_utils.concat_where_branch_domain(domain, cond, False).as_expr() == im.domain(
+        common.GridType.CARTESIAN, {I: (0, 10), J: (0, 5)}
+    )
+
+    # the other order does not work
+    with pytest.raises(AssertionError):
+        domain_utils.domain_complement(domain_utils.promote_domain(cond, domain.ranges.keys()))
+
+
 def test_is_finite_symbolic_range():
     assert not domain_utils.is_finite(infinity_range)
     assert not domain_utils.is_finite(left_infinity_range)
