@@ -419,8 +419,9 @@ _TypeAliasTypes: Final[tuple[type, ...]] = (
     _typing_extensions.TypeAliasType,
 )
 
-#: Upper bound for the number of resolution steps in `eval_type_alias`, to avoid
-#: hanging on recursive aliases like ``type A = A``.
+#: Upper bound for the number of resolution steps in `eval_type_alias`. True cycles are
+#: detected exactly by the set of visited aliases; this bound is the backstop for the
+#: chains that diverge without ever repeating, like ``type G[T] = G[Tuple[T]]``.
 _MAX_TYPE_ALIAS_DEPTH: Final = 64
 
 
@@ -450,9 +451,9 @@ def eval_type_alias(annotation: Any) -> Any:
 
     Raises:
         NameError: If the alias value references a name which is not defined yet.
-        TypeError: If the alias is recursive, nested too deeply, cannot be
-            parametrized with the given type arguments, or its value fails to
-            evaluate for any other reason.
+        TypeError: If the alias is recursive (reported as such), nested too
+            deeply, cannot be parametrized with the given type arguments, or its
+            value fails to evaluate for any other reason.
 
     Examples:
         >>> type MyInt = int
@@ -463,9 +464,19 @@ def eval_type_alias(annotation: Any) -> Any:
         <class 'float'>
     """
     original_annotation = annotation
+    # A set of the aliases already walked through detects a true cycle ('type A = A',
+    # or a mutual 'A -> B -> A') exactly and reports it as such. It cannot replace the
+    # depth bound, though: a parametrized alias like 'type G[T] = G[Tuple[T]]' builds a
+    # bigger annotation on every step and so never repeats one. The two are complements.
+    seen: set[TypeAliasType] = set()
+    recursive = False
     try:
         for _ in range(_MAX_TYPE_ALIAS_DEPTH):
             if is_type_alias(annotation):
+                if annotation in seen:
+                    recursive = True
+                    break
+                seen.add(annotation)
                 annotation = annotation.__value__
             elif is_type_alias(alias := get_origin(annotation)):
                 annotation = alias.__value__[get_args(annotation)]
@@ -483,7 +494,8 @@ def eval_type_alias(annotation: Any) -> Any:
         ) from error
 
     raise TypeError(
-        f"Type alias '{original_annotation}' cannot be resolved (recursive or nested too deeply)."
+        f"Type alias '{original_annotation}' cannot be resolved "
+        f"({'recursive definition' if recursive else 'nested too deeply'})."
     )
 
 

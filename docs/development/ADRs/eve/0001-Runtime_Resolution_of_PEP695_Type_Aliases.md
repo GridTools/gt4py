@@ -54,7 +54,7 @@ Harder, and accepted:
 
 - A field annotated with an alias whose value is not yet resolvable is validated on first instantiation instead of at class definition, so its errors surface later than for other fields. Its error message also reports the bare field name rather than the qualified `Model.field` one, matching the pre-existing behavior for forward references.
 - `ClassVar` hidden behind an alias (`type CV = ClassVar[int]`) is not detected as a class variable by `datamodels`. This is not supported and no attempt is made to detect it.
-- The resolution depth is capped (64 steps) so that recursive aliases fail fast instead of hanging.
+- Recursive aliases are detected by the set of aliases already visited, so a cycle (`type A = A`, or a mutual `A -> B -> A`) is reported as recursive rather than as too deeply nested. The resolution depth is capped as well (64 steps), because an alias which grows on every step (`type G[T] = G[Tuple[T]]`) never repeats an annotation and so cannot be caught that way.
 - Support is for aliases used **as annotations**. An existing `X: TypeAlias = SomeClass` which is also used as a runtime value — as a base class, a constructor, or an `isinstance()` argument — cannot be mechanically rewritten to `type X = ...`, because a `TypeAliasType` is not the class it stands for. `common.Tag` (subclassed at `iterator/embedded.py:102`) is one such case. This fails loudly at import, so it is not a silent hazard, but it does mean ruff's `UP040` cannot be enabled repo-wide.
 
 ## Alternatives considered

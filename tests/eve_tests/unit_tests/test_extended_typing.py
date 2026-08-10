@@ -426,6 +426,9 @@ type SampleIntAlias = int
 type SampleChainedAlias = SampleIntAlias
 type SampleGenericAlias[T] = Tuple[T, T]
 type SampleRecursiveAlias = SampleRecursiveAlias
+type SampleMutualAliasA = SampleMutualAliasB
+type SampleMutualAliasB = SampleMutualAliasA
+type SampleDivergingGenericAlias[T] = SampleDivergingGenericAlias[Tuple[T]]
 
 
 def test_is_type_alias():
@@ -464,8 +467,23 @@ def test_eval_type_alias_with_undefined_value():
 
 
 def test_eval_type_alias_with_recursive_alias():
-    with pytest.raises(TypeError, match="cannot be resolved"):
+    with pytest.raises(TypeError, match="recursive definition"):
         xtyping.eval_type_alias(SampleRecursiveAlias)
+
+
+def test_eval_type_alias_with_mutually_recursive_aliases():
+    # Reported as recursive rather than as too deeply nested, which is what a bare
+    # depth bound would have to say: a cycle repeats an alias, so it is detected as
+    # soon as one is seen twice, however long the cycle is.
+    with pytest.raises(TypeError, match="'SampleMutualAliasA' cannot be resolved.*recursive"):
+        xtyping.eval_type_alias(SampleMutualAliasA)
+
+
+def test_eval_type_alias_with_diverging_generic_alias():
+    # A parametrized alias which grows on every step never repeats an annotation, so
+    # the visited-alias check cannot see it and the depth bound is what stops it.
+    with pytest.raises(TypeError, match="nested too deeply"):
+        xtyping.eval_type_alias(SampleDivergingGenericAlias[int])
 
 
 def test_eval_type_alias_with_failing_value():
