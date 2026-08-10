@@ -404,15 +404,17 @@ def test_write_back_buffer_elimination_loop():
     assert "tmp" in sdfg.arrays
 
 
-def test_write_back_buffer_elimination_view_of_tmp():
-    """A View of `tmp` must keep the write back.
+@pytest.mark.parametrize("viewed_data", ["tmp", "a"])
+def test_write_back_buffer_elimination_view(viewed_data):
+    """Only a View of `tmp` itself must keep the write back.
 
-    The View has its own descriptor, whose strides are the ones of the contiguous
-    `tmp` and not the ones of `b`; nothing updates them.
+    Such a View has its own descriptor, whose strides are the ones of the contiguous
+    `tmp` and not the ones of `b`, and nothing updates them. A View of anything else
+    is unaffected by the rewrite.
     """
-    sdfg = dace.SDFG(util.unique_name("write_back_view_of_tmp"))
+    sdfg = dace.SDFG(util.unique_name("write_back_view"))
 
-    for name in ["a", "c"]:
+    for name in ["a", "c", "d"]:
         sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
     sdfg.add_array("b", shape=(100, 100), dtype=dace.float64, transient=False)
     sdfg.add_array("tmp", shape=(10, 10), dtype=dace.float64, transient=True)
@@ -436,7 +438,11 @@ def test_write_back_buffer_elimination_view_of_tmp():
     )
     view_node = state2.add_access("v")
     state2.add_edge(
-        state2.add_access("tmp"), None, view_node, "views", dace.Memlet("tmp[0:10, 0:10]")
+        state2.add_access(viewed_data),
+        None,
+        view_node,
+        "views",
+        dace.Memlet(f"{viewed_data}[0:10, 0:10]"),
     )
     state2.add_mapped_tasklet(
         "consumer",
@@ -447,10 +453,31 @@ def test_write_back_buffer_elimination_view_of_tmp():
         input_nodes={view_node},
         external_edges=True,
     )
+    if viewed_data != "tmp":
+        # Keep `tmp` consumed by something other than the write back.
+        state2.add_mapped_tasklet(
+            "tmp_consumer",
+            map_ranges={"__i1": "0:10", "__i2": "0:10"},
+            inputs={"__in": dace.Memlet("tmp[__i1, __i2]")},
+            code="__out = __in * 3.0",
+            outputs={"__out": dace.Memlet("d[__i1, __i2]")},
+            external_edges=True,
+        )
     sdfg.validate()
 
-    assert not _apply(sdfg)
-    assert "tmp" in sdfg.arrays
+    if viewed_data == "tmp":
+        assert not _apply(sdfg)
+        assert "tmp" in sdfg.arrays
+    else:
+        ref, res = util.make_sdfg_args(sdfg)
+        util.compile_and_run_sdfg(sdfg, **ref)
+
+        assert _apply(sdfg)
+        assert "tmp" not in sdfg.arrays
+        sdfg.validate()
+
+        util.compile_and_run_sdfg(sdfg, **res)
+        assert util.compare_sdfg_res(ref, res)
 
 
 def test_write_back_buffer_elimination_view_of_tmp_in_map():
