@@ -23,13 +23,13 @@ pass without changing either therefore leaves the fingerprint intact: the cached
 translation is replayed and the pass never runs, while the build step still
 recompiles and refreshes the library's mtime. A fresh library is thus evidence of
 recompilation, never of re-translation. The two caches hit and miss independently,
-so the `status` command reports a verdict for each.
+so `list --by-program` reports both side by side.
 
 Run it in the environment that produced the cache, from the working directory the
 cached run used (the default cache base is `<cwd>/.gt4py_cache`), either through
 the installed `gt4py-next-cache` command or as a module::
 
-    gt4py-next-cache status --program 'apply_diffusion_*'
+    gt4py-next-cache list --by-program --filter 'apply_diffusion_*'
     python -m gt4py.next.gt_cache_manager delete --program 'apply_diffusion_*' --yes
 """
 
@@ -110,16 +110,13 @@ class BuildDir:
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramStatus:
-    """What the next run of one program can do with each of the two caches.
+class ProgramSummary:
+    """What both caches hold for one program name.
 
-    Translation and build are cached separately and hit or miss independently, so
-    they are reported as two verdicts rather than one. Both are counted per
-    program name, which is all the caches record about their contents, while a
-    hit is decided by a fingerprint taken at run time. `replays` and `recompiles`
-    are therefore not symmetric: `not replays` and `recompiles` are guarantees,
-    since nothing on disk can serve this program, while the opposite only says
-    that something on disk could serve it.
+    Counts, not predictions: a program name is all the caches record about their
+    contents, while a hit is decided by a fingerprint taken at run time over the
+    lowered program and its arguments. So an entry counted here may well be
+    unreachable, e.g. after its program's source was edited.
     """
 
     program: str
@@ -128,14 +125,8 @@ class ProgramStatus:
     usable_build_dirs: int
 
     @property
-    def replays(self) -> bool:
-        """Whether a cached translation is available to replay."""
-        return sum(self.entries.values()) > 0
-
-    @property
-    def recompiles(self) -> bool:
-        """Whether no usable build is available, so the library is built again."""
-        return self.usable_build_dirs == 0
+    def entry_count(self) -> int:
+        return sum(self.entries.values())
 
 
 def get_cache_base(cache_dir: pathlib.Path | None = None) -> pathlib.Path:
@@ -189,42 +180,6 @@ def read_entry(path: pathlib.Path) -> stages.ProgramSource:
     """
     with path.open("rb") as fp:
         return pickle.load(fp)
-
-
-def describe_entry(program_source: stages.ProgramSource) -> dict[str, Any]:
-    """Return the facts worth reporting about one unpickled entry."""
-    details: dict[str, Any] = {
-        "program": program_source.entry_point.name,
-        "parameters": len(program_source.entry_point.parameters),
-        "source_language": program_source.code_spec.source_language,
-    }
-    source_code = program_source.source_code
-    if isinstance(source_code, dict):
-        # The DaCe backend stores the SDFG as a JSON object, so it can be
-        # inspected without importing dace.
-        type_counts = _count_json_types(source_code)
-        details |= {
-            "sdfg_name": source_code.get("attributes", {}).get("name"),
-            "dace_version": source_code.get("dace_version"),
-            "states": type_counts.get("SDFGState", 0),
-            "maps": type_counts.get("MapEntry", 0),
-        }
-    else:
-        details["source_characters"] = len(source_code)
-    return details
-
-
-def _count_json_types(obj: Any, counts: dict[str, int] | None = None) -> dict[str, int]:
-    counts = {} if counts is None else counts
-    if isinstance(obj, dict):
-        if isinstance(type_name := obj.get("type"), str):
-            counts[type_name] = counts.get(type_name, 0) + 1
-        for value in obj.values():
-            _count_json_types(value, counts)
-    elif isinstance(obj, list):
-        for value in obj:
-            _count_json_types(value, counts)
-    return counts
 
 
 def find_entries(
@@ -296,13 +251,13 @@ def find_build_dirs(cache_base: pathlib.Path, *, program: str | None = None) -> 
     return build_dirs
 
 
-def get_status(
+def summarize_programs(
     cache_base: pathlib.Path, backends: Sequence[str], *, program: str | None = None
-) -> tuple[list[ProgramStatus], list[Entry]]:
-    """Report per program what the next run does with each cache.
+) -> tuple[list[ProgramSummary], list[Entry]]:
+    """Count what both caches hold, per program name.
 
     Returns:
-        The status of every program with a translation cache entry or a build
+        A summary of every program with a translation cache entry or a build
         folder, sorted by name, and the entries that could not be read.
     """
     entries = find_entries(cache_base, backends, program=program)
@@ -318,7 +273,7 @@ def get_status(
     )
 
     return [
-        ProgramStatus(
+        ProgramSummary(
             program=name,
             entries=counts.get(name, {}),
             build_dirs=build_counts.get(name, 0),
@@ -392,6 +347,12 @@ def _cmd_path(args: argparse.Namespace) -> int:
 
 def _cmd_list(args: argparse.Namespace) -> int:
     cache_base = get_cache_base(args.cache_dir)
+    if args.by_program:
+        return _list_by_program(args, cache_base)
+    return _list_entries(args, cache_base)
+
+
+def _list_entries(args: argparse.Namespace, cache_base: pathlib.Path) -> int:
     entries = find_entries(cache_base, args.backends, program=args.filter)
     sort_keys: dict[str, Callable[[Entry], Any]] = {
         "mtime": lambda e: e.mtime,
@@ -409,105 +370,78 @@ def _cmd_list(args: argparse.Namespace) -> int:
                 default=str,
             )
         )
-        return EXIT_OK
-
-    if not entries:
+    elif not entries:
         print("no entries")
-        return EXIT_OK
-    _print_table(
-        ("BACKEND", "KEY", "PROGRAM", "SIZE", "MTIME"),
-        [
-            (
-                e.backend,
-                e.key,
-                e.program if e.program is not None else "<unreadable>",
-                _format_size(e.size),
-                _format_mtime(e.mtime),
-            )
-            for e in entries
-        ],
-    )
-    return EXIT_OK
+    else:
+        _print_table(
+            ("BACKEND", "KEY", "PROGRAM", "SIZE", "MTIME"),
+            [
+                (
+                    e.backend,
+                    e.key,
+                    e.program if e.program is not None else "<unreadable>",
+                    _format_size(e.size),
+                    _format_mtime(e.mtime),
+                )
+                for e in entries
+            ],
+        )
+    return _fail_if_cached(args, len(entries))
 
 
-def _cmd_show(args: argparse.Namespace) -> int:
-    cache_base = get_cache_base(args.cache_dir)
-    matches = [e for e in find_entries(cache_base, args.backends) if e.key == args.key]
-    if not matches:
-        print(f"error: no entry with key '{args.key}'", file=sys.stderr)
-        return EXIT_NOTHING_DONE
+def _list_by_program(args: argparse.Namespace, cache_base: pathlib.Path) -> int:
+    summaries, unreadable = summarize_programs(cache_base, args.backends, program=args.filter)
 
-    for entry in matches:
-        details: dict[str, Any] = {
-            "key": entry.key,
-            "backend": entry.backend,
-            "path": entry.path,
-            "size": _format_size(entry.size),
-            "mtime": _format_mtime(entry.mtime),
-        }
-        if entry.error is None:
-            details |= describe_entry(read_entry(entry.path))
-        else:
-            details["error"] = f"unreadable payload ({entry.error})"
-        width = max(len(name) for name in details) + 2
-        for name, value in details.items():
-            print(f"{name + ':':{width}}{value}")
-    return EXIT_OK
-
-
-def _cmd_status(args: argparse.Namespace) -> int:
-    cache_base = get_cache_base(args.cache_dir)
-    statuses, unreadable = get_status(cache_base, args.backends, program=args.program)
-
-    if not statuses:
+    if args.json:
+        print(json.dumps([dataclasses.asdict(s) for s in summaries], indent=2, default=str))
+    elif not summaries:
         print("no cached programs")
     else:
         _print_table(
-            ("PROGRAM", "ENTRIES", "BUILDS", "TRANSLATION", "BUILD"),
+            ("PROGRAM", "ENTRIES", "BUILDS"),
             [
                 (
-                    status.program,
-                    ", ".join(f"{n} {backend}" for backend, n in sorted(status.entries.items()))
+                    summary.program,
+                    ", ".join(f"{n} {backend}" for backend, n in sorted(summary.entries.items()))
                     or "-",
-                    f"{status.usable_build_dirs}"
-                    if status.build_dirs == status.usable_build_dirs
-                    else f"{status.usable_build_dirs} (+{status.build_dirs - status.usable_build_dirs} stale)",
-                    "may replay" if status.replays else "will re-translate",
-                    "will recompile" if status.recompiles else "may reuse",
+                    f"{summary.usable_build_dirs}"
+                    if summary.build_dirs == summary.usable_build_dirs
+                    else f"{summary.usable_build_dirs}"
+                    f" (+{summary.build_dirs - summary.usable_build_dirs} stale)",
                 )
-                for status in statuses
+                for summary in summaries
             ],
         )
-    sys.stdout.flush()  # keep the table above the warnings when both go to a terminal
-    if dangerous := [s for s in statuses if s.replays and s.recompiles]:
+    sys.stdout.flush()  # keep the table above the notes when both go to a terminal
+
+    if trap := [s for s in summaries if s.entry_count and not s.usable_build_dirs]:
         print(
-            f"\nWARNING: {len(dangerous)} program(s) will recompile and may replay a cached"
-            " translation while doing so. The library then gets a fresh mtime although a changed"
-            " transformation or pass never runs.",
+            f"\nWARNING: {len(trap)} program(s) have a cached translation but no usable build"
+            " folder. Their next run rebuilds the library while the cached translation is"
+            " replayed, so a fresh library there would NOT mean a changed pass ran.",
             file=sys.stderr,
         )
-    if stale := sum(s.build_dirs - s.usable_build_dirs for s in statuses):
+    if stale := sum(s.build_dirs - s.usable_build_dirs for s in summaries):
         print(
             f"\nnote: {stale} build folder(s) cannot be hit by this environment, most of them"
             f" built under a build-cache version other than '{config.BUILD_CACHE_VERSION_ID}'."
             " The same version salts the translation cache, but entries do not record it, so"
-            " entries left by those runs are still counted as REPLAY above although they"
-            " cannot be hit either.",
+            " entries left by those runs are still counted above although they cannot be hit"
+            " either.",
             file=sys.stderr,
         )
     if unreadable:
         print(
-            f"\nnote: {len(unreadable)} entr(ies) could not be read; the runtime discards"
-            " those too, so they are not replayed.",
+            f"\nnote: {len(unreadable)} entr(ies) could not be read; the runtime discards those"
+            " too, so they cannot be hit either.",
             file=sys.stderr,
         )
+    return _fail_if_cached(args, sum(s.entry_count for s in summaries))
 
-    replaying = [status for status in statuses if status.replays]
-    if args.fail_if_cached and replaying:
-        print(
-            f"error: {len(replaying)} program(s) may replay a cached translation.",
-            file=sys.stderr,
-        )
+
+def _fail_if_cached(args: argparse.Namespace, matched: int) -> int:
+    if args.fail_if_cached and matched:
+        print(f"error: {matched} cached entr(ies) matched.", file=sys.stderr)
         return EXIT_NOTHING_DONE
     return EXIT_OK
 
@@ -598,45 +532,36 @@ def _make_parser(prog: str | None = None) -> argparse.ArgumentParser:
     path_parser = subparsers.add_parser("path", help="Print the resolved cache directories.")
     path_parser.set_defaults(func=_cmd_path)
 
-    list_parser = subparsers.add_parser("list", help="List the translation cache entries.")
+    list_parser = subparsers.add_parser(
+        "list",
+        help="List what the caches hold.",
+        description=(
+            "List the translation cache entries, or with --by-program one row per program"
+            " together with its build folders. Everything reported is a count of what is on"
+            " disk, not a prediction: a hit is decided by a fingerprint taken at run time"
+            " over the lowered program and its arguments, which this tool does not have, so"
+            " an entry listed here may already be unreachable — after its program's source"
+            " was edited, for instance. Build folders record the build-cache version in"
+            " their name, so those that no run here can hit are counted as stale;"
+            " translation cache entries record no version and cannot be told apart that way."
+        ),
+    )
     list_parser.add_argument(
         "--filter", metavar="GLOB", default=None, help="Only entries whose program name matches."
     )
+    list_parser.add_argument(
+        "--by-program",
+        action="store_true",
+        help="One row per program, with its build folders, instead of one row per entry.",
+    )
     list_parser.add_argument("--sort", choices=["mtime", "size", "program", "key"], default="mtime")
     list_parser.add_argument("--json", action="store_true", help="Print as JSON.")
-    list_parser.set_defaults(func=_cmd_list)
-
-    show_parser = subparsers.add_parser("show", help="Show the details of one entry.")
-    show_parser.add_argument("key", help="Entry key, as printed by `list`.")
-    show_parser.set_defaults(func=_cmd_show)
-
-    status_parser = subparsers.add_parser(
-        "status",
-        help="Report what the next run does with each cache.",
-        description=(
-            "Report, per program, what the next run can do with each cache."
-            " The verdicts are deliberately asymmetric, because only one direction can be"
-            " known: 'will re-translate' and 'will recompile' are guarantees, since nothing"
-            " on disk can serve that program; 'may replay' and 'may reuse' only say that"
-            " something on disk could. Whether it is actually hit depends on a fingerprint"
-            " taken at run time over the lowered program and its arguments, which this tool"
-            " does not have. So a cached entry left over from an earlier version of the"
-            " program source is reported as 'may replay' although editing that source"
-            " already invalidated it. Build folders that are unfinished, or were built"
-            " under another build-cache version, are counted as stale instead, because their"
-            " name records the version; translation cache entries record none, so they"
-            " cannot be told apart that way."
-        ),
-    )
-    status_parser.add_argument(
-        "--program", metavar="GLOB", default=None, help="Only programs whose name matches."
-    )
-    status_parser.add_argument(
+    list_parser.add_argument(
         "--fail-if-cached",
         action="store_true",
-        help="Exit with a non-zero status if any program would replay a cached translation.",
+        help="Exit with a non-zero status if anything matched, to gate a run on an empty cache.",
     )
-    status_parser.set_defaults(func=_cmd_status)
+    list_parser.set_defaults(func=_cmd_list)
 
     delete_parser = subparsers.add_parser(
         "delete",
@@ -668,7 +593,7 @@ def _make_parser(prog: str | None = None) -> argparse.ArgumentParser:
     )
     delete_parser.set_defaults(func=_cmd_delete)
 
-    for subparser in (path_parser, list_parser, show_parser, status_parser, delete_parser):
+    for subparser in (path_parser, list_parser, delete_parser):
         _add_common_arguments(subparser)
     return parser
 

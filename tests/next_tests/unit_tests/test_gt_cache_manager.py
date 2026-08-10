@@ -116,7 +116,7 @@ def test_get_cache_base_rejects_other_dirs(tmp_path):
 def test_missing_cache_dirs_are_an_empty_cache(cache_base):
     assert gt_cache_manager.find_entries(cache_base, ["dace", "gtfn"]) == []
     assert gt_cache_manager.find_build_dirs(cache_base) == []
-    assert gt_cache_manager.get_status(cache_base, ["dace", "gtfn"]) == ([], [])
+    assert gt_cache_manager.summarize_programs(cache_base, ["dace", "gtfn"]) == ([], [])
 
 
 def test_find_entries_reads_program_and_backend(cache_base):
@@ -192,77 +192,66 @@ def test_corrupt_entry_degrades_instead_of_crashing(cache_base, capsys):
     assert gt_cache_manager.main(["list", "--cache-dir", str(cache_base)]) == 0
     assert "<unreadable>" in capsys.readouterr().out
 
-    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
+    assert gt_cache_manager.main(["list", "--by-program", "--cache-dir", str(cache_base)]) == 0
     assert "could not be read" in capsys.readouterr().err
 
 
-def test_status_reports_replay_and_retranslate(cache_base):
+def test_summarize_groups_entries_and_builds_by_program(cache_base):
     write_entry(cache_base, "dace", "cached")
     write_entry(cache_base, "dace", "cached", salt="second")
     write_entry(cache_base, "gtfn", "cached")
     write_build_dir(cache_base, "built_only")
 
-    statuses, unreadable = gt_cache_manager.get_status(cache_base, ["dace", "gtfn"])
+    summaries, unreadable = gt_cache_manager.summarize_programs(cache_base, ["dace", "gtfn"])
 
     assert unreadable == []
-    assert [s.program for s in statuses] == ["built_only", "cached"]
-    assert statuses[0].replays is False
-    assert statuses[0].build_dirs == 1
-    assert statuses[1].replays is True
-    assert statuses[1].entries == {"dace": 2, "gtfn": 1}
-    assert statuses[1].build_dirs == 0
+    assert [s.program for s in summaries] == ["built_only", "cached"]
+    assert summaries[0].entry_count == 0
+    assert summaries[0].build_dirs == 1
+    assert summaries[1].entries == {"dace": 2, "gtfn": 1}
+    assert summaries[1].build_dirs == 0
 
 
-def test_status_reports_the_two_caches_independently(cache_base):
+def test_summarize_counts_the_two_caches_independently(cache_base):
     write_entry(cache_base, "dace", "warm")
     write_build_dir(cache_base, "warm")
     write_entry(cache_base, "dace", "translated_only")
     write_build_dir(cache_base, "built_only")
 
-    statuses = {s.program: s for s in gt_cache_manager.get_status(cache_base, ["dace"])[0]}
+    summaries = {s.program: s for s in gt_cache_manager.summarize_programs(cache_base, ["dace"])[0]}
 
-    # both caches warm: nothing is redone, which is why the two verdicts are separate
-    assert (statuses["warm"].replays, statuses["warm"].recompiles) == (True, False)
-    # the trap: the library is rebuilt, the translation is not
-    assert (statuses["translated_only"].replays, statuses["translated_only"].recompiles) == (
-        True,
-        True,
+    assert (summaries["warm"].entry_count, summaries["warm"].usable_build_dirs) == (1, 1)
+    assert (
+        summaries["translated_only"].entry_count,
+        summaries["translated_only"].usable_build_dirs,
+    ) == (1, 0)
+    assert (summaries["built_only"].entry_count, summaries["built_only"].usable_build_dirs) == (
+        0,
+        1,
     )
-    assert (statuses["built_only"].replays, statuses["built_only"].recompiles) == (False, False)
 
 
-def test_status_counts_a_build_from_another_version_as_recompile(cache_base):
+def test_build_from_another_version_is_stale(cache_base):
     write_entry(cache_base, "dace", "foo")
     write_build_dir(cache_base, "foo", version_id="0.0.1+ancient")
 
-    (status,) = gt_cache_manager.get_status(cache_base, ["dace"])[0]
+    (summary,) = gt_cache_manager.summarize_programs(cache_base, ["dace"])[0]
 
-    assert status.build_dirs == 1
-    assert status.usable_build_dirs == 0
-    assert status.recompiles is True
-
-
-def test_status_notes_that_entries_may_be_stale_too(cache_base, capsys):
-    write_entry(cache_base, "dace", "foo")
-    write_build_dir(cache_base, "foo", version_id="0.0.1+ancient")
-
-    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
-
-    assert "cannot be hit either" in capsys.readouterr().err
+    assert summary.build_dirs == 1
+    assert summary.usable_build_dirs == 0
 
 
-def test_status_counts_an_unfinished_build_as_recompile(cache_base):
+def test_unfinished_build_is_stale(cache_base):
     write_entry(cache_base, "dace", "foo")
     write_build_dir(cache_base, "foo", complete=False)
 
-    (status,) = gt_cache_manager.get_status(cache_base, ["dace"])[0]
+    (summary,) = gt_cache_manager.summarize_programs(cache_base, ["dace"])[0]
 
-    assert status.build_dirs == 1
-    assert status.usable_build_dirs == 0
-    assert status.recompiles is True
+    assert summary.build_dirs == 1
+    assert summary.usable_build_dirs == 0
 
 
-def test_status_accepts_build_data_as_finished(cache_base):
+def test_build_data_marks_a_build_finished(cache_base):
     folder = write_build_dir(cache_base, "foo", complete=False)
     build_data.write_data(
         build_data.BuildData(
@@ -273,71 +262,61 @@ def test_status_accepts_build_data_as_finished(cache_base):
         folder,
     )
 
-    (status,) = gt_cache_manager.get_status(cache_base, ["gtfn"])[0]
+    (summary,) = gt_cache_manager.summarize_programs(cache_base, ["gtfn"])[0]
 
-    assert status.recompiles is False
+    assert summary.usable_build_dirs == 1
 
 
-def test_status_warns_about_replay_without_build_dir(cache_base, capsys):
+def test_list_by_program_warns_about_a_cached_translation_without_a_build(cache_base, capsys):
     write_entry(cache_base, "dace", "foo")
 
-    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
+    assert gt_cache_manager.main(["list", "--by-program", "--cache-dir", str(cache_base)]) == 0
 
     captured = capsys.readouterr()
-    assert "may replay" in captured.out
-    assert "will recompile" in captured.out
-    assert "never runs" in captured.err
+    assert "1 dace" in captured.out
+    assert "would NOT mean a changed pass ran" in captured.err
 
 
-def test_status_does_not_warn_when_both_caches_are_warm(cache_base, capsys):
+def test_list_by_program_does_not_warn_when_both_caches_are_warm(cache_base, capsys):
     write_entry(cache_base, "dace", "foo")
     write_build_dir(cache_base, "foo")
 
-    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
+    assert gt_cache_manager.main(["list", "--by-program", "--cache-dir", str(cache_base)]) == 0
 
-    captured = capsys.readouterr()
-    assert "may replay" in captured.out
-    assert "may reuse" in captured.out
-    assert "WARNING" not in captured.err
+    assert "WARNING" not in capsys.readouterr().err
 
 
-def test_status_fail_if_cached(cache_base):
+def test_list_by_program_notes_that_entries_may_be_stale_too(cache_base, capsys):
+    write_entry(cache_base, "dace", "foo")
+    write_build_dir(cache_base, "foo", version_id="0.0.1+ancient")
+
+    assert gt_cache_manager.main(["list", "--by-program", "--cache-dir", str(cache_base)]) == 0
+
+    assert "cannot be hit either" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("extra", [[], ["--by-program"]])
+def test_list_fail_if_cached(cache_base, extra):
     write_build_dir(cache_base, "foo")
-    argv = ["status", "--cache-dir", str(cache_base), "--fail-if-cached"]
+    argv = ["list", "--cache-dir", str(cache_base), "--fail-if-cached", *extra]
 
-    assert gt_cache_manager.main(argv) == 0
+    assert gt_cache_manager.main(argv) == 0  # a build folder alone is not a cached translation
 
     write_entry(cache_base, "dace", "foo")
 
     assert gt_cache_manager.main(argv) == gt_cache_manager.EXIT_NOTHING_DONE
 
 
-def test_status_program_filter(cache_base, capsys):
+@pytest.mark.parametrize("extra", [[], ["--by-program"]])
+def test_list_filter(cache_base, capsys, extra):
     write_entry(cache_base, "dace", "foo")
     write_entry(cache_base, "dace", "bar")
 
-    gt_cache_manager.main(["status", "--cache-dir", str(cache_base), "--program", "fo*"])
+    gt_cache_manager.main(["list", "--cache-dir", str(cache_base), "--filter", "fo*", *extra])
 
     captured = capsys.readouterr()
     assert "foo" in captured.out
     assert "bar" not in captured.out
-
-
-def test_show_reports_payload_details(cache_base, capsys):
-    key = write_entry(cache_base, "dace", "foo")
-
-    assert gt_cache_manager.main(["show", key, "--cache-dir", str(cache_base)]) == 0
-
-    out = capsys.readouterr().out
-    assert "program:" in out and "foo" in out
-    assert "SDFG" in out
-
-
-def test_show_unknown_key(cache_base):
-    assert (
-        gt_cache_manager.main(["show", "0123456789abcdef", "--cache-dir", str(cache_base)])
-        == gt_cache_manager.EXIT_NOTHING_DONE
-    )
 
 
 def test_delete_dry_run_keeps_entries(cache_base, capsys):
