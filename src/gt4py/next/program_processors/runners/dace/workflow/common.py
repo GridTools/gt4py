@@ -155,26 +155,6 @@ def set_dace_config(
     #   possible.
     dace.Config.set("compiler", "cuda", "synchronize_on_exit", value=False)
 
-    # NEW CODEGEN:
-    # In the old codegen we had to use the default stream. The effect was that the "same"
-    #  stream was used across all SDFGs in ICON4Py. After switching to the new codegen,
-    #  a single stream was used (there was a bug that made the default stream not used
-    #  correctly [see](https://github.com/spcl/dace/pull/2408)). The net effect was that
-    #  allocations got slower. We think this is because there are now multiple stream
-    #  involved which makes it harder for the driver to schedule them. Thus, for good
-    #  performance, we still have to use the default stream. But for other reasons as
-    #  before.
-    # OLD CODEGEN:
-    # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
-    #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
-    #  idea was to use just one stream. However, even in that case the generator
-    #  generated wrong code. The current approach is to use the default stream, i.e.
-    #  setting `max_concurrent_streams` to `-1`. However, the draw back is, that
-    #  apparently then all synchronization is disabled, even the one at the very
-    #  end of the SDFG call. To correct for that we are using either
-    #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
-    #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
-    #
     # GT4Py can optionally request multi-stream scheduling via
     # ``max_concurrent_gpu_streams``. A value of ``0`` keeps the historical
     # behavior (default stream only, ``max_concurrent_streams=-1``); larger values
