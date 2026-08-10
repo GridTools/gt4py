@@ -37,8 +37,16 @@ gt4py-next-cache status --program '<name glob>' --fail-if-cached
 
 The `status` call is the gate: it exits non-zero while any matched program would
 still replay. Require it to pass **before** launching an expensive job. Drop
-`--program` to cover every program, add `--include-build-dirs` to force a full
-rebuild too, and omit `--yes` for a dry run.
+`--program` to cover every program and add `--include-build-dirs` to force a full
+rebuild too.
+
+`status` reports the two caches separately, because they hit and miss
+independently: `TRANSLATION` is `REPLAY` or `re-translate`, `BUILD` is `reuse` or
+`recompile`. Only the translation column decides whether a changed pass runs.
+
+Without `--yes`, `delete` lists what it matched and asks for confirmation on a
+terminal; use `--dry-run` to preview and `--yes` in scripts and job files, where
+there is no terminal to ask.
 
 `gt4py-next-cache` is installed with gt4py; `python -m gt4py.next.gt_cache_manager`
 is the same tool, for when the console script is not on `PATH`.
@@ -47,10 +55,10 @@ Worked example — a new dace transformation, measured on one dycore program:
 
 ```bash
 gt4py-next-cache status --program 'apply_divergence_damping*'
-# -> REPLAY (recompiles, does NOT re-translate)
+# -> TRANSLATION: REPLAY   BUILD: reuse
 gt4py-next-cache delete --program 'apply_divergence_damping*' --yes
 gt4py-next-cache status --program 'apply_divergence_damping*' --fail-if-cached
-# -> RE-TRANSLATE, exit 0
+# -> TRANSLATION: re-translate, exit 0
 srun ...   # now the pass actually runs
 ```
 

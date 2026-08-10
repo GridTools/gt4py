@@ -32,7 +32,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.compilation import cache as gtx_cache
+from gt4py.next.otf.compilation import build_data, cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import compilation as dace_wf_compilation
 
 
@@ -118,7 +118,7 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
 
     # Simulate a build interrupted mid-link: truncated library, no completion marker.
     artifact.library_path.write_bytes(b"\x00" * 64)
-    (build_folder / dace_wf_compilation._COMPILE_COMPLETE_MARKER).unlink()
+    (build_folder / build_data.COMPILE_COMPLETE_MARKER_NAME).unlink()
 
     recovered = comp(inp)
 

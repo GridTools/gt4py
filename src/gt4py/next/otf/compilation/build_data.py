@@ -19,6 +19,12 @@ from gt4py._core import file_utils
 
 _DATAFILE_NAME: Final = "gt4py.json"
 
+#: Marker file written into a build folder once a build has run to completion.
+#: Used by build systems that keep no `BuildData` of their own (the DaCe backend
+#: lets dace drive the build), so that an interrupted build is not mistaken for a
+#: finished one just because the folder exists.
+COMPILE_COMPLETE_MARKER_NAME: Final = ".gt4py_compile_complete"
+
 
 class BuildStatus(enum.IntEnum):
     INITIALIZED = enum.auto()
@@ -84,6 +90,20 @@ def read_data(path: pathlib.Path) -> Optional[BuildData]:
         # dict key raises KeyError, a bad status name AttributeError) is treated
         # as "no build data" so the caller rebuilds rather than crashing.
         return None
+
+
+def is_build_complete(path: pathlib.Path) -> bool:
+    """Whether the build folder `path` holds a build that ran to completion.
+
+    Covers both ways a build folder records this: the `BuildData` status written by
+    the gt4py build systems, and the marker file written where dace drives the
+    build. A folder that holds neither was left behind by an interrupted build and
+    will be built again.
+    """
+    if (path / COMPILE_COMPLETE_MARKER_NAME).exists():
+        return True
+    data = read_data(path)
+    return data is not None and data.status >= BuildStatus.COMPILED
 
 
 def write_data(data: BuildData, path: pathlib.Path) -> None:

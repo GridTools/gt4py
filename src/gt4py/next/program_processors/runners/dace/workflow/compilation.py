@@ -14,7 +14,7 @@ import os
 import pathlib
 import warnings
 from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any, Final, TypeAlias
+from typing import Any, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -24,14 +24,11 @@ from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
-from gt4py.next.otf.compilation import cache as gtx_cache
+from gt4py.next.otf.compilation import build_data, cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
 )
-
-
-_COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
 SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
@@ -335,7 +332,7 @@ class DaCeCompiler(
                 # truncated, unloadable library behind. The marker is written only
                 # after a completed compile: no marker -> drop the stale library so
                 # dace rebuilds it instead of handing it out.
-                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                marker = sdfg_build_folder / build_data.COMPILE_COMPLETE_MARKER_NAME
                 if not marker.exists():
                     for stale in (
                         library_path,

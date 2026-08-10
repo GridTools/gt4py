@@ -14,7 +14,7 @@ from gt4py._core import filecache
 from gt4py.next import config, gt_cache_manager
 from gt4py.next.otf import code_specs, stages
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.compilation import cache
+from gt4py.next.otf.compilation import build_data, cache
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
@@ -42,12 +42,32 @@ def write_entry(cache_base: pathlib.Path, backend: str, name: str, salt: str = "
     return file_cache._get_path(key).stem
 
 
-def write_build_dir(cache_base: pathlib.Path, name: str, salt: str = "0") -> pathlib.Path:
+def write_build_dir(
+    cache_base: pathlib.Path,
+    name: str,
+    salt: str = "0",
+    *,
+    complete: bool = True,
+    version_id: str | None = None,
+) -> pathlib.Path:
     """Create a folder named the way `cache.get_cache_folder` names them."""
-    folder = cache_base / f"{name}{cache.BINDINGS_NAME_SUFFIX}_{salt * 16}_1.2.3"
+    version_id = config.BUILD_CACHE_VERSION_ID if version_id is None else version_id
+    folder = cache_base / f"{name}{cache.BINDINGS_NAME_SUFFIX}_{salt * 16}_{version_id}"
     folder.mkdir(parents=True)
     (folder / "libprogram.so").write_text("not really a library")
+    if complete:
+        (folder / build_data.COMPILE_COMPLETE_MARKER_NAME).touch()
     return folder
+
+
+class FakeStdin:
+    """Stand-in for `sys.stdin` that reports whether it is a terminal."""
+
+    def __init__(self, interactive: bool) -> None:
+        self._interactive = interactive
+
+    def isatty(self) -> bool:
+        return self._interactive
 
 
 @pytest.fixture
@@ -193,6 +213,62 @@ def test_status_reports_replay_and_retranslate(cache_base):
     assert statuses[1].build_dirs == 0
 
 
+def test_status_reports_the_two_caches_independently(cache_base):
+    write_entry(cache_base, "dace", "warm")
+    write_build_dir(cache_base, "warm")
+    write_entry(cache_base, "dace", "translated_only")
+    write_build_dir(cache_base, "built_only")
+
+    statuses = {s.program: s for s in gt_cache_manager.get_status(cache_base, ["dace"])[0]}
+
+    # both caches warm: nothing is redone, which is why the two verdicts are separate
+    assert (statuses["warm"].replays, statuses["warm"].recompiles) == (True, False)
+    # the trap: the library is rebuilt, the translation is not
+    assert (statuses["translated_only"].replays, statuses["translated_only"].recompiles) == (
+        True,
+        True,
+    )
+    assert (statuses["built_only"].replays, statuses["built_only"].recompiles) == (False, False)
+
+
+def test_status_counts_a_build_from_another_version_as_recompile(cache_base):
+    write_entry(cache_base, "dace", "foo")
+    write_build_dir(cache_base, "foo", version_id="0.0.1+ancient")
+
+    (status,) = gt_cache_manager.get_status(cache_base, ["dace"])[0]
+
+    assert status.build_dirs == 1
+    assert status.usable_build_dirs == 0
+    assert status.recompiles is True
+
+
+def test_status_counts_an_unfinished_build_as_recompile(cache_base):
+    write_entry(cache_base, "dace", "foo")
+    write_build_dir(cache_base, "foo", complete=False)
+
+    (status,) = gt_cache_manager.get_status(cache_base, ["dace"])[0]
+
+    assert status.build_dirs == 1
+    assert status.usable_build_dirs == 0
+    assert status.recompiles is True
+
+
+def test_status_accepts_build_data_as_finished(cache_base):
+    folder = write_build_dir(cache_base, "foo", complete=False)
+    build_data.write_data(
+        build_data.BuildData(
+            status=build_data.BuildStatus.COMPILED,
+            module=folder / "libprogram.so",
+            entry_point_name="foo",
+        ),
+        folder,
+    )
+
+    (status,) = gt_cache_manager.get_status(cache_base, ["gtfn"])[0]
+
+    assert status.recompiles is False
+
+
 def test_status_warns_about_replay_without_build_dir(cache_base, capsys):
     write_entry(cache_base, "dace", "foo")
 
@@ -200,7 +276,20 @@ def test_status_warns_about_replay_without_build_dir(cache_base, capsys):
 
     captured = capsys.readouterr()
     assert "REPLAY" in captured.out
-    assert "will NOT run" in captured.err
+    assert "recompile" in captured.out
+    assert "does NOT run" in captured.err
+
+
+def test_status_does_not_warn_when_both_caches_are_warm(cache_base, capsys):
+    write_entry(cache_base, "dace", "foo")
+    write_build_dir(cache_base, "foo")
+
+    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
+
+    captured = capsys.readouterr()
+    assert "REPLAY" in captured.out
+    assert "reuse" in captured.out
+    assert "WARNING" not in captured.err
 
 
 def test_status_fail_if_cached(cache_base):
@@ -211,7 +300,7 @@ def test_status_fail_if_cached(cache_base):
 
     write_entry(cache_base, "dace", "foo")
 
-    assert gt_cache_manager.main(argv) == gt_cache_manager.EXIT_NO_MATCH
+    assert gt_cache_manager.main(argv) == gt_cache_manager.EXIT_NOTHING_DONE
 
 
 def test_status_program_filter(cache_base, capsys):
@@ -238,16 +327,72 @@ def test_show_reports_payload_details(cache_base, capsys):
 def test_show_unknown_key(cache_base):
     assert (
         gt_cache_manager.main(["show", "0123456789abcdef", "--cache-dir", str(cache_base)])
-        == gt_cache_manager.EXIT_NO_MATCH
+        == gt_cache_manager.EXIT_NOTHING_DONE
     )
 
 
 def test_delete_dry_run_keeps_entries(cache_base, capsys):
     write_entry(cache_base, "dace", "foo")
 
+    assert (
+        gt_cache_manager.main(["delete", "--all", "--dry-run", "--cache-dir", str(cache_base)]) == 0
+    )
+
+    assert "dry run" in capsys.readouterr().out
+    assert len(gt_cache_manager.find_entries(cache_base, ["dace"])) == 1
+
+
+def test_delete_asks_before_removing_on_a_terminal(cache_base, monkeypatch, capsys):
+    write_entry(cache_base, "dace", "foo")
+    monkeypatch.setattr(gt_cache_manager.sys, "stdin", FakeStdin(interactive=True))
+    monkeypatch.setattr("builtins.input", lambda prompt="": "y")
+
     assert gt_cache_manager.main(["delete", "--all", "--cache-dir", str(cache_base)]) == 0
 
-    assert "would remove" in capsys.readouterr().out
+    assert gt_cache_manager.find_entries(cache_base, ["dace"]) == []
+
+
+@pytest.mark.parametrize("answer", ["n", "", "no", "whatever"])
+def test_delete_declined_removes_nothing(cache_base, monkeypatch, answer):
+    write_entry(cache_base, "dace", "foo")
+    monkeypatch.setattr(gt_cache_manager.sys, "stdin", FakeStdin(interactive=True))
+    monkeypatch.setattr("builtins.input", lambda prompt="": answer)
+
+    result = gt_cache_manager.main(["delete", "--all", "--cache-dir", str(cache_base)])
+
+    assert result == gt_cache_manager.EXIT_NOTHING_DONE
+    assert len(gt_cache_manager.find_entries(cache_base, ["dace"])) == 1
+
+
+def test_delete_never_prompts_without_a_terminal(cache_base, monkeypatch, capsys):
+    write_entry(cache_base, "dace", "foo")
+    monkeypatch.setattr(gt_cache_manager.sys, "stdin", FakeStdin(interactive=False))
+
+    def _no_prompting(prompt=""):
+        raise AssertionError("a non-interactive run must not block on a prompt")
+
+    monkeypatch.setattr("builtins.input", _no_prompting)
+
+    result = gt_cache_manager.main(["delete", "--all", "--cache-dir", str(cache_base)])
+
+    assert result == gt_cache_manager.EXIT_ERROR
+    assert "--yes" in capsys.readouterr().err
+    assert len(gt_cache_manager.find_entries(cache_base, ["dace"])) == 1
+
+
+def test_delete_declined_at_eof_removes_nothing(cache_base, monkeypatch):
+    write_entry(cache_base, "dace", "foo")
+    monkeypatch.setattr(gt_cache_manager.sys, "stdin", FakeStdin(interactive=True))
+
+    def _eof(prompt=""):
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", _eof)
+
+    assert (
+        gt_cache_manager.main(["delete", "--all", "--cache-dir", str(cache_base)])
+        == gt_cache_manager.EXIT_NOTHING_DONE
+    )
     assert len(gt_cache_manager.find_entries(cache_base, ["dace"])) == 1
 
 
@@ -284,7 +429,7 @@ def test_delete_without_match_exits_non_zero(cache_base):
         gt_cache_manager.main(
             ["delete", "--program", "nope", "--yes", "--cache-dir", str(cache_base)]
         )
-        == gt_cache_manager.EXIT_NO_MATCH
+        == gt_cache_manager.EXIT_NOTHING_DONE
     )
 
 
@@ -362,7 +507,12 @@ def test_delete_refuses_paths_outside_the_cache(cache_base, tmp_path):
 def test_delete_refuses_build_dirs_outside_the_cache(cache_base, tmp_path):
     outsider = tmp_path / "precious"
     outsider.mkdir()
-    build_dir = gt_cache_manager.BuildDir(program="foo", path=outsider)
+    build_dir = gt_cache_manager.BuildDir(
+        program="foo",
+        path=outsider,
+        version_id=config.BUILD_CACHE_VERSION_ID,
+        complete=True,
+    )
 
     with pytest.raises(gt_cache_manager.CacheDirError, match="refusing to remove"):
         gt_cache_manager.delete_build_dirs([build_dir], cache_base)
