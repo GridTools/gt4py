@@ -214,6 +214,59 @@ def test_write_back_buffer_elimination_unrelated_reader():
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
 
 
+def test_write_back_buffer_elimination_loop():
+    """A write back inside a loop must be kept.
+
+    The loop body defines `tmp`, then reads `b` and only then writes `tmp` back. The
+    read is reachable from the write back, through the back edge, but it must still
+    see what the previous iteration wrote and not what the producer of `tmp` just
+    computed.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_back_loop"))
+
+    for name in ["a", "b", "d"]:
+        sdfg.add_array(name, shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(20,), dtype=dace.float64, transient=True)
+
+    loop = dace.sdfg.state.LoopRegion(
+        label="loop",
+        condition_expr="it < 2",
+        loop_var="it",
+        initialize_expr="it = 0",
+        update_expr="it = it + 1",
+    )
+    sdfg.add_node(loop, is_start_block=True)
+
+    define_state = loop.add_state("define", is_start_block=True)
+    define_state.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i": "0:20"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + it",
+        outputs={"__out": dace.Memlet("tmp[__i]")},
+        external_edges=True,
+    )
+    read_state = loop.add_state_after(define_state, "read")
+    read_state.add_mapped_tasklet(
+        "reader",
+        map_ranges={"__i": "0:20"},
+        inputs={"__in": dace.Memlet("b[__i]")},
+        code="__out = __in * 2.0",
+        outputs={"__out": dace.Memlet("d[__i]")},
+        external_edges=True,
+    )
+    write_back_state = loop.add_state_after(read_state, "write_back")
+    write_back_state.add_nedge(
+        write_back_state.add_access("tmp"),
+        write_back_state.add_access("b"),
+        dace.Memlet("tmp[0:20] -> [0:20]"),
+    )
+    sdfg.validate()
+
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+
+
 def test_write_back_buffer_elimination_view_of_tmp():
     """A View of `tmp` must keep the write back.
 

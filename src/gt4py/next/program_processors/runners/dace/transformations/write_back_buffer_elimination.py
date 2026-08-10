@@ -135,6 +135,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             `wb_state` is only used by `wb_edge`.
         - Every state that writes `T` reaches `wb_state`, i.e. the copy always happens
             after `T` has been defined.
+        - `wb_state` does not lie on a cycle, so a state that is reachable from
+            `wb_state` really does run after the write back.
         - No other access to `G` conflicts with turning the writes to `T` into writes
             to `G`, see `_has_conflicting_global_access()`.
 
@@ -181,6 +183,14 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if len(write_backs) != 1:
                 continue
             wb_edge, wb_state = write_backs[0]
+
+            # If `wb_state` lies on a cycle, for example because it is inside a loop,
+            #  then "reachable from `wb_state`" no longer means "after the write back":
+            #  a state that reaches `wb_state` again also runs before it, in the next
+            #  iteration. The reachability based checks below, especially
+            #  `_has_conflicting_global_access()`, rely on that implication.
+            if wb_state in reachable[wb_state]:
+                continue
 
             glob_node = wb_edge.dst
             glob_desc = glob_node.desc(sdfg)
