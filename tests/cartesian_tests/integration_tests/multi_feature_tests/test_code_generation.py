@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from enum import IntEnum
 import numpy as np
 import pytest
 
@@ -1853,3 +1854,39 @@ def test_offset_j_in_temporaries(backend: str) -> None:
                 if isnan(sqrt_res)
                 else 0.0
             )
+
+
+@gtscript.enum
+class MyEnum(IntEnum):
+    Zero = 0
+    A = 10
+    B = 20
+    C = 30
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_enum_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], order: MyEnum):  # type: ignore
+        with computation(PARALLEL), interval(0, 1):
+            out_field = 32
+            if order < MyEnum.A:
+                out_field = MyEnum.A
+
+        with computation(PARALLEL), interval(1, 2):
+            out_field = 23
+            out_field = MyEnum.B
+
+        with computation(PARALLEL), interval(2, None):
+            out_field = 56
+            out_field = MyEnum.C
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, MyEnum.Zero)
+
+    assert out_arr[0, 0, 0] == MyEnum.A.value
+    assert out_arr[0, 0, 1] == MyEnum.B.value
+    assert (out_arr[0, 0, 2:] == MyEnum.C.value).all()
