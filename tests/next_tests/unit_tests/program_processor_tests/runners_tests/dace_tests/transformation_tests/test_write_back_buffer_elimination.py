@@ -214,6 +214,32 @@ def test_write_back_buffer_elimination_unrelated_reader():
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
 
 
+def test_write_back_buffer_elimination_strided_write_back():
+    """A strided write back must be kept.
+
+    `Range.size()` ignores the step, so the destination has the same size as `tmp`,
+    but the rewrite can only shift the accesses, not scatter them.
+    """
+    sdfg, _, _ = _mk_write_back_buffer_sdfg("tmp[0:10, 0:10] -> [0:20:2, 22:32]")
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+
+
+def test_write_back_buffer_elimination_wcr_write_back():
+    """A write back with conflict resolution must be kept."""
+    sdfg, _, state2 = _mk_write_back_buffer_sdfg("tmp[0:10, 0:10] -> [11:21, 22:32]")
+    (write_back_edge,) = [
+        edge
+        for edge in state2.edges()
+        if isinstance(edge.src, dace.sdfg.nodes.AccessNode) and edge.src.data == "tmp"
+        if isinstance(edge.dst, dace.sdfg.nodes.AccessNode)
+    ]
+    write_back_edge.data.wcr = "lambda a, b: a + b"
+
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+
+
 def test_write_back_buffer_elimination_loop():
     """A write back inside a loop must be kept.
 

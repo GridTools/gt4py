@@ -129,8 +129,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             all its AccessNodes are on the top level of their state, i.e. none of them
             is inside a Map.
         - `wb_edge` is the only edge that connects `T` with a non transient array and
-            it copies `T` in full, into a range of `G` of the same size. `G` is not a
-            view and has the same number of dimensions as `T`.
+            it copies `T` in full, without conflict resolution, into a contiguous
+            range of `G` of the same size. `G` is not a view and has the same number
+            of dimensions as `T`.
         - `wb_state` neither writes `T` nor reads `G`, and the AccessNode of `G` in
             `wb_state` is only used by `wb_edge`.
         - Every state that writes `T` reaches `wb_state`, i.e. the copy always happens
@@ -203,6 +204,11 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if wb_state.in_degree(glob_node) != 1 or wb_state.out_degree(glob_node) != 0:
                 continue
 
+            # A conflict resolution would combine `T` with the old value of `G`, but
+            #  after the rewrite the producer writes `G` unconditionally.
+            if wb_edge.data.wcr is not None:
+                continue
+
             src_subset = wb_edge.data.get_src_subset(wb_edge, wb_state)
             dst_subset = wb_edge.data.get_dst_subset(wb_edge, wb_state)
             if src_subset is None or dst_subset is None:
@@ -211,6 +217,11 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if src_subset != dace_subsets.Range.from_array(tmp_desc):
                 continue
             if dst_subset.size() != src_subset.size():
+                continue
+            # `Range.size()` ignores the step, so the check above also passes for a
+            #  strided destination. The rewrite, however, only shifts the accesses by
+            #  a constant offset and can not scatter them.
+            if any(step != 1 for _, _, step in dst_subset.ndrange()):
                 continue
 
             def_states = {state for node, state in locations if state.in_degree(node) > 0}
