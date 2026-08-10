@@ -23,6 +23,15 @@ from dace.transformation import pass_pipeline as dace_ppl
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
+# Conditional import because `gt4py.cartesian` uses an older DaCe version without
+#  `explicit_cf_compatible`.
+# TODO(phimuell): Remove once `gt4py.cartesian` has been updated.
+try:
+    explicit_cf_compatible = dace_transformation.explicit_cf_compatible
+except AttributeError:
+    explicit_cf_compatible = lambda x: x  # noqa: E731 [lambda-assignment]
+
+
 def _find_viewed_data(sdfg: dace.SDFG) -> set[str]:
     """Collects the names of all data that some View in `sdfg` refers to.
 
@@ -53,6 +62,7 @@ def _find_viewed_data(sdfg: dace.SDFG) -> set[str]:
     return viewed
 
 
+@explicit_cf_compatible
 @dace_properties.make_properties
 class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     """Removes a write back buffer whose content is also consumed.
@@ -95,7 +105,14 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             self.assume_pointwise = assume_pointwise
 
     def modifies(self) -> dace_ppl.Modifies:
-        return dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes
+        # `Descriptors` because `T` is removed, `NestedSDFGs` because the strides of
+        #  the descriptors that were mapped from `T` are adjusted.
+        return (
+            dace_ppl.Modifies.Memlets
+            | dace_ppl.Modifies.AccessNodes
+            | dace_ppl.Modifies.Descriptors
+            | dace_ppl.Modifies.NestedSDFGs
+        )
 
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
