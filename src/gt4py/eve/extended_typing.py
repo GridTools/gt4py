@@ -34,20 +34,14 @@ import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
-# The standard library has supported PEP 585 (Type Hinting Generics In Standard
-# Collections) since Python 3.9, so the deprecated 'typing' aliases star-imported above
-# are replaced here by the standard collection types. This block must stay *below* the
-# star imports, since it deliberately rebinds names those imports also define; the
-# 'isort: split' marker keeps the import sorter from hoisting it.
+# Re-export the standard collection types under the names the star imports above bind to
+# their deprecated 'typing' counterparts, so that e.g. 'Sequence' is
+# 'collections.abc.Sequence' rather than 'typing.Sequence'. This block must stay *below*
+# the star imports, since it deliberately rebinds names those imports also define; the
+# 'isort: split' marker keeps the import sorter from hoisting it. The builtin generics
+# are deliberately not re-exported under their old 'typing' spellings; see
+# '_DEPRECATED_TYPING_ALIASES' below.
 # isort: split
-from builtins import (  # type: ignore[assignment]
-    dict as Dict,
-    frozenset as FrozenSet,
-    list as List,
-    set as Set,
-    tuple as Tuple,
-    type as Type,
-)
 from collections import (
     ChainMap as ChainMap,
     Counter as Counter,
@@ -87,12 +81,58 @@ from contextlib import (
 from re import Match as Match, Pattern as Pattern
 
 
+# The 'typing' aliases of the builtin generics are deprecated since PEP 585 and are no
+# longer re-exported: use the builtin spelling instead. They are not simply absent from
+# this module -- the star imports above bind them, and '__getattr__' below would happily
+# forward them to 'typing' -- so they are dropped from the namespace here and rejected
+# explicitly. Without this, removing them would silently downgrade every use site from
+# the builtin to the deprecated 'typing' object. Note that this is a runtime guarantee
+# only: a type checker still resolves the names through the star imports.
+_DEPRECATED_TYPING_ALIASES: Final[Mapping[str, str]] = {
+    "Dict": "dict",
+    "FrozenSet": "frozenset",
+    "List": "list",
+    "Set": "set",
+    "Tuple": "tuple",
+    "Type": "type",
+}
+
+for _alias in _DEPRECATED_TYPING_ALIASES:
+    globals().pop(_alias, None)
+del _alias
+
+
+class _ForwardRefTypingNamespace:
+    """Namespace bound to the name 'typing' while evaluating forward references.
+
+    Annotations are resolved through this module, so that 'typing_extensions'
+    definitions take priority and the standard collection types are used. The
+    deprecated builtin aliases are not re-exported here, but they remain perfectly
+    valid in user-written annotations, so 'typing.List[int]' and friends fall back
+    to the real 'typing' module instead of raising.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        if name in _DEPRECATED_TYPING_ALIASES:
+            return getattr(_typing, name)
+        return getattr(_sys.modules[__name__], name)
+
+
+_FORWARD_REF_TYPING_NS: Final = _ForwardRefTypingNamespace()
+
+
 # These fallbacks are useful for public symbols not exported by default.
 # Again, definitions in 'typing_extensions' take priority over those in 'typing'
 def __getattr__(name: str) -> Any:
     import sys
 
     import typing_extensions
+
+    if (replacement := _DEPRECATED_TYPING_ALIASES.get(name)) is not None:
+        raise AttributeError(
+            f"'{name}' is a deprecated 'typing' alias (PEP 585) and is not exported by"
+            f" '{__name__}'. Use '{replacement}' instead."
+        )
 
     result = SENTINEL = object()
     if not (name.startswith("__") and name.endswith("__")):
@@ -110,15 +150,17 @@ def __getattr__(name: str) -> Any:
     return result
 
 
-def __dir__() -> List[str]:
+def __dir__() -> list[str]:
     if not hasattr(self_func := (globals()["__dir__"]), "__cached_dir"):
         import typing
 
         import typing_extensions
 
         orig_dir = typing.__dir__()
-        self_func.__cached_dir = [*orig_dir] + [
-            name for name in typing_extensions.__dir__() if name not in orig_dir
+        self_func.__cached_dir = [
+            name
+            for name in [*orig_dir, *(n for n in typing_extensions.__dir__() if n not in orig_dir)]
+            if name not in _DEPRECATED_TYPING_ALIASES
         ]
 
     return self_func.__cached_dir
@@ -137,8 +179,8 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
 
 _T_co = TypeVar("_T_co", covariant=True)
 NestedSequence = Sequence[Union[_T_co, "NestedSequence[_T_co]"]]
-NestedList = List[Union[_T_co, "NestedList[_T_co]"]]
-NestedTuple = Tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
+NestedList = list[Union[_T_co, "NestedList[_T_co]"]]
+NestedTuple = tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
 
 MaybeNested = Union[_T_co, NestedSequence[_T_co]]
 MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
@@ -163,7 +205,7 @@ def is_maybe_nested_in_tuple_of(
 
 # -- Typing annotations --
 SingleTypeAnnotation = Union[
-    Type,
+    type[Any],
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
 ]
@@ -173,13 +215,13 @@ SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
-StdGenericAliasType: Final[Type] = type(List[int])
+StdGenericAliasType: Final[type[Any]] = type(list[int])
 
 if TYPE_CHECKING:
     StdGenericAlias: TypeAlias = _types.GenericAlias
 
-_TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
+_TypingSpecialFormType: Final[type[Any]] = _typing._SpecialForm
+_TypingGenericAliasType: Final[type[Any]] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -195,14 +237,14 @@ class NonDataDescriptor(Protocol[_C, _V]):
 
     @overload
     def __get__(
-        self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
+        self, _instance: Literal[None], _owner_type: Optional[type[_C]] = None
     ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
-    def __get__(self, _instance: _C, _owner_type: Optional[Type[_C]] = None) -> _V: ...
+    def __get__(self, _instance: _C, _owner_type: Optional[type[_C]] = None) -> _V: ...
 
     def __get__(
-        self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
+        self, _instance: Optional[_C], _owner_type: Optional[type[_C]] = None
     ) -> _V | NonDataDescriptor[_C, _V]: ...
 
 
@@ -303,15 +345,15 @@ def supports_array(value: Any) -> TypeGuard[SupportsArray]:
 
 class ArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> Dict[str, Any]: ...
+    def __array_interface__(self) -> dict[str, Any]: ...
 
 
 class ArrayInterfaceTypedDict(TypedDict):
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     typestr: str
-    descr: NotRequired[List[Tuple]]
-    data: NotRequired[Tuple[int, bool]]
-    strides: NotRequired[Optional[Tuple[int, ...]]]
+    descr: NotRequired[list[tuple]]
+    data: NotRequired[tuple[int, bool]]
+    strides: NotRequired[Optional[tuple[int, ...]]]
     mask: NotRequired[Optional["StrictArrayInterface"]]
     offset: NotRequired[int]
     version: int
@@ -328,16 +370,16 @@ def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
 
 class CUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> Dict[str, Any]: ...
+    def __cuda_array_interface__(self) -> dict[str, Any]: ...
 
 
 class CUDAArrayInterfaceTypedDict(TypedDict):
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     typestr: str
-    data: Tuple[int, bool]
+    data: tuple[int, bool]
     version: int
-    strides: NotRequired[Optional[Tuple[int, ...]]]
-    descr: NotRequired[List[Tuple]]
+    strides: NotRequired[Optional[tuple[int, ...]]]
+    descr: NotRequired[list[tuple]]
     mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
     stream: NotRequired[Optional[int]]
 
@@ -352,7 +394,7 @@ def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
     return hasattr(value, "__cuda_array_interface__")
 
 
-DLPackDevice = Tuple[int, int]
+DLPackDevice = tuple[int, int]
 
 
 class MultiStreamDLPackBuffer(Protocol):
@@ -399,7 +441,7 @@ if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.
     _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
 
 
-def is_actual_type(obj: Any) -> TypeGuard[Type]:
+def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
     This is needed because since Python 3.9:
@@ -425,12 +467,12 @@ else:
         return obj is _typing.Any
 
 
-def has_type_parameters(cls: Type) -> bool:
+def has_type_parameters(cls: type[Any]) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
 
 
-def get_actual_type(obj: _T) -> Type[_T]:
+def get_actual_type(obj: _T) -> type[_T]:
     """Return type of an object (also working for GenericAlias instances which pretend to be an actual type)."""
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
@@ -438,8 +480,8 @@ def get_actual_type(obj: _T) -> Type[_T]:
 def get_represented_types(
     type_annotation: TypeAnnotation,
     *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
 ) -> tuple[type, ...]:
     """Return a tuple with all the actual types contained in a type annotation."""
 
@@ -478,7 +520,7 @@ def get_represented_types(
     return ()
 
 
-def is_type_with_custom_hash(type_: Type) -> bool:
+def is_type_with_custom_hash(type_: type[Any]) -> bool:
     return type_.__hash__ not in (None, object.__hash__)
 
 
@@ -629,10 +671,10 @@ def get_partial_type_hints(
         _types.MethodWrapperType,
         _types.MethodDescriptorType,
     ],
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
     include_extras: bool = False,
-) -> Dict[str, Union[Type, ForwardRef]]:
+) -> dict[str, Union[type[Any], ForwardRef]]:
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
     For each member type hint in the object a :class:`typing.ForwardRef` instance will be
@@ -646,7 +688,7 @@ def get_partial_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
-    hints: Dict[str, Union[Type, ForwardRef]] = {}
+    hints: dict[str, Union[type[Any], ForwardRef]] = {}
     annotations = getattr(obj, "__annotations__", {})
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
@@ -673,8 +715,8 @@ def get_partial_type_hints(
 
 def eval_forward_ref(
     ref: Union[str, ForwardRef],
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
     *,
     include_extras: bool = False,
 ) -> SolvedTypeAnnotation:
@@ -688,9 +730,8 @@ def eval_forward_ref(
         include_extras: if ``True``, ``Annotated`` hints will preserve the annotation.
 
     Examples:
-        >>> from typing import Dict, Tuple
-        >>> print("Result:", eval_forward_ref("Dict[str, Tuple[int, float]]"))
-        Result: ...ict[str, ...uple[int, float]]
+        >>> print("Result:", eval_forward_ref("dict[str, tuple[int, float]]"))
+        Result: dict[str, tuple[int, float]]
 
     """
 
@@ -699,7 +740,7 @@ def eval_forward_ref(
     f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
     safe_localns = {**localns} if localns else {}
-    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("typing", _FORWARD_REF_TYPING_NS)
     safe_localns.setdefault("NoneType", type(None))
 
     actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
@@ -708,7 +749,7 @@ def eval_forward_ref(
     return actual_type
 
 
-def _collapse_type_args(*args: Any) -> Tuple[bool, Tuple]:
+def _collapse_type_args(*args: Any) -> tuple[bool, tuple]:
     if args and all(args[0] == a for a in args[1:]):
         return (True, args)
     else:
@@ -718,7 +759,7 @@ def _collapse_type_args(*args: Any) -> Tuple[bool, Tuple]:
 @final
 @_dataclasses.dataclass
 class CallableKwargsInfo:
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 
 def infer_type(
@@ -763,7 +804,7 @@ def infer_type(
         >>> print("Result:", infer_type(f))
         Result: ...Callable[..., int]
 
-        >>> print("Result:", infer_type(Dict[int, Union[int, float]]))
+        >>> print("Result:", infer_type(dict[int, Union[int, float]]))
         Result: ...ict[int, ...int...float...]
 
     For advanced cases, using :func:`functools.singledispatch` with custom hooks
@@ -794,7 +835,7 @@ def infer_type(
         return type(None) if none_as_type else None
 
     if isinstance(value, type):
-        return Type[value]
+        return type[value]
 
     if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
         # Special case for tuples, which can have multiple types.
@@ -807,7 +848,7 @@ def infer_type(
             return StdGenericAliasType(tuple, (Any, ...))
 
     if isinstance(value, (list, set, frozenset)):
-        t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
+        t: Union[type[list], type[set], type[frozenset]] = type(value)
         unique_type, args = _collapse_type_args(*(_infer(item) for item in value))
         return StdGenericAliasType(t, args[0] if unique_type else Any)
 
@@ -824,8 +865,8 @@ def infer_type(
             return_type = annotations.get("return", Any)
 
             sig = _inspect.signature(value)
-            arg_types: List = []
-            kwonly_arg_types: Dict[str, Any] = {}
+            arg_types: list = []
+            kwonly_arg_types: dict[str, Any] = {}
             for p in sig.parameters.values():
                 if p.kind in (
                     _inspect.Parameter.POSITIONAL_ONLY,

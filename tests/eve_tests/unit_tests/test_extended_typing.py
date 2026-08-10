@@ -8,7 +8,11 @@
 
 from __future__ import annotations
 
+import builtins
+import collections
 import collections.abc
+import contextlib
+import re
 import sys
 import types
 import typing
@@ -20,15 +24,9 @@ from gt4py.eve.extended_typing import (
     Annotated,
     Any,
     Callable,
-    Dict,
     ForwardRef,
-    FrozenSet,
-    List,
     Mapping,
     Sequence,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
 )
 
@@ -169,6 +167,67 @@ def test_supports_dlpack():
     assert not supports_dlpack(DLPackBufferWithWrongDevice())
 
 
+DEPRECATED_TYPING_ALIASES = [
+    ("Dict", "dict"),
+    ("FrozenSet", "frozenset"),
+    ("List", "list"),
+    ("Set", "set"),
+    ("Tuple", "tuple"),
+    ("Type", "type"),
+]
+
+
+@pytest.mark.parametrize(["name", "replacement"], DEPRECATED_TYPING_ALIASES)
+def test_deprecated_typing_alias_is_not_exported(name, replacement):
+    # These names are still bound by the 'typing' / 'typing_extensions' star imports in
+    # 'extended_typing', and its module '__getattr__' would otherwise forward them. Pin
+    # the rejection: dropping the guard would not make the names disappear, it would
+    # silently resolve them to the deprecated 'typing' objects instead of the builtins.
+    with pytest.raises(AttributeError, match=f"'{name}' is a deprecated 'typing' alias"):
+        getattr(xtyping, name)
+
+    assert replacement in str(pytest.raises(AttributeError, lambda: getattr(xtyping, name)).value)
+
+    with pytest.raises(ImportError):
+        exec(f"from gt4py.eve.extended_typing import {name}")
+
+    assert name not in dir(xtyping)
+
+
+@pytest.mark.parametrize(
+    ["name", "expected"],
+    [
+        ("Sequence", collections.abc.Sequence),
+        ("Callable", collections.abc.Callable),
+        ("AbstractSet", collections.abc.Set),
+        ("Match", re.Match),
+        ("ContextManager", contextlib.AbstractContextManager),
+        ("deque", collections.deque),
+    ],
+)
+def test_non_deprecated_aliases_are_still_re_exported(name, expected):
+    # Unlike the builtin generics above, these names are not deprecated -- only their
+    # 'typing' home is -- so 'extended_typing' keeps pointing them at the modern object.
+    assert getattr(xtyping, name) is expected
+
+
+@pytest.mark.parametrize(
+    ["name", "replacement", "args"],
+    [
+        (name, replacement, "int, str" if name == "Dict" else "int")
+        for name, replacement in DEPRECATED_TYPING_ALIASES
+    ],
+)
+def test_deprecated_typing_alias_still_resolves_in_forward_refs(name, replacement, args):
+    # 'eval_forward_ref' binds the name 'typing' to 'extended_typing', but a user writing
+    # 'typing.List[int]' means the real (deprecated but valid) 'typing' alias, so it must
+    # keep resolving rather than hitting the guard above.
+    resolved = xtyping.eval_forward_ref(f"typing.{name}[{args}]")
+
+    assert xtyping.get_origin(resolved) is getattr(builtins, replacement)
+    assert xtyping.get_args(resolved) == tuple(eval(a) for a in args.split(", "))
+
+
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
 def test_is_actual_valid_type(t):
     assert xtyping.is_actual_type(t)
@@ -177,11 +236,11 @@ def test_is_actual_valid_type(t):
 @pytest.mark.parametrize(
     "t",
     (
-        Tuple[int],
-        Tuple[int, ...],
-        Tuple[int, int],
-        Dict[str, Any],
-        Dict[str, float],
+        tuple[int],
+        tuple[int, ...],
+        tuple[int, int],
+        dict[str, Any],
+        dict[str, float],
         Mapping[int, float],
     ),
 )
@@ -196,8 +255,10 @@ ACTUAL_TYPE_SAMPLES = [
     (int, type),
     (tuple, type),
     (list, type),
-    (Tuple[int, float], type(Tuple[int, float])),
-    (List[int], type(List[int])),
+    # The deprecated 'typing' aliases and the builtin generics are distinct objects with
+    # distinct alias types, so both spellings are covered.
+    (typing.Tuple[int, float], type(typing.Tuple[int, float])),
+    (typing.List[int], type(typing.List[int])),
     (tuple[int, float], types.GenericAlias),
     (list[int], types.GenericAlias),
 ]
@@ -281,15 +342,15 @@ def test_get_partial_type_hints():
         "return": int,
     }
 
-    def f_nested_partial(a: int) -> Dict[str, MissingRef]: ...
+    def f_nested_partial(a: int) -> dict[str, MissingRef]: ...
 
     assert xtyping.get_partial_type_hints(f_nested_partial) == {
         "a": int,
-        "return": ForwardRef("Dict[str, MissingRef]"),
+        "return": ForwardRef("dict[str, MissingRef]"),
     }
     assert xtyping.get_partial_type_hints(f_nested_partial, localns={"MissingRef": MissingRef}) == {
         "a": int,
-        "return": Dict[str, MissingRef],
+        "return": dict[str, MissingRef],
     }
 
     def f_annotated(a: Annotated[int, "Foo"]) -> float:  # type: ignore[name-defined]  # used to work, now mypy is going berserk for unknown reasons
@@ -307,10 +368,10 @@ def test_get_partial_type_hints():
 
 
 def test_eval_forward_ref():
-    assert xtyping.eval_forward_ref("Dict[str, Tuple[int, float]]") == Dict[str, Tuple[int, float]]
+    assert xtyping.eval_forward_ref("dict[str, tuple[int, float]]") == dict[str, tuple[int, float]]
     assert (
-        xtyping.eval_forward_ref(ForwardRef("Dict[str, Tuple[int, float]]"))
-        == Dict[str, Tuple[int, float]]
+        xtyping.eval_forward_ref(ForwardRef("dict[str, tuple[int, float]]"))
+        == dict[str, tuple[int, float]]
     )
 
     class MissingRef: ...
@@ -356,19 +417,19 @@ def test_infer_type():
     assert xtyping.infer_type(None, none_as_type=False) is None
     assert xtyping.infer_type(type(None), none_as_type=False) is None
 
-    assert xtyping.infer_type(Dict[str, int]) == Dict[str, int]
+    assert xtyping.infer_type(dict[str, int]) == dict[str, int]
 
-    assert xtyping.infer_type({1, 2, 3}) == Set[int]
-    assert xtyping.infer_type(frozenset({"1", "2", "3"})) == FrozenSet[str]
+    assert xtyping.infer_type({1, 2, 3}) == set[int]
+    assert xtyping.infer_type(frozenset({"1", "2", "3"})) == frozenset[str]
 
-    assert xtyping.infer_type({"a": [0], "b": [1]}) == Dict[str, List[int]]
+    assert xtyping.infer_type({"a": [0], "b": [1]}) == dict[str, list[int]]
 
-    assert xtyping.infer_type(str) == Type[str]
+    assert xtyping.infer_type(str) == type[str]
 
     class A: ...
 
     assert xtyping.infer_type(A()) == A
-    assert xtyping.infer_type(A) == Type[A]
+    assert xtyping.infer_type(A) == type[A]
 
     def f1(): ...
 
@@ -379,30 +440,30 @@ def test_infer_type():
     assert xtyping.infer_type(f2) == Callable[[int, float], type(None)]
 
     def f3(
-        a: Dict[Tuple[str, ...], List[int]],
-        b: List[Callable[[List[int]], Set[Set[int]]]],
-        c: Type[List[int]],
+        a: dict[tuple[str, ...], list[int]],
+        b: list[Callable[[list[int]], set[set[int]]]],
+        c: type[list[int]],
     ) -> Any: ...
 
     assert (
         xtyping.infer_type(f3)
         == Callable[
             [
-                Dict[Tuple[str, ...], List[int]],
-                List[Callable[[List[int]], Set[Set[int]]]],
-                Type[List[int]],
+                dict[tuple[str, ...], list[int]],
+                list[Callable[[list[int]], set[set[int]]]],
+                type[list[int]],
             ],
             Any,
         ]
     )
 
-    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None: ...
+    def f4(a: int, b: float, *, foo: tuple[str, ...] = ()) -> None: ...
 
     assert xtyping.infer_type(f4) == Callable[[int, float], type(None)]
     assert (
         xtyping.infer_type(f4, annotate_callable_kwargs=True)
         == Annotated[
-            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
+            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": tuple[str, ...]})
         ]
     )
 

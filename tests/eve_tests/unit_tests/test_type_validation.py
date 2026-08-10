@@ -22,15 +22,11 @@ from gt4py.eve import (
 from gt4py.eve.extended_typing import (
     Any,
     Callable,
-    Dict,
     Final,
     ForwardRef,
-    List,
     Optional,
     Sequence,
-    Set,
     SourceTypeAnnotation,
-    Tuple,
     Union,
 )
 
@@ -56,8 +52,8 @@ class SampleDataClass:
 # Each item should be a tuple like:
 #   ( annotation: Any, valid_values: Sequence, wrong_values: Sequence,
 #     globalns: Optional[Dict[str, Any]], localns: Optional[Dict[str, Any]] )
-SAMPLE_TYPE_DEFINITIONS: List[
-    Tuple[Any, Sequence, Sequence, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]
+SAMPLE_TYPE_DEFINITIONS: list[
+    tuple[Any, Sequence, Sequence, Optional[dict[str, Any]], Optional[dict[str, Any]]]
 ] = [
     (bool, [True, False], [1, "True"], None, None),
     (int, [1, -1], [1.0, "1"], None, None),
@@ -96,7 +92,7 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Union[int, float, str], [1, 3.0, "one"], [[1], [], 1j], None, None),
     (typing.Optional[int], [1, None], [[1], [], 1j], None, None),
     (
-        typing.Dict[Union[int, float, str], Union[Tuple[int, Optional[float]], Set[int]]],
+        typing.Dict[Union[int, float, str], Union[tuple[int, Optional[float]], set[int]]],
         [{1: (2, 3.0)}, {1.0: (2, None)}, {"1": {1, 2}}],
         [{(1, 1.0, "1"): set()}, {1: [1]}, {"1": (1,)}],
         None,
@@ -166,8 +162,8 @@ def test_validators(
     type_hint: SourceTypeAnnotation,
     valid_values: Sequence,
     wrong_values: Sequence,
-    globalns: Optional[Dict[str, Any]],
-    localns: Optional[Dict[str, Any]],
+    globalns: Optional[dict[str, Any]],
+    localns: Optional[dict[str, Any]],
 ):
     for value in valid_values:
         validator(value, type_hint, "<value>", globalns=globalns, localns=localns)
@@ -186,8 +182,8 @@ def test_validator_factories(
     type_hint: SourceTypeAnnotation,
     valid_values: Sequence,
     wrong_values: Sequence,
-    globalns: Optional[Dict[str, Any]],
-    localns: Optional[Dict[str, Any]],
+    globalns: Optional[dict[str, Any]],
+    localns: Optional[dict[str, Any]],
 ):
     validator = factory(type_hint, name="<value>", globalns=globalns, localns=localns)
     for value in valid_values:
@@ -215,8 +211,8 @@ def test_validator_factories_with_invalid_hints(
         SampleEmptyClass,
         SampleDataClass,
         SampleEnum,
-        List[int],
-        Dict[Tuple[int, ...], List[Set[complex]]],
+        list[int],
+        dict[tuple[int, ...], list[set[complex]]],
     ],
 )
 def test_simple_validation_cache(type_hint):
@@ -225,7 +221,7 @@ def test_simple_validation_cache(type_hint):
 
     assert type_val.simple_type_validator_factory(type_hint, "value_2") is not validator
     assert type_val.simple_type_validator_factory(Optional[float], "value") is not validator
-    assert type_val.simple_type_validator_factory(List[float], "value") is not validator
+    assert type_val.simple_type_validator_factory(list[float], "value") is not validator
 
     opt_validator = type_val.simple_type_validator_factory(type_hint, "value", required=False)
     assert opt_validator not in (validator, None)

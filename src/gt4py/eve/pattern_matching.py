@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from functools import singledispatch
 
-from .extended_typing import Any, Iterator, Tuple
+from .extended_typing import Any, Iterator
 
 
 class ObjectPattern:
@@ -60,7 +60,7 @@ class ObjectPattern:
 
 
 @singledispatch
-def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
+def get_differences(a: Any, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     """Compare two objects and return a list of differences.
 
     If the arguments are lists or dictionaries comparison is recursively per
@@ -77,7 +77,7 @@ def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]
 
 
 @get_differences.register
-def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
+def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     if not isinstance(b, a.cls):
         yield (path, f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}")
     else:
@@ -89,7 +89,7 @@ def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
 
 
 @get_differences.register
-def _(a: list, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
+def _(a: list, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     if not isinstance(b, list):
         yield (path, f"Expected list, but got {type(b).__name__}")
     elif len(a) != len(b):
@@ -100,7 +100,7 @@ def _(a: list, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
 
 
 @get_differences.register
-def _(a: dict, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
+def _(a: dict, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
     if not isinstance(b, dict):
         yield (path, f"Expected dict, but got {type(b).__name__}")
     elif set(a.keys()) != set(b.keys()):
