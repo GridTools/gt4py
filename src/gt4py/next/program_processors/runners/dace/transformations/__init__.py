@@ -66,7 +66,6 @@ from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
-    GT4PyWriteBackBufferElimination,
     gt_inline_nested_sdfg,
     gt_reduce_distributed_buffering,
     gt_simplify,
@@ -87,6 +86,7 @@ from .strides import (
     gt_propagate_strides_of,
 )
 from .utils import gt_configure_transient_lifetime
+from .write_back_buffer_elimination import GT4PyWriteBackBufferElimination
 
 
 __all__ = [
