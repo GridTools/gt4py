@@ -394,6 +394,22 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                     (False, state.out_edges(tmp_node)),
                 ]:
                     for old_edge in list(old_edges):
+                        if old_edge.data.is_empty():
+                            # An empty Memlet only sequences the dataflow and has
+                            #  nothing to shift. `reroute_edge()` would substitute the
+                            #  full range of `T` for the missing subset and thus turn
+                            #  it into a copy, so it is recreated as it is.
+                            if is_producer_edge:
+                                state.add_edge(
+                                    old_edge.src, old_edge.src_conn, new_node, None, dace.Memlet()
+                                )
+                            else:
+                                state.add_edge(
+                                    new_node, None, old_edge.dst, old_edge.dst_conn, dace.Memlet()
+                                )
+                            state.remove_edge(old_edge)
+                            continue
+
                         new_edge = gtx_transformations.utils.reroute_edge(
                             is_producer_edge=is_producer_edge,
                             current_edge=old_edge,

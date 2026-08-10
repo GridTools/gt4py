@@ -214,6 +214,62 @@ def test_write_back_buffer_elimination_unrelated_reader():
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
 
 
+def test_write_back_buffer_elimination_empty_memlet():
+    """An empty Memlet next to `tmp` must stay empty.
+
+    It only sequences the dataflow, turning it into a copy of the full array would
+    both move data that nobody asked for and, because the edge has no connectors,
+    make the SDFG invalid.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_back_empty_memlet"))
+
+    for name in ["a", "c"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(10,), dtype=dace.float64, transient=True)
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("tmp[__i]")},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    tmp_node = state2.add_access("tmp")
+    state2.add_nedge(tmp_node, state2.add_access("b"), dace.Memlet("tmp[0:10] -> [10:20]"))
+    # A Map that does not consume `tmp`, but that must run after it was computed.
+    map_entry, map_exit = state2.add_map("unrelated", ndrange={"__i": "0:10"})
+    tasklet = state2.add_tasklet(
+        "comp", inputs={"__in"}, outputs={"__out"}, code="__out = __in * 3.0"
+    )
+    map_entry.add_in_connector("IN_a")
+    map_entry.add_out_connector("OUT_a")
+    state2.add_edge(state2.add_access("a"), None, map_entry, "IN_a", dace.Memlet("a[0:10]"))
+    state2.add_edge(map_entry, "OUT_a", tasklet, "__in", dace.Memlet("a[__i]"))
+    map_exit.add_in_connector("IN_c")
+    map_exit.add_out_connector("OUT_c")
+    state2.add_edge(tasklet, "__out", map_exit, "IN_c", dace.Memlet("c[__i]"))
+    state2.add_edge(map_exit, "OUT_c", state2.add_access("c"), None, dace.Memlet("c[0:10]"))
+    state2.add_nedge(tmp_node, map_entry, dace.Memlet())
+    sdfg.validate()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    assert _apply(sdfg)
+    assert "tmp" not in sdfg.arrays
+    (sequencing_edge,) = [edge for edge in state2.in_edges(map_entry) if edge.dst_conn is None]
+    assert sequencing_edge.data.is_empty()
+    sdfg.validate()
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
+
+
 def test_write_back_buffer_elimination_tmp_read_and_written_in_one_state():
     """A `tmp` that is written, read and written again in one state must be kept.
 
