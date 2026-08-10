@@ -37,7 +37,11 @@ Note that PEP 695 _generics_ (`class Model[T](DataModel)`) already work unchange
 
    A funnel left out of this list does not raise: it falls through to whatever its no-match branch is. For `get_represented_types` that branch returns an empty tuple, which turns every downstream `isinstance()` against the result into a constant `False`. When adding a new consumer that dispatches on annotation shape, wire it in here.
 
-3. A `NameError` from `eval_type_alias` is a **signal, not an error** inside `eve`: `type_validation` lets it propagate, and `datamodels.field_type_validator_factory` catches it and installs the existing `ForwardRefValidator`, deferring validation to the first instantiation, which is the same treatment string forward references already get.
+3. A `NameError` from `eval_type_alias` is a **signal, not an error** inside `eve`: `type_validation` lets it propagate, and `datamodels.field_type_validator_factory` catches it and installs the existing `ForwardRefValidator`, deferring validation to the first instantiation, which is the same treatment string forward references already get. `datamodels._make_type_converter` does the same with a `DeferredTypeConverter`, so coerced and validated fields defer alike.
+
+4. Every **other** exception is wrapped by `eval_type_alias` into a `TypeError` naming the alias and the underlying cause. An alias value is arbitrary user code evaluated on first access, so it can fail in any way — a typo'd dtype (`type F = Field[Dims[I], np.foat64]`) raises `AttributeError`. Only `NameError` means "not defined _yet_"; anything else will never resolve, so it must fail where it is found instead of being deferred to a later instantiation that reports it worse.
+
+   This is what lets consumers keep a single narrow `except`: `next.type_translation._resolve_type_alias` turns the `TypeError` into the `ValueError` that `type_from_annotation` already converts into a located `InvalidAnnotationError`, so a broken alias reaches the user as a DSL diagnostic pointing at the annotation rather than as a raw traceback. Consumers propagate the wrapped message verbatim instead of re-wording it, since it is the only text naming the actual cause.
 
 ## Consequences
 

@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import enum
+import types
 import typing
 
 import numpy as np
@@ -493,5 +494,19 @@ def test_invalid_type_alias_annotations():
     with pytest.raises(ValueError, match="undefined forward references"):
         type_translation.from_type_hint(LazyAlias)
 
-    with pytest.raises(ValueError, match="not a valid type alias"):
+    with pytest.raises(ValueError, match="'RecursiveAlias' cannot be resolved"):
         type_translation.from_type_hint(RecursiveAlias)
+
+
+def test_broken_type_alias_annotation_reports_the_underlying_cause():
+    # An alias value is evaluated lazily, so a typo inside it only fails here. It has
+    # to arrive as a 'ValueError' like any other bad annotation, otherwise callers
+    # cannot turn it into a located diagnostic and the user gets a raw traceback.
+    type BrokenAlias = gtx.Field[gtx.Dims[IDim], _empty_module.foat64]  # noqa: F821 [undefined-name]  # defined below
+
+    _empty_module = types.ModuleType("_empty_module")
+
+    with pytest.raises(ValueError, match="'BrokenAlias' cannot be resolved") as exc_info:
+        type_translation.from_type_hint(BrokenAlias)
+
+    assert "foat64" in str(exc_info.value)

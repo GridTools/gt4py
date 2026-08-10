@@ -468,6 +468,22 @@ def test_eval_type_alias_with_recursive_alias():
         xtyping.eval_type_alias(SampleRecursiveAlias)
 
 
+def test_eval_type_alias_with_failing_value():
+    # Anything the lazily evaluated alias value raises is a problem with the alias
+    # itself, so it is reported as such instead of escaping as a raw error. Only
+    # 'NameError' stays unwrapped, since callers defer on it (see the test above).
+    type BrokenAlias = _empty_module.missing_attribute  # noqa: F821 [undefined-name]  # defined below
+
+    _empty_module = types.ModuleType("_empty_module")
+
+    with pytest.raises(TypeError, match="'BrokenAlias' cannot be resolved") as exc_info:
+        xtyping.eval_type_alias(BrokenAlias)
+
+    # The actual cause is kept, both in the message and as the chained exception.
+    assert "missing_attribute" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, AttributeError)
+
+
 # -- get_represented_types --
 class SampleReprA: ...
 

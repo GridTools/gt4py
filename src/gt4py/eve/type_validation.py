@@ -207,9 +207,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             try:
                 resolved_annotation = xtyping.eval_type_alias(type_annotation)
             except TypeError as error:
-                raise exceptions.EveValueError(
-                    f"{type_annotation} type annotation is not supported."
-                ) from error
+                # 'eval_type_alias' already names both the alias and what is wrong
+                # inside it, which is more than the generic message below would say.
+                raise exceptions.EveValueError(str(error)) from error
             if resolved_annotation is not type_annotation:
                 return make_recursive(resolved_annotation)
 

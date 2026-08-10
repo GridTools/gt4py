@@ -450,8 +450,9 @@ def eval_type_alias(annotation: Any) -> Any:
 
     Raises:
         NameError: If the alias value references a name which is not defined yet.
-        TypeError: If the alias is recursive, nested too deeply, or cannot be
-            parametrized with the given type arguments.
+        TypeError: If the alias is recursive, nested too deeply, cannot be
+            parametrized with the given type arguments, or its value fails to
+            evaluate for any other reason.
 
     Examples:
         >>> type MyInt = int
@@ -462,13 +463,24 @@ def eval_type_alias(annotation: Any) -> Any:
         <class 'float'>
     """
     original_annotation = annotation
-    for _ in range(_MAX_TYPE_ALIAS_DEPTH):
-        if is_type_alias(annotation):
-            annotation = annotation.__value__
-        elif is_type_alias(alias := get_origin(annotation)):
-            annotation = alias.__value__[get_args(annotation)]
-        else:
-            return annotation
+    try:
+        for _ in range(_MAX_TYPE_ALIAS_DEPTH):
+            if is_type_alias(annotation):
+                annotation = annotation.__value__
+            elif is_type_alias(alias := get_origin(annotation)):
+                annotation = alias.__value__[get_args(annotation)]
+            else:
+                return annotation
+    except NameError:
+        # Left unwrapped on purpose: callers use it to tell a name which is not
+        # defined _yet_ (and defer, as 'datamodels' does) from a broken alias.
+        raise
+    except Exception as error:
+        # The value of an alias is arbitrary user code run on first access, so any
+        # other failure means the alias does not denote a type and never will.
+        raise TypeError(
+            f"Type alias '{original_annotation}' cannot be resolved ({error})."
+        ) from error
 
     raise TypeError(
         f"Type alias '{original_annotation}' cannot be resolved (recursive or nested too deeply)."

@@ -17,6 +17,7 @@ regress. When changing a message, update the expectation here alongside.
 
 import re
 import sys
+import types
 
 import pytest
 
@@ -26,6 +27,11 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
 IDim = gtx.Dimension("IDim")
+
+# A PEP 695 alias whose value raises when it is evaluated, standing in for the
+# common case of a typo'd dtype ('np.foat64') inside an alias definition.
+_empty_module = types.ModuleType("_empty_module")
+type BrokenFieldAlias = gtx.Field[gtx.Dims[IDim], _empty_module.foat64]
 
 
 def parse_error(func) -> errors.DSLError:
@@ -241,3 +247,19 @@ def test_invalid_annotation_keeps_the_underlying_reason_as_a_note():
 
     assert isinstance(err, errors.InvalidAnnotationError)
     assert any("Field type requires two arguments" in note for note in err.notes)
+
+
+def test_broken_type_alias_annotation_is_located():
+    # A PEP 695 alias body is only evaluated when the annotation is resolved, so a
+    # typo inside it surfaces during parsing. It has to come out as a located
+    # diagnostic naming the typo, not as a raw 'AttributeError' traceback.
+    def broken(a: BrokenFieldAlias) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(broken)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.location is not None
+    assert any("foat64" in note for note in err.notes)
+    # The carets cover the annotation only, not the whole signature.
+    assert re.search(r"\| +\^{16}", str(err)), str(err)

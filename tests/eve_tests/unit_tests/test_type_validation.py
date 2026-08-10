@@ -277,7 +277,9 @@ def test_simple_validation_particularities():
 def test_recursive_type_alias_is_not_supported():
     type RecursiveAlias = RecursiveAlias
 
-    with pytest.raises(ValueError, match="annotation is not supported"):
+    # The reason the alias could not be resolved is kept instead of the generic
+    # 'not supported' message, since it is the only thing pointing at the cause.
+    with pytest.raises(ValueError, match="'RecursiveAlias' cannot be resolved"):
         type_val.simple_type_validator_factory(RecursiveAlias, "value")
 
     assert type_val.simple_type_validator_factory(RecursiveAlias, "value", required=False) is None

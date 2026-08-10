@@ -136,7 +136,10 @@ def _resolve_type_alias(type_hint: Any) -> Any:
             f"Type annotation '{type_hint}' has undefined forward references."
         ) from error
     except TypeError as error:
-        raise ValueError(f"Type annotation '{type_hint}' is not a valid type alias.") from error
+        # 'eval_type_alias' already names both the alias and what is actually wrong
+        # inside it, and its text is what callers surface as a note on the
+        # diagnostic, so re-wording it here would only repeat the alias name.
+        raise ValueError(str(error)) from error
 
 
 def canonicalize_type_hint(

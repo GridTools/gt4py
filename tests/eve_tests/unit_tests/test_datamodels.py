@@ -1379,3 +1379,26 @@ class DefinedLater:
 
     assert isinstance(Model(value=42).value, DefinedLater)
     assert Model(value=42).value.value == 42
+
+
+@pytest.mark.parametrize("coerced", [False, True])
+def test_type_alias_field_with_failing_value_fails_at_class_creation(coerced):
+    # Deferral is only right for a name which is not defined _yet_. A value which
+    # raises for any other reason will never resolve, so it has to fail right away
+    # and name the actual cause, rather than be deferred to the first instantiation.
+    annotation = "datamodels.Coerced[BrokenAlias]" if coerced else "BrokenAlias"
+    source = f"""
+import types
+from gt4py.eve import datamodels
+
+_empty_module = types.ModuleType("_empty_module")
+
+type BrokenAlias = _empty_module.missing_attribute
+
+class Model(datamodels.DataModel):
+    value: {annotation}
+"""
+    with pytest.raises(Exception, match="'BrokenAlias' cannot be resolved") as exc_info:
+        exec(compile(source, "<test_broken_type_alias>", "exec", dont_inherit=True), {})
+
+    assert "missing_attribute" in str(exc_info.value)
