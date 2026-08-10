@@ -228,9 +228,8 @@ def field_type_validator_factory(
         try:
             simple_validator = factory(type_annotation, name, required=True)
         except NameError:
-            # A PEP 695 type alias ('type X = ...') is evaluated lazily and may
-            # reference a name which does not exist yet at class creation time.
-            # Defer the creation of the validator, as done for forward references.
+            # Deferral signal from 'xtyping.eval_type_alias' (see its 'except NameError'
+            # branch); handled like a forward reference.
             return ForwardRefValidator(factory)
 
         return ValidatorAdapter(
@@ -980,9 +979,8 @@ def _make_data_model_class_getitem() -> classmethod:
 class DeferredTypeConverter:
     """Type converter for annotations which cannot be resolved at class creation time.
 
-    A PEP 695 type alias (``type X = ...``) is evaluated lazily and may reference a
-    name which does not exist yet, so the actual converter is created the first time
-    a value is coerced, mirroring what `ForwardRefValidator` does for validators.
+    The actual converter is created the first time a value is coerced, mirroring what
+    `ForwardRefValidator` does for validators.
     """
 
     type_annotation: TypeAnnotation
@@ -1006,9 +1004,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
     try:
         resolved_annotation = xtyping.eval_type_alias(type_annotation)
     except NameError:
-        # A PEP 695 type alias ('type X = ...') is evaluated lazily and may
-        # reference a name which does not exist yet at class creation time.
-        # Defer the creation of the converter, as done for the type validators.
+        # Deferral signal, as in 'field_type_validator_factory' above.
         return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
 
     if resolved_annotation is not type_annotation:

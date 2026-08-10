@@ -117,6 +117,16 @@ def adapted_func_to_foast_factory(
     return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 
+def _returned_value_location(foast_node: foast.FunctionDefinition) -> eve.SourceLocation:
+    """Locate the expression the deduced return type comes from.
+
+    Falls back to the whole function definition when the type cannot be pinned on a
+    single expression, i.e. when the function returns from more than one place.
+    """
+    returns = foast_node.walk_values().if_isinstance(foast.Return).to_list()
+    return returns[0].value.location if len(returns) == 1 else foast_node.location
+
+
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     """
     Parse field operator function definition from source code into FOAST.
@@ -193,22 +203,31 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             #  arguments becomes available here
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
-                    cls._returned_value_location(foast_node),
+                    _returned_value_location(foast_node),
                     "Annotated return type does not match deduced return type: annotation is "
                     f"'{annotated_return_type}'"
                     f", got '{foast_node.type.returns}'.",  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
                 )
         return foast_node
 
-    @staticmethod
-    def _returned_value_location(foast_node: foast.FunctionDefinition) -> eve.SourceLocation:
-        """Locate the expression the deduced return type comes from.
+    def _reject_invalid_return_annotation(self, node: ast.FunctionDef) -> None:
+        """Raise if the return annotation is not a GT4Py type, pointing at the annotation.
 
-        Falls back to the whole function definition when the type cannot be pinned on
-        a single expression, i.e. when the function returns from more than one place.
+        '_postprocess_dialect_ast' has to translate this annotation again, to compare it
+        against the deduced return type. It cannot report the failure, though: by then
+        the `ast` is gone and it could point no further than the whole function
+        definition. So the invalid case is rejected here, where 'node.returns' still
+        carries the source location, and the translation there no longer raises.
+
+        The check cannot simply be moved here instead, because the deduced type it is
+        compared against does not exist until the body has been typed.
         """
-        returns = foast_node.walk_values().if_isinstance(foast.Return).to_list()
-        return returns[0].value.location if len(returns) == 1 else foast_node.location
+        if node.returns is not None and "return" in self.annotations:
+            type_from_annotation(
+                self.annotations["return"],
+                self.get_location(node.returns),
+                description="return type annotation",
+            )
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
@@ -231,17 +250,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     f"Unexpected object '{name}' of type '{type(self.closure_vars[name])}' encountered.",
                 ) from e
 
-        # Validate the return annotation here, where the 'ast' node it was written at
-        # is still available: '_postprocess_dialect_ast' only sees the lowered FOAST
-        # and could point no further than the whole function definition. It compares
-        # the annotated and deduced types, which is why the check is split rather than
-        # moved: the deduced type does not exist until the body has been typed.
-        if node.returns is not None and "return" in self.annotations:
-            type_from_annotation(
-                self.annotations["return"],
-                self.get_location(node.returns),
-                description="return type annotation",
-            )
+        self._reject_invalid_return_annotation(node)
 
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
