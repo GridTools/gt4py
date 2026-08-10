@@ -16,8 +16,7 @@ import re
 from typing import Literal, Optional
 
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir, ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -175,7 +174,7 @@ class CollapseTuple(
         def all(self) -> CollapseTuple.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
-    uids: eve_utils.UIDGenerator
+    uids: utils.IDGeneratorPool
     enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     REINFER_TYPES = True
@@ -194,7 +193,8 @@ class CollapseTuple(
         enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
-        uids: Optional[eve_utils.UIDGenerator] = None,
+        recursive: bool = True,
+        uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -206,10 +206,12 @@ class CollapseTuple(
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
+            recursive: If `True` (default) transform the given node and all its children (until a
+                fixed point is reached). If `False` only transform the given node itself to a fixed
+                point, without recursing into its children.
         """
         enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
-        uids = uids or eve_utils.UIDGenerator()
 
         if isinstance(node, itir.Program):
             within_stencil = False
@@ -232,10 +234,15 @@ class CollapseTuple(
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 
-        new_node = cls(
+        instance = cls(
             enabled_transformations=enabled_transformations,
             uids=uids,
-        ).visit(node, within_stencil=within_stencil)
+        )
+        if recursive:
+            new_node = instance.visit(node, within_stencil=within_stencil, recurse=True)
+        else:
+            # only transform the node itself (to a fixed point) without recursing into its children
+            new_node = instance.fp_transform(node, within_stencil=within_stencil, recurse=False)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -289,7 +296,7 @@ class CollapseTuple(
             and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert not node.args[0].type or type_info.is_integer(node.args[0].type)
+            assert not node.args[0].type or type_info.is_integral_scalar(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(make_tuple_call.args), (
@@ -331,7 +338,7 @@ class CollapseTuple(
             new_args: list[itir.Expr] = []
             for arg in node.args:
                 if cpm.is_call_to(node, "make_tuple") and not _is_trivial_make_tuple_call(node):
-                    new_arg = im.ref(self.uids.sequential_id(prefix="__ct_el"), arg.type)
+                    new_arg = im.ref(next(self.uids["__ct_el"]), arg.type)
                     self._preserve_annex(arg, new_arg)
                     new_args.append(new_arg)
                     bound_vars[im.sym(new_arg.id, arg.type)] = arg
@@ -350,9 +357,10 @@ class CollapseTuple(
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
-                return self.visit(
-                    inline_lambdas.inline_lambda(node, eligible_params=eligible_params), **kwargs
-                )
+                inlined = inline_lambdas.inline_lambda(node, eligible_params=eligible_params)
+                if kwargs["recurse"]:
+                    return self.visit(inlined, **kwargs)
+                return inlined
         return None
 
     def transform_propagate_to_if_on_tuples(
@@ -432,8 +440,7 @@ class CollapseTuple(
                     returns=node.type,
                 )
                 f_params = [
-                    im.sym(self.uids.sequential_id(prefix="__ct_el_cps"), type_)
-                    for type_ in tuple_type.types
+                    im.sym(next(self.uids["__ct_el_cps"]), type_) for type_ in tuple_type.types
                 ]
                 f_args = [im.ref(param.id, param.type) for param in f_params]
                 f_body = ir_misc.with_altered_arg(node, i, im.make_tuple(*f_args))
@@ -454,9 +461,9 @@ class CollapseTuple(
 
                 # this is the symbol refering to the tuple value inside the two branches of the
                 # if, e.g. a symbol refering to `{1, 2}` and `{3, 4}` respectively
-                tuple_var = self.uids.sequential_id(prefix="__ct_tuple_cps")
+                tuple_var = next(self.uids["__ct_tuple_cps"])
                 # this is the symbol refering to our continuation, e.g. `cont` in our example.
-                f_var = self.uids.sequential_id(prefix="__ct_cont")
+                f_var = next(self.uids["__ct_cont"])
                 new_branches = []
                 for branch in [true_branch, false_branch]:
                     new_branch = im.let(tuple_var, branch)(
@@ -625,7 +632,8 @@ class CollapseTuple(
             flags=inline_lifts.InlineLifts.Flag.INLINE_DEREF_LIFT
             | inline_lifts.InlineLifts.Flag.PROPAGATE_SHIFT
         ).visit(new_body)
-        new_body = self.visit(new_body, **kwargs)
+        if kwargs["recurse"]:
+            new_body = self.visit(new_body, **kwargs)
         new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
 
         return im.let(*remapped_args.items())(im.as_fieldop(new_stencil, domain)(*new_args))

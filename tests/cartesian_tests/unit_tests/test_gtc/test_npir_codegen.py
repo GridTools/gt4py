@@ -197,10 +197,19 @@ def test_field_definition() -> None:
 
 def test_temp_definition() -> None:
     result = NpirCodegen().visit(
-        TemporaryDeclFactory(name="a", offset=(1, 2), padding=(3, 4), dtype=common.DataType.FLOAT32)
+        TemporaryDeclFactory(
+            name="a",
+            offset=(1, 2),
+            padding=(3, 4),
+            dtype=common.DataType.FLOAT32,
+            dimensions=(True, True, True),
+        )
     )
     print(result)
-    assert result == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0))"
+    assert (
+        result
+        == "a = Field.empty((_dI_ + 3, _dJ_ + 4, _dK_), np.float32, (1, 2, 0), (True, True, True))"
+    )
 
 
 def test_vector_arithmetic() -> None:
@@ -308,7 +317,7 @@ def test_full_computation_valid(tmp_path) -> None:
     result = NpirCodegen().visit(computation)
     print(result)
     mod_path = tmp_path / "npir_codegen_1.py"
-    mod_path.write_text(result)
+    mod_path.write_text(result, encoding="utf-8")
 
     sys.path.append(str(tmp_path))
     import npir_codegen_1 as mod
@@ -341,7 +350,7 @@ def test_variable_read_outside_bounds(tmp_path) -> None:
     result = NpirCodegen().visit(computation)
     print(result)
     mod_path = tmp_path / "npir_codegen_2.py"
-    mod_path.write_text(result)
+    mod_path.write_text(result, encoding="utf-8")
 
     sys.path.append(str(tmp_path))
     import npir_codegen_2 as mod

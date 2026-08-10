@@ -9,7 +9,7 @@
 import dataclasses
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.utils import UIDGenerator
+from gt4py.next import utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -18,7 +18,7 @@ from gt4py.next.iterator.transforms import inline_lambdas
 @dataclasses.dataclass(frozen=True)
 class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
-    Fuses nested `map_`s.
+    Fuses nested `map_list`s.
 
     Preconditions:
       - `FunctionDefinitions` are inlined
@@ -29,18 +29,16 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
     to
         map(λ(a, b, c) → f(a, g(b, c)))(a, b, c)
 
-        reduce(λ(x, y) → f(x, y), init)(map_(g(z, w))(a, b))
+        reduce(λ(x, y) → f(x, y), init)(map_list(g(z, w))(a, b))
     to
         reduce(λ(x, y, z) → f(x, g(y, z)), init)(a, b)
     """
 
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: utils.IDGeneratorPool = dataclasses.field(repr=False)
 
     def _as_lambda(self, fun: ir.SymRef | ir.Lambda, param_count: int) -> ir.Lambda:
         # if fun is already a Lambda we still wrap it to get unique symbol names to avoid symbol clashes
-        params = [
-            ir.Sym(id=self.uids.sequential_id(prefix="_fuse_maps")) for _ in range(param_count)
-        ]
+        params = [ir.Sym(id=next(self.uids["_fuse_maps"])) for _ in range(param_count)]
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
@@ -95,7 +93,7 @@ class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrai
                 new_op = ir.Lambda(params=new_params, expr=new_body)
                 if cpm.is_applied_map(node):
                     return ir.FunCall(
-                        fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]), args=new_args
+                        fun=ir.FunCall(fun=ir.SymRef(id="map_list"), args=[new_op]), args=new_args
                     )
                 else:  # is_applied_reduce(node)
                     return ir.FunCall(

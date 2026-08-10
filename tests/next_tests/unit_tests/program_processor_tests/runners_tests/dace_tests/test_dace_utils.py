@@ -11,11 +11,10 @@
 import pytest
 
 dace = pytest.importorskip("dace")
-
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg_utils
 
 
 def test_safe_replace_symbolic():
-    assert gtx_dace_utils.safe_replace_symbolic(
+    assert gtir_to_sdfg_utils.safe_replace_symbolic(
         dace.symbolic.pystr_to_symbolic("x*x + y"), symbol_mapping={"x": "y", "y": "x"}
     ) == dace.symbolic.pystr_to_symbolic("y*y + x")

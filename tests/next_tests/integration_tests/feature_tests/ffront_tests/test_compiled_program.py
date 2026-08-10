@@ -5,7 +5,10 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-
+import inspect
+import threading
+import warnings
+from typing import Optional, NamedTuple
 from unittest import mock
 
 import numpy as np
@@ -14,33 +17,47 @@ import time
 import contextlib
 
 from gt4py import next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
-from gt4py.next.otf import compiled_program
+from gt4py.next.otf import compiled_program, options, arguments
+from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    KDim,
     V2E,
     cartesian_case,
     mesh_descriptor,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     MeshDescriptor,
     exec_alloc_descriptor,
     simple_mesh,
     skip_value_mesh,
 )
 
+from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
 
 
-@pytest.fixture
-def compile_testee(cartesian_case):
-    @gtx.field_operator
+class NamedTupleNamedCollection(NamedTuple):
+    u: cases.IField
+    v: cases.IField
+
+
+@pytest.fixture(
+    params=[
+        pytest.param(True, id="program"),
+        pytest.param(False, id="field-operator"),
+    ]
+)
+def compile_testee(request, cartesian_case):
+    @gtx.field_operator(backend=cartesian_case.backend)
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
@@ -48,7 +65,11 @@ def compile_testee(cartesian_case):
     def testee(a: cases.IField, b: cases.IField, out: cases.IField):
         testee_op(a, b, out=out)
 
-    return testee
+    wrap_in_program = request.param
+    if wrap_in_program:
+        return testee
+    else:
+        return testee_op
 
 
 @pytest.fixture
@@ -64,9 +85,14 @@ def compile_testee_domain(cartesian_case):
     return testee
 
 
-@pytest.fixture
-def compile_testee_scan(cartesian_case):
-    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0)
+@pytest.fixture(
+    params=[
+        pytest.param(True, id="program"),
+        pytest.param(False, id="scan-operator"),
+    ]
+)
+def compile_testee_scan(request, cartesian_case):
+    @gtx.scan_operator(axis=cases.KDim, forward=True, init=0, backend=cartesian_case.backend)
     def testee_op(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
         return carry + inp
 
@@ -74,7 +100,11 @@ def compile_testee_scan(cartesian_case):
     def testee(a: cases.KField, out: cases.KField):
         testee_op(a, out=out)
 
-    return testee
+    wrap_in_program = request.param
+    if wrap_in_program:
+        return testee
+    else:
+        return testee_op
 
 
 def test_compile(cartesian_case, compile_testee):
@@ -94,6 +124,25 @@ def test_compile(cartesian_case, compile_testee):
     # run a second time to check if it still works after the future is resolved
     compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+
+def test_precompile_and_jit_have_same_arg_descr_mapping(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    empty_static_args = {}
+    precompiled_testee = compile_testee.with_backend(cartesian_case.backend)
+    precompiled_testee.compile(offset_provider=cartesian_case.offset_provider, **empty_static_args)
+    precompiled_arg_descr_mapping = (
+        precompiled_testee._compiled_programs.argument_descriptor_mapping
+    )
+
+    jit_testee = compile_testee.with_backend(cartesian_case.backend)
+    args, kwargs = cases.get_default_data(cartesian_case, jit_testee)
+    jit_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    jit_arg_descr_mapping = jit_testee._compiled_programs.argument_descriptor_mapping
+
+    assert precompiled_arg_descr_mapping == jit_arg_descr_mapping
 
 
 def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
@@ -120,19 +169,25 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
 
 
+@pytest.mark.uses_scan
 def test_compile_scan(cartesian_case, compile_testee_scan):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
+    if isinstance(compile_testee_scan, gtx.ffront.decorator.FieldOperator):
+        pytest.xfail(reason="Scan operators can not be precompiled yet.")
+
     compile_testee_scan.compile(offset_provider=cartesian_case.offset_provider)
 
-    args, kwargs = cases.get_default_data(cartesian_case, compile_testee_scan)
+    k_size = cartesian_case.default_sizes[KDim]
+    inp = cartesian_case.as_field([KDim], np.arange(k_size, dtype=np.int32))
+    out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
 
     # make sure the backend is never called
     object.__setattr__(compile_testee_scan, "backend", _raise_on_compile)
 
-    compile_testee_scan(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
-    assert np.allclose(kwargs["out"].ndarray, np.cumsum(args[0].ndarray))
+    compile_testee_scan(inp, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, np.cumsum(inp.ndarray))
 
 
 def test_compile_domain(cartesian_case, compile_testee_domain):
@@ -176,6 +231,12 @@ def compile_testee_unstructured(unstructured_case):
     return testee
 
 
+@pytest.fixture
+def compile_testee_unstructured_no_jit(compile_testee_unstructured):
+    return compile_testee_unstructured.with_compilation_options(enable_jit=False)
+
+
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -209,100 +270,52 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
     return skip_value_mesh(exec_alloc_descriptor.allocator)
 
 
-def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
-        offset_provider=[
-            skip_value_mesh_descriptor.offset_provider,
-            unstructured_case.offset_provider,
-        ],
-        enable_jit=False,
-    )
-
-    # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
-
-    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
-    assert np.allclose(
-        kwargs["out"].asnumpy(),
-        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
-    )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_wrong_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
     )
 
     # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
+        compile_testee_unstructured_no_jit(
             *args, offset_provider=unstructured_case.offset_provider, **kwargs
         )
 
 
-def test_compile_unstructured_modified_offset_provider(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh
-    compile_testee_unstructured.compile(
-        offset_provider=skip_value_mesh_descriptor.offset_provider,
-        enable_jit=False,
-    )
-
-    # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
-
-    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured(
-            *args, offset_provider=unstructured_case.offset_provider, **kwargs
-        )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_for_two_offset_providers(
-    unstructured_case, compile_testee_unstructured, skip_value_mesh_descriptor
+    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured.compile(
+    compile_testee_unstructured_no_jit.compile(
         offset_provider=[
             skip_value_mesh_descriptor.offset_provider,
             unstructured_case.offset_provider,
         ],
-        enable_jit=False,
     )
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
 
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
-    compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
+    compile_testee_unstructured_no_jit(
+        *args, offset_provider=unstructured_case.offset_provider, **kwargs
+    )
 
     v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
     assert np.allclose(
@@ -355,6 +368,13 @@ def compile_variants_testee_not_compiled(
 
 @pytest.fixture
 def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled) -> Program:
+    if (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
     return compile_variants_testee_not_compiled.compile(
         scalar_int=[1, 2],
         scalar_float=[3.0, 4.0],
@@ -363,11 +383,18 @@ def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
 
-    assert compile_variants_testee.static_params == ("scalar_int", "scalar_float", "scalar_bool")
+    assert compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+        arguments.StaticArg
+    ] == (
+        "scalar_int",
+        "scalar_float",
+        "scalar_bool",
+    )
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -399,6 +426,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
@@ -420,8 +448,9 @@ def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_teste
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -439,11 +468,12 @@ def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     cartesian_case, compile_variants_testee
 ):
     # disable jit on the program
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -475,41 +505,61 @@ def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
-def test_compile_variants_config_default_disable_jit(cartesian_case, compile_variants_testee):
+def test_compile_variants_config_default_disable_jit(cartesian_case):
     """
     Checks that changing the config default will be picked up at call time.
     """
-    field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
-    field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
-    out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
+    # One of the 2 cases will be the non-default. The program has to be defined after the config
+    # has been altered in order for the value to take effect.
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
 
-    # One of the 2 cases will be the non-default.
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
-        compile_variants_testee(
-            field_a,
-            int32(3),  # variant does not exist
-            4.0,
-            False,
-            field_b,
+
+        @gtx.field_operator
+        def identity(a: cases.IField):
+            return a
+
+        @gtx.program(backend=cartesian_case.backend)
+        def testee(inp: cases.IField, out: cases.IField):
+            identity(inp, out=out)
+
+        assert testee.compilation_options.enable_jit == True
+
+        inp = cases.allocate(cartesian_case, testee, "inp")()
+        out = cases.allocate(cartesian_case, testee, "out")()
+
+        testee(
+            inp,
             out=out,
             offset_provider=cartesian_case.offset_provider,
         )
-        assert np.allclose(out[0].ndarray, field_a.ndarray - 3)
-        assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
+        assert np.allclose(out.ndarray, inp.ndarray)
 
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", False):
         with pytest.raises(RuntimeError):
-            compile_variants_testee(
-                field_a,
-                int32(-42),  # other value than before
-                4.0,
-                False,
-                field_b,
+
+            @gtx.field_operator
+            def identity(a: cases.IField):
+                return a
+
+            @gtx.program(backend=cartesian_case.backend)
+            def testee(inp: cases.IField, out: cases.IField):
+                identity(inp, out=out)
+
+            assert testee.compilation_options.enable_jit == False
+
+            inp = cases.allocate(cartesian_case, testee, "inp")()
+            out = cases.allocate(cartesian_case, testee, "out")()
+
+            testee(
+                inp,
                 out=out,
                 offset_provider=cartesian_case.offset_provider,
             )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_reset_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -517,13 +567,20 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     This test ensures that after calling ".with_static_params(None)" the previously compiled programs are gone
     and we can compile for the generic version.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
+    assert (
+        len(
+            compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+                arguments.StaticArg
+            ]
+        )
+        > 0
+    )
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs
@@ -561,6 +618,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 5.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_set_new_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -568,13 +626,20 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     This test ensures that after calling `with_static_params("scalar_float", "scalar_bool")`
     the previously compiled programs are gone and we can compile for the new `static_params`.
     """
-    object.__setattr__(compile_variants_testee, "enable_jit", False)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
 
     # the compile_variants_testee has static_params set and is compiled (in a previous test)
-    assert len(compile_variants_testee.static_params) > 0
+    assert (
+        len(
+            compile_variants_testee._compiled_programs.argument_descriptor_mapping[
+                arguments.StaticArg
+            ]
+        )
+        > 0
+    )
     assert compile_variants_testee._compiled_programs is not None
 
     # but now we reset the compiled programs and fix to other static params
@@ -613,8 +678,9 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
-    object.__setattr__(compile_variants_testee, "enable_jit", True)
+    object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -648,10 +714,11 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_with_static_params_jit(
     cartesian_case, compile_variants_testee_not_compiled
 ):
-    object.__setattr__(compile_variants_testee_not_compiled, "enable_jit", True)
+    object.__setattr__(compile_variants_testee_not_compiled.compilation_options, "enable_jit", True)
     testee_with_static_params = compile_variants_testee_not_compiled.with_static_params(
         "scalar_int", "scalar_float", "scalar_bool"
     )
@@ -689,6 +756,7 @@ def test_compile_variants_with_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_params_jit(
     compile_variants_field_operator, cartesian_case
 ):
@@ -765,6 +833,13 @@ def test_compile_variants_error_static_field(cartesian_case, compile_variants_te
 def compile_variants_testee_tuple(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
+    elif (
+        cartesian_case.backend.name.startswith("run_dace_gpu")
+        and core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM
+    ):
+        # TODO(edopao): The reason for this segmentation fault is not yet understood,
+        #   but it only appears in this test case, with the dace backend and the ROCM device.
+        pytest.skip("segmentation fault in loading compiled SDFG from library file")
 
     @gtx.field_operator
     def testee_op(
@@ -789,6 +864,7 @@ def compile_variants_testee_tuple(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_args
 def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee_tuple, "backend", _raise_on_compile)
@@ -818,12 +894,16 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
-    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+    with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+        get_runner.return_value = compiled_program.runners.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
-        out = cases.allocate(cartesian_case, compile_testee, "out")()
+        if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+            out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+        else:
+            out = cases.allocate(cartesian_case, compile_testee, "out")()
+
         compile_testee(
             a,
             b,
@@ -833,18 +913,178 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
-@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+@pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, mode):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     with (
-        mock.patch.object(compiled_program, "_async_compilation_pool", None)
-        if synchronous
-        else contextlib.nullcontext()
+        mock.patch.object(config, "BUILD_JOBS_MODE", mode),
+        mock.patch.object(config, "BUILD_JOBS", 1),
     ):
-        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        # TODO(havogt): currently only tests that the function call does not crash...
-        gtx.wait_for_compilation()
-        # ... and afterwards compilation still works
-        compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+        runner = compiled_program.runners.from_config()
+
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+            gtx.wait_for_compilation()
+            # afterwards compilation still works
+            compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+    finally:
+        runner.shutdown(wait=True)
+
+
+def test_compile_local_program_offloads_to_worker_process(cartesian_case, compile_testee):
+    """Programs defined in a local scope (as `compile_testee` is) must offload cleanly.
+
+    Only the lowered, pickle-safe program crosses the process boundary — never
+    the raw definition function, which is unpicklable for local definitions.
+    A fallback to in-thread compilation would mean the boundary leaked.
+    """
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    runner = compiled_program.runners.ProcessRunner(
+        max_workers=1,
+        shared_session_cache_dir=str(compilation_cache._session_cache_dir_path),
+    )
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", message=".*in the calling thread.*")
+                compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+                gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+    a = cases.allocate(cartesian_case, compile_testee, "a")()
+    b = cases.allocate(cartesian_case, compile_testee, "b")()
+    if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+        out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+    else:
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+
+    compile_testee(a, b, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    # Failing only once the gate opens keeps the future pending until after
+    # submission; an instant failure would raise eagerly at `compile()` already.
+    gate = threading.Event()
+
+    class FailingBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            gate.wait()
+            raise ValueError("compilation went boom")
+
+    runner = compiled_program.runners.ThreadRunner(max_workers=1)
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            # The program must stay referenced: failure tracking is weak, so the
+            # failed future of a garbage-collected program is not reported.
+            testee = compile_testee.with_backend(FailingBackend())
+            testee.compile(offset_provider=cartesian_case.offset_provider)
+            gate.set()
+            with pytest.raises(ValueError, match="compilation went boom"):
+                gtx.wait_for_compilation()
+            # each failure is reported only once
+            gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_compile_variants_decorator_static_domains(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    captured_cargs: Optional[arguments.CompileTimeArgs] = None
+
+    class CaptureCompileTimeArgsBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            nonlocal captured_cargs
+            captured_cargs = compile_time_args
+
+            return cartesian_case.backend.compile(program, compile_time_args)
+
+    @gtx.field_operator
+    def identity_like(inp: tuple[cases.IField, cases.IField, float]):
+        return NamedTupleNamedCollection(u=inp[0], v=inp[1])
+
+    # the float argument here is merely to test that static domains work for tuple arguments
+    # of inhomogeneous types
+    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
+    def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
+        identity_like(inp, out=out)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+
+    testee(inp, out, offset_provider={})
+    assert np.allclose(inp[0].ndarray, out[0].ndarray)
+    assert np.allclose(inp[1].ndarray, out[1].ndarray)
+
+    assert testee._compiled_programs.argument_descriptor_mapping[
+        arguments.FieldDomainDescriptor
+    ] == ["inp[0]", "inp[1]", "out[0]", "out[1]"]
+    assert captured_cargs.argument_descriptor_contexts[arguments.FieldDomainDescriptor] == {
+        "inp": (
+            arguments.FieldDomainDescriptor(inp[0].domain),
+            arguments.FieldDomainDescriptor(inp[1].domain),
+            None,
+        ),
+        "out": (
+            arguments.FieldDomainDescriptor(out[0].domain),
+            arguments.FieldDomainDescriptor(out[1].domain),
+        ),
+    }
+
+
+@pytest.fixture
+def scan_operator_testee(cartesian_case):
+    """A scan operator called directly as a FieldOperator — the only case where _is_generic=True."""
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=0, backend=cartesian_case.backend)
+    def testee(carry: gtx.int32, inp: gtx.int32) -> gtx.int32:
+        return carry + inp
+
+    return testee
+
+
+@pytest.mark.uses_scan
+def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee):
+    """A warning is emitted when a scan operator is called directly as a FieldOperator.
+
+    Scan operators called directly (not wrapped in a @program) are the only case where
+    _is_generic is True, triggering the 'not optimized' generic-program warning.
+    """
+    k_size = cartesian_case.default_sizes[KDim]
+    inp = cartesian_case.as_field([KDim], np.arange(k_size, dtype=np.int32))
+    out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        call_lineno = inspect.currentframe().f_lineno + 1
+        scan_operator_testee(inp, out=out, offset_provider=cartesian_case.offset_provider)
+
+    generic_warnings = [w for w in caught if "generic" in str(w.message)]
+    assert len(generic_warnings) == 1
+    w = generic_warnings[0]
+    assert w.filename == __file__
+    assert w.lineno == call_lineno

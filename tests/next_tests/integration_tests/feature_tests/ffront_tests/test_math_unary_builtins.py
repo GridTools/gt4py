@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import math
+
 import numpy as np
 import pytest
 
@@ -19,6 +21,7 @@ from gt4py.next import (
     exp,
     float64,
     floor,
+    gamma,
     int32,
     isfinite,
     isinf,
@@ -34,7 +37,7 @@ from gt4py.next import (
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 
@@ -75,7 +78,9 @@ def test_mod(cartesian_case):
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
 
-    inp1 = cartesian_case.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
+    inp1 = cartesian_case.as_field(
+        [IDim], np.asarray(range(cartesian_case.default_sizes[IDim]), dtype=int32) - 5
+    )
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
     cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
@@ -193,10 +198,9 @@ def test_basic_trig(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         basic_trig_fieldop,
-        ref=lambda inp1, inp2: np.sin(np.cos(inp1))
-        - np.sinh(np.cosh(inp2))
-        + np.tan(inp1)
-        - np.tanh(inp2),
+        ref=lambda inp1, inp2: (
+            np.sin(np.cos(inp1)) - np.sinh(np.cosh(inp2)) + np.tan(inp1) - np.tanh(inp2)
+        ),
     )
 
 
@@ -207,6 +211,16 @@ def test_exp_log(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, exp_log_fieldop, ref=lambda inp1, inp2: np.log(inp1) - np.exp(inp2)
+    )
+
+
+def test_gamma(cartesian_case):
+    @gtx.field_operator
+    def gamma_fieldop(inp1: cases.IFloatField) -> cases.IFloatField:
+        return gamma(inp1)
+
+    cases.verify_with_default_data(
+        cartesian_case, gamma_fieldop, ref=lambda inp1: np.vectorize(math.gamma)(inp1)
     )
 
 

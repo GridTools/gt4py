@@ -21,21 +21,21 @@ We strongly recommended to create a virtual environment for any new project:
 
 
 Then clone the GT4Py repository and install the local copy or install it directly from PyPI: `pip install gt4py`
-For use with NVIDIA GPUs, add the `[cudaXXX]` optional dependency, where `XXX` takes the values
-`101`, `102`, ... depending on the CUDA version installed in your system (CUDA version 11.1, 11.2, ...).
+For use with NVIDIA GPUs, add the `[cudaXX]` optional dependency, where `XX` takes the values
+`11`, `12`, ... depending on the CUDA version installed in your system (CUDA version 11.x, 12.x, ...).
 
 .. code:: bash
 
     git clone https://github.com/GridTools/gt4py.git
     pip install ./gt4py
-    # pip install ./gt4py[cuda11x]
+    # pip install ./gt4py[cuda12]
 
 Or
 
 .. code:: bash
 
     pip install gt4py
-    # pip install gt4py[cuda11x]
+    # pip install gt4py[cuda12]
 
 
 ------------
@@ -123,7 +123,10 @@ Currently, the following backends are available:
 * ``"gt:cpu_kfirst"``: a backend based on GridTools code performance-optimized for x86 architecture
 * ``"gt:cpu_ifirst"``: a GridTools backend targeting many core architectures
 * ``"gt:gpu"``: a GridTools backend targeting GPUs
-* ``"cuda"``: a backend targeting NVIDIA GPUs using CUDA and some GridTools
+* ``"dace:cpu"``: Dace code-generated CPU backend
+* ``"dace:cpu_kfirst"``: Dace code-generated CPU backend using `K`-first data ordering
+* ``"dace:gpu"``: Dace code-generated GPU backend
+* ``"debug"``: A pure python backend used for prototyping new features
 
 The decorator further replaces the stencil definition function (here ``stencil_example``) by a callable object that
 can be used as a function to call the generated code which modifies the passed data in place.

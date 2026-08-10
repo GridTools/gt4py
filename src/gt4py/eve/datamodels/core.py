@@ -13,6 +13,7 @@ Check :mod:`eve.datamodels` for additional information.
 
 from __future__ import annotations
 
+import abc
 import dataclasses
 import functools
 import sys
@@ -98,6 +99,23 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
     __post_init__: ClassVar[Callable[[DataModelTP], None]] = cast(
         Callable[["DataModelTP"], None], None
     )
+
+
+class DataModelABC(abc.ABC):
+    """ABC for data models."""
+
+    __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]]
+    __datamodel_params__: ClassVar[utils.FrozenNamespace[Any]]
+
+    @classmethod
+    def __subclasshook__(cls, subclass: type) -> bool:
+        # Treat any data model as a virtual subclass of `DataModelABC` itself.
+        # Everything else (in particular real subclasses and checks against
+        # derived ABCs) is deferred to the normal MRO-based check by returning
+        # `NotImplemented`.
+        if cls is DataModelABC and is_datamodel(subclass):
+            return True
+        return NotImplemented
 
 
 DataModelT = TypeVar("DataModelT", bound=DataModelTP)
@@ -1024,9 +1042,9 @@ def _make_datamodel(
     """
     mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
 
-    if "__annotations__" not in cls.__dict__:
+    if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
-    annotations = cls.__dict__["__annotations__"]
+    annotations = cls.__annotations__
     resolved_annotations = xtyping.get_partial_type_hints(cls)
     annotations_with_extras = xtyping.get_partial_type_hints(cls, include_extras=True)
 
@@ -1169,11 +1187,11 @@ def _make_datamodel(
             generic = True
         else:
             # For any other subclass, add the proper __class_getitem__ method
-            if not issubclass(cls, (typing.Generic, xtyping.Generic)):  # type: ignore[arg-type]  # Generic is not considered a type
+            if not issubclass(cls, (typing.Generic, xtyping.Generic)):
                 raise TypeError(
                     f"'{cls.__name__}' cannot be converted to a GenericDataModel because it is not a generic class."
                 )
-            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[attr-defined]  # adding new attribute
+            cls.__class_getitem__ = _make_data_model_class_getitem()  # type: ignore[method-assign,assignment]  # adding new attribute
 
     # TODO(egparedes): consider the use of the field_transformer hook available in attrs:
     #   https://www.attrs.org/en/stable/extending.html#automatic-field-transformation-and-modification

@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from copy import deepcopy
+
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py.cartesian.gtc.dace.passes import utils
@@ -13,32 +15,36 @@ from gt4py.cartesian.gtc.dace.passes import utils
 
 class PushVerticalMapDown(tn.ScheduleNodeVisitor):
     """
-    Given a schedule tree with K-IJ loops, push the K-loop down into the IJ-loops to
-    achieve a loop structure suitable for a "K-first" memory layout.
+    Given a schedule tree with K-JI loops, push the K-loop down into the JI-loops to
+    achieve a loop structure suitable for a "K-first" memory layout, or a layout
+    where K is the highest value in the layout_map.
 
     Expected input is something like
 
     // vertical loop outside
     for k ...
         // horizontal loop(s) inside
-        for i,j ...
+        for j,i ...
             // computation here (1)
 
-        for i,j ...
+        for j,i ...
             // computation here (2)
 
     Given such a loop structure, this pass will push down the vertical loop into the
     horizontal loops. In the above example, the expected output is
 
     // horizontal loop(s) outside
-    for i,j ...
+    for j,i ...
         for k ...
             // computation here (1)
 
-    for i, j ...
+    for j,i ...
         for k ...
             // computation here (2)
     """
+
+    def __init__(self, *, forscope_only: bool = False) -> None:
+        self._forscope_only = forscope_only
 
     def _push_K_loop_in_IJ(self, node: tn.MapScope | tn.ForScope):
         # take refs before moving things around
@@ -53,14 +59,17 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
 
             # New loop with MapEntry (`node`) from parent and children from `child`
             if isinstance(node, tn.MapScope):
-                new_loop = tn.MapScope(node=parent.node, children=child.children)
-                new_loop.parent = child
-            elif isinstance(node, tn.ForScope):
-                new_loop = node
-                node.children = child.children
-                node.parent = child
+                new_loop = tn.MapScope(
+                    node=deepcopy(parent.node), children=[c for c in child.children], parent=child
+                )
             else:
-                raise ValueError(f"Unknown node of type {type(node)}")
+                assert isinstance(node, tn.ForScope)
+                new_loop = tn.ForScope(
+                    loop=deepcopy(parent.loop),
+                    children=[c for c in child.children],
+                    parent=child,
+                )
+
             child.children = [new_loop]
             child.parent = grandparent
             grandparent_children.insert(k_loop_index, child)
@@ -70,9 +79,11 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
         grandparent_children.remove(node)
 
     def visit_MapScope(self, node: tn.MapScope):
-        if node.node.map.params[0].startswith("__k"):
+        if self._forscope_only:
+            return
+        if node.node.map.params[0] == "__k":
             self._push_K_loop_in_IJ(node)
 
     def visit_ForScope(self, node: tn.ForScope):
-        if node.header.itervar.startswith("__k"):
+        if node.loop.loop_variable == "__k":
             self._push_K_loop_in_IJ(node)

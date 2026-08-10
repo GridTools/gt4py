@@ -6,19 +6,21 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Optional, TypeAlias, TypeVar, cast
+import textwrap
+from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
+from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.next import errors, utils
-from gt4py.next.common import DimensionKind, promote_dims
-from gt4py.next.ffront import (  # noqa
+from gt4py.next import common, errors
+from gt4py.next.common import Dimension, DimensionKind, promote_dims
+from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
     fbuiltins,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -35,7 +37,6 @@ def with_altered_scalar_kind(
 
     Examples:
     ---------
-    >>> from gt4py.next import Dimension
     >>> scalar_t = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
@@ -55,80 +56,6 @@ def with_altered_scalar_kind(
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
     else:
         raise ValueError(f"Expected field or scalar type, got '{type_spec}'.")
-
-
-def construct_tuple_type(
-    true_branch_types: list, false_branch_types: list, mask_type: ts.FieldType
-) -> list:
-    """
-    Recursively construct  the return types for the tuple return branch.
-
-    Examples:
-    ---------
-    >>> from gt4py.next import Dimension
-    >>> mask_type = ts.FieldType(
-    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    ... )
-    >>> true_branch_types = [
-    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-    ... ]
-    >>> false_branch_types = [
-    ...     ts.FieldType(
-    ...         dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ...     ),
-    ...     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-    ... ]
-    >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
-    [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))]
-    """
-    element_types_new = true_branch_types
-    for i, element in enumerate(true_branch_types):
-        if isinstance(element, ts.TupleType):
-            element_types_new[i] = ts.TupleType(
-                types=construct_tuple_type(element.types, false_branch_types[i].types, mask_type)
-            )
-        else:
-            element_types_new[i] = promote_to_mask_type(
-                mask_type, type_info.promote(element_types_new[i], false_branch_types[i])
-            )
-    return element_types_new
-
-
-def promote_to_mask_type(
-    mask_type: ts.FieldType, input_type: ts.FieldType | ts.ScalarType
-) -> ts.FieldType:
-    """
-    Promote mask type with the input type.
-
-    The input type being the result of promoting the left and right types in a conditional clause.
-
-    If the input type is a scalar, the return type takes the dimensions of the mask_type, while retaining the dtype of
-    the input type. The behavior is similar when the input type is a field type with fewer dimensions than the mask_type.
-    In all other cases, the return type takes the dimensions and dtype of the input type.
-
-    >>> from gt4py.next import Dimension
-    >>> I, J = (Dimension(value=dim) for dim in ["I", "J"])
-    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), dtype)
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
-    >>> promote_to_mask_type(
-    ...     ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype)
-    ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
-    >>> promote_to_mask_type(
-    ...     ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I, J], dtype=dtype)
-    ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None))
-    """
-    if isinstance(input_type, ts.ScalarType) or not all(
-        item in input_type.dims for item in mask_type.dims
-    ):
-        return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
-        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
-    else:
-        return input_type
 
 
 def deduce_stmt_return_type(
@@ -219,6 +146,21 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
             incomplete_nodes.append(node)
 
 
+def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> dict[str, Any]:
+    """Shared 'related'/'notes'/'hints' payload for the no-implicit-conversion errors."""
+    return {
+        "related": [
+            (left.location, f"this operand has type '{left.type}'"),
+            (right.location, f"this operand has type '{right.type}'"),
+        ],
+        "notes": ["GT4Py does not implicitly convert between datatypes."],
+        "hints": [
+            "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
+            "or make the datatypes of the inputs match."
+        ],
+    }
+
+
 class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
@@ -227,7 +169,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     ---------
     >>> import ast
     >>> import typing
-    >>> from gt4py.next import Field, Dimension
+    >>> from gt4py.next import Field
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> IDim = Dimension("IDim")
@@ -322,15 +264,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
-        if new_init.type != new_def_type.returns:
+        if not new_def_type.pos_or_kw_args:
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
-                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
+                f"Scan operator '{node.id}' must have at least one argument (the carry).",
+            )
+        carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
+        carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
+        if carry_type != new_def_type.returns:
+            raise errors.DSLError(
+                node.location,
+                f"Argument '{carry_arg_name}' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{carry_type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
@@ -351,7 +298,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise errors.DSLError(node.location, f"Undeclared symbol '{node.id}'.")
+            defined_names = {
+                ssa.original_name(name) for name, sym in symtable.items() if sym.type is not None
+            }
+            raise errors.UndefinedSymbolError(
+                node.location, ssa.original_name(node.id), candidates=defined_names
+            )
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
@@ -369,7 +321,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         TargetType: TypeAlias = list[foast.Starred | foast.Symbol]
         values = self.visit(node.value, **kwargs)
 
-        if isinstance(values.type, ts.TupleType):
+        if isinstance(values.type, ts.COLLECTION_TYPE_SPECS):
             num_elts: int = len(values.type.types)
             targets: TargetType = node.targets
             indices: list[tuple[int, int] | int] = foast_utils.compute_assign_indices(
@@ -399,7 +351,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]  # type: ignore[assignment] # see check in next line
+                    new_type = values.type.types[index]
                     assert isinstance(new_type, ts.DataType)
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
@@ -655,13 +607,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        # e.g. `IDim+1`
-        if (
-            isinstance(left.type, ts.DimensionType)
-            and isinstance(right.type, ts.ScalarType)
-            and type_info.is_integral(right.type)
-        ):
-            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
         if isinstance(left.type, ts.OffsetType):
             raise errors.DSLError(
                 node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
@@ -681,9 +626,23 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             is_compatible = (
                 type_info.is_logical if node.op in logical_ops else type_info.is_arithmetic
             )
-            for arg in (left, right):
+            requirement = "logical" if node.op in logical_ops else "arithmetic"
+            for arg, other in ((left, right), (right, left)):
                 if not is_compatible(arg.type):
-                    raise errors.DSLError(arg.location, err_msg)
+                    hints = []
+                    if node.op not in logical_ops and type_info.is_logical(arg.type):
+                        hints = [
+                            "To select values based on a boolean mask, use 'where(mask, a, b)'. "
+                            "To compute with a boolean field, convert it explicitly, "
+                            "e.g. 'astype(mask, int32)'."
+                        ]
+                    raise errors.DSLError(
+                        arg.location,
+                        err_msg,
+                        label=f"'{node.op}' expects {requirement} operands, but this has type '{arg.type}'",
+                        related=[(other.location, f"the other operand has type '{other.type}'")],
+                        hints=hints,
+                    )
 
             if node.op == dialect_ast_enums.BinaryOperator.POW:
                 return left.type
@@ -692,7 +651,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 right.type
             ):
                 raise errors.DSLError(
-                    arg.location,
+                    right.location,
                     f"Type '{right.type}' can not be used in operator '{node.op}', it only accepts 'int'.",
                 )
 
@@ -703,6 +662,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     node.location,
                     f"Could not promote '{left.type}' and '{right.type}' to common type"
                     f" in call to '{node.op}'.",
+                    **_no_implicit_conversion_diagnostic(left, right),
                 ) from ex
         elif isinstance(left.type, ts.DomainType) and isinstance(right.type, ts.DomainType):
             if node.op not in logical_ops:
@@ -712,6 +672,34 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"must be one of {', '.join((str(op) for op in logical_ops))}.",
                 )
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
+        elif (
+            node.op in (dialect_ast_enums.BinaryOperator.ADD, dialect_ast_enums.BinaryOperator.SUB)
+            and isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_arithmetic(right.type)
+        ):
+            # e.g. `IDim+1` or `IDim+0.5`
+            if not isinstance(right, foast.Constant):
+                raise errors.DSLError(
+                    right.location,
+                    "Cartesian offsets are only supported with a literal right-hand side, "
+                    "e.g. 'IDim + 1', but not 'IDim + expr'.",
+                )
+            offset_index = right.value
+            if node.op == dialect_ast_enums.BinaryOperator.SUB:
+                offset_index *= -1
+            if not isinstance(offset_index, (int, float)) or offset_index % 1 not in (0, 0.5):
+                raise errors.DSLError(
+                    right.location,
+                    f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
+                    f"'{left.type.dim.value}'.",
+                    hints=[
+                        "Use an integer offset to shift within the dimension, or a half-integer "
+                        "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                    ],
+                )
+            conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
+            return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
         else:
             raise errors.DSLError(node.location, err_msg)
 
@@ -723,6 +711,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise errors.DSLError(
                 node.location,
                 f"Incompatible datatypes in operator '{node.op}': '{left.type}' and '{right.type}'.",
+                **_no_implicit_conversion_diagnostic(left, right),
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
@@ -944,10 +933,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         new_type = new_type_constructor.type.definition.returns
 
-        return_type = type_info.apply_to_primitive_constituents(
-            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind),
-            value.type,
-        )
+        return_type = type_info.tree_map_type(
+            lambda primitive_type: with_altered_scalar_kind(primitive_type, new_type.kind)
+        )(value.type)
         assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
@@ -963,6 +951,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_1 = node.args[1].type
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
+        if not fbuiltins.is_cartesian_offset(arg_0):
+            target_dims = ", ".join(d.value for d in arg_0.target)
+            raise errors.DSLError(
+                node.location,
+                f"'as_offset' is only supported for Cartesian offsets "
+                f"(single target dimension equal to source dimension); "
+                f"got source '{arg_0.source.value}' and target ({target_dims}).",
+            )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
@@ -983,46 +979,68 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             func=node.func, args=node.args, kwargs=node.kwargs, type=arg_0, location=node.location
         )
 
+    def _deduce_where_return_type(
+        self,
+        func_name: str,
+        cond_dims: Sequence[Dimension],
+        true_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
+        false_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
+        location: eve.SourceLocation,
+    ) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
+        assert all(
+            isinstance(el, (ts.FieldType, ts.ScalarType))
+            for arg in (true_branch, false_branch)
+            for el in type_info.primitive_constituents(arg)
+        )
+
+        # replace all primitive constituents by the same type, `ts.DeferredType()` for convenience,
+        # to capture the structure of the two branches
+        extract_structure = type_info.tree_map_type(lambda x: ts.DeferredType(constraint=None))
+        tb_structure = extract_structure(true_branch)
+        fb_structure = extract_structure(false_branch)
+
+        if tb_structure != fb_structure:
+            raise errors.DSLError(
+                location,
+                f"Second and third argument to '{func_name}' must have the same tuple/collection "
+                f"structure.\n"
+                + textwrap.indent(
+                    f"true branch:  '{true_branch}'\nfalse branch:  '{false_branch}'", " "
+                ),
+            )
+
+        @type_info.tree_map_type
+        def deduce_return_type(
+            tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
+        ) -> ts.FieldType:
+            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+                raise errors.DSLError(
+                    location,
+                    f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
+                    f"'{f_dtype}'.",
+                )
+            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
+            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
+            return return_type
+
+        return deduce_return_type(true_branch, false_branch)
+
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        mask_type = cast(ts.FieldType, node.args[0].type)
-        true_branch_type = node.args[1].type
-        false_branch_type = node.args[2].type
-        return_type: ts.TupleType | ts.FieldType
+        mask_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
+        assert isinstance(mask_type, ts.FieldType)
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
                 f"Incompatible argument in call to '{node.func!s}': expected "
                 f"a field with dtype 'bool', got '{mask_type}'.",
             )
-
-        try:
-            # TODO(tehrengruber): the construct_tuple_type function doesn't look correct
-            if isinstance(true_branch_type, ts.TupleType) and isinstance(
-                false_branch_type, ts.TupleType
-            ):
-                return_type = ts.TupleType(
-                    types=construct_tuple_type(
-                        true_branch_type.types, false_branch_type.types, mask_type
-                    )
-                )
-            elif isinstance(true_branch_type, ts.TupleType) or isinstance(
-                false_branch_type, ts.TupleType
-            ):
-                raise errors.DSLError(
-                    node.location,
-                    f"Return arguments need to be of same type in '{node.func!s}', got "
-                    f"'{node.args[1].type}' and '{node.args[2].type}'.",
-                )
-            else:
-                true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
-                false_branch_fieldtype = cast(ts.FieldType, false_branch_type)
-                promoted_type = type_info.promote(true_branch_fieldtype, false_branch_fieldtype)
-                return_type = promote_to_mask_type(mask_type, promoted_type)
-
-        except ValueError as ex:
-            raise errors.DSLError(
-                node.location, f"Incompatible argument in call to '{node.func!s}'."
-            ) from ex
+        return_type = self._deduce_where_return_type(
+            "where",
+            mask_type.dims,
+            true_branch_type,  # type: ignore[arg-type]
+            false_branch_type,  # type: ignore[arg-type]
+            node.location,
+        )
 
         return foast.Call(
             func=node.func,
@@ -1036,31 +1054,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         cond_type, true_branch_type, false_branch_type = (arg.type for arg in node.args)
 
         assert isinstance(cond_type, ts.DomainType)
-        assert all(
-            isinstance(el, (ts.FieldType, ts.ScalarType))
-            for arg in (true_branch_type, false_branch_type)
-            for el in type_info.primitive_constituents(arg)
+        return_type = self._deduce_where_return_type(
+            "concat_where",
+            cond_type.dims,
+            true_branch_type,  # type: ignore[arg-type]
+            false_branch_type,  # type: ignore[arg-type]
+            node.location,
         )
-
-        @utils.tree_map(
-            collection_type=ts.TupleType,
-            result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
-        )
-        def deduce_return_type(
-            tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
-        ) -> ts.FieldType:
-            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
-                raise errors.DSLError(
-                    node.location,
-                    f"Field arguments must be of same dtype, got '{t_dtype}' != '{f_dtype}'.",
-                )
-            return_dims = promote_dims(
-                cond_type.dims, type_info.extract_dims(type_info.promote(tb, fb))
-            )
-            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
-            return return_type
-
-        return_type = deduce_return_type(true_branch_type, false_branch_type)
 
         return foast.Call(
             func=node.func,

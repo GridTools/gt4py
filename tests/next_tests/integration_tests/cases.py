@@ -5,6 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+"""Framework for gt4py.next integration ("feature") tests.
+
+A test requests the ``cartesian_case`` / ``unstructured_case`` fixture -- a
+``Case`` bundling a backend, allocator, offset provider and default sizes --
+builds inputs with ``allocate(...)``, and checks results with ``verify(...)`` /
+``verify_with_default_data(...)``. The backend matrix these fixtures
+parametrize over, and the per-backend skip/xfail lists, live in
+``next_tests.definitions`` (see ADR 0015). The shared fixtures and the
+dimension / offset / field aliases live in the sibling ``cases_utils`` module.
+"""
 
 from __future__ import annotations
 
@@ -24,18 +34,20 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import (
-    allocators as next_allocators,
     backend as next_backend,
     common,
     constructors,
+    custom_layout_allocators as next_allocators,
     field_utils,
+    named_collections,
     utils as gt_utils,
 )
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.otf import arguments
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
+from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
     E2V,
@@ -46,11 +58,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     E2VDim,
     Edge,
     IDim,
-    Ioff,
+    IHalfDim,
     JDim,
-    Joff,
+    JHalfDim,
     KDim,
-    Koff,
+    KHalfDim,
     V2EDim,
     Vertex,
     exec_alloc_descriptor,
@@ -64,6 +76,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 # mypy does not accept [IDim, ...] as a type
 
 IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IHalfField: TypeAlias = gtx.Field[[IHalfDim], np.int32]  # type: ignore [valid-type]
 JField: TypeAlias = gtx.Field[[JDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
 IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
@@ -466,16 +479,18 @@ def verify(
     Else, ``inout`` will not be passed and compared to ``ref``.
     """
     kwargs = {}
-    if out:
+    if out is not None:
         kwargs["out"] = out
-    if domain:
+    if domain is not None:
         kwargs["domain"] = domain
 
     run(case, fieldview_prog, *args, **kwargs, offset_provider=offset_provider)
 
-    out_comp = out or inout
+    out_comp = out if out is not None else inout
     assert out_comp is not None
+    out_comp = arguments.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref = arguments.extract(ref)
     ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
@@ -489,6 +504,7 @@ def verify_with_default_data(
     case: Case,
     fieldop: decorator.FieldOperator,
     ref: Callable,
+    offset_provider: Optional[OffsetProvider] = None,
     comparison: Callable[[Any, Any], bool] = tree_mapped_np_allclose,
 ) -> None:
     """
@@ -503,6 +519,8 @@ def verify_with_default_data(
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
             of the fieldview code, after applying ``.ndarray`` on the fields.
+        offset_provider: An override for the test case's offset_provider.
+            Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
@@ -516,7 +534,7 @@ def verify_with_default_data(
         *inps,
         **kwfields,
         ref=ref(*ref_args),
-        offset_provider=case.offset_provider,
+        offset_provider=offset_provider,
         comparison=comparison,
     )
 
@@ -567,7 +585,7 @@ def unstructured_case_3d(unstructured_case):
     return dataclasses.replace(
         unstructured_case,
         default_sizes={**unstructured_case.default_sizes, KDim: 10},
-        offset_provider={**unstructured_case.offset_provider, "Koff": KDim},
+        offset_provider=unstructured_case.offset_provider,
     )
 
 
@@ -598,6 +616,22 @@ def _allocate_from_type(
                     for t in types
                 )
             )
+        case ts.NamedCollectionType(types=types) as named_collection_type_spec:
+            container_constructor = (
+                named_collections.make_named_collection_constructor_from_type_spec(
+                    named_collection_type_spec, nested=False
+                )
+            )
+            return container_constructor(
+                tuple(
+                    (
+                        _allocate_from_type(
+                            case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
+                        )
+                        for t in types
+                    )
+                )
+            )
         case _:
             raise TypeError(
                 f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
@@ -623,7 +657,9 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
         case ts.ScalarType(shape=shape):
             return int(np.prod(shape)) if shape else 1
-        case ts.TupleType(types):
+        case ts.TupleType(types=types):
+            return sum([get_param_size(t, sizes=sizes) for t in types])
+        case ts.NamedCollectionType(types=types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
@@ -701,6 +737,9 @@ class Case:
                 IDim: grid_descriptor.sizes[0],
                 JDim: grid_descriptor.sizes[1],
                 KDim: grid_descriptor.sizes[2],
+                IHalfDim: grid_descriptor.sizes[0] - 1,
+                JHalfDim: grid_descriptor.sizes[1] - 1,
+                KHalfDim: grid_descriptor.sizes[2] - 1,
             },
             grid_type=common.GridType.CARTESIAN,
             allocator=allocator,

@@ -6,13 +6,20 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import warnings
 from typing import Any, Iterable, Optional
 
 import dace
-from dace import properties as dace_properties, transformation as dace_transformation
+from dace import (
+    properties as dace_properties,
+    subsets as dace_sbs,
+    transformation as dace_transformation,
+)
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
@@ -28,6 +35,11 @@ def gt_split_access_nodes(
 ) -> Optional[int]:
     """Applies the `SplitAccessNode` transformation to the SDFG.
 
+    This function should be the preferred way to run the `SplitAccessNode`
+    transformation. Since it will ensure that the single data is only computed
+    once. Furthermore, it guarantees that the transformations are applied in
+    a deterministic order.
+
     The transformation returns the number of AccessNodes that have been split.
 
     Args:
@@ -35,7 +47,8 @@ def gt_split_access_nodes(
         validate: Perform validation after the pass has run.
         validate_all: Perform extensive validation.
         single_use_data: Which data descriptors are used only once.
-            If not passed the function will run `FindSingleUseData`.
+            If not passed the function will run `FindSingleUseData`, if passed the
+            function will update its content and add the newly generated data.
     """
 
     # To ensures that the `{src,dst}_subset` are properly set, run initialization.
@@ -48,18 +61,97 @@ def gt_split_access_nodes(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
-    return sdfg.apply_transformations_repeated(
-        SplitAccessNode(single_use_data=single_use_data),
-        validate=validate,
-        validate_all=validate_all,
+    apply_count = 0
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        apply_count += _apply_split_access_node_non_recursive(
+            sdfg=nsdfg,
+            validate=validate,
+            validate_all=validate_all,
+            single_use_data=single_use_data[nsdfg],
+        )
+
+    return apply_count
+
+
+def _apply_split_access_node_non_recursive(
+    sdfg: dace.SDFG,
+    validate: bool,
+    validate_all: bool,
+    single_use_data: set[str],
+) -> int:
+    apply_count = 0
+    if len(single_use_data) == 0:
+        return apply_count
+
+    # The splitter transformation. Note that we set `assume_single_use_data` to `True`
+    #  because we do this test outside.
+    access_node_splitter = gtx_transformations.SplitAccessNode(
+        assume_single_use_data=True,
     )
+
+    # The transformation only applies to transient single use data, thus the order
+    #  in which the states are provided are irrelevant. Furthermore, all fragments
+    #  that are generated does not need to be examined again, thus a one pass is
+    #  enough. This is because the `SplitAccessNode` transformation does not generates
+    #  new edges upon the split, it just reroutes them to the fragments.
+    for state in sdfg.states():
+        state_cfg_id = state.parent_graph.cfg_id
+        state_id = state.block_id
+        scope_dict = state.scope_dict()
+
+        # We can only split single use data that is also transient. Because GT4Py uses
+        #  an SSA style we know that there is only one AccessNode that refers to that
+        #  data. Thus, all AccessNodes that are stored refer to different data
+        access_nodes_to_process = sorted(
+            (
+                dnode
+                for dnode in state.data_nodes()
+                if dnode.data in single_use_data and scope_dict[dnode] is None
+            ),
+            key=lambda dnode: dnode.data,
+        )
+        assert len(access_nodes_to_process) == len(
+            set(map(lambda ac: ac.data, access_nodes_to_process))
+        )
+
+        if len(access_nodes_to_process) == 0:
+            # Nothing to process in this state, continue.
+            continue
+
+        # Now try to split all candidates that we have found.
+        for access_node_to_process in access_nodes_to_process:
+            access_node_splitter.setup_match(
+                sdfg=sdfg,
+                cfg_id=state_cfg_id,
+                state_id=state_id,
+                subgraph={gtx_transformations.SplitAccessNode.access_node: access_node_to_process},
+                expr_index=0,
+                override=True,
+            )
+            if access_node_splitter.can_be_applied(
+                graph=state, expr_index=0, sdfg=sdfg, permissive=False
+            ):
+                splitted_access_nodes = access_node_splitter.apply(graph=state, sdfg=sdfg)
+                if validate_all:
+                    # Not super correct as we not check at the top of the hierarchy.
+                    sdfg.validate()
+
+                # We have to update `single_use_data`. By definition all data that we
+                #  generate through splitting is also single use data.
+                single_use_data.update(sac.data for sac in splitted_access_nodes.values())
+                apply_count += 1
+
+    if validate:
+        sdfg.validate()
+
+    return apply_count
 
 
 @dace_properties.make_properties
 class SplitAccessNode(dace_transformation.SingleStateTransformation):
     """The transformation will split an AccessNode into multiple ones.
 
-    If there is no interesection between a write and different reads,
+    If there is no intersection between a write and different reads,
     i.e. if every read to the AccessNode can be satisfied by a single
     write to the AccessNode and the AccessNode is only used at one
     location, then the node is split.
@@ -71,15 +163,30 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
     Args:
         single_use_data: The list of data that is used only once.
+        assume_single_use_data: Assume that `access_node` is single use data.
+            Note this flag should _only_ be used if the transformation is used
+            through the `apply_to()` interface and the caller has ensured that
+            `self.access_node` really is single use data.
 
     Todo:
         - Made it possible to merge splits, i.e. such that a fragment can
             be described by two producers.
         - Create a version that is able to split over multiple states. This is
             mostly useful to enable more state fusion.
+
+    Note:
+        The actual split operation is performed using `splitting_tools.split_node()`.
+        Furthermore, as a special extension, to support certain workflows the
+        `apply()` function returns the return value of that function.
     """
 
     access_node = dace_transformation.PatternNode(dace_nodes.AccessNode)
+
+    assume_single_use_data = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Always assume that `self.access_node` is single use data. Only useful if used through `SplitAccessNode.apply_to()`.",
+    )
 
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
@@ -90,12 +197,13 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         *args: Any,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
+        assume_single_use_data: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._single_use_data = None
-        if single_use_data is not None:
-            self._single_use_data = single_use_data
+        self._single_use_data = single_use_data
+        if assume_single_use_data is not None:
+            self.assume_single_use_data = assume_single_use_data
 
     @classmethod
     def expressions(cls) -> Any:
@@ -144,6 +252,8 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         ):
             return False
 
+        if self.assume_single_use_data:
+            single_use_data = {sdfg: {access_node.data}}
         if self._single_use_data is None:
             find_single_use_data = dace_analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
@@ -158,7 +268,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         graph: dace.SDFGState,
         sdfg: dace.SDFG,
-    ) -> None:
+    ) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
         access_node: dace_nodes.AccessNode = self.access_node
 
         edge_reassignments = self._find_edge_reassignment(graph)
@@ -181,10 +291,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
 
         # We have to clean up the isolated fragments. This is because we specified
         #  `allow_to_bypass_nodes` in the call above.
-        for ac in fragment_access_nodes.values():
+        for split_sbs in list(fragment_access_nodes.keys()):
+            ac = fragment_access_nodes[split_sbs]
             if graph.degree(ac) == 0:
                 graph.remove_node(ac)
                 sdfg.remove_data(ac.data, validate=False)
+                fragment_access_nodes.pop(split_sbs)
 
         # NOTE: In some situation it happens that when a producer writes
         #   something inside `access_node` and the data is never read. This is
@@ -192,10 +304,13 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #   transformations. This will lead to dead data flow, that we will
         #   not remove. Instead DDE should be run.
 
+        # Special extension to support certain workflows.
+        return fragment_access_nodes
+
     def _find_edge_reassignment(
         self,
         state: dace.SDFGState,
-    ) -> dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] | None:
+    ) -> dict[dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]] | None:
         """Determine how the edges should be distributed to the fragments.
 
         The current implementation defines the fragments, i.e. the pieces into
@@ -223,14 +338,14 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  generate the data for a consumer). This is hard to handle, but should
         #  be implemented at some point.
         edge_reassignments: dict[
-            dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]
+            dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]
         ] = {}
         for iedge in state.in_edges(access_node):
             if iedge.data.dst_subset is None:
                 return None  # TODO(phimuell): Lift this.
             if iedge.data.wcr is not None:
                 return None
-            edge_reassignments[iedge] = set()
+            edge_reassignments[iedge] = OrderedSet()
 
         # Now match the outgoing edges to their incoming producers.
         for oedge in state.out_edges(access_node):
@@ -314,7 +429,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-        edge_reassignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
+        edge_reassignments: dict[
+            dace_graph.MultiConnectorEdge, OrderedSet[dace_graph.MultiConnectorEdge]
+        ],
     ) -> bool:
         """Checks if the decomposition results in a valid SDFG.
 

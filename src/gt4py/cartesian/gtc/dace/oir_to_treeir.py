@@ -10,6 +10,7 @@ from typing import Any, List, TypeAlias
 
 from dace import data, dtypes, symbolic
 
+import gt4py.cartesian.config as gt_config
 from gt4py import eve
 from gt4py.cartesian.gtc import common, definitions, oir
 from gt4py.cartesian.gtc.dace import oir_to_tasklet, treeir as tir, utils
@@ -29,11 +30,19 @@ DEFAULT_STORAGE_TYPE = {
 }
 """Default dace residency types per device type."""
 
-DEFAULT_MAP_SCHEDULE = {
-    dtypes.DeviceType.CPU: dtypes.ScheduleType.Default,
-    dtypes.DeviceType.GPU: dtypes.ScheduleType.GPU_Device,
-}
-"""Default kernel target per device type."""
+
+def _resolve_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
+    """Optimal kernel schedule type based on target device."""
+    if device_type == dtypes.DeviceType.GPU:
+        return dtypes.ScheduleType.GPU_Device
+
+    if device_type != dtypes.DeviceType.CPU:
+        raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")
+
+    if not gt_config.build_settings["openmp"]["use_openmp"]:
+        return dtypes.ScheduleType.Sequential
+
+    return dtypes.ScheduleType.CPU_Multicore
 
 
 class OIRToTreeIR(eve.NodeVisitor):
@@ -61,7 +70,6 @@ class OIRToTreeIR(eve.NodeVisitor):
         self._device_type = device_type_translate[device_type.upper()]
         self._api_signature = builder.gtir.api_signature
         self._k_bounds = compute_k_boundary(builder.gtir)
-        self._vloop_sections = 0
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
@@ -138,7 +146,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=DEFAULT_MAP_SCHEDULE[self._device_type],
+            schedule=_resolve_map_schedule(self._device_type),
             children=[],
             parent=ctx.current_scope,
         )
@@ -226,11 +234,24 @@ class OIRToTreeIR(eve.NodeVisitor):
             groups = self._group_statements(node)
             self.visit(groups, ctx=ctx)
 
-    def visit_AxisBound(self, node: oir.AxisBound, axis_start: str, axis_end: str) -> str:
+    def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
+            if axis_start == "0":
+                return f"({node.offset})"
+            if node.offset == 0:
+                return f"({axis_start})"
             return f"({axis_start}) + ({node.offset})"
 
+        if axis_end == "0":
+            return f"({node.offset})"
+        if node.offset == 0:
+            return f"({axis_end})"
         return f"({axis_end}) + ({node.offset})"
+
+    def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
+        raise NotImplementedError(
+            "Runtime interval bounds (e.g. `with interval(0, field)`) is an experimental feature and not implemented for the `dace:X` backends."
+        )
 
     def visit_Interval(
         self, node: oir.Interval, loop_order: common.LoopOrder, axis_start: str, axis_end: str
@@ -243,19 +264,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return tir.Bounds(start=start, end=end)
 
-    def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
-        """
-        Defines the vertical loop schedule.
-
-        Current strategy is to
-          - keep the vertical loop on the host for both, CPU and GPU targets
-          - and run it in parallel on CPU and sequential on GPU.
-        """
-        if self._device_type == dtypes.DeviceType.GPU:
-            return dtypes.ScheduleType.Sequential
-
-        return DEFAULT_MAP_SCHEDULE[self._device_type]
-
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
     ) -> None:
@@ -266,21 +274,26 @@ class OIRToTreeIR(eve.NodeVisitor):
             axis_end=tir.Axis.K.domain_dace_symbol(),
         )
 
-        loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(
-                f"{tir.Axis.K.iteration_symbol()}_{self._vloop_sections}"
-            ),
-            loop_order=loop_order,
-            bounds_k=bounds,
-            schedule=self._vertical_loop_schedule(),
-            children=[],
-            parent=ctx.current_scope,
-        )
+        loop: tir.SequentialVerticalLoop | tir.ParallelVerticalLoop
+        if loop_order == common.LoopOrder.PARALLEL:
+            loop = tir.ParallelVerticalLoop(
+                iteration_variable=tir.Axis.K.iteration_symbol(),
+                bounds_k=bounds,
+                schedule=_resolve_map_schedule(self._device_type),
+                children=[],
+                parent=ctx.current_scope,
+            )
+        else:
+            loop = tir.SequentialVerticalLoop(
+                iteration_variable=tir.Axis.K.iteration_symbol(),
+                bounds_k=bounds,
+                loop_order=loop_order,
+                children=[],
+                parent=ctx.current_scope,
+            )
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
-
-        self._vloop_sections += 1
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop, ctx: tir.Context) -> None:
         if node.caches:
@@ -339,7 +352,6 @@ class OIRToTreeIR(eve.NodeVisitor):
                         param,
                         field_without_mask_extents[param.name],
                         k_bound,
-                        symbols,
                     ),
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
@@ -363,7 +375,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(
                 dtype=utils.data_type_to_dace_typeclass(field.dtype),
-                shape=get_dace_shape(field, field_extent, k_bound, symbols),
+                shape=get_dace_shape(field, field_extent, k_bound),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
@@ -497,6 +509,14 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return f"({if_code} if {condition} else {else_code})"
 
+    def visit_IteratorAccess(
+        self, node: oir.IteratorAccess, ctx: tir.Context, **kwargs: Any
+    ) -> str:
+        if node.name == tir.Axis.K:
+            return tir.k_symbol(ctx.current_scope)
+
+        return tir.Axis(node.name).iteration_symbol()
+
     # visitors that should _not_ be called
 
     def visit_Decl(self, node: oir.Decl, **kwargs: Any) -> None:
@@ -513,7 +533,6 @@ def get_dace_shape(
     field: oir.FieldDecl,
     extent: definitions.Extent,
     k_bound: tuple[int, int],
-    symbols: tir.SymbolDict,
 ) -> list[symbolic.symbol]:
     shape = []
     for index, axis in enumerate(tir.Axis.dims_3d()):

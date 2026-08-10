@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+from typing import NamedTuple
 
 import numpy as np
 import pytest
@@ -16,29 +17,39 @@ from gt4py.next import common
 
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import Cell, KDim, Koff
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases import Cell, KDim
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 
 
-pytestmark = [pytest.mark.uses_unstructured_shift, pytest.mark.uses_scan]
+pytestmark = [
+    pytest.mark.uses_scan,
+    pytest.mark.uses_cartesian_shift,
+    pytest.mark.uses_scan_in_field_operator,
+]
 
 
 Cell = gtx.Dimension("Cell")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
-Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 
-@gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
-def _scan(
-    state: tuple[float, float, bool], w: float, z_q: float, z_a: float, z_b: float, z_c: float
-) -> tuple[float, float, bool]:
-    z_q_m1, w_m1, first = state
-    z_g = z_b + z_a * z_q_m1
+class State(NamedTuple):
+    z_q_new: float
+    w_new: float
+    first_level: bool
+
+
+@gtx.scan_operator(axis=KDim, forward=True, init=State(z_q_new=0.0, w_new=0.0, first_level=True))
+def _scan(state: State, w: float, z_q: float, z_a: float, z_b: float, z_c: float) -> State:
+    z_g = z_b + z_a * state.z_q_new
     z_q_new = (0.0 - z_c) * z_g
-    w_new = z_a * w_m1 * z_g
-    return (z_q, w, False) if first else (z_q_new, w_new, False)
+    w_new = z_a * state.w_new * z_g
+    return (
+        State(z_q_new=z_q, w_new=w, first_level=False)
+        if state.first_level
+        else State(z_q_new=z_q_new, w_new=w_new, first_level=False)
+    )
 
 
 @gtx.field_operator
@@ -51,9 +62,9 @@ def _solve_nonhydro_stencil_52_like(
     gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], bool]
 ]:
     """No projector required as we write all output of the scan (including dummy field)"""
-    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
-    z_c = z_beta * z_alpha(Koff[1])
-    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
+    z_a = z_beta(KDim - 1) * z_alpha(KDim - 1)
+    z_c = z_beta * z_alpha(KDim + 1)
+    z_b = z_alpha * (z_beta(KDim - 1) + z_beta)
     z_q_res, w_res, dummy = _scan(w, z_q, z_a, z_b, z_c)
     return z_q_res, w_res, dummy
 
@@ -78,9 +89,9 @@ def _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     z_q: gtx.Field[[Cell, KDim], float],
     w: gtx.Field[[Cell, KDim], float],
 ) -> tuple[gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float]]:
-    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
-    z_c = z_beta * z_alpha(Koff[1])
-    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
+    z_a = z_beta(KDim - 1) * z_alpha(KDim - 1)
+    z_c = z_beta * z_alpha(KDim + 1)
+    z_b = z_alpha * (z_beta(KDim - 1) + z_beta)
     z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
     return z_q_res, w_res
 
@@ -104,9 +115,9 @@ def _solve_nonhydro_stencil_52_like_z_q(
     z_q: gtx.Field[[Cell, KDim], float],
     w: gtx.Field[[Cell, KDim], float],
 ) -> gtx.Field[[Cell, KDim], float]:
-    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
-    z_c = z_beta * z_alpha(Koff[1])
-    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
+    z_a = z_beta(KDim - 1) * z_alpha(KDim - 1)
+    z_c = z_beta * z_alpha(KDim + 1)
+    z_b = z_alpha * (z_beta(KDim - 1) + z_beta)
     z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
     return z_q_res
 
@@ -129,9 +140,9 @@ def _solve_nonhydro_stencil_52_like_z_q_tup(
     z_q: gtx.Field[[Cell, KDim], float],
     w: gtx.Field[[Cell, KDim], float],
 ) -> tuple[gtx.Field[[Cell, KDim], float]]:
-    z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
-    z_c = z_beta * z_alpha(Koff[1])
-    z_b = z_alpha * (z_beta(Koff[-1]) + z_beta)
+    z_a = z_beta(KDim - 1) * z_alpha(KDim - 1)
+    z_c = z_beta * z_alpha(KDim + 1)
+    z_b = z_alpha * (z_beta(KDim - 1) + z_beta)
     z_q_res, w_res, _ = _scan(w, z_q, z_a, z_b, z_c)
     return (z_q_res,)
 
@@ -175,7 +186,7 @@ def test_setup(exec_alloc_descriptor):
         None
         if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
         else exec_alloc_descriptor,
-        offset_provider={"Koff": KDim},
+        offset_provider={},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
@@ -206,6 +217,7 @@ def test_setup(exec_alloc_descriptor):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
     cases.verify(
         test_setup.case,
@@ -220,10 +232,9 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
         comparison=lambda ref, a: np.allclose(ref[:, 1:], a[:, 1:]),
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
-
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
@@ -243,6 +254,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like(test_setup):
     cases.run(
         test_setup.case,
@@ -259,6 +271,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_program_with_sliced_out_arguments
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
     if test_setup.case.backend == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")

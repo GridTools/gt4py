@@ -7,21 +7,47 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
-from typing import Any, Final, Generator, Optional
+import os
+from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config
+from gt4py.eve import extended_typing as xtyping
+from gt4py.next import config as gtx_config
+from gt4py.next.otf.compilation import common as gtx_compilation_common
 
 
 SDFG_ARG_METRIC_LEVEL: Final[str] = "gt_metrics_level"
-"""Name of SDFG argument to retrive the GT4Py metrics level."""
+"""Name of SDFG argument to input the GT4Py metrics level."""
+
+
+SDFG_ARG_METRIC_LEVEL_DTYPE: Final[dace.dtypes.typeclass] = dace.int32
+"""DaCe datatype of `SDFG_ARG_METRIC_LEVEL` argument."""
+
+
+SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
+"""Name of SDFG argument to return the total compute time to GT4Py."""
+
+
+SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
+"""DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
+
+
+ExternalWorkspace: TypeAlias = dict[
+    core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+]
+""" Mapping from device types to array-like objects.
+
+    The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
+    as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
+    or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
+"""
 
 
 def set_dace_config(
     device_type: core_defs.DeviceType,
-    cmake_build_type: Optional[config.CMakeBuildType] = None,
+    cmake_build_type: Optional[gtx_config.CMakeBuildType] = None,
 ) -> None:
     """Set the DaCe configuration as required by GT4Py.
 
@@ -57,6 +83,15 @@ def set_dace_config(
     #   creating any further sub-folder to compile the SDFG.
     dace.Config.set("cache", value="single")
 
+    # Workaround to disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
+    # TODO(edopao): revisit this workaround once it is possible to disable GPU detection in DaCe.
+    # (see https://github.com/spcl/dace/pull/2424)
+    if device_arch := gtx_compilation_common.get_device_arch():
+        dace.Config.set(
+            "compiler.extra_cmake_args",
+            value=f"-DLOCAL_CUDA_ARCHITECTURES={device_arch}",
+        )
+
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
@@ -64,19 +99,39 @@ def set_dace_config(
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 
-    # dace dafault setting use fast-math in both cpu and gpu compilation, don't use it here
-    dace.Config.set(
-        "compiler.cpu.args",
-        value="-std=c++14 -fPIC -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
-    )
-    dace.Config.set(
-        "compiler.cuda.args",
-        value="-Xcompiler -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
-    )
-    dace.Config.set(
-        "compiler.cuda.hip_args",
-        value="-std=c++17 -fPIC -O3 -march=native -Wno-unused-parameter",
-    )
+    if cmake_build_type == gtx_config.CMakeBuildType.DEBUG:
+        dbginfo = "-g"
+        cuda_dbginfo = "--device-debug -Xcompiler -g"
+    elif cmake_build_type == gtx_config.CMakeBuildType.REL_WITH_DEB_INFO:
+        dbginfo = "-g"
+        cuda_dbginfo = "--generate-line-info -Xcompiler -g"
+    else:
+        dbginfo = ""
+        cuda_dbginfo = ""
+
+    # The dace dafault settings use fast-math in both cpu and gpu compilation,
+    # we don't use it here.
+    if gt_cxxargs := os.environ.get("CXXFLAGS", None):
+        dace.Config.set("compiler.cpu.args", value=gt_cxxargs)
+    else:
+        dace.Config.set(
+            "compiler.cpu.args",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wall -Wextra -Wno-unused-parameter -Wno-unused-label",
+        )
+    if gt_cudaargs := os.environ.get("CUDAFLAGS", None):
+        dace.Config.set("compiler.cuda.args", value=gt_cudaargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.args",
+            value=f"{cuda_dbginfo} -O3 -Xcompiler -march=native -Xcompiler -Wno-unused-parameter",
+        )
+    if gt_hipargs := os.environ.get("HIPFLAGS", None):
+        dace.Config.set("compiler.cuda.hip_args", value=gt_hipargs)
+    else:
+        dace.Config.set(
+            "compiler.cuda.hip_args",
+            value=f"-fPIC {dbginfo} -O3 -march=native -Wno-unused-parameter",
+        )
 
     # By design, we do not allow converting Memlets to Maps during code generation.
     #  If needed, Memles are converted to Maps explicitly by gt4py in the `gt_auto_optimize`
@@ -102,9 +157,23 @@ def set_dace_config(
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
     # Instrumentation of SDFG timers
-    dace.Config.set("instrumentation", "report_each_invocation", value=True)
+    dace.Config.set("instrumentation", "report_each_invocation", value=False)
 
-    # we are not interested in storing the history of SDFG transformations.
+    # Do not print the progress of SDFG transformations, nor that of SDFG code generation,
+    #  unless enabled through env variable.
+    dace.Config.set(
+        "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
+    )
+
+    # In debug mode use `development` otherwise use `production`.
+    # NOTE: In case you want to run with optimizations, but would like to have the full
+    #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
+    #   set to `development` (small case matters).
+    dace.Config.set(
+        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
+    )
+
+    # We are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
 
 
@@ -117,3 +186,34 @@ def dace_context(**kwargs: Any) -> Generator[None, None, None]:
     with dace.config.temporary_config():
         set_dace_config(**kwargs)
         yield
+
+
+def serialize_sdfg_as_json(sdfg: dace.SDFG) -> dict[str, Any]:
+    """
+    Serialize an SDFG to JSON while removing ``guid`` keys.
+
+    `guid` is a per-element identity token: it does not affect code generation, and
+    `SDFG.from_json()` assigns fresh ids anyway. Keeping it would make the compile
+    cache key depend on element creation order, so two structurally identical
+    lowerings of the same program would not share a cached build.
+    # FIXME(edopao): remove this workaround once the SDFG lowering is stable.
+
+    Note that the recursive implementation to drop ``guid`` keys is 2-3x faster than
+    the iterative one, on a large SDFG, and it is also simpler to read.
+
+    Note that we set 'hash=True' to compute the SDFG hash and store it in the JSON
+    object. We compute the hash in order to refresh `cfg_list` on the SDFG, which
+    makes the JSON serialization stable.
+    """
+    json_obj = sdfg.to_json(hash=True)
+
+    def _drop_guids(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: _drop_guids(v) for k, v in obj.items() if k != "guid"}
+        if isinstance(obj, list):
+            return [_drop_guids(v) for v in obj]
+        if isinstance(obj, tuple):
+            return tuple(_drop_guids(v) for v in obj)
+        return obj
+
+    return _drop_guids(json_obj)

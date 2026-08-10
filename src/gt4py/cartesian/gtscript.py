@@ -168,12 +168,51 @@ def enum(class_: type[IntEnum]):
     return class_
 
 
-def function(func):
+def function(func: Callable) -> Callable:
     """Mark a GTScript function."""
     from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
 
     gt_frontend.GTScriptParser.annotate_definition(func)
     return func
+
+
+def lazy_function(
+    *, before_annotation: Callable | None = None, after_annotation: Callable | None = None
+) -> Callable:
+    """
+    Mark a GTScript function that will only be annotated before usage.
+
+    Lazy functions can be useful if e.g. annotated types aren't known when python
+    parses the code. Hooks allow to insert code before and after the function is
+    annotated.
+
+    Parameters
+    ----------
+        before_annotation : Callable | None
+            Hook to be called before annotating the function. Takes the function
+            that is about to be annotated as an argument and returns nothing.
+        after_annotation : Callable | None
+            Hook to be called after annotating the function. Takes the annotated
+            function as an argument and returns nothing.
+    """
+
+    def wrapper(func: Callable) -> Callable:
+        def inner_function() -> Callable:
+            if before_annotation is not None:
+                before_annotation(func)
+
+            from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
+
+            gt_frontend.GTScriptParser.annotate_definition(func)
+
+            if after_annotation is not None:
+                after_annotation(func)
+
+            return func
+
+        return inner_function
+
+    return wrapper
 
 
 # Interface functions
@@ -795,12 +834,12 @@ def computation(order):
 
 def interval(*args):
     """Define the interval of computation in the 'K' sequential axis."""
-    pass
+    return _ComputationContextManager()
 
 
 def horizontal(*args):
     """Define a block of code that is restricted to a set of regions in the parallel axes."""
-    pass
+    return _ComputationContextManager()
 
 
 class _Region:

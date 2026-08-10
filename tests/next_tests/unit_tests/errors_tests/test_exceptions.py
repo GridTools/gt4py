@@ -46,6 +46,13 @@ def test_with_location(loc_plain, message):
     assert errors.DSLError(None, message).with_location(loc_plain).location == loc_plain
 
 
+def test_did_you_mean_does_not_suggest_the_looked_up_name(loc_plain):
+    # A same-named symbol in the candidate set (e.g. a later SSA version) must not
+    # produce "Did you mean 'result'?" — the user already wrote that.
+    err = errors.UndefinedSymbolError(loc_plain, "result", candidates={"result"})
+    assert err.hints == []
+
+
 def test_str(loc_plain, message):
     pattern = f'{message}\\n  File ".*", line.*'
     s = str(errors.DSLError(loc_plain, message))
@@ -57,8 +64,8 @@ def test_str_snippet(loc_snippet, message):
         [
             f"{message}",
             '  File ".*", line.*',
-            "        # This very line of comment should be shown in the snippet.",
-            r"                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^",
+            r"\s+\d+ \|     # This very line of comment should be shown in the snippet\.",
+            r"\s+\| {15}\^{14}",
         ]
     )
     s = str(errors.DSLError(loc_snippet, message))

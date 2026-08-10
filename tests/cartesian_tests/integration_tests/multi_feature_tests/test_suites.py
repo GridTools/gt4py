@@ -800,10 +800,7 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out, index):
         with computation(PARALLEL), interval(1, None):
-            field_out[0, 0, 0] = (
-                field_in[0, 0, index]  # noqa: F841 [unused-variable]
-                + field_in[0, 0, -2]
-            )
+            field_out[0, 0, 0] = field_in[0, 0, index] + field_in[0, 0, -2]
 
     def validation(field_in, field_out, index, *, domain, origin):
         idx = 1 + (np.arange(domain[-1]) + index)[1:]
@@ -923,11 +920,17 @@ class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out):
         with computation(PARALLEL), interval(...):
-            with horizontal(region[I[0] : I[2], J[0] : J[2]], region[I[-3] : I[-1], J[-3] : J[-1]]):
+            with horizontal(
+                region[I[0] : I[0] + 2, J[0] : J[0] + 2],
+                region[I[-1] - 2 : I[-1], J[-1] - 2 : J[-1]],
+            ):
                 field_out = (  # noqa: F841 [unused-variable]
                     field_in + 1.0
                 )
-            with horizontal(region[I[0] : I[2], J[-3] : J[-1]], region[I[-3] : I[-1], J[0] : J[2]]):
+            with horizontal(
+                region[I[0] : I[0] + 2, J[-1] - 2 : J[-1]],
+                region[I[-1] - 2 : I[-1], J[0] : J[0] + 2],
+            ):
                 field_out = (  # noqa: F841 [unused-variable]
                     field_in - 1.0
                 )

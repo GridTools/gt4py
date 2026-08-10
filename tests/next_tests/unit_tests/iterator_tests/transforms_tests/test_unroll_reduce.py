@@ -6,15 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from types import SimpleNamespace
-
 import pytest
 
-from gt4py.eve.utils import UIDs
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.type_system import type_specifications as ts
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
@@ -27,6 +25,19 @@ def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
     )
 
 
+def _list_type(dim: str) -> ts.ListType:
+    return ts.ListType(
+        element_type=ts.DataType(),
+        offset_type=common.Dimension(value=dim, kind=common.DimensionKind.LOCAL),
+    )
+
+
+def typed_neighbors(dim: str, arg: str | ir.Expr) -> ir.FunCall:
+    neighbors = im.neighbors(dim, arg)
+    neighbors.type = _list_type(dim)
+    return neighbors
+
+
 @pytest.fixture(params=[True, False])
 def has_skip_values(request):
     return request.param
@@ -34,34 +45,33 @@ def has_skip_values(request):
 
 @pytest.fixture
 def basic_reduction():
-    UIDs.reset_sequence()
-    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"))
+    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
-    UIDs.reset_sequence()
-    return im.reduce("foo", 0.0)("x", im.neighbors("Dim", "y"))
+    const_list = im.call("make_const_list")(42)
+    const_list.type = _list_type("Dim")
+    return im.reduce("foo", 0.0)(const_list, typed_neighbors("Dim", "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
-    UIDs.reset_sequence()
-    return im.reduce("foo", 0.0)(im.neighbors("Dim", "x"), im.neighbors("Dim2", "y"))
+    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"), typed_neighbors("Dim2", "y"))
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
-    UIDs.reset_sequence()
     return im.reduce("foo", 0.0)(
-        im.neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), im.neighbors("Dim", "y")
+        typed_neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), typed_neighbors("Dim", "y")
     )
 
 
 @pytest.fixture
 def reduction_if():
-    UIDs.reset_sequence()
-    return im.reduce("foo", 0.0)(im.if_(True, im.neighbors("Dim", "x"), "y"))
+    if_expr = im.if_(True, typed_neighbors("Dim", "x"), "y")
+    if_expr.type = _list_type("Dim")
+    return im.reduce("foo", 0.0)(if_expr)
 
 
 @pytest.mark.parametrize(
@@ -74,14 +84,13 @@ def reduction_if():
     ],
 )
 def test_get_partial_offsets(reduction, request):
-    offset_provider_type = {"Dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
     partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
 
     assert set(partial_offsets) == {"Dim"}
 
 
-def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
-    acc, offset, step = "_acc_1", "_i_2", "_step_3"
+def _expected(red, max_neighbors, has_skip_values, shifted_arg=0):
+    acc, offset, step = "_acc_0", "_i_0", "_step_0"
 
     red_fun, red_init = red.fun.args
 
@@ -103,38 +112,44 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
     return im.let(step, step_fun)(step_app)
 
 
-def test_basic(basic_reduction, has_skip_values):
-    expected = _expected(basic_reduction, "Dim", 3, has_skip_values)
+def test_basic(basic_reduction, has_skip_values, uids: utils.IDGeneratorPool):
+    expected = _expected(basic_reduction, 3, has_skip_values)
 
     offset_provider_type = {
         "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=has_skip_values)
     }
-    actual = UnrollReduce.apply(basic_reduction, offset_provider_type=offset_provider_type)
+    actual = UnrollReduce.apply(
+        basic_reduction, offset_provider_type=offset_provider_type, uids=uids
+    )
     assert actual == expected
 
 
-def test_reduction_with_shift_on_second_arg(reduction_with_shift_on_second_arg, has_skip_values):
-    expected = _expected(reduction_with_shift_on_second_arg, "Dim", 1, has_skip_values, 1)
+def test_reduction_with_shift_on_second_arg(
+    reduction_with_shift_on_second_arg, has_skip_values, uids
+):
+    expected = _expected(reduction_with_shift_on_second_arg, 1, has_skip_values, 1)
 
     offset_provider_type = {
         "Dim": dummy_connectivity_type(max_neighbors=1, has_skip_values=has_skip_values)
     }
     actual = UnrollReduce.apply(
-        reduction_with_shift_on_second_arg, offset_provider_type=offset_provider_type
+        reduction_with_shift_on_second_arg, offset_provider_type=offset_provider_type, uids=uids
     )
     assert actual == expected
 
 
-def test_reduction_with_if(reduction_if):
-    expected = _expected(reduction_if, "Dim", 2, False)
+def test_reduction_with_if(reduction_if, uids: utils.IDGeneratorPool):
+    expected = _expected(reduction_if, 2, False)
 
     offset_provider_type = {"Dim": dummy_connectivity_type(max_neighbors=2, has_skip_values=False)}
-    actual = UnrollReduce.apply(reduction_if, offset_provider_type=offset_provider_type)
+    actual = UnrollReduce.apply(reduction_if, offset_provider_type=offset_provider_type, uids=uids)
     assert actual == expected
 
 
-def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shift):
-    expected = _expected(reduction_with_irrelevant_full_shift, "Dim", 3, False)
+def test_reduction_with_irrelevant_full_shift(
+    reduction_with_irrelevant_full_shift, uids: utils.IDGeneratorPool
+):
+    expected = _expected(reduction_with_irrelevant_full_shift, 3, False)
 
     offset_provider_type = {
         "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
@@ -143,7 +158,7 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
         ),  # different max_neighbors and skip value to trigger error
     }
     actual = UnrollReduce.apply(
-        reduction_with_irrelevant_full_shift, offset_provider_type=offset_provider_type
+        reduction_with_irrelevant_full_shift, offset_provider_type=offset_provider_type, uids=uids
     )
     assert actual == expected
 
@@ -166,13 +181,9 @@ def test_reduction_with_irrelevant_full_shift(reduction_with_irrelevant_full_shi
     ],
 )
 def test_reduction_with_incompatible_shifts(
-    reduction_with_incompatible_shifts, offset_provider_type
+    reduction_with_incompatible_shifts, offset_provider_type, uids
 ):
-    offset_provider_type = {
-        "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
-        "Dim2": dummy_connectivity_type(max_neighbors=2, has_skip_values=False),
-    }
     with pytest.raises(RuntimeError, match="incompatible"):
         UnrollReduce.apply(
-            reduction_with_incompatible_shifts, offset_provider_type=offset_provider_type
+            reduction_with_incompatible_shifts, offset_provider_type=offset_provider_type, uids=uids
         )

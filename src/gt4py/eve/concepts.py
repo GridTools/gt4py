@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import copy
 import re
+from collections.abc import Callable
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
-    Callable,
     ClassVar,
     Dict,
     Final,
@@ -229,8 +229,3 @@ class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from Da
 
 class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
     pass
-
-
-def eq_nonlocated(a: Node, b: Node) -> bool:
-    """Compare two nodes, ignoring their `SourceLocation` or `SourceLocationGroup`."""
-    return len(utils.ddiff(a, b, exclude_types=[SourceLocation, SourceLocationGroup])) == 0

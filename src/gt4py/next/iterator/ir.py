@@ -11,21 +11,28 @@ import typing
 from typing import TYPE_CHECKING, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
-from gt4py.eve import Coerced, SymbolName, SymbolRef
-from gt4py.eve.concepts import SourceLocation
+from gt4py.eve import Coerced, SymbolName, SymbolRef, concepts, utils as eve_utils
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
-from gt4py.eve.utils import noninstantiable
-from gt4py.next import common
+from gt4py.next import common, fingerprinting
 from gt4py.next.iterator.builtins import BUILTINS
 from gt4py.next.type_system import type_specifications as ts
 
 
 DimensionKind = common.DimensionKind
 
+# Generate an unique fingerprint for `eve.Node`s ignoring the "location" and "type" attribute.
+# TODO(tehrengruber): this is a workaround for the fact that `eve.Node`s type can be
+# set after creation, in the type inference passes.
+lenient_ir_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
+    deconstructor=fingerprinting.make_lenient_data_deconstructor(
+        {concepts.Node: fingerprinting.skipping_fields_node_deconstructor("location", "type")}
+    )
+)
 
-@noninstantiable
+
+@eve_utils.noninstantiable
 class Node(eve.Node):
-    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
+    location: Optional[concepts.SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
     # TODO(tehrengruber): include in comparison if value is not None
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
@@ -52,7 +59,7 @@ class Sym(Node):  # helper
     id: Coerced[SymbolName]
 
 
-@noninstantiable
+@eve_utils.noninstantiable
 class Expr(Node): ...
 
 
@@ -81,6 +88,7 @@ InfinityLiteral.NEGATIVE = InfinityLiteral(name="NEGATIVE")
 InfinityLiteral.POSITIVE = InfinityLiteral(name="POSITIVE")
 
 
+# TODO(tehrengruber): allow int only and create OffsetRef for str instead
 class OffsetLiteral(Expr):
     value: Union[int, str]
 
@@ -90,6 +98,11 @@ class AxisLiteral(Expr):
     # Now every use of the literal has to provide the kind, where usually we only care of the name.
     value: str
     kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
+
+
+class CartesianOffset(Expr):
+    domain: AxisLiteral
+    codomain: AxisLiteral
 
 
 class SymRef(Expr):
@@ -152,6 +165,7 @@ Literal.__hash__ = Node.__hash__  # type: ignore[method-assign]
 NoneLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 AxisLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+CartesianOffset.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]

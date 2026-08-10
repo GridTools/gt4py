@@ -34,10 +34,19 @@ class GenericAccess(Generic[OffsetT]):
     is_write: bool
     data_index: List[oir.Expr] = dataclasses.field(default_factory=list)
     horizontal_mask: Optional[common.HorizontalMask] = None
+    conditional: bool | None = None
+    """Set to True if this access is conditional, e.g. part of the body of a MaskStmt."""
 
     @property
     def is_read(self) -> bool:
         return not self.is_write
+
+    @property
+    def is_conditional(self) -> bool:
+        if self.conditional is None:
+            raise RuntimeError("It is unknown whether or not this access is conditional.")
+
+        return self.conditional
 
     def to_extent(
         self,
@@ -87,6 +96,7 @@ class AccessCollector(eve.NodeVisitor):
         accesses: List[GeneralAccess],
         is_write: bool,
         horizontal_mask: Optional[common.HorizontalMask] = None,
+        conditional: bool | None = None,
         **kwargs: Any,
     ) -> None:
         self.generic_visit(node, accesses=accesses, is_write=is_write, **kwargs)
@@ -98,6 +108,7 @@ class AccessCollector(eve.NodeVisitor):
                 data_index=node.data_index,
                 is_write=is_write,
                 horizontal_mask=horizontal_mask,
+                conditional=conditional is True,
             )
         )
 
@@ -107,14 +118,21 @@ class AccessCollector(eve.NodeVisitor):
 
     def visit_MaskStmt(self, node: oir.MaskStmt, **kwargs: Any) -> None:
         self.visit(node.mask, is_write=False, **kwargs)
-        self.visit(node.body, **kwargs)
+        kwargs.pop("conditional", None)  # avoid multiple values for kwarg `conditional`
+        self.visit(node.body, conditional=True, **kwargs)
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         self.visit(node.cond, is_write=False, **kwargs)
-        self.visit(node.body, **kwargs)
+        kwargs.pop("conditional", None)  # avoid multiple values for kwarg `conditional`
+        self.visit(node.body, conditional=True, **kwargs)
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
-        self.visit(node.body, horizontal_mask=node.mask, **kwargs)
+        kwargs.pop("conditional", None)  # avoid multiple values for kwarg `conditional`
+        self.visit(node.body, horizontal_mask=node.mask, conditional=True, **kwargs)
+
+    def visit_Interval(self, node: oir.Interval, **kwargs: Any) -> None:
+        self.visit(node.start, is_write=False, **kwargs)
+        self.visit(node.end, is_write=False, **kwargs)
 
     @dataclass
     class GenericAccessCollection(Generic[AccessT, OffsetT]):

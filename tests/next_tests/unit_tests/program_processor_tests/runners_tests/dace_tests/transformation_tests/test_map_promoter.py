@@ -14,7 +14,7 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
-    gtir_to_sdfg_utils as gtx_sdfg_utils,
+    lowering as gtx_dace_lowering,
     transformations as gtx_transformations,
 )
 
@@ -314,8 +314,8 @@ def _make_horizontal_promoter_sdfg(
     sdfg = dace.SDFG(util.unique_name("serial_map_promoter_tester"))
     state = sdfg.add_state(is_start_block=True)
 
-    h_idx = gtx_sdfg_utils.get_map_variable(gtx_common.Dimension("boden"))
-    v_idx = gtx_sdfg_utils.get_map_variable(
+    h_idx = gtx_dace_lowering.get_map_variable(gtx_common.Dimension("boden"))
+    v_idx = gtx_dace_lowering.get_map_variable(
         gtx_common.Dimension("K", gtx_common.DimensionKind.VERTICAL)
     )
 

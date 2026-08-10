@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import warnings
 from typing import Final, Iterable, Optional, Sequence, TypeAlias
@@ -14,6 +16,7 @@ import dace
 import sympy
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -73,7 +76,7 @@ def perform_dataflow_inlining(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace_graph.MultiConnectorEdge[dace.Memlet],
-    nodes_to_inline: set[dace_nodes.Node],
+    nodes_to_inline: OrderedSet[dace_nodes.Node],
     inline_spec: InlineSpec,
 ) -> Optional[tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]]:
     """Performs the second step, i.e. the actual inlining, of the dataflow.
@@ -134,7 +137,7 @@ def find_nodes_to_inline(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace_graph.MultiConnectorEdge[dace.Memlet],
-) -> Optional[tuple[set[dace_nodes.Node], InlineSpec]]:
+) -> Optional[tuple[OrderedSet[dace_nodes.Node], InlineSpec]]:
     """First step of dataflow inlining, computing the inline specification.
 
     The inline specification describes how the inlining of dataflow has to be done.
@@ -451,7 +454,7 @@ def _insert_nested_sdfg(
         dace.Memlet(
             data=outer_output_name,
             subset=edge_to_replace.data.src_subset.offset_new(offset, negative=True),
-            other_subset=edge_to_replace.data.get_dst_subset(edge_to_replace, state),
+            other_subset=copy.deepcopy(edge_to_replace.data.get_dst_subset(edge_to_replace, state)),
         ),
     )
 
@@ -477,7 +480,7 @@ def _insert_nested_sdfg(
 def _populate_nested_sdfg(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    nodes_to_replicate: set[dace_nodes.Node],
+    nodes_to_replicate: OrderedSet[dace_nodes.Node],
     first_map_exit: dace_nodes.MapExit,
     exchange_subset: dace_sbs.Range,
     intermediate_node: dace_nodes.AccessNode,
@@ -547,7 +550,7 @@ def _populate_nested_sdfg(
                     memlet=dace.Memlet(
                         data=output_name,
                         subset=dace_sbs.Range.from_array(output_desc),
-                        other_subset=oedge.data.get_src_subset(oedge, state),
+                        other_subset=copy.deepcopy(oedge.data.get_src_subset(oedge, state)),
                     ),
                 )
 

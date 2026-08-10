@@ -88,12 +88,20 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_TemporaryDecl(
         self, node: npir.TemporaryDecl, **kwargs
     ) -> Union[str, Collection[str]]:
-        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}", "_dK_"] + [
-            str(dim) for dim in node.data_dims
-        ]
-        offset = [str(off) for off in node.offset] + ["0"] * (1 + len(node.data_dims))
+        # Cartesian IJ
+        shape = [f"_dI_ + {node.padding[0]}", f"_dJ_ + {node.padding[1]}"]
+        offset = [str(off) for off in node.offset]
+        # Vertical dimension K
+        if node.dimensions[2]:
+            shape += ["_dK_"]
+            offset += ["0"]
+        # Data dimensions
+        shape += [str(dim) for dim in node.data_dims]
+        offset += ["0"] * len(node.data_dims)
+
         dtype = self.visit(node.dtype, **kwargs)
-        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}))"
+        dims = node.dimensions
+        return f"{node.name} = Field.empty(({', '.join(shape)}), {dtype}, ({', '.join(offset)}), {dims})"
 
     LocalScalarDecl = as_fmt(
         "{name} = Field.empty((_dI_ + {upper[0] + lower[0]}, _dJ_ + {upper[1] + lower[1]}, {ksize}), {dtype}, ({', '.join(str(l) for l in lower)}, 0))"
@@ -101,12 +109,16 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     VarKOffset = as_fmt("lk + {k}")
 
+    def visit_KMaskFieldAccess(self, node: npir.KMaskFieldAccess, **kwargs: Any) -> str:
+        return "__k_mask[i:I, j:J, k:K]"
+
     def visit_FieldSlice(self, node: npir.FieldSlice, **kwargs: Any) -> Union[str, Collection[str]]:
         k_offset = (
             self.visit(node.k_offset, **kwargs)
             if isinstance(node.k_offset, npir.VarKOffset)
             else node.k_offset
         )
+
         offsets: Tuple[Optional[int], Optional[int], Union[str, int, None]] = (
             node.i_offset,
             node.j_offset,
@@ -116,7 +128,11 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         # To determine: when is the symbol name not in the symtable?
         if node.name in kwargs.get("symtable", {}):
             decl = kwargs["symtable"][node.name]
-            dimensions = decl.dimensions if isinstance(decl, npir.FieldDecl) else [True] * 3
+            dimensions = (
+                decl.dimensions
+                if isinstance(decl, npir.FieldDecl | npir.TemporaryDecl)
+                else [True] * 3
+            )
             offsets = cast(
                 Tuple[Optional[int], Optional[int], Union[str, int, None]],
                 tuple(off if has_dim else None for has_dim, off in zip(dimensions, offsets)),
@@ -327,6 +343,8 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 # --- begin domain boundary shortcuts ---
                 _di_, _dj_, _dk_ = 0, 0, 0
                 _dI_, _dJ_, _dK_ = _domain_
+                __k_mask = np.empty(_domain_, dtype=int)
+                __k_mask[:, :] = np.arange(_dK_, dtype=int)
                 # --- end domain padding ---
 
                 {% for decl in api_field_decls %}{{ decl | indent(4) }}

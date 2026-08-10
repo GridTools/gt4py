@@ -13,8 +13,20 @@ that explains the general structure and requirements on the SDFGs.
 """
 
 from . import constants, splitting_tools
-from .auto_optimize import GT4PyAutoOptHook, GT4PyAutoOptHookFun, gt_auto_optimize
-from .dead_dataflow_elimination import gt_eliminate_dead_dataflow
+from .auto_optimize import (
+    GT4PyAutoOptHook,
+    GT4PyAutoOptHookFun,
+    GT4PyAutoOptHookStage,
+    TransientMemoryMode,
+    gt_auto_optimize,
+)
+from .concat_where_mapper import (
+    gt_apply_concat_where_replacement_on_sdfg,
+    gt_check_if_concat_where_node_is_replaceable,
+    gt_replace_concat_where_node,
+)
+from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
+from .fuse_horizontal_conditionblocks import FuseHorizontalConditionBlocks
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -38,14 +50,19 @@ from .map_fusion_extended import (
 )
 from .map_orderer import MapIterationOrder, gt_set_iteration_order
 from .map_promoter import MapPromoter, MapPromotionCallBack
+from .map_splitter import MapSplitter
+from .map_to_copy import MapToCopy
 from .move_dataflow_into_if_body import MoveDataflowIntoIfBody
 from .multi_state_global_self_copy_elimination import (
     MultiStateGlobalSelfCopyElimination,
     MultiStateGlobalSelfCopyElimination2,
     gt_multi_state_global_self_copy_elimination,
 )
-from .redundant_array_removers import CopyChainRemover, gt_remove_copy_chain
+from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
+from .remove_access_node_copies import RemoveAccessNodeCopies
+from .remove_scalar_copies import RemoveScalarCopies
 from .remove_views import RemovePointwiseViews
+from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
     GT4PyMapBufferElimination,
     GT4PyMoveTaskletIntoMap,
@@ -62,20 +79,23 @@ from .split_access_nodes import SplitAccessNode, gt_split_access_nodes
 from .split_memlet import SplitConsumerMemlet
 from .state_fusion import GT4PyStateFusion
 from .strides import (
-    gt_change_transient_strides,
+    gt_change_strides,
     gt_map_strides_to_dst_nested_sdfg,
     gt_map_strides_to_src_nested_sdfg,
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_find_constant_arguments, gt_make_transients_persistent
+from .utils import gt_configure_transient_lifetime
 
 
 __all__ = [
     "CopyChainRemover",
+    "DoubleWriteRemover",
+    "FuseHorizontalConditionBlocks",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
+    "GT4PyAutoOptHookStage",
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
@@ -87,27 +107,34 @@ __all__ = [
     "MapIterationOrder",
     "MapPromoter",
     "MapPromotionCallBack",
+    "MapSplitter",
+    "MapToCopy",
     "MoveDataflowIntoIfBody",
     "MultiStateGlobalSelfCopyElimination",
     "MultiStateGlobalSelfCopyElimination2",
+    "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "RemoveScalarCopies",
+    "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "TransientMemoryMode",
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
+    "gt_apply_concat_where_replacement_on_sdfg",
     "gt_auto_optimize",
-    "gt_change_transient_strides",
+    "gt_change_strides",
+    "gt_check_if_concat_where_node_is_replaceable",
+    "gt_configure_transient_lifetime",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
-    "gt_find_constant_arguments",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
     "gt_horizontal_map_split_fusion",
     "gt_inline_nested_sdfg",
-    "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",
     "gt_multi_state_global_self_copy_elimination",
@@ -115,6 +142,8 @@ __all__ = [
     "gt_propagate_strides_of",
     "gt_reduce_distributed_buffering",
     "gt_remove_copy_chain",
+    "gt_remove_map",
+    "gt_replace_concat_where_node",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",

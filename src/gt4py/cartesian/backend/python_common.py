@@ -45,4 +45,4 @@ def recursive_write(root_path: pathlib.Path, tree: dict[str, str | dict]):
             return recursive_write(root_path / key, value)
 
         src_path = root_path / key
-        src_path.write_text(value)
+        src_path.write_text(value, encoding="utf-8")

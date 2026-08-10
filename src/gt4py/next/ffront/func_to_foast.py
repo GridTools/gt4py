@@ -17,6 +17,7 @@ import gt4py.eve as eve
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
+    experimental,
     fbuiltins,
     field_operator_ast as foast,
     source_utils,
@@ -35,12 +36,17 @@ from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVar
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.ffront.stages import AOT_DSL_FOP, AOT_FOP, DSL_FOP, FOP
+from gt4py.next.ffront.stages import (
+    ConcreteDSLFieldOperatorDef,
+    ConcreteFOASTOperatorDef,
+    DSLFieldOperatorDef,
+    FOASTOperatorDef,
+)
 from gt4py.next.otf import toolchain, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-def func_to_foast(inp: DSL_FOP) -> FOP:
+def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     """
     Turn a DSL field operator definition into a FOAST operator definition, adding metadata.
 
@@ -53,7 +59,7 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
         >>> def dsl_operator(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
         ...     return a * const
 
-        >>> dsl_operator_def = gtx.ffront.stages.FieldOperatorDefinition(definition=dsl_operator)
+        >>> dsl_operator_def = gtx.ffront.stages.DSLFieldOperatorDef(definition=dsl_operator)
         >>> foast_definition = func_to_foast(dsl_operator_def)
 
         >>> print(foast_definition.foast_node.id)
@@ -66,20 +72,24 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
-    foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
-    loc = foast_definition_node.location
-    operator_attribute_nodes = {
-        key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
-        for key, value in inp.attributes.items()
-    }
-    untyped_foast_node = inp.node_class(
-        id=foast_definition_node.id,
-        definition=foast_definition_node,
-        location=loc,
-        **operator_attribute_nodes,
-    )
-    foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
-    return ffront_stages.FoastOperatorDefinition(
+    try:
+        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+        loc = foast_definition_node.location
+        operator_attribute_nodes = {
+            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+            for key, value in inp.attributes.items()
+        }
+        untyped_foast_node = inp.node_class(
+            id=foast_definition_node.id,
+            definition=foast_definition_node,
+            location=loc,
+            **operator_attribute_nodes,
+        )
+        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    except errors.DSLError as err:
+        err.add_note(f"While processing the definition of '{inp.definition.__name__}'.")
+        raise
+    return ffront_stages.FOASTOperatorDef(
         foast_node=foast_node,
         closure_vars=closure_vars,
         grid_type=inp.grid_type,
@@ -88,15 +98,21 @@ def func_to_foast(inp: DSL_FOP) -> FOP:
     )
 
 
-def func_to_foast_factory(cached: bool = True) -> workflow.Workflow[DSL_FOP, FOP]:
+def func_to_foast_factory(
+    cached: bool = True,
+) -> workflow.Workflow[DSLFieldOperatorDef, FOASTOperatorDef]:
     """Wrap `func_to_foast` in a chainable and optionally cached workflow step."""
     wf = workflow.make_step(func_to_foast)
     if cached:
-        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep.in_memory(
+            step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf
 
 
-def adapted_func_to_foast_factory(**kwargs: Any) -> workflow.Workflow[AOT_DSL_FOP, AOT_FOP]:
+def adapted_func_to_foast_factory(
+    **kwargs: Any,
+) -> workflow.Workflow[ConcreteDSLFieldOperatorDef, ConcreteFOASTOperatorDef]:
     """Wrap the `func_to_foast step in an adapter to fit into transform toolchains.`"""
     return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
@@ -119,11 +135,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)
     >>> foast_tree  # doctest: +ELLIPSIS
-    FunctionDefinition(..., id=SymbolName('field_op'), ...)
+    FunctionDefinition(id=SymbolName('field_op'), ...)
     >>> foast_tree.params  # doctest: +ELLIPSIS
-    [Symbol(..., id=SymbolName('inp'), type=FieldType(...), ...)]
+    [Symbol(id=SymbolName('inp'), type=FieldType(...), ...)]
     >>> foast_tree.body.stmts  # doctest: +ELLIPSIS
-    [Return(..., value=Name(..., id=SymbolRef('inp')))]
+    [Return(value=Name(..., id=SymbolRef('inp')))]
 
 
     If a syntax error is encountered, it will point to the location in the source code.
@@ -141,6 +157,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     ...     )
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
+
+    reserved_names = fbuiltins.BUILTIN_NAMES + experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
 
     @classmethod
     def _preprocess_definition_ast(cls, ast: ast.AST) -> ast.AST:
@@ -171,13 +189,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 raise errors.DSLError(
                     foast_node.location,
                     "Annotated return type does not match deduced return type: annotation is "
-                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{foast_node.type.returns}'.",
+                    f"'{annotated_return_type}'"
+                    f", got '{foast_node.type.returns}'.",  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
                 )
         return foast_node
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
+        self._check_not_a_reserved_name(node.name, loc)
         closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
             try:
@@ -282,6 +301,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(node.target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
+        if node.value is None:
+            raise errors.DSLError(
+                self.get_location(node), "Variable declaration without assignment is not allowed."
+            )
+
         if node.annotation is not None:
             assert isinstance(node.annotation, ast.Constant) and isinstance(
                 node.annotation.value, str
@@ -297,7 +321,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             target=foast.Symbol[ts.FieldType](
                 id=node.target.id, location=self.get_location(node.target), type=target_type
             ),
-            value=self.visit(node.value) if node.value else None,
+            value=self.visit(node.value),
             location=self.get_location(node),
         )
 
@@ -389,7 +413,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs: Any) -> None:
         raise errors.UnsupportedPythonFeatureError(
-            self.get_location(node), "logical operators `and`, `or`"
+            self.get_location(node),
+            "logical operators `and`, `or`",
+            notes=[
+                "`and` and `or` operate on whole truth values, but fields contain "
+                "one boolean per grid point."
+            ],
+            hints=["Use the element-wise operators '&' and '|' instead."],
         )
 
     def visit_IfExp(self, node: ast.IfExp, **kwargs: Any) -> foast.TernaryExpr:

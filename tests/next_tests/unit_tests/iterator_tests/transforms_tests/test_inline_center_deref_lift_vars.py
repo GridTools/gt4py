@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from gt4py.next import utils
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -45,39 +46,47 @@ def unwrap_from_program(program: itir.Program) -> itir.Expr:
     return stencil.expr
 
 
-def test_simple():
+def test_simple(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.deref("var"))
-    expected = "(λ(_icdlv_1) → ·(↑(λ() → _icdlv_1()))())(λ() → ·it)"
+    expected = "(λ(_icdlv_0) → ·(↑(λ() → _icdlv_0()))())(λ() → ·it)"
 
-    actual = unwrap_from_program(InlineCenterDerefLiftVars.apply(wrap_in_program(testee)))
+    program = wrap_in_program(testee)
+    result = InlineCenterDerefLiftVars.apply(program, uids=uids)
+    actual = unwrap_from_program(result)
     assert str(actual) == expected
 
 
-def test_double_deref():
+def test_double_deref(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.plus(im.deref("var"), im.deref("var")))
-    expected = "(λ(_icdlv_1) → ·(↑(λ() → _icdlv_1()))() + ·(↑(λ() → _icdlv_1()))())(λ() → ·it)"
+    expected = "(λ(_icdlv_0) → ·(↑(λ() → _icdlv_0()))() + ·(↑(λ() → _icdlv_0()))())(λ() → ·it)"
 
-    actual = unwrap_from_program(InlineCenterDerefLiftVars.apply(wrap_in_program(testee)))
+    program = wrap_in_program(testee)
+    result = InlineCenterDerefLiftVars.apply(program, uids=uids)
+    actual = unwrap_from_program(result)
     assert str(actual) == expected
 
 
-def test_deref_at_non_center_different_pos():
+def test_deref_at_non_center_different_pos(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(im.deref(im.shift("I", 1)("var")))
 
-    actual = unwrap_from_program(InlineCenterDerefLiftVars.apply(wrap_in_program(testee)))
+    program = wrap_in_program(testee)
+    result = InlineCenterDerefLiftVars.apply(program, uids=uids)
+    actual = unwrap_from_program(result)
     assert testee == actual
 
 
-def test_deref_at_multiple_pos():
+def test_deref_at_multiple_pos(uids: utils.IDGeneratorPool):
     testee = im.let("var", im.lift("deref")("it"))(
         im.plus(im.deref("var"), im.deref(im.shift("I", 1)("var")))
     )
 
-    actual = unwrap_from_program(InlineCenterDerefLiftVars.apply(wrap_in_program(testee)))
+    program = wrap_in_program(testee)
+    result = InlineCenterDerefLiftVars.apply(program, uids=uids)
+    actual = unwrap_from_program(result)
     assert testee == actual
 
 
-def test_bc():
+def test_bc(uids: utils.IDGeneratorPool):
     # we also check that the common subexpression is able to extract the inlined value, such
     # that it is only evaluated once
     testee = im.let("var", im.lift("deref")("it2"))(
@@ -85,12 +94,11 @@ def test_bc():
             im.deref("it1"), im.literal_from_value(0.0), im.plus(im.deref("var"), im.deref("var"))
         )
     )
-    expected = """(λ(_icdlv_1) → if ·it1 then 0.0 else (λ(_cs_1) → _cs_1 + _cs_1)(·(↑(λ() → _icdlv_1()))()))(
+    expected = """(λ(_icdlv_0) → if ·it1 then 0.0 else (λ(_cs_0) → _cs_0 + _cs_0)(·(↑(λ() → _icdlv_0()))()))(
   λ() → ·it2
 )"""
 
-    actual = InlineCenterDerefLiftVars.apply(
-        wrap_in_program(testee, arg_dtypes=[ts.ScalarKind.BOOL, ts.ScalarKind.FLOAT64])
-    )
-    simplified = unwrap_from_program(cse.CommonSubexpressionElimination.apply(actual))
+    program = wrap_in_program(testee, arg_dtypes=[ts.ScalarKind.BOOL, ts.ScalarKind.FLOAT64])
+    actual = InlineCenterDerefLiftVars.apply(program, uids=uids)
+    simplified = unwrap_from_program(cse.CommonSubexpressionElimination.apply(actual, uids=uids))
     assert str(simplified) == expected

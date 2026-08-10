@@ -18,7 +18,7 @@ from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.past_common_fixtures import (
+from next_tests.fixtures.past_common import (
     IDim,
     copy_program_def,
     copy_restrict_program_def,
@@ -107,6 +107,16 @@ def test_undefined_field_program(identity_def):
         ProgramParser.apply_to_function(undefined_field_program)
 
 
+def test_program_name_shadows_builtin(identity_def):
+    identity = gtx.field_operator(identity_def)
+
+    def minimum(in_field: gtx.Field[[IDim], "float64"], out: gtx.Field[[IDim], "float64"]):
+        identity(in_field, out=out)
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        ProgramParser.apply_to_function(minimum)
+
+
 def test_copy_restrict_parsing(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
 
@@ -154,7 +164,7 @@ def test_domain_exception_1(identity_def):
     assert exc_info.match("Invalid call to 'domain_format_1'")
 
     assert (
-        re.search("Only Dictionaries allowed in 'domain'", exc_info.value.__cause__.args[0])
+        re.search("Tuple domain requires tuple output", exc_info.value.__cause__.args[0])
         is not None
     )
 

@@ -11,6 +11,7 @@ import copy
 import numpy as np
 import pytest
 
+from gt4py.cartesian.frontend.exceptions import GTScriptSyntaxError
 import gt4py.cartesian.gtscript as gtscript
 import gt4py.storage as gt_storage
 from gt4py.cartesian.gtscript import Field, K
@@ -403,6 +404,58 @@ class TestDataDimensions:
                     aligned_index=(0, 0, 0),
                 )
             )
+
+    @pytest.mark.parametrize("backend", ALL_BACKENDS)
+    def test_data_dimension_1d(self, backend: str):
+        @gtscript.stencil(backend=backend)
+        def data_dimension_1d(field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))]):
+            with computation(FORWARD), interval(...):
+                field_out[0, 0][0] = 42.0
+
+        ones = gt_storage.ones(
+            shape=(2, 3),
+            dimensions=["I", "J"],
+            dtype=(np.float64, (1,)),
+            backend=backend,
+            aligned_index=(0, 0),
+        )
+        data_dimension_1d(ones)
+        assert ones[0, 0][0] == 42.0
+
+    @pytest.mark.requires_dace
+    def test_data_dimension_1d_warning(self):
+        backend = "dace:cpu"
+
+        # Expect parsing to emit a warning
+        with pytest.warns(UserWarning, match="Accessing without a Literal is suspicious."):
+
+            @gtscript.stencil(backend=backend)
+            def data_dimension_1d_warning(
+                field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))], index: int
+            ):
+                with computation(FORWARD), interval(...):
+                    # 1. warn about accessing an array of static size 1 with a variable index
+                    # 2. add a runtime check and error out in case index != 0
+                    field_out[0, 0][index] = 42.0
+
+        ones = gt_storage.ones(
+            shape=(2, 3),
+            dimensions=["I", "J"],
+            dtype=(np.float64, (1,)),
+            backend=backend,
+            aligned_index=(0, 0),
+        )
+        data_dimension_1d_warning(ones, index=0)
+        assert ones[0, 0][0] == 42.0
+
+    def test_data_dimensions_1d_error(self):
+        # Expect out of bounds write to be caught at stencil parse time
+        with pytest.raises(GTScriptSyntaxError, match="Data index out of bounds."):
+
+            @gtscript.stencil(backend=self.backend)
+            def data_dimension_1d_error(field_out: gtscript.Field[gtscript.IJ, (np.float64, (1,))]):
+                with computation(FORWARD), interval(...):
+                    field_out[0, 0][1] = 42.0
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)

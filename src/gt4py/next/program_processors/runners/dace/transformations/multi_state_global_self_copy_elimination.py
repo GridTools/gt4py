@@ -94,10 +94,10 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [
             dace_transformation.passes.FindAccessStates,
-        }
+        ]
 
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]

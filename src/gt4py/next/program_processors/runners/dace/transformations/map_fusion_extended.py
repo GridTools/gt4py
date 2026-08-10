@@ -16,13 +16,18 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes, propagation as dace_propagation
+from dace.sdfg import (
+    graph as dace_graph,
+    nodes as dace_nodes,
+    propagation as dace_propagation,
+    utils as dace_sdutils,
+)
 from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
-    utils as gtx_dace_utils,
 )
 from gt4py.next.program_processors.runners.dace.transformations import (
     map_fusion_utils as gtx_mfutils,
@@ -347,8 +352,10 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         #  by assumption inside the same Map.
         if containing_scope_or_none is None:
             for new_map_entry in new_map_entries_from_first + new_map_entries_from_second:
+                dace_sdutils.canonicalize_memlet_trees_for_map(graph, new_map_entry)
                 dace_propagation.propagate_memlets_map_scope(sdfg, graph, new_map_entry)
         else:
+            dace_sdutils.canonicalize_memlet_trees_for_map(graph, containing_scope_or_none)
             dace_propagation.propagate_memlets_map_scope(sdfg, graph, containing_scope_or_none)
 
         # Workaround to ensure that some cache in DaCe has been cleared.
@@ -691,7 +698,7 @@ class VerticalSplitMapRange(SplitMapRange):
                     edge.data.data for edge in second_map_subgraph.in_edges(second_map_node)
                 ]
                 if self.access_node.data in nested_map_input_edges_data and any(
-                    gtx_dace_utils.is_connectivity_identifier(data)
+                    gtx_dace_args.is_connectivity_identifier(data)
                     for data in nested_map_input_edges_data
                 ):
                     return False

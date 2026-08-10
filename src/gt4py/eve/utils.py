@@ -16,7 +16,7 @@ import collections.abc
 import dataclasses
 import enum
 import functools
-import hashlib
+import io
 import itertools
 import operator
 import pickle
@@ -24,8 +24,6 @@ import pprint
 import re
 import types
 import typing
-import uuid
-import warnings
 
 import deepdiff
 import xxhash
@@ -46,6 +44,7 @@ from boltons.strutils import (
 
 from . import extended_typing as xtyping
 from .extended_typing import (
+    TYPE_CHECKING,
     Any,
     ArgsOnlyCallable,
     Callable,
@@ -231,6 +230,18 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) -> str:
+    """
+    Get the fully qualified name of an object.
+
+    This is useful for creating unique identifiers for objects that can be used
+    in fingerprinting or other identification scenarios.
+    """
+    if isinstance(obj, types.ModuleType):
+        return obj.__name__
+    return f"{obj.__module__}.{obj.__qualname__}"
+
+
 _P = ParamSpec("_P")
 _S = TypeVar("_S")
 _T = TypeVar("_T")
@@ -281,6 +292,8 @@ class CustomDefaultDictBase(collections.defaultdict[_K, _V]):
         10
 
     """
+
+    __slots__ = ()
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
@@ -463,6 +476,15 @@ def optional_lru_cache(
     return _decorator(func) if func is not None else _decorator
 
 
+class EqualityBy(HashableBy):
+    """Use a hash function as the definition of equality for the wrapped object."""
+
+    __hash__ = HashableBy.__hash__
+
+    def __eq__(self, other: Any) -> bool:
+        return self is other or hash(self) == hash(other)
+
+
 # TODO(egparedes): it would be more efficient to implement the caching logic
 # here instead of relying on `functools.lru_cache` and wrapping/unwrapping the
 # arguments.
@@ -476,7 +498,8 @@ def lru_cache(
     """
     Wrap :func:`functools.lru_cache` but allow customizing the cache key.
 
-    Be careful: `key(obj1) == key(obj2)` must imply `obj1 == obj2`.
+    Be careful, with custom `key` functions, `key(obj1) == key(obj2)` automatically
+    implies `obj1 == obj2`, i.e. they are considered equal.
 
     >>> @lru_cache(key=id)
     ... def func(x):
@@ -503,12 +526,13 @@ def lru_cache(
             @functools.wraps(func)
             def inner(*args, **kwargs):  # type: ignore[no-untyped-def]  # cast below restores type info
                 return cached_func(
-                    *(hashable_by(key, arg) for arg in args),
-                    **{k: hashable_by(key, arg) for k, arg in kwargs.items()},
+                    *(EqualityBy(key, arg) for arg in args),
+                    **{k: EqualityBy(key, arg) for k, arg in kwargs.items()},
                 )
 
             inner.cache_parameters = cached_func.cache_parameters  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
             inner.cache_info = cached_func.cache_info  # type: ignore[attr-defined]  # mypy not aware of functools.lru_cache behavior
+            inner.cache_clear = cached_func.cache_clear  # type: ignore[attr-defined]  # mypy not aware of functools.cache_clear behavior
 
             return typing.cast(Callable[_P, _T], inner)
 
@@ -617,31 +641,135 @@ def is_noninstantiable(cls: Type[_T]) -> bool:
     return "__noninstantiable__" in cls.__dict__
 
 
-def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | None = None) -> str:
+def singledispatcher(
+    default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Create a single-dispatch callable from a default and a registry of implementations.
+
+    This is a thin wrapper around :func:`functools.singledispatch` that allows
+    constructing a dispatcher from an existing mapping rather than decorating
+    individual functions.
+
+    Args:
+        default: The default implementation used when no type-specific handler
+            is found. If ``None``, the implementation registered for ``object``
+            in `implementations` is used as the default.
+        implementations: A mapping from types to their registered handler
+            functions. If `default` is ``None``, ``object`` must be present.
+
+    Returns:
+        A single-dispatch callable with the registered implementations.
+
+    Examples:
+        >>> def default_impl(x: Any) -> str:
+        ...     return f"default: {x}"
+        >>> def int_impl(x: int) -> str:
+        ...     return f"int: {x}"
+        >>> dispatch = singledispatcher(default_impl, implementations={int: int_impl})
+        >>> dispatch(3.14)
+        'default: 3.14'
+        >>> dispatch(42)
+        'int: 42'
+
+    """
+    if default is None:
+        if object not in implementations:
+            raise ValueError("A default implementation for 'object' must be provided.")
+        default = cast(Callable[P, T], implementations[object])
+    else:
+        if not callable(default):
+            raise ValueError(f"Default implementation must be callable, got '{default}'.")
+        if object in implementations:
+            raise ValueError(
+                "Default implementation for 'object' is already provided in 'implementations'."
+            )
+
+    assert callable(default)  # for mypy
+
+    if xtyping.is_single_dispatch_callable(default):
+        # `default` is itself a single-dispatch callable (e.g. a dispatcher used
+        # as the fallback to chain dispatchers). `functools.singledispatch`
+        # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
+        # holds ``register``/``registry`` -- onto the new dispatcher via
+        # ``update_wrapper``, aliasing the two. Registering the implementations
+        # below would then silently mutate ``default`` itself. Forward through a
+        # plain function (empty ``__dict__``) so the new dispatcher keeps its own
+        # independent registry.
+        inner_default = default
+
+        def default(*args: Any, **kwargs: Any) -> T:  # deliberately shadowing the parameter
+            return inner_default(*args, **kwargs)
+
+    result = functools.singledispatch(default)
+    for cls, func in implementations.items():
+        result.register(cls)(func)
+    return cast(xtyping.SingleDispatchCallable[P, T], result)
+
+
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the last
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry: dict[Any, Any] = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
+
+
+#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+#: therefore the resulting hash) is reproducible across Python versions,
+#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+_CONTENT_HASH_PICKLE_PROTOCOL: int = 5
+
+
+def content_hash(
+    *args: Any,
+    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
+    pickler_type: type[pickle.Pickler] = pickle.Pickler,
+) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
-    interpreter reboots) and it does not use hash customizations on user
-    classes (it uses `pickle` internally to get a byte stream).
+    interpreter reboots and Python versions) and it does not use hash
+    customizations on user classes (it uses `pickle` internally to get a byte
+    stream). The pickle protocol is pinned (:data:`CONTENT_HASH_PICKLE_PROTOCOL`)
+    so the byte stream does not depend on the running Python's default protocol.
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
-            from :mod:`hashlib` or canonical name (`str`) of the
-            hash algorithm as defined in :mod:`hashlib`.
-            Defaults to :class:`xxhash.xxh64`.
+            from :mod:`hashlib`. Defaults to :class:`xxhash.xxh64`.
 
     """
-    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
-    elif isinstance(hash_algorithm, str):
-        hasher = hashlib.new(hash_algorithm)
-    else:
-        hasher = hash_algorithm
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+    assert hash_algorithm is not None
 
-    hasher.update(pickle.dumps(args))
-    result = hasher.hexdigest()
+    buf = io.BytesIO()
+    pickler_type(buf, protocol=_CONTENT_HASH_PICKLE_PROTOCOL).dump(args)
+
+    hash_algorithm.update(buf.getvalue())
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
@@ -824,6 +952,10 @@ class Namespace(types.SimpleNamespace, Generic[T]):
 
     asdict = as_dict
 
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> T: ...
+
 
 class FrozenNamespace(Namespace[T]):
     """An immutable version of :class:`Namespace`.
@@ -863,64 +995,22 @@ class FrozenNamespace(Namespace[T]):
         return self.__cached_hash_value__
 
 
-@dataclasses.dataclass
-class UIDGenerator:
-    """Simple unique id generator using different methods."""
+@dataclasses.dataclass(frozen=True)
+class SequentialIDGenerator:
+    """Simple sequential ID generator."""
 
-    prefix: Optional[str] = dataclasses.field(default=None, kw_only=True)
-    width: Optional[int] = dataclasses.field(default=None, kw_only=True)
-    warn_unsafe: Optional[bool] = dataclasses.field(default=None, kw_only=True)
+    prefix: str = ""
+    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
+    #: A string to be used as template for the new ids.
+    #: It should contain the `{prefix}`and `{id}` format keys.
+    format: str = "{prefix}_{id}"
 
-    _counter: Iterator[int] = dataclasses.field(
-        default_factory=functools.partial(itertools.count, 1), init=False
-    )
-    """Constantly increasing counter for generation of sequential unique ids."""
+    def __next__(self) -> str:
+        return self.format.format(prefix=self.prefix, id=next(self.counter))
 
-    def random_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a random globally unique id."""
-        width = width or self.width or 8
-        if width <= 4:
-            raise ValueError(f"Width must be a positive number > 4 ({width} provided).")
-        prefix = prefix or self.prefix
-        u = uuid.uuid4()
-        s = str(u).replace("-", "")[:width]
-        return f"{prefix}_{s}" if prefix else f"{s}"
+    def next(self) -> str:
+        return self.__next__()
 
-    def sequential_id(self, *, prefix: Optional[str] = None, width: Optional[int] = None) -> str:
-        """Generate a sequential unique id (for the current session)."""
-        width = width or self.width
-        if width is not None and width < 1:
-            raise ValueError(f"Width must be a positive number ({width} provided).")
-        prefix = prefix or self.prefix
-        count = next(self._counter)
-        s = f"{count:0{width}}" if width else f"{count}"
-        return f"{prefix}_{s}" if prefix else f"{s}"
-
-    def reset_sequence(self, start: int = 1, *, warn_unsafe: Optional[bool] = None) -> UIDGenerator:
-        """Reset generator counter.
-
-        It returns the same instance to allow resetting at initialization:
-
-        Example:
-            >>> generator = UIDGenerator().reset_sequence(3)
-
-        Notes:
-            If the new start value is lower than the last generated UID, new
-            IDs are not longer guaranteed to be unique.
-
-        """
-        if start < 0:
-            raise ValueError(f"Starting value must be a positive number ({start} provided).")
-        if warn_unsafe is None:
-            warn_unsafe = self.warn_unsafe
-        if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
-        self._counter = itertools.count(start)
-
-        return self
-
-
-UIDs = UIDGenerator()
 
 # -- Iterators --
 S = TypeVar("S")

@@ -93,6 +93,153 @@ def test_register_subclasses():
     )
 
 
+def test_singledispatcher():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    class Derived(Base):
+        pass
+
+    dispatcher = singledispatcher(
+        lambda _: "default",
+        implementations={
+            Base: lambda _: "base",
+            Derived: lambda _: "derived",
+        },
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher(Derived()) == "derived"
+    assert dispatcher.registry.keys() == {object, Base, Derived}
+
+
+def test_singledispatcher_default_from_object_implementation():
+    from gt4py.eve.utils import singledispatcher
+
+    class Base:
+        pass
+
+    # When no explicit `default` is given, the 'object' implementation is used as default.
+    dispatcher = singledispatcher(
+        implementations={
+            object: lambda _: "default",
+            Base: lambda _: "base",
+        }
+    )
+
+    assert dispatcher(1) == "default"
+    assert dispatcher(Base()) == "base"
+    assert dispatcher.registry.keys() == {object, Base}
+
+
+def test_singledispatcher_dispatcher_as_default_is_not_mutated():
+    from gt4py.eve.utils import singledispatcher
+
+    # Chaining dispatchers: a dispatcher is used as the `default` (fallback) of
+    # another. Registering implementations on the new dispatcher must NOT leak
+    # into the one used as default (a regression: `functools.singledispatch`
+    # aliases `register`/`registry` of a single-dispatch default via
+    # `update_wrapper`).
+    class Base:
+        pass
+
+    base = singledispatcher(lambda _: "default", implementations={Base: lambda _: "base"})
+    chained = singledispatcher(base, implementations={int: lambda _: "int"})
+
+    assert chained(1) == "int"
+    assert chained(Base()) == "base"  # delegated to `base`
+    assert chained("x") == "default"
+
+    # `base` is unchanged: its registry never learned about `int`.
+    assert base.registry.keys() == {object, Base}
+    assert base(1) == "default"
+
+
+def test_singledispatcher_validation_errors():
+    from gt4py.eve.utils import singledispatcher
+
+    # Neither an explicit `default` nor an 'object' implementation is provided.
+    with pytest.raises(ValueError, match="default implementation for 'object' must be provided"):
+        singledispatcher(implementations={})
+
+    # A non-callable default is rejected.
+    with pytest.raises(ValueError, match="must be callable"):
+        singledispatcher("not-callable", implementations={})  # type: ignore[arg-type]  # intentionally wrong
+
+    # Providing both an explicit `default` and an 'object' implementation is ambiguous.
+    with pytest.raises(ValueError, match="already provided in 'implementations'"):
+        singledispatcher(lambda _: "default", implementations={object: lambda _: "obj"})
+
+
+def test_get_fully_qualified_name():
+    import json
+
+    from gt4py.eve.utils import get_fully_qualified_name
+
+    # Built-in type and a regular function: "<module>.<qualname>".
+    assert get_fully_qualified_name(dict) == "builtins.dict"
+    assert get_fully_qualified_name(json.dumps) == "json.dumps"
+
+    # Nested objects use the dotted __qualname__.
+    class Outer:
+        class Inner: ...
+
+    assert get_fully_qualified_name(Outer.Inner).endswith(".Outer.Inner")
+
+    # Modules are identified by their import name only (no qualname).
+    assert get_fully_qualified_name(json) == "json"
+
+
+def test_merge_dispatchers_merges_registries_and_uses_last_default():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    class B:
+        pass
+
+    d1 = singledispatcher(lambda _: "first-default", implementations={A: lambda _: "a"})
+    d2 = singledispatcher(lambda _: "second-default", implementations={B: lambda _: "b"})
+
+    merged = merge_dispatchers(d1, d2)
+
+    # Without an explicit default, the default of the *last* dispatcher is used.
+    assert merged("x") == "second-default"
+    assert merged(A()) == "a"
+    assert merged(B()) == "b"
+    assert merged.registry.keys() == {object, A, B}
+
+
+def test_merge_dispatchers_uses_explicit_default_and_last_registration_wins():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    class A:
+        pass
+
+    d1 = singledispatcher(lambda _: "default-1", implementations={A: lambda _: "a-1"})
+    d2 = singledispatcher(lambda _: "default-2", implementations={A: lambda _: "a-2"})
+
+    merged = merge_dispatchers(d1, d2, default=lambda _: "custom-default")
+
+    assert merged("x") == "custom-default"
+    assert merged(A()) == "a-2"
+
+
+def test_merge_dispatchers_validation_errors():
+    from gt4py.eve.utils import merge_dispatchers, singledispatcher
+
+    with pytest.raises(ValueError, match="At least one dispatcher"):
+        merge_dispatchers()
+
+    dispatcher = singledispatcher(lambda _: "default", implementations={})
+    with pytest.raises(TypeError, match="single-dispatch callables"):
+        merge_dispatchers(dispatcher, lambda _: "not-a-dispatcher")
+
+
 class ModelClass(eve.datamodels.DataModel):
     data: Any
 
@@ -270,6 +417,22 @@ def test_lru_cache_key_id_called_once():
     assert cached.cache_info().misses == 1
 
 
+def test_lru_cache_no_eq_call():
+    class A:
+        def __hash__(self) -> int:
+            return 1
+
+        def __eq__(self, other):
+            raise ValueError()  # this function should never be called
+
+    @eve.utils.lru_cache(key=lambda x: hash(x))
+    def func(x):
+        pass
+
+    func(A())
+    func(A())
+
+
 def test_fluid_partial():
     from gt4py.eve.utils import fluid_partial
 
@@ -307,9 +470,7 @@ def test_noninstantiable_class():
     assert not eve.utils.is_noninstantiable(InstantiableSubclass)
 
 
-@pytest.fixture(
-    params=[None, hashlib.md5(), "md5", hashlib.sha1(), "sha1", hashlib.sha256(), "sha256"]
-)
+@pytest.fixture(params=[None, hashlib.md5(), hashlib.sha1(), hashlib.sha256()])
 def hash_algorithm(request):
     yield request.param
 
@@ -371,86 +532,30 @@ def test_case_style_converter(name_with_cases):
             ]
 
 
-# -- UIDGenerator --
-class TestUIDGenerator:
-    def test_random_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+# -- SequentialIDGenerator --
+class TestSequentialIDGenerator:
+    def test_basic(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        a = UIDs.random_id()
-        b = UIDs.random_id()
-        c = UIDs.random_id()
-        assert a != b and a != c and b != c
-        assert UIDs.random_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.random_id(width=10)) == 10
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=-1)
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.random_id(width=4)
+        uids = SequentialIDGenerator()
+        first = next(uids)
+        second = uids.next()
+        assert next(uids) != first != second
 
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
+    def test_prefix(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        uids = UIDGenerator(width=12)
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
+        uids = SequentialIDGenerator(prefix="test_")
+        uid = next(uids)
+        assert uid.startswith("test_")
 
-    def test_sequential_id(self):
-        from gt4py.eve.utils import UIDGenerator, UIDs
+    def test_format(self):
+        from gt4py.eve.utils import SequentialIDGenerator
 
-        i = UIDs.sequential_id()
-        assert UIDs.sequential_id() != i
-        assert UIDs.sequential_id(prefix="abcde").startswith("abcde")
-        assert len(UIDs.sequential_id(width=10)) == 10
-        assert not UIDs.sequential_id().startswith("0")
-        with pytest.raises(ValueError, match="Width"):
-            UIDs.sequential_id(width=-1)
-
-        uids = UIDGenerator(prefix="abcde")
-        assert uids.prefix == "abcde"
-        assert uids.sequential_id().startswith("abcde")
-        assert uids.sequential_id(prefix="xyz").startswith("xyz")
-
-        uids = UIDGenerator(width=12)
-        assert uids.width == 12
-        assert len(uids.sequential_id()) == 12
-        assert len(UIDs.sequential_id(width=10)) == 10
-
-    def test_reset_sequence(self):
-        import warnings
-
-        from gt4py.eve.utils import UIDGenerator, UIDs
-
-        i = UIDs.sequential_id()
-        counter = int(i)
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            UIDs.reset_sequence(counter + 10)
-            assert int(UIDs.sequential_id()) == counter + 10
-
-            UIDs.reset_sequence(counter + 1, warn_unsafe=False)
-
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            UIDs.reset_sequence(counter, warn_unsafe=True)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-
-            uids = UIDGenerator(warn_unsafe=True).reset_sequence(10)
-            counter = int(uids.sequential_id())
-            assert uids.warn_unsafe is True
-            assert counter == 10
-
-            uids.reset_sequence(counter + 10)
-            uids.reset_sequence(1, warn_unsafe=False)
-
-        uids.reset_sequence(10, warn_unsafe=False)
-        with pytest.warns(UserWarning, match="Unsafe reset"):
-            uids.reset_sequence(1)
-
-        with pytest.raises(ValueError, match="must be a positive number"):
-            uids.reset_sequence(-1)
+        prefix = "UID"
+        uids = SequentialIDGenerator(format="{prefix}-{id:04d}", prefix=prefix)
+        uid = next(uids)
+        assert len(uid) == len(prefix) + 1 + 4  # prefix + '-' + zero-padded id
 
 
 # -- Iterators --

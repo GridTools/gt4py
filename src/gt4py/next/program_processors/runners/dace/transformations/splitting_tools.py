@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import dataclasses
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -13,6 +15,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -21,8 +24,10 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class EdgeConnectionSpec:
     """Describes an edge in an abstract way, that is kind of independent of the direction.
 
-    It is always described in terms of a node, which is eader the `src` or the `dst`
-    of the edge, in terms of the subset the edge read or writes and the edge itself.
+    It is always described in terms of a node, which is either the source or the
+    destination of the edge. The subset it stores is always described for that node.
+    To get the "other side of the edge" use the `other_subset` and `other_node`
+    properties, respectively.
 
     To construct `EdgeConnectionSpec` you can use the `describe_incoming_edges()`
     and `describe_outgoing_edges()` function.
@@ -257,6 +262,12 @@ def split_node(
     if already_reconfigured_nodes is None:
         already_reconfigured_nodes = set()
 
+    # Sort the split descriptions such that they are processed in a deterministic way.
+    # NOTE: Turning them into a string is the best solution is probably the only way
+    #   to achieve some stability. The only downside is that the order now depends
+    #   on the specialization level that is used, i.e. if we have numbers or symbols.
+    split_description = sorted(split_description, key=lambda split: str(split))
+
     desc_to_split = node_to_split.desc(sdfg)
     assert desc_to_split.transient
     assert not gtx_transformations.utils.is_view(desc_to_split)
@@ -334,6 +345,13 @@ def split_edge(
     #  detail that does not limit the applicability of this function.
     # TODO(phimuell): Implements some check that nothing is lost.
 
+    # Bring the split description in a deterministic order.
+    # NOTE: See note in `split_node()` why the sorting is done in this way.
+    # NOTE: The main benefit of bringing `split_description` into a deterministic
+    #   order is that the output of this function is deterministic as well. I am
+    #   not sure if there is any benefit beside that.
+    split_description = sorted(split_description, key=lambda split: str(split))
+
     assert isinstance(edge_to_split.src, dace_nodes.AccessNode)
     assert not isinstance(edge_to_split.src.desc(sdfg), dace_data.View)
     assert isinstance(edge_to_split.src.desc(sdfg), dace_data.Array)
@@ -366,6 +384,10 @@ def split_edge(
                 new_fully_splitted_subsets.append(consumer)
         fully_splitted_subsets = new_fully_splitted_subsets
 
+    # We already create the return `dict` and fill it with the sets. We do this to
+    #  ensure that if we iterate through it find the splits in the same order they
+    #  were _processed_. By convention we put `None`, which means "not associated
+    #  to any split" at the end.
     new_edges: dict[Union[dace_sbs.Range, None], dace_graph.MultiConnectorEdge] = {
         split: set() for split in split_description
     }
@@ -659,7 +681,7 @@ def _perform_node_split(
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode],
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]],
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]],
     allow_to_bypass_nodes: bool,
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> None:
@@ -839,15 +861,10 @@ def _perform_node_split_with_bypass_impl(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
-    edges_to_relocate: set[EdgeConnectionSpec],
+    edges_to_relocate: OrderedSet[EdgeConnectionSpec],
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> list[dace_graph.MultiConnectorEdge]:
-    """Performs the splitting but the edge might go directly to the consumer.
-
-    # TODO: Remove the producer edge, run reconfiguration, split operation.
-    # TODO ADDING PRODUCER TO THE SET OF PROCESSED NODES
-
-    """
+    """Performs the splitting but the edge might go directly to the consumer."""
     producer_edge_desc = next(
         edesc for edesc in edges_to_relocate if describes_incoming_edge(edesc)
     )
@@ -987,6 +1004,10 @@ def _perform_node_split_with_bypass_impl(
     # TODO(phimuell): Find a way to avoid doing the propagation here, where the
     #   dataflow might be in some invalid state.
     state.remove_edge(producer_edge)
+    if state.degree(producer_edge.src) == 0:
+        assert len(new_consumer_edges) == 0
+        state.remove_node(producer_edge.src)
+        return new_consumer_edges
     processed_nsdfgs: set = set()
     for new_consumer_edge in new_consumer_edges:
         gtx_transformations.gt_map_strides_to_dst_nested_sdfg(
@@ -1031,14 +1052,14 @@ def _generate_data_descriptors_for_split(
 def _compute_assignement_for_split(
     edge_descriptions: Sequence[EdgeConnectionSpec],
     split_description: Sequence[dace_sbs.Subset],
-) -> dict[dace_sbs.Subset, set[EdgeConnectionSpec]]:
+) -> dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]]:
     """For every subset, that defines a split find the set of edges that belongs into it.
 
     Note that it might happens that some splits have zero assigned edges.
     """
     assert all(split is not None for split in split_description)
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]] = {
-        split: set() for split in split_description
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]] = {
+        split: OrderedSet() for split in split_description
     }
 
     for edge_description in edge_descriptions:

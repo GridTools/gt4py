@@ -35,6 +35,7 @@ from .base import (
     shash,
     shashed_id,
     slugify,
+    warn_experimental_feature,
 )
 from .field import Field
 
@@ -72,4 +73,5 @@ __all__ = [  # noqa: RUF022 `__all__` is not sorted
     "shash",
     "shashed_id",
     "slugify",
+    "warn_experimental_feature",
 ]

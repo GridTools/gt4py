@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, Iterator, List, Optional, TypeGuard, Uni
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, concepts
-from gt4py.eve.utils import UIDGenerator
+from gt4py.next import utils
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
 from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import (
     AssignStmt,
@@ -108,7 +108,9 @@ class PlugInCurrentIdx(NodeTranslator):
 class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: utils.IDGeneratorPool = dataclasses.field(
+        init=False, repr=False, default_factory=utils.IDGeneratorPool
+    )
 
     def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> gtfn_ir_common.SymRef:
         if "localized_symbols" in kwargs and node.id in kwargs["localized_symbols"]:
@@ -182,19 +184,17 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.Expr:
         if any(isinstance(arg, gtfn_ir.Lambda) for arg in node.args):
             # do not try to lower constructs that take lambdas as argument to something more readable
-            lam_idx = self.uids.sequential_id(prefix="lam")
+            lam_idx = next(self.uids["lam"])
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{lam_idx}"), rhs=node))
             return gtfn_ir_common.SymRef(id=f"{lam_idx}")
         if isinstance(node.fun, gtfn_ir.Lambda):
             localized_symbols = {**kwargs["localized_symbols"]}  # create a new scope
 
-            lam_idx = self.uids.sequential_id(prefix="lam")
+            lam_idx = next(self.uids["lam"])
             params = [self.visit(param, **kwargs) for param in node.fun.params]
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
-                localized_symbols[param.id] = new_symbol = (
-                    f"{param.id}_{self.uids.sequential_id()}_local"
-                )
+                localized_symbols[param.id] = new_symbol = f"{param.id}_{next(self.uids[''])}_local"
                 self.imp_list_ir.append(
                     InitStmt(
                         lhs=gtfn_ir_common.Sym(id=new_symbol),
@@ -210,7 +210,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 "Not implemented. The code-path was removed as it was not actively used and tested."
             )
         if isinstance(node.fun, gtfn_ir_common.SymRef) and node.fun.id == "make_tuple":
-            tupl_id = self.uids.sequential_id(prefix="tupl")
+            tupl_id = next(self.uids["tupl"])
             tuple_fun = self.commit_args(node, tupl_id, "make_tuple", **kwargs)
             self.imp_list_ir.append(
                 InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tupl_id}"), rhs=tuple_fun)
@@ -225,7 +225,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         cond = self.visit(node.cond, **kwargs)
         if_ = self.visit(node.true_expr, **kwargs)
         else_ = self.visit(node.false_expr, **kwargs)
-        cond_idx = self.uids.sequential_id(prefix="cond")
+        cond_idx = next(self.uids["cond"])
         self.imp_list_ir.append(
             Conditional(
                 cond_type=f"{cond_idx}_t",

@@ -7,13 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-from typing import ClassVar, Optional, TypeVar
+from typing import ClassVar, TypeVar
 
-import gt4py.next.iterator.ir_utils.common_pattern_matcher as cpm
 from gt4py import eve
-from gt4py.eve import utils as eve_utils
+from gt4py.next import utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
@@ -59,14 +58,10 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("domain", "recorded_shifts")
 
-    uids: eve_utils.UIDGenerator
+    uids: utils.IDGeneratorPool
 
     @classmethod
-    def apply(
-        cls, node: T, *, is_stencil=False, uids: Optional[eve_utils.UIDGenerator] = None
-    ) -> T:
-        if not uids:
-            uids = eve_utils.UIDGenerator()
+    def apply(cls, node: T, *, is_stencil=False, uids: utils.IDGeneratorPool) -> T:
         if is_stencil:
             assert isinstance(node, itir.Expr)
             trace_shifts.trace_stencil(node, save_to_annex=True)
@@ -95,7 +90,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
             for i, (param, arg) in enumerate(zip(node.fun.params, node.args)):
                 if cpm.is_applied_lift(arg) and is_center_derefed_only(param):
                     eligible_params[i] = True
-                    bound_arg_evaluator = self.uids.sequential_id(prefix="_icdlv")
+                    bound_arg_evaluator = next(self.uids["_icdlv"])
                     capture_lift = im.promote_to_const_iterator(im.call(bound_arg_evaluator)())
                     trace_shifts.copy_recorded_shifts(from_=param, to=capture_lift)
                     new_args.append(capture_lift)

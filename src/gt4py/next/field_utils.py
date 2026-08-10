@@ -11,7 +11,8 @@ from types import ModuleType
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils
+from gt4py.eve.extended_typing import NestedTuple
+from gt4py.next import common, named_collections, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -27,13 +28,13 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    type_: ts.TupleType | ts.ScalarType, domain: common.Domain, xp: ModuleType
+    type_: ts.CollectionTypeSpec | ts.ScalarType, domain: common.Domain, xp: ModuleType
 ) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
     """
     Allocate a field or (arbitrarily nested) tuple(s) of fields.
 
     The tuple structure and dtype is taken from a type_specifications.DataType,
-    which is either ScalarType or TupleType of ScalarType (possibly nested).
+    which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
 
     >>> field_from_typespec(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
@@ -52,8 +53,17 @@ def field_from_typespec(
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
     """
 
+    def _constructor(
+        type_: ts.CollectionTypeSpec,
+        elems: NestedTuple[common.MutableField],
+    ) -> named_collections.NamedCollection:
+        if isinstance(type_, ts.NamedCollectionType):
+            return named_collections.make_named_collection_constructor_from_type_spec(type_)(elems)
+        return tuple(elems)
+
     @utils.tree_map(
-        collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
+        collection_type=ts.COLLECTION_TYPE_SPECS,
+        result_collection_constructor=_constructor,
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(

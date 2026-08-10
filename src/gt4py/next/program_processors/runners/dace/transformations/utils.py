@@ -8,46 +8,44 @@
 
 """Common functionality for the transformations/optimization pipeline."""
 
-from typing import Any, Container, Optional, Sequence, TypeVar, Union
+from __future__ import annotations
+
+from typing import Optional, Sequence, Union
 
 import dace
-from dace import data as dace_data, libraries as dace_lib, subsets as dace_sbs, symbolic as dace_sym
+from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
+from dace.libraries import standard as dace_stdlib
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
-from dace.transformation import pass_pipeline as dace_ppl
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
-from gt4py.next.program_processors.runners.dace import utils as gtx_dace_utils
-
-
-_PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
+from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
 
 
-def gt_make_transients_persistent(
+def gt_configure_transient_lifetime(
     sdfg: dace.SDFG,
-    device: dace.DeviceType,
+    lifetime: dace.AllocationLifetime,
 ) -> dict[int, set[str]]:
     """
-    Changes the lifetime of certain transients to `Persistent`.
+    Configure transient lifetime for eligible data nodes in the given SDFG and all nested SDFGs.
 
-    A persistent lifetime means that the transient is allocated only the very first
-    time the SDFG is executed and only deallocated if the underlying `CompiledSDFG`
-    object goes out of scope. The main advantage is, that memory must not be
-    allocated every time the SDFG is run. The downside is that the SDFG can not be
-    called by different threads.
+    Eligible data nodes are transient arrays or scalars excluding:
+    - data nodes with storage type `Register` (relevant for scalars)
+    - data nodes with lifetime `External` (already externally managed)
+    - data nodes used inside a scope (e.g., maps)
+    - data nodes whose size is not fully determined by the SDFG's free symbols (dynamic allocations)
 
     Args:
         sdfg: The SDFG to process.
-        device: The device type.
+        lifetime: The desired lifetime to set for eligible transient data nodes.
 
     Returns:
-        A `dict` mapping SDFG IDs to a set of transient arrays that
-        were made persistent.
-
-    Note:
-        This function is based on a similar function in DaCe. However, the DaCe
-        function does, for unknown reasons, also reset the `wcr_nonatomic` property,
-        but only for GPU.
+        A dictionary mapping SDFG configuration IDs to the data node names whose
+        lifetimes were modified.
     """
+    if lifetime not in {dace.AllocationLifetime.Persistent, dace.AllocationLifetime.External}:
+        raise ValueError(f"Unsupported transient lifetime '{lifetime}'.")
+
     result: dict[int, set[str]] = {}
     for nsdfg in sdfg.all_sdfgs_recursive():
         fsyms: set[str] = nsdfg.free_symbols
@@ -66,6 +64,7 @@ def gt_make_transients_persistent(
 
                 desc = dnode.desc(nsdfg)
                 if not desc.transient or type(desc) not in {dace.data.Array, dace.data.Scalar}:
+                    # TODO(phimuell): Find out why scalars are processed.
                     not_modify_lifetime.add(dnode.data)
                     continue
                 if desc.storage == dace.StorageType.Register:
@@ -77,10 +76,8 @@ def gt_make_transients_persistent(
                     continue
 
                 # If the data is referenced inside a scope, such as a map, it might be possible
-                #  that it is only used inside that scope. If we would make it persistent, then
-                #  it would essentially be allocated outside and be shared among the different
-                #  map iterations. So we can not make it persistent.
-                #  The downside is, that we might have to perform dynamic allocation.
+                #  that it is only used inside that scope. If we would make it global-lifetime,
+                #  it would effectively be shared among map iterations, which is unsafe.
                 if scope_dict[dnode] is not None:
                     not_modify_lifetime.add(dnode.data)
                     continue
@@ -96,43 +93,26 @@ def gt_make_transients_persistent(
                 except AttributeError:  # total_size is an integer / has no free symbols
                     pass
 
-                # Make it persistent.
                 modify_lifetime.add(dnode.data)
 
-        # Now setting the lifetime.
         result[nsdfg.cfg_id] = modify_lifetime - not_modify_lifetime
         for aname in result[nsdfg.cfg_id]:
-            nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
+            adesc = nsdfg.arrays[aname]
+            adesc.lifetime = lifetime
+            if adesc.storage == dace.StorageType.Default and isinstance(adesc, dace.data.Array):
+                # GPU transformation have already changed the storage for GPU arrays.
+                # NOTE: If we do not change the storage during lowering / transformations,
+                #  it will be done in code generation when calling `sdfg.compile()`.
+                #  This side effect is a potential issue, because we do not store
+                #  the program handle, see `sdfg.compile(return_program_handle=False)`
+                #  in `compilation.py`; therefore, we do not have the modified SDFG.
+                #  The original SDFG is deserialized, at call time, and the storage
+                #  type is reset to `Default`. This is a problem for arrays with
+                #  external storage, because `CompiledSDFG.set_workspace()` will
+                #  try to load a symbol from the library for the wrong storage type.
+                adesc.storage = dace.StorageType.CPU_Heap
 
     return result
-
-
-def gt_find_constant_arguments(
-    call_args: dict[str, Any],
-    include: Optional[Container[str]] = None,
-) -> dict[str, Any]:
-    """Scans the calling arguments for compile time constants.
-
-    The output of this function can be used as input to
-    `gt_substitute_compiletime_symbols()`, which then removes these symbols.
-
-    By specifying `include` it is possible to force the function to include
-    additional arguments, that would not be matched otherwise. Importantly,
-    their value is not checked.
-
-    Args:
-        call_args: The full list of arguments that will be passed to the SDFG.
-        include: List of arguments that should be included.
-    """
-    if include is None:
-        include = set()
-    ret_value: dict[str, Any] = {}
-
-    for name, value in call_args.items():
-        if name in include or (gtx_dace_utils.is_stride_symbol(name) and value == 1):
-            ret_value[name] = value
-
-    return ret_value
 
 
 def is_accessed_downstream(
@@ -569,7 +549,7 @@ def reconfigure_dataflow_after_rerouting(
         #  the full array, but essentially slice a bit.
         pass
 
-    elif isinstance(other_node, dace_lib.standard.Reduce):
+    elif isinstance(other_node, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
         # For now we only handle the case that the reduction node is writing into
         #  `new_node`, before the data was written into `old_node`. In that case
         #  there is nothing to do, we just do some checks.
@@ -596,7 +576,7 @@ def find_upstream_nodes(
     state: dace.SDFGState,
     start_connector: Optional[str] = None,
     limit_node: Optional[dace_nodes.Node] = None,
-) -> set[dace_nodes.Node]:
+) -> OrderedSet[dace_nodes.Node]:
     """Finds all upstream nodes, i.e. all producers, of `start`.
 
     Note that `start` and `limit_node` are not part of the returned set.
@@ -609,7 +589,7 @@ def find_upstream_nodes(
         limit_node: Consider this node as "limiting wall", i.e. do not explore
             beyond it.
     """
-    seen: set[dace_nodes.Node] = set()
+    seen: OrderedSet[dace_nodes.Node] = OrderedSet()
 
     to_visit = [
         iedge.src
@@ -678,3 +658,186 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
             all_successors.extend(successor.all_states())
 
     return all_successors
+
+
+def associate_dimmensions(
+    sbs1: dace_sbs.Range,
+    sbs2: dace_sbs.Range,
+    allow_trivial_dimensions: bool = True,
+) -> tuple[dict[int, int], list[int], list[int]]:
+    """Computes the association between dimensions of two subsets.
+
+    The intention is that `sbs1` is the subset at the source and `sbs2` the
+    subset at the destination, but other combinations are implicitly possible.
+    The function computes which dimension of `sbs1` maps to which dimensions
+    in `sbs2`. The function is based on the following restrictions:
+    - The order of dimensions does not change, i.e. the Memlet does not perform
+        a transpose operation.
+    - Only trivial dimensions, i.e. size one dimensions are added or removed.
+
+    By setting `allow_trivial_dimensions` to `False` the function will assume
+    that all dimensions of size 1 are "filling dimensions", i.e. they will never
+    appear in the returned `dict`. By default it is `True`, which means that
+    dimensions of size one, might appear in the mapping.
+
+    Returns:
+        The function returns a tuple with three elements. The first element is
+        a `dict` that maps each dimension of `sbs1` to a dimensions `sbs2`.
+        The second element is a `list` containing all dimensions that were dropped
+        from `sbs1`, because they where trivial. The third element is the same
+        as the second element, but for `sbs2`.
+
+    Example:
+        >>> from dace import subsets as dace_sbs
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ... )
+        ({1: 0, 2: 1}, [0], [])
+        >>> associate_dimmensions(
+        ...     sbs1=dace_sbs.Range.from_string("3, 0:10, 1"),
+        ...     sbs2=dace_sbs.Range.from_string("0:10, 4"),
+        ...     allow_trivial_dimensions=False,
+        ... )
+        ({1: 0}, [0, 2], [1])
+
+    Note:
+        This function can not perform arbitrary reshapes, such as flatten a multi
+        dimensional array.
+        Furthermore, currently the matching relies on the size of the subsets that
+        are copied, this means that if the sizes are not unique then the matching
+        might fail.
+    """
+    sizes1 = sbs1.size()
+    sizes2 = sbs2.size()
+
+    dim_mapping: dict[int, int] = {}
+    drop1: list[int] = []
+    drop2: list[int] = []
+
+    idx1 = 0
+    idx2 = 0
+    while idx1 != sbs1.dims() or idx2 != sbs2.dims():
+        # TODO(phimuell): Handle symbolic sizes better.
+
+        if idx1 == sbs1.dims():
+            # We have processed all dimensions of the first subset. Thus all dimensions
+            #  of the second subset must be dropped/trivial.
+            size2 = sizes2[idx2]
+            if (size2 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                raise ValueError(
+                    f"Expected that dimension {idx2} of the second subset is a trivial dimension, but its size was {size2}."
+                )
+            drop2.append(idx2)
+            idx2 += 1
+
+        elif idx2 == sbs2.dims():
+            # We have processed all dimensions of the second subset. Thus all dimensions
+            #  of the first subset must be dropped/trivial.
+            size1 = sizes1[idx1]
+            if (size1 == 1) == False:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                raise ValueError(
+                    f"Expected that dimension {idx1} of the first subset is a trivial dimension, but its size was {size1}."
+                )
+            drop1.append(idx1)
+            idx1 += 1
+
+        elif (
+            (sizes1[idx1] == sizes2[idx2]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            and (
+                allow_trivial_dimensions
+                or (
+                    (sizes1[idx1] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                    and (sizes2[idx2] == 1) == False  # noqa: E712 [true-false-comparison]  # SymPy comparison
+                )
+            )
+        ):
+            # These two dimensions have the same size, thus we consider them the same and
+            #  add them to the mapping.
+            # NOTE: This considers two dimensions of size one the same, even if they are
+            #   just trivial dimensions.
+            dim_mapping[idx1] = idx2
+            idx1 += 1
+            idx2 += 1
+
+        elif (sizes1[idx1] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            # `sbs1` has a trivial dimension at `idx1`: Drop it.
+            drop1.append(idx1)
+            idx1 += 1
+
+        elif (sizes2[idx2] == 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            # `sbs2` has a trivial dimension at `idx2`, drop it.
+            drop2.append(idx2)
+            idx2 += 1
+
+        else:
+            raise ValueError(f"Failed to associating the dimensions of '{sbs1}' with '{sbs2}'.")
+
+    assert len(dim_mapping) + len(drop1) == sbs1.dims()
+    assert len(dim_mapping) + len(drop2) == sbs2.dims()
+
+    return dim_mapping, drop1, drop2
+
+
+def gt_data_descriptor_mapping(
+    state: dace.SDFGState,
+    nsdfg: dace_nodes.NestedSDFG,
+    only_fully_mapped: bool,
+    only_inputs: bool = False,
+    only_outputs: bool = False,
+) -> dict[str, str]:
+    """Determine the mapping of the data descriptors for the NestedSDFG.
+
+    The returned `dict` maps the data descriptor names on the inside to the
+    corresponding data descriptor on the outside. Thus it is important that
+    some outside descriptor can be named multiple times. Note if a descriptor
+    is an input and output then the output takes precedence.
+
+    If `only_fully_mapped` is `True` then only data descriptors that are fully
+    mapped into the nested SDFG are returned. If it is `False` then all
+    descriptors are used.
+
+    Args:
+        state: The state in which we operate.
+        nsdfg: The nested SDFG node we want to process.
+        only_fully_mapped: Only look at the fully mapped data.
+        only_inputs: Only consider the data that are used as inputs.
+        only_inputs: Only consider the data that are used as outputs.
+    """
+    assert not (only_inputs and only_outputs)
+    name_mapping: dict[str, str] = {}
+    sdfg = state.sdfg
+
+    # When we have to return both, we start with the input such that the output
+    #  descriptors are dominant.
+    if not only_outputs:
+        iedges = sorted(
+            (iedge for iedge in state.in_edges(nsdfg) if not iedge.data.is_empty()),
+            key=lambda iedge: iedge.dst_conn,
+        )
+        for iedge in iedges:
+            data_outside = iedge.data.data
+            data_inside = iedge.dst_conn
+            if only_fully_mapped and (
+                not iedge.data.subset.covers(dace_sbs.Range.from_array(sdfg.arrays[data_outside]))
+            ):
+                continue
+            name_mapping[data_inside] = data_outside
+
+    if only_inputs:
+        return name_mapping
+
+    oedges = sorted(
+        (oedge for oedge in state.out_edges(nsdfg) if not oedge.data.is_empty()),
+        key=lambda oedge: iedge.src_conn,
+    )
+    for oedge in oedges:
+        data_outside = oedge.data.data
+        data_inside = oedge.src_conn
+        if only_fully_mapped and (
+            not oedge.data.subset.covers(dace_sbs.Range.from_array(sdfg.arrays[data_outside]))
+        ):
+            continue
+        name_mapping[data_inside] = data_outside
+
+    return name_mapping

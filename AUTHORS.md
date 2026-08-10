@@ -11,6 +11,7 @@
 - Ehrengruber, Till. ETH Zurich - CSCS
 - Elbert, Oliver D. NOAA-GFDL
 - Faghih-Naini, Sara. ECMWF
+- Fandrich, Katrina. SSAI/NASA-GSFC
 - Farabullini, Nicoletta. ETH Zurich - EXCLAIM
 - George, Rhea. Allen Institute for AI
 - González Paredes, Enrique. ETH Zurich - CSCS
@@ -20,6 +21,7 @@
 - Kardos, Péter. ETH Zurich - EXCLAIM
 - Kellerhals, Samuel. ETH Zurich - EXCLAIM
 - Kotsalos, Christos. ETH Zurich - CSCS
+- Kropiewnicki, Charles. SSAI/NASA-GSFC
 - Luz, Magdalena. ETH Zurich - EXCLAIM
 - Madonna, Alberto. ETH Zurich - CSCS
 - Mariotti, Kean. ETH Zurich - CSCS
