@@ -209,7 +209,54 @@ def test_unsupported_return_annotation_is_located():
     err = parse_error(bad_return)
 
     assert isinstance(err, errors.InvalidAnnotationError)
-    assert err.location is not None
+    assert "return type annotation" in err.message
+    # The span covers the annotation, not the whole function definition (which used
+    # to span both lines). See the note on caret-run regexes in
+    # 'test_unsupported_variable_annotation_is_located'.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("list[float64]")
+    assert re.search(r"\| +\^{13}(?!\^)", str(err)), str(err)
+
+
+def test_return_type_mismatch_points_at_the_returned_value():
+    def mismatch(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float32]:
+        return a
+
+    err = parse_error(mismatch)
+
+    assert "does not match deduced return type" in err.message
+    # The deduced type comes from the returned expression, so that is what is
+    # underlined rather than the whole function definition.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("a")
+    assert re.search(r"\| +\^(?!\^)", str(err)), str(err)
+
+
+def test_return_type_mismatch_with_several_returns_falls_back_to_the_function():
+    def two_returns(a: gtx.Field[[IDim], float64], cond: bool) -> gtx.Field[[IDim], float32]:
+        if cond:
+            return a
+        else:
+            return a + a
+
+    err = parse_error(two_returns)
+
+    assert "does not match deduced return type" in err.message
+    # No single expression the deduced type can be pinned on, so the whole function
+    # definition stays the primary span rather than an arbitrarily picked return.
+    assert err.location.line < err.location.end_line
+
+
+def test_bad_return_annotation_is_reported_before_body_errors():
+    # The return annotation is checked while parsing the signature, so it is reported
+    # even when the body would also fail to type-deduce. This ordering changed when
+    # the check moved out of the post-processing step to get a usable location.
+    def both_wrong(a: gtx.Field[[IDim], float64]) -> list[float64]:
+        return a + "not a field"
+
+    err = parse_error(both_wrong)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
     assert "return type annotation" in err.message
 
 
