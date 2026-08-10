@@ -224,8 +224,12 @@ def test_unsupported_variable_annotation_is_located():
     assert "variable type annotation" in err.message
     rendered = str(err)
     assert "tmp: list[float64]" in rendered
-    # The carets cover the annotation only, not the whole statement.
-    assert re.search(r"\| +\^{13}", rendered), rendered
+    # The span covers the annotation only, not the whole statement. Asserted on the
+    # columns rather than only on the carets, because a caret-run regex without a
+    # trailing lookahead also matches any *longer* run and so pins nothing.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("list[float64]")
+    assert re.search(r"\| +\^{13}(?!\^)", rendered), rendered
 
 
 def test_valid_variable_annotation_is_accepted():
@@ -261,5 +265,9 @@ def test_broken_type_alias_annotation_is_located():
     assert isinstance(err, errors.InvalidAnnotationError)
     assert err.location is not None
     assert any("foat64" in note for note in err.notes)
-    # The carets cover the annotation only, not the whole signature.
-    assert re.search(r"\| +\^{16}", str(err)), str(err)
+    # The span covers the parameter, not the whole signature. It includes the
+    # parameter name because 'visit_arg' locates the whole 'ast.arg'; only
+    # 'visit_AnnAssign' narrows down to the annotation itself.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("a: BrokenFieldAlias")
+    assert re.search(r"\| +\^{19}(?!\^)", str(err)), str(err)
