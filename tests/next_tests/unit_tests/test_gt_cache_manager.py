@@ -242,6 +242,15 @@ def test_status_counts_a_build_from_another_version_as_recompile(cache_base):
     assert status.recompiles is True
 
 
+def test_status_notes_that_entries_may_be_stale_too(cache_base, capsys):
+    write_entry(cache_base, "dace", "foo")
+    write_build_dir(cache_base, "foo", version_id="0.0.1+ancient")
+
+    assert gt_cache_manager.main(["status", "--cache-dir", str(cache_base)]) == 0
+
+    assert "cannot be hit either" in capsys.readouterr().err
+
+
 def test_status_counts_an_unfinished_build_as_recompile(cache_base):
     write_entry(cache_base, "dace", "foo")
     write_build_dir(cache_base, "foo", complete=False)

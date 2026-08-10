@@ -484,6 +484,15 @@ def _cmd_status(args: argparse.Namespace) -> int:
             " pass does NOT run.",
             file=sys.stderr,
         )
+    if stale := sum(s.build_dirs - s.usable_build_dirs for s in statuses):
+        print(
+            f"\nnote: {stale} build folder(s) cannot be hit by this environment, most of them"
+            f" built under a build-cache version other than '{config.BUILD_CACHE_VERSION_ID}'."
+            " The same version salts the translation cache, but entries do not record it, so"
+            " entries left by those runs are still counted as REPLAY above although they"
+            " cannot be hit either.",
+            file=sys.stderr,
+        )
     if unreadable:
         print(
             f"\nnote: {len(unreadable)} entr(ies) could not be read; the runtime discards"
