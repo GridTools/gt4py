@@ -84,8 +84,25 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     Because the rewritten producer writes `G` where previously only `T` was written,
     `G` must still hold its original value everywhere between the definition of `T`
     and the write back. Therefore `G` must neither be written nor read in that range,
-    the only exception being the pointwise read described by ADR-18 rule 3, which is
-    covered by `assume_pointwise`.
+    the only exception being the read that ADR-18 rule 3 allows, which is covered by
+    `assume_pointwise`, see the note below.
+
+    Notes:
+        - Like `GT4PyMapBufferElimination`, the pass does not test that a read of `G`
+            by the producer of `T` is really pointwise, it only tests that the read
+            feeds nothing but that producer, see `_only_feeds_tmp_producer()`.
+            Specifying `assume_pointwise` asserts the rest, which ADR-18 rule 3
+            guarantees for a valid GT4Py program.
+        - The assumption covers the read of `G[i]` by the Map iteration that computes
+            `T[i]`, so it only holds if `T[i]` is written back to `G[i]`. For a write
+            back at an offset the rewritten producer reads `G[i]` and writes
+            `G[i + off]`, and the iterations clobber each other's input. Such an SDFG
+            is out of contract, ADR-18 rule 3 is about using the very same memory as
+            input and output, and it is not detected.
+
+    Todo:
+        - Implement a real pointwise test, then reject a non zero offset when the
+            producer reads `G`.
     """
 
     assume_pointwise = dace_properties.Property(
