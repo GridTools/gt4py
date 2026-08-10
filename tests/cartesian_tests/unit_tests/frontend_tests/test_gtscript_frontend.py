@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from enum import IntEnum
+from enum import IntEnum, StrEnum, Enum
 import inspect
 import functools
 import textwrap
@@ -2513,3 +2513,34 @@ class TestEnum:
             def_ir.computations[0].body.stmts[0].main_body.stmts[0].value, nodes.ScalarLiteral
         )
         assert def_ir.computations[0].body.stmts[0].main_body.stmts[0].value.value == LocalEnum.B
+
+    def test_enum_bad_definitions(self):
+
+        @gtscript.enum
+        class MyTestEnum(IntEnum):
+            A = 0
+
+        with pytest.raises(
+            ValueError,
+            match="Enum names must be unique. @gtscript.enum MyTestEnum is already taken*",
+        ):
+
+            @gtscript.enum
+            class MyTestEnum(IntEnum):
+                B = 0
+
+        with pytest.raises(
+            ValueError, match="Enum BadEnumTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadEnumTestEnum(Enum):
+                B = 0.0
+
+        with pytest.raises(
+            ValueError, match="Enum BadStrTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadStrTestEnum(StrEnum):
+                C = "meh"

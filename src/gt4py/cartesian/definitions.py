@@ -45,16 +45,17 @@ LITERAL_FLOAT_PRECISION = int(
 def get_integer_type(literal_integer_precision: int):
     """Return the integer numpy type corresponding to the LITERAL_INT_PRECISION set."""
     # I'd love to return `numpy.signedinteger[LITERAL_INT_PRECISION]` but that won't work
-    if literal_integer_precision == 8:
-        return numpy.int8
-    if literal_integer_precision == 16:
-        return numpy.int16
-    if literal_integer_precision == 32:
-        return numpy.int32
-    if literal_integer_precision == 64:
-        return numpy.int64
-
-    raise NotImplementedError("Unknown integer precision type")
+    match literal_integer_precision:
+        case 8:
+            return numpy.int8
+        case 16:
+            return numpy.int16
+        case 32:
+            return numpy.int32
+        case 64:
+            return numpy.int64
+        case _:
+            raise NotImplementedError("Unknown integer precision type")
 
 
 @enum.unique
