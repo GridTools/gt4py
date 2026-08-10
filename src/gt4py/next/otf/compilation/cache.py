@@ -10,6 +10,8 @@
 
 import pathlib
 import tempfile
+import types
+from collections.abc import Mapping
 from typing import Final
 
 from gt4py.next import config, fingerprinting
@@ -29,6 +31,19 @@ from gt4py.next.otf import stages
 CACHE_FOLDER_NAME_PATTERN: Final[str] = (
     r"(?P<name>.+)_(?P<fingerprint>[0-9a-f]{16})_(?P<version_id>.+?)"
     r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
+)
+
+#: Suffix appended by `get_cache_folder` to the program name when the cached
+#: artifact includes bindings. It is part of the pattern's `name` group, so
+#: recovering the plain program name means stripping this suffix.
+BINDINGS_NAME_SUFFIX: Final[str] = "_pyext"
+
+#: Sub-directories of the cache base where each backend persists the output of
+#: its translation step, keyed by backend name. Set by the `cached_translation`
+#: traits of the gtfn and DaCe workflow factories; read back by
+#: `gt4py.next.gt_cache_manager`.
+TRANSLATION_CACHE_DIR_NAMES: Final[Mapping[str, str]] = types.MappingProxyType(
+    {"dace": "translation_cache", "gtfn": "gtfn_cache"}
 )
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
@@ -70,7 +85,7 @@ def get_cache_folder(
     fingerprinter = fingerprinting.strict_fingerprinter
     slug = ext_source.program_source.entry_point.name
     if ext_source.binding_source:
-        slug = f"{slug}_pyext"
+        slug = f"{slug}{BINDINGS_NAME_SUFFIX}"
     folder_name = f"{slug}_{fingerprinter(ext_source)}_{config.BUILD_CACHE_VERSION_ID}"
     if build_context_id:
         folder_name = f"{folder_name}_{build_context_id}"

@@ -48,7 +48,7 @@ class DaCeWorkflowFactory(factory.Factory):
                     cache=filecache.FileCache(
                         str(
                             cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)
-                            / "translation_cache"
+                            / cache.TRANSLATION_CACHE_DIR_NAMES["dace"]
                         )
                     ),
                 )

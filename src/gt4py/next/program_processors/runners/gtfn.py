@@ -150,7 +150,10 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                     o.bare_translation,
                     input_fingerprinter=stages.compilable_program_fingerprinter,
                     cache=filecache.FileCache(
-                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                        str(
+                            cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME)
+                            / cache.TRANSLATION_CACHE_DIR_NAMES["gtfn"]
+                        )
                     ),
                 )
             ),
