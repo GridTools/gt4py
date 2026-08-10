@@ -128,6 +128,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         - `T` is a non view, non scalar transient that is not viewed by any View, and
             all its AccessNodes are on the top level of their state, i.e. none of them
             is inside a Map.
+        - No state reads `T` through one AccessNode and writes it through another,
+            which the merge of all AccessNodes of `T` per state would reorder.
         - `wb_edge` is the only edge that connects `T` with a non transient array and
             it copies `T` in full, without conflict resolution, into a contiguous
             range of `G` of the same size. `G` is not a view and has the same number
@@ -173,6 +175,24 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if not locations:
                 continue
             if any(state.scope_dict()[node] is not None for node, state in locations):
+                continue
+
+            # All AccessNodes of `T` inside a state are replaced by a single AccessNode
+            #  of `G`. If a state reads `T` through one AccessNode and writes it through
+            #  another, then that merge would order the read after the write, and, if
+            #  the two are connected, even create a cycle. Such an input violates
+            #  ADR-18 rule 6, `T` is written more than once, and is rejected here so
+            #  that it is left untouched instead of being modified and then rejected by
+            #  the validation at the end of `_eliminate()`.
+            nodes_per_state: dict[dace.SDFGState, list[dace_nodes.AccessNode]] = {}
+            for node, state in locations:
+                nodes_per_state.setdefault(state, []).append(node)
+            if any(
+                len(nodes) > 1
+                and any(state.in_degree(node) > 0 for node in nodes)
+                and any(state.out_degree(node) > 0 for node in nodes)
+                for state, nodes in nodes_per_state.items()
+            ):
                 continue
 
             write_backs = [

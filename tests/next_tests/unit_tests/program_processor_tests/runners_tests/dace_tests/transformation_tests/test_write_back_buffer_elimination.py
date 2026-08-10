@@ -214,6 +214,61 @@ def test_write_back_buffer_elimination_unrelated_reader():
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
 
 
+def test_write_back_buffer_elimination_tmp_read_and_written_in_one_state():
+    """A `tmp` that is written, read and written again in one state must be kept.
+
+    Such an SDFG violates ADR-18 rule 6. Merging the two AccessNodes of `tmp` would
+    make the state cyclic, so the SDFG must be left untouched.
+    """
+    sdfg = dace.SDFG(util.unique_name("write_back_tmp_chain"))
+
+    for name in ["a", "c"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(10,), dtype=dace.float64, transient=True)
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    first_tmp = state1.add_access("tmp")
+    state1.add_mapped_tasklet(
+        "producer1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("tmp[__i]")},
+        output_nodes={first_tmp},
+        external_edges=True,
+    )
+    second_tmp = state1.add_access("tmp")
+    state1.add_mapped_tasklet(
+        "producer2",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("tmp[__i]")},
+        code="__out = __in * 3.0",
+        outputs={"__out": dace.Memlet("tmp[__i]")},
+        input_nodes={first_tmp},
+        output_nodes={second_tmp},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    state2.add_nedge(
+        state2.add_access("tmp"), state2.add_access("b"), dace.Memlet("tmp[0:10] -> [10:20]")
+    )
+    state2.add_mapped_tasklet(
+        "consumer",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("tmp[__i]")},
+        code="__out = __in * 2.0",
+        outputs={"__out": dace.Memlet("c[__i]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    assert not _apply(sdfg)
+    assert "tmp" in sdfg.arrays
+    sdfg.validate()
+
+
 def test_write_back_buffer_elimination_strided_write_back():
     """A strided write back must be kept.
 
