@@ -413,36 +413,21 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
 
 # -- PEP 695 type aliases (``type X = ...``) --
 #
-# An alias is an opaque `TypeAliasType` object rather than the annotation it stands for,
-# and no runtime introspection helper unwraps it: `typing.get_type_hints` returns it as
-# is and never evaluates `__value__`, so the usual `NameError`-to-`ForwardRef` fallback
-# never triggers for it.
+# Resolved at the annotation-dispatch funnels (`type_validation`,
+# `datamodels.core._make_type_converter`, `get_represented_types` below), not by
+# rewriting stored annotations: that would force `__value__` evaluation at class
+# creation and break aliases defined before their target. Wire any new shape-dispatching
+# consumer in as well; a funnel left out does not raise, it falls through to its
+# no-match branch (``()`` for `get_represented_types`), silently making every
+# `isinstance()` against the result `False`.
 #
-# Aliases are therefore resolved at the **annotation-dispatch funnels** rather than by
-# rewriting stored annotations: `type_validation.SimpleTypeValidatorFactory.__call__`,
-# `datamodels.core._make_type_converter` and `get_represented_types` below. All three
-# already recurse into type arguments, so nesting (``list[MyAlias]``) is covered for
-# free, and the stored annotation keeps the alias name for reprs and signatures.
-# Resolving eagerly instead would force `__value__` evaluation at class-creation time,
-# which breaks aliases defined before their target.
-#
-# A funnel left out does not raise, it falls through to its no-match branch: for
-# `get_represented_types` that is an empty tuple, which silently turns every downstream
-# `isinstance()` against the result into a constant `False`. Wire any new consumer that
-# dispatches on annotation shape into this list.
-#
-# Two known limits: a `ClassVar` hidden behind an alias is not detected as a class
-# variable by `datamodels`, and an alias also used as a runtime value (a base class, a
-# constructor, an `isinstance()` argument) cannot be written this way at all, since a
-# `TypeAliasType` is not the class it stands for. The latter is why ruff's `UP040`
-# cannot be enabled repo-wide.
+# Not supported: `ClassVar` behind an alias, and aliases used as runtime values (base
+# class, constructor, `isinstance()` argument) -- the reason ruff's `UP040` stays off.
 
-#: Both implementations of PEP 695 type aliases. They are distinct classes, and a native
-#: ``type X = ...`` alias is not an instance of the ``typing_extensions`` backport (nor
-#: the other way round), so both of them have to be checked. Note that a `hasattr(obj,
-#: "__value__")` check is not equivalent: ``MyGenericAlias[int]`` is a `types.GenericAlias`
-#: which proxies attribute lookups to its origin, so it passes that check but is not an
-#: alias itself.
+#: Both PEP 695 alias implementations: they are distinct classes and neither is an
+#: instance of the other, so both have to be checked. ``hasattr(obj, "__value__")`` is
+#: not equivalent -- ``MyGenericAlias[int]`` proxies attribute lookups to its origin and
+#: passes it without being an alias.
 _TypeAliasTypes: Final[tuple[type, ...]] = (
     _typing.TypeAliasType,
     _typing_extensions.TypeAliasType,
@@ -512,25 +497,17 @@ def eval_type_alias(annotation: Any) -> Any:
             else:
                 return annotation
     except NameError:
-        # Left unwrapped on purpose, because inside 'eve' it is a signal and not an
-        # error: an alias may legitimately be defined before its target, so a name
-        # missing here may exist by the time the field is used. 'type_validation' lets
-        # it propagate, and 'datamodels' catches it and defers to the first
-        # instantiation with a 'ForwardRefValidator' / 'DeferredTypeConverter', which
-        # is the treatment string forward references already get. The cost of that,
-        # accepted: such a field is validated later than the others, and reports the
-        # bare field name rather than the qualified 'Model.field' one.
+        # A signal, not an error: an alias may be defined before its target, so a name
+        # missing here may exist by the time the field is used. 'datamodels' catches it
+        # and defers to the first instantiation, as it already does for string forward
+        # references, at the cost of a later error naming the bare field.
         raise
     except Exception as error:
-        # The value of an alias is arbitrary user code run on first access, so any
-        # other failure means the alias does not denote a type and never will: a typo'd
-        # dtype ('type F = Field[Dims[I], np.foat64]') raises 'AttributeError' here.
-        # Unlike 'NameError' above, deferring it would only report it later and worse,
-        # so it fails where it is found. Wrapping into a single exception type is what
-        # lets consumers keep one narrow 'except': 'next.type_translation' turns it into
-        # the 'ValueError' that becomes a located 'InvalidAnnotationError' pointing at
-        # the annotation. Consumers propagate this message verbatim rather than
-        # re-wording it, as it is the only text naming the actual cause.
+        # An alias value is arbitrary user code, so it can fail in any way (a typo'd
+        # dtype raises 'AttributeError'). Unlike 'NameError', none of those will ever
+        # resolve, so they fail here rather than being deferred. Wrapping them into one
+        # type lets consumers keep a single narrow 'except' and propagate this message
+        # verbatim, as it is the only text naming the actual cause.
         raise TypeError(
             f"Type alias '{original_annotation}' cannot be resolved ({error})."
         ) from error
