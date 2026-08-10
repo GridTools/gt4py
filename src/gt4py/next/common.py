@@ -112,8 +112,7 @@ class Dimension:
         if isinstance(value, Dimension):
             return self.value == value.value and self.kind == value.kind
         if isinstance(value, core_defs.INTEGRAL_TYPES):
-            int_value = cast(core_defs.IntegralScalar, value)
-            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
         # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
         # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
         return NotImplemented
