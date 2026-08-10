@@ -583,7 +583,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         artifact_future = self._compilation_jobs.pop(key)
         assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = artifact_future.result().load()
+        self.compiled_programs[key] = self.backend.load_artifact(artifact_future.result())
         return True
 
     def _compile_variant(
@@ -660,7 +660,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result().load()
+            self.compiled_programs[key] = self.backend.load_artifact(future.result())
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (
