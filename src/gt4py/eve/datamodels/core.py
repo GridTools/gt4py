@@ -1014,8 +1014,15 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
+#: Hashable container types folding the hashes of the items they hold into their own.
+#: Used unparametrized they say nothing about those items, so they are only accepted
+#: as the origin of a parametrized alias (``tuple[int, ...]``), never on their own.
+_ITEM_HASHING_CONTAINER_TYPES: Final = (tuple, frozenset)
 
-def _is_strictly_immutable_type(type_annotation: TypeAnnotation) -> bool:
+
+def _is_strictly_immutable_type(
+    type_annotation: TypeAnnotation, *, _as_container_origin: bool = False
+) -> bool:
     """Check whether an annotation only admits strictly immutable (hashable) values.
 
     A datamodel qualifies only if it is itself defined with ``frozen="strict"``;
@@ -1025,6 +1032,16 @@ def _is_strictly_immutable_type(type_annotation: TypeAnnotation) -> bool:
     (whose hash folds in the hashes of its items) weakens the check. Annotations
     that cannot be resolved to any concrete type (``Any``, unbound type variables,
     unresolved forward references) are conservatively rejected.
+
+    Arguments:
+        type_annotation: The annotation to check.
+
+    Keyword Arguments:
+        _as_container_origin: Internal flag set when checking the origin of a
+            parametrized alias, whose type arguments are checked separately.
+
+    Returns:
+        ``True`` if every value admitted by the annotation is strictly immutable.
     """
     if is_datamodel(type_annotation):
         return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
@@ -1042,26 +1059,50 @@ def _is_strictly_immutable_type(type_annotation: TypeAnnotation) -> bool:
         return bool(type_args) and all(map(_is_strictly_immutable_type, type_args))
 
     if origin_type is not None:
+        if not type_args:
+            # Unparametrized alias ('typing.Tuple', 'typing.List', ...): it says nothing
+            # more than the bare origin type does.
+            return _is_strictly_immutable_type(origin_type)
+
         # Parametrized generic alias ('tuple[int, ...]', 'list[int]', ...). The alias
         # itself is a hashable object, so it has to be decomposed: both the container
         # type and every type argument must be strictly immutable, since the hash of
         # a container folds in the hashes of the items it holds.
-        return _is_strictly_immutable_type(origin_type) and all(
+        return _is_strictly_immutable_type(origin_type, _as_container_origin=True) and all(
             _is_strictly_immutable_type(arg) for arg in type_args if arg is not Ellipsis
         )
 
     if xtyping.is_actual_type(type_annotation):  # plain type, already known not to be a datamodel
+        if not _as_container_origin and issubclass(type_annotation, _ITEM_HASHING_CONTAINER_TYPES):
+            # Unparametrized container ('tuple', 'frozenset', a 'NamedTuple', ...): its
+            # hash folds in the hashes of items which nothing here proves immutable, the
+            # same reason why 'tuple[Any, ...]' is rejected.
+            return False
         return xtyping.is_type_with_custom_hash(type_annotation)
 
-    # Anything else (type variables, forward references, ...) is checked through the
-    # concrete types it stands for, if any. Forward references that cannot be resolved
-    # at this point do not prove anything, so they are rejected.
-    try:
-        represented_types = xtyping.get_represented_types(type_annotation)
-    except NameError:
+    if isinstance(type_annotation, TypeVar):
+        # Check the concrete annotations the type variable can stand for. Note that the
+        # bound/constraints are checked as annotations, not flattened to their origins,
+        # so that e.g. a 'tuple[list[int], ...]' bound is still decomposed.
+        if type_annotation.__bound__ is not None:
+            return _is_strictly_immutable_type(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return all(map(_is_strictly_immutable_type, type_annotation.__constraints__))
+        if (typevar_default := getattr(type_annotation, "__default__", None)) is not None:
+            return _is_strictly_immutable_type(typevar_default)
         return False
 
-    return bool(represented_types) and all(map(_is_strictly_immutable_type, represented_types))
+    if isinstance(type_annotation, (ForwardRef, typing.ForwardRef)):
+        # Forward references that cannot be resolved at this point do not prove
+        # anything, so they are rejected instead of propagating the resolution error.
+        try:
+            resolved_annotation = xtyping.eval_forward_ref(type_annotation)
+        except Exception:
+            return False
+        return _is_strictly_immutable_type(resolved_annotation)
+
+    # Anything else ('Any', special forms, ...) proves nothing.
+    return False
 
 
 def _make_datamodel(

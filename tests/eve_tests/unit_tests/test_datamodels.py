@@ -1020,6 +1020,9 @@ class PlainFrozenInner:
     values: List[int]
 
 
+MutableBoundT = TypeVar("MutableBoundT", bound=Tuple[List[int], ...])
+
+
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
@@ -1141,6 +1144,36 @@ class TestDatamodelOptions:
             @datamodels.datamodel(frozen="strict")
             class TupleOfNonStrictModels:
                 inners: Tuple[PlainFrozenInner, ...]
+
+    def test_strict_frozen_rejects_unparametrized_container_fields(self):
+        # A bare 'tuple' hashes its items, which nothing proves immutable: it must be
+        # rejected for exactly the same reason as the explicit 'Tuple[Any, ...]' below.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BareTupleModel:
+                values: tuple
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BareTypingTupleModel:
+                values: Tuple
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class AnyItemTupleModel:
+                values: Tuple[Any, ...]
+
+    def test_strict_frozen_rejects_type_var_with_mutable_bound(self):
+        # The bound has to be checked as an annotation, not flattened to its origin,
+        # otherwise 'tuple[list[int], ...]' would come back as a plain (hashable) 'tuple'.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TypeVarModel:
+                value: MutableBoundT
 
     def test_strict_frozen_rejects_unresolved_forward_reference(self):
         # A self-reference cannot be resolved while the class is being created, so it
