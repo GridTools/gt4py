@@ -212,3 +212,134 @@ def test_write_back_buffer_elimination_unrelated_reader():
         [gtx_transformations.GT4PyWriteBackBufferElimination(assume_pointwise=True)]
     ).apply_pass(sdfg, {})
     assert "tmp" in sdfg.arrays, "the pass must not fire when an unrelated Map reads 'b'"
+
+
+def _mk_map_consumer_sdfg(inner_memlet_uses_tmp: bool) -> dace.SDFG:
+    """`tmp` is written back into `b` and additionally consumed inside nested Maps."""
+    sdfg = dace.SDFG(util.unique_name("write_back_map_consumer"))
+
+    sdfg.add_array("a", shape=(10, 10), dtype=dace.float64, transient=False)
+    sdfg.add_array("c", shape=(10, 10), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(100, 100), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(10, 10), dtype=dace.float64, transient=True)
+    sdfg.add_array(
+        "local",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=True,
+        storage=dace.dtypes.StorageType.Register,
+        lifetime=dace.dtypes.AllocationLifetime.Scope,
+    )
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i1": "0:10", "__i2": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i1, __i2]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("tmp[__i1, __i2]")},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    state2.add_nedge(
+        state2.add_access("tmp"),
+        state2.add_access("b"),
+        dace.Memlet("tmp[0:10, 0:10] -> [11:21, 22:32]"),
+    )
+
+    tmp_node = state2.add_access("tmp")
+    outer_entry, outer_exit = state2.add_map("outer", ndrange={"__i1": "0:10"})
+    inner_entry, inner_exit = state2.add_map("inner", ndrange={"__i2": "0:10"})
+    tasklet = state2.add_tasklet(
+        "comp", inputs={"__in"}, outputs={"__out"}, code="__out = __in * 2"
+    )
+    local_node = state2.add_access("local")
+    c_node = state2.add_access("c")
+
+    state2.add_edge(tmp_node, None, outer_entry, "IN_tmp", dace.Memlet("tmp[__i1, 0:10]"))
+    outer_entry.add_in_connector("IN_tmp")
+    outer_entry.add_out_connector("OUT_tmp")
+    if inner_memlet_uses_tmp:
+        inner_copy_memlet = dace.Memlet("tmp[__i1, 0:10] -> [0:10]")
+    else:
+        # The very same copy, but expressed relative to `local`; the subset that
+        #  refers to `tmp` is now the memlet's `other_subset`.
+        inner_copy_memlet = dace.Memlet(data="local", subset="0:10", other_subset="__i1, 0:10")
+    state2.add_edge(outer_entry, "OUT_tmp", local_node, None, inner_copy_memlet)
+
+    state2.add_edge(local_node, None, inner_entry, "IN_local", dace.Memlet("local[0:10]"))
+    inner_entry.add_in_connector("IN_local")
+    inner_entry.add_out_connector("OUT_local")
+    state2.add_edge(inner_entry, "OUT_local", tasklet, "__in", dace.Memlet("local[__i2]"))
+    state2.add_edge(tasklet, "__out", inner_exit, "IN_c", dace.Memlet("c[__i1, __i2]"))
+    inner_exit.add_in_connector("IN_c")
+    inner_exit.add_out_connector("OUT_c")
+    state2.add_edge(inner_exit, "OUT_c", outer_exit, "IN_c", dace.Memlet("c[__i1, 0:10]"))
+    outer_exit.add_in_connector("IN_c")
+    outer_exit.add_out_connector("OUT_c")
+    state2.add_edge(outer_exit, "OUT_c", c_node, None, dace.Memlet("c[0:10, 0:10]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+@pytest.mark.parametrize("inner_memlet_uses_tmp", [True, False])
+def test_write_back_buffer_elimination_map_consumer(inner_memlet_uses_tmp):
+    sdfg = _mk_map_consumer_sdfg(inner_memlet_uses_tmp)
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    assert _apply(sdfg)
+    assert "tmp" not in sdfg.arrays
+    sdfg.validate()
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)
+
+
+def test_write_back_buffer_elimination_pointwise_reader():
+    """`b` is read elementwise by the producer of `tmp`, i.e. ADR-18 rule 3."""
+    sdfg = dace.SDFG(util.unique_name("write_back_pointwise_reader"))
+
+    sdfg.add_array("a", shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("c", shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array("tmp", shape=(20,), dtype=dace.float64, transient=True)
+
+    state1: dace.SDFGState = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "producer",
+        map_ranges={"__i": "0:20"},
+        inputs={"__in_a": dace.Memlet("a[__i]"), "__in_b": dace.Memlet("b[__i]")},
+        code="__out = __in_a + __in_b",
+        outputs={"__out": dace.Memlet("tmp[__i]")},
+        external_edges=True,
+    )
+
+    state2: dace.SDFGState = sdfg.add_state_after(state1)
+    state2.add_nedge(
+        state2.add_access("tmp"), state2.add_access("b"), dace.Memlet("tmp[0:20] -> [0:20]")
+    )
+    state2.add_mapped_tasklet(
+        "consumer",
+        map_ranges={"__i": "0:20"},
+        inputs={"__in": dace.Memlet("tmp[__i]")},
+        code="__out = __in * 2.0",
+        outputs={"__out": dace.Memlet("c[__i]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    assert _apply(sdfg)
+    assert "tmp" not in sdfg.arrays
+    # The read of `b` and the write to `b` must use two distinct AccessNodes, a
+    #  single one would make the state cyclic.
+    assert len([dnode for dnode in state1.data_nodes() if dnode.data == "b"]) == 2
+    sdfg.validate()
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref, res)

@@ -275,34 +275,74 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         wb_edge: dace.sdfg.graph.MultiConnectorEdge,
         wb_state: dace.SDFGState,
     ) -> None:
+        """Replaces every access to `T` with an access to `G` and removes `T`.
+
+        Args:
+            sdfg: The SDFG on which we operate.
+            tmp_name: The name of `T`.
+            wb_edge: The edge that copies `T` into `G`.
+            wb_state: The state that contains `wb_edge`.
+        """
         glob_node = wb_edge.dst
         glob_name = glob_node.data
         src_subset = wb_edge.data.get_src_subset(wb_edge, wb_state)
         dst_subset = wb_edge.data.get_dst_subset(wb_edge, wb_state)
-        correcting_offset = dst_subset.offset_new(src_subset, negative=True)
+        ss_offset = [
+            dst_start - src_start
+            for dst_start, src_start in zip(dst_subset.min_element(), src_subset.min_element())
+        ]
 
         wb_state.remove_edge(wb_edge)
 
         for state in sdfg.states():
-            for node in [node for node in state.data_nodes() if node.data == tmp_name]:
-                if state.degree(node) == 0:
-                    state.remove_node(node)
-            for edge in state.edges():
-                touches_tmp = (
-                    isinstance(edge.src, dace_nodes.AccessNode) and edge.src.data == tmp_name
-                ) or (isinstance(edge.dst, dace_nodes.AccessNode) and edge.dst.data == tmp_name)
-                if edge.data.data == tmp_name:
-                    edge.data.data = glob_name
-                    if edge.data.subset is not None:
-                        edge.data.subset.offset(correcting_offset, negative=False)
-                elif touches_tmp and edge.data.other_subset is not None:
-                    edge.data.other_subset.offset(correcting_offset, negative=False)
-            for node in state.data_nodes():
-                if node.data == tmp_name:
-                    node.data = glob_name
+            tmp_nodes = [node for node in state.data_nodes() if node.data == tmp_name]
+            if not tmp_nodes:
+                continue
+            # In `wb_state` the AccessNode of `G` is now isolated, so it can serve as
+            #  the replacement. In the other states a new one is needed; especially in
+            #  the states that define `T` reusing a present AccessNode of `G`, which
+            #  can only be a read, see `_only_feeds_tmp_producer()`, would create a
+            #  cycle.
+            new_node = glob_node if state is wb_state else state.add_access(glob_name)
+            reconfigured_neighbours: set[tuple[dace_nodes.Node, Optional[str]]] = set()
 
-        if wb_state.degree(glob_node) == 0:
-            wb_state.remove_node(glob_node)
+            for tmp_node in tmp_nodes:
+                for is_producer_edge, old_edges in [
+                    (True, state.in_edges(tmp_node)),
+                    (False, state.out_edges(tmp_node)),
+                ]:
+                    for old_edge in list(old_edges):
+                        new_edge = gtx_transformations.utils.reroute_edge(
+                            is_producer_edge=is_producer_edge,
+                            current_edge=old_edge,
+                            ss_offset=ss_offset,
+                            state=state,
+                            sdfg=sdfg,
+                            old_node=tmp_node,
+                            new_node=new_node,
+                        )
+                        neighbour = (
+                            (old_edge.src, old_edge.src_conn)
+                            if is_producer_edge
+                            else (old_edge.dst, old_edge.dst_conn)
+                        )
+                        if neighbour not in reconfigured_neighbours:
+                            reconfigured_neighbours.add(neighbour)
+                            # Stride propagation is done at the very end.
+                            gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
+                                is_producer_edge=is_producer_edge,
+                                new_edge=new_edge,
+                                ss_offset=ss_offset,
+                                state=state,
+                                sdfg=sdfg,
+                                old_node=tmp_node,
+                                new_node=new_node,
+                            )
+                        state.remove_edge(old_edge)
+                state.remove_node(tmp_node)
+
+            if state.degree(new_node) == 0:
+                state.remove_node(new_node)
 
         sdfg.remove_data(tmp_name, validate=True)
 
