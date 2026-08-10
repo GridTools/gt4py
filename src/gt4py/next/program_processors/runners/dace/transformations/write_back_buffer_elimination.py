@@ -37,9 +37,15 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     All accesses to `T` are rewritten to `G`, shifted by the offset of the copy, and
     the copy is removed.
 
-    `T` must be copied in full. Otherwise the producer would write `G` outside the
+    `T` must be copied in full into `G`. Otherwise the producer would write `G` outside the
     range that the copy would have touched, which is not allowed because the range
     of `G` outside the copy is not part of the requested write.
+
+    Because the rewritten producer writes `G` where previously only `T` was written,
+    `G` must still hold its original value everywhere between the definition of `T`
+    and the write back. Therefore `G` must neither be written nor read in that range,
+    the only exception being the pointwise read described by ADR-18 rule 3, which is
+    covered by `assume_pointwise`.
     """
 
     assume_pointwise = dace_properties.Property(
@@ -83,6 +89,28 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         sdfg: dace.SDFG,
         reachable: dict[dace.SDFGState, set[dace.SDFGState]],
     ) -> list[tuple[str, dace.sdfg.graph.MultiConnectorEdge, dace.SDFGState]]:
+        """Scans `sdfg` for write back buffers that can be eliminated.
+
+        A candidate is a triple `(tmp_name, wb_edge, wb_state)`, where `tmp_name` is
+        the transient `T`, `wb_edge` is the edge that copies `T` into the global `G`
+        and `wb_state` is the state that contains `wb_edge`. For every candidate the
+        function guarantees that:
+        - `T` is a non view, non scalar transient and all its AccessNodes are on the
+            top level of their state, i.e. none of them is inside a Map.
+        - `wb_edge` is the only edge that connects `T` with a non transient array and
+            it copies `T` in full, into a range of `G` of the same size. `G` is not a
+            view and has the same number of dimensions as `T`.
+        - `wb_state` neither writes `T` nor reads `G`, and the AccessNode of `G` in
+            `wb_state` is only used by `wb_edge`.
+        - Every state that writes `T` reaches `wb_state`, i.e. the copy always happens
+            after `T` has been defined.
+        - No other access to `G` conflicts with turning the writes to `T` into writes
+            to `G`, see `_has_conflicting_global_access()`.
+
+        Args:
+            sdfg: The SDFG to scan.
+            reachable: Result of the `StateReachability` pass for `sdfg`.
+        """
         candidates = []
         for tmp_name, tmp_desc in sdfg.arrays.items():
             if not tmp_desc.transient:
@@ -161,7 +189,32 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         def_states: set[dace.SDFGState],
         tmp_name: str,
     ) -> bool:
-        """`G` must not be read where it is still expected to hold its old value."""
+        """Checks if any AccessNode of `G` other than `glob_node` prevents the removal.
+
+        Eliminating the write back turns the writes to `T` into writes to `G`, so `G`
+        no longer holds its old value from the definition of `T` onwards, instead of
+        only from the write back onwards. Any of the following disqualifies the
+        candidate:
+        - A write to `G`, i.e. an AccessNode with a non zero in degree. ADR-18 rule 6
+            would then no longer hold, as `G` would be written in two places, and
+            depending on the order the two writes would clobber each other.
+        - A read of `G` in a state that defines `T`. Such a read is unordered with
+            respect to the producer of `T`, so after the rewrite it would race with
+            the write to `G`. The only exception is the elementwise read allowed by
+            ADR-18 rule 3, which requires `assume_pointwise`, see
+            `_only_feeds_tmp_producer()`.
+        - A read of `G` in a state that is not reachable from `wb_state`. Such a read
+            expects the old value of `G`, which the rewrite destroys.
+
+        Returns:
+            `True` if the write back must be kept.
+
+        Todo:
+            The check is conservative: once the write back has happened `G` may be
+            written freely, so writes in states reachable from `wb_state` are
+            harmless. Lifting the restriction requires taking the topology of the
+            state machine into account.
+        """
         for state in sdfg.states():
             for node in state.data_nodes():
                 if node.data != glob_node.data or node is glob_node:
@@ -169,10 +222,6 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 if state.in_degree(node) != 0:
                     return True
                 if state in def_states:
-                    # `assume_pointwise` only covers `G` being an input of the very
-                    #  Map that computes `T`, which is what ADR-18 rule 3 is about.
-                    #  Any other reader in the same state is unordered with respect
-                    #  to the producer and would race with the now direct write.
                     if not self._only_feeds_tmp_producer(state, node, tmp_name):
                         return True
                     if not self.assume_pointwise:
@@ -184,10 +233,30 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     def _only_feeds_tmp_producer(
         self,
         state: dace.SDFGState,
-        glob_read: dace_nodes.AccessNode,
+        glob_read_node: dace_nodes.AccessNode,
         tmp_name: str,
     ) -> bool:
-        """Checks that `glob_read` is consumed exclusively by the Maps writing `T`."""
+        """Checks if the read of `G` is the elementwise read allowed by ADR-18 rule 3.
+
+        ADR-18 rule 3 allows using the same global memory as input and output, but
+        only if the output depends elementwise on the input. In the SDFG this shows
+        up as `G` being an input of the very Maps that compute `T`, which is what this
+        function tests: every consumer of `glob_read_node` must be the MapEntry of a
+        Map that writes into `T`.
+
+        Anything else, for example a second, unrelated Map in the same state that also
+        reads `G`, is unordered with respect to the producer of `T`. After the write
+        back has been removed the producer writes `G` directly, so such a reader would
+        race with it and `assume_pointwise` must not waive it.
+
+        Args:
+            state: The state that contains `glob_read_node`; it also defines `T`.
+            glob_read_node: The AccessNode of `G` that is read.
+            tmp_name: The name of `T`.
+
+        Returns:
+            `True` if the read is elementwise in the sense of ADR-18 rule 3.
+        """
         producer_entries = {
             state.entry_node(iedge.src)
             for tmp_node in state.data_nodes()
@@ -197,7 +266,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         }
         if not producer_entries:
             return False
-        return all(oedge.dst in producer_entries for oedge in state.out_edges(glob_read))
+        return all(oedge.dst in producer_entries for oedge in state.out_edges(glob_read_node))
 
     def _eliminate(
         self,
@@ -235,11 +304,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         if wb_state.degree(glob_node) == 0:
             wb_state.remove_node(glob_node)
 
-        try:
-            sdfg.remove_data(tmp_name, validate=True)
-        except ValueError as e:
-            if not str(e).startswith(f"Cannot remove data descriptor {tmp_name}:"):
-                raise
+        sdfg.remove_data(tmp_name, validate=True)
 
         # The accesses now refer to `G`, whose strides generally differ from the ones
         #  of the (contiguous) `T` they were derived from, so every descriptor inside
