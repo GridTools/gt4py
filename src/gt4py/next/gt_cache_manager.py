@@ -26,9 +26,10 @@ recompilation, never of re-translation. The `status` command reports which of th
 two the next run will do.
 
 Run it in the environment that produced the cache, from the working directory the
-cached run used (the default cache base is `<cwd>/.gt4py_cache`)::
+cached run used (the default cache base is `<cwd>/.gt4py_cache`), either through
+the installed `gt4py-next-cache` command or as a module::
 
-    python -m gt4py.next.gt_cache_manager status --program 'apply_diffusion_*'
+    gt4py-next-cache status --program 'apply_diffusion_*'
     python -m gt4py.next.gt_cache_manager delete --program 'apply_diffusion_*' --yes
 """
 
@@ -514,9 +515,9 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _make_parser() -> argparse.ArgumentParser:
+def _make_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m gt4py.next.gt_cache_manager",
+        prog=prog,
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -572,8 +573,9 @@ def _make_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = _make_parser().parse_args(argv)
+def main(argv: Sequence[str] | None = None, *, prog: str | None = None) -> int:
+    """Run the CLI. Entry point of the `gt4py-next-cache` command."""
+    args = _make_parser(prog).parse_args(argv)
     args.backends = (
         list(cache.TRANSLATION_CACHE_DIR_NAMES) if args.backends == "all" else [args.backends]
     )
@@ -585,4 +587,5 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # `python -m` leaves argparse with the module file as the program name.
+    sys.exit(main(prog="python -m gt4py.next.gt_cache_manager"))

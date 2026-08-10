@@ -390,6 +390,16 @@ def test_list_json_output(cache_base, capsys):
     assert [(e["key"], e["program"], e["backend"]) for e in payload] == [(key, "foo", "dace")]
 
 
+def test_console_script_points_at_main():
+    import importlib.metadata
+
+    entry_points = importlib.metadata.distribution("gt4py").entry_points
+    console_scripts = {ep.name: ep for ep in entry_points if ep.group == "console_scripts"}
+
+    assert "gt4py-next-cache" in console_scripts
+    assert console_scripts["gt4py-next-cache"].load() is gt_cache_manager.main
+
+
 def test_cli_reports_cache_dir_error(tmp_path, capsys):
     (tmp_path / "unrelated").mkdir()
 

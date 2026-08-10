@@ -31,8 +31,8 @@ edits do not, and a non-editable install never does.
 Run in the environment and working directory of the run being measured:
 
 ```bash
-python -m gt4py.next.gt_cache_manager delete --program '<name glob>' --yes
-python -m gt4py.next.gt_cache_manager status --program '<name glob>' --fail-if-cached
+gt4py-next-cache delete --program '<name glob>' --yes
+gt4py-next-cache status --program '<name glob>' --fail-if-cached
 ```
 
 The `status` call is the gate: it exits non-zero while any matched program would
@@ -40,13 +40,16 @@ still replay. Require it to pass **before** launching an expensive job. Drop
 `--program` to cover every program, add `--include-build-dirs` to force a full
 rebuild too, and omit `--yes` for a dry run.
 
+`gt4py-next-cache` is installed with gt4py; `python -m gt4py.next.gt_cache_manager`
+is the same tool, for when the console script is not on `PATH`.
+
 Worked example — a new dace transformation, measured on one dycore program:
 
 ```bash
-python -m gt4py.next.gt_cache_manager status --program 'apply_divergence_damping*'
+gt4py-next-cache status --program 'apply_divergence_damping*'
 # -> REPLAY (recompiles, does NOT re-translate)
-python -m gt4py.next.gt_cache_manager delete --program 'apply_divergence_damping*' --yes
-python -m gt4py.next.gt_cache_manager status --program 'apply_divergence_damping*' --fail-if-cached
+gt4py-next-cache delete --program 'apply_divergence_damping*' --yes
+gt4py-next-cache status --program 'apply_divergence_damping*' --fail-if-cached
 # -> RE-TRANSLATE, exit 0
 srun ...   # now the pass actually runs
 ```
@@ -77,7 +80,7 @@ confirm the log appears.
 
 ## Related
 
-- `python -m gt4py.next.gt_cache_manager list|show` inspects entries (program,
+- `gt4py-next-cache list|show` inspects entries (program,
   backend, SDFG name, state and map counts).
 - `scripts/python/dace_determinism.py` answers the neighbouring question: whether
   dace codegen is deterministic across two runs.
