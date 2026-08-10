@@ -516,7 +516,92 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         consumer_edges: OrderedSet[dace_graph.MultiConnectorEdge],
     ) -> bool:
         """Checks if `subset` is fully read by `consumer_edges` taken together."""
-        merged = gtx_dace_split.subset_merger(
+        merged = _merge_overlapping_subsets(
             [consumer_edge.data.src_subset for consumer_edge in consumer_edges]
         )
         return any(merged_subset.covers(subset) for merged_subset in merged)
+
+
+def _merge_overlapping_subsets(subsets: list[dace_sbs.Subset]) -> list[dace_sbs.Subset]:
+    """Merges subsets that overlap, touch or contain each other.
+
+    `splitting_tools.subset_merger()` only joins subsets that are exactly adjacent,
+    which is what describing a split needs. Consumers however routinely read
+    overlapping regions, so deciding whether they read a fragment in full needs the
+    stronger version.
+    """
+    subsets = sorted(subsets, key=str)
+
+    performed_merge = True
+    while performed_merge and len(subsets) > 1:
+        performed_merge = False
+        for idx1 in range(len(subsets)):
+            for idx2 in range(idx1 + 1, len(subsets)):
+                merged_subset = _try_to_merge_overlapping_subsets(subsets[idx1], subsets[idx2])
+                if merged_subset is None:
+                    continue
+                subsets = [sbs for idx, sbs in enumerate(subsets) if idx not in (idx1, idx2)]
+                subsets.append(merged_subset)
+                performed_merge = True
+                break
+            if performed_merge:
+                break
+
+    return subsets
+
+
+def _try_to_merge_overlapping_subsets(
+    subset1: dace_sbs.Subset,
+    subset2: dace_sbs.Subset,
+) -> Optional[dace_sbs.Subset]:
+    """Tries to express two subsets as a single one, returns `None` if impossible.
+
+    Like `splitting_tools._try_to_merge_subsets()` the two subsets must have the same
+    bounds in all but one dimension, but in that dimension they may also overlap
+    instead of only touching.
+    """
+    if subset1.covers(subset2):
+        return subset1
+    if subset2.covers(subset1):
+        return subset2
+    if subset1.dims() != subset2.dims():
+        return None
+
+    merged_subset: list[Any] = []
+    has_found_merge_dim = False
+    for dim in range(subset1.dims()):
+        start1, end1, step1 = subset1[dim]
+        start2, end2, step2 = subset2[dim]
+
+        if (step1 != 1) == True or (step2 != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+
+        elif (start1 == start2) == True and (end1 == end2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            merged_subset.append((start1, end1, 1))
+            continue
+
+        if has_found_merge_dim:
+            # It is only possible to extend along one dimension.
+            return None
+
+        # Order the two ranges such that `lo` starts first, `end` is inclusive.
+        if (start1 <= start2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            (lo_start, lo_end), (hi_start, hi_end) = (start1, end1), (start2, end2)
+        elif (start2 <= start1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            (lo_start, lo_end), (hi_start, hi_end) = (start2, end2), (start1, end1)
+        else:
+            return None
+
+        # Unless they overlap or touch their union has a hole in it.
+        if not ((hi_start <= lo_end + 1) == True):  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            return None
+
+        if (hi_end >= lo_end) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            merged_subset.append((lo_start, hi_end, 1))
+        elif (lo_end >= hi_end) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            merged_subset.append((lo_start, lo_end, 1))
+        else:
+            return None
+        has_found_merge_dim = True
+
+    return dace_sbs.Range(merged_subset)

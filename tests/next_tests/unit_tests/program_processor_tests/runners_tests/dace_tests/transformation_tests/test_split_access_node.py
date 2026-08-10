@@ -1052,3 +1052,76 @@ def test_consumer_spanning_already_merged_producers():
     # Everything ends up in a single fragment, so there is nothing to split -- the
     #  point of the test is that determining that does not raise.
     _perform_test(sdfg, explected_applies=0)
+
+
+def _make_multi_producer_sdfg(
+    name: str,
+    producers: list[tuple[str, int]],
+    consumers: list[tuple[str, str]],
+) -> tuple[dace.SDFG, dace.SDFGState]:
+    """Builds an SDFG where `producers` write disjoint chunks of `t` that `consumers` read."""
+    sdfg = dace.SDFG(util.unique_name(name))
+    state = sdfg.add_state(is_start_block=True)
+
+    for array in [source for source, _ in producers] + [dst for dst, _ in consumers] + ["t"]:
+        sdfg.add_array(array, shape=(20,), dtype=dace.float64, transient=(array == "t"))
+    t = state.add_access("t")
+
+    for producer, (source, start) in enumerate(producers):
+        state.add_mapped_tasklet(
+            f"producer_{producer}",
+            map_ranges={"__i": f"{start}:{start + 5}"},
+            inputs={"__in": dace.Memlet(f"{source}[__i]")},
+            code=f"__out = __in + {producer + 1}.0",
+            outputs={"__out": dace.Memlet("t[__i]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+    for consumer, (destination, rng) in enumerate(consumers):
+        state.add_mapped_tasklet(
+            f"consumer_{consumer}",
+            map_ranges={"__i": rng},
+            inputs={"__in": dace.Memlet("t[__i]")},
+            code="__out = __in + 13.0",
+            outputs={"__out": dace.Memlet(f"{destination}[__i]")},
+            input_nodes={t},
+            external_edges=True,
+        )
+    sdfg.validate()
+    return sdfg, state
+
+
+def test_partially_read_multi_producer_fragment_is_rejected():
+    """A merged fragment whose data is not read in full must not be split off.
+
+    The first producer forms its own, fully read fragment, so the candidate is not
+    rejected before the merged fragment is examined. The second and third producer
+    are merged by the spanning consumer, but that consumer stops short of what the
+    third producer writes, so the fragment is not tight and splitting it would break
+    the assumption `CopyChainRemover` relies on.
+    """
+    sdfg, _ = _make_multi_producer_sdfg(
+        "partially_read_multi_producer_fragment",
+        producers=[("a", 0), ("b", 5), ("c", 10)],
+        consumers=[("d", "0:5"), ("e", "5:12")],
+    )
+    _perform_test(sdfg, explected_applies=0)
+
+
+def test_overlapping_consumers_cover_multi_producer_fragment():
+    """Consumers that read overlapping regions still cover the merged fragment.
+
+    The two reads of the merged fragment overlap rather than being adjacent, which
+    is the common case for stencils reading a halo. Their union still covers what
+    the two producers write, so the split must be performed.
+    """
+    sdfg, state = _make_multi_producer_sdfg(
+        "overlapping_consumers_cover_fragment",
+        producers=[("a", 0), ("b", 5), ("c", 10)],
+        consumers=[("d", "0:5"), ("e", "5:12"), ("f", "10:15")],
+    )
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
+
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    assert {state.in_degree(dnode) for dnode in fragment_nodes} == {1, 2}
