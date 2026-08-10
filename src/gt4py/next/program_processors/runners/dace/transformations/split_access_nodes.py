@@ -397,8 +397,8 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         fragments: list[_Fragment] = []
         for fragment_id, consumer_edges in consumers_of_fragment.items():
             producers = OrderedSet(
-                producer_edges[i]
-                for i in range(len(producer_edges))
+                producer_edge
+                for i, producer_edge in enumerate(producer_edges)
                 if find_fragment(i) == fragment_id
             )
             subsets = gtx_dace_split.subset_merger(
@@ -458,56 +458,59 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             if len(consumer_edges) == 0:
                 continue
 
-            # A fragment that is fed by several producers is only read as a whole,
-            #  so tightness can only be established for the fragment, not for the
-            #  individual producers.
-            if len(fragment.producers) > 1:
-                if not self._is_covered_by_consumers(fragment.subset, consumer_edges):
-                    return False
-
             for producer_edge in fragment.producers:
                 data_source = producer_edge.src
-
                 if isinstance(data_source, dace_nodes.AccessNode):
                     # TODO(phimuell): Should we also ensure that the domains are tight?
                     if gtx_transformations.utils.is_view(data_source, sdfg):
                         return False
+                elif not isinstance(data_source, dace_nodes.MapExit):
+                    return False
 
-                    # If the source is a global data, then we do not impose any other
-                    #  constraints.
-                    if not data_source.desc(sdfg).transient:
-                        continue
+            # The tightness requirement below, i.e. that what is computed is also
+            #  read, is a core assumption of the `CopyChainRemover`. A fragment with
+            #  several producers is only ever read as a whole, so the requirement
+            #  applies to the fragment; imposing it per producer instead would reject
+            #  a consumer that legitimately reads across a producer boundary, which
+            #  is the very case a multi producer fragment exists for.
+            if len(fragment.producers) > 1:
+                if not self._is_fully_read_by_consumers(fragment.subset, consumer_edges):
+                    return False
+                continue
 
-                    # If the source is a transient then we distinguish between two cases.
-                    #  In the first case there is only one consumer, in that case we
-                    #  require that everything is read. In the second case, more than
-                    #  one consumer, we do not impose any constraints.
-                    #  We do this to ensure the tightness of the temporaries, i.e. what
-                    #  is computed is also read, which is core assumption of the
-                    #  `CopyChainRemover`.
-                    # TODO(phimuell): Lift this limitation.
-                    if len(fragment.producers) == 1 and len(consumer_edges) == 1:
-                        if not next(iter(consumer_edges)).data.src_subset.covers(
-                            producer_edge.data.dst_subset
-                        ):
-                            return False
+            (producer_edge,) = fragment.producers
+            data_source = producer_edge.src
 
-                elif isinstance(data_source, dace_nodes.MapExit):
-                    # The source is a Map, in this case we just generate a new transient
-                    #  output and then perform some reconnection. However, we require that
-                    #  all consumer read exactly what is is written by the map. This
-                    #  is to ensure some tightness of the domains.
-                    if len(fragment.producers) == 1 and not all(
-                        consumer_edge.data.src_subset.covers(producer_edge.data.dst_subset)
-                        for consumer_edge in consumer_edges
+            if isinstance(data_source, dace_nodes.AccessNode):
+                # If the source is a global data, then we do not impose any other
+                #  constraints.
+                if not data_source.desc(sdfg).transient:
+                    continue
+
+                # If the source is a transient then we distinguish between two cases.
+                #  In the first case there is only one consumer, in that case we
+                #  require that everything is read. In the second case, more than
+                #  one consumer, we do not impose any constraints.
+                # TODO(phimuell): Lift this limitation.
+                if len(consumer_edges) == 1:
+                    if not next(iter(consumer_edges)).data.src_subset.covers(
+                        producer_edge.data.dst_subset
                     ):
                         return False
 
-                else:
+            else:
+                # The source is a Map, in this case we just generate a new transient
+                #  output and then perform some reconnection. However, we require that
+                #  all consumer read exactly what is is written by the map. This
+                #  is to ensure some tightness of the domains.
+                if not all(
+                    consumer_edge.data.src_subset.covers(producer_edge.data.dst_subset)
+                    for consumer_edge in consumer_edges
+                ):
                     return False
         return True
 
-    def _is_covered_by_consumers(
+    def _is_fully_read_by_consumers(
         self,
         subset: dace_sbs.Subset,
         consumer_edges: OrderedSet[dace_graph.MultiConnectorEdge],

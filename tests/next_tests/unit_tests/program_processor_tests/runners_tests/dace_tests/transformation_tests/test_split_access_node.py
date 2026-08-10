@@ -948,8 +948,27 @@ def test_consumer_spanning_multiple_producers():
 
     _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
 
-    # The node was split into exactly the two fragments described above.
-    assert len([desc for desc in sdfg.arrays.values() if desc.transient]) == 2
+    # The node was split into exactly the two fragments described above: one fed by
+    #  the first producer alone, the other by the second and third together.
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    fragment_by_nb_producers = {state.in_degree(dnode): dnode for dnode in fragment_nodes}
+    assert set(fragment_by_nb_producers.keys()) == {1, 2}
+
+    # Each fragment serves exactly the consumer that reads it, i.e. the single
+    #  producer fragment feeds the consumer writing to `d` and the merged one the
+    #  consumer writing to `e`.
+    for nb_producers, expected_destination in [(1, "d"), (2, "e")]:
+        fragment_node = fragment_by_nb_producers[nb_producers]
+        assert state.out_degree(fragment_node) == 1
+        consumer_entry = next(iter(state.out_edges(fragment_node))).dst
+        assert isinstance(consumer_entry, dace_nodes.MapEntry)
+        destinations = {
+            oedge.dst.data
+            for oedge in state.out_edges(state.exit_node(consumer_entry))
+            if isinstance(oedge.dst, dace_nodes.AccessNode)
+        }
+        assert destinations == {expected_destination}
 
 
 def test_consumer_spanning_all_producers():
