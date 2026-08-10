@@ -2498,9 +2498,7 @@ class TestEnum:
 
         self.stencil = enum
 
-    @pytest.mark.parametrize(
-        "integer_precision", [32, 64]
-    )
+    @pytest.mark.parametrize("integer_precision", [32, 64])
     def test_enum_in_stencil(self, integer_precision):
         def_ir = parse_definition(
             self.stencil,
@@ -2508,7 +2506,7 @@ class TestEnum:
             module=self.__class__.__name__,
             literal_int_precision=integer_precision,
         )
-        
+
         assert isinstance(def_ir.computations[0].body.stmts[0].condition.rhs, nodes.ScalarLiteral)
         assert def_ir.computations[0].body.stmts[0].condition.rhs.value == LocalEnum.A
         assert isinstance(

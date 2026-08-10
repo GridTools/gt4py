@@ -1837,6 +1837,7 @@ def test_offset_j_in_temporaries(backend: str) -> None:
                 else 0.0
             )
 
+
 @gtscript.enum
 class MyEnum(IntEnum):
     Zero = 0
@@ -1849,7 +1850,7 @@ class MyEnum(IntEnum):
 def test_enum_runtime(backend):
 
     @gtscript.stencil(backend=backend)
-    def the_stencil(out_field: Field[int], order: MyEnum): # type: ignore
+    def the_stencil(out_field: Field[int], order: MyEnum):  # type: ignore
         with computation(PARALLEL), interval(0, 1):
             out_field = 32
             if order < MyEnum.A:
