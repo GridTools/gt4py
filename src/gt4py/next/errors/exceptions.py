@@ -215,8 +215,10 @@ class InvalidAnnotationError(DSLTypeError):
             label="not a valid GT4Py type",
             notes=(reason,) if reason else (),
             hints=(
-                "Use a GT4Py type, e.g. a scalar type like 'float64', a "
-                "'Field[Dims[IDim], float64]', or a tuple of those.",
+                (
+                    "Use a GT4Py type, e.g. a scalar type like 'float64', a "
+                    "'Field[Dims[IDim], float64]', or a tuple of those."
+                ),
             ),
         )
         self.annotation = annotation
