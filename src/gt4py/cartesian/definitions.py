@@ -47,6 +47,8 @@ def get_integer_type(literal_integer_precision: int):
     # I'd love to return `numpy.signedinteger[LITERAL_INT_PRECISION]` but that won't work
     if literal_integer_precision == 8:
         return numpy.int8
+    if literal_integer_precision == 16:
+        return numpy.int16
     if literal_integer_precision == 32:
         return numpy.int32
     if literal_integer_precision == 64:
