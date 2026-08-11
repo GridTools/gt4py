@@ -352,10 +352,10 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 return None
             producer_edges.append(iedge)
 
-        # Union find over the producers: `fragment_of_producer[i]` is the id of
-        #  another producer in the same fragment as producer `i`, or `i` itself if
-        #  `i` is the representative of its fragment. Every producer starts out
-        #  alone; a consumer that straddles several producers merges them.
+        # We use union find over the producers, i.e. `fragment_of_producer[i]` is
+        #  the id of another producer that is in the same fragment as producer `i`,
+        #  or `i` itself if `i` is the representative of its fragment. Every producer
+        #  starts alone and a consumer that straddles several producers merges them.
         fragment_of_producer = list(range(len(producer_edges)))
 
         def find_fragment(idx: int) -> int:
@@ -400,10 +400,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 for i, producer_edge in enumerate(producer_edges)
                 if fragment_of[i] == fragment_id
             )
-            # NOTE: This must be the adjacency only merger. Producers that overlap
-            #  would describe the same memory twice, so they must not be merged into
-            #  one region here, unlike the consumer subsets in
-            #  `_is_fully_read_by_consumers()` which only have to cover the fragment.
+            # NOTE: We must use the adjacency only merger here, producers that
+            #  overlap would describe the same memory twice, so we must not merge
+            #  them into one region.
             subsets = gtx_dace_split.subset_merger(
                 [producer_edge.data.dst_subset for producer_edge in producers]
             )
@@ -474,19 +473,14 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 elif not isinstance(data_source, dace_nodes.MapExit):
                     return False
 
-            # Both branches below require that what is computed is also read. They
-            #  differ only in the granularity at which that is checked. A fragment
-            #  fed by several producers is only ever read as a whole -- no consumer
-            #  is associated with an individual producer -- so the requirement is
-            #  imposed on the fragment. Imposing it per producer would reject a
-            #  consumer that reads across a producer boundary, which is the case a
-            #  multi producer fragment exists for. Note that the requirement is not
-            #  weaker: a producer writing `[0:10]` whose only consumer reads `[0:5]`
-            #  is rejected either way, by `_is_fully_read_by_consumers()` here and by
-            #  the `covers()` below.
+            # For a fragment with a single producer we require that what is computed
+            #  is also read. We can not impose that on a fragment that is fed by
+            #  several producers, no consumer is associated to an individual producer
+            #  of it, so requiring that the fragment is read in full would reject the
+            #  whole node, including the fragments that are fine. What stays unread is
+            #  dead data, which we already tolerate for a fragment without any
+            #  consumer, see the warning in `_find_edge_reassignment()`.
             if len(fragment.producers) > 1:
-                if not self._is_fully_read_by_consumers(fragment.subset, consumer_edges):
-                    return False
                 continue
 
             (producer_edge,) = fragment.producers
@@ -520,99 +514,3 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 ):
                     return False
         return True
-
-    def _is_fully_read_by_consumers(
-        self,
-        subset: dace_sbs.Subset,
-        consumer_edges: OrderedSet[dace_graph.MultiConnectorEdge],
-    ) -> bool:
-        """Checks if `subset` is fully read by `consumer_edges` taken together."""
-        merged = _merge_overlapping_subsets(
-            [consumer_edge.data.src_subset for consumer_edge in consumer_edges]
-        )
-        return any(merged_subset.covers(subset) for merged_subset in merged)
-
-
-def _merge_overlapping_subsets(subsets: list[dace_sbs.Subset]) -> list[dace_sbs.Subset]:
-    """Merges subsets that overlap, touch or contain each other.
-
-    `splitting_tools.subset_merger()` only joins subsets that are exactly adjacent,
-    which is what describing a split needs. Consumers however routinely read
-    overlapping regions, so deciding whether they read a fragment in full needs the
-    stronger version.
-    """
-    subsets = sorted(subsets, key=str)
-
-    performed_merge = True
-    while performed_merge and len(subsets) > 1:
-        performed_merge = False
-        for idx1 in range(len(subsets)):
-            for idx2 in range(idx1 + 1, len(subsets)):
-                merged_subset = _try_to_merge_overlapping_subsets(subsets[idx1], subsets[idx2])
-                if merged_subset is None:
-                    continue
-                subsets = [sbs for idx, sbs in enumerate(subsets) if idx not in (idx1, idx2)]
-                subsets.append(merged_subset)
-                performed_merge = True
-                break
-            if performed_merge:
-                break
-
-    return subsets
-
-
-def _try_to_merge_overlapping_subsets(
-    subset1: dace_sbs.Subset,
-    subset2: dace_sbs.Subset,
-) -> Optional[dace_sbs.Subset]:
-    """Tries to express two subsets as a single one, returns `None` if impossible.
-
-    Like `splitting_tools._try_to_merge_subsets()` the two subsets must have the same
-    bounds in all but one dimension, but in that dimension they may also overlap
-    instead of only touching.
-    """
-    if subset1.covers(subset2):
-        return subset1
-    if subset2.covers(subset1):
-        return subset2
-    if subset1.dims() != subset2.dims():
-        return None
-
-    merged_subset: list[Any] = []
-    has_found_merge_dim = False
-    for dim in range(subset1.dims()):
-        start1, end1, step1 = subset1[dim]
-        start2, end2, step2 = subset2[dim]
-
-        if (step1 != 1) == True or (step2 != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            return None
-
-        elif (start1 == start2) == True and (end1 == end2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            merged_subset.append((start1, end1, 1))
-            continue
-
-        if has_found_merge_dim:
-            # It is only possible to extend along one dimension.
-            return None
-
-        # Order the two ranges such that `lo` starts first, `end` is inclusive.
-        if (start1 <= start2) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            (lo_start, lo_end), (hi_start, hi_end) = (start1, end1), (start2, end2)
-        elif (start2 <= start1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            (lo_start, lo_end), (hi_start, hi_end) = (start2, end2), (start1, end1)
-        else:
-            return None
-
-        # Unless they overlap or touch their union has a hole in it.
-        if not ((hi_start <= lo_end + 1) == True):  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            return None
-
-        if (hi_end >= lo_end) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            merged_subset.append((lo_start, hi_end, 1))
-        elif (lo_end >= hi_end) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
-            merged_subset.append((lo_start, lo_end, 1))
-        else:
-            return None
-        has_found_merge_dim = True
-
-    return dace_sbs.Range(merged_subset)

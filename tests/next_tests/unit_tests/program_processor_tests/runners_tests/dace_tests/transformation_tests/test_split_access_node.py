@@ -1091,21 +1091,24 @@ def _make_multi_producer_sdfg(
     return sdfg, state
 
 
-def test_partially_read_multi_producer_fragment_is_rejected():
-    """A merged fragment whose data is not read in full must not be split off.
+def test_partially_read_multi_producer_fragment():
+    """A fragment that is not read in full does not prevent the other ones.
 
-    The first producer forms its own, fully read fragment, so the candidate is not
-    rejected before the merged fragment is examined. The second and third producer
-    are merged by the spanning consumer, but that consumer stops short of what the
-    third producer writes, so the fragment is not tight and splitting it would break
-    the assumption `CopyChainRemover` relies on.
+    The second and third producer are merged by the spanning consumer, which stops
+    short of what the third producer writes, so that fragment keeps data that nobody
+    reads. The first producer and its consumer are unaffected by that and become an
+    independent fragment.
     """
-    sdfg, _ = _make_multi_producer_sdfg(
+    sdfg, state = _make_multi_producer_sdfg(
         "partially_read_multi_producer_fragment",
         producers=[("a", 0), ("b", 5), ("c", 10)],
         consumers=[("d", "0:5"), ("e", "5:12")],
     )
-    _perform_test(sdfg, explected_applies=0)
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
+
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    assert {state.in_degree(dnode) for dnode in fragment_nodes} == {1, 2}
 
 
 def test_overlapping_consumers_cover_multi_producer_fragment():
