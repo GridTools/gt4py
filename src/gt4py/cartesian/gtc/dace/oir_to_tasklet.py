@@ -290,6 +290,9 @@ class OIRToTasklet(eve.NodeVisitor):
 
         return tir.Axis(node.name).iteration_symbol()
 
+    def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> str:
+        return node.name
+
     # Not (yet) supported section
     def visit_CacheDesc(self, node: oir.CacheDesc, **kwargs: Any) -> None:
         raise NotImplementedError("To be implemented: Caches")
@@ -315,6 +318,9 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_While(self, node: oir.While, **kwargs: Any) -> None:
         raise RuntimeError("visit_While should not be called")
+
+    def visit_For(self, node: oir.For, **kwargs: Any) -> None:
+        raise RuntimeError("visit_For should not be called")
 
     def visit_HorizontalRestriction(self, node: oir.HorizontalRestriction, **kwargs: Any) -> None:
         raise RuntimeError("visit_HorizontalRestriction: should be dealt with in TreeIR")

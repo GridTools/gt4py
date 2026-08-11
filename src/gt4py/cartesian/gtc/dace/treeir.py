@@ -119,6 +119,17 @@ class While(TreeScope):
     """Condition as ScheduleTree worthy code"""
 
 
+class ForIndex(TreeNode):
+    name: str
+
+
+class For(TreeScope):
+    index_name: str
+    iter_start: int
+    iter_stop: int
+    iter_step: int
+
+
 class HorizontalLoop(TreeScope):
     bounds_i: Bounds
     bounds_j: Bounds
