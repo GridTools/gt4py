@@ -191,9 +191,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # Only a transient can be removed; a global outlives the SDFG.
             if not tmp_desc.transient:
                 continue
-            # ADR-18 rule 4 allows an interstate edge to read a Scalar, and the note
-            #  of rule 9 keeps Scalars alive for that reason. The rewrite only follows
-            #  dataflow edges, so it would miss such a read.
+            # ADR-18 rule 4 allows an interstate edge to read a Scalar, and we only
+            #  follow dataflow edges, so we would miss such a read.
             if isinstance(tmp_desc, dace_data.Scalar):
                 continue
 
@@ -207,8 +206,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 for edge in state.out_edges(node)
                 if isinstance(edge.dst, dace_nodes.AccessNode) and not edge.dst.desc(sdfg).transient
             ]
-            # There has to be exactly one write back for the candidate to be defined;
-            #  with several ones there would be no single `G` to rewrite `T` into.
+            # With several write backs there is no single `G` to rewrite `T` into.
             if len(write_backs) != 1:
                 continue
             wb_edge, wb_state = write_backs[0]
@@ -221,14 +219,14 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # `T` must be copied in full, see the class documentation.
             if src_subset != dace_subsets.Range.from_array(tmp_desc):
                 continue
-            # The rewrite maps the index space of `T` onto the one of `G` by adding an
-            #  offset, which needs the two to have the same shape. Comparing the sizes
-            #  covers a `G` with a different number of dimensions as well.
+            # We map the index space of `T` onto the one of `G` by adding an offset,
+            #  so the two must have the same shape. Comparing the sizes also covers a
+            #  `G` with a different number of dimensions.
             if dst_subset.size() != src_subset.size():
                 continue
             # `Range.size()` ignores the step, so the check above also passes for a
-            #  strided destination. The rewrite, however, only shifts the accesses by
-            #  a constant offset and can not scatter them.
+            #  strided destination, but we only shift the accesses and can not
+            #  scatter them.
             if any(step != 1 for _, _, step in dst_subset.ndrange()):
                 continue
             # A write back with conflict resolution (`wcr`) combines `T` with the old
@@ -237,9 +235,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 continue
 
             glob_node = wb_edge.dst
-            # ADR-18 rule 7 recommends a single incoming edge for a write access node.
-            #  The pass requires it, so that removing `wb_edge` leaves a node that only
-            #  reads `G` and can take the place of the AccessNodes of `T`.
+            # ADR-18 rule 7 recommends a single incoming edge for a write access
+            #  node; we require it, so that removing `wb_edge` leaves a node that
+            #  only reads `G` and can replace the AccessNodes of `T`.
             if wb_state.in_degree(glob_node) != 1:
                 continue
 
@@ -251,9 +249,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # Without a producer there is nothing that could write `G` in its place.
             if not def_states:
                 continue
-            # The definition of `T` and the write back must be in different states.
-            #  Inside one state the pass does not analyse whether the copy is ordered
-            #  after the producer; that pattern belongs to `GT4PyMapBufferElimination`.
+            # Inside one state we do not analyse whether the copy is ordered after
+            #  the producer, that pattern belongs to `GT4PyMapBufferElimination`.
             if wb_state in def_states:
                 continue
             # `_eliminate()` moves the write into `G` to the states that define `T`,
@@ -338,10 +335,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                     return True
                 if not self.assume_pointwise:
                     return True
-                # ADR-18 rule 3 is about using the very same memory as input and
-                #  output. With a shifted write back the rewritten producer reads
-                #  `G[i]` and writes `G[i + off]`, so the iterations clobber each
-                #  other's input and the assumption does not apply.
+                # ADR-18 rule 3 is about the very same memory. With a shifted write
+                #  back the producer reads `G[i]` and writes `G[i + off]`, so the
+                #  iterations clobber each other's input.
                 if wb_is_shifted:
                     return True
                 if not self._is_read_by_tmp_producer(state, node, tmp_name):
@@ -420,11 +416,11 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 ]:
                     for old_edge in list(old_edges):
                         if old_edge.data.is_empty():
-                            # An empty Memlet only imposes an order and has nothing to
-                            #  shift. It is recreated as it is; because all edges of
-                            #  `tmp_node` end up on `new_node`, the order it imposes is
-                            #  preserved. `reroute_edge()` would substitute the full
-                            #  range of `T` for the missing subset and turn it into a
+                            # An empty Memlet only imposes an order and has nothing
+                            #  to shift, and `reroute_edge()` would substitute the full
+                            #  range of `T` for the missing subset and make it non
+                            #  empty. All edges of `tmp_node` end up on `new_node`, so
+                            #  recreating it as it is preserves the order it imposes.
                             #  copy.
                             if is_producer_edge:
                                 state.add_edge(
@@ -453,7 +449,6 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                         )
                         if neighbour not in reconfigured_neighbours:
                             reconfigured_neighbours.add(neighbour)
-                            # Stride propagation is done at the very end.
                             gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
                                 is_producer_edge=is_producer_edge,
                                 new_edge=new_edge,
