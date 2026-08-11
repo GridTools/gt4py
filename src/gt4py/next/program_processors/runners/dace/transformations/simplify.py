@@ -58,6 +58,7 @@ def gt_simplify(
         `SingleStateGlobalSelfCopyElimination`, with the exception that the write to
         `T`, i.e. `(G) -> (T)` and the write back to `G`, i.e. `(T) -> (G)` might be
         in different states.
+    - `InlineBroadcastAccess`: Handles the GT4Py specific broadcast nodes.
     - `CopyChainRemover`: Which removes some chains that are introduced by the
         `concat_where` built-in function.
     - `GT4PyDeadDataflowElimination`: Run `gt_eliminate_dead_dataflow()` on the SDFG,
@@ -148,6 +149,46 @@ def gt_simplify(
                 if "FuseStates" not in result:
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
+
+        # Handling broadcasts. We first run `BrodcastChainRemover` before
+        #  `InlineBroadcastAccess` to prevent some specific situations that might arise.
+        #  Note because of the similarities the transformations share the result of a
+        #  single use data scan.
+        broadcast_single_use_data_cache: None | dict[dace.SDFG, set[str]] = None
+        if "BrodcastChainRemover" not in skip:
+            find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+            broadcast_single_use_data_cache = find_single_use_data.apply_pass(sdfg, None)
+            removed_chains = sdfg.apply_transformations_repeated(
+                gtx_transformations.BrodcastChainRemover(
+                    single_use_data=broadcast_single_use_data_cache,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if removed_chains:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "BrodcastChainRemover" not in result:
+                    result["BrodcastChainRemover"] = 0
+                result["BrodcastChainRemover"] += removed_chains
+        if "InlineBroadcastAccess" not in skip:
+            if broadcast_single_use_data_cache is None:
+                find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
+                broadcast_single_use_data_cache = find_single_use_data.apply_pass(sdfg, None)
+            inlined_broadcasts = sdfg.apply_transformations_repeated(
+                gtx_transformations.InlineBroadcastAccess(
+                    clean_dead_dataflow=True,
+                    single_use_data=broadcast_single_use_data_cache,
+                ),
+                validate=False,
+                validate_all=validate_all,
+            )
+            if inlined_broadcasts:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                if "InlineBroadcastAccess" not in result:
+                    result["InlineBroadcastAccess"] = 0
+                result["InlineBroadcastAccess"] += inlined_broadcasts
 
         if "MapToCopy" not in skip:
             find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()

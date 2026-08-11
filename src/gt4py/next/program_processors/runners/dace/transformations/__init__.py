@@ -20,6 +20,7 @@ from .auto_optimize import (
     TransientMemoryMode,
     gt_auto_optimize,
 )
+from .broadcast import BrodcastChainRemover, InlineBroadcastAccess
 from .concat_where_mapper import (
     gt_apply_concat_where_replacement_on_sdfg,
     gt_check_if_concat_where_node_is_replaceable,
@@ -89,6 +90,7 @@ from .utils import gt_configure_transient_lifetime
 
 
 __all__ = [
+    "BrodcastChainRemover",
     "CopyChainRemover",
     "DoubleWriteRemover",
     "FuseHorizontalConditionBlocks",
@@ -101,6 +103,7 @@ __all__ = [
     "GT4PyStateFusion",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
+    "InlineBroadcastAccess",
     "LoopBlocking",
     "MapFusionHorizontal",
     "MapFusionVertical",

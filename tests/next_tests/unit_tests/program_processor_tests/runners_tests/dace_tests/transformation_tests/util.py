@@ -85,7 +85,9 @@ def compile_and_run_sdfg(
     shared objects that are loaded multiple times.
     """
 
-    with dace.config.set_temporary("compiler.use_cache", value=False):
+    with dace.config.temporary_config() as config:
+        config.set("compiler.use_cache", value=False)
+        config.set("compiler.allow_view_arguments", value=True)
         sdfg_clone = copy.deepcopy(sdfg)
 
         sdfg_clone.name = unique_name(sdfg_clone.name)
