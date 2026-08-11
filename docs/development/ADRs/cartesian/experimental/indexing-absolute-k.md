@@ -36,7 +36,12 @@ We decided to allow absolute indexing on the K axis in certain circumstances wit
 
 ```py
 @stencil(backend="dace:cpu", externals={K4: "4"})
-def absolute_k_indexing(in_field: Field[np.float64], index_field: Field[IJ, np.int64], out_field: Field[np.float64], index: int) -> None:
+def absolute_k_indexing(
+    in_field: Field[np.float64],
+    index_field: Field[IJ, np.int64],
+    out_field: Field[np.float64],
+    index: int,
+) -> None:
     with computation(PARALLEL), interval(...):
         from __externals__ import K4
 

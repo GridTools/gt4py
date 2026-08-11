@@ -232,7 +232,7 @@ class SymbolicDomain:
                     new_range = _unstructured_translate_range_statically(
                         new_ranges[old_dim],
                         off.value,
-                        val,  # type: ignore[arg-type] # mypy not smart enough
+                        val,
                         connectivity,
                         self.as_expr(),
                     )

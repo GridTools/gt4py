@@ -637,7 +637,7 @@ def _subset_merger_impl(
 def _try_to_merge_subsets(
     subset1: dace_sbs.Subset,
     subset2: dace_sbs.Subset,
-) -> Union[None, dace_sbs.Subset]:
+) -> Union[dace_sbs.Subset, None]:
     """Tries to merge the subsets together, it it is impossible return `None`.
 
     Two subset can only be merged if they have the same bounds in all but one
