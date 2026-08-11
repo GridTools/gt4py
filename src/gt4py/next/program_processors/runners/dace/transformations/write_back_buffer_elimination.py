@@ -17,92 +17,106 @@ from dace import (
     subsets as dace_subsets,
     transformation as dace_transformation,
 )
-from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
+from dace.sdfg import nodes as dace_nodes
 from dace.transformation import pass_pipeline as dace_ppl
+from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-# Conditional import because `gt4py.cartesian` uses an older DaCe version without
-#  `explicit_cf_compatible`.
-# TODO(phimuell): Remove once `gt4py.cartesian` has been updated.
-try:
-    explicit_cf_compatible = dace_transformation.explicit_cf_compatible
-except AttributeError:
-    explicit_cf_compatible = lambda x: x  # noqa: E731 [lambda-assignment]
+def _is_written(state: dace.SDFGState, node: dace_nodes.AccessNode) -> bool:
+    """Tells if data flows into `node`; an empty Memlet only imposes an order."""
+    return any(not edge.data.is_empty() for edge in state.in_edges(node))
 
 
-def _find_viewed_data(sdfg: dace.SDFG) -> set[str]:
-    """Collects the names of all data that some View in `sdfg` refers to.
+def _has_view(sdfg: dace.SDFG) -> bool:
+    """Tells if `sdfg`, or an SDFG nested inside it, contains a View.
 
-    A View does not necessarily refer to an AccessNode, inside a Map scope it refers
-    to its data through the MapEntry, so `utils.track_view()` can not be used. The
-    name is therefore taken from the Memlet of the View edge, which is the name of
-    the viewed data unless the Memlet is expressed relative to the View itself, in
-    which case the AccessNode on the other side of the edge supplies it.
-
-    Views of Views need no special handling, every View contributes the data it
-    refers to directly, so the second View of such a tower contributes the name of
-    the underlying data.
+    A View has its own descriptor, whose strides are derived from the data it refers
+    to, and nothing updates them when the accesses that the View is built from are
+    moved to another array.
     """
-    viewed: set[str] = set()
-    for state in sdfg.states():
-        for view_node in state.data_nodes():
-            if not gtx_transformations.utils.is_view(view_node, sdfg):
-                continue
-            view_edge = dace_sdutils.get_view_edge(state, view_node)
-            if view_edge is None:
-                # The View can not be resolved, so assume it refers to anything.
-                return set(sdfg.arrays.keys())
-            if view_edge.data.data is not None:
-                viewed.add(view_edge.data.data)
-            other_node = view_edge.src if view_edge.dst is view_node else view_edge.dst
-            if isinstance(other_node, dace_nodes.AccessNode):
-                viewed.add(other_node.data)
-    return viewed
+    return any(
+        isinstance(node.desc(nsdfg), dace_data.View)
+        for nsdfg in sdfg.all_sdfgs_recursive()
+        for state in nsdfg.states()
+        for node in state.data_nodes()
+    )
 
 
-@explicit_cf_compatible
+def _runs_strictly_before(
+    first: dace.SDFGState,
+    second: dace.SDFGState,
+    reachable: dict[dace.SDFGState, set[dace.SDFGState]],
+) -> bool:
+    """Tells if `second` always starts after `first` has finished.
+
+    ADR-18 rule 5 forbids cycles in the state graph but mandates `LoopRegion` for
+    loops, so `reachable`, which is a may reach relation, lists the states of a loop
+    body as reaching each other. Two states of the same loop body are therefore never
+    strictly ordered, whatever their order inside the body is.
+    """
+    return second in reachable[first] and first not in reachable[second]
+
+
+def _accesses_region(
+    state: dace.SDFGState,
+    node: dace_nodes.AccessNode,
+    region: dace_subsets.Subset,
+    incoming: bool,
+) -> bool:
+    """Tells if the in or out edges of `node` may touch `region` of its data."""
+    edges = state.in_edges(node) if incoming else state.out_edges(node)
+    for edge in edges:
+        if edge.data.is_empty():
+            continue
+        subset = (
+            edge.data.get_dst_subset(edge, state)
+            if incoming
+            else edge.data.get_src_subset(edge, state)
+        )
+        if subset is None or dace_subsets.intersects(subset, region) is not False:
+            return True
+    return False
+
+
+@dace_transformation.explicit_cf_compatible
 @dace_properties.make_properties
 class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     """Removes a write back buffer whose content is also consumed.
 
-    Matches a transient `T` that is written by maps, copied in full into a non
-    transient `G`, and additionally read by other consumers. Neither
+    Matches a transient `T` that is written by Maps, copied in full into a non
+    transient `G` by a later state and additionally read by other consumers. Neither
     `DistributedBufferRelocator` (requires `out_degree(T) == 1`) nor
     `GT4PyMapBufferElimination` (requires the copy to be in the state where `T` is
     written, and `T` to be unused downstream) applies then, so the full array copy
     survives as a device to device transfer.
 
-    All accesses to `T` are rewritten to `G`, shifted by the offset of the copy, and
-    the copy is removed.
+    Every access to `T` is rewritten into an access to `G`, shifted by the offset of
+    the copy, and the copy is removed. The producer of `T` and all of its consumers
+    thus operate on `G` directly.
 
-    `T` must be copied in full into `G`. Otherwise the producer would write `G` outside the
-    range that the copy would have touched, which is not allowed because the range
-    of `G` outside the copy is not part of the requested write.
+    `T` must be copied in full into `G`. Otherwise the producer would write `G`
+    outside the range that the copy would have touched, which is not allowed because
+    the range of `G` outside the copy is not part of the requested write.
 
-    Because the rewritten producer writes `G` where previously only `T` was written,
-    `G` must still hold its original value everywhere between the definition of `T`
-    and the write back. Therefore `G` must neither be written nor read in that range,
-    the only exception being the read that ADR-18 rule 3 allows, which is covered by
-    `assume_pointwise`, see the note below.
+    What the rewrite changes is when `G` is written: from the write back to the point
+    where `T` is defined. The range of `G` that the copy covers therefore has to hold
+    its old value between the definition of `T` and the write back, which is what
+    `_has_conflicting_global_access()` establishes.
+
+    The consumers of `T` need no condition of their own. From the definition of `T`
+    onwards that range of `G` holds what the producer computed, exactly what `T`
+    held, and ADR-18 rule 6 forbids a second AccessNode writing `G` downstream of the
+    write back that could still change it. A consumer of `T` is therefore served by
+    `G` wherever it is, before or after the write back.
 
     Notes:
         - Like `GT4PyMapBufferElimination`, the pass does not test that a read of `G`
-            by the producer of `T` is really pointwise, it only tests that the read
-            feeds nothing but that producer, see `_only_feeds_tmp_producer()`.
+            by the producer of `T` is really elementwise, it only tests that it is
+            ordered before the definition of `T`, see `_is_read_by_tmp_producer()`.
             Specifying `assume_pointwise` asserts the rest, which ADR-18 rule 3
             guarantees for a valid GT4Py program.
-        - The assumption covers the read of `G[i]` by the Map iteration that computes
-            `T[i]`, so it only holds if `T[i]` is written back to `G[i]`. For a write
-            back at an offset the rewritten producer reads `G[i]` and writes
-            `G[i + off]`, and the iterations clobber each other's input. Such an SDFG
-            is out of contract, ADR-18 rule 3 is about using the very same memory as
-            input and output, and it is not detected.
-
-    Todo:
-        - Implement a real pointwise test, then reject a non zero offset when the
-            producer reads `G`.
     """
 
     assume_pointwise = dace_properties.Property(
@@ -135,15 +149,18 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
     def depends_on(self) -> list[type[dace_transformation.Pass]]:
-        return [dace_transformation.passes.StateReachability]
+        return [dace_analysis.StateReachability, dace_analysis.FindAccessNodes]
 
     def apply_pass(self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]) -> Optional[set[str]]:
         reachable: dict[dace.SDFGState, set[dace.SDFGState]] = pipeline_results[
             "StateReachability"
         ][sdfg.cfg_id]
+        access_nodes: dict[str, dict[dace.SDFGState, tuple[set[dace_nodes.AccessNode], ...]]] = (
+            pipeline_results["FindAccessNodes"][sdfg.cfg_id]
+        )
 
         removed: set[str] = set()
-        for candidate in self._find_candidates(sdfg, reachable):
+        for candidate in self._find_candidates(sdfg, reachable, access_nodes):
             self._eliminate(sdfg, *candidate)
             removed.add(candidate[0])
         return removed or None
@@ -152,124 +169,61 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         self,
         sdfg: dace.SDFG,
         reachable: dict[dace.SDFGState, set[dace.SDFGState]],
+        access_nodes: dict[str, dict[dace.SDFGState, tuple[set[dace_nodes.AccessNode], ...]]],
     ) -> list[tuple[str, dace.sdfg.graph.MultiConnectorEdge, dace.SDFGState]]:
         """Scans `sdfg` for write back buffers that can be eliminated.
 
         A candidate is a triple `(tmp_name, wb_edge, wb_state)`, where `tmp_name` is
         the transient `T`, `wb_edge` is the edge that copies `T` into the global `G`
-        and `wb_state` is the state that contains `wb_edge`. For every candidate the
-        function guarantees that:
-        - `T` is a non view, non scalar transient that is not viewed by any View, and
-            all its AccessNodes are on the top level of their state, i.e. none of them
-            is inside a Map.
-        - No state reads `T` through one AccessNode and writes it through another,
-            which the merge of all AccessNodes of `T` per state would reorder.
-        - `wb_edge` is the only edge that connects `T` with a non transient array and
-            it copies `T` in full, without conflict resolution, into a contiguous
-            range of `G` of the same size. `G` is not a view and has the same number
-            of dimensions as `T`.
-        - `wb_state` neither writes `T` nor reads `G`, and the AccessNode of `G` in
-            `wb_state` is only used by `wb_edge`.
-        - Every state that writes `T` reaches `wb_state`, i.e. the copy always happens
-            after `T` has been defined.
-        - `wb_state` does not lie on a cycle, so a state that is reachable from
-            `wb_state` really does run after the write back.
-        - No other access to `G` conflicts with turning the writes to `T` into writes
-            to `G`, see `_has_conflicting_global_access()`.
+        and `wb_state` is the state that contains `wb_edge`. `_eliminate()` may be
+        called on every returned candidate.
 
         Args:
             sdfg: The SDFG to scan.
             reachable: Result of the `StateReachability` pass for `sdfg`.
+            access_nodes: Result of the `FindAccessNodes` pass for `sdfg`.
         """
-        viewed_data = _find_viewed_data(sdfg)
+        if _has_view(sdfg):
+            return []
 
         candidates = []
         for tmp_name, tmp_desc in sdfg.arrays.items():
+            # Only a transient can be removed; a global outlives the SDFG.
             if not tmp_desc.transient:
                 continue
+            # ADR-18 rule 4 allows an interstate edge to read a Scalar, and the note
+            #  of rule 9 keeps Scalars alive for that reason. The rewrite only follows
+            #  dataflow edges, so it would miss such a read.
             if isinstance(tmp_desc, dace_data.Scalar):
                 continue
-            if gtx_transformations.utils.is_view(tmp_desc, sdfg):
-                continue
-            # A View of `T` has its own descriptor, whose strides were derived from
-            #  the ones of `T`. After the rewrite the View would refer to `G` but
-            #  still carry the strides of `T`. Neither `gt_propagate_strides_of()`,
-            #  which only descends into NestedSDFGs, nor `gt_change_strides()`, which
-            #  ignores Views of non transient data, would update it. Repairing the
-            #  Views is not attempted, such a `T` is conservatively rejected instead.
-            if tmp_name in viewed_data:
-                continue
 
-            locations = [
-                (node, state)
-                for state in sdfg.states()
-                for node in state.data_nodes()
-                if node.data == tmp_name
-            ]
-            if not locations:
-                continue
-            if any(state.scope_dict()[node] is not None for node, state in locations):
-                continue
-
-            # All AccessNodes of `T` inside a state are replaced by a single AccessNode
-            #  of `G`. If a state reads `T` through one AccessNode and writes it through
-            #  another, then that merge would order the read after the write, and, if
-            #  the two are connected, even create a cycle. Such an input violates
-            #  ADR-18 rule 6, `T` is written more than once, and is rejected here so
-            #  that it is left untouched instead of being modified and then rejected by
-            #  the validation at the end of `_eliminate()`.
-            nodes_per_state: dict[dace.SDFGState, list[dace_nodes.AccessNode]] = {}
-            for node, state in locations:
-                nodes_per_state.setdefault(state, []).append(node)
-            if any(
-                len(nodes) > 1
-                and any(state.in_degree(node) > 0 for node in nodes)
-                and any(state.out_degree(node) > 0 for node in nodes)
-                for state, nodes in nodes_per_state.items()
-            ):
-                continue
-
+            tmp_access = access_nodes.get(tmp_name, {})
+            # Every other out edge of `T` leads to a consumer, which `_eliminate()`
+            #  reroutes to `G` just like the write back itself.
             write_backs = [
                 (edge, state)
-                for node, state in locations
+                for state, (tmp_reads, _) in tmp_access.items()
+                for node in tmp_reads
                 for edge in state.out_edges(node)
                 if isinstance(edge.dst, dace_nodes.AccessNode) and not edge.dst.desc(sdfg).transient
             ]
+            # There has to be exactly one write back for the candidate to be defined;
+            #  with several ones there would be no single `G` to rewrite `T` into.
             if len(write_backs) != 1:
                 continue
             wb_edge, wb_state = write_backs[0]
 
-            # If `wb_state` lies on a cycle, for example because it is inside a loop,
-            #  then "reachable from `wb_state`" no longer means "after the write back":
-            #  a state that reaches `wb_state` again also runs before it, in the next
-            #  iteration. The reachability based checks below, especially
-            #  `_has_conflicting_global_access()`, rely on that implication.
-            if wb_state in reachable[wb_state]:
-                continue
-
-            glob_node = wb_edge.dst
-            glob_desc = glob_node.desc(sdfg)
-            if gtx_transformations.utils.is_view(glob_desc, sdfg):
-                continue
-            if len(glob_desc.shape) != len(tmp_desc.shape):
-                continue
-            if wb_state.scope_dict()[glob_node] is not None:
-                continue
-            if wb_state.in_degree(glob_node) != 1 or wb_state.out_degree(glob_node) != 0:
-                continue
-
-            # A conflict resolution would combine `T` with the old value of `G`, but
-            #  after the rewrite the producer writes `G` unconditionally.
-            if wb_edge.data.wcr is not None:
-                continue
-
             src_subset = wb_edge.data.get_src_subset(wb_edge, wb_state)
             dst_subset = wb_edge.data.get_dst_subset(wb_edge, wb_state)
+            # Without both sides the shift that the rewrite has to apply is unknown.
             if src_subset is None or dst_subset is None:
                 continue
             # `T` must be copied in full, see the class documentation.
             if src_subset != dace_subsets.Range.from_array(tmp_desc):
                 continue
+            # The rewrite maps the index space of `T` onto the one of `G` by adding an
+            #  offset, which needs the two to have the same shape. Comparing the sizes
+            #  covers a `G` with a different number of dimensions as well.
             if dst_subset.size() != src_subset.size():
                 continue
             # `Range.size()` ignores the step, so the check above also passes for a
@@ -277,19 +231,45 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             #  a constant offset and can not scatter them.
             if any(step != 1 for _, _, step in dst_subset.ndrange()):
                 continue
+            # A write back with conflict resolution (`wcr`) combines `T` with the old
+            #  value of `G`, while the rewritten producer overwrites `G`.
+            if wb_edge.data.wcr is not None:
+                continue
 
-            def_states = {state for node, state in locations if state.in_degree(node) > 0}
+            glob_node = wb_edge.dst
+            # ADR-18 rule 7 recommends a single incoming edge for a write access node.
+            #  The pass requires it, so that removing `wb_edge` leaves a node that only
+            #  reads `G` and can take the place of the AccessNodes of `T`.
+            if wb_state.in_degree(glob_node) != 1:
+                continue
+
+            def_states = {
+                state
+                for state, (_, tmp_writes) in tmp_access.items()
+                if any(_is_written(state, node) for node in tmp_writes)
+            }
+            # Without a producer there is nothing that could write `G` in its place.
             if not def_states:
                 continue
-            if any(
-                state is not wb_state and wb_state not in reachable[state] for state in def_states
-            ):
-                continue
+            # The definition of `T` and the write back must be in different states.
+            #  Inside one state the pass does not analyse whether the copy is ordered
+            #  after the producer; that pattern belongs to `GT4PyMapBufferElimination`.
             if wb_state in def_states:
+                continue
+            # `_eliminate()` moves the write into `G` to the states that define `T`,
+            #  which is only a valid reordering if they run before the write back.
+            if any(not _runs_strictly_before(state, wb_state, reachable) for state in def_states):
                 continue
 
             if self._has_conflicting_global_access(
-                sdfg, reachable, glob_node, wb_state, def_states, tmp_name
+                access_nodes.get(glob_node.data, {}),
+                glob_node=glob_node,
+                wb_state=wb_state,
+                wb_region=dst_subset,
+                wb_is_shifted=dst_subset.min_element() != src_subset.min_element(),
+                def_states=def_states,
+                tmp_name=tmp_name,
+                reachable=reachable,
             ):
                 continue
 
@@ -298,91 +278,108 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
 
     def _has_conflicting_global_access(
         self,
-        sdfg: dace.SDFG,
-        reachable: dict[dace.SDFGState, set[dace.SDFGState]],
+        glob_access: dict[dace.SDFGState, tuple[set[dace_nodes.AccessNode], ...]],
         glob_node: dace_nodes.AccessNode,
         wb_state: dace.SDFGState,
+        wb_region: dace_subsets.Subset,
+        wb_is_shifted: bool,
         def_states: set[dace.SDFGState],
         tmp_name: str,
+        reachable: dict[dace.SDFGState, set[dace.SDFGState]],
     ) -> bool:
-        """Checks if any AccessNode of `G` other than `glob_node` prevents the removal.
+        """Checks if an access to `G` other than the write back prevents the rewrite.
 
-        Eliminating the write back turns the writes to `T` into writes to `G`, so `G`
-        no longer holds its old value from the definition of `T` onwards, instead of
-        only from the write back onwards. Any of the following disqualifies the
-        candidate:
-        - A write to `G`, i.e. an AccessNode with a non zero in degree. ADR-18 rule 6
-            would then no longer hold, as `G` would be written in two places, and
-            depending on the order the two writes would clobber each other.
-        - A read of `G` in a state that defines `T`. Such a read is unordered with
-            respect to the producer of `T`, so after the rewrite it would race with
-            the write to `G`. The only exception is the elementwise read allowed by
-            ADR-18 rule 3, which requires `assume_pointwise`, see
-            `_only_feeds_tmp_producer()`.
-        - A read of `G` in a state that is not reachable from `wb_state`. Such a read
-            expects the old value of `G`, which the rewrite destroys.
+        After the rewrite `wb_region` holds what the producer computed from the
+        definition of `T` onwards instead of from the write back onwards. An access to
+        `G` through an AccessNode other than `glob_node` is harmless if
+        - it does not touch `wb_region`,
+        - it runs strictly before every state that defines `T`, where nothing has
+            changed yet, or
+        - it only reads and runs strictly after the write back, where both versions of
+            the SDFG agree on the content of `wb_region`.
+
+        What is left is rejected:
+        - A write to `wb_region`. ADR-18 rule 6 forbids a second AccessNode writing
+            `G` upstream or downstream of `glob_node`, so such a node is a sibling in
+            a `ConditionalBlock`. Moving the write into the producer would put a write
+            of `G` on a path that had none.
+        - A read of `wb_region` in a state that defines `T`. Only the elementwise read
+            that ADR-18 rule 3 allows is admissible, see `_is_read_by_tmp_producer()`
+            and `assume_pointwise`.
+        - Anything else is unordered with the write that the rewrite prepones and
+            would race with it.
 
         Returns:
             `True` if the write back must be kept.
 
         Todo:
-            The check is conservative: once the write back has happened `G` may be
-            written freely, so writes in states reachable from `wb_state` are
-            harmless. Lifting the restriction requires taking the topology of the
-            state machine into account.
+            A read inside a state that defines `T` and that is ordered before the
+            producer, rather than feeding it, is safe as well and is rejected here.
         """
-        for state in sdfg.states():
-            for node in state.data_nodes():
-                if node.data != glob_node.data or node is glob_node:
+        for state, (glob_reads, glob_writes) in glob_access.items():
+            for node in glob_reads | glob_writes:
+                if node is glob_node:
                     continue
-                if state.in_degree(node) != 0:
+                if all(
+                    _runs_strictly_before(state, def_state, reachable) for def_state in def_states
+                ):
+                    continue
+
+                if node in glob_writes and _accesses_region(state, node, wb_region, incoming=True):
                     return True
-                if state in def_states:
-                    if not self._only_feeds_tmp_producer(state, node, tmp_name):
-                        return True
-                    if not self.assume_pointwise:
-                        return True
-                elif state not in reachable[wb_state]:
+                if not (
+                    node in glob_reads and _accesses_region(state, node, wb_region, incoming=False)
+                ):
+                    continue
+
+                if _runs_strictly_before(wb_state, state, reachable):
+                    continue
+                if state not in def_states:
+                    return True
+                if not self.assume_pointwise:
+                    return True
+                # ADR-18 rule 3 is about using the very same memory as input and
+                #  output. With a shifted write back the rewritten producer reads
+                #  `G[i]` and writes `G[i + off]`, so the iterations clobber each
+                #  other's input and the assumption does not apply.
+                if wb_is_shifted:
+                    return True
+                if not self._is_read_by_tmp_producer(state, node, tmp_name):
                     return True
         return False
 
-    def _only_feeds_tmp_producer(
+    def _is_read_by_tmp_producer(
         self,
         state: dace.SDFGState,
         glob_read_node: dace_nodes.AccessNode,
         tmp_name: str,
     ) -> bool:
-        """Checks if the read of `G` is the elementwise read allowed by ADR-18 rule 3.
+        """Checks if the read of `G` is ordered before every write to `T` in `state`.
 
-        ADR-18 rule 3 allows using the same global memory as input and output, but
-        only if the output depends elementwise on the input. In the SDFG this shows
-        up as `G` being an input of the very Maps that compute `T`, which is what this
-        function tests: every consumer of `glob_read_node` must be the MapEntry of a
-        Map that writes into `T`.
-
-        Anything else, for example a second, unrelated Map in the same state that also
-        reads `G`, is unordered with respect to the producer of `T`. After the write
-        back has been removed the producer writes `G` directly, so such a reader would
-        race with it and `assume_pointwise` must not waive it.
+        The read happens at the consumers of `glob_read_node`. If every AccessNode of
+        `T` that is written in `state` is downstream of every one of them, then the
+        write to `T`, which the rewrite turns into a write to `G`, can not start
+        before the read has finished, the Map scope that hosts both excepted. That
+        exception is the elementwise case of ADR-18 rule 3, which `assume_pointwise`
+        covers; the pass does not distinguish it from the strictly ordered case, so it
+        demands the assumption for both.
 
         Args:
             state: The state that contains `glob_read_node`; it also defines `T`.
             glob_read_node: The AccessNode of `G` that is read.
             tmp_name: The name of `T`.
-
-        Returns:
-            `True` if the read is elementwise in the sense of ADR-18 rule 3.
         """
-        producer_entries = {
-            state.entry_node(iedge.src)
-            for tmp_node in state.data_nodes()
-            if tmp_node.data == tmp_name
-            for iedge in state.in_edges(tmp_node)
-            if isinstance(iedge.src, dace_nodes.MapExit)
+        tmp_defs = {
+            node
+            for node in state.data_nodes()
+            if node.data == tmp_name and _is_written(state, node)
         }
-        if not producer_entries:
+        if not tmp_defs:
             return False
-        return all(oedge.dst in producer_entries for oedge in state.out_edges(glob_read_node))
+        return all(
+            tmp_defs.issubset(state.bfs_nodes(oedge.dst))
+            for oedge in state.out_edges(glob_read_node)
+        )
 
     def _eliminate(
         self,
@@ -399,8 +396,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             wb_edge: The edge that copies `T` into `G`.
             wb_state: The state that contains `wb_edge`.
         """
-        glob_node = wb_edge.dst
-        glob_name = glob_node.data
+        glob_name = wb_edge.dst.data
         src_subset = wb_edge.data.get_src_subset(wb_edge, wb_state)
         dst_subset = wb_edge.data.get_dst_subset(wb_edge, wb_state)
         ss_offset = [
@@ -412,27 +408,24 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
 
         for state in sdfg.states():
             tmp_nodes = [node for node in state.data_nodes() if node.data == tmp_name]
-            if not tmp_nodes:
-                continue
-            # In `wb_state` the AccessNode of `G` is now isolated, so it can serve as
-            #  the replacement. In the other states a new one is needed; especially in
-            #  the states that define `T` reusing a present AccessNode of `G`, which
-            #  can only be a read, see `_only_feeds_tmp_producer()`, would create a
-            #  cycle.
-            new_node = glob_node if state is wb_state else state.add_access(glob_name)
-            reconfigured_neighbours: set[tuple[dace_nodes.Node, Optional[str]]] = set()
-
             for tmp_node in tmp_nodes:
+                new_node = self._replacement_node(
+                    state, glob_name, writes_glob=_is_written(state, tmp_node)
+                )
+                reconfigured_neighbours: set[tuple[dace_nodes.Node, Optional[str]]] = set()
+
                 for is_producer_edge, old_edges in [
                     (True, state.in_edges(tmp_node)),
                     (False, state.out_edges(tmp_node)),
                 ]:
                     for old_edge in list(old_edges):
                         if old_edge.data.is_empty():
-                            # An empty Memlet only sequences the dataflow and has
-                            #  nothing to shift. `reroute_edge()` would substitute the
-                            #  full range of `T` for the missing subset and thus turn
-                            #  it into a copy, so it is recreated as it is.
+                            # An empty Memlet only imposes an order and has nothing to
+                            #  shift. It is recreated as it is; because all edges of
+                            #  `tmp_node` end up on `new_node`, the order it imposes is
+                            #  preserved. `reroute_edge()` would substitute the full
+                            #  range of `T` for the missing subset and turn it into a
+                            #  copy.
                             if is_producer_edge:
                                 state.add_edge(
                                     old_edge.src, old_edge.src_conn, new_node, None, dace.Memlet()
@@ -471,14 +464,41 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                                 new_node=new_node,
                             )
                         state.remove_edge(old_edge)
+
                 state.remove_node(tmp_node)
+                if state.degree(new_node) == 0:
+                    state.remove_node(new_node)
 
-            if state.degree(new_node) == 0:
-                state.remove_node(new_node)
+        sdfg.remove_data(tmp_name, validate=dace.Config.get_bool("debugprint"))
 
-        sdfg.remove_data(tmp_name, validate=True)
-
-        # The accesses now refer to `G`, whose strides generally differ from the ones
-        #  of the (contiguous) `T` they were derived from, so every descriptor inside
-        #  a NestedSDFG that was mapped from `T` has to be updated.
+        # The accesses now refer to `G`, whose strides generally differ from the ones of
+        #  the `T` they were derived from, so every descriptor inside a NestedSDFG that
+        #  was mapped from `T` has to be updated.
         gtx_transformations.gt_propagate_strides_of(sdfg, glob_name)
+
+    def _replacement_node(
+        self,
+        state: dace.SDFGState,
+        glob_name: str,
+        writes_glob: bool,
+    ) -> dace_nodes.AccessNode:
+        """Returns the AccessNode of `G` that takes the place of an AccessNode of `T`.
+
+        ADR-18 rule 8 allows a single AccessNode per data in a state and rule 3 makes
+        the exception that `G` may have a second one when it is used as input and as
+        output at the same time. A node that will be written therefore gets its own
+        AccessNode, reusing one that is read would make the state cyclic, while a node
+        that is only read joins the AccessNode that already reads `G`, if there is one.
+        """
+        if not writes_glob:
+            scope_dict = state.scope_dict()
+            for node in state.data_nodes():
+                # The AccessNodes of `T` are on the top level of the state, ADR-18
+                #  rule 10, so the node that replaces them has to be there too.
+                if (
+                    node.data == glob_name
+                    and state.in_degree(node) == 0
+                    and scope_dict[node] is None
+                ):
+                    return node
+        return state.add_access(glob_name)
