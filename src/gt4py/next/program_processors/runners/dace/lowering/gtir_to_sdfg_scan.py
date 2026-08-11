@@ -622,7 +622,9 @@ def _handle_dataflow_result_of_nested_sdfg(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
+    output_dtype = inner_data.gt_type.dtype
+    assert ti.is_concrete_dtype(output_dtype)
+    output_expr = gtir_dataflow.ValueExpr(outer_node, output_dtype)
     return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 
