@@ -157,48 +157,23 @@ def removed_buffers(monkeypatch):
     return removed
 
 
-def _view_targets(sdfg: dace.SDFG) -> dict[str, list[str]]:
-    """Maps each viewed data name to the Views of it, at any nesting or scope level."""
-    targets: dict[str, list[str]] = {}
-    for nsdfg in sdfg.all_sdfgs_recursive():
-        for state in nsdfg.states():
-            for node in state.data_nodes():
-                if not isinstance(node.desc(nsdfg), dace_data.View):
-                    continue
-                try:
-                    viewed = gtx_transformations.utils.track_view(node, state, nsdfg).data
-                except Exception:  # noqa: BLE001 [blind-except]
-                    # The Views the lowering builds inside a Map are fed through the
-                    #  MapEntry and carry no `views` connector, so `track_view` cannot
-                    #  resolve them. Their incoming Memlet names the data they view.
-                    sources = {
-                        edge.data.data
-                        for edge in state.in_edges(node)
-                        if edge.data.data not in (None, node.data)
-                    } or {
-                        edge.data.data
-                        for edge in state.out_edges(node)
-                        if edge.data.data not in (None, node.data)
-                    }
-                    if len(sources) != 1:
-                        continue
-                    viewed = next(iter(sources))
-                targets.setdefault(viewed, []).append(node.data)
-    return targets
-
-
 @pytest.fixture
-def selected_candidates(monkeypatch):
-    """Records, per selected transient, the Views of it that exist at that moment."""
-    seen: dict[str, list[str]] = {}
+def views_when_selecting(monkeypatch):
+    """Collects the Views that exist whenever the transformation looks for candidates."""
+    seen: list[list[str]] = []
     original = gtx_transformations.GT4PyWriteBackBufferElimination._find_candidates
 
-    def find_candidates(self, sdfg, reachable):
-        candidates = original(self, sdfg, reachable)
-        targets = _view_targets(sdfg)
-        for name, _, _ in candidates:
-            seen[name] = targets.get(name, [])
-        return candidates
+    def find_candidates(self, sdfg, *args):
+        seen.append(
+            [
+                node.data
+                for nsdfg in sdfg.all_sdfgs_recursive()
+                for state in nsdfg.states()
+                for node in state.data_nodes()
+                if isinstance(node.desc(nsdfg), dace_data.View)
+            ]
+        )
+        return original(self, sdfg, *args)
 
     monkeypatch.setattr(
         gtx_transformations.GT4PyWriteBackBufferElimination,
@@ -206,21 +181,6 @@ def selected_candidates(monkeypatch):
         find_candidates,
     )
     return seen
-
-
-@pytest.fixture
-def view_targets_after_lowering(monkeypatch):
-    """`_view_targets` of the freshly lowered SDFG, before any transformation."""
-    targets: list[dict[str, list[str]]] = []
-    original = gtx_transformations.gt_auto_optimize
-
-    def gt_auto_optimize(sdfg, *args, **kwargs):
-        targets.append(_view_targets(sdfg))
-        return original(sdfg, *args, **kwargs)
-
-    monkeypatch.setattr(gtx_transformations.auto_optimize, "gt_auto_optimize", gt_auto_optimize)
-    monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", gt_auto_optimize)
-    return targets
 
 
 @pytest.mark.parametrize("flag", [0, 1])
@@ -242,23 +202,17 @@ def test_write_back_buffer_elimination_from_lowering(
     np.testing.assert_allclose(scaled_out.asnumpy(), expected_base * (2.0 if flag == 1 else 3.0))
 
 
-def test_write_back_buffer_elimination_selects_unviewed_data(
+def test_write_back_buffer_elimination_from_lowering_with_reduction(
     uncached_dace_cpu,
     in_process_compilation,
     removed_buffers,
-    selected_candidates,
-    view_targets_after_lowering,
+    views_when_selecting,
 ):
-    """The transformation redirects accesses of `T` to `G` and then propagates the
-    strides of `G`, but `gt_propagate_strides_of` only descends into NestedSDFGs. A
-    View of `T` would keep the strides it inherited from the contiguous `T` and
-    silently read `G` wrongly. This holds today only because the Views the lowering
-    emits for neighbour reductions are gone by the time the transformation runs.
+    """The transformation gives up on any View, so the lowering must leave none.
 
-    The reduction below reads the selected transient, so the lowering does build a
-    View of it. That the same View resolution finds Views right after lowering is
-    asserted too, to keep the check on the selected candidates from passing
-    vacuously.
+    The neighbour reduction below reads the selected transient and the lowering does
+    build Views for it, which makes this the program that would notice if they
+    survived until the transformation runs.
     """
     offset_provider = {
         "C2E": constructors.as_connectivity(
@@ -277,13 +231,9 @@ def test_write_back_buffer_elimination_selects_unviewed_data(
     )
 
     assert removed_buffers, "GT4PyWriteBackBufferElimination did not match"
-    assert selected_candidates, "no candidate was recorded"
-    assert any(targets for targets in view_targets_after_lowering), (
-        "the lowering built no Views, so this test would not detect a View of `T`"
-    )
-    assert not any(selected_candidates.values()), (
-        f"a selected transient is viewed: {selected_candidates}; "
-        "`gt_propagate_strides_of` does not update Views"
+    assert views_when_selecting, "the transformation never looked for candidates"
+    assert not any(views_when_selecting), (
+        f"the optimization pipeline left Views behind: {views_when_selecting}"
     )
 
     expected_base = inp.asnumpy() + 1.0
