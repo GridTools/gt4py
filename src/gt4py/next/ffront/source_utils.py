@@ -13,9 +13,13 @@ import inspect
 import pathlib
 import symtable
 import textwrap
+import typing
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Optional, cast
+
+from gt4py.eve.concepts import SourceLocation
+from gt4py.next import errors
 
 
 MISSING_FILENAME = "<string>"
@@ -26,6 +30,39 @@ def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
 
     # nonlocals override globals, sorted for deterministic results
     return dict(sorted({**builtins, **globals, **nonlocals}.items()))
+
+
+def get_type_hints_from_function(
+    function: Callable, source_definition: Optional[SourceDefinition] = None
+) -> dict[str, Any]:
+    """
+    Resolve the type annotations of ``function``, reporting failures as :class:`errors.DSLError`.
+
+    Annotations are resolved with :func:`typing.get_type_hints`, which evaluates
+    them in the function's module namespace; unresolvable annotations (e.g. names
+    that are not defined, or strings that are not valid types) raise exceptions
+    that would otherwise leak to the user as plain Python errors.
+    """
+    try:
+        return typing.get_type_hints(function)
+    except Exception as err:
+        location = (
+            SourceLocation(
+                filename=source_definition.filename,
+                line=source_definition.line_offset + 1,
+                column=source_definition.column_offset + 1,
+            )
+            if source_definition is not None
+            else None
+        )
+        raise errors.DSLError(
+            location,
+            f"Could not resolve type annotations of '{function.__name__}': {err}.",
+            hints=(
+                "Make sure every name used in an annotation is defined or imported in "
+                "the module where the function is defined.",
+            ),
+        ) from err
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:

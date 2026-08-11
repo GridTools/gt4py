@@ -36,7 +36,7 @@ class GT4PyError(Exception):
         return self.args[0]
 
 
-def _did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
+def did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
     """Produce a 'Did you mean ...?' hint if `name` closely matches any candidate."""
     # Never suggest the name the user already wrote (it can appear among the
     # candidates as a same-named symbol from another SSA generation).
@@ -157,7 +157,7 @@ class UndefinedSymbolError(DSLError):
             location,
             f"Undeclared symbol '{name}'.",
             label="not defined at this point",
-            hints=_did_you_mean(name, candidates),
+            hints=did_you_mean(name, candidates),
         )
         self.sym_name = name
 
@@ -183,8 +183,8 @@ class MissingArgumentError(DSLError):
 
 
 class DSLTypeError(DSLError):
-    def __init__(self, location: Optional[SourceLocation], message: str) -> None:
-        super().__init__(location, message)
+    def __init__(self, location: Optional[SourceLocation], message: str, **kwargs: Any) -> None:
+        super().__init__(location, message, **kwargs)
 
 
 class MissingParameterAnnotationError(DSLTypeError):
@@ -203,6 +203,11 @@ class InvalidParameterAnnotationError(DSLTypeError):
         super().__init__(
             location, f"Parameter '{param_name}' has invalid type annotation '{type_}'."
         )
+        self.hints = [
+            "Annotate parameters with a GT4Py type: a field (e.g. "
+            "'gtx.Field[[IDim], gtx.float64]'), a scalar (e.g. 'gtx.float64') or a "
+            "tuple of these."
+        ]
         self.param_name = param_name
         self.annotated_type = type_
 
