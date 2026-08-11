@@ -1245,7 +1245,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         The map operation is applied on the local dimension of input fields.
         In the example below, the local dimension consists of a list of neighbor
         values as the first argument, and a list of constant values `1.0`:
-        `map_(plus)(neighbors(V2E, it), make_const_list(1.0))`
+        `map_list(plus)(neighbors(V2E, it), make_const_list(1.0))`
 
         The `plus` operation is lowered to a tasklet inside a map that computes
         the domain of the local dimension (in this example, max neighbors in V2E).
@@ -1303,7 +1303,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         # The dataflow we build in this class has some loose connections on input edges.
         # These edges are described as set of nodes, that will have to be connected to
         # external data source nodes passing through the map entry node of the field map.
-        # Similarly to `neighbors` expressions, the `map_` input edges terminate on view
+        # Similarly to `neighbors` expressions, the `map_list` input edges terminate on view
         # nodes (see `_construct_local_view` in the for-loop below), because it is simpler
         # than representing map-to-map edges (which require memlets with 2 pass-nodes).
         input_memlets = {}
@@ -1330,7 +1330,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         result_node = self.state.add_access(result)
 
         if conn_type.has_skip_values:
-            # In case the `map_` input expressions contain skip values, we use
+            # In case the `map_list` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
             conn_data = gtx_dace_args.connectivity_identifier(offset_type.value)
             conn_desc = self.sdfg.arrays[conn_data]
@@ -1497,12 +1497,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         return offset_provider_arg, offset_value_arg, it
 
     def _make_cartesian_shift(
-        self, it: IteratorExpr, offset_dim: gtx_common.Dimension, offset_expr: DataExpr
+        self, it: IteratorExpr, offset: gtir.CartesianOffset, offset_expr: DataExpr
     ) -> IteratorExpr:
         """Implements cartesian shift along one dimension."""
-        assert any(dim == offset_dim for dim, _ in it.field_domain)
+        old_dim = itir_misc.dim_from_axis_literal(offset.domain)
+        new_dim = itir_misc.dim_from_axis_literal(offset.codomain)
         new_index: SymbolExpr | ValueExpr
-        index_expr = it.indices[offset_dim]
+        index_expr = it.indices[old_dim]
         if isinstance(index_expr, SymbolExpr) and isinstance(offset_expr, SymbolExpr):
             # purely symbolic expression which can be interpreted at compile time
             new_index = SymbolExpr(
@@ -1565,9 +1566,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         # a new iterator with a shifted index along one dimension
-        shifted_indices = {
-            dim: (new_index if dim == offset_dim else index) for dim, index in it.indices.items()
-        }
+        shifted_indices = dict(
+            (new_dim, new_index) if dim == old_dim else (dim, index)
+            for dim, index in it.indices.items()
+        )
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _make_dynamic_neighbor_offset(
@@ -1673,31 +1675,26 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
 
         if isinstance(offset_provider_arg, gtir.CartesianOffset):
-            # cartesian shift; the dimension (incl. kind) is encoded in the node
-            assert offset_provider_arg.domain == offset_provider_arg.codomain, (
-                "relocation (staggering) is not supported"
+            return self._make_cartesian_shift(it, offset_provider_arg, offset_expr)
+        else:
+            assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
+            assert isinstance(offset_provider_arg.value, str)
+            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+                offset_provider_arg.value
             )
-            offset_dim = itir_misc.dim_from_axis_literal(offset_provider_arg.codomain)
-            return self._make_cartesian_shift(it, offset_dim, offset_expr)
+            assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+            # a named offset → unstructured shift; the offset value may be a static
+            # `OffsetLiteral` or a dynamic offset (handled by `_make_unstructured_shift`).
+            # initially, the storage for the connectivity tables is created as transient;
+            # when the tables are used, the storage is changed to non-transient,
+            # so the corresponding arrays are supposed to be allocated by the SDFG caller
+            offset_table = gtx_dace_args.connectivity_identifier(offset_provider_arg.value)
+            self.sdfg.arrays[offset_table].transient = False
+            offset_table_node = self.state.add_access(offset_table)
 
-        # first argument of the shift node is the offset provider
-        assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
-        offset = offset_provider_arg.value
-        assert isinstance(offset, str)
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset)
-
-        # reaching here means a named offset → unstructured shift (cartesian shifts took the
-        # CartesianOffset branch above)
-        # initially, the storage for the connectivity tables is created as transient;
-        # when the tables are used, the storage is changed to non-transient,
-        # so the corresponding arrays are supposed to be allocated by the SDFG caller
-        offset_table = gtx_dace_args.connectivity_identifier(offset)
-        self.sdfg.arrays[offset_table].transient = False
-        offset_table_node = self.state.add_access(offset_table)
-
-        return self._make_unstructured_shift(
-            it, offset_provider_type, offset_table_node, offset_expr
-        )
+            return self._make_unstructured_shift(
+                it, offset_provider_type, offset_table_node, offset_expr
+            )
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """
@@ -1750,12 +1747,12 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if isinstance(node.type, ts.ListType):
             # The only builtin function (so far) handled here that returns a list
-            # is 'make_const_list'. There are other builtin functions (map_, neighbors)
+            # is 'make_const_list'. There are other builtin functions (map_list, neighbors)
             # that return a list but they are handled in specialized visit methods.
             # This method (the generic visitor for builtin functions) always returns
             # a single value. This is also the case of 'make_const_list' expression:
             # it simply broadcasts a scalar on the local domain of another expression,
-            # for example 'map_(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
+            # for example 'map_list(plus)(neighbors(V2Eₒ, it), make_const_list(1.0))'.
             # Therefore we handle `ListType` as a single-element array with shape (1,)
             # that will be accessed in a map expression on a local domain.
             assert isinstance(node.type.element_type, ts.ScalarType)

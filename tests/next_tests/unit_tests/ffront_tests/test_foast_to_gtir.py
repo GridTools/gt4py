@@ -21,6 +21,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next import (
     astype,
     broadcast,
+    errors,
     float32,
     float64,
     int32,
@@ -110,18 +111,38 @@ def test_multivalue_identity():
     assert lowered.expr == reference
 
 
+def test_premap_cartesian_invalid_fractional_offset():
+    # only integer or half-integer offsets are valid; expect a located DSLError.
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 0.25)
+
+    with pytest.raises(errors.DSLError, match="Invalid offset"):
+        FieldOperatorParser.apply_to_function(foo)
+
+
+def test_premap_cartesian_non_literal_offset():
+    def foo(inp: gtx.Field[[TDim], float64], i: int):
+        return inp(TDim + i)
+
+    with pytest.raises(errors.DSLError, match="literal right-hand side"):
+        FieldOperatorParser.apply_to_function(foo)
+
+
 def test_premap_cartesian_syntax():
+    # an integer offset shifts within the dimension; '1.0' is equivalent to '1'.
     def foo(inp: gtx.Field[[TDim], float64]):
         return inp(TDim + 1)
 
-    parsed = FieldOperatorParser.apply_to_function(foo)
-    lowered = FieldOperatorLowering.apply(parsed)
+    def foo_float(inp: gtx.Field[[TDim], float64]):
+        return inp(TDim + 1.0)
 
     reference = im.as_fieldop(
         im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim, TDim), 1)("__it")))
     )("inp")
 
-    assert lowered.expr == reference
+    for f in (foo, foo_float):
+        lowered = FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(f))
+        assert lowered.expr == reference
 
 
 def test_as_offset():
@@ -287,7 +308,7 @@ def test_astype_local_field():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.op_as_fieldop(im.map_(im.lambda_("val")(im.cast_("val", "int32"))))("a")
+    reference = im.op_as_fieldop(im.map_list(im.lambda_("val")(im.cast_("val", "int32"))))("a")
 
     assert lowered.expr == reference
 
@@ -820,9 +841,9 @@ def test_reduction_lowering_expr():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    mapped = im.op_as_fieldop(im.map_("multiplies"))(
+    mapped = im.op_as_fieldop(im.map_list("multiplies"))(
         im.op_as_fieldop("make_const_list")(im.literal("1.1", "float64")),
-        im.op_as_fieldop(im.map_("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
+        im.op_as_fieldop(im.map_list("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
     )
 
     reference = im.let(

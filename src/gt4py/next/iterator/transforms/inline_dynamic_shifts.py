@@ -16,7 +16,7 @@ from gt4py.next.iterator.transforms import fuse_as_fieldop, inline_lambdas, trac
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 
 
-def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
+def _dynamic_shift_args(node: itir.Expr) -> list[bool] | None:
     if not cpm.is_applied_as_fieldop(node):
         return None
     params_shifts = trace_shifts.trace_stencil(

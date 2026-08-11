@@ -13,6 +13,7 @@ Porting physics code, we came across patterns that are hard to map to a stencil 
 krel [IntField]: Release layer where buoyancy sorting first occurs
 kinv [IntField]: Inversion layer with PBL top interface as lower interface
 """
+
 with computation(), interval():
     # ...
     if iteration_index_K >= kinv - 1 and iteration_index_K <= max(krel - 1, kinv - 1):
@@ -39,6 +40,7 @@ We chose to expose the current iteration index in `K` with the following syntax 
 krel [IntField]: Release layer where buoyancy sorting first occurs
 kinv [IntField]: Inversion layer with PBL top interface as lower interface
 """
+
 with computation(), interval():
     # ...
     if K >= kinv - 1 and K <= max(krel - 1, kinv - 1):

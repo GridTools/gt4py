@@ -11,8 +11,8 @@ import dataclasses
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never, cast
-from gt4py.next import utils
+from gt4py.eve.extended_typing import Never
+from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental as experimental_builtins,
@@ -304,19 +304,22 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
                     )(current_expr)
-                # `field(Dim + idx)`
+                # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.Name() as dim_name,
+                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.Dimension() as dim)),
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
-                    assert isinstance(dim_name.type, ts.DimensionType)
-                    dim = dim_name.type.dim
+                    conn = common.connectivity_for_cartesian_shift(dim, offset_index)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(
-                            im.deref(im.shift(im.cartesian_offset(dim), offset_index)("__it"))
+                            im.deref(
+                                im.shift(
+                                    im.cartesian_offset(conn.domain_dim, conn.codomain), conn.offset
+                                )("__it")
+                            )
                         )
                     )(current_expr)
                 # `field(Off)`
@@ -409,6 +412,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
+        #  instead of emitting `tree_map_tuple` so mixed field types are supported,
+        #  e.g. (local field, regular field).
         if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
             return self._lower_and_map("if_", *node.args)
 
@@ -434,6 +440,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
+        #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
         return im.concat_where(domain, true_branch, false_branch)
 
@@ -506,9 +514,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
-            type_ = cast(
-                ts.CollectionTypeSpec, type_
-            )  # This shouldn't be needed after the previous isinstance() check
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val
@@ -535,7 +540,7 @@ def _map(
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
     """
-    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
     """
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
@@ -548,7 +553,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.map_(op)
+        op = im.map_list(op)
 
     return im.op_as_fieldop(op)(*lowered_args)
 
