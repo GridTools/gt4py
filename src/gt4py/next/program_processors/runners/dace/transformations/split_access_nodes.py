@@ -352,8 +352,10 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 return None
             producer_edges.append(iedge)
 
-        # Every producer starts out in its own fragment, consumers that straddle
-        #  several producers merge them together.
+        # Union find over the producers: `fragment_of_producer[i]` is the id of
+        #  another producer in the same fragment as producer `i`, or `i` itself if
+        #  `i` is the representative of its fragment. Every producer starts out
+        #  alone; a consumer that straddles several producers merges them.
         fragment_of_producer = list(range(len(producer_edges)))
 
         def find_fragment(idx: int) -> int:
@@ -368,39 +370,40 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         for oedge in state.out_edges(access_node):
             if oedge.data.wcr is not None:
                 return None
-            consumer_subset = oedge.data.src_subset
+            consumer_subset = oedge.data.get_src_subset(oedge, state)
             if consumer_subset is None:
                 return None  # TODO(phimuell): Lift this.
 
             # All producers that might contribute to what this consumer reads have
             #  to be part of the same fragment. Several producers may already share a
-            #  fragment, so the ids have to be deduplicated before they are merged.
-            contributing = list(
-                dict.fromkeys(
-                    find_fragment(i)
-                    for i, producer_edge in enumerate(producer_edges)
-                    if gtx_dace_split.maybe_intersecting(
-                        producer_edge.data.dst_subset, consumer_subset
-                    )
-                )
-            )
+            #  fragment, so the ids are deduplicated before they are merged.
+            contributing = {
+                find_fragment(i)
+                for i, producer_edge in enumerate(producer_edges)
+                if gtx_dace_split.maybe_intersecting(producer_edge.data.dst_subset, consumer_subset)
+            }
             if len(contributing) == 0:
                 return None
 
             merged_id = min(contributing)
-            for fragment_id in contributing:
+            for fragment_id in sorted(contributing):
                 if fragment_id != merged_id:
                     fragment_of_producer[fragment_id] = merged_id
                     consumers_of_fragment[merged_id] |= consumers_of_fragment.pop(fragment_id)
             consumers_of_fragment[merged_id].add(oedge)
 
+        fragment_of = [find_fragment(i) for i in range(len(producer_edges))]
         fragments: list[_Fragment] = []
         for fragment_id, consumer_edges in consumers_of_fragment.items():
             producers = OrderedSet(
                 producer_edge
                 for i, producer_edge in enumerate(producer_edges)
-                if find_fragment(i) == fragment_id
+                if fragment_of[i] == fragment_id
             )
+            # NOTE: This must be the adjacency only merger. Producers that overlap
+            #  would describe the same memory twice, so they must not be merged into
+            #  one region here, unlike the consumer subsets in
+            #  `_is_fully_read_by_consumers()` which only have to cover the fragment.
             subsets = gtx_dace_split.subset_merger(
                 [producer_edge.data.dst_subset for producer_edge in producers]
             )
@@ -412,16 +415,20 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 _Fragment(producers=producers, consumers=consumer_edges, subset=subsets[0])
             )
 
-        # `split_node()` requires that every edge is fully covered by exactly one
-        #  fragment, so a consumer must not straddle a fragment boundary.
+        # `split_node()` requires that every consumer edge is fully covered by
+        #  exactly one fragment, so a consumer must not straddle a fragment boundary.
         for fragment in fragments:
             for consumer_edge in fragment.consumers:
-                if not fragment.subset.covers(consumer_edge.data.src_subset):
+                if not fragment.subset.covers(
+                    consumer_edge.data.get_src_subset(consumer_edge, state)
+                ):
                     return None
         for i, fragment in enumerate(fragments):
-            for other in fragments[i + 1 :]:
-                if gtx_dace_split.maybe_intersecting(fragment.subset, other.subset):
-                    return None
+            if any(
+                gtx_dace_split.maybe_intersecting(fragment.subset, other.subset)
+                for other in fragments[i + 1 :]
+            ):
+                return None
 
         unused_producers = [
             producer
@@ -467,12 +474,16 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 elif not isinstance(data_source, dace_nodes.MapExit):
                     return False
 
-            # The tightness requirement below, i.e. that what is computed is also
-            #  read, is a core assumption of the `CopyChainRemover`. A fragment with
-            #  several producers is only ever read as a whole, so the requirement
-            #  applies to the fragment; imposing it per producer instead would reject
-            #  a consumer that legitimately reads across a producer boundary, which
-            #  is the very case a multi producer fragment exists for.
+            # Both branches below require that what is computed is also read. They
+            #  differ only in the granularity at which that is checked. A fragment
+            #  fed by several producers is only ever read as a whole -- no consumer
+            #  is associated with an individual producer -- so the requirement is
+            #  imposed on the fragment. Imposing it per producer would reject a
+            #  consumer that reads across a producer boundary, which is the case a
+            #  multi producer fragment exists for. Note that the requirement is not
+            #  weaker: a producer writing `[0:10]` whose only consumer reads `[0:5]`
+            #  is rejected either way, by `_is_fully_read_by_consumers()` here and by
+            #  the `covers()` below.
             if len(fragment.producers) > 1:
                 if not self._is_fully_read_by_consumers(fragment.subset, consumer_edges):
                     return False
