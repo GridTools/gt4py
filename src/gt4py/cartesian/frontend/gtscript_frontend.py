@@ -50,7 +50,6 @@ from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
 PYTHON_AST_VERSION: Final = (3, 12)
-ELLIPSIS_TYPE = getattr(ast, "Ellipsis", types.EllipsisType)
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -751,10 +750,11 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """Ignore pure string statements in callee."""
-        pure_str_types = (ast.Constant,) + ((ast.Str,) if hasattr(ast, "Str") else ())
-        if not isinstance(node.value, pure_str_types):
-            return super().visit(node.value)
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            # Ignore pure string statements in callee
+            return
+
+        return super().visit(node.value)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -1372,7 +1372,7 @@ class IRMaker(ast.NodeVisitor):
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
-        if any(isinstance(cn, ELLIPSIS_TYPE) for cn in index_nodes):
+        if any(isinstance(cn, types.EllipsisType) for cn in index_nodes):
             return None
 
         # Determine if we are using the new-style axis syntax, or the old style.
