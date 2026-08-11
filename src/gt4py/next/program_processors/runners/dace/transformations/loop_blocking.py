@@ -9,7 +9,7 @@
 import copy
 import warnings
 from collections.abc import Sequence
-from typing import Any, Optional, Union
+from typing import Any, Final, Optional, Union
 
 import dace
 from dace import (
@@ -56,7 +56,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
     Args:
         blocking_size: The size of the block, denoted as `B` above.
-        blocking_parameters: On which parameter should we block.
+        blocking_parameters: On which parameter should we block. Priority based on the order of the passed dimensions.
         require_independent_nodes: If `True` only apply loop blocking if the Map
             actually contains independent nodes. Defaults to `True`.
         promote_independent_memlets: If `True` then memlets with independent data are promoted to the outer map.
@@ -70,27 +70,22 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     blocking_size = dace_properties.Property(
         dtype=int,
         allow_none=True,
-        desc="Size of the inner blocks; 'B' in the above description.",
     )
     blocking_parameters = dace_properties.ListProperty(
         element_type=str,
         allow_none=True,
-        desc="Names of the iteration variables on which to block checked in order they are listed. Only the first one that is found is used for blocking.",
     )
     require_independent_nodes = dace_properties.Property(
         dtype=bool,
         default=True,
-        desc="If 'True' then blocking is only applied if there are independent nodes.",
     )
     promote_independent_memlets = dace_properties.Property(
         dtype=bool,
         default=False,
-        desc="If 'True' then memlets with independent data are promoted to the outer map.",
     )
     independent_node_threshold = dace_properties.Property(
         dtype=int,
         default=0,
-        desc="Minimum number of independent nodes required to apply blocking (non-inclusive).",
     )
 
     # Set of nodes that are independent of the blocking parameter.
@@ -99,6 +94,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     _memlet_to_promote: Optional[list[dace_graph.MultiConnectorEdge[dace.Memlet]]]
 
     outer_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
+
+    # Buffer size limit for promotion of memlet to an AccessNode in the outer map
+    BUFFER_SIZE_LIMIT: Final[int] = 100
 
     def __init__(
         self,
@@ -733,8 +731,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         src_subset: dace_subsets.Subset | None = memlet.src_subset
         dst_subset: dace_subsets.Subset | None = memlet.dst_subset
 
-        if edge.dst in self._independent_nodes:
-            # If the memlet is connected to an independent node, then we can not promote it, since it would be redundant.
+        if edge.dst in self._independent_nodes or isinstance(edge.dst, dace_nodes.AccessNode):
+            # If the memlet is connected to an independent node, then we can not
+            #  promote it, since it would be redundant. Promotion to AccessNodes
+            #  is not needed because the destination AccessNode should already be
+            #  in the set of independent nodes.
             return False
 
         # Empty Memlets should already be in independent nodes and don't have read dependencies
@@ -749,12 +750,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             subsets_to_inspect.append(src_subset)
 
         if any(matched_blocking_var in subset.free_symbols for subset in subsets_to_inspect):
-            return False
-
-        if isinstance(edge.dst, dace_nodes.AccessNode):
-            # Promotion of memlets to AccessNodes is not needed because the
-            #  destination AccessNode should already be in the set of
-            #  independent nodes.
             return False
 
         if isinstance(edge.dst, dace_nodes.Tasklet) and not edge.data.data.startswith("gt_conn_"):
@@ -791,7 +786,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         for buffer_dim in buffer_shape:
             # We don't want to promote memlets that are too big because then the register or stack usage would increase a lot and we will get worse performance.
             # TODO(iomaganaris): Maybe find a better suited number
-            if buffer_dim > 100:
+            if buffer_dim > LoopBlocking.BUFFER_SIZE_LIMIT:
                 return False
 
         return True
