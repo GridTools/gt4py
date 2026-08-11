@@ -737,9 +737,11 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """Ignore pure string statements in callee."""
-        if not (isinstance(node.value, ast.Constant) and isinstance(node.value, str)):
-            return super().visit(node.value)
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            # Ignore pure string statements in callee
+            return
+
+        return super().visit(node.value)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
