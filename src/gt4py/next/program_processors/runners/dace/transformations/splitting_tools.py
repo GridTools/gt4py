@@ -273,6 +273,16 @@ def split_node(
     assert not gtx_transformations.utils.is_view(desc_to_split)
     assert isinstance(desc_to_split, dace_data.Array)
 
+    # DaCe reruns Memlet propagation after every applied transformation. It rebuilds
+    #  the Memlets on the edges of a NestedSDFG from the ones inside it and carries over
+    #  which side of the connection the data is on, although inside it refers to a
+    #  different data container, which can leave a read without a `src_subset`. The
+    #  rerouting below can not repair that, it runs while the old and the new edge are
+    #  both present, so it is done here, while the graph still tells where the data is.
+    for edge in state.all_edges(node_to_split):
+        for memlet_tree in state.memlet_tree(edge).traverse_children(include_self=True):
+            memlet_tree.edge.data.try_initialize(sdfg, state, memlet_tree.edge)
+
     input_descriptions = describe_incoming_edges(state, node_to_split)
     output_descriptions = describe_outgoing_edges(state, node_to_split)
     edge_descriptions = input_descriptions + output_descriptions

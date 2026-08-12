@@ -370,14 +370,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         for oedge in state.out_edges(access_node):
             if oedge.data.wcr is not None:
                 return None
-            # NOTE: This must be the raw property and not `get_src_subset()`. A
-            #  Memlet that has no side associated to it has no `src_subset`, see
-            #  [issue 1703](https://github.com/spcl/dace/issues/1703), and the check
-            #  below turns that into a decline. `get_src_subset()` initializes the
-            #  Memlet, which removes that guard and makes the transformation accept
-            #  nodes whose rerouting then fails inside
-            #  `reconfigure_dataflow_after_rerouting()`.
-            consumer_subset = oedge.data.src_subset
+            consumer_subset = oedge.data.get_src_subset(oedge, state)
             if consumer_subset is None:
                 return None  # TODO(phimuell): Lift this.
 
@@ -425,7 +418,9 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         #  exactly one fragment, so a consumer must not straddle a fragment boundary.
         for fragment in fragments:
             for consumer_edge in fragment.consumers:
-                if not fragment.subset.covers(consumer_edge.data.src_subset):
+                if not fragment.subset.covers(
+                    consumer_edge.data.get_src_subset(consumer_edge, state)
+                ):
                     return None
         for i, fragment in enumerate(fragments):
             if any(
