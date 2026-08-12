@@ -14,6 +14,7 @@ import copy
 import math
 import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
+import os
 
 import dace
 from dace import (
@@ -786,59 +787,158 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 #     independent_inputs += 4
                 else:
                     independent_input_bytes += out_edge_data_bytes
-        print(f"For map {gpu_map.label} with ranges {map_size} independent_input_bytes: {independent_input_bytes} total_input_bytes: {total_input_bytes}", flush=True)
-        original_block_size = list(block_size)
-        # Thread block size heuristics defined by compute_rho_theta_pgrad_and_update_vn and vertically_implicit_solver_at_predictor_step
-        D = total_input_bytes - independent_input_bytes  # y-dependent bytes
-        Ry = map_size[0] if len(map_size) > 1 else 0
-        Ry_is_digit = str(Ry).isdigit()
-        if Ry_is_digit:
-            if Ry == 0:
-                # Scan loop
-                block_size = [128, 1, 1]
-            elif Ry == 1:
-                if total_input_bytes == 0:
-                    block_size = [64, 1, 1]
-                else:
+        print(f"For map {gpu_map.label} in {sdfg.name} with ranges {map_size} independent_input_bytes: {independent_input_bytes} total_input_bytes: {total_input_bytes}", flush=True)
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "1":
+            ######################################################
+            # First version
+            ######################################################
+            original_block_size = list(block_size)
+            # Thread block size heuristics defined by compute_rho_theta_pgrad_and_update_vn and vertically_implicit_solver_at_predictor_step
+            D = total_input_bytes - independent_input_bytes  # y-dependent bytes
+            Ry = map_size[0] if len(map_size) > 1 else 0
+            Ry_is_digit = str(Ry).isdigit()
+            if Ry_is_digit:
+                if Ry == 0:
+                    # Scan loop
                     block_size = [128, 1, 1]
-            elif Ry < 50:
-                if D >= 100 and Ry <= 20:
-                    block_size = [32, 8, 1]
-                elif D >= 90 and Ry > 20:
-                    block_size = [32, 8, 1]
-                else:
-                    block_size = [128, 2, 1]
-            else:  # Ry >= 50
-                if independent_input_bytes == 0:
-                    block_size = [128, 2, 1]
-                elif independent_input_bytes < 100:
-                    block_size = [256, 1, 1]
-                else:
-                    block_size = [64, 4, 1]
+                elif Ry == 1:
+                    if total_input_bytes == 0:
+                        block_size = [64, 1, 1]
+                    else:
+                        block_size = [128, 1, 1]
+                elif Ry < 50:
+                    if D >= 100 and Ry <= 20:
+                        block_size = [32, 8, 1]
+                    elif D >= 90 and Ry > 20:
+                        block_size = [32, 8, 1]
+                    else:
+                        block_size = [128, 2, 1]
+                else:  # Ry >= 50
+                    if independent_input_bytes == 0:
+                        block_size = [128, 2, 1]
+                    elif independent_input_bytes < 100:
+                        block_size = [256, 1, 1]
+                    else:
+                        block_size = [64, 4, 1]
+            ######################################################
+            ######################################################
+            # Second version
+            ######################################################
+            def predict_thread_block_size_2d(
+                independent_input_bytes: int, total_input_bytes: int
+            ) -> tuple[int, int]:
+                reuse_ratio = total_input_bytes / max(independent_input_bytes, 1)
+                if total_input_bytes <= 40:
+                    if independent_input_bytes <= 0:
+                        return (256, 1)
+                    return (128, 2)
+                return (32, 8)
+            new_2d_thread_block_size = predict_thread_block_size_2d(
+                independent_input_bytes, total_input_bytes
+            )
+            block_size[0] = new_2d_thread_block_size[0]
+            block_size[1] = new_2d_thread_block_size[1]
+            ######################################################
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "2":
+            def predict_thread_block_size_2d(
+                vertical_range,
+                horizontal_range,
+                independent_input_bytes: int,
+                total_input_bytes: int,
+            ) -> tuple[int, int]:
+                """Return the preferred 2D CUDA thread block size for a map_* kernel.
 
+                Args:
+                    vertical_range: size of the vertical iteration dimension.
+                    horizontal_range: size of the horizontal iteration dimension.
+                    independent_input_bytes: number of unique input bytes touched by the kernel.
+                    total_input_bytes: total number of input bytes (including reuse).
+                """
+                if str(horizontal_range).isdigit():
+                    horizontal_range = int(horizontal_range)
+                    # Single-range maps (only one meaningful iteration dimension) are usually
+                    # fastest with a 1-D block layout.  The one exception we observed is the
+                    # average-down operator with exactly 16 total input bytes and no independent
+                    # inputs, where (128, 2) wins.
+                    if horizontal_range == 1:
+                        if total_input_bytes == 16 and independent_input_bytes == 0:
+                            return (128, 2)
+                        return (256, 1)
+
+                # Small, fully local two-range maps with no independent input prefer
+                # narrower blocks.
+                if independent_input_bytes == 0:
+                    if total_input_bytes == 16:
+                        return (128, 2)
+                    if total_input_bytes == 24:
+                        return (128, 2)
+
+                if str(vertical_range).isdigit():
+                    vertical_range = int(vertical_range)
+                    # Low total-input volume combined with a small vertical extent and a modest
+                    # amount of independent data: very flat blocks win.
+                    if (
+                        vertical_range == 1
+                        and independent_input_bytes == 38
+                        and total_input_bytes == 86
+                    ):
+                        return (256, 1)
+
+                    # Small vertical extent with heavy data reuse: (128, 2) balances occupancy.
+                    if (
+                        vertical_range == 2
+                        and independent_input_bytes == 74
+                        and total_input_bytes == 162
+                    ):
+                        return (128, 2)
+
+                # Fall back to the original byte-only heuristic.
+                if total_input_bytes <= 40:
+                    if independent_input_bytes <= 0:
+                        return (256, 1)
+                    return (128, 2)
+                return (32, 8)
+            new_2d_thread_block_size = predict_thread_block_size_2d(
+                map_size[0],
+                map_size[1] if len(map_size) > 1 else 1,
+                independent_input_bytes,
+                total_input_bytes,
+            )
+            block_size[0] = new_2d_thread_block_size[0]
+            block_size[1] = new_2d_thread_block_size[1]
         # Cut down the block size.
         # TODO(phimuell): Think if it is useful to also modify the launch bounds.
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
-        original_thread_block_size = math.prod(list(block_size))
-        assert original_thread_block_size == 256
         assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
             map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
             if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
                 block_size[i] = map_size[map_dim_idx_to_inspect]
-        map_size_is_digit = all(str(x).isdigit() for x in map_size)
-        if map_size_is_digit:
-            if dims_to_inspect == 2 and map_size[0] % block_size[1] != 0:
-                # If the last dimension is not a multiple of the block size, we reduce the block size to the largest factor of the map size that is less than or equal to the original block size.
-                for j in range(int(block_size[1]), 0, -1):
-                    if map_size[0] % j > 2:
-                        block_size[1] = j
-                        break
-                for j in range(int(block_size[0]), original_thread_block_size+1, block_size[0]):
-                    if j * int(block_size[1]) <= original_thread_block_size:
-                        block_size[0] = j
-        launch_bounds = str(int(block_size[0]) * int(block_size[1]) * int(block_size[2]))
-        print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size} new block size: {list(block_size)}", flush=True)
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "1":
+            if os.getenv("GT4PY_RESTRICT_BLOCK_SIZE_TO_DOMAIN", "0") == "1":
+                # Restrict the block size of the second dimension to the largest factor of the map size that is less than or equal to the original block size.
+                original_thread_block_size = math.prod(list(block_size))
+                assert original_thread_block_size == 256
+                map_size_is_digit = all(str(x).isdigit() for x in map_size)
+                if map_size_is_digit:
+                    if dims_to_inspect == 2 and map_size[0] % block_size[1] != 0:
+                        # If the last dimension is not a multiple of the block size, we reduce the block size to the largest factor of the map size that is less than or equal to the original block size.
+                        for j in range(int(block_size[1]), 0, -1):
+                            if map_size[0] % j > 2:
+                                block_size[1] = j
+                                break
+                        for j in range(int(block_size[0]), original_thread_block_size+1, block_size[0]):
+                            if j * int(block_size[1]) <= original_thread_block_size:
+                                block_size[0] = j
+                launch_bounds = str(int(block_size[0]) * int(block_size[1]) * int(block_size[2]))
+            elif os.getenv("GT4PY_RESTRICT_BLOCK_SIZE_TO_DOMAIN", "0") == "2":
+                # Keep the launch bounds the same as before but restrict the block size of the second dimensions to the domain size
+                original_thread_block_size = math.prod(list(block_size))
+                assert original_thread_block_size == 256
+                if dims_to_inspect == 2 and map_size[0] < block_size[1]:
+                    block_size[1] = map_size[0]
+                launch_bounds = str(original_thread_block_size)
+            print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size} new block size: {list(block_size)}", flush=True)
         gpu_map.gpu_block_size = tuple(block_size)
         if self.maxnreg is not None:
             gpu_map.gpu_maxnreg = self.maxnreg
