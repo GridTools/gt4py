@@ -992,7 +992,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a5"
-source = { git = "https://github.com/SPCL/dace?branch=main#1216e6624900df412e8254263e35d7eaa77424a2" }
+source = { git = "https://github.com/SPCL/dace?branch=main#17ecffef75f73df2a787d9ff52f1acb102e07608" }
 dependencies = [
     { name = "astunparse" },
     { name = "dill" },
