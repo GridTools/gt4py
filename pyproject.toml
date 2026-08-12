@@ -203,7 +203,7 @@ plugins = ['gt4py.next.type_system.mypy_plugin']
 show_column_numbers = true
 show_error_codes = true
 warn_redundant_casts = true
-warn_unused_configs = true
+warn_unused_configs = false
 warn_unused_ignores = true
 
 # GT4Py configs
