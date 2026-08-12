@@ -56,3 +56,40 @@ def test_get_domains():
 
     result = list(it2gtfn._get_domains(testee.body))
     assert result == [domain]
+
+
+def _program_over_domains(domains: list[itir.FunCall]) -> itir.Program:
+    return itir.Program(
+        id="foo",
+        function_definitions=[],
+        params=[itir.Sym(id="bar")],
+        declarations=[],
+        body=[
+            itir.SetAt(expr=im.as_fieldop("deref")(), domain=domain, target=itir.SymRef(id="bar"))
+            for domain in domains
+        ],
+    )
+
+
+def test_get_domains_preserves_ir_order():
+    # The order of the domains fixes the order of the generated dimension tag
+    # declarations, so it has to follow the IR. Deriving it from a `set` instead made the
+    # generated source vary with `PYTHONHASHSEED` from one process to the next, which
+    # changed the fingerprint the build cache is keyed on.
+    domains = [
+        im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value=name), 1, 2))
+        for name in ["D", "C", "B", "A", "F", "E"]
+    ]
+
+    result = list(it2gtfn._get_domains(_program_over_domains(domains).body))
+
+    assert result == domains
+
+
+def test_get_domains_deduplicates():
+    domain = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="D"), 1, 2))
+    other = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="E"), 1, 2))
+
+    result = list(it2gtfn._get_domains(_program_over_domains([domain, other, domain]).body))
+
+    assert result == [domain, other]

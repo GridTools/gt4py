@@ -77,10 +77,15 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    result = set()
+    # The order the domains are returned in fixes the order of the generated dimension
+    # tag declarations, so it has to be derived from the IR rather than from set
+    # iteration, which varies with `PYTHONHASHSEED` across processes.
+    result: dict[itir.FunCall, None] = {}
     for node in nodes:
-        result |= node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
-    return result
+        result.update(
+            dict.fromkeys(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
+        )
+    return result.keys()
 
 
 def _name_from_named_range(named_range_call: itir.FunCall) -> str:
@@ -154,9 +159,11 @@ def _collect_offset_definitions(
     offset_definitions = {}
     offset_provider_type = {**offset_provider_type}
 
-    cartesian_offsets: set[itir.CartesianOffset] = (
-        node.walk_values().if_isinstance(itir.CartesianOffset)
-    ).to_set()
+    # Traversal order, not set order: these feed `offset_definitions` below, whose
+    # insertion order becomes the order of the generated tag declarations.
+    cartesian_offsets: Iterable[itir.CartesianOffset] = (
+        node.walk_values().if_isinstance(itir.CartesianOffset).unique().to_list()
+    )
     for cart_offset in cartesian_offsets:
         dims = [
             ir_utils_misc.dim_from_axis_literal(v)
@@ -424,19 +431,23 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @staticmethod
     def _collect_offset_or_axis_node(
         node_type: Type, tree: eve.Node | Iterable[eve.Node]
-    ) -> set[str]:
+    ) -> list[str]:
+        # Ordered by traversal: callers build generated-code lists (e.g. `connectivities`)
+        # from this, so a `set` here would make the emitted order hash-seed dependent.
         if not isinstance(tree, Iterable):
             tree = [tree]
-        result = set()
+        result: dict[str, None] = {}
         for n in tree:
             result.update(
-                n.pre_walk_values()
-                .if_isinstance(node_type)
-                .getattr("value")
-                .if_isinstance(str)
-                .to_set()
+                dict.fromkeys(
+                    n.pre_walk_values()
+                    .if_isinstance(node_type)
+                    .getattr("value")
+                    .if_isinstance(str)
+                    .to_list()
+                )
             )
-        return result
+        return list(result)
 
     def _visit_if_(self, node: itir.FunCall, **kwargs: Any) -> Node:
         assert len(node.args) == 3
