@@ -10,10 +10,26 @@
 
 import pathlib
 import tempfile
+from typing import Final
 
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import stages
 
+
+#: Regex describing the folder names produced by `get_cache_folder` (use
+#: `re.fullmatch`): `{name}_{fingerprint}_{version_id}`, plus a trailing
+#: `_{build_context_id}` when a fingerprint-style (16-hex) build context id was
+#: given. Where `get_cache_folder` assembles a folder name from these parts, the
+#: pattern's capture groups take an existing folder name apart again — most
+#: importantly recovering the program `name`. External tools use it to recognize
+#: cached program folders — e.g. `scripts/python/dace_determinism.py` reads this
+#: pattern from the installed gt4py at runtime. When changing the naming scheme
+#: in `get_cache_folder`, update this pattern with it; the round-trip test in
+#: `test_cache.py` fails otherwise.
+CACHE_FOLDER_NAME_PATTERN: Final[str] = (
+    r"(?P<name>.+)_(?P<fingerprint>[0-9a-f]{16})_(?P<version_id>.+?)"
+    r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
+)
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
@@ -47,6 +63,9 @@ def get_cache_folder(
     An optional ``build_context_id`` can be provided to distinguish between different contexts
     that may produce different artifacts for the same extension source.
     The returned path points to an existing folder in all cases.
+
+    The folder name layout is documented by ``CACHE_FOLDER_NAME_PATTERN``; keep the
+    two in sync when changing the naming scheme here.
     """
     fingerprinter = fingerprinting.strict_fingerprinter
     slug = ext_source.program_source.entry_point.name

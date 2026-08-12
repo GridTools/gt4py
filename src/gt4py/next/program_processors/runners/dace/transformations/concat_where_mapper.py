@@ -1160,7 +1160,7 @@ def _find_consumer_specs_in_descending_point(
 
     consumers: dict[dace.SDFG, tuple[dace_nodes.AccessNode, _ConsumerPartition]] = {}
     for state in sdfg.states():
-        concat_node: Union[None, dace_nodes.AccessNode] = None
+        concat_node: Union[dace_nodes.AccessNode, None] = None
         for dnode in state.data_nodes():
             if dnode.data != concat_data:
                 continue

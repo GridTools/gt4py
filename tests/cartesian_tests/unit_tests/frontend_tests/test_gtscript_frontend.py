@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from enum import IntEnum, StrEnum, Enum
 import inspect
 import functools
 import textwrap
@@ -252,7 +253,7 @@ class TestInlinedExternals:
             "other_call",
             "func",
             "another_const",
-            "test_gtscript_frontend.func_nested.func_deeply_nested",
+            "cartesian_tests.unit_tests.frontend_tests.test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
@@ -479,6 +480,58 @@ class TestFunction:
                 module=self.__class__.__name__,
                 externals={"func": recursive_fcn},
             )
+
+
+class TestLazyFunction:
+    def test_simple_case(self) -> None:
+        @gtscript.lazy_function()
+        def constant():
+            return 1.0
+
+        def definition_func(out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = constant()
+
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.value == 1.0
+
+    def test_annotation_deferred_type(self) -> None:
+        class DeferredType:
+            pass
+
+        def resolve_type(func: Callable):
+            """This function resolves the deferred type"""
+            for name, type_ in func.__annotations__.items():
+                if type_ == DeferredType:
+                    func.__annotations__[name] = gtscript.Field[float]
+
+        # configure lazy_function to resolve the deferred type on the `plus_one()` function
+        @gtscript.lazy_function(before_annotation=resolve_type)
+        def plus_one(a: DeferredType):
+            return a + 1.0
+
+        def definition_func(in_field: DeferredType, out_field: gtscript.Field[float]):
+            with computation(PARALLEL), interval(...):
+                out_field = plus_one(in_field)
+
+        # resolve deferred type on stencil
+        resolve_type(definition_func)
+
+        # parse stencil, which will automatically resolve the deferred type in the lazy_function
+        stencil = parse_definition(
+            definition_func,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+        )
+
+        # check that constant was properly inlined
+        assert stencil.computations[0].body.stmts[0].value.rhs.value == 1.0
 
 
 class TestAxisSyntax:
@@ -1872,10 +1925,6 @@ class TestGlobalTablesWithDataDimensions:
                 module=self.__class__.__name__,
             )
 
-    @pytest.mark.xfail(
-        reason="IR validation expects ddim sizes to be of type `int`",
-        raises=gt_frontend.GTScriptSyntaxError,
-    )
     def test_ddims_with_numpy_type(self) -> None:
         def data_dims_with_numpy_int_type(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
@@ -2428,3 +2477,66 @@ class TestIteratorAccess:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+
+@gtscript.enum
+class LocalEnum(IntEnum):
+    A = 42
+    B = 1000
+
+
+class TestEnum:
+    def setup_method(self):
+        def enum(field: gtscript.Field[float], order: LocalEnum):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                if order > LocalEnum.A:
+                    field[0, 0, 0] = LocalEnum.B
+
+        self.stencil = enum
+
+    @pytest.mark.parametrize("integer_precision", [32, 64])
+    def test_enum_in_stencil(self, integer_precision):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=integer_precision,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].condition.rhs, nodes.ScalarLiteral)
+        assert def_ir.computations[0].body.stmts[0].condition.rhs.value == LocalEnum.A
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].main_body.stmts[0].value, nodes.ScalarLiteral
+        )
+        assert def_ir.computations[0].body.stmts[0].main_body.stmts[0].value.value == LocalEnum.B
+
+    def test_enum_bad_definitions(self):
+
+        @gtscript.enum
+        class MyTestEnum(IntEnum):
+            A = 0
+
+        with pytest.raises(
+            ValueError,
+            match="Enum names must be unique. @gtscript.enum MyTestEnum is already taken*",
+        ):
+
+            @gtscript.enum
+            class MyTestEnum(IntEnum):
+                B = 0
+
+        with pytest.raises(
+            ValueError, match="Enum BadEnumTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadEnumTestEnum(Enum):
+                B = 0.0
+
+        with pytest.raises(
+            ValueError, match="Enum BadStrTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadStrTestEnum(StrEnum):
+                C = "meh"

@@ -189,8 +189,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 raise errors.DSLError(
                     foast_node.location,
                     "Annotated return type does not match deduced return type: annotation is "
-                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{foast_node.type.returns}'.",
+                    f"'{annotated_return_type}'"
+                    f", got '{foast_node.type.returns}'.",  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
                 )
         return foast_node
 
@@ -416,8 +416,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             self.get_location(node),
             "logical operators `and`, `or`",
             notes=[
-                "`and` and `or` operate on whole truth values, but fields contain "
-                "one boolean per grid point."
+                (
+                    "`and` and `or` operate on whole truth values, but fields contain "
+                    "one boolean per grid point."
+                )
             ],
             hints=["Use the element-wise operators '&' and '|' instead."],
         )

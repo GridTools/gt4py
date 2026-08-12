@@ -405,7 +405,7 @@ def gt_set_gpu_blocksize(
 
     configured_maps = 0
     for state in sdfg.states():
-        scope_dict: Union[None, dict[Any, Any]] = None
+        scope_dict: Union[dict[Any, Any], None] = None
         cfg_id = state.parent_graph.cfg_id
         state_id = state.block_id
         for node in state.nodes():
@@ -940,7 +940,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 launch_bounds = str(original_thread_block_size)
             print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size} new block size: {list(block_size)}", flush=True)
         gpu_map.gpu_block_size = tuple(block_size)
-        if self.maxnreg is not None:
+        # Only set `gpu_maxnreg` if it has not been set already (default is 0),
+        #  to avoid overriding a value that was set by another transformation
+        #  such as `LoopBlocking`.
+        if self.maxnreg is not None and gpu_map.gpu_maxnreg == 0:
             gpu_map.gpu_maxnreg = self.maxnreg
         elif launch_bounds is not None:  # Note: empty string has a meaning in DaCe
             gpu_map.gpu_launch_bounds = launch_bounds

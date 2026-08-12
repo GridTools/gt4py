@@ -315,14 +315,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
         if self.is_cartesian:
-            block_dims = []
-            block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
-            for i, tag in enumerate(offset_definitions):
-                if tag.alias is None:
-                    block_dims.append(
-                        f"gridtools::meta::list<{tag.name.id}_t, "
-                        f"gridtools::integral_constant<int, {block_sizes[i]}>>"
-                    )
+            dims = [tag for tag in offset_definitions if tag.alias is None]
+            block_sizes = [32, 8] + [1] * (len(dims) - 2)
+            block_dims = [
+                f"gridtools::meta::list<{tag.name.id}_t, "
+                f"gridtools::integral_constant<int, {block_size}>>"
+                for tag, block_size in zip(dims, block_sizes)
+            ]
             sizes_str = ",\n".join(block_dims)
             return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
         else:
