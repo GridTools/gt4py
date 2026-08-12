@@ -88,7 +88,14 @@ class DataflowBuilder(Protocol):
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary array to the SDFG."""
         temp_name = self.unique_temp_name()
-        return sdfg.add_temp_transient_like(datadesc, name=temp_name)
+        ret = None
+        try:
+            ret = sdfg.add_temp_transient_like(datadesc, name=temp_name)
+        except TypeError as e:
+            raise TypeError(
+                f"[SDFG: {sdfg.name}] Failed to add temporary array like {temp_name} with shape {datadesc.shape} and dtype {datadesc.dtype}"
+            ) from e
+        return ret
 
     def add_temp_scalar(
         self, sdfg: dace.SDFG, dtype: dace.dtypes.typeclass
