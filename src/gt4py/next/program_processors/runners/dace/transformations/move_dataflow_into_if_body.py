@@ -133,8 +133,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         relocatable_connectors, non_relocatable_connectors, connector_usage_location = if_block_spec
 
         # Compute the dataflow that is relocated.
-        # NOTE: That the nodes sets are not sorted in any way, instead we will sort
-        #   them before we iterate over them.
         raw_relocatable_dataflow, non_relocatable_dataflow = (
             {
                 conn_name: gtx_transformations.utils.find_upstream_nodes(
@@ -224,16 +222,10 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
             enclosing_map=enclosing_map,
         )
 
-        # Bring the nodes in a deterministic order, which is induced by the underlying state.
-        # NOTE: The following key function is equivalent to use `lambda n: graph.node_id(n)`
-        #   but instead of O[N^2] it is O[N].
-        node_keys = {node: i for i, node in enumerate(graph.nodes())}
-        nodes_to_move = sorted(relocatable_dataflow, key=lambda n: node_keys[n])
-
         # For each node we have to find out in which state inside the `if_block` it will
         #  end up. `relocation_destination` has a fixed order.
         relocation_destination: dict[dace_nodes.Node, dace.SDFGState] = {}
-        for node_to_move in nodes_to_move:
+        for node_to_move in relocatable_dataflow:
             # Although `node_top_move` could be reached through different connectors
             #  they are all associated to the same branch.
             target_state: Optional[dace.SDFGState] = None
@@ -754,7 +746,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # While we can relocate nodes that are needed by multiple connectors, we can
         #  not handle the case if they end up in multiple branches.
-        nodes_in_states: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(set)
+        nodes_in_states: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(
+            OrderedSet
+        )
         for conn_name, rel_df in raw_relocatable_dataflow.items():
             nodes_in_states[connector_usage_location[conn_name][0]].update(rel_df)
         state_nodes_sets = list(nodes_in_states.values())  # Order is unimportant here.
@@ -932,7 +926,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     # If all input connectors were classified as non relocatable
                     #  then the partition does not exist.
                     if len(non_relocatable_connectors) == len(input_names):
-                        assert non_relocatable_connectors == input_names
+                        assert set(non_relocatable_connectors) == set(input_names)
                         return None
 
         # There is nothing to relocate.
@@ -952,8 +946,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(non_relocatable_connectors) == 0:
             return None
 
-        # We only guarantee that `relocatable_connectors` has an stable order,
-        #  everything else has no guaranteed order, even `connector_usage_location`.
-        relocatable_connectors = sorted(connector_usage_location.keys())
+        relocatable_connectors = list(connector_usage_location.keys())
 
         return relocatable_connectors, list(non_relocatable_connectors), connector_usage_location
