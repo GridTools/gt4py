@@ -79,9 +79,9 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    # Ordered, because the order the domains are returned in fixes the order of the
-    # generated dimension tag declarations. A plain `set` would make that order depend
-    # on `PYTHONHASHSEED` and so differ between processes.
+    # Ordered set, here and in the other collectors below: the order the collected
+    # elements are returned in ends up in the generated code, so it must not be left to
+    # set iteration order.
     result: OrderedSet[itir.FunCall] = OrderedSet()
     for node in nodes:
         result.update(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
@@ -159,8 +159,6 @@ def _collect_offset_definitions(
     offset_definitions = {}
     offset_provider_type = {**offset_provider_type}
 
-    # Ordered, because these feed `offset_definitions` below, whose insertion order
-    # becomes the order of the generated tag declarations.
     cartesian_offsets: OrderedSet[itir.CartesianOffset] = OrderedSet(
         node.walk_values().if_isinstance(itir.CartesianOffset).to_list()
     )
@@ -432,8 +430,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def _collect_offset_or_axis_node(
         node_type: Type, tree: eve.Node | Iterable[eve.Node]
     ) -> OrderedSet[str]:
-        # Ordered, because callers build generated-code lists (e.g. `connectivities`)
-        # from this, so a plain `set` would make the emitted order hash-seed dependent.
         if not isinstance(tree, Iterable):
             tree = [tree]
         result: OrderedSet[str] = OrderedSet()
