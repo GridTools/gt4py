@@ -842,7 +842,11 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         sdfg: dace.SDFG,
         if_block: dace_nodes.NestedSDFG,
     ) -> Optional[
-        tuple[list[str], list[str], dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]]]
+        tuple[
+            OrderedSet[str],
+            OrderedSet[str],
+            dict[str, tuple[dace.SDFGState, dace_nodes.AccessNode]],
+        ]
     ]:
         """Check if `if_block` can be processed and partition the input connectors.
 
@@ -946,6 +950,6 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         if len(non_relocatable_connectors) == 0:
             return None
 
-        relocatable_connectors = list(connector_usage_location.keys())
+        relocatable_connectors = OrderedSet(connector_usage_location.keys())
 
-        return relocatable_connectors, list(non_relocatable_connectors), connector_usage_location
+        return relocatable_connectors, non_relocatable_connectors, connector_usage_location
