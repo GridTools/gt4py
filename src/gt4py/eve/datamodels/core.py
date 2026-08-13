@@ -1081,6 +1081,20 @@ def _is_strictly_immutable_type(
     Returns:
         ``True`` if every value admitted by the annotation is strictly immutable.
     """
+    if xtyping.is_type_alias(type_annotation) or xtyping.get_origin(type_annotation) is not None:
+        # A PEP 695 alias stands for the annotation it resolves to, so check that
+        # instead; an alias whose value cannot be evaluated (undefined name, recursive,
+        # ...) proves nothing and is rejected below like any other unresolved
+        # annotation. Non-aliases are returned unchanged, as the identical object.
+        try:
+            resolved_alias = xtyping.eval_type_alias(type_annotation)
+        except (NameError, TypeError):
+            return False
+        if resolved_alias is not type_annotation:
+            return _is_strictly_immutable_type(
+                resolved_alias, _as_container_origin=_as_container_origin
+            )
+
     if is_datamodel(type_annotation):
         return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
 

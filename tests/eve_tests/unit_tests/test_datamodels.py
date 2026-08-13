@@ -1022,6 +1022,14 @@ class PlainFrozenInner:
 
 MutableBoundT = TypeVar("MutableBoundT", bound=Tuple[List[int], ...])
 
+# Module level, since this file uses PEP 563: a function-local alias would only ever be
+# seen as an unresolvable forward reference and the tests below would pass for the wrong
+# reason.
+type ImmutableAlias = tuple[int, int]
+type MutableAlias = tuple[list[int], ...]
+type PairAlias[T] = tuple[T, T]
+type BrokenAlias = _undefined_alias_target  # noqa: F821 [undefined-name]
+
 
 # Test datamodel options
 class TestDatamodelOptions:
@@ -1174,6 +1182,38 @@ class TestDatamodelOptions:
             @datamodels.datamodel(frozen="strict")
             class TypeVarModel:
                 value: MutableBoundT
+
+    def test_strict_frozen_resolves_pep695_type_aliases(self):
+        # A PEP 695 alias stands for the annotation it resolves to, so it has to be
+        # checked through that: otherwise an alias for an immutable type would be
+        # rejected just for being an alias, and one hiding a mutable type would only be
+        # rejected by accident.
+        @datamodels.datamodel(frozen="strict")
+        class ImmutableAliasModel:
+            value: ImmutableAlias
+
+        @datamodels.datamodel(frozen="strict")
+        class ParametrizedAliasModel:
+            value: PairAlias[int]
+
+        assert hash(ImmutableAliasModel(value=(1, 2))) is not None
+        assert hash(ParametrizedAliasModel(value=(1, 2))) is not None
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class MutableAliasModel:
+                value: MutableAlias
+
+    def test_strict_frozen_rejects_unevaluable_pep695_type_alias(self):
+        # Alias values are evaluated lazily, so a broken one only fails here. It proves
+        # nothing about immutability and must be rejected rather than escaping as the
+        # raw 'NameError' / 'TypeError' from the alias evaluation.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BrokenAliasModel:
+                value: BrokenAlias
 
     def test_strict_frozen_rejects_unresolved_forward_reference(self):
         # A self-reference cannot be resolved while the class is being created, so it
