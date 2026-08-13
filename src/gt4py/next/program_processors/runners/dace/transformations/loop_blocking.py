@@ -27,6 +27,7 @@ from dace.sdfg import (
     utils as dace_sdutils,
 )
 from dace.transformation import helpers as dace_helpers
+from ordered_set import OrderedSet
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
@@ -89,8 +90,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     )
 
     # Set of nodes that are independent of the blocking parameter.
-    _independent_nodes: Optional[set[dace_nodes.AccessNode]]
-    _dependent_nodes: Optional[set[dace_nodes.AccessNode]]
+    _independent_nodes: Optional[OrderedSet[dace_nodes.AccessNode]]
+    _dependent_nodes: Optional[OrderedSet[dace_nodes.AccessNode]]
     _memlet_to_promote: Optional[list[dace_graph.MultiConnectorEdge[dace.Memlet]]]
 
     outer_entry = dace_transformation.PatternNode(dace_nodes.MapEntry)
@@ -403,7 +404,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
 
         # Clear the previous partition.
-        self._independent_nodes = set()
+        self._independent_nodes = OrderedSet()
         self._dependent_nodes = None
 
         # We only need to do the following if we require some independent nodes to exist
@@ -412,11 +413,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             #  - All nodes adjacent to `outer_entry` (which is
             #       independent by definition).
             #  - All nodes adjacent to independent nodes.
-            nodes_to_classify: set[dace_nodes.Node] = {
+            nodes_to_classify: OrderedSet[dace_nodes.Node] = OrderedSet(
                 edge.dst for edge in state.out_edges(outer_entry)
-            }
+            )
             for independent_node in self._independent_nodes:
-                nodes_to_classify.update({edge.dst for edge in state.out_edges(independent_node)})
+                nodes_to_classify.update([edge.dst for edge in state.out_edges(independent_node)])
             nodes_to_classify.difference_update(self._independent_nodes)
 
             # Now classify each node
@@ -454,11 +455,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # After the independent set is computed compute the set of dependent nodes
         #  as the set of all nodes adjacent to `outer_entry` that are not independent.
-        self._dependent_nodes = {
+        self._dependent_nodes = OrderedSet(
             edge.dst
             for edge in state.out_edges(outer_entry)
             if edge.dst not in self._independent_nodes
-        }
+        )
 
         return True
 
@@ -525,7 +526,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # If the test succeed then these are the nodes we additionally consider
         #  as independent.
-        new_independent_nodes: set[dace_nodes.Node] = {node_to_classify}
+        new_independent_nodes = OrderedSet([node_to_classify])
 
         # We are only able to handle certain kind of nodes, so screening them.
         if isinstance(node_to_classify, dace_nodes.Tasklet):
@@ -942,6 +943,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         # Contains the nodes that are already have been handled.
         relocated_nodes: set[dace_nodes.Node] = set()
 
+        # Counter for copy tasklets to generate deterministic names.
+        copy_tlet_counter = 0
+
         # We now handle all independent nodes, this means that all of their
         #  _output_ edges have to go through the new inner map and the Memlets
         #  need modifications, because of the block parameter.
@@ -965,11 +969,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     assert not out_edge.data.is_empty()
 
                     copy_tlet = state.add_tasklet(
-                        name=f"loop_blocking_copy_tlet_{independent_node.data}_{id(out_edge)}",
+                        name=f"loop_blocking_copy_tlet_{independent_node.data}_{copy_tlet_counter}",
                         inputs={"__in"},
                         outputs={"__out"},
                         code="__out = __in",
                     )
+                    copy_tlet_counter += 1
 
                     # remove the current output edge from the state, but we need it.
                     org_out_edge = out_edge
