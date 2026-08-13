@@ -17,6 +17,7 @@ regress. When changing a message, update the expectation here alongside.
 
 import re
 import sys
+import types
 
 import pytest
 
@@ -26,6 +27,11 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
 IDim = gtx.Dimension("IDim")
+
+# A PEP 695 alias whose value raises when it is evaluated, standing in for the
+# common case of a typo'd dtype ('np.foat64') inside an alias definition.
+_empty_module = types.ModuleType("_empty_module")
+type BrokenFieldAlias = gtx.Field[gtx.Dims[IDim], _empty_module.foat64]
 
 
 def parse_error(func) -> errors.DSLError:
@@ -180,3 +186,135 @@ def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
     assert errors.DSLError.code is None
+
+
+def test_unsupported_parameter_annotation_is_located():
+    def bad_param(a: list[float64]) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(bad_param)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.code == "invalid-annotation"
+    assert err.location is not None
+    rendered = str(err)
+    assert "a: list[float64]" in rendered
+    assert "Hint:" in rendered
+
+
+def test_unsupported_return_annotation_is_located():
+    def bad_return(a: gtx.Field[[IDim], float64]) -> list[float64]:
+        return a
+
+    err = parse_error(bad_return)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert "return type annotation" in err.message
+    # The span covers the annotation, not the whole function definition (which used
+    # to span both lines). See the note on caret-run regexes in
+    # 'test_unsupported_variable_annotation_is_located'.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("list[float64]")
+    assert re.search(r"\| +\^{13}(?!\^)", str(err)), str(err)
+
+
+def test_return_type_mismatch_points_at_the_returned_value():
+    def mismatch(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float32]:
+        return a
+
+    err = parse_error(mismatch)
+
+    assert "does not match deduced return type" in err.message
+    # The deduced type comes from the returned expression, so that is what is
+    # underlined rather than the whole function definition.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("a")
+    assert re.search(r"\| +\^(?!\^)", str(err)), str(err)
+
+
+def test_return_type_mismatch_with_several_returns_falls_back_to_the_function():
+    def two_returns(a: gtx.Field[[IDim], float64], cond: bool) -> gtx.Field[[IDim], float32]:
+        if cond:
+            return a
+        else:
+            return a + a
+
+    err = parse_error(two_returns)
+
+    assert "does not match deduced return type" in err.message
+    # No single expression the deduced type can be pinned on, so the whole function
+    # definition stays the primary span rather than an arbitrarily picked return.
+    assert err.location.line < err.location.end_line
+
+
+def test_bad_return_annotation_is_reported_before_body_errors():
+    # The return annotation is checked while parsing the signature, so it is reported
+    # even when the body would also fail to type-deduce. This ordering changed when
+    # the check moved out of the post-processing step to get a usable location.
+    def both_wrong(a: gtx.Field[[IDim], float64]) -> list[float64]:
+        return a + "not a field"
+
+    err = parse_error(both_wrong)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert "return type annotation" in err.message
+
+
+def test_unsupported_variable_annotation_is_located():
+    def bad_var(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        tmp: list[float64] = a
+        return tmp
+
+    err = parse_error(bad_var)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert "variable type annotation" in err.message
+    rendered = str(err)
+    assert "tmp: list[float64]" in rendered
+    # The span covers the annotation only, not the whole statement. Asserted on the
+    # columns rather than only on the carets, because a caret-run regex without a
+    # trailing lookahead also matches any *longer* run and so pins nothing.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("list[float64]")
+    assert re.search(r"\| +\^{13}(?!\^)", rendered), rendered
+
+
+def test_valid_variable_annotation_is_accepted():
+    # Regression test: the annotation of a valid declaration is turned into a
+    # location-less 'ast.Constant' by 'StringifyAnnotationsPass', so asking for
+    # its source location used to crash before the pass preserved it.
+    def annotated(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        tmp: float64 = 1.0
+        return a + tmp
+
+    FieldOperatorParser.apply_to_function(annotated)
+
+
+def test_invalid_annotation_keeps_the_underlying_reason_as_a_note():
+    def mistyped(a: gtx.Field) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(mistyped)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert any("Field type requires two arguments" in note for note in err.notes)
+
+
+def test_broken_type_alias_annotation_is_located():
+    # A PEP 695 alias body is only evaluated when the annotation is resolved, so a
+    # typo inside it surfaces during parsing. It has to come out as a located
+    # diagnostic naming the typo, not as a raw 'AttributeError' traceback.
+    def broken(a: BrokenFieldAlias) -> gtx.Field[[IDim], float64]:
+        return a
+
+    err = parse_error(broken)
+
+    assert isinstance(err, errors.InvalidAnnotationError)
+    assert err.location is not None
+    assert any("foat64" in note for note in err.notes)
+    # The span covers the parameter, not the whole signature. It includes the
+    # parameter name because 'visit_arg' locates the whole 'ast.arg'; only
+    # 'visit_AnnAssign' narrows down to the annotation itself.
+    assert err.location.line == err.location.end_line
+    assert err.location.end_column - err.location.column == len("a: BrokenFieldAlias")
+    assert re.search(r"\| +\^{19}(?!\^)", str(err)), str(err)
