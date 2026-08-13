@@ -72,10 +72,7 @@ def _program_over_domains(domains: list[itir.FunCall]) -> itir.Program:
 
 
 def test_get_domains_preserves_ir_order():
-    # The order of the domains fixes the order of the generated dimension tag
-    # declarations, so it has to follow the IR. Deriving it from a `set` instead made the
-    # generated source vary with `PYTHONHASHSEED` from one process to the next, which
-    # changed the fingerprint the build cache is keyed on.
+    # The order of the domains fixes the order of the generated dimension tag declarations.
     domains = [
         im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value=name), 1, 2))
         for name in ["D", "C", "B", "A", "F", "E"]

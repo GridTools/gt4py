@@ -79,9 +79,7 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    # Ordered set, here and in the other collectors below: the order the collected
-    # elements are returned in ends up in the generated code, so it must not be left to
-    # set iteration order.
+    # Ordered, here and in the collectors below: this order ends up in the generated code.
     result: OrderedSet[itir.FunCall] = OrderedSet()
     for node in nodes:
         result.update(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
