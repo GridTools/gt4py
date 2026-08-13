@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Dict, Final, Mapping, Optional, TypeVar
 
 import dace
+from ordered_set import OrderedSet
 
 from gt4py import eve
 from gt4py.eve.extended_typing import NestedTuple
@@ -136,14 +137,14 @@ def replace_invalid_symbols(ir: gtir.Program) -> gtir.Program:
             f"Unexpectd symbol with prefix '{_TASKLET_CONNECTOR_PREFIX}' in program parameters."
         )
 
-    ir_sym_ids = {str(sym.id) for sym in eve.walk_values(ir).if_isinstance(gtir.Sym).to_set()}
+    ir_sym_ids = OrderedSet(
+        eve.walk_values(ir).if_isinstance(gtir.Sym).map(lambda x: str(x.id)).to_list()
+    )
     ir_ssa_uuid = eve.utils.SequentialIDGenerator(prefix="gtir_var")
 
     # note: traverse in alphabetical order to generate UIDs in deterministic way
     invalid_symbols_mapping = {
-        sym_id: next(ir_ssa_uuid)
-        for sym_id in sorted(ir_sym_ids)
-        if not dace.dtypes.validate_name(sym_id)
+        sym_id: next(ir_ssa_uuid) for sym_id in ir_sym_ids if not dace.dtypes.validate_name(sym_id)
     }
     if len(invalid_symbols_mapping) == 0:
         return ir

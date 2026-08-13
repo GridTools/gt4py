@@ -102,14 +102,11 @@ def _apply_split_access_node_non_recursive(
         # We can only split single use data that is also transient. Because GT4Py uses
         #  an SSA style we know that there is only one AccessNode that refers to that
         #  data. Thus, all AccessNodes that are stored refer to different data
-        access_nodes_to_process = sorted(
-            (
-                dnode
-                for dnode in state.data_nodes()
-                if dnode.data in single_use_data and scope_dict[dnode] is None
-            ),
-            key=lambda dnode: dnode.data,
-        )
+        access_nodes_to_process = [
+            dnode
+            for dnode in state.data_nodes()
+            if dnode.data in single_use_data and scope_dict[dnode] is None
+        ]
         assert len(access_nodes_to_process) == len(
             set(map(lambda ac: ac.data, access_nodes_to_process))
         )

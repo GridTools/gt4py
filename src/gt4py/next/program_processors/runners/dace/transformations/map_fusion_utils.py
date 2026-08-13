@@ -78,8 +78,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs={k: None for k in sorted(node.in_connectors.keys())},
-                outputs={k: None for k in sorted(node.out_connectors.keys())},
+                inputs={k: None for k in node.in_connectors.keys()},
+                outputs={k: None for k in node.out_connectors.keys()},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
@@ -202,19 +202,17 @@ def split_overlapping_map_range(
         Two lists, each containing the ranges corresponding to the splitted range
         for the first and the second map, respectively.
     """
-    first_map_params = set(first_map.params)
-    second_map_params = set(second_map.params)
-    if first_map_params != second_map_params:
+    if set(first_map.params) != set(second_map.params):
         return None
 
     first_map_dict = dict(zip(first_map.params, first_map.range.ranges, strict=True))
     second_map_dict = dict(zip(second_map.params, second_map.range.ranges, strict=True))
 
     first_map_sorted_range = dace_subsets.Range(
-        [first_map_dict[param] for param in sorted(first_map_params)]
+        [first_map_dict[param] for param in first_map.params]
     )
     second_map_sorted_range = dace_subsets.Range(
-        [second_map_dict[param] for param in sorted(second_map_params)]
+        [second_map_dict[param] for param in first_map.params]
     )
 
     if gtx_dace_split.never_intersecting(first_map_sorted_range, second_map_sorted_range):
@@ -224,18 +222,18 @@ def split_overlapping_map_range(
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
-    for param, first_map_range in first_map_dict.items():
+    for param, first_map_sorted_range in first_map_dict.items():
         second_map_range = second_map_dict[param]
-        if (step := first_map_range[2]) != second_map_range[2]:
+        if (step := first_map_sorted_range[2]) != second_map_range[2]:
             # we do not support splitting of map range when the range step is different
             return None
-        elif first_map_range == second_map_range:
-            first_map_splitted_dict[param] = [first_map_range]
+        elif first_map_sorted_range == second_map_range:
+            first_map_splitted_dict[param] = [first_map_sorted_range]
             second_map_splitted_dict[param] = [second_map_range]
         else:
             try:
-                overlap_range_start = max(first_map_range[0], second_map_range[0])
-                overlap_range_stop = min(first_map_range[1], second_map_range[1])
+                overlap_range_start = max(first_map_sorted_range[0], second_map_range[0])
+                overlap_range_stop = min(first_map_sorted_range[1], second_map_range[1])
             except TypeError:
                 # cannot determine truth value of Relational
                 # in case the ranges are defined with symbols we cannot determine the intersection
@@ -265,7 +263,7 @@ def split_overlapping_map_range(
 
             # split the ranges into sub-ranges based on the overlapping range
             first_map_splitted_dict[param] = _split_range(
-                first_map_range, overlap_range_start, overlap_range_stop, step
+                first_map_sorted_range, overlap_range_start, overlap_range_stop, step
             )
             second_map_splitted_dict[param] = _split_range(
                 second_map_range, overlap_range_start, overlap_range_stop, step

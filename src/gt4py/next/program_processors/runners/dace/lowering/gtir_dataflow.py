@@ -29,6 +29,7 @@ from typing import (
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 from dace.libraries import standard as dace_stdlib
+from ordered_set import OrderedSet
 
 from gt4py import eve
 from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
@@ -461,8 +462,8 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _add_tasklet(
         self,
         name: str,
-        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
-        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        inputs: OrderedSet[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: OrderedSet[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         **kwargs: Any,
     ) -> tuple[dace_nodes.Tasklet, dict[str, str]]:
@@ -631,8 +632,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         deref_node, connector_mapping = self._add_tasklet(
             name="deref",
-            inputs={"field"} | set(index_connectors),
-            outputs={"val"},
+            inputs={"field": None} | {conn: None for conn in index_connectors},
+            outputs={"val": None},
             code=f"val = field[{index_internals}]",
         )
         # add new termination point for the field parameter
@@ -989,7 +990,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             result = outer_value
 
-        outputs = {outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))}
+        outputs = [outval.dc_node.data for outval in gtx_utils.flatten_nested_tuple((result,))]
 
         # map the connectivities that were used inside the nested SDFG
         used_connectivities = [
@@ -1004,8 +1005,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             nsdfg_symbols_mapping["__cond"] = condition_value.value
         nsdfg_node = self.state.add_nested_sdfg(
             nsdfg,
-            inputs={key: None for key in sorted(used_connectivities | input_memlets.keys())},
-            outputs={key: None for key in sorted(outputs)},
+            inputs={key: None for key in [*used_connectivities, *input_memlets.keys()]},
+            outputs={key: None for key in outputs},
             symbol_mapping=nsdfg_symbols_mapping,
         )
 
@@ -1207,8 +1208,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         elif isinstance(index_arg, ValueExpr):
             tasklet_node, connector_mapping = self._add_tasklet(
                 name="list_get",
-                inputs={"index", "data"},
-                outputs={"val"},
+                inputs={"index": None, "data": None},
+                outputs={"val": None},
                 code="val = data[index]",
             )
             self._add_edge(
@@ -1516,22 +1517,22 @@ class LambdaToDataflow(eve.NodeVisitor):
             if isinstance(index_expr, SymbolExpr):
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
                     name="dynamic_offset",
-                    inputs={"offset"},
-                    outputs={new_index_connector},
+                    inputs={"offset": None},
+                    outputs={new_index_connector: None},
                     code=f"{new_index_connector} = {index_expr.value} + offset",
                 )
             elif isinstance(offset_expr, SymbolExpr):
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
                     name="dynamic_offset",
-                    inputs={"index"},
-                    outputs={new_index_connector},
+                    inputs={"index": None},
+                    outputs={new_index_connector: None},
                     code=f"{new_index_connector} = index + {offset_expr}",
                 )
             else:
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
                     name="dynamic_offset",
-                    inputs={"index", "offset"},
-                    outputs={new_index_connector},
+                    inputs={"index": None, "offset": None},
+                    outputs={new_index_connector: None},
                     code=f"{new_index_connector} = index + offset",
                 )
             for input_expr, input_connector in [
@@ -1587,8 +1588,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         new_index_connector = "neighbor_index"
         tasklet_node, connector_mapping = self._add_tasklet(
             "dynamic_neighbor_offset",
-            {"table", "offset"},
-            {new_index_connector},
+            {"table": None, "offset": None},
+            {new_index_connector: None},
             f"{new_index_connector} = table[{origin_index.value}, offset]",
         )
         self._add_input_data_edge(
@@ -1723,8 +1724,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         out_connector = "result"
         tasklet_node, connector_mapping = self._add_tasklet(
             name=builtin_name,
-            inputs=set(node_connections.keys()),
-            outputs={out_connector},
+            inputs={conn: None for conn in node_connections.keys()},
+            outputs={out_connector: None},
             code="{} = {}".format(out_connector, code),
         )
 
@@ -1841,7 +1842,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # special case where the field operator is simply copying data from source to destination node
                 output_dtype = output_expr.dc_node.desc(self.sdfg).dtype
                 tasklet_node, connector_mapping = self._add_tasklet(
-                    name="copy", inputs={"inp"}, outputs={"out"}, code="out = inp"
+                    name="copy",
+                    inputs={"inp": None},
+                    outputs={"out": None},
+                    code="out = inp",
                 )
                 self._add_input_data_edge(
                     output_expr.dc_node,
@@ -1853,7 +1857,10 @@ class LambdaToDataflow(eve.NodeVisitor):
                 # even simpler case, where a constant value is written to destination node
                 output_dtype = output_expr.dc_dtype
                 tasklet_node, connector_mapping = self._add_tasklet(
-                    name="write", inputs={}, outputs={"out"}, code=f"out = {output_expr.value}"
+                    name="write",
+                    inputs={},
+                    outputs={"out": None},
+                    code=f"out = {output_expr.value}",
                 )
 
             output_expr = self._construct_tasklet_result(

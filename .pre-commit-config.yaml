@@ -117,3 +117,10 @@ repos:
         entry: uv run --group dev --frozen --isolated validate-pyproject pyproject.toml
         files: ^pyproject\.toml$
         pass_filenames: false
+
+      - <<: *uv-managed-hook
+        id: no-sorted-in-dace-backend
+        name: no sorted() in dace backend
+        entry: uv run --group dev --frozen --isolated python scripts/python/check_no_sorted_graph_traversal.py
+        files: ^src/gt4py/next/program_processors/runners/dace/.*\.py$
+        types_or: [python]
