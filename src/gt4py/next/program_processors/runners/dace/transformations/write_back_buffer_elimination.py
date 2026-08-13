@@ -85,8 +85,9 @@ def _accesses_region(
 class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     """Removes a write back buffer whose content is also consumed.
 
-    Matches a transient `T` that is written by Maps, copied in full into a non
-    transient `G` by a later state and additionally read by other consumers. Neither
+    Matches a transient `T` that is written in one or more states, whatever produces
+    it, copied in full into a non transient `G` by a later state and additionally
+    read by other consumers. Neither
     `DistributedBufferRelocator` (requires `out_degree(T) == 1`) nor
     `GT4PyMapBufferElimination` (requires the copy to be in the state where `T` is
     written, and `T` to be unused downstream) applies then, so the full array copy
@@ -107,9 +108,13 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
 
     The consumers of `T` need no condition of their own. From the definition of `T`
     onwards that range of `G` holds what the producer computed, exactly what `T`
-    held, and ADR-18 rule 6 forbids a second AccessNode writing `G` downstream of the
-    write back that could still change it. A consumer of `T` is therefore served by
-    `G` wherever it is, before or after the write back.
+    held, and `_has_conflicting_global_access()` declines when anything else writes
+    that range without being ordered before every definition of `T`. A consumer of
+    `T` is therefore served by `G` wherever it is, before or after the write back.
+
+    Args:
+        assume_pointwise: Assume that a read of `G` in a state that defines `T` is
+            elementwise, so that ADR-18 rule 3 permits it to alias the write.
 
     Notes:
         - Like `GT4PyMapBufferElimination`, the pass does not test that a read of `G`
@@ -122,7 +127,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     assume_pointwise = dace_properties.Property(
         dtype=bool,
         default=False,
-        desc="Assume that reads of `G` in the state that defines `T` are pointwise.",
+        desc="See docs.",
     )
 
     def __init__(
@@ -146,7 +151,14 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
         )
 
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
-        return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
+        # `Descriptors` because data that becomes transient turns into a candidate,
+        #  `NestedSDFGs` because a View inside one blocks the pass, see `_has_view()`.
+        return modified & (
+            dace_ppl.Modifies.Memlets
+            | dace_ppl.Modifies.AccessNodes
+            | dace_ppl.Modifies.Descriptors
+            | dace_ppl.Modifies.NestedSDFGs
+        )
 
     def depends_on(self) -> list[type[dace_transformation.Pass]]:
         return [dace_analysis.StateReachability, dace_analysis.FindAccessNodes]
@@ -197,8 +209,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 continue
 
             tmp_access = access_nodes.get(tmp_name, {})
-            # Every other out edge of `T` leads to a consumer, which `_eliminate()`
-            #  reroutes to `G` just like the write back itself.
+            # Find all locations where `T` is written to global data, i.e. the write
+            #  backs. The other out edges of `T` lead to consumers, which
+            #  `_eliminate()` reroutes to `G` just like the write back itself.
             write_backs = [
                 (edge, state)
                 for state, (tmp_reads, _) in tmp_access.items()
@@ -207,6 +220,8 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 if isinstance(edge.dst, dace_nodes.AccessNode) and not edge.dst.desc(sdfg).transient
             ]
             # With several write backs there is no single `G` to rewrite `T` into.
+            # TODO(havogt): Copying `T` back into more than one global could be
+            #   handled by keeping all write backs but the one that is rewritten.
             if len(write_backs) != 1:
                 continue
             wb_edge, wb_state = write_backs[0]
@@ -220,8 +235,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             if src_subset != dace_subsets.Range.from_array(tmp_desc):
                 continue
             # We map the index space of `T` onto the one of `G` by adding an offset,
-            #  so the two must have the same shape. Comparing the sizes also covers a
-            #  `G` with a different number of dimensions.
+            #  which is a simplification: it needs the two to have the same shape,
+            #  and comparing the sizes also rejects a `G` with a different number of
+            #  dimensions.
             if dst_subset.size() != src_subset.size():
                 continue
             # `Range.size()` ignores the step, so the check above also passes for a
@@ -238,6 +254,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # ADR-18 rule 7 recommends a single incoming edge for a write access
             #  node; we require it, so that removing `wb_edge` leaves a node that
             #  only reads `G` and can replace the AccessNodes of `T`.
+            # TODO(havogt): This stands in for a test whether rerouting the other
+            #   incoming edges through the consumers of `glob_node` would create a
+            #   cycle. With that test the requirement can be dropped.
             if wb_state.in_degree(glob_node) != 1:
                 continue
 
@@ -249,8 +268,9 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # Without a producer there is nothing that could write `G` in its place.
             if not def_states:
                 continue
-            # Inside one state we do not analyse whether the copy is ordered after
-            #  the producer, that pattern belongs to `GT4PyMapBufferElimination`.
+            # The reordering below is justified by the order of the states alone. If
+            #  the write back sits in a state that also defines `T`, their order is a
+            #  property of the dataflow inside that state, which we do not analyse.
             if wb_state in def_states:
                 continue
             # `_eliminate()` moves the write into `G` to the states that define `T`,
@@ -296,24 +316,24 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             the SDFG agree on the content of `wb_region`.
 
         What is left is rejected:
-        - A write to `wb_region`. ADR-18 rule 6 forbids a second AccessNode writing
-            `G` upstream or downstream of `glob_node`, so such a node is a sibling in
-            a `ConditionalBlock`. Moving the write into the producer would put a write
-            of `G` on a path that had none.
+        - A write to `wb_region`. For global memory ADR-18 rule 3 takes precedence
+            over rule 6, so a second AccessNode writing `G` is allowed and may sit on
+            the same path as `glob_node` or on a sibling one. Preponing the write is
+            wrong either way: it would end up behind that write instead of in front
+            of it, or put a write of `G` on a path that had none.
         - A read of `wb_region` in a state that defines `T`. Only the elementwise read
             that ADR-18 rule 3 allows is admissible, see `_is_read_by_tmp_producer()`
             and `assume_pointwise`.
         - Anything else is unordered with the write that the rewrite prepones and
             would race with it.
 
-        Returns:
-            `True` if the write back must be kept.
-
         Todo:
             A read inside a state that defines `T` and that is ordered before the
             producer, rather than feeding it, is safe as well and is rejected here.
         """
         for state, (glob_reads, glob_writes) in glob_access.items():
+            # Every node is classified on its own, so the iteration order of the
+            #  union of the two sets does not matter.
             for node in glob_reads | glob_writes:
                 if node is glob_node:
                     continue
