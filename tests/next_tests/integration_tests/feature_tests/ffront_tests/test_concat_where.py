@@ -407,3 +407,28 @@ def test_with_tuples_different_domain(cartesian_case):
         out=out,
         ref=(ref0, ref1),
     )
+
+
+def test_concat_where_never_selected_branch_keeps_dimensions(cartesian_case):
+    # The bounds have to be literals: a branch can only be shown to be never selected
+    #  when the domain is known at compile time.
+    isize, ksize = 3, 4
+
+    @gtx.field_operator
+    def testee(interior: cases.IKField, profile: cases.KField) -> cases.IKField:
+        return concat_where(KDim < 0, interior, profile)
+
+    @gtx.program
+    def prog(interior: cases.IKField, profile: cases.KField, out: cases.IKField):
+        testee(interior, profile, out=out, domain={IDim: (0, 3), KDim: (0, 4)})
+
+    interior = cases.allocate(
+        cartesian_case, testee, "interior", domain=gtx.domain({IDim: isize, KDim: ksize})
+    )()
+    profile = cases.allocate(cartesian_case, testee, "profile", domain=gtx.domain({KDim: ksize}))()
+    out = cases.allocate(
+        cartesian_case, testee, cases.RETURN, domain=gtx.domain({IDim: isize, KDim: ksize})
+    )()
+
+    ref = np.broadcast_to(profile.asnumpy(), (isize, ksize))
+    cases.verify(cartesian_case, prog, interior, profile, out=out, ref=ref)
