@@ -649,7 +649,10 @@ def _setup_initial_producer_description_in_nested_state(
                 break
 
     # Now create the ones that are missing.
-    for missing_data in needed_data:
+    # Sorted, not set order: this drives the order the access nodes are inserted into the
+    # state, and therefore the order they are serialized in. `str` hashing is salted per
+    # process, so a plain set makes the emitted SDFG differ from one run to the next.
+    for missing_data in sorted(needed_data):
         assert not nested_sdfg.arrays[missing_data].transient
         source_access_nodes[missing_data] = nested_state.add_access(missing_data)
 
