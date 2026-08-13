@@ -10,6 +10,8 @@ import dataclasses
 import functools
 from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
+from ordered_set import OrderedSet
+
 import gt4py.eve as eve
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common, utils
@@ -77,15 +79,13 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    # The order the domains are returned in fixes the order of the generated dimension
-    # tag declarations, so it has to be derived from the IR rather than from set
-    # iteration, which varies with `PYTHONHASHSEED` across processes.
-    result: dict[itir.FunCall, None] = {}
+    # Ordered, because the order the domains are returned in fixes the order of the
+    # generated dimension tag declarations. A plain `set` would make that order depend
+    # on `PYTHONHASHSEED` and so differ between processes.
+    result: OrderedSet[itir.FunCall] = OrderedSet()
     for node in nodes:
-        result.update(
-            dict.fromkeys(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
-        )
-    return result.keys()
+        result.update(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
+    return result
 
 
 def _name_from_named_range(named_range_call: itir.FunCall) -> str:
@@ -159,10 +159,10 @@ def _collect_offset_definitions(
     offset_definitions = {}
     offset_provider_type = {**offset_provider_type}
 
-    # Traversal order, not set order: these feed `offset_definitions` below, whose
-    # insertion order becomes the order of the generated tag declarations.
-    cartesian_offsets: Iterable[itir.CartesianOffset] = (
-        node.walk_values().if_isinstance(itir.CartesianOffset).unique().to_list()
+    # Ordered, because these feed `offset_definitions` below, whose insertion order
+    # becomes the order of the generated tag declarations.
+    cartesian_offsets: OrderedSet[itir.CartesianOffset] = OrderedSet(
+        node.walk_values().if_isinstance(itir.CartesianOffset).to_list()
     )
     for cart_offset in cartesian_offsets:
         dims = [
@@ -431,23 +431,21 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @staticmethod
     def _collect_offset_or_axis_node(
         node_type: Type, tree: eve.Node | Iterable[eve.Node]
-    ) -> list[str]:
-        # Ordered by traversal: callers build generated-code lists (e.g. `connectivities`)
-        # from this, so a `set` here would make the emitted order hash-seed dependent.
+    ) -> OrderedSet[str]:
+        # Ordered, because callers build generated-code lists (e.g. `connectivities`)
+        # from this, so a plain `set` would make the emitted order hash-seed dependent.
         if not isinstance(tree, Iterable):
             tree = [tree]
-        result: dict[str, None] = {}
+        result: OrderedSet[str] = OrderedSet()
         for n in tree:
             result.update(
-                dict.fromkeys(
-                    n.pre_walk_values()
-                    .if_isinstance(node_type)
-                    .getattr("value")
-                    .if_isinstance(str)
-                    .to_list()
-                )
+                n.pre_walk_values()
+                .if_isinstance(node_type)
+                .getattr("value")
+                .if_isinstance(str)
+                .to_list()
             )
-        return list(result)
+        return result
 
     def _visit_if_(self, node: itir.FunCall, **kwargs: Any) -> Node:
         assert len(node.args) == 3
