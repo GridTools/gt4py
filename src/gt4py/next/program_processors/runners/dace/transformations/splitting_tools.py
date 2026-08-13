@@ -279,6 +279,10 @@ def split_node(
     #  different data container, which can leave a read without a `src_subset`. The
     #  rerouting below can not repair that, it runs while the old and the new edge are
     #  both present, so it is done here, while the graph still tells where the data is.
+    # TODO(phimuell): Replace this with a cheaper repair. The cost is not the Memlet
+    #   tree, which is scope local, but `try_initialize()`, which calls `memlet_path()`
+    #   once per edge; that is also where the "undefined for more than one path"
+    #   caveat of `memlet_path()` applies.
     for edge in state.all_edges(node_to_split):
         for memlet_tree in state.memlet_tree(edge).traverse_children(include_self=True):
             memlet_tree.edge.data.try_initialize(sdfg, state, memlet_tree.edge)

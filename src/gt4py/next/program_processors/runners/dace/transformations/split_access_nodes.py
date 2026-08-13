@@ -257,7 +257,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             return False
 
         # Now check if a decomposition exist.
-        fragments = self._find_edge_reassignment(graph)
+        fragments = self._find_fragments(graph)
         if fragments is None:
             return False
         if len(fragments) <= 1:
@@ -288,7 +288,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     ) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
         access_node: dace_nodes.AccessNode = self.access_node
 
-        fragments = self._find_edge_reassignment(graph)
+        fragments = self._find_fragments(graph)
         assert fragments is not None
 
         # TODO(phimuell): Make it more general that it can take the full advantage
@@ -324,7 +324,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         # Special extension to support certain workflows.
         return fragment_access_nodes
 
-    def _find_edge_reassignment(
+    def _find_fragments(
         self,
         state: dace.SDFGState,
     ) -> list[_Fragment] | None:
@@ -456,7 +456,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         """Checks if the decomposition results in a valid SDFG.
 
         This function is used to validate the decomposition computed by
-        `self._find_edge_reassignment()`.
+        `self._find_fragments()`.
         """
 
         for fragment in fragments:
@@ -477,9 +477,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             #  is also read. We can not impose that on a fragment that is fed by
             #  several producers, no consumer is associated to an individual producer
             #  of it, so requiring that the fragment is read in full would reject the
-            #  whole node, including the fragments that are fine. What stays unread is
-            #  dead data, which we already tolerate for a fragment without any
-            #  consumer, see the warning in `_find_edge_reassignment()`.
+            #  whole node, including the fragments that are fine.
+            # NOTE: What stays unread is computed and stored for nothing, and unlike a
+            #   fragment without any consumer, which `DeadDataflowElimination` removes,
+            #   it can not be recovered later, the fragment is read. It is not a
+            #   regression, without the split the same producer computes the same
+            #   values and they are discarded just as well.
             if len(fragment.producers) > 1:
                 continue
 
