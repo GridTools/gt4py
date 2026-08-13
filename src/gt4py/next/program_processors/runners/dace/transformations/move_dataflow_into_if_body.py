@@ -746,8 +746,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # While we can relocate nodes that are needed by multiple connectors, we can
         #  not handle the case if they end up in multiple branches.
-        nodes_in_states: dict[dace.SDFGState, set[dace_nodes.Node]] = collections.defaultdict(
-            OrderedSet
+        nodes_in_states: dict[dace.SDFGState, OrderedSet[dace_nodes.Node]] = (
+            collections.defaultdict(OrderedSet)
         )
         for conn_name, rel_df in raw_relocatable_dataflow.items():
             nodes_in_states[connector_usage_location[conn_name][0]].update(rel_df)
