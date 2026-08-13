@@ -22,6 +22,7 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next import config as gtx_config
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
@@ -636,9 +637,11 @@ def _setup_initial_producer_description_in_nested_state(
 
     # Look for access nodes that already exist.
     source_access_nodes: dict[str, dace_nodes.AccessNode] = {}
-    needed_data: set[str] = {
+    # Ordered, because iterating it below fixes the order the access nodes are inserted
+    # into the state, and with it the order they are serialized in.
+    needed_data: OrderedSet[str] = OrderedSet(
         producer_spec.data_name for producer_spec in nested_initial_producer_specs
-    }
+    )
     for dnode in nested_state.data_nodes():
         if dnode.data in needed_data:
             needed_data.remove(dnode.data)
@@ -1078,8 +1081,8 @@ def _replace_single_read(
     )
     concat_where_tasklet = state.add_tasklet(
         tasklet_name,
-        inputs=set(tlet_inputs),
-        outputs={tlet_output},
+        inputs={v: None for v in tlet_inputs},
+        outputs={tlet_output: None},
         code=tlet_code,
     )
 
