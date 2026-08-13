@@ -22,6 +22,7 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next import config as gtx_config
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
@@ -636,9 +637,11 @@ def _setup_initial_producer_description_in_nested_state(
 
     # Look for access nodes that already exist.
     source_access_nodes: dict[str, dace_nodes.AccessNode] = {}
-    needed_data: set[str] = {
+    # Ordered, because iterating it below fixes the order the access nodes are inserted
+    # into the state, and with it the order they are serialized in.
+    needed_data: OrderedSet[str] = OrderedSet(
         producer_spec.data_name for producer_spec in nested_initial_producer_specs
-    }
+    )
     for dnode in nested_state.data_nodes():
         if dnode.data in needed_data:
             needed_data.remove(dnode.data)
@@ -649,10 +652,7 @@ def _setup_initial_producer_description_in_nested_state(
                 break
 
     # Now create the ones that are missing.
-    # Sorted, not set order: this drives the order the access nodes are inserted into the
-    # state, and therefore the order they are serialized in. `str` hashing is salted per
-    # process, so a plain set makes the emitted SDFG differ from one run to the next.
-    for missing_data in sorted(needed_data):
+    for missing_data in needed_data:
         assert not nested_sdfg.arrays[missing_data].transient
         source_access_nodes[missing_data] = nested_state.add_access(missing_data)
 
