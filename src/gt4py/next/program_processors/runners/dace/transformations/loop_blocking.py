@@ -185,7 +185,13 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         block_var_idx = map_params.index(matched_blocking_var)
         map_range_size = map_range.size()
 
-        if all((map_range_size_i == 1) == True for map_range_size_i in map_range_size):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+        # Skip maps where every dimension has size 1. Treat symbolic sizes as
+        # non-unit so that blocking can still be attempted.
+        try:
+            all_unit_sizes = all((map_range_size_i == 1) == True for map_range_size_i in map_range_size)  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
+        except TypeError:
+            all_unit_sizes = False
+        if all_unit_sizes:
             return False
 
         if map_range[block_var_idx][2] != 1:
@@ -204,7 +210,18 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #                    For example: if we want to have grid_size[block_var_idx] > 5, block_var_range = 35
         #                    and block_size = 8, then the blocking_size should be lowered to 7 instead of disabling
         #                    the transformation.
-        if (map_range_size[block_var_idx] <= self.blocking_size) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+        # The map range may be symbolic when the map has already been processed
+        # (e.g. by loop blocking on a different dimension). Only skip blocking
+        # if we can determine that the range is definitely not larger than the
+        # blocking size. If the comparison is symbolic, treat it as large enough
+        # to allow blocking and let downstream code handle it.
+        range_size = map_range_size[block_var_idx]
+        try:
+            range_is_small = bool(range_size <= self.blocking_size)
+        except TypeError:
+            # Symbolic comparison: assume the range is large enough.
+            range_is_small = False
+        if range_is_small:
             return False
 
         if not self.partition_map_output(matched_blocking_var, graph, sdfg, outer_entry):
