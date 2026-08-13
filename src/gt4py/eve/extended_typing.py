@@ -216,6 +216,9 @@ SingleTypeAnnotation = Union[
     type[Any],
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+    # Both PEP 695 type alias implementations, for the same reason as in `_TypeAliasTypes`
+    _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
 ]
 
 SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
@@ -459,6 +462,113 @@ def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
     )
 
 
+# -- PEP 695 type aliases (``type X = ...``) --
+#
+# Resolved at the annotation-dispatch funnels (`type_validation`,
+# `datamodels.core._make_type_converter`, `get_represented_types` below), not by
+# rewriting stored annotations: that would force `__value__` evaluation at class
+# creation and break aliases defined before their target. Wire any new shape-dispatching
+# consumer in as well; a funnel left out does not raise, it falls through to its
+# no-match branch (``()`` for `get_represented_types`), silently making every
+# `isinstance()` against the result `False`.
+#
+# Not supported: `ClassVar` behind an alias, and aliases used as runtime values (base
+# class, constructor, `isinstance()` argument) -- the reason ruff's `UP040` stays off.
+
+#: Both PEP 695 alias implementations: they are distinct classes and neither is an
+#: instance of the other, so both have to be checked. ``hasattr(obj, "__value__")`` is
+#: not equivalent -- ``MyGenericAlias[int]`` proxies attribute lookups to its origin and
+#: passes it without being an alias.
+_TypeAliasTypes: Final[tuple[type, ...]] = (
+    _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
+)
+
+#: Upper bound for the number of resolution steps in `eval_type_alias`. True cycles are
+#: detected exactly by the set of visited aliases; this bound is the backstop for the
+#: chains that diverge without ever repeating, like ``type G[T] = G[Tuple[T]]``.
+_MAX_TYPE_ALIAS_DEPTH: Final = 64
+
+
+def is_type_alias(obj: Any) -> TypeGuard[TypeAliasType]:
+    """Check if an object is a PEP 695 type alias (``type X = ...``)."""
+    return isinstance(obj, _TypeAliasTypes)
+
+
+def eval_type_alias(annotation: Any) -> Any:
+    """Replace a PEP 695 type alias by the annotation it stands for.
+
+    Chained aliases are followed until a non-alias annotation is reached, and
+    parametrized generic aliases (``MyAlias[int]``) get their type parameters
+    substituted. Any other annotation is returned unchanged (as the identical
+    object), so callers can use an identity check to find out whether anything
+    was actually resolved.
+
+    Note that alias values are evaluated lazily by the interpreter, so this is
+    the point where the names used in the alias definition are looked up for
+    the first time.
+
+    Args:
+        annotation: Any type annotation.
+
+    Returns:
+        The annotation the alias stands for, or `annotation` itself.
+
+    Raises:
+        NameError: If the alias value references a name which is not defined yet.
+        TypeError: If the alias is recursive (reported as such), nested too
+            deeply, cannot be parametrized with the given type arguments, or its
+            value fails to evaluate for any other reason.
+
+    Examples:
+        >>> type MyInt = int
+        >>> eval_type_alias(MyInt)
+        <class 'int'>
+
+        >>> eval_type_alias(float)
+        <class 'float'>
+    """
+    original_annotation = annotation
+    # A set of the aliases already walked through detects a true cycle ('type A = A',
+    # or a mutual 'A -> B -> A') exactly and reports it as such. It cannot replace the
+    # depth bound, though: a parametrized alias like 'type G[T] = G[Tuple[T]]' builds a
+    # bigger annotation on every step and so never repeats one. The two are complements.
+    seen: set[TypeAliasType] = set()
+    recursive = False
+    try:
+        for _ in range(_MAX_TYPE_ALIAS_DEPTH):
+            if is_type_alias(annotation):
+                if annotation in seen:
+                    recursive = True
+                    break
+                seen.add(annotation)
+                annotation = annotation.__value__
+            elif is_type_alias(alias := get_origin(annotation)):
+                annotation = alias.__value__[get_args(annotation)]
+            else:
+                return annotation
+    except NameError:
+        # A signal, not an error: an alias may be defined before its target, so a name
+        # missing here may exist by the time the field is used. 'datamodels' catches it
+        # and defers to the first instantiation, as it already does for string forward
+        # references, at the cost of a later error naming the bare field.
+        raise
+    except Exception as error:
+        # An alias value is arbitrary user code, so it can fail in any way (a typo'd
+        # dtype raises 'AttributeError'). Unlike 'NameError', none of those will ever
+        # resolve, so they fail here rather than being deferred. Wrapping them into one
+        # type lets consumers keep a single narrow 'except' and propagate this message
+        # verbatim, as it is the only text naming the actual cause.
+        raise TypeError(
+            f"Type alias '{original_annotation}' cannot be resolved ({error})."
+        ) from error
+
+    raise TypeError(
+        f"Type alias '{original_annotation}' cannot be resolved "
+        f"({'recursive definition' if recursive else 'nested too deeply'})."
+    )
+
+
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
     # When using Python < 3.11 and typing_extensions >= 4.4 there are
     # two different implementations of `Any`
@@ -489,9 +599,15 @@ def get_represented_types(
     localns: Optional[dict[str, Any]] = None,
 ) -> tuple[type, ...]:
     """Return a tuple with all the actual types contained in a type annotation."""
+    recurse = _functools.partial(get_represented_types, globalns=globalns, localns=localns)
 
     def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
-        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+        return _functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
+
+    # PEP 695 aliases are opaque objects which no other branch below matches, so an
+    # unresolved one would silently yield an empty tuple. Nested aliases are covered
+    # for free, since the generic branches recurse through this same function.
+    type_annotation = eval_type_alias(type_annotation)
 
     if type_annotation is Ellipsis:
         return ()
@@ -501,16 +617,14 @@ def get_represented_types(
 
     if isinstance(type_annotation, TypeVar):
         if type_annotation.__bound__:
-            return get_represented_types(type_annotation.__bound__)
+            return recurse(type_annotation.__bound__)
         if type_annotation.__constraints__:
             return recurse_all(type_annotation.__constraints__)
         if typevar_default := getattr(type_annotation, "__default__", None):
-            return get_represented_types(typevar_default)
+            return recurse(typevar_default)
 
     if isinstance(type_annotation, ForwardRef):
-        return get_represented_types(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
+        return recurse(eval_forward_ref(type_annotation, globalns=globalns, localns=localns))
 
     # Generic types
     origin_type = get_origin(type_annotation)

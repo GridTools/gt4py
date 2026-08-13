@@ -197,6 +197,16 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             ):  # see https://github.com/python/cpython/issues/105499
                 type_annotation = typing.Union[type_annotation.__args__]
 
+            # A 'NameError' is deliberately left to propagate here, so that 'datamodels'
+            # can defer; see 'xtyping.eval_type_alias' for both failure modes.
+            try:
+                resolved_annotation = xtyping.eval_type_alias(type_annotation)
+            except TypeError as error:
+                # Keep its message: it names the alias and the cause.
+                raise exceptions.EveValueError(str(error)) from error
+            if resolved_annotation is not type_annotation:
+                return make_recursive(resolved_annotation)
+
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
                 assert not xtyping.get_args(type_annotation)

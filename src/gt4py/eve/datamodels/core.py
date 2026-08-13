@@ -179,7 +179,7 @@ class ForwardRefValidator:
     factory: type_val.TypeValidatorFactory
     """Type factory used to create the actual field validator."""
 
-    validator: Union[type_val.FixedTypeValidator, None, NothingType] = NOTHING
+    validator: Union[type_val.FixedTypeValidator, NothingType, None] = NOTHING
     """Actual type validator created after resolving the forward references."""
 
     def __call__(self, instance: DataModel, attribute: Attribute, value: Any) -> None:
@@ -220,11 +220,17 @@ def field_type_validator_factory(
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
-        else:
+
+        try:
             simple_validator = factory(type_annotation, name, required=True)
-            return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
-            )
+        except NameError:
+            # Deferral signal from 'xtyping.eval_type_alias' (see its 'except NameError'
+            # branch); handled like a forward reference.
+            return ForwardRefValidator(factory)
+
+        return ValidatorAdapter(
+            simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
+        )
 
     return _field_type_validator_factory
 
@@ -448,10 +454,10 @@ else:
             cls,
             /,
             *,
-            repr: (bool | None | Literal["inherited"]) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
-            eq: bool | None | Literal["inherited"] = "inherited",
-            order: bool | None | Literal["inherited"] = "inherited",
-            unsafe_hash: bool | None | Literal["inherited"] = "inherited",
+            repr: (bool | Literal["inherited"] | None) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
+            eq: bool | Literal["inherited"] | None = "inherited",
+            order: bool | Literal["inherited"] | None = "inherited",
+            unsafe_hash: bool | Literal["inherited"] | None = "inherited",
             frozen: bool | Literal["strict", "inherited"] = "inherited",
             match_args: bool | Literal["inherited"] = "inherited",
             kw_only: bool | Literal["inherited"] = "inherited",
@@ -965,9 +971,41 @@ def _make_data_model_class_getitem() -> classmethod:
     return classmethod(__class_getitem__)
 
 
+@dataclasses.dataclass(**_dataclass_opts)
+class DeferredTypeConverter:
+    """Type converter for annotations which cannot be resolved at class creation time.
+
+    The actual converter is created the first time a value is coerced, mirroring what
+    `ForwardRefValidator` does for validators.
+    """
+
+    type_annotation: TypeAnnotation
+    """Unresolved annotation of the field."""
+
+    name: str
+    """Qualified name of the field, used in error messages."""
+
+    converter: Union[TypeConverter, None] = None
+    """Actual type converter created after resolving the annotation."""
+
+    def __call__(self, value: Any) -> Any:
+        if self.converter is None:
+            self.converter = _make_type_converter(self.type_annotation, self.name)
+        return self.converter(value)
+
+
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
+    try:
+        resolved_annotation = xtyping.eval_type_alias(type_annotation)
+    except NameError:
+        # Deferral signal, as in 'field_type_validator_factory' above.
+        return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
+
+    if resolved_annotation is not type_annotation:
+        return _make_type_converter(resolved_annotation, name)
+
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)

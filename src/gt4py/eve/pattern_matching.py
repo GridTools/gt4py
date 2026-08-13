@@ -110,15 +110,19 @@ def _(a: dict, b: Any, path: str = "") -> Iterator[tuple[str, str]]:
             missing_keys_str = "`" + "`, `".join(map(str, a_min_b)) + "`"
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
-                f"but the following keys are missing: {missing_keys_str}",
+                (
+                    f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
+                    f"but the following keys are missing: {missing_keys_str}"
+                ),
             )
         if b_min_a:
             extra_keys_str = "`" + "`, `".join(map(str, b_min_a)) + "`"
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
-                f"but the following keys are extra: {extra_keys_str}",
+                (
+                    f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
+                    f"but the following keys are extra: {extra_keys_str}"
+                ),
             )
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):

@@ -18,6 +18,7 @@ from gt4py.next import errors
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -32,16 +33,20 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.For: (
         "'for' loop",
         (
-            "GT4Py functions describe operations on whole fields without explicit loops. "
-            "Use field expressions or built-ins like 'neighbor_sum' instead; for sequential "
-            "dependencies along a dimension, use a 'scan_operator'.",
+            (
+                "GT4Py functions describe operations on whole fields without explicit loops. "
+                "Use field expressions or built-ins like 'neighbor_sum' instead; for sequential "
+                "dependencies along a dimension, use a 'scan_operator'."
+            ),
         ),
     ),
     ast.While: (
         "'while' loop",
         (
-            "GT4Py functions describe operations on whole fields without explicit loops. "
-            "For sequential dependencies along a dimension, use a 'scan_operator'.",
+            (
+                "GT4Py functions describe operations on whole fields without explicit loops. "
+                "For sequential dependencies along a dimension, use a 'scan_operator'."
+            ),
         ),
     ),
     ast.ListComp: (
@@ -108,6 +113,36 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
             ),
         )
         raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__) from err
+
+
+def type_from_annotation(
+    annotation: Any,
+    location: SourceLocation,
+    *,
+    description: str,
+    globalns: dict[str, Any] | None = None,
+) -> ts.TypeSpec:
+    """Translate a Python annotation into a GT4Py type, reporting failures as a diagnostic.
+
+    Args:
+        annotation: The Python type hint written by the user.
+        location: The source span the annotation was written at.
+        description: How to name the annotation in the message, e.g.
+            "type annotation for parameter 'a'".
+        globalns: Globals used to resolve names in the annotation.
+
+    Returns:
+        The GT4Py type specification for the annotation.
+
+    Raises:
+        InvalidAnnotationError: If the annotation is not a valid GT4Py type.
+    """
+    try:
+        return type_translation.from_type_hint(annotation, globalns=globalns)
+    except ValueError as error:
+        raise errors.InvalidAnnotationError(
+            location, annotation, description=description, reason=str(error)
+        ) from error
 
 
 @dataclass(frozen=True, kw_only=True)

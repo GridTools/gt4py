@@ -326,7 +326,7 @@ except ImportError:
 
     def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
         # restore the input scalar type, which `math.gamma` widens to `float`
-        return cast(core_defs.ScalarT, type(value)(math.gamma(value)))
+        return type(value)(math.gamma(value))
 
 
 _UNARY_MATH_FP_BUILTIN_IMPL: Final = {

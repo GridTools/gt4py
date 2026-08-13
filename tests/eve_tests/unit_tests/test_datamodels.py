@@ -1424,3 +1424,118 @@ def test_datamodel_abc_virtual_subclasses():
     assert isinstance(Model(value=1), datamodels.DataModelABC)
     assert not issubclass(Plain, datamodels.DataModelABC)
     assert not isinstance(Plain(), datamodels.DataModelABC)
+
+
+# -- PEP 695 type aliases --
+type SampleAliasInt = int
+type SampleAliasNested = typing.List[SampleAliasInt]
+type SampleAliasPair[T] = typing.Tuple[T, T]
+
+
+def test_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: SampleAliasInt
+
+    assert Model(value=1).value == 1
+    with pytest.raises(TypeError, match="Model.value"):
+        Model(value="1")
+
+
+def test_nested_type_alias_field():
+    class Model(datamodels.DataModel):
+        direct: SampleAliasNested
+        inline: typing.List[SampleAliasInt]
+        parametrized: SampleAliasPair[int]
+
+    model = Model(direct=[1], inline=[2], parametrized=(3, 4))
+    assert model.direct == [1]
+
+    with pytest.raises(TypeError, match="Model.inline"):
+        Model(direct=[1], inline=["2"], parametrized=(3, 4))
+
+
+def test_coerced_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: datamodels.Coerced[SampleAliasInt]
+
+    assert Model(value="42").value == 42
+
+
+def test_type_alias_field_with_undefined_value_is_deferred():
+    # The alias value is evaluated lazily, so the class body must not fail even
+    # though 'DefinedLater' does not exist yet. Validation happens on the first
+    # instantiation, like for forward references.
+    #
+    # This is 'exec'-ed instead of written inline because this test module uses
+    # 'from __future__ import annotations', which would turn the annotation into
+    # the string 'LazyAlias' and exercise the plain forward-reference path
+    # instead of the type-alias one. 'dont_inherit=True' is required for the
+    # same reason: 'exec()' inherits the '__future__' flags of the calling module.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: LazyAlias
+
+class DefinedLater:
+    pass
+"""
+    namespace: Dict[str, Any] = {}
+    exec(compile(source, "<test_type_alias_deferral>", "exec", dont_inherit=True), namespace)
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=DefinedLater()).value, DefinedLater)
+    # Note: the deferred validator reports the bare field name instead of the
+    # qualified 'Model.value', as it does for regular forward references.
+    with pytest.raises(TypeError, match="'value' must be"):
+        Model(value=1)
+
+
+def test_coerced_type_alias_field_with_undefined_value_is_deferred():
+    # Same as above for coerced fields: the converter is created on the first
+    # coercion instead of at class creation. See the note there on 'exec()'.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: datamodels.Coerced[LazyAlias]
+
+class DefinedLater:
+    def __init__(self, value):
+        self.value = value
+"""
+    namespace: Dict[str, Any] = {}
+    exec(
+        compile(source, "<test_coerced_type_alias_deferral>", "exec", dont_inherit=True), namespace
+    )
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=42).value, DefinedLater)
+    assert Model(value=42).value.value == 42
+
+
+@pytest.mark.parametrize("coerced", [False, True])
+def test_type_alias_field_with_failing_value_fails_at_class_creation(coerced):
+    # Deferral is only right for a name which is not defined _yet_. A value which
+    # raises for any other reason will never resolve, so it has to fail right away
+    # and name the actual cause, rather than be deferred to the first instantiation.
+    annotation = "datamodels.Coerced[BrokenAlias]" if coerced else "BrokenAlias"
+    source = f"""
+import types
+from gt4py.eve import datamodels
+
+_empty_module = types.ModuleType("_empty_module")
+
+type BrokenAlias = _empty_module.missing_attribute
+
+class Model(datamodels.DataModel):
+    value: {annotation}
+"""
+    with pytest.raises(Exception, match="'BrokenAlias' cannot be resolved") as exc_info:
+        exec(compile(source, "<test_broken_type_alias>", "exec", dont_inherit=True), {})
+
+    assert "missing_attribute" in str(exc_info.value)
