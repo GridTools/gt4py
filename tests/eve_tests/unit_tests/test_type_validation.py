@@ -157,6 +157,25 @@ SAMPLE_TYPE_DEFINITIONS.append(
 )
 
 
+# -- PEP 695 type aliases --
+type SampleIntAlias = int
+type SampleChainedAlias = SampleIntAlias
+type SampleListAlias = List[SampleIntAlias]
+type SamplePairAlias[T] = Tuple[T, T]
+
+
+SAMPLE_TYPE_DEFINITIONS.extend(
+    [
+        (SampleIntAlias, [1, -1], [1.0, "1"], None, None),
+        (SampleChainedAlias, [1, -1], [1.0, "1"], None, None),
+        (SampleListAlias, ([1, 2, 3], []), (1, [1.0]), None, None),
+        (List[SampleIntAlias], ([1, 2, 3], []), (1, [1.0]), None, None),
+        (Optional[SampleIntAlias], [1, None], ["1"], None, None),
+        (SamplePairAlias[int], [(1, 2)], [(1, "2"), (1,)], None, None),
+    ]
+)
+
+
 @pytest.mark.parametrize("validator", VALIDATORS)
 @pytest.mark.parametrize(
     ["type_hint", "valid_values", "wrong_values", "globalns", "localns"], SAMPLE_TYPE_DEFINITIONS
@@ -253,3 +272,31 @@ def test_simple_validation_particularities():
 
     with pytest.raises(ValueError, match="annotation is not supported"):
         type_val.simple_type_validator_factory(InvalidAnnotation, "value")
+
+
+def test_recursive_type_alias_is_not_supported():
+    type RecursiveAlias = RecursiveAlias
+
+    # The reason the alias could not be resolved is kept instead of the generic
+    # 'not supported' message, since it is the only thing pointing at the cause.
+    with pytest.raises(ValueError, match="'RecursiveAlias' cannot be resolved"):
+        type_val.simple_type_validator_factory(RecursiveAlias, "value")
+
+    assert type_val.simple_type_validator_factory(RecursiveAlias, "value", required=False) is None
+
+
+def test_type_alias_with_undefined_value_propagates_name_error():
+    # Alias values are evaluated lazily, so the missing name only shows up here.
+    # The error must not be swallowed: 'datamodels' relies on it to defer the
+    # creation of the validator.
+    type LazyAlias = _defined_later  # noqa: F821 [undefined-name]  # defined below
+
+    with pytest.raises(NameError):
+        type_val.simple_type_validator_factory(LazyAlias, "value")
+
+    _defined_later = int
+
+    validator = type_val.simple_type_validator_factory(LazyAlias, "value")
+    validator(1)
+    with pytest.raises(TypeError):
+        validator("1")
