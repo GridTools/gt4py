@@ -73,7 +73,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                 # TODO(tehrengruber): Implement support for tuples.
                 return node
 
-            def explicit_broadcast(branch: itir.Expr) -> itir.Expr:
+            def make_broadcast_explicit(branch: itir.Expr) -> itir.Expr:
                 assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
                 assert isinstance(node.type, (ts.FieldType, ts.ScalarType))
                 if type_info.extract_dims(branch.type) != type_info.extract_dims(node.type):
@@ -92,7 +92,9 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             # domain of the broadcast is used for simplicity and to not duplicate the domain
             # semantics of `concat_where`.
             node_with_explicit_broadcast, _ = infer_domain.infer_expr(
-                im.concat_where(cond_expr, explicit_broadcast(tb), explicit_broadcast(fb)),
+                im.concat_where(
+                    cond_expr, make_broadcast_explicit(tb), make_broadcast_explicit(fb)
+                ),
                 node.annex.domain,
                 offset_provider={},  # not needed on field-view level expressions
                 revisit_already_inferred=False,
