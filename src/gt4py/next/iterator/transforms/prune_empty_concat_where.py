@@ -67,7 +67,6 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node, "concat_where"):
-            # no `offset_provider_type` needed as we only infer field-view level expressions
             type_inference.reinfer(node)
             if not isinstance(node.type, (ts.FieldType, ts.ScalarType)):
                 # TODO(tehrengruber): Implement support for tuples.
