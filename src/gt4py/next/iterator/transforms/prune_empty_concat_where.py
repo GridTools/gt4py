@@ -106,7 +106,12 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                 #  (Vertex, K)))` the `a` inside the surviving `broadcast` would otherwise keep
                 #  the domain `K: [0, 2)` of the true branch.
                 # note: as long as we visited the args we have a copy here, so no need to copy again
-                new_node, _ = infer_domain.infer_expr(tb, node.annex.domain, offset_provider={})
+                new_node, _ = infer_domain.infer_expr(
+                    tb,
+                    node.annex.domain,
+                    keep_existing_domains=False,
+                    revisit_already_inferred=True, offset_provider={}
+                )
                 return new_node
 
             if not isinstance(node.annex.domain, domain_utils.SymbolicDomain):
