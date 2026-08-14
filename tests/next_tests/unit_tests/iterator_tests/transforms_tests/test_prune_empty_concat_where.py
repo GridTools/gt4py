@@ -14,7 +14,7 @@ from gt4py.next.iterator.transforms.prune_empty_concat_where import prune_empty_
 from gt4py.next.iterator.transforms.concat_where import canonicalize_domain_argument
 from gt4py.next.iterator.transforms.infer_domain import infer_expr
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
-from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+from gt4py.next.iterator.ir_utils import domain_utils
 from gt4py.next.type_system import type_specifications as ts
 
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
@@ -194,11 +194,10 @@ def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_bra
     expected = InlineLambdas.apply(expected)
 
     actual = prune_empty_concat_where(testee)
-    if not cpm.is_call_to(actual, "concat_where"):
-        # on pruning, the domain annex is populated from the pruned `concat_where`
-        #  (`RemoveBroadcast` relies on it)
-        assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
-            im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
-        )
+    # on pruning, the domain annex is populated from the pruned `concat_where`
+    #  (`RemoveBroadcast` relies on it)
+    assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
+    )
     actual = InlineLambdas.apply(actual)
     assert actual == expected
