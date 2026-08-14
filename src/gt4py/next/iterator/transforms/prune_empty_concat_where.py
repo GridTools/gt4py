@@ -69,7 +69,6 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
         if cpm.is_call_to(node, "concat_where"):
             type_inference.reinfer(node)
             if not isinstance(node.type, (ts.FieldType, ts.ScalarType)):
-                # TODO(tehrengruber): Implement support for tuples.
                 return node
 
             def make_broadcast_explicit(branch: itir.Expr) -> itir.Expr:
