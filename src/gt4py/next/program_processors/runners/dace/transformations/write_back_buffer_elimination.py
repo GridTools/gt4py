@@ -214,13 +214,20 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             # Find all locations where `T` is written to global data, i.e. the write
             #  backs. The other out edges of `T` lead to consumers, which
             #  `_eliminate()` reroutes to `G` just like the write back itself.
-            write_backs = [
-                (edge, state)
-                for state, (tmp_reads, _) in tmp_access.items()
-                for node in tmp_reads
-                for edge in state.out_edges(node)
-                if isinstance(edge.dst, dace_nodes.AccessNode) and not edge.dst.desc(sdfg).transient
-            ]
+            #  Only an AccessNode at the top level qualifies; ADR-18 rule 10 gives one
+            #  inside a Map scope `Scope` lifetime, so it can not refer to the data
+            #  this pass removes.
+            write_backs = []
+            for state, (tmp_reads, _) in tmp_access.items():
+                scope_dict = state.scope_dict()
+                write_backs.extend(
+                    (edge, state)
+                    for node in tmp_reads
+                    if scope_dict[node] is None
+                    for edge in state.out_edges(node)
+                    if isinstance(edge.dst, dace_nodes.AccessNode)
+                    and not edge.dst.desc(sdfg).transient
+                )
             # With several write backs there is no single `G` to rewrite `T` into.
             # TODO(havogt): Copying `T` back into more than one global could be
             #   handled by keeping all write backs but the one that is rewritten.
