@@ -84,6 +84,24 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.Match: ("'match' statement", ("Use 'if'/'elif' chains or 'where' instead.",)),
 }
 
+#: Same as above, but keyed by node *name*, for constructs introduced after the
+#: supported Python floor: naming e.g. 'ast.TemplateStr' (3.14) directly in the
+#: catalogue above would raise 'AttributeError' on 3.12 and 3.13. Entries whose node
+#: type the running interpreter does not have are skipped, which is harmless: the
+#: construct cannot be parsed there in the first place.
+_NEWER_UNSUPPORTED_FEATURE_HINTS: dict[str, tuple[str, tuple[str, ...]]] = {
+    # PEP 750 t-strings (3.14).
+    "TemplateStr": ("t-string", ("Strings cannot be computed inside GT4Py functions.",))
+}
+
+_UNSUPPORTED_FEATURE_HINTS.update(
+    {
+        node_type: entry
+        for name, entry in _NEWER_UNSUPPORTED_FEATURE_HINTS.items()
+        if (node_type := getattr(ast, name, None)) is not None
+    }
+)
+
 
 def _describe_unsupported_feature(node: ast.AST) -> tuple[str, tuple[str, ...]]:
     if (entry := _UNSUPPORTED_FEATURE_HINTS.get(type(node))) is not None:

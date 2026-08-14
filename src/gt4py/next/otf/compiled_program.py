@@ -170,12 +170,12 @@ def wait_for_compilation() -> None:
 
     Raises:
         Exception: The exception of the failed compilation. If several
-            compilations failed, a `RuntimeError` summarizing all of them
-            (chaining the first). Each failure is raised only once; the
-            original exception is raised again when the failed program
-            variant is called. Failures of programs that have been garbage
-            collected in the meantime are not reported (they could never
-            raise at call time either).
+            compilations failed, an `ExceptionGroup` (PEP 654) holding all of
+            them, so that every failure keeps its own traceback. Each failure
+            is raised only once; the original exception is raised again when
+            the failed program variant is called. Failures of programs that
+            have been garbage collected in the meantime are not reported
+            (they could never raise at call time either).
     """
     # TODO(havogt): reconsider tearing down the default runner here: a pure wait
     # on the tracked futures would keep the workers warm between compilation
@@ -190,16 +190,16 @@ def wait_for_compilation() -> None:
     if len(failures) == 1:
         raise failures[0][1]
     if failures:
-        # TODO(havogt): raise an ExceptionGroup here. The 3.10 floor that originally
-        # blocked this is gone (PEP 654 is available on the 3.12 floor), so only the
-        # flattening below still loses information: failures 2..n survive as 'repr'
-        # text and '__cause__'/'__traceback__' carry the first failure alone. Left as
-        # is because it changes the documented 'Raises:' contract of this public
-        # function from 'RuntimeError' to 'ExceptionGroup', which callers may catch.
-        raise RuntimeError(
-            "Multiple compilations failed: "
-            + "; ".join(f"'{label}': {error!r}" for label, error in failures)
-        ) from failures[0][1]
+        # A group keeps every failure with its own traceback; flattening them into a
+        # single error would reduce failures 2..n to 'repr' text and let only the first
+        # one carry a '__cause__'. 'BaseExceptionGroup' is the constructor to use since
+        # 'Future.exception()' is typed as 'BaseException'; it returns a plain
+        # 'ExceptionGroup' whenever every member is an 'Exception', which is the case
+        # for anything a compilation realistically raises.
+        raise BaseExceptionGroup(
+            "Multiple compilations failed: " + ", ".join(f"'{label}'" for label, _ in failures),
+            [error for _, error in failures],
+        )
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:

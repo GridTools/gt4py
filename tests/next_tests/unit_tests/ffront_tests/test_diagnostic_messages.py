@@ -117,6 +117,20 @@ def test_try_star_statement_is_catalogued():
     assert any("Exception handling" in hint for hint in hints)
 
 
+@pytest.mark.skipif(
+    not hasattr(ast, "TemplateStr"), reason="PEP 750 t-strings require Python >= 3.14."
+)
+def test_post_floor_construct_is_catalogued():
+    # Constructs newer than the supported floor are registered by name, so the
+    # catalogue can name them without breaking the import on older interpreters.
+    node = ast.parse('t"{a}"', mode="eval").body
+
+    feature, hints = dialect_parser._describe_unsupported_feature(node)
+
+    assert feature == "t-string"
+    assert any("cannot be computed" in hint for hint in hints)
+
+
 def test_unlisted_construct_falls_back_to_ast_name():
     def with_string(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
         f"{a}"
