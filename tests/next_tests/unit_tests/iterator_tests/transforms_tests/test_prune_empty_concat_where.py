@@ -159,12 +159,12 @@ def _infer(testee, accessed_domain):
             im.broadcast(im.ref("b"), (Vertex, K)),
         ),
         # no pruning of a selected branch that lacks the concat dimension: `a` — implicitly
-        #  broadcast to `(Vertex, K)` — is selected on `K: [-5, 0)`; note that `b`'s accessed
-        #  domain `K: [0, 10)` is disjoint from the cond, which must not be mistaken for `a`
+        #  broadcast to `(Vertex, K)` — is selected on `K: [0, 5)`; note that `b`'s accessed
+        #  domain `K: [5, 10)` is disjoint from the cond, which must not be mistaken for `a`
         #  being never selected
         (
-            {Vertex: (0, 10), K: (-5, 10)},
-            {K: (itir.InfinityLiteral.NEGATIVE, 0)},
+            {Vertex: (0, 10), K: (0, 10)},
+            {K: (itir.InfinityLiteral.NEGATIVE, 5)},
             ("a", vertex_field),
             ("b", vertex_k_field),
             None,
