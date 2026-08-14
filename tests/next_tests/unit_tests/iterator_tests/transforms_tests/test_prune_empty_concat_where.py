@@ -50,7 +50,13 @@ def _infer(testee, accessed_domain):
             ("b", vertex_k_field),
             "a",
         ),
-        # ({Vertex: ("v0", "v1")}, {Vertex: ("v0", "v1")}, ..., "a"),
+        # (
+        #     {Vertex: ("v0", "v1")},
+        #     {Vertex: ("v0", "v1")},
+        #     ("a", vertex_field),
+        #     ("b", vertex_field),
+        #     "a",
+        # ),
         # cond is empty
         ({Vertex: (0, 10)}, {Vertex: (0, 0)}, ("a", vertex_field), ("b", vertex_field), "b"),
         (
@@ -60,7 +66,13 @@ def _infer(testee, accessed_domain):
             ("b", vertex_k_field),
             "b",
         ),
-        # ({Vertex: ("v0", "v0")}, {Vertex: ("v0", "v0")}, ..., "b"),
+        # (
+        #     {Vertex: ("v0", "v0")},
+        #     {Vertex: ("v0", "v0")},
+        #     ("a", vertex_field),
+        #     ("b", vertex_field),
+        #     "b",
+        # ),
         # cond disjoint from the accessed domain:
         #  entirely below it
         (
@@ -104,7 +116,13 @@ def _infer(testee, accessed_domain):
             ("b", vertex_k_field),
             None,
         ),
-        # ({Vertex: ("v0", "v1")}, {Vertex: ("v0", "v2")}, ..., None)
+        # (
+        #     {Vertex: ("v0", "v1")},
+        #     {Vertex: ("v0", "v2")},
+        #     ("a", vertex_field),
+        #     ("b", vertex_field),
+        #     None,
+        # ),
         # cond subset of accessed domain, but only one half-space
         #  after canonicalization will remain
         (
