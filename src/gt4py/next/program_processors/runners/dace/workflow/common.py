@@ -86,6 +86,7 @@ def set_dace_config(
     # Disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
     if device_arch := gtx_compilation_common.get_device_arch():
         dace.Config.set("compiler.cuda.cuda_arch", value=device_arch)
+        dace.Config.set("compiler.cuda.hip_arch", value=device_arch)
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
