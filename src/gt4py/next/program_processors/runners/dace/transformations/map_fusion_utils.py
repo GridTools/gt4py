@@ -78,8 +78,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs={k: None for k in sorted(node.in_connectors.keys())},
-                outputs={k: None for k in sorted(node.out_connectors.keys())},
+                inputs={k: None for k in node.in_connectors.keys()},
+                outputs={k: None for k in node.out_connectors.keys()},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
@@ -202,19 +202,18 @@ def split_overlapping_map_range(
         Two lists, each containing the ranges corresponding to the splitted range
         for the first and the second map, respectively.
     """
-    first_map_params = set(first_map.params)
-    second_map_params = set(second_map.params)
-    if first_map_params != second_map_params:
+    if set(first_map.params) != set(second_map.params):
         return None
 
     first_map_dict = dict(zip(first_map.params, first_map.range.ranges, strict=True))
     second_map_dict = dict(zip(second_map.params, second_map.range.ranges, strict=True))
 
+    # Follow order of parameters as they appear in the first map.
     first_map_sorted_range = dace_subsets.Range(
-        [first_map_dict[param] for param in sorted(first_map_params)]
+        [first_map_dict[param] for param in first_map.params]
     )
     second_map_sorted_range = dace_subsets.Range(
-        [second_map_dict[param] for param in sorted(second_map_params)]
+        [second_map_dict[param] for param in first_map.params]
     )
 
     if gtx_dace_split.never_intersecting(first_map_sorted_range, second_map_sorted_range):

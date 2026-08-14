@@ -293,7 +293,6 @@ def gt_apply_concat_where_replacement_on_sdfg(
                 found_nsdfgs.append((state, node))
 
     if len(suitable_concat_nodes) > 0:
-        suitable_concat_nodes = sorted(suitable_concat_nodes, key=lambda x: (repr(x[0]), x[1].data))
         for state, concat_node in suitable_concat_nodes:
             nb_applies += gt_replace_concat_where_node(
                 sdfg=sdfg,
@@ -305,7 +304,6 @@ def gt_apply_concat_where_replacement_on_sdfg(
                 sdfg.validate()
 
     if len(found_nsdfgs) > 0:
-        found_nsdfgs = sorted(found_nsdfgs, key=lambda x: (repr(x[0]), str(x[1])))
         for _, nsdfg in found_nsdfgs:
             nb_applies += gt_apply_concat_where_replacement_on_sdfg(
                 sdfg=nsdfg.sdfg,
@@ -482,7 +480,7 @@ def _setup_initial_producer_description_on_top_level(
         )
         assert all(str(fs) in sdfg.symbols for fs in initial_producer_specs[-1].free_symbols)
 
-    return sorted(initial_producer_specs)
+    return initial_producer_specs
 
 
 def _process_descending_points_of_state(
@@ -867,10 +865,9 @@ def _map_data_into_nested_scopes(
     #  its ancestors scopes too. We will bring them in a deterministic order before
     #  process them, handling missing parent scopes on the fly, see
     #  `_map_data_into_nested_scopes_impl()`.
-    scopes_containing_consumers: list[_ScopeLocation] = sorted(
-        {scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs},
-        key=lambda scope: "NONE" if scope is None else str(scope),
-    )
+    scopes_containing_consumers: list[_ScopeLocation] = [
+        scope_dict[consumer_spec.consumer] for consumer_spec in consumer_specs
+    ]
     for scope in scopes_containing_consumers:
         _map_data_into_nested_scopes_impl(
             state=state,
@@ -1327,7 +1324,7 @@ def _find_consumer_specs_single_source_single_level(
 
     if for_check:
         return stairs_to_deeper_levels
-    return sorted(consumer_specs), sorted(stairs_to_deeper_levels)
+    return consumer_specs, stairs_to_deeper_levels
 
 
 def _handle_special_case_of_gt4py_scan_point(

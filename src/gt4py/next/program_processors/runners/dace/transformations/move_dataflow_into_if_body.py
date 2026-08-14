@@ -304,7 +304,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         #  aliasing, i.e. multiple inner names refer to the same outer name.
         # TODO(phimuell): Investigate if it would be better if we handle partially
         #   mapped in data such by fully map it in and perform the slicing outside.
-        fully_mapped_in_data: dict[str, set[str]] = collections.defaultdict(set)
+        fully_mapped_in_data: dict[str, OrderedSet[str]] = collections.defaultdict(OrderedSet)
         for if_iedge in state.in_edges(if_block):
             if if_iedge.data.is_empty():
                 continue
@@ -385,18 +385,13 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                     #  `branch_state`. We first look if the state contains an AccessNode
                     #  referring to that data.
                     outer_aliases = fully_mapped_in_data[outer_data]
-                    candidate_nodes: list[dace_nodes.AccessNode] = sorted(
-                        (
-                            dnode
-                            for dnode in branch_state.data_nodes()
-                            if dnode.data in outer_aliases
-                        ),
-                        key=lambda dnode: dnode.data,
-                    )
+                    candidate_nodes: list[dace_nodes.AccessNode] = [
+                        dnode for dnode in branch_state.data_nodes() if dnode.data in outer_aliases
+                    ]
 
                     if len(candidate_nodes) == 0:
                         # There is no AccessNode in the state so we have to create one.
-                        inner_data = sorted(outer_aliases)[0]
+                        inner_data = next(iter(outer_aliases))
                         inner_node = branch_state.add_access(inner_data)
 
                     else:
@@ -410,7 +405,8 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
                         if len(candidate_source_nodes) != len(candidate_nodes):
                             raise NotImplementedError()
 
-                        # We take the first node, since they are sorted it is deterministic.
+                        # We take the first node; `data_nodes()` returns a list,
+                        #  so the order is already deterministic.
                         inner_node = candidate_source_nodes[0]
 
                     # A different AccessNode object for the same outer data may have
@@ -550,10 +546,9 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
         are available in the parent SDFG.
         """
         symbol_mapping = if_block.symbol_mapping
-        missing_symbols = sorted(
-            (ms for ms in if_block.sdfg.free_symbols if ms not in symbol_mapping),
-            key=lambda sym: str(sym),
-        )
+        missing_symbols = [
+            ms for ms in sorted(if_block.sdfg.free_symbols) if ms not in symbol_mapping
+        ]
         symbol_mapping.update({s: s for s in missing_symbols})
         if_block.symbol_mapping = symbol_mapping  # Performs conversion.
 

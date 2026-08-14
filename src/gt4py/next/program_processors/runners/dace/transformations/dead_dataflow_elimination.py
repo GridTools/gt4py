@@ -12,6 +12,7 @@ import dace
 from dace import properties as dace_properties, transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -189,9 +190,10 @@ def gt_remove_map(
 
     # Now find all notes that are producer or consumer of the Map, after we removed
     #  the nodes of the Maps we need to check if they have become isolated.
-    # NOTE: Needs to be a `set` to handle multiple connections with the MapEntry node.
-    adjacent_nodes: set[dace_nodes.AccessNode] = {iedge.src for iedge in state.in_edges(map_entry)}
-    adjacent_nodes.update(oedge.dst for oedge in state.out_edges(map_exit))
+    # NOTE: Use an OrderedSet to handle multiple connections with the MapEntry node
+    #  while preserving deterministic iteration order.
+    adjacent_nodes = OrderedSet(iedge.src for iedge in state.in_edges(map_entry))
+    adjacent_nodes.update([oedge.dst for oedge in state.out_edges(map_exit)])
 
     if not all(isinstance(ac, dace_nodes.AccessNode) for ac in adjacent_nodes):
         raise ValueError(
@@ -208,8 +210,7 @@ def gt_remove_map(
     state.remove_nodes_from(map_scope.nodes())
 
     # Now check for potentially isolated nodes.
-    #  Process them in deterministic order.
-    for adjacent_node in sorted(adjacent_nodes, key=lambda ac: ac.data):
+    for adjacent_node in adjacent_nodes:
         if state.degree(adjacent_node) == 0:
             map_scope_datas.add(adjacent_node.data)
             state.remove_node(adjacent_node)

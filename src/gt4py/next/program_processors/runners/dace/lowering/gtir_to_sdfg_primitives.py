@@ -481,7 +481,7 @@ def translate_index(
         sdfg=ctx.sdfg,
         state=ctx.state,
         inputs={},
-        outputs={"val"},
+        outputs={"val": None},
         code=f"val = {dim_index}",
     )
     ctx.state.add_edge(
@@ -547,7 +547,7 @@ def _get_symbolic_value(
         sdfg=sdfg,
         state=state,
         inputs={},
-        outputs={"out"},
+        outputs={"out": None},
         code=f"out = {symbolic_expr}",
     )
     temp_name, _ = sdfg.add_scalar(
@@ -682,8 +682,8 @@ def translate_scalar_expr(
         name="scalar_expr",
         sdfg=ctx.sdfg,
         state=ctx.state,
-        inputs=set(connectors),
-        outputs={"out"},
+        inputs={connector: None for connector in connectors},
+        outputs={"out": None},
         code=f"out = {python_code}",
     )
     # create edges for the input data connectors

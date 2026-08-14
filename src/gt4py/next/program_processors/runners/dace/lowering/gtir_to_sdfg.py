@@ -21,6 +21,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Seque
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 from dace.frontend.python import astutils as dace_astutils
+from ordered_set import OrderedSet
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -116,8 +117,8 @@ class DataflowBuilder(Protocol):
         name: str,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        inputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
-        outputs: set[str] | Mapping[str, dace.dtypes.typeclass | None],
+        inputs: OrderedSet[str] | Mapping[str, dace.dtypes.typeclass | None],
+        outputs: OrderedSet[str] | Mapping[str, dace.dtypes.typeclass | None],
         code: str,
         language: dace.dtypes.Language = dace.dtypes.Language.Python,
         **kwargs: Any,
@@ -132,10 +133,10 @@ class DataflowBuilder(Protocol):
             The created tasklet node and the mapping from original connector names to
             modified connector names.
         """
-        if isinstance(inputs, set):
-            inputs = {k: None for k in sorted(inputs)}
-        if isinstance(outputs, set):
-            outputs = {k: None for k in sorted(outputs)}
+        if not isinstance(inputs, Mapping):
+            inputs = {k: None for k in inputs}
+        if not isinstance(outputs, Mapping):
+            outputs = {k: None for k in outputs}
         assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
@@ -627,7 +628,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Sorting the parameter list in alphabetical order to improve determinism.
         input_params = [
-            gtir.Sym(id=name, type=lambda_symbols[name]) for name in sorted(lambda_symbols.keys())
+            gtir.Sym(id=name, type=lambda_symbols[name]) for name in lambda_symbols.keys()
         ]
 
         nsdfg = dace.SDFG(name=self.unique_nsdfg_name(sdfg_name))
@@ -684,11 +685,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         # The output connectors only need to be setup for the actual result of the
         # internal dataflow that writes to some sink data nodes of the nested SDFG.
-        lambda_outputs = {
+        lambda_outputs = [
             dataname
             for output in lambda_output_data
             if output is not None and (dataname := output.dc_node.data) not in data_args
-        }
+        ]
 
         connectivity_arrays = {
             gtx_dace_args.connectivity_identifier(offset)
@@ -766,8 +767,8 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         nsdfg_node = outer_ctx.state.add_nested_sdfg(
             inner_ctx.sdfg,
-            inputs={key: None for key in sorted(input_memlets.keys())},
-            outputs={key: None for key in sorted(lambda_outputs)},
+            inputs={key: None for key in input_memlets.keys()},
+            outputs={key: None for key in lambda_outputs},
             symbol_mapping=nsdfg_symbols_mapping,
             debuginfo=gtir_to_sdfg_utils.debug_info(node, default=outer_ctx.sdfg.debuginfo),
         )
