@@ -96,6 +96,13 @@ def set_dace_config(
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
     dace.Config.set("compiler.cuda.allow_implicit_memlet_to_map", value=False)
 
+    # FORCE NANOBIND
+    dace.Config.set("compiler.interface", value="nanobind")
+    dace.Config.set(
+        "compiler.nanobind_name_collision", value="error"
+    )  # Consider switching to `rename`.
+    dace.Config.set("compiler.nanobind_reuse_loaded", value=True)
+
     if cmake_build_type is not None:
         dace.Config.set("compiler.build_type", value=cmake_build_type.value)
 

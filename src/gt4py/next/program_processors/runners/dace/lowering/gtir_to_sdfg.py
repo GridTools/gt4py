@@ -1018,7 +1018,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 transient=True,
             )
 
-        # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
+        # The list of the SDFG arguments, i.e. the global arrays, scalars and free symbols.
+        #  Note that tuple arguments are flattened and their name is mangled and no longer
+        #  matches the name in the signature of the field operator / program.
+        #  Also note that some scalar arguments (which are lowered to symbols) listed in
+        #  this signature might not be part of the generated C-API, as unused symbols are
+        #  pruned from the SDFG during optimization.
+        # NOTE: The dispatch code does not use it, instead the `user_args` are used.
         return [arg_name for arg_name, _ in sdfg_args]
 
     def visit_Program(self, node: gtir.Program) -> dace.SDFG:
@@ -1064,10 +1070,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 assert isinstance(nsdfg.arrays[data], dace.data.Array)
                 nsdfg.arrays.pop(data)
 
-        # Create the call signature for the SDFG.
-        #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
-        #  as positional arguments. The implicit arguments, such as the offset providers or
-        #  the arguments created by the translation process, must be passed as keyword arguments.
+        # NOTE: A program uses the `user_args` mechanism to perform the call. So,
+        #   technically these arguments is not needed. However, the orchestrator needs
+        #   it to work. Note that in the following list, tuple arguments to the
+        #   program/fieldop are expanded.
         sdfg.arg_names = sdfg_arg_names
 
         return sdfg

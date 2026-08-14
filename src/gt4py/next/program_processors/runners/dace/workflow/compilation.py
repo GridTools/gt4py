@@ -9,12 +9,10 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 import os
 import pathlib
-import warnings
-from collections.abc import Callable, MutableSequence, Sequence
-from typing import Any, Final, TypeAlias
+from collections.abc import Callable
+from typing import Any, Final, Sequence, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
@@ -126,32 +124,20 @@ def _validate_external_workspace(
 class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
-    # Sorted list of SDFG arguments as they appear in program ABI and corresponding data type;
-    # scalar arguments that are not used in the SDFG will not be present.
-    sdfg_argtypes: list[dace.dtypes.Data]
-
-    # The compiled program contains a callable object to update the SDFG arguments list.
-    update_sdfg_ctype_arglist: Callable[
-        [
-            core_defs.DeviceType,
-            Sequence[dace.dtypes.Data],
-            Sequence[Any],
-            MutableSequence[Any],
-            common.OffsetProvider,
-        ],
-        None,
+    # Callable to process the GT4Py arguments and offset providers to bring them in a form suitable for calling.
+    argument_preprocessing_function: Callable[
+        [Sequence[Any], common.OffsetProvider, int, Any], tuple[Any, ...]
     ]
 
-    # Processed argument vectors that are passed to `CompiledSDFG.fast_call()`. `None`
-    #  means that it has not been initialized, i.e. no call was ever performed.
-    #  - csdfg_argv: Arguments used for calling the actual compiled SDFG, will be updated.
-    #  - csdfg_init_argv: Arguments used for initialization; used only the first time and
-    #       never updated.
-    csdfg_argv: MutableSequence[Any] | None
-    csdfg_init_argv: Sequence[Any] | None
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
         None  # This attribute is set at runtime, before the first call.
     )
+
+    # Whether the SDFG has transients with `AllocationLifetime.External`, i.e. whether
+    # the caller has to install a workspace before the program can run. Determined
+    # once at load time so that the (non-trivial) workspace configuration is only
+    # performed for the programs that actually need it.
+    requires_external_workspace: bool
 
     def __init__(
         self,
@@ -160,27 +146,49 @@ class CompiledDaceProgram:
         binding_source_code: str,
     ):
         self.sdfg_program = program
-
-        # `dace.CompiledSDFG.arglist()` returns an ordered dictionary that maps the argument
-        # name to its data type, in the same order as arguments appear in the program ABI.
-        # This is also the same order of arguments in `dace.CompiledSDFG._lastargs[0]`.
-        self.sdfg_argtypes = list(program.sdfg.arglist().values())
+        self.requires_external_workspace = any(
+            desc.lifetime == dace.dtypes.AllocationLifetime.External
+            for _, _, desc in program.sdfg.arrays_recursive()
+        )
 
         # The binding source code is Python tailored to this specific SDFG.
         # We dynamically compile that function and add it to the compiled program.
         global_namespace: dict[str, Any] = {}
         exec(binding_source_code, global_namespace)
-        self.update_sdfg_ctype_arglist = global_namespace[bind_func_name]
+
+        self.argument_preprocessing_function = global_namespace[bind_func_name]
         # For debug purpose, we set a unique module name on the compiled function.
-        self.update_sdfg_ctype_arglist.__module__ = os.path.basename(program.sdfg.build_folder)
+        self.argument_preprocessing_function.__module__ = os.path.basename(
+            program.sdfg.build_folder
+        )
 
-        # Since the SDFG hasn't been called yet.
-        self.csdfg_argv = None
-        self.csdfg_init_argv = None
+    def configure_external_workspace(self, **kwargs: Any) -> None:
+        """Install the caller-provided workspace buffers on the compiled SDFG.
 
-    def _configure_external_workspace(self, **kwargs: Any) -> None:
+        This eagerly initializes the SDFG state, queries the required workspace
+        size per storage type and hands the matching buffer of
+        `self.external_workspace` to DaCe. It has to run before the first call,
+        because an SDFG with external transients refuses to run with no
+        workspace installed.
+
+        The required sizes depend on the symbol values passed here, so they are
+        only valid for calls made with the same symbols. This is called once,
+        with the arguments of the first call; keeping the workspace large enough
+        for subsequent calls is the caller's responsibility.
+
+        Args:
+            kwargs: The SDFG call arguments. Only the free symbols among them are
+                used; the remaining entries are ignored by DaCe.
+
+        Raises:
+            RuntimeError: If the SDFG needs a workspace but none was set for the
+                required device.
+            TypeError: If a workspace buffer exposes no suitable array interface.
+            ValueError: If a workspace buffer is too small, or is required for an
+                unsupported storage type.
+        """
         self.sdfg_program.initialize(**kwargs)
-        if workspace_sizes := self.sdfg_program.get_workspace_sizes():
+        if workspace_sizes := self.sdfg_program.get_workspace_sizes(**kwargs):
             if self.external_workspace is None:
                 raise RuntimeError(
                     "External workspace is not set. Please call `set_external_workspace()`"
@@ -192,77 +200,33 @@ class CompiledDaceProgram:
                 if workspace is None:
                     raise RuntimeError(f"External workspace for device {device} not found.")
                 _validate_external_workspace(workspace, storage, required_nbytes)
-                self.sdfg_program.set_workspace(storage, workspace)
-
-    def construct_arguments(self, **kwargs: Any) -> None:
-        """
-        This function will process the arguments and store the processed argument
-        vectors in `self.csdfg_args`, to call them use `self.fast_call()`.
-        """
-        with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
-            csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
-            self._configure_external_workspace(**kwargs)
-        # Note we only care about `csdfg_argv` (normal call), since we have to update it,
-        #  we ensure that it is a `list`.
-        self.csdfg_argv = [*csdfg_argv]
-        self.csdfg_init_argv = csdfg_init_argv
-
-    def fast_call(self) -> None:
-        """
-        Perform a call to the compiled SDFG using the previously generated argument
-        vectors, see `self.construct_arguments()`.
-        """
-        assert self.csdfg_argv is not None and self.csdfg_init_argv is not None, (
-            "Argument vector was not set properly."
-        )
-        self.sdfg_program.fast_call(
-            self.csdfg_argv, self.csdfg_init_argv, do_gpu_check=config.DEBUG
-        )
+                self.sdfg_program.set_workspace(storage, workspace, **kwargs)
 
     def __call__(self, **kwargs: Any) -> None:
         """Call the compiled SDFG with the given arguments.
 
-        Note that this function will not update the argument vectors stored inside
-        `self`. Furthermore, it is not recommended to use this function as it is
-        very slow.
+        A `CompiledDaceProgram` should not be called directly. Instead
+        `gt4py.next.program_processors.runners.dace.workflow.decoration.convert_args()`
+        should be used to obtain a callable.
         """
-        warnings.warn(
-            "Called an SDFG through the standard DaCe interface is not recommended, use `fast_call()` instead.",
-            stacklevel=1,
+        raise NotImplementedError(
+            "A `CompiledDaceProgram` can not be called directly. Instead use "
+            "`gt4py.next.program_processors.runners.dace.workflow.decoration.convert_args()`."
         )
-        result = self.sdfg_program(**kwargs)
-        assert result is None
 
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompilationArtifact:
-    """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself.
+    """Result of a DaCe compilation: library path + SDFG bindings + the SDFG itself."""
 
-    The SDFG is carried inline as JSON because dace's load path
-    (``get_program_handle``) needs an SDFG instance to wrap into the
-    returned ``CompiledSDFG``, and the build folder may not contain a
-    ``program.sdfg(z)`` dump under the upcoming minimal-build-dir mode.
-
-    The SDFG we store here is the one on which we called `SDFG.compile(return_program_handle=False)`.
-    Note that the `compile()` call has side effects, because it applies transformations
-    to the SDFG, in order to enable code generation for the target platform.
-    Since we pass `return_program_handle=False`, the `compile()` method does not
-    return a `CompiledSDFG` instance, therefore we cannot access `CompiledSDFG.sdfg`,
-    which would be the modified SDFG from which DaCe generates the C++/CUDA/HIP code.
-    """
-
-    library_path: pathlib.Path
-    sdfg_json: str
+    sdfg_build_folder: pathlib.Path
     binding_source_code: str
     bind_func_name: str
     device_type: core_defs.DeviceType
 
     def load(self) -> stages.ExecutableProgram:
-        # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
-        #   exposes a load path that doesn't require an SDFG instance to wrap
-        #   into the returned ``CompiledSDFG``.
-        sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
-        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
+        sdfg_program = dace_compiler.load_precompiled_sdfg(self.sdfg_build_folder, sdfg=None)
+        sdfg_program.gpu_error_check = False  # Not useful in asynchronous launches.
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
@@ -290,7 +254,8 @@ class DaCeCompiler(
     cmake_build_type: config.CMakeBuildType = dataclasses.field(
         default_factory=lambda: config.CMAKE_BUILD_TYPE
     )
-    # we store the non-default values of `dace.Config` in order to include it in the stage fingerprint
+    # We store the non-default values of `dace.Config` in order to include it in the stage fingerprint
+    # NOTE: They do not include the non default keys set through DaCe environment variables.
     dace_config_nondefaults: dict[str, Any] = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
@@ -323,8 +288,8 @@ class DaCeCompiler(
             # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
 
-            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
-            # path here so ``get_binary_name`` sees the same mode dace built under.
+            # `compiler.build_folder_mode` is set by `dace_context()`; resolve the library
+            #  path here so `get_binary_name()` sees the same mode DaCe built under.
             library_path = dace_compiler.get_binary_name(
                 object_folder=sdfg_build_folder, sdfg_name=sdfg.name
             )
@@ -348,8 +313,7 @@ class DaCeCompiler(
 
         assert inp.binding_source is not None
         return DaCeCompilationArtifact(
-            library_path=library_path,
-            sdfg_json=json.dumps(inp.program_source.source_code),
+            sdfg_build_folder=sdfg_build_folder,
             binding_source_code=inp.binding_source.source_code,
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,

@@ -16,7 +16,7 @@ import contextlib
 import pathlib
 import pickle
 import unittest.mock as mock
-from typing import Any
+from typing import Any, Sequence
 
 import pytest
 
@@ -170,8 +170,7 @@ def test_compiler_skips_tx_markers_for_non_gpu_device(program_source):
 def test_dace_compilation_artifact_pickle_round_trip(tmp_path: pathlib.Path):
     """The artifact is picklable and does not carry runtime workspace buffers."""
     artifact = dace_wf_compilation.DaCeCompilationArtifact(
-        library_path=tmp_path / "build" / "libprogram.so",
-        sdfg_json="{}",
+        sdfg_build_folder=tmp_path,
         binding_source_code="def update_sdfg_args(*a, **k): ...",
         bind_func_name="update_sdfg_args",
         device_type=core_defs.DeviceType.CPU,
@@ -201,7 +200,8 @@ def test_same_artifact(add_gpu_trace_markers, program_source):
         device_type=core_defs.DeviceType.CUDA,
     )
 
-    assert artifact_1.library_path == artifact_2.library_path
+    assert artifact_1.sdfg_build_folder == artifact_2.sdfg_build_folder
+    assert artifact_1 == artifact_2
     assert (
         sdfg_1.hash_sdfg() == sdfg_2.hash_sdfg()
     )  # might contain different GUIDs, `hash_sdfg()` ignores them
@@ -216,7 +216,7 @@ def test_apply_tx_markers_changes_artifact(program_source):
         program_source, device_type=core_defs.DeviceType.CUDA, add_gpu_trace_markers=True
     )
 
-    assert artifact_base.library_path != artifact_with_markers.library_path
+    assert artifact_base.sdfg_build_folder != artifact_with_markers.sdfg_build_folder
 
 
 # `CXXFLAGS`, `CUDAFLAGS` and `HIPFLAGS` feed `compiler.cpu.args`, `compiler.cuda.args`
@@ -248,7 +248,7 @@ def test_compiler_flags_change_artifact(
 
     # The differing `dace_config_nondefaults` make the two compilers fingerprint differently,
     # so `get_cache_folder` names two distinct artifacts.
-    assert artifact_default.library_path != artifact_custom.library_path
+    assert artifact_default.sdfg_build_folder != artifact_custom.sdfg_build_folder
 
 
 def test_cmake_build_type_changes_artifact(program_source):
@@ -265,13 +265,14 @@ def test_cmake_build_type_changes_artifact(program_source):
     )
     artifact_debug, _ = _run_compiler(program_source, cmake_build_type=config.CMakeBuildType.DEBUG)
 
-    assert artifact_release.library_path != artifact_debug.library_path
+    assert artifact_release.sdfg_build_folder != artifact_debug.sdfg_build_folder
 
 
 def _make_compiled_program(
     *,
     external_workspace: dict[core_defs.DeviceType, Any] | None = None,
     workspace_sizes: dict[Any, int] | None = None,
+    external_transient_storages: Sequence[Any] = (),
 ):
     if workspace_sizes is None:
         workspace_sizes = {}
@@ -279,11 +280,14 @@ def _make_compiled_program(
     sdfg = mock.MagicMock()
     sdfg.arglist.return_value = {}
     sdfg.build_folder = "build-folder"
+    sdfg.arrays_recursive.return_value = [
+        (sdfg, f"__tmp{i}", _make_external_transient_desc(storage))
+        for i, storage in enumerate(external_transient_storages)
+    ]
 
     sdfg_program = mock.MagicMock()
     sdfg_program.sdfg = sdfg
     sdfg_program.get_workspace_sizes.return_value = workspace_sizes
-    sdfg_program.construct_arguments.return_value = ((), ())
 
     compiled_program = dace_wf_compilation.CompiledDaceProgram(
         program=sdfg_program,
@@ -295,29 +299,48 @@ def _make_compiled_program(
     return compiled_program
 
 
-def test_construct_arguments_without_external_workspace():
-    """If the SDFG does not need a workspace, `construct_arguments` works without it."""
+def _make_external_transient_desc(storage: Any) -> mock.MagicMock:
+    """A data descriptor that looks like a transient with an external lifetime."""
+    desc = mock.MagicMock()
+    desc.lifetime = dace.dtypes.AllocationLifetime.External
+    desc.storage = storage
+    return desc
+
+
+def test_requires_external_workspace_detects_external_transients():
+    """The flag that gates workspace configuration follows the transient lifetimes.
+
+    `DaCeDecoratedProgram` only pays for the workspace setup when this is set, so
+    an SDFG with external transients must be recognized as needing one.
+    """
+    assert not _make_compiled_program().requires_external_workspace
+    assert _make_compiled_program(
+        external_transient_storages=[dace.StorageType.CPU_Heap]
+    ).requires_external_workspace
+
+
+def test_configure_external_workspace_without_external_workspace():
+    """If the SDFG does not need a workspace, configuration is a no-op."""
     program = _make_compiled_program(
         external_workspace=None, workspace_sizes={}
     )  # no workspace needed
 
-    program.construct_arguments(alpha=1)
+    program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.initialize.assert_called_once()
     program.sdfg_program.get_workspace_sizes.assert_called_once()
     program.sdfg_program.set_workspace.assert_not_called()
-    program.sdfg_program.construct_arguments.assert_called_once()
 
 
-def test_construct_arguments_installs_external_workspace():
-    """If the SDFG needs a workspace, `construct_arguments` installs it from the mapping."""
+def test_configure_external_workspace_installs_external_workspace():
+    """If the SDFG needs a workspace, it is installed from the mapping."""
     workspace = _make_array_buffer(nbytes=128)
     program = _make_compiled_program(
         external_workspace={core_defs.DeviceType.CPU: workspace},
         workspace_sizes={dace.StorageType.CPU_Heap: 128},
     )
 
-    program.construct_arguments(alpha=1)
+    program.configure_external_workspace(alpha=1)
 
     assert program.sdfg_program.initialize.call_count == 1
     assert program.sdfg_program.get_workspace_sizes.call_count == 1
@@ -327,17 +350,17 @@ def test_construct_arguments_installs_external_workspace():
     assert set_workspace_call.args[1] is workspace
 
 
-def test_construct_arguments_raises_when_workspace_missing():
+def test_configure_external_workspace_raises_when_workspace_missing():
     """If the SDFG needs a workspace but none is provided, raise early."""
     program = _make_compiled_program(
         external_workspace=None, workspace_sizes={dace.StorageType.CPU_Heap: 128}
     )
 
     with pytest.raises(RuntimeError, match="External workspace is not set"):
-        program.construct_arguments(alpha=1)
+        program.configure_external_workspace(alpha=1)
 
 
-def test_construct_arguments_raises_when_workspace_missing_for_device():
+def test_configure_external_workspace_raises_when_workspace_missing_for_device():
     """If a required device workspace is absent from the mapping, raise early."""
     program = _make_compiled_program(
         external_workspace={core_defs.DeviceType.CPU: _make_array_buffer(nbytes=128)},
@@ -347,10 +370,10 @@ def test_construct_arguments_raises_when_workspace_missing_for_device():
         dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
     ):
         with pytest.raises(RuntimeError, match="External workspace for device .* not found"):
-            program.construct_arguments(alpha=1)
+            program.configure_external_workspace(alpha=1)
 
 
-def test_construct_arguments_propagates_validation_error_for_too_small_buffer():
+def test_configure_external_workspace_propagates_validation_error_for_too_small_buffer():
     """A workspace that is too small for the requested storage is rejected."""
     workspace = _make_array_buffer(nbytes=64)
     program = _make_compiled_program(
@@ -359,12 +382,12 @@ def test_construct_arguments_propagates_validation_error_for_too_small_buffer():
     )
 
     with pytest.raises(ValueError, match="at least 128 bytes were required"):
-        program.construct_arguments(alpha=1)
+        program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_not_called()
 
 
-def test_construct_arguments_propagates_validation_error_for_invalid_storage():
+def test_configure_external_workspace_propagates_validation_error_for_invalid_storage():
     """An unsupported storage type is rejected during device mapping."""
     workspace = _make_array_buffer(nbytes=128)
     program = _make_compiled_program(
@@ -373,7 +396,7 @@ def test_construct_arguments_propagates_validation_error_for_invalid_storage():
     )
 
     with pytest.raises(ValueError, match="Unsupported storage type"):
-        program.construct_arguments(alpha=1)
+        program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_not_called()
 
@@ -391,7 +414,7 @@ def _make_array_buffer(*, nbytes: int, cuda: bool = False) -> mock.MagicMock:
     return buffer
 
 
-def test_construct_arguments_rejects_buffer_without_array_interface():
+def test_configure_external_workspace_rejects_buffer_without_array_interface():
     """The workspace must expose an array interface that ``set_workspace`` can consume."""
     program = _make_compiled_program(
         external_workspace={core_defs.DeviceType.CPU: "not-an-array"},
@@ -399,12 +422,12 @@ def test_construct_arguments_rejects_buffer_without_array_interface():
     )
 
     with pytest.raises(TypeError, match="must expose `__array_interface__`"):
-        program.construct_arguments(alpha=1)
+        program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_not_called()
 
 
-def test_construct_arguments_accepts_cpu_workspace():
+def test_configure_external_workspace_accepts_cpu_workspace():
     """A host workspace with matching size is accepted and installed."""
     workspace = _make_array_buffer(nbytes=128)
     program = _make_compiled_program(
@@ -412,13 +435,13 @@ def test_construct_arguments_accepts_cpu_workspace():
         workspace_sizes={dace.StorageType.CPU_Heap: 128},
     )
 
-    program.construct_arguments(alpha=1)
+    program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_called_once()
     assert program.sdfg_program.set_workspace.call_args.args[1] is workspace
 
 
-def test_construct_arguments_accepts_gpu_workspace():
+def test_configure_external_workspace_accepts_gpu_workspace():
     """A device workspace with matching size is accepted and installed."""
     workspace = _make_array_buffer(nbytes=128, cuda=True)
     program = _make_compiled_program(
@@ -428,7 +451,7 @@ def test_construct_arguments_accepts_gpu_workspace():
     with mock.patch.object(
         dace_wf_compilation.core_defs, "CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA
     ):
-        program.construct_arguments(alpha=1)
+        program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_called_once()
     assert program.sdfg_program.set_workspace.call_args.args[0] == dace.StorageType.GPU_Global
@@ -439,7 +462,7 @@ class _ArrayBufferWithoutNbytes:
     __array_interface__ = {"shape": (128,), "typestr": "|u1", "version": 3}
 
 
-def test_construct_arguments_skips_size_check_when_nbytes_missing():
+def test_configure_external_workspace_skips_size_check_when_nbytes_missing():
     """When the buffer lacks ``nbytes`` the size contract is trust-based."""
     program = _make_compiled_program(
         external_workspace={core_defs.DeviceType.CPU: _ArrayBufferWithoutNbytes()},
@@ -447,6 +470,6 @@ def test_construct_arguments_skips_size_check_when_nbytes_missing():
     )
 
     # Must not raise even though the size cannot be verified.
-    program.construct_arguments(alpha=1)
+    program.configure_external_workspace(alpha=1)
 
     program.sdfg_program.set_workspace.assert_called_once()

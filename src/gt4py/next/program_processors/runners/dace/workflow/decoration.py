@@ -8,8 +8,7 @@
 
 from __future__ import annotations
 
-import functools
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -28,13 +27,16 @@ if TYPE_CHECKING:
 class DaCeDecoratedProgram:
     """A compiled DaCe program wrapped as a GT4Py-callable ``ExecutableProgram``.
 
-    On the first call the full SDFG argument vector is constructed via
-    ``CompiledDaceProgram.construct_arguments``; subsequent calls only update
-    the argument vector in place through the binding function generated for the
-    program. External workspace memory (when the SDFG uses
+    Every call translates the GT4Py arguments through the binding function
+    generated for the program and hands them to the SDFG via ``user_bind_call``.
+
+    External workspace memory (when the SDFG uses
     ``TransientMemoryMode.EXTERNAL``) is installed onto the underlying
-    ``CompiledDaceProgram`` before the first call via `set_external_workspace`;
-    its lifetime is owned by the caller, not by this wrapper.
+    ``CompiledDaceProgram`` via `set_external_workspace`; its lifetime is owned
+    by the caller, not by this wrapper. It is handed to the SDFG on the first
+    call, using that call's symbol values, since the required size is only known
+    then. Keeping the buffer large enough for later calls, which may use
+    different symbol values, is the caller's responsibility.
     """
 
     def __init__(
@@ -44,14 +46,14 @@ class DaCeDecoratedProgram:
     ) -> None:
         self._fun = fun
         # Retrieve metrics level from GT4Py environment variable.
+        # TODO(phimuell): Should the check be in the call or at construction.
         self._collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
         self._collect_time_arg = np.array(
             [1], dtype=gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE.as_numpy_dtype()
         )
-        # We use the callback function provided by the compiled program to update the SDFG arglist.
-        self._update_sdfg_call_args = functools.partial(
-            fun.update_sdfg_ctype_arglist, device_type, fun.sdfg_argtypes
-        )
+        # The external workspace is installed lazily, on the first call, because its
+        # required size depends on the symbol values of that call.
+        self._external_workspace_configured = False
 
     def __call__(
         self,
@@ -62,38 +64,43 @@ class DaCeDecoratedProgram:
         if out is not None:
             args = (*args, out)
 
-        try:
-            # Not the first call.
-            #  We will only update the argument vector  for the normal call.
-            # NOTE: If this is the first time then we will generate an exception because
-            #   `fun.csdfg_args` is `None`
-            # TODO(phimuell, edopao): Think about refactor the code such that the update
-            #   of the argument vector is a Method of the `CompiledDaceProgram`.
-            self._update_sdfg_call_args(args, self._fun.csdfg_argv, offset_provider)  # type: ignore[arg-type]  # Will error out in first call.
+        if self._fun.requires_external_workspace and not self._external_workspace_configured:
+            self._configure_external_workspace(args, offset_provider)
+            self._external_workspace_configured = True
 
-        except TypeError:
-            # First call. Construct the initial argument vector of the `CompiledDaceProgram`.
-            assert self._fun.csdfg_argv is None and self._fun.csdfg_init_argv is None
-            flat_args: Sequence[Any] = gtx_utils.flatten_nested_tuple(args)
-            this_call_args = sdfg_callable.get_sdfg_args(
-                self._fun.sdfg_program.sdfg,
-                offset_provider,
-                *flat_args,
-                filter_args=False,
-            )
-            this_call_args |= {
-                gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
-                gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
-            }
-            self._fun.construct_arguments(**this_call_args)
-
-        # Perform the call to the SDFG.
-        self._fun.fast_call()
+        processed_args, _ = self._fun.argument_preprocessing_function(
+            args,
+            offset_provider,
+            metrics.get_current_level(),
+            self._collect_time_arg,
+        )
+        self._fun.sdfg_program.user_bind_call(*processed_args)
 
         if self._collect_time:
             metrics.add_sample_to_current_source(
                 metrics.COMPUTE_METRIC, self._collect_time_arg[0].item()
             )
+
+    def _configure_external_workspace(
+        self, args: tuple[Any, ...], offset_provider: gtx_common.OffsetProvider
+    ) -> None:
+        """Install the external workspace, using the symbol values of the current call.
+
+        `configure_external_workspace()` needs the SDFG free symbols by name, which
+        the binding function does not produce: it emits the positional `user_args`
+        vector, from which DaCe infers the symbols on its own. So the SDFG argument
+        mapping is built explicitly here. This is the slow path, but it only runs
+        once per program, and only for programs with external transients.
+        """
+        flat_args = gtx_utils.flatten_nested_tuple(args)
+        call_args = sdfg_callable.get_sdfg_args(
+            self._fun.sdfg_program.sdfg, offset_provider, *flat_args, filter_args=False
+        )
+        call_args |= {
+            gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
+            gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
+        }
+        self._fun.configure_external_workspace(**call_args)
 
     def set_external_workspace(self, external_workspace: gtx_wfdcommon.ExternalWorkspace) -> None:
         """Set the external workspace for the underlying compiled program.
