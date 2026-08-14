@@ -49,6 +49,16 @@ def _infer(testee, accessed_domain):
         ({Vertex: (0, 10)}, {Vertex: (0, 0)}, "b"),
         ({Vertex: (0, 10), K: (0, 10)}, {K: (0, 0)}, "b"),
         # ({Vertex: ("v0", "v0")}, {Vertex: ("v0", "v0")}, "b"),
+        # cond disjoint from the accessed domain:
+        #  entirely below it
+        ({Vertex: (0, 10), K: (0, 10)}, {K: (itir.InfinityLiteral.NEGATIVE, 0)}, "b"),
+        #  entirely above it
+        ({Vertex: (0, 10), K: (0, 10)}, {K: (10, itir.InfinityLiteral.POSITIVE)}, "b"),
+        # cond covers the accessed domain:
+        #  from below
+        ({Vertex: (0, 10), K: (0, 10)}, {K: (itir.InfinityLiteral.NEGATIVE, 10)}, "a"),
+        #  from above
+        ({Vertex: (0, 10), K: (0, 10)}, {K: (0, itir.InfinityLiteral.POSITIVE)}, "a"),
         # cond subset of accessed domain, no transformation occurs
         ({Vertex: (0, 10)}, {Vertex: (1, 2)}, None),
         ({Vertex: (0, 10), K: (0, 10)}, {Vertex: (1, 2)}, None),
@@ -88,14 +98,12 @@ def test_prune_concat_where(accessed_domain, cond_domain, expected):
     assert actual == expected
 
 
-def _broadcast(expr):
-    return im.call("broadcast")(
-        expr,
-        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (Vertex, K))),
-    )
-
-
-def _concat_where(cond_range, true_branch_type, false_branch_type, accessed_domain):
+def _concat_where(
+    cond_range: tuple[int | itir.InfinityLiteral, int | itir.InfinityLiteral],
+    true_branch_type: ts.FieldType,
+    false_branch_type: ts.FieldType,
+    accessed_domain: dict[common.Dimension, tuple[int, int]],
+) -> itir.Expr:
     """A `concat_where` on `K` with domains inferred from `accessed_domain`."""
     testee = im.concat_where(
         im.domain(common.GridType.UNSTRUCTURED, {K: cond_range}),
@@ -103,23 +111,6 @@ def _concat_where(cond_range, true_branch_type, false_branch_type, accessed_doma
         im.ref("b", false_branch_type),
     )
     return _infer(testee, accessed_domain)
-
-
-@pytest.mark.parametrize(
-    "cond_range, expected",
-    [
-        ((itir.InfinityLiteral.NEGATIVE, 0), "b"),  # entirely below the accessed domain
-        ((10, itir.InfinityLiteral.POSITIVE), "b"),  # entirely above it
-        ((itir.InfinityLiteral.NEGATIVE, 10), "a"),  # covers it from below
-        ((0, itir.InfinityLiteral.POSITIVE), "a"),  # covers it from above
-    ],
-)
-def test_prune_condition_disjoint_from_accessed_domain(cond_range, expected):
-    testee = _concat_where(
-        cond_range, vertex_k_field, vertex_k_field, accessed_domain={Vertex: (0, 10), K: (0, 10)}
-    )
-
-    assert prune_empty_concat_where(testee) == im.ref(expected)
 
 
 def test_prune_to_branch_that_lacks_a_dimension():
@@ -136,7 +127,7 @@ def test_prune_to_branch_that_lacks_a_dimension():
     )
 
     actual = prune_empty_concat_where(testee)
-    assert actual == _broadcast(im.ref("b"))
+    assert actual == im.broadcast(im.ref("b"), (Vertex, K))
     # `RemoveBroadcast` lowers the `broadcast` using the domain of the pruned `concat_where`
     assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 10), K: (0, 10)})
@@ -159,7 +150,7 @@ def test_prune_never_selected_branch_when_no_branch_has_the_concat_dimension():
     )
 
     actual = prune_empty_concat_where(testee)
-    assert actual == _broadcast(im.ref("b"))
+    assert actual == im.broadcast(im.ref("b"), (Vertex, K))
     assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 10), K: (0, 10)})
     )
@@ -193,4 +184,4 @@ def test_prune_equal_branches_that_lack_the_concat_dimension():
     )
     testee = _infer(testee, {Vertex: (0, 10), K: (0, 10)})
 
-    assert prune_empty_concat_where(testee) == _broadcast(im.ref("a"))
+    assert prune_empty_concat_where(testee) == im.broadcast(im.ref("a"), (Vertex, K))

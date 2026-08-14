@@ -74,10 +74,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
         assert isinstance(node.type, ts.FieldType)  # `concat_where` has at least the concat dim
         assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
         if type_info.extract_dims(branch.type) != node.type.dims:
-            branch = im.call("broadcast")(
-                branch,
-                im.make_tuple(*(im.axis_literal(dim) for dim in node.type.dims)),
-            )
+            branch = im.broadcast(branch, node.type.dims)
         branch.annex.domain = node.annex.domain
         return branch
 

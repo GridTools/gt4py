@@ -409,12 +409,13 @@ def test_with_tuples_different_domain(cartesian_case):
     )
 
 
-def test_concat_where_prune_to_lower_dimensional_branch(cartesian_case):
+def test_concat_where_field_broadcast_on_empty_branch(cartesian_case):
     """
-    Prune a `concat_where` where the surviving branch has fewer dimensions than the expression.
+    A field branch with fewer dimensions than the expression is implicitly broadcast.
 
-    The static domain bounds allow `prune_empty_concat_where` to statically decide that `a` is
-    never selected. The surviving branch `b` only has the `K` dimension, so pruning must
+    `b` only has the `K` dimension, but is selected everywhere, so it is broadcast to the
+    three-dimensional result. Note that this also tests pruning: since the domain bounds are
+    statically known, `prune_empty_concat_where` decides that `a` is never selected and must
     reintroduce the implicit broadcast of the `concat_where` instead of replacing the
     three-dimensional expression by a one-dimensional one.
     """
