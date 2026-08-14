@@ -35,8 +35,9 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
 
     This pass requires domain and type inference to be executed before.
 
-    This pass requires the true and false branch values to be fields, not tuples of fields.
-    Execute `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before.
+    This pass only applies if the true and false branch values are fields, not tuples of
+    fields; `concat_where` expressions on tuples are left untouched. Execute
+    `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before to prune them.
 
     >>> from gt4py.next import common
     >>> IDim = common.Dimension("IDim")
