@@ -31,15 +31,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
 
     A branch is never selected exactly if its inferred domain, i.e. the intersection of the
     domain of the `concat_where` with the condition (respectively its complement for the false
-    branch), is empty. Since a `concat_where` implicitly broadcasts a branch to the dimensions
-    it does not have itself, such a branch's inferred domain is however restricted to the
-    branch's own dimensions, dropping exactly the ranges that decide whether it is selected.
-    Hence, the pass materializes the implicit broadcast (in a `broadcast` call) and populates
-    the domains of the new nodes by rerunning domain inference on the `concat_where` (cheap,
-    since already inferred subexpressions are not revisited), after which each branch's domain
-    contains all dimensions and a simple emptiness check remains. On pruning, the (broadcast)
-    branch's domain equals the domain of the `concat_where` (`RemoveBroadcast` relies on it to
-    lower the `broadcast` again).
+    branch), is empty.
 
     This pass requires domain and type inference to be executed before.
 
