@@ -95,26 +95,19 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
     Matches a transient `T` that is defined in one state, copied in full into a non
     transient `G` in another state, and additionally read by other consumers. `T` may
     also be defined in several states, as long as they exclude each other, e.g. the
-    branches of a `ConditionalBlock`. Neither
-    `DistributedBufferRelocator` (requires `out_degree(T) == 1`) nor
-    `GT4PyMapBufferElimination` (requires the copy to be in the state where `T` is
-    written, and `T` to be unused downstream) applies then, so the full array copy
-    survives as a device to device transfer.
+    branches of a `ConditionalBlock`.
 
     Every access to `T` is rewritten into an access to `G`, shifted by the offset of
-    the copy, and the copy is removed. The producer of `T` and all of its consumers
-    thus operate on `G` directly. The copy has to cover `T` in full, otherwise the
-    producer would write `G` outside the range that the copy would have touched,
+    the copy, and the copy is removed. The copy has to cover `T` in full, otherwise
+    the producer would write `G` outside the range that the copy would have touched,
     which is not part of the requested write.
 
     What the rewrite changes is when `G` is written: from the write back to the point
-    where `T` is defined. As a simplification the transformation therefore requires
-    that the range of `G` holding `T` is not modified from the definition of `T`
-    onwards, the write back itself excepted, and not only up to the write back. This
-    covers the consumers of `T` as well, at whatever point they read: that range of
-    `G` holds what the producer computed for as long as `T` would have held it, so a
-    consumer is served by `G` wherever it is. `_has_conflicting_global_access()`
-    establishes both.
+    where `T` is defined. That the range of `G` holding `T` is not modified in between
+    is therefore a hard requirement. Extending it past the write back is a
+    simplification: a later modification only matters for a consumer of `T` that reads
+    after it, and rejecting it outright avoids testing whether `T` is still read
+    there. `_has_conflicting_global_access()` establishes both.
 
     Args:
         assume_pointwise: Assume that a read of `G` in a state that defines `T` is
@@ -126,6 +119,11 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             ordered before the definition of `T`, see `_is_read_by_tmp_producer()`.
             Specifying `assume_pointwise` asserts the rest, which ADR-18 rule 3
             guarantees for a valid GT4Py program.
+        - Neither `DistributedBufferRelocator` (requires `out_degree(T) == 1`) nor
+            `GT4PyMapBufferElimination` (requires the copy to be in the state where
+            `T` is written, and `T` to be unused downstream) applies to this pattern,
+            so without this pass the full array copy survives as a device to device
+            transfer.
     """
 
     assume_pointwise = dace_properties.Property(
@@ -230,6 +228,21 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                 continue
             wb_edge, wb_state = write_backs[0]
 
+            # A write back with conflict resolution (`wcr`) combines `T` with the old
+            #  value of `G`, while the rewritten producer overwrites `G`.
+            if wb_edge.data.wcr is not None:
+                continue
+
+            glob_node = wb_edge.dst
+            # ADR-18 rule 7 recommends a single incoming edge for a write access
+            #  node; we require it, so that removing `wb_edge` leaves a node that
+            #  only reads `G` and can replace the AccessNodes of `T`.
+            # TODO(havogt): This stands in for a test whether rerouting the other
+            #   incoming edges through the consumers of `glob_node` would create a
+            #   cycle. With that test the requirement can be dropped.
+            if wb_state.in_degree(glob_node) != 1:
+                continue
+
             src_subset = wb_edge.data.get_src_subset(wb_edge, wb_state)
             dst_subset = wb_edge.data.get_dst_subset(wb_edge, wb_state)
             # Without both sides the shift that the rewrite has to apply is unknown.
@@ -245,25 +258,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             #  also rejects a `G` with a different number of dimensions.
             if dst_subset.size() != src_subset.size():
                 continue
-            # Equal sizes do not imply equal ranges, `Range.size()` divides by the
-            #  step, so `[0:8:2]` and `[0:4]` have the same size. The source is the
-            #  full array and therefore has unit steps, and shifting an access can not
-            #  turn it into a scatter, so the destination must have them too.
             if any(step != 1 for _, _, step in dst_subset.ndrange()):
-                continue
-            # A write back with conflict resolution (`wcr`) combines `T` with the old
-            #  value of `G`, while the rewritten producer overwrites `G`.
-            if wb_edge.data.wcr is not None:
-                continue
-
-            glob_node = wb_edge.dst
-            # ADR-18 rule 7 recommends a single incoming edge for a write access
-            #  node; we require it, so that removing `wb_edge` leaves a node that
-            #  only reads `G` and can replace the AccessNodes of `T`.
-            # TODO(havogt): This stands in for a test whether rerouting the other
-            #   incoming edges through the consumers of `glob_node` would create a
-            #   cycle. With that test the requirement can be dropped.
-            if wb_state.in_degree(glob_node) != 1:
                 continue
 
             def_states = {
@@ -448,7 +443,6 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                             #  range of `T` for the missing subset and make it non
                             #  empty. All edges of `tmp_node` end up on `new_node`, so
                             #  recreating it as it is preserves the order it imposes.
-                            #  copy.
                             if is_producer_edge:
                                 state.add_edge(
                                     old_edge.src, old_edge.src_conn, new_node, None, dace.Memlet()
@@ -457,34 +451,32 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
                                 state.add_edge(
                                     new_node, None, old_edge.dst, old_edge.dst_conn, dace.Memlet()
                                 )
-                            state.remove_edge(old_edge)
-                            continue
-
-                        new_edge = gtx_transformations.utils.reroute_edge(
-                            is_producer_edge=is_producer_edge,
-                            current_edge=old_edge,
-                            ss_offset=ss_offset,
-                            state=state,
-                            sdfg=sdfg,
-                            old_node=tmp_node,
-                            new_node=new_node,
-                        )
-                        neighbour = (
-                            (old_edge.src, old_edge.src_conn)
-                            if is_producer_edge
-                            else (old_edge.dst, old_edge.dst_conn)
-                        )
-                        if neighbour not in reconfigured_neighbours:
-                            reconfigured_neighbours.add(neighbour)
-                            gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
+                        else:
+                            new_edge = gtx_transformations.utils.reroute_edge(
                                 is_producer_edge=is_producer_edge,
-                                new_edge=new_edge,
+                                current_edge=old_edge,
                                 ss_offset=ss_offset,
                                 state=state,
                                 sdfg=sdfg,
                                 old_node=tmp_node,
                                 new_node=new_node,
                             )
+                            neighbour = (
+                                (old_edge.src, old_edge.src_conn)
+                                if is_producer_edge
+                                else (old_edge.dst, old_edge.dst_conn)
+                            )
+                            if neighbour not in reconfigured_neighbours:
+                                reconfigured_neighbours.add(neighbour)
+                                gtx_transformations.utils.reconfigure_dataflow_after_rerouting(
+                                    is_producer_edge=is_producer_edge,
+                                    new_edge=new_edge,
+                                    ss_offset=ss_offset,
+                                    state=state,
+                                    sdfg=sdfg,
+                                    old_node=tmp_node,
+                                    new_node=new_node,
+                                )
                         state.remove_edge(old_edge)
 
                 state.remove_node(tmp_node)
