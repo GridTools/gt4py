@@ -208,6 +208,7 @@ def split_overlapping_map_range(
     first_map_dict = dict(zip(first_map.params, first_map.range.ranges, strict=True))
     second_map_dict = dict(zip(second_map.params, second_map.range.ranges, strict=True))
 
+    # Follow order of parameters as they appear in the first map.
     first_map_sorted_range = dace_subsets.Range(
         [first_map_dict[param] for param in first_map.params]
     )
@@ -222,18 +223,18 @@ def split_overlapping_map_range(
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
-    for param, first_map_sorted_range in first_map_dict.items():
+    for param, first_map_range in first_map_dict.items():
         second_map_range = second_map_dict[param]
-        if (step := first_map_sorted_range[2]) != second_map_range[2]:
+        if (step := first_map_range[2]) != second_map_range[2]:
             # we do not support splitting of map range when the range step is different
             return None
-        elif first_map_sorted_range == second_map_range:
-            first_map_splitted_dict[param] = [first_map_sorted_range]
+        elif first_map_range == second_map_range:
+            first_map_splitted_dict[param] = [first_map_range]
             second_map_splitted_dict[param] = [second_map_range]
         else:
             try:
-                overlap_range_start = max(first_map_sorted_range[0], second_map_range[0])
-                overlap_range_stop = min(first_map_sorted_range[1], second_map_range[1])
+                overlap_range_start = max(first_map_range[0], second_map_range[0])
+                overlap_range_stop = min(first_map_range[1], second_map_range[1])
             except TypeError:
                 # cannot determine truth value of Relational
                 # in case the ranges are defined with symbols we cannot determine the intersection

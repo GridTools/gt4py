@@ -18,8 +18,12 @@ by ``OrderedSet`` when order matters. Wrapping any of these in ``sorted()`` is
 therefore unnecessary and can hide non-determinism when the sort key
 accidentally depends on object identity, e.g. ``id()`` or ``repr()``.
 
-The only allowed exception is sorting ``free_symbols``, because the set of
-symbols is a genuine mathematical set and sorting it yields a stable order.
+The allowed exceptions are:
+- sorting ``free_symbols``, because the set of symbols is a genuine mathematical
+  set and sorting it yields a stable order;
+- ``splitting_tools.py``, where ``sorted(split_description, key=str)`` is used
+  to obtain a deterministic processing order that cannot be derived from the
+  existing data structures.
 
 This script is intended as a pre-commit / CI check for the DaCe backend code.
 """
@@ -34,6 +38,10 @@ from pathlib import Path
 # ``sorted()`` may only be used on these expressions.
 ALLOWED_SORTED_ARGUMENTS = frozenset({"free_symbols"})
 
+# Some files are allowed to use ``sorted()`` because their specific ordering
+# requirement cannot be satisfied by the existing data structures.
+EXEMPT_FILE_NAMES = frozenset({"splitting_tools.py"})
+
 
 def _is_allowed_sorted_argument(node: ast.AST) -> bool:
     """Return True if ``sorted(node)`` is an allowed use case."""
@@ -43,6 +51,9 @@ def _is_allowed_sorted_argument(node: ast.AST) -> bool:
 
 def check_file(path: Path) -> list[str]:
     """Return a list of violation messages for ``path``."""
+    if path.name in EXEMPT_FILE_NAMES:
+        return []
+
     try:
         source = path.read_text()
     except (OSError, UnicodeDecodeError) as e:
@@ -87,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             "Found sorted() calls in the DaCe backend. "
             "Use OrderedSet or rely on the existing list/dict order instead; "
-            "only sorting free_symbols is allowed:",
+            "only sorting free_symbols (and the exempt splitting_tools.py) is allowed:",
             file=sys.stderr,
         )
         for violation in all_violations:

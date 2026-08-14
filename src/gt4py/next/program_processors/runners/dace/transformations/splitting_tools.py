@@ -262,6 +262,12 @@ def split_node(
     if already_reconfigured_nodes is None:
         already_reconfigured_nodes = set()
 
+    # Sort the split descriptions such that they are processed in a deterministic way.
+    # NOTE: Turning them into a string is the best solution is probably the only way
+    #   to achieve some stability. The only downside is that the order now depends
+    #   on the specialization level that is used, i.e. if we have numbers or symbols.
+    split_description = sorted(split_description, key=lambda split: str(split))
+
     desc_to_split = node_to_split.desc(sdfg)
     assert desc_to_split.transient
     assert not gtx_transformations.utils.is_view(desc_to_split)
@@ -338,6 +344,13 @@ def split_edge(
     #  `edge_to_split` is an outgoing edge. But this is an implementation
     #  detail that does not limit the applicability of this function.
     # TODO(phimuell): Implements some check that nothing is lost.
+
+    # Bring the split description in a deterministic order.
+    # NOTE: See note in `split_node()` why the sorting is done in this way.
+    # NOTE: The main benefit of bringing `split_description` into a deterministic
+    #   order is that the output of this function is deterministic as well. I am
+    #   not sure if there is any benefit beside that.
+    split_description = sorted(split_description, key=lambda split: str(split))
 
     assert isinstance(edge_to_split.src, dace_nodes.AccessNode)
     assert not isinstance(edge_to_split.src.desc(sdfg), dace_data.View)
