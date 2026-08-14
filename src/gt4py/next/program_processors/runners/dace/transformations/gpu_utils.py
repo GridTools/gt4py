@@ -757,9 +757,15 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
         assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
-            map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
-            if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
-                block_size[i] = map_size[map_dim_idx_to_inspect]
+            map_dim_size = map_size[len(gpu_map.params) - 1 - i]
+            # Note that the comparison can be provably true for a symbolic map size, e.g.
+            #  `5 - Max(0, N)` for a statically bounded domain with a runtime scalar `N`,
+            #  but a block size must be a compile-time integer, so only cut down to
+            #  concrete sizes.
+            if not dace.symbolic.issymbolic(map_dim_size) and (
+                (map_dim_size < block_size[i]) == True  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
+            ):
+                block_size[i] = map_dim_size
 
         gpu_map.gpu_block_size = tuple(block_size)
         # Only set `gpu_maxnreg` if it has not been set already (default is 0),
