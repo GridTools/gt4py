@@ -217,7 +217,7 @@ class GT4PyWriteBackBufferElimination(dace_transformation.Pass):
             #  Only an AccessNode at the top level qualifies; ADR-18 rule 10 gives one
             #  inside a Map scope `Scope` lifetime, so it can not refer to the data
             #  this pass removes.
-            write_backs = []
+            write_backs: list[tuple[dace.sdfg.graph.MultiConnectorEdge, dace.SDFGState]] = []
             for state, (tmp_reads, _) in tmp_access.items():
                 scope_dict = state.scope_dict()
                 write_backs.extend(
