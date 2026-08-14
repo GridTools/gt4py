@@ -119,15 +119,15 @@ except errors.DSLError as err:
     raise
 ```
 
-This is the stock `BaseException.add_note`, so the breadcrumb lands in
-`__notes__`, not in the structured `notes` field — `notes` is reserved for
-content authored at the raise site. The two have different renderers:
+`add_note` puts the breadcrumb in `__notes__`, which is *not* the structured
+`notes` field: `notes` is reserved for content authored at the raise site. The
+two are rendered by different code, so do not expect one to show the other —
 `DSLError.__str__` emits only the structured parts, while `__notes__` is
 printed by the traceback machinery (and therefore by pytest and
-IPython/Jupyter). The excepthook in `errors/excepthook.py` replaces that
-machinery, so it appends `__notes__` itself. The seam is wired at
-`func_to_foast` (`ffront/func_to_foast.py`); add it at later stages as they
-gain useful context.
+IPython/Jupyter). `errors/excepthook.py` replaces that machinery, so it
+appends `__notes__` itself. The seam is wired at `func_to_foast`
+(`ffront/func_to_foast.py`); add it at later stages as they gain useful
+context.
 
 ### 5. Always: a test
 
@@ -203,11 +203,8 @@ Unsupported operand type(s) for +: 'Field[[IDim], float64]' and 'Field[[IDim], b
 
 ## Python-version caveat
 
-The supported floor is Python 3.12, so `Self`, `BaseException.add_note` (PEP
-678\) and every `ast` node up to 3.12 can be used directly.
-
-The diagnostics code carries no version shims left over from the old 3.10
-floor; do not add new ones.
-
-Nodes introduced *after* 3.12 (for example `ast.TemplateStr` for PEP 750
-t-strings, 3.14) still cannot be referenced unconditionally in the catalogue.
+`ast` nodes introduced *after* the supported floor cannot be named directly in
+the catalogue — `ast.TemplateStr` (PEP 750 t-strings, 3.14) does not exist on
+3.12, so the module would fail to import there. Register those by name in
+`_NEWER_UNSUPPORTED_FEATURE_HINTS` instead; entries the running interpreter
+does not have are skipped.
