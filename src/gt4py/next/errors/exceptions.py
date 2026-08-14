@@ -183,8 +183,9 @@ class MissingArgumentError(DSLError):
 
 
 class DSLTypeError(DSLError):
-    def __init__(self, location: Optional[SourceLocation], message: str) -> None:
-        super().__init__(location, message)
+    # Note: no '__init__' override, so that subclasses inherit the full structured
+    # signature of 'DSLError' ('label', 'related', 'notes', 'hints').
+    pass
 
 
 class MissingParameterAnnotationError(DSLTypeError):
@@ -193,6 +194,34 @@ class MissingParameterAnnotationError(DSLTypeError):
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
         super().__init__(location, f"Parameter '{param_name}' is missing type annotations.")
         self.param_name = param_name
+
+
+class InvalidAnnotationError(DSLTypeError):
+    code: ClassVar[str] = "invalid-annotation"
+
+    annotation: Any
+
+    def __init__(
+        self,
+        location: Optional[SourceLocation],
+        annotation: Any,
+        *,
+        description: str = "type annotation",
+        reason: Optional[str] = None,
+    ) -> None:
+        super().__init__(
+            location,
+            f"Invalid {description}: '{annotation}'.",
+            label="not a valid GT4Py type",
+            notes=(reason,) if reason else (),
+            hints=(
+                (
+                    "Use a GT4Py type, e.g. a scalar type like 'float64', a "
+                    "'Field[Dims[IDim], float64]', or a tuple of those."
+                ),
+            ),
+        )
+        self.annotation = annotation
 
 
 class InvalidParameterAnnotationError(DSLTypeError):
