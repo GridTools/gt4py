@@ -16,6 +16,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
+from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -28,24 +29,24 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     """
     Prune `concat_where` expressions with one branch never being selected.
 
-    Whether a branch is selected is decided from the domain of the `concat_where` itself:
-    the intersection with the condition (respectively its complement for the false branch)
-    is empty exactly if the branch is never selected.
+    A branch is never selected exactly if its inferred domain, i.e. the intersection of the
+    domain of the `concat_where` with the condition (respectively its complement for the false
+    branch), is empty. Since a `concat_where` implicitly broadcasts a branch to the dimensions
+    it does not have itself, such a branch's inferred domain is however restricted to the
+    branch's own dimensions, dropping exactly the ranges that decide whether it is selected.
+    Hence, the pass materializes the implicit broadcast (in a `broadcast` call) and populates
+    the domains of the new nodes by rerunning domain inference on the `concat_where` (cheap,
+    since already inferred subexpressions are not revisited), after which each branch's domain
+    contains all dimensions and a simple emptiness check remains. On pruning, the (broadcast)
+    branch's domain equals the domain of the `concat_where` (`RemoveBroadcast` relies on it to
+    lower the `broadcast` again).
 
-    Since a `concat_where` implicitly broadcasts a branch to the dimensions it does not have
-    itself, a surviving branch with fewer dimensions than the `concat_where` is wrapped in a
-    `broadcast` call. The domain of the resulting expression is populated from the pruned
-    `concat_where` (`RemoveBroadcast` relies on it to lower the `broadcast` again).
-
-    This pass requires domain and type inference to be executed before. In particular it relies
-    on the condition being in the canonical form that domain inference already requires, i.e.
-    bounded on exactly one side, as the complement of the condition is not defined otherwise.
+    This pass requires domain and type inference to be executed before.
 
     This pass requires the true and false branch values to be fields, not tuples of fields.
     Execute `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before.
 
     >>> from gt4py.next import common
-    >>> from gt4py.next.iterator.transforms import infer_domain
     >>> IDim = common.Dimension("IDim")
     >>> field_t = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> expr = im.concat_where(
@@ -69,15 +70,6 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     def apply(cls: type[Self], node: PRG) -> PRG:
         return cls().visit(node)
 
-    def _prune_to(self, node: itir.FunCall, branch: itir.Expr) -> itir.Expr:
-        """Replace `node` by `branch`, broadcasting `branch` if it has fewer dimensions."""
-        assert isinstance(node.type, ts.FieldType)  # `concat_where` has at least the concat dim
-        assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
-        if type_info.extract_dims(branch.type) != node.type.dims:
-            branch = im.broadcast(branch, node.type.dims)
-        branch.annex.domain = node.annex.domain
-        return branch
-
     def visit_FunCall(self, node: itir.FunCall) -> itir.Expr:
         node = self.generic_visit(node)
 
@@ -88,29 +80,40 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                 # TODO(tehrengruber): Implement support for tuples.
                 return node
 
-            cond_expr, tb, fb = node.args
+            def materialize_broadcast(branch: itir.Expr) -> itir.Expr:
+                assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
+                assert isinstance(node.type, (ts.FieldType, ts.ScalarType))
+                if type_info.extract_dims(branch.type) != type_info.extract_dims(node.type):
+                    return im.broadcast(branch, type_info.extract_dims(node.type))
+                return branch
+
+            cond_expr = node.args[0]
+            tb, fb = (materialize_broadcast(branch) for branch in node.args[1:])
+
+            # note: the inference rebuilds the nodes it visits and populates the domains on the
+            #  rebuilt copies, so take the branches from the result
+            candidate, _ = infer_domain.infer_expr(
+                im.concat_where(cond_expr, tb, fb),
+                node.annex.domain,
+                offset_provider={},  # not needed on field-view level expressions
+                revisit_already_inferred=False,
+            )
+            assert isinstance(candidate, itir.FunCall)
+            tb, fb = candidate.args[1:]
 
             if tb == fb:
-                # note: as long as we visited the args we have a copy here, so no need to copy again
-                return self._prune_to(node, tb)
+                # the branch is accessed on the entire domain of the `concat_where` now, not
+                #  only on its selected region
+                tb.annex.domain = node.annex.domain
+                return tb
 
-            accessed_domain = node.annex.domain
-            cond = domain_utils.SymbolicDomain.from_expr(cond_expr)
-            if isinstance(accessed_domain, domain_utils.SymbolicDomain):
-                assert cond.ranges.keys() <= accessed_domain.ranges.keys()
-                for branch, other_branch, selected_domain in (
-                    (tb, fb, cond),
-                    (fb, tb, domain_utils.domain_complement(cond)),
-                ):
-                    branch_accessed_domain = domain_utils.domain_intersection(
-                        domain_utils.promote_domain(
-                            branch.annex.domain, accessed_domain.ranges.keys()
-                        ),
-                        domain_utils.promote_domain(selected_domain, accessed_domain.ranges.keys()),
-                        accessed_domain,
-                    )
-                    if branch_accessed_domain.empty():
-                        return self._prune_to(node, other_branch)
+            if not isinstance(node.annex.domain, domain_utils.SymbolicDomain):
+                return node
+
+            if tb.annex.domain.empty():
+                return fb
+            if fb.annex.domain.empty():
+                return tb
 
         return node
 

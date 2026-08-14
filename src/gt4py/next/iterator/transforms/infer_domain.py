@@ -58,6 +58,7 @@ class InferenceOptions(typing.TypedDict):
     symbolic_domain_sizes: dict[str, itir.Expr] | None
     allow_uninferred: bool
     keep_existing_domains: bool
+    revisit_already_inferred: bool
 
 
 class DomainAnnexDebugger(eve.NodeVisitor):
@@ -185,6 +186,7 @@ def _infer_as_fieldop(
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
+    revisit_already_inferred: bool,
 ) -> tuple[itir.FunCall, AccessedDomains]:
     assert isinstance(applied_fieldop, itir.FunCall)
     assert cpm.is_call_to(applied_fieldop.fun, "as_fieldop")
@@ -234,6 +236,7 @@ def _infer_as_fieldop(
             symbolic_domain_sizes=symbolic_domain_sizes,
             allow_uninferred=allow_uninferred,
             keep_existing_domains=keep_existing_domains,
+            revisit_already_inferred=revisit_already_inferred,
         )
         transformed_inputs.append(transformed_input)
 
@@ -442,6 +445,7 @@ def infer_expr(
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
+    revisit_already_inferred: bool = True,
 ) -> tuple[itir.Expr, AccessedDomains]:
     """
     Infer the domain of all field subexpressions of `expr`.
@@ -464,12 +468,19 @@ def infer_expr(
       but we can't reinfer everything because some domain access information has been lost.
       For example when a `concat_where` is transformed into an `as_fieldop` with an if we lose
       some information that could lead to unnecessary overcomputation and out-of-bounds accesses.
+    - revisit_already_inferred: If `False`, subexpressions that already have a domain (in their
+      annex) are neither descended into nor altered. Useful together with
+      `keep_existing_domains` to cheaply populate the domains of nodes newly created by a
+      transformation on an already inferred expression. Note that accesses inside skipped
+      subexpressions are not reported in the returned accessed domains.
 
     Returns:
       A tuple containing the inferred expression with all applied `as_fieldop` (that are accessed)
       having a domain argument now, and a dictionary mapping symbol names referenced in `expr` to
       domain they are accessed at.
     """
+    if not revisit_already_inferred and hasattr(expr.annex, "domain"):
+        return expr, {}
 
     itir_type_inference.reinfer(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
@@ -512,6 +523,7 @@ def infer_expr(
         symbolic_domain_sizes=symbolic_domain_sizes,
         allow_uninferred=allow_uninferred,
         keep_existing_domains=keep_existing_domains,
+        revisit_already_inferred=revisit_already_inferred,
     )
     if not keep_existing_domains or not hasattr(expr.annex, "domain"):
         expr.annex.domain = domain
@@ -560,6 +572,7 @@ def infer_program(
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
+    revisit_already_inferred: bool = True,
 ) -> itir.Program:
     """
     Infer the domain of all field subexpressions inside a program.
@@ -586,6 +599,7 @@ def infer_program(
                 symbolic_domain_sizes=symbolic_domain_sizes,
                 allow_uninferred=allow_uninferred,
                 keep_existing_domains=keep_existing_domains,
+                revisit_already_inferred=revisit_already_inferred,
             )
             for stmt in program.body
         ],
