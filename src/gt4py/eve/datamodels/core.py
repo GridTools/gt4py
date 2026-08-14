@@ -1063,13 +1063,19 @@ def _is_strictly_immutable_type(
 ) -> bool:
     """Check whether an annotation only admits strictly immutable (hashable) values.
 
-    A datamodel qualifies only if it is itself defined with ``frozen="strict"``;
-    any other plain type qualifies if it defines a custom ``__hash__``. Composite
-    annotations are decomposed and every part is checked with the same rules, so
-    that neither wrapping a type in a union nor hiding it in a generic container
-    (whose hash folds in the hashes of its items) weakens the check. Annotations
-    that cannot be resolved to any concrete type (``Any``, unbound type variables,
-    unresolved forward references) are conservatively rejected.
+    A datamodel qualifies only if it is itself defined with ``frozen="strict"``.
+    Any other plain type is judged by its ``__hash__``, which is the only signal
+    the language gives here: a type that defines its own is claiming its values
+    hash by content, which they can only do if they do not change, while the
+    mutable builtins opt out by setting ``__hash__ = None`` and the inherited
+    ``object.__hash__`` just hashes by identity and says nothing about the value.
+    So neither of those two counts, and everything else does.
+
+    Composite annotations are decomposed and every part is checked with the same
+    rules, so that neither wrapping a type in a union nor hiding it in a generic
+    container (whose hash folds in the hashes of its items) weakens the check.
+    Annotations that cannot be resolved to any concrete type (``Any``, unbound
+    type variables, unresolved forward references) are conservatively rejected.
 
     Arguments:
         type_annotation: The annotation to check.

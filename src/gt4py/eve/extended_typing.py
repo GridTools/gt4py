@@ -439,14 +439,7 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-# `Any` is a class since Python 3.11, which is below the supported floor.
-_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias, _typing.Any)
-
-# `Any` is a class since typing_extensions >= 4.4 and Python 3.11
-if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
-    typing_exts_any, type
-):
-    _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
+_ArtefactTypes: Final[tuple[type, ...]] = (_types.GenericAlias, _typing.Any)
 
 
 def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
@@ -569,17 +562,11 @@ def eval_type_alias(annotation: Any) -> Any:
     )
 
 
-if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
-    # When using Python < 3.11 and typing_extensions >= 4.4 there are
-    # two different implementations of `Any`
-
-    def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any or obj is _typing_extensions.Any  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
-
-else:
-
-    def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any
+def is_Any(obj: Any) -> bool:
+    """Check if an object is the ``Any`` special form."""
+    # 'typing_extensions' re-exports 'typing.Any' on every supported version, so the
+    # two implementations that used to exist below the 3.11 floor are now one object.
+    return obj is _typing.Any
 
 
 def has_type_parameters(cls: type[Any]) -> bool:
