@@ -87,6 +87,7 @@ from .strides import (
 )
 from .trivial_map_dimension_folding import TrivialMapDimensionFolding
 from .utils import gt_configure_transient_lifetime
+from .write_back_buffer_elimination import GT4PyWriteBackBufferElimination
 
 
 __all__ = [
@@ -100,6 +101,7 @@ __all__ = [
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
+    "GT4PyWriteBackBufferElimination",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
     "LoopBlocking",
