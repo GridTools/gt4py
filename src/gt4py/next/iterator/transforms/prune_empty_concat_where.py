@@ -90,12 +90,14 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             cond_expr, tb, fb = node.args
 
             # transform implicit broadcast in the branches in explicit ones and reinfer domain,
-            #  since the domain of a branch is restricted to the branch's own dimensions. E.g.,
-            #  in `concat_where(K < 0, a, b)` with `a: Field[[Vertex]]` accessed on
-            #  `Vertex: [0, 10), K: [0, 10)` the domain of `a` is just `Vertex: [0, 10)` — the
+            # since the domain of a branch is restricted to the branch's own dimensions. E.g.,
+            # in `concat_where(K < 0, a, b)` with `a: Field[[Vertex]]` accessed on
+            # `Vertex: [0, 10), K: [0, 10)` the domain of `a` is just `Vertex: [0, 10)` — the
             #  empty range `K: [0, 0)`, which decides that `a` is never selected, is dropped as
-            #  `a` does not have the `K` dimension — while the domain of the corresponding
-            #  `broadcast(a, (Vertex, K))` retains it.
+            # `a` does not have the `K` dimension — while the domain of the corresponding
+            # `broadcast(a, (Vertex, K))` retains it. Domain inference instead of computing the
+            # domain of the broadcast is used for simplicity and to not duplicate the domain
+            # semantics of `concat_where`.
             node_with_explicit_broadcast, _ = infer_domain.infer_expr(
                 im.concat_where(cond_expr, explicit_broadcast(tb), explicit_broadcast(fb)),
                 node.annex.domain,

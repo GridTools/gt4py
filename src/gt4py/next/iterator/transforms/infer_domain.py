@@ -12,7 +12,7 @@ import typing
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, Unpack
+from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, TypeVar, Unpack
 from gt4py.next import common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -51,6 +51,9 @@ NonTupleDomainAccess: TypeAlias = domain_utils.SymbolicDomain | DomainAccessDesc
 #: fine to a tuple of a vertex and an edge domain.
 DomainAccess: TypeAlias = NonTupleDomainAccess | tuple["DomainAccess", ...]
 AccessedDomains: TypeAlias = dict[str, DomainAccess]
+
+
+_Expr_T = TypeVar("_Expr_T", bound=itir.Expr)
 
 
 class InferenceOptions(typing.TypedDict):
@@ -438,7 +441,7 @@ def _infer_expr(
 
 
 def infer_expr(
-    expr: itir.Expr,
+    expr: _Expr_T,
     domain: DomainAccess,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
@@ -446,7 +449,7 @@ def infer_expr(
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
     revisit_already_inferred: bool = True,
-) -> tuple[itir.Expr, AccessedDomains]:
+) -> tuple[_Expr_T, AccessedDomains]:
     """
     Infer the domain of all field subexpressions of `expr`.
 
@@ -516,7 +519,7 @@ def infer_expr(
         )
     )(domain, el_types, additional_dims)
 
-    expr, accessed_domains = _infer_expr(
+    inferred_expr, accessed_domains = _infer_expr(
         expr,
         domain,
         offset_provider=offset_provider,
@@ -525,10 +528,11 @@ def infer_expr(
         keep_existing_domains=keep_existing_domains,
         revisit_already_inferred=revisit_already_inferred,
     )
-    if not keep_existing_domains or not hasattr(expr.annex, "domain"):
-        expr.annex.domain = domain
+    if not keep_existing_domains or not hasattr(inferred_expr.annex, "domain"):
+        inferred_expr.annex.domain = domain
 
-    return expr, accessed_domains
+    # `_infer_expr` preserves the node class, e.g. a `FunCall` is rebuilt as a `FunCall`
+    return typing.cast(_Expr_T, inferred_expr), accessed_domains
 
 
 def _make_symbolic_domain_tuple(domains: itir.Node) -> DomainAccess:
