@@ -64,7 +64,6 @@ build_cscs_amd_rocm:
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 60
-  allow_failure: true
   artifacts:
     when: always
     paths:
