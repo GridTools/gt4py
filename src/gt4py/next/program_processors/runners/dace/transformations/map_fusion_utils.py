@@ -264,7 +264,7 @@ def split_overlapping_map_range(
 
             # split the ranges into sub-ranges based on the overlapping range
             first_map_splitted_dict[param] = _split_range(
-                first_map_sorted_range, overlap_range_start, overlap_range_stop, step
+                first_map_range, overlap_range_start, overlap_range_stop, step
             )
             second_map_splitted_dict[param] = _split_range(
                 second_map_range, overlap_range_start, overlap_range_stop, step
