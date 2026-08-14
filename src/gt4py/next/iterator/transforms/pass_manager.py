@@ -187,9 +187,7 @@ def apply_common_transforms(
         offset_provider=offset_provider,
         symbolic_domain_sizes=symbolic_domain_sizes,
     )
-    ir = prune_empty_concat_where.prune_empty_concat_where(
-        ir, offset_provider_type=offset_provider_type
-    )
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
@@ -308,8 +306,6 @@ def apply_fieldview_transforms(
         symbolic_domain_sizes=symbolic_domain_sizes,
         offset_provider=offset_provider,
     )
-    ir = prune_empty_concat_where.prune_empty_concat_where(
-        ir, offset_provider_type=offset_provider_type
-    )
+    ir = prune_empty_concat_where.prune_empty_concat_where(ir)
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
     return ir

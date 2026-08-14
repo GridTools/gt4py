@@ -6,11 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -45,6 +44,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     This pass requires the true and false branch values to be fields, not tuples of fields.
     Execute `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before.
 
+    >>> from gt4py.next import common
     >>> from gt4py.next.iterator.transforms import infer_domain
     >>> IDim = common.Dimension("IDim")
     >>> field_t = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
@@ -65,19 +65,13 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
-    offset_provider_type: Optional[common.OffsetProviderType] = None
-
     @classmethod
-    def apply(
-        cls: type[Self],
-        node: PRG,
-        *,
-        offset_provider_type: Optional[common.OffsetProviderType] = None,
-    ) -> PRG:
-        return cls(offset_provider_type=offset_provider_type).visit(node)
+    def apply(cls: type[Self], node: PRG) -> PRG:
+        return cls().visit(node)
 
     def _prune_to(self, node: itir.FunCall, branch: itir.Expr) -> itir.Expr:
         """Replace `node` by `branch`, broadcasting `branch` if it has fewer dimensions."""
+        assert isinstance(node.type, ts.FieldType)  # `concat_where` has at least the concat dim
         assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
         if type_info.extract_dims(branch.type) != node.type.dims:
             branch = im.call("broadcast")(
@@ -91,7 +85,8 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
         node = self.generic_visit(node)
 
         if cpm.is_call_to(node, "concat_where"):
-            type_inference.reinfer(node, offset_provider_type=self.offset_provider_type)
+            # no `offset_provider_type` needed as we only infer field-view level expressions
+            type_inference.reinfer(node)
             if not isinstance(node.type, (ts.FieldType, ts.ScalarType)):
                 # TODO(tehrengruber): Implement support for tuples.
                 return node
