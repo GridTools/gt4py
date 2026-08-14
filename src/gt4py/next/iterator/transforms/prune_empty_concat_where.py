@@ -110,7 +110,8 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                     tb,
                     node.annex.domain,
                     keep_existing_domains=False,
-                    revisit_already_inferred=True, offset_provider={}
+                    revisit_already_inferred=True,
+                    offset_provider={},
                 )
                 return new_node
 
