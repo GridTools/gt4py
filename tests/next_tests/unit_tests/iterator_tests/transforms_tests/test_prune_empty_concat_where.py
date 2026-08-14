@@ -15,9 +15,27 @@ from gt4py.next.iterator.transforms.concat_where import canonicalize_domain_argu
 from gt4py.next.iterator.transforms.infer_domain import infer_expr
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.ir_utils import domain_utils
+from gt4py.next.type_system import type_specifications as ts
 
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
 K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
+
+float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+vertex_k_field = ts.FieldType(dims=[Vertex, K], dtype=float64)
+vertex_field = ts.FieldType(dims=[Vertex], dtype=float64)
+k_field = ts.FieldType(dims=[K], dtype=float64)
+
+
+def _infer(testee, accessed_domain):
+    testee = canonicalize_domain_argument(testee)
+    testee, _ = infer_expr(
+        testee,
+        domain_utils.SymbolicDomain.from_expr(
+            im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
+        ),
+        offset_provider={},
+    )
+    return testee
 
 
 @pytest.mark.parametrize(
@@ -51,12 +69,13 @@ K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
     ],
 )
 def test_prune_concat_where(accessed_domain, cond_domain, expected):
-    accessed_domain = im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
-    testee = im.concat_where(im.domain(common.GridType.UNSTRUCTURED, cond_domain), "a", "b")
-    testee = canonicalize_domain_argument(testee)
-    testee, _ = infer_expr(
-        testee, domain_utils.SymbolicDomain.from_expr(accessed_domain), offset_provider={}
+    field_t = ts.FieldType(dims=list(accessed_domain.keys()), dtype=float64)
+    testee = im.concat_where(
+        im.domain(common.GridType.UNSTRUCTURED, cond_domain),
+        im.ref("a", field_t),
+        im.ref("b", field_t),
     )
+    testee = _infer(testee, accessed_domain)
 
     if expected is None:
         expected = testee
@@ -67,3 +86,111 @@ def test_prune_concat_where(accessed_domain, cond_domain, expected):
     actual = prune_empty_concat_where(testee)
     actual = InlineLambdas.apply(actual)
     assert actual == expected
+
+
+def _broadcast(expr):
+    return im.call("broadcast")(
+        expr,
+        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (Vertex, K))),
+    )
+
+
+def _concat_where(cond_range, true_branch_type, false_branch_type, accessed_domain):
+    """A `concat_where` on `K` with domains inferred from `accessed_domain`."""
+    testee = im.concat_where(
+        im.domain(common.GridType.UNSTRUCTURED, {K: cond_range}),
+        im.ref("a", true_branch_type),
+        im.ref("b", false_branch_type),
+    )
+    return _infer(testee, accessed_domain)
+
+
+@pytest.mark.parametrize(
+    "cond_range, expected",
+    [
+        ((itir.InfinityLiteral.NEGATIVE, 0), "b"),  # entirely below the accessed domain
+        ((10, itir.InfinityLiteral.POSITIVE), "b"),  # entirely above it
+        ((itir.InfinityLiteral.NEGATIVE, 10), "a"),  # covers it from below
+        ((0, itir.InfinityLiteral.POSITIVE), "a"),  # covers it from above
+    ],
+)
+def test_prune_condition_disjoint_from_accessed_domain(cond_range, expected):
+    testee = _concat_where(
+        cond_range, vertex_k_field, vertex_k_field, accessed_domain={Vertex: (0, 10), K: (0, 10)}
+    )
+
+    assert prune_empty_concat_where(testee) == im.ref(expected)
+
+
+def test_prune_to_branch_that_lacks_a_dimension():
+    """The surviving branch is broadcast to the dimensions of the `concat_where`.
+
+    Replacing the `concat_where` by the branch alone would turn a two-dimensional expression
+    into a one-dimensional one.
+    """
+    testee = _concat_where(
+        (itir.InfinityLiteral.NEGATIVE, 0),
+        vertex_k_field,
+        k_field,
+        accessed_domain={Vertex: (0, 10), K: (0, 10)},
+    )
+
+    actual = prune_empty_concat_where(testee)
+    assert actual == _broadcast(im.ref("b"))
+    # `RemoveBroadcast` lowers the `broadcast` using the domain of the pruned `concat_where`
+    assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 10), K: (0, 10)})
+    )
+
+
+def test_prune_never_selected_branch_when_no_branch_has_the_concat_dimension():
+    """A never-selected branch must be pruned even if no branch has the concat dimension.
+
+    `a` is selected where `K < 0`, i.e. nowhere within the accessed domain `K: [0, 10)`, so the
+    expression is `b`. Since neither branch has the `K` dimension, neither branch's inferred
+    domain has a `K` range — the emptiness of the region selecting `a` is only visible in the
+    domain of the `concat_where` itself.
+    """
+    testee = _concat_where(
+        (itir.InfinityLiteral.NEGATIVE, 0),
+        vertex_field,
+        vertex_field,
+        accessed_domain={Vertex: (0, 10), K: (0, 10)},
+    )
+
+    actual = prune_empty_concat_where(testee)
+    assert actual == _broadcast(im.ref("b"))
+    assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 10), K: (0, 10)})
+    )
+
+
+def test_no_prune_of_selected_branch_that_lacks_the_concat_dimension():
+    """A branch lacking the concat dimension can still be selected via the implicit broadcast.
+
+    The condition `K < 0` overlaps the accessed domain `K: [-5, 10)`, so `a` — implicitly
+    broadcast to `(Vertex, K)` — is selected on `K: [-5, 0)` and must not be pruned, even
+    though `a`'s own inferred domain has no `K` range. Note that `b` is only selected (and
+    hence accessed) on `K: [0, 10)`, which is disjoint from the condition; that must not be
+    mistaken for `a` being never selected.
+    """
+    testee = _concat_where(
+        (itir.InfinityLiteral.NEGATIVE, 0),
+        vertex_field,
+        vertex_k_field,
+        accessed_domain={Vertex: (0, 10), K: (-5, 10)},
+    )
+
+    assert prune_empty_concat_where(testee) == testee
+
+
+def test_prune_equal_branches_that_lack_the_concat_dimension():
+    """Equal branches are pruned, broadcasting if they do not have the concat dimension."""
+    testee = im.concat_where(
+        im.domain(common.GridType.UNSTRUCTURED, {K: (2, itir.InfinityLiteral.POSITIVE)}),
+        im.ref("a", vertex_field),
+        im.ref("a", vertex_field),
+    )
+    testee = _infer(testee, {Vertex: (0, 10), K: (0, 10)})
+
+    assert prune_empty_concat_where(testee) == _broadcast(im.ref("a"))

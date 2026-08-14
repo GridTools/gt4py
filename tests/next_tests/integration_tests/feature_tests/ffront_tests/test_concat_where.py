@@ -407,3 +407,32 @@ def test_with_tuples_different_domain(cartesian_case):
         out=out,
         ref=(ref0, ref1),
     )
+
+
+def test_concat_where_prune_to_lower_dimensional_branch(cartesian_case):
+    """
+    Prune a `concat_where` where the surviving branch has fewer dimensions than the expression.
+
+    The static domain bounds allow `prune_empty_concat_where` to statically decide that `a` is
+    never selected. The surviving branch `b` only has the `K` dimension, so pruning must
+    reintroduce the implicit broadcast of the `concat_where` instead of replacing the
+    three-dimensional expression by a one-dimensional one.
+    """
+
+    @gtx.field_operator
+    def testee(a: cases.IJKField, b: cases.KField) -> cases.IJKField:
+        return concat_where(KDim < 0, a, b)
+
+    @gtx.program
+    def prog(a: cases.IJKField, b: cases.KField, out: cases.IJKField):
+        # note: the domain bounds need to be statically known for the pruning to occur
+        testee(a, b, out=out, domain={IDim: (0, 2), JDim: (0, 2), KDim: (0, 2)})
+
+    a = cases.allocate(cartesian_case, prog, "a")()
+    b = cases.allocate(cartesian_case, prog, "b")()
+    out = cases.allocate(cartesian_case, prog, "out")()
+
+    ref = out.asnumpy().copy()  # ensure we are not writing outside the domain
+    ref[0:2, 0:2, 0:2] = b.asnumpy()[np.newaxis, np.newaxis, 0:2]
+
+    cases.verify(cartesian_case, prog, a, b, out, inout=out, ref=ref)
