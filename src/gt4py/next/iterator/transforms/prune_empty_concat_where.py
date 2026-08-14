@@ -80,30 +80,32 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                 # TODO(tehrengruber): Implement support for tuples.
                 return node
 
-            def materialize_broadcast(branch: itir.Expr) -> itir.Expr:
+            def explicit_broadcast(branch: itir.Expr) -> itir.Expr:
                 assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
                 assert isinstance(node.type, (ts.FieldType, ts.ScalarType))
                 if type_info.extract_dims(branch.type) != type_info.extract_dims(node.type):
                     return im.broadcast(branch, type_info.extract_dims(node.type))
                 return branch
 
-            cond_expr = node.args[0]
-            tb, fb = (materialize_broadcast(branch) for branch in node.args[1:])
+            cond_expr, tb, fb = node.args
 
-            # note: the inference rebuilds the nodes it visits and populates the domains on the
-            #  rebuilt copies, so take the branches from the result
-            candidate, _ = infer_domain.infer_expr(
-                im.concat_where(cond_expr, tb, fb),
+            # transform implicit broadcast in the branches in explicit ones and reinfer domain,
+            #  since the domain of a branch is restricted to the branch's own dimensions. E.g.,
+            #  in `concat_where(K < 0, a, b)` with `a: Field[[Vertex]]` accessed on
+            #  `Vertex: [0, 10), K: [0, 10)` the domain of `a` is just `Vertex: [0, 10)` — the
+            #  empty range `K: [0, 0)`, which decides that `a` is never selected, is dropped as
+            #  `a` does not have the `K` dimension — while the domain of the corresponding
+            #  `broadcast(a, (Vertex, K))` retains it.
+            node_with_explicit_broadcast, _ = infer_domain.infer_expr(
+                im.concat_where(cond_expr, explicit_broadcast(tb), explicit_broadcast(fb)),
                 node.annex.domain,
                 offset_provider={},  # not needed on field-view level expressions
                 revisit_already_inferred=False,
             )
-            assert isinstance(candidate, itir.FunCall)
-            tb, fb = candidate.args[1:]
+            cond_expr, tb, fb = node_with_explicit_broadcast.args
 
             if tb == fb:
-                # the branch is accessed on the entire domain of the `concat_where` now, not
-                #  only on its selected region
+                # note: as long as we visited the args we have a copy here, so no need to copy again
                 tb.annex.domain = node.annex.domain
                 return tb
 
