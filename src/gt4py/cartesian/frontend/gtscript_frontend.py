@@ -53,12 +53,7 @@ PYTHON_AST_VERSION: Final = (3, 12)
 
 
 def _is_ellipsis_node(node: ast.AST) -> bool:
-    """Check whether an AST node is the '...' literal.
-
-    'ast.Ellipsis' is a deprecated alias scheduled for removal in Python 3.14, and
-    'types.EllipsisType' is the type of the '...' object itself, not of its AST node,
-    so neither is usable as an 'isinstance()' target here.
-    """
+    """Check whether an AST node is the '...' literal."""
     return isinstance(node, ast.Constant) and node.value is Ellipsis
 
 
