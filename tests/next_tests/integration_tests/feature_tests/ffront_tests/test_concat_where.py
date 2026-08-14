@@ -20,8 +20,14 @@ from next_tests.integration_tests.cases_utils import (
 pytestmark = pytest.mark.uses_concat_where
 
 
-def test_concat_where_simple(cartesian_case):
-    @gtx.field_operator
+@pytest.fixture(params=[False, True], ids=["dynamic_domains", "static_domains"])
+def static_domains(request) -> bool:
+    """Fixture to select compilation with dynamic or statically known domain bounds."""
+    return request.param
+
+
+def test_concat_where_simple(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim > 0, air, ground)
 
@@ -34,8 +40,8 @@ def test_concat_where_simple(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
-def test_concat_where(cartesian_case):
-    @gtx.field_operator
+def test_concat_where(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
@@ -48,10 +54,10 @@ def test_concat_where(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
-def test_concat_where_non_overlapping(cartesian_case):
+def test_concat_where_non_overlapping(cartesian_case, static_domains: bool):
     """Fields only defined in their respective region in concat_where."""
 
-    @gtx.field_operator
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
@@ -65,8 +71,8 @@ def test_concat_where_non_overlapping(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
-def test_concat_where_empty_branch(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_empty_branch(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.IJKField, b: cases.IJKField, N: np.int32) -> cases.IJKField:
         return concat_where(IDim < N, a, b * 2)
 
@@ -79,8 +85,8 @@ def test_concat_where_empty_branch(cartesian_case):
 
 
 @pytest.mark.embedded_concat_where_infinite_domain
-def test_concat_where_scalar_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_scalar_broadcast(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
         return concat_where(KDim < N - 1, a, b)
 
@@ -99,10 +105,10 @@ def test_concat_where_scalar_broadcast(cartesian_case):
 
 
 @pytest.mark.embedded_concat_where_infinite_domain
-def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
     """Output domain such that the scalar branch is never active."""
 
-    @gtx.field_operator
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: np.int32, b: cases.KField, N: np.int32) -> cases.KField:
         return concat_where(KDim < N, a, b)
 
@@ -114,8 +120,8 @@ def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, 1, out=out, ref=ref)
 
 
-def test_concat_where_single_level_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_single_level_broadcast(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, a, b)
 
@@ -135,8 +141,10 @@ def test_concat_where_single_level_broadcast(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_single_level_restricted_domain_broadcast(
+    cartesian_case, static_domains: bool
+):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, a, b)
 
@@ -155,8 +163,8 @@ def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-def test_boundary_single_layer_3d_bc(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_3d_bc(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
@@ -174,8 +182,8 @@ def test_boundary_single_layer_3d_bc(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_boundary_single_layer_2d_bc(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_2d_bc(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
@@ -193,8 +201,8 @@ def test_boundary_single_layer_2d_bc(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
@@ -208,8 +216,8 @@ def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_dimension_two_nested_conditions(cartesian_case):
-    @gtx.field_operator
+def test_dimension_two_nested_conditions(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where((KDim < 2), boundary, concat_where((KDim >= 5), boundary, interior))
 
@@ -226,8 +234,8 @@ def test_dimension_two_nested_conditions(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_dimension_two_conditions_and(cartesian_case):
-    @gtx.field_operator
+def test_dimension_two_conditions_and(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
         return concat_where((0 < KDim) & (KDim < (nlev - 1)), interior, boundary)
 
@@ -241,8 +249,8 @@ def test_dimension_two_conditions_and(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 
-def test_dimension_eq_in_middle_of_domain(cartesian_case):
-    @gtx.field_operator
+def test_dimension_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where((KDim == 2), interior, boundary)
 
@@ -256,8 +264,8 @@ def test_dimension_eq_in_middle_of_domain(cartesian_case):
 
 
 @pytest.mark.embedded_concat_where_non_contiguous_domain
-def test_dimension_two_conditions_or(cartesian_case):
-    @gtx.field_operator
+def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where(((KDim < 2) | (KDim >= 5)), boundary, interior)
 
@@ -270,8 +278,8 @@ def test_dimension_two_conditions_or(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_lap_like(cartesian_case):
-    @gtx.field_operator
+def test_lap_like(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
     ) -> cases.IJField:
@@ -304,8 +312,8 @@ def test_lap_like(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
-def test_with_tuples(cartesian_case):
-    @gtx.field_operator
+def test_with_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         interior0: cases.IJKField,
         boundary0: cases.IJField,
@@ -344,8 +352,8 @@ def test_with_tuples(cartesian_case):
     )
 
 
-def test_nested_conditions_with_empty_branches(cartesian_case):
-    @gtx.field_operator
+def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
         interior = concat_where(IDim == 0, boundary, interior)
         interior = concat_where((1 <= IDim) & (IDim < N - 1), interior * 2, interior)
@@ -367,8 +375,8 @@ def test_nested_conditions_with_empty_branches(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
-def test_with_tuples_different_domain(cartesian_case):
-    @gtx.field_operator
+def test_with_tuples_different_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         interior0: cases.IJKField,
         boundary0: cases.IJKField,
@@ -409,31 +417,24 @@ def test_with_tuples_different_domain(cartesian_case):
     )
 
 
-def test_concat_where_field_broadcast_on_empty_branch(cartesian_case):
+def test_concat_where_field_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
     """
     A field branch with fewer dimensions than the expression is implicitly broadcast.
 
     `b` only has the `K` dimension, but is selected everywhere, so it is broadcast to the
-    three-dimensional result. Note that this also tests pruning: since the domain bounds are
-    statically known, `prune_empty_concat_where` decides that `a` is never selected and must
-    reintroduce the implicit broadcast of the `concat_where` instead of replacing the
+    three-dimensional result. With `static_domains` this also tests pruning: the domain bounds
+    are statically known, so `prune_empty_concat_where` decides that `a` is never selected and
+    must reintroduce the implicit broadcast of the `concat_where` instead of replacing the
     three-dimensional expression by a one-dimensional one.
     """
 
-    @gtx.field_operator
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.IJKField, b: cases.KField) -> cases.IJKField:
         return concat_where(KDim < 0, a, b)
 
-    @gtx.program
-    def prog(a: cases.IJKField, b: cases.KField, out: cases.IJKField):
-        # note: the domain bounds need to be statically known for the pruning to occur
-        testee(a, b, out=out, domain={IDim: (0, 2), JDim: (0, 2), KDim: (0, 2)})
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    a = cases.allocate(cartesian_case, prog, "a")()
-    b = cases.allocate(cartesian_case, prog, "b")()
-    out = cases.allocate(cartesian_case, prog, "out")()
-
-    ref = out.asnumpy().copy()  # ensure we are not writing outside the domain
-    ref[0:2, 0:2, 0:2] = b.asnumpy()[np.newaxis, np.newaxis, 0:2]
-
-    cases.verify(cartesian_case, prog, a, b, out, inout=out, ref=ref)
+    ref = np.broadcast_to(b.asnumpy()[np.newaxis, np.newaxis, :], out.domain.shape)
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
