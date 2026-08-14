@@ -100,9 +100,14 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             cond_expr, tb, fb = node_with_explicit_broadcast.args
 
             if tb == fb:
+                # The branch is selected on the entire domain of the `concat_where`, but its
+                #  domains were inferred from the region where each branch instance is selected.
+                #  Reinfer on the full domain, e.g. in `concat_where(2 <= K, a, broadcast(a,
+                #  (Vertex, K)))` the `a` inside the surviving `broadcast` would otherwise keep
+                #  the domain `K: [0, 2)` of the true branch.
                 # note: as long as we visited the args we have a copy here, so no need to copy again
-                tb.annex.domain = node.annex.domain
-                return tb
+                new_node, _ = infer_domain.infer_expr(tb, node.annex.domain, offset_provider={})
+                return new_node
 
             if not isinstance(node.annex.domain, domain_utils.SymbolicDomain):
                 return node

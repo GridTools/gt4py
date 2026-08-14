@@ -14,8 +14,8 @@ from gt4py.next.iterator.transforms.prune_empty_concat_where import prune_empty_
 from gt4py.next.iterator.transforms.concat_where import canonicalize_domain_argument
 from gt4py.next.iterator.transforms.infer_domain import infer_expr
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
-from gt4py.next.iterator.ir_utils import domain_utils
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
 K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
@@ -176,13 +176,27 @@ def _infer(testee, accessed_domain):
             ("a", vertex_field),
             im.broadcast(im.ref("a"), (Vertex, K)),
         ),
+        # branches that are equal after the implicit broadcast is made explicit; the domains
+        #  inside the surviving branch must be reinferred on the full domain of the
+        #  `concat_where`, e.g. the `a` inside the `broadcast` would otherwise keep the domain
+        #  `K: [2, 10)` of the branch instance it originates from
+        (
+            {Vertex: (0, 10), K: (0, 10)},
+            {K: (2, itir.InfinityLiteral.POSITIVE)},
+            ("a", k_field),
+            im.broadcast(im.ref("a", k_field), (Vertex, K)),
+            im.broadcast(im.ref("a"), (Vertex, K)),
+        ),
     ],
 )
 def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_branch, expected):
+    def branch_expr(branch: tuple[str, ts.FieldType] | itir.Expr) -> itir.Expr:
+        return im.ref(*branch) if isinstance(branch, tuple) else branch
+
     testee = im.concat_where(
         im.domain(common.GridType.UNSTRUCTURED, cond_domain),
-        im.ref(*true_branch),
-        im.ref(*false_branch),
+        branch_expr(true_branch),
+        branch_expr(false_branch),
     )
     testee = _infer(testee, accessed_domain)
 
@@ -198,5 +212,19 @@ def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_bra
     assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
     )
+    if cpm.is_call_to(actual, "broadcast"):
+        # the domains inside the pruned branch are inferred from the full domain of the
+        #  `concat_where`, restricted to the respective expression's dimensions
+        inner = actual.args[0]
+        assert inner.annex.domain == domain_utils.SymbolicDomain.from_expr(
+            im.domain(
+                common.GridType.UNSTRUCTURED,
+                {
+                    dim: bounds
+                    for dim, bounds in accessed_domain.items()
+                    if dim in type_info.extract_dims(inner.type)
+                },
+            )
+        )
     actual = InlineLambdas.apply(actual)
     assert actual == expected
