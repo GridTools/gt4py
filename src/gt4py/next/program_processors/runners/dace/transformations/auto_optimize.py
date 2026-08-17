@@ -523,6 +523,15 @@ def _gt_auto_process_top_level_maps(
         #   has been solved.
         vertical_map_fusion._single_use_data = single_use_data
 
+        # Fold single iteration Map dimensions first, otherwise their Memlets still
+        #  refer to the parameter symbolically and `Range.covers()` fails to see that
+        #  a producer covers a consumer, rejecting legal fusions.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.TrivialMapDimensionFolding(only_toplevel_maps=True),
+            validate=False,
+            validate_all=validate_all,
+        )
+
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
             validate=False,
