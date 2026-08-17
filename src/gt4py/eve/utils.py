@@ -49,17 +49,12 @@ from .extended_typing import (
     ArgsOnlyCallable,
     Callable,
     Collection,
-    Dict,
     Generic,
     Iterable,
     Iterator,
-    List,
     Literal,
     Optional,
     ParamSpec,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     cast,
@@ -88,7 +83,7 @@ def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) ->
         raise error
 
 
-def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
+def isinstancechecker(type_info: Union[type[Any], Iterable[type[Any]]]) -> Callable[[Any], bool]:
     """Return a callable object that checks if operand is an instance of `type_info`.
 
     Examples:
@@ -101,7 +96,7 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         False
 
     """
-    types: Tuple[Type, ...] = tuple()
+    types: tuple[type[Any], ...] = tuple()
     if isinstance(type_info, type):
         types = (type_info,)
     elif not isinstance(type_info, tuple) and is_collection(type_info):
@@ -264,7 +259,7 @@ class IndexerCallable(Generic[_S, _T]):
 
     func: ArgsOnlyCallable[_S, _T]
 
-    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+    def __getitem__(self, key: _S | tuple[_S, ...]) -> _T:
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
@@ -590,7 +585,7 @@ def with_fluid_partial(
     return _decorator(func) if func is not None else _decorator
 
 
-def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
+def register_subclasses(*subclasses: type[Any]) -> Callable[[type[Any]], type[Any]]:
     """Class decorator to automatically register virtual subclasses.
 
     Examples:
@@ -609,7 +604,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
 
     """
 
-    def _decorator(base_cls: Type) -> Type:
+    def _decorator(base_cls: type[Any]) -> type[Any]:
         for s in subclasses:
             base_cls.register(s)
         return base_cls
@@ -617,7 +612,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
-def noninstantiable(cls: Type[_T]) -> Type[_T]:
+def noninstantiable(cls: type[_T]) -> type[_T]:
     """Make a class without abstract method non-instantiable (subclasses should be instantiable)."""
     if not isinstance(cls, type):
         raise ValueError(f"Non-type value ({cls}) passed to 'noninstantiable()' class decorator.")
@@ -636,7 +631,7 @@ def noninstantiable(cls: Type[_T]) -> Type[_T]:
     return cls
 
 
-def is_noninstantiable(cls: Type[_T]) -> bool:
+def is_noninstantiable(cls: type[_T]) -> bool:
     """Return True if `model` is a non-instantiable class."""
     return "__noninstantiable__" in cls.__dict__
 
@@ -791,7 +786,7 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 
 
 def pprint_ddiff(
-    old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
+    old: Any, new: Any, *, pprint_opts: Optional[dict[str, Any]] = None, **kwargs: Any
 ) -> None:
     """Pretty printing of deepdiff.diff.DeepDiff objects.
 
@@ -822,14 +817,14 @@ class CaseStyleConverter:
         KEBAB = "kebab"
 
     @classmethod
-    def split(cls, name: str, case_style: Union[CASE_STYLE, str]) -> List[str]:
+    def split(cls, name: str, case_style: Union[CASE_STYLE, str]) -> list[str]:
         if isinstance(case_style, str):
             case_style = cls.CASE_STYLE(case_style)
         assert isinstance(case_style, cls.CASE_STYLE)
         if case_style == cls.CASE_STYLE.CONCATENATED:
             raise ValueError("Impossible to split a simply concatenated string")
 
-        splitter: Callable[[str], List[str]] = getattr(cls, f"split_{case_style.value}_case")
+        splitter: Callable[[str], list[str]] = getattr(cls, f"split_{case_style.value}_case")
         return splitter(name)
 
     @classmethod
@@ -888,22 +883,22 @@ class CaseStyleConverter:
     #    https://stackoverflow.com/a/29920015/7232525
     #
     @staticmethod
-    def split_canonical_case(name: str) -> List[str]:
+    def split_canonical_case(name: str) -> list[str]:
         return name.split()
 
     @staticmethod
-    def split_camel_case(name: str) -> List[str]:
+    def split_camel_case(name: str) -> list[str]:
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)", name)
         return [m.group(0) for m in matches]
 
     split_pascal_case = split_camel_case
 
     @staticmethod
-    def split_snake_case(name: str) -> List[str]:
+    def split_snake_case(name: str) -> list[str]:
         return name.split("_")
 
     @staticmethod
-    def split_kebab_case(name: str) -> List[str]:
+    def split_kebab_case(name: str) -> list[str]:
         return name.split("-")
 
 
@@ -933,7 +928,7 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     def __contains__(self, key: str) -> bool:
         return key in self.__dict__
 
-    def items(self) -> Iterable[Tuple[str, T]]:
+    def items(self) -> Iterable[tuple[str, T]]:
         return self.__dict__.items()
 
     def keys(self) -> Iterable[str]:
@@ -942,12 +937,12 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     def values(self) -> Iterable[T]:
         return self.__dict__.values()
 
-    def reset(self, data: Optional[Dict[str, Any]] = None) -> None:
+    def reset(self, data: Optional[dict[str, Any]] = None) -> None:
         self.__dict__.clear()
         if data:
             self.__dict__.update(data)
 
-    def as_dict(self) -> Dict[str, T]:
+    def as_dict(self) -> dict[str, T]:
         return {**self.__dict__}
 
     asdict = as_dict
@@ -1117,7 +1112,7 @@ class XIterable(Iterable[T]):
             raise TypeError(f"Invalid function or callable: '{func}'.")
         return XIterable(filter(func, self.iterator))
 
-    def if_isinstance(self, *types: Type) -> XIterable[T]:
+    def if_isinstance(self, *types: type[Any]) -> XIterable[T]:
         """Filter elements using :func:`isinstance` checks.
 
         Equivalent to ``xiter(item for item in self if isinstance(item, types))``.
@@ -1130,7 +1125,7 @@ class XIterable(Iterable[T]):
         """
         return XIterable(filter(isinstancechecker([*types]), self.iterator))
 
-    def if_not_isinstance(self, *types: Type) -> XIterable[T]:
+    def if_not_isinstance(self, *types: type[Any]) -> XIterable[T]:
         """Filter elements using negated :func:`isinstance` checks.
 
         Equivalent to ``xiter(item for item in self if not isinstance(item, types))``.
@@ -1229,7 +1224,7 @@ class XIterable(Iterable[T]):
 
         """
 
-        def _contains(a: Any, collection: Tuple) -> bool:
+        def _contains(a: Any, collection: tuple) -> bool:
             try:
                 return all(operator.contains(a, v) for v in collection)
             except Exception:
@@ -1340,7 +1335,7 @@ class XIterable(Iterable[T]):
 
     def diff(
         self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
-    ) -> XIterable[Tuple[T, S]]:
+    ) -> XIterable[tuple[T, S]]:
         """Diff iterators.
 
         Equivalent to ``toolz.itertoolz.diff(self, *others)``.
@@ -1373,7 +1368,7 @@ class XIterable(Iterable[T]):
             [('Bananas', 'oranges')]
 
         """
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if default is not NOTHING:
             kwargs["default"] = default
         if key is not NOTHING:
@@ -1384,7 +1379,7 @@ class XIterable(Iterable[T]):
 
     def product(
         self, other: Union[Iterable[S], int]
-    ) -> Union[XIterable[Tuple[T, S]], XIterable[Tuple[T, T]]]:
+    ) -> Union[XIterable[tuple[T, S]], XIterable[tuple[T, T]]]:
         """Product of iterators.
 
         Equivalent to ``itertools.product(it_a, it_b)``.
@@ -1416,7 +1411,7 @@ class XIterable(Iterable[T]):
 
     def partition(
         self, n: int, *, exact: bool = False, fill: Any = NOTHING
-    ) -> XIterable[Tuple[T, ...]]:
+    ) -> XIterable[tuple[T, ...]]:
         """Partition iterator into tuples of length `n` (``exact=True``) or at most `n` (``exact=False``).
 
         Equivalent to ``toolz.itertoolz.partition(n, self)`` or
@@ -1477,7 +1472,7 @@ class XIterable(Iterable[T]):
 
     def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
-    ) -> XIterable[Tuple[T, S]]:
+    ) -> XIterable[tuple[T, S]]:
         """Zip iterators.
 
         Equivalent to ``zip(self, *others)`` or ``itertools.zip_longest(self, *others, fillvalue=fill)``.
@@ -1508,7 +1503,7 @@ class XIterable(Iterable[T]):
         else:
             return XIterable(itertools.zip_longest(self.iterator, *iterators, fillvalue=fill))
 
-    def unzip(self) -> XIterable[Tuple[Any, ...]]:
+    def unzip(self) -> XIterable[tuple[Any, ...]]:
         """Unzip iterator.
 
         Equivalent to ``zip(*self)``.
@@ -1609,21 +1604,21 @@ class XIterable(Iterable[T]):
     @typing.overload
     def groupby(
         self, key: str, *other_keys: str, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     @typing.overload
     def groupby(
-        self, key: List[Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+        self, key: list[Any], *, as_dict: bool = False
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     @typing.overload
     def groupby(
         self, key: Callable[[T], Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     def groupby(
-        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
-    ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
+        self, key: Union[str, list[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
+    ) -> Union[XIterable[tuple[Any, list[T]]], dict]:
         """Group a sequence by a given key.
 
         More or less equivalent to ``toolz.itertoolz.groupby(key, self)`` with some caveats.
@@ -1748,7 +1743,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[str, S]]: ...
+    ) -> XIterable[tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1759,7 +1754,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
+    ) -> XIterable[tuple[tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1769,7 +1764,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[str, S]: ...
+    ) -> dict[str, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1780,27 +1775,27 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[Tuple[str, ...], S]: ...
+    ) -> dict[tuple[str, ...], S]: ...
 
     @typing.overload
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: List[K],
+        key: list[K],
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]: ...
+    ) -> XIterable[tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: List[K],
+        key: list[K],
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]: ...
+    ) -> dict[K, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1810,7 +1805,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]: ...
+    ) -> XIterable[tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1820,22 +1815,22 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]: ...
+    ) -> dict[K, S]: ...
 
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: Union[str, List[K], Callable[[T], K]],
+        key: Union[str, list[K], Callable[[T], K]],
         *attr_keys: str,
         as_dict: bool = False,
         init: Union[S, NothingType] = NOTHING,
     ) -> Union[
-        XIterable[Tuple[str, S]],
-        Dict[str, S],
-        XIterable[Tuple[Tuple[str, ...], S]],
-        Dict[Tuple[str, ...], S],
-        XIterable[Tuple[K, S]],
-        Dict[K, S],
+        XIterable[tuple[str, S]],
+        dict[str, S],
+        XIterable[tuple[tuple[str, ...], S]],
+        dict[tuple[str, ...], S],
+        XIterable[tuple[K, S]],
+        dict[K, S],
     ]:
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
@@ -1908,7 +1903,7 @@ class XIterable(Iterable[T]):
             groups = toolz.itertoolz.reduceby(groupby_key, bin_op_func, self.iterator)
         return groups if as_dict else xiter(groups.items())
 
-    def to_list(self) -> List[T]:
+    def to_list(self) -> list[T]:
         """Expand iterator into a ``list``.
 
         Equivalent to ``list(self)``.
@@ -1921,7 +1916,7 @@ class XIterable(Iterable[T]):
         """
         return list(self.iterator)
 
-    def to_set(self) -> Set[T]:
+    def to_set(self) -> set[T]:
         """Expand iterator into a ``set``.
 
         Equivalent to ``set(self)``.

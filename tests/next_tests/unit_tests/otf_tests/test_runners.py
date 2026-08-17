@@ -210,6 +210,31 @@ def test_wait_for_compilation_untracks_successful_futures():
     assert future not in compiled_program._ongoing_compilations
 
 
+def test_wait_for_compilation_groups_multiple_failures():
+    errors = [ValueError("first boom"), TypeError("second boom")]
+    # The futures have to stay referenced: tracking is weak, so a collected future
+    # is not reported and this would degrade to the single-failure path.
+    futures = [concurrent.futures.Future() for _ in errors]
+    for i, (future, error) in enumerate(zip(futures, errors)):
+        future.set_exception(error)
+        compiled_program._ongoing_compilations[future] = f"testee_{i} (backend)"
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        compiled_program.wait_for_compilation()
+
+    # Every failure keeps its own traceback instead of being flattened into the
+    # message of a single error, and each program is named. It is a plain
+    # 'ExceptionGroup', not just a 'BaseExceptionGroup', so 'except*' on 'Exception'
+    # catches it.
+    assert type(exc_info.value) is ExceptionGroup
+    assert exc_info.value.exceptions == tuple(errors)
+    assert "testee_0 (backend)" in str(exc_info.value)
+    assert "testee_1 (backend)" in str(exc_info.value)
+
+    # each failure is reported only once
+    compiled_program.wait_for_compilation()
+
+
 def test_detect_cuda_archs_prefers_cudaarchs_env():
     with (
         mock.patch.dict(os.environ, {"CUDAARCHS": "80;90"}),

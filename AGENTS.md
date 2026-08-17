@@ -13,7 +13,7 @@ conventions in [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
 
 ## Stack
 
-- Language: **Python 3.10–3.14** (see `.python-versions`).
+- Language: **Python 3.12–3.14** (see `.python-versions`).
 - Environment / dependencies: **`uv`** (lockfile is `uv.lock`) — always go
   through `uv`, never bare `pip` / `python`.
 - Test runner: **`nox`** (sessions in `noxfile.py`).
