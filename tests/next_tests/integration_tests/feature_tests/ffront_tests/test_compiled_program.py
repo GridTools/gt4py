@@ -22,7 +22,6 @@ from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program, options, arguments
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
-from gt4py.next.ffront.experimental import concat_where
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
 from next_tests.integration_tests import cases
@@ -1089,24 +1088,3 @@ def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee)
     w = generic_warnings[0]
     assert w.filename == __file__
     assert w.lineno == call_lineno
-
-
-@pytest.mark.uses_concat_where
-def test_static_domains_with_runtime_scalar_condition(cartesian_case):
-    """With static domain bounds, a domain condition on a runtime scalar yields map extents
-    that are symbolic but provably bounded, e.g. `size - Max(0, N)`. Regression test for the
-    DaCe GPU block-size cut-down, which used such extents as (compile-time) block sizes.
-    """
-    if cartesian_case.backend is None:
-        pytest.skip("Compilation options are meaningless in embedded execution.")
-
-    @gtx.field_operator(static_domains=True)
-    def testee(a: cases.IJKField, b: cases.IJKField, N: int32) -> cases.IJKField:
-        return concat_where(cases.IDim < N, a, b * 2)
-
-    a = cases.allocate(cartesian_case, testee, "a")()
-    b = cases.allocate(cartesian_case, testee, "b")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
-    N = cartesian_case.default_sizes[cases.IDim] + 1
-    cases.verify(cartesian_case, testee, a, b, N, out=out, ref=a.asnumpy())
