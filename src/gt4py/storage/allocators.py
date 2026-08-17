@@ -30,8 +30,6 @@ from gt4py.eve.extended_typing import (
     Optional,
     Protocol,
     Sequence,
-    Tuple,
-    Type,
     TypeAlias,
     TypeGuard,
     Union,
@@ -96,11 +94,11 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
     device: core_defs.Device[core_defs.DeviceTypeT]
     dtype: core_defs.DType[core_defs.ScalarT]
     shape: core_defs.TensorShape
-    strides: Tuple[int, ...]
+    strides: tuple[int, ...]
     layout_map: BufferLayoutMap
     byte_offset: int
     byte_alignment: int
-    aligned_index: Tuple[int, ...]
+    aligned_index: tuple[int, ...]
     ndarray: core_defs.NDArrayObject = dataclasses.field(hash=False)
 
     @property
@@ -141,9 +139,9 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
 
 if TYPE_CHECKING:
     # TensorBuffer should be compatible with all the expected buffer interfaces
-    __TensorBufferAsArrayInterfaceT: Type[xtyping.ArrayInterface] = TensorBuffer
-    __TensorBufferAsCUDAArrayInterfaceT: Type[xtyping.CUDAArrayInterface] = TensorBuffer
-    __TensorBufferAsDLPackBufferT: Type[xtyping.DLPackBuffer] = TensorBuffer
+    __TensorBufferAsArrayInterfaceT: type[xtyping.ArrayInterface] = TensorBuffer
+    __TensorBufferAsCUDAArrayInterfaceT: type[xtyping.CUDAArrayInterface] = TensorBuffer
+    __TensorBufferAsDLPackBufferT: type[xtyping.DLPackBuffer] = TensorBuffer
 
 
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
@@ -302,7 +300,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 class ArrayUtils:
     array_ns: types.ModuleType
     empty: Callable[..., _NDBuffer]
-    byte_bounds: Callable[[_NDBuffer], Tuple[int, int]]
+    byte_bounds: Callable[[_NDBuffer], tuple[int, int]]
     as_strided: Callable[..., core_defs.NDArrayObject]
 
 

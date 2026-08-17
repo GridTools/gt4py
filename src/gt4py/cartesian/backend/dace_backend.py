@@ -596,8 +596,6 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             line = line.strip()
             if line == '#include "../../include/hash.h"':
                 return False
-            if line.startswith("DACE_EXPORTED") and line.endswith(");"):
-                return False
             if line == "#include <cuda_runtime.h>":
                 return False
             return True
