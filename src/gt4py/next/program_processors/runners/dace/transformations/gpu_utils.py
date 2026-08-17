@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import copy
+import uuid
 import math
 import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
@@ -787,6 +788,9 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                 #     independent_inputs += 4
                 else:
                     independent_input_bytes += out_edge_data_bytes
+        _original_label = gpu_map.label
+        _kernel_hash = uuid.uuid4().hex[:8]
+        gpu_map.label = f"{_original_label}_{_kernel_hash}"
         print(f"For map {gpu_map.label} in {sdfg.name} with ranges {map_size} independent_input_bytes: {independent_input_bytes} total_input_bytes: {total_input_bytes}", flush=True)
         # Track the original block size for logging. If the heuristics below do
         # not run (e.g. mode 0) this stays None.
@@ -934,6 +938,238 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             )
             block_size[0] = new_2d_thread_block_size[0]
             block_size[1] = new_2d_thread_block_size[1]
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "3":
+            bytes_are_numeric = (
+                isinstance(independent_input_bytes, int)
+                and isinstance(total_input_bytes, int)
+            )
+            vertical_range = map_size[0] if len(map_size) > 0 else None
+            horizontal_range = map_size[1] if len(map_size) > 1 else None
+            horizontal_is_digit = str(horizontal_range).isdigit()
+            vertical_is_digit = str(vertical_range).isdigit()
+            if not (bytes_are_numeric and horizontal_is_digit and vertical_is_digit):
+                warnings.warn(
+                    f"GT4PY_BLOCK_SIZE_HEURISTICS=3 is enabled, but the map '{gpu_map}' has symbolic sizes. Falling back to default block size {self.block_size_2d}.",
+                    stacklevel=0,
+                )
+            else:
+                # Thresholds fitted from the v3 profile data (R02B06, JW benchmark).
+                # The data showed (128, 2, 1) as the best choice for the majority of maps.
+                # (256, 1, 1) won for maps with a large vertical range and moderate reuse.
+                # (64, 4, 1) won for a few maps with very large horizontal range and no
+                # independent inputs.
+                _LARGE_HORIZONTAL = 400_000
+                _VERY_LARGE_HORIZONTAL = 480_000
+                _LARGE_VERTICAL = 30
+                _HIGH_REUSE = 4.0
+                _BLOCK_SIZE_1D = tuple(self.block_size_1d)
+
+                def predict_block_size(
+                    dims: int,
+                    vrange: int | None,
+                    hrange: int | None,
+                    independent_input_bytes: int,
+                    total_input_bytes: int,
+                ) -> tuple[int, int, int]:
+                    """Return the recommended (block_x, block_y, block_z) tuple.
+
+                    Args:
+                        dims: Number of non-trivial dimensions (1 or 2).
+                        vrange: Size of the vertical dimension for 2D maps; ignored for 1D.
+                        hrange: Size of the horizontal dimension.
+                        independent_input_bytes: Bytes touched independently of blocked dim.
+                        total_input_bytes: Total bytes touched (including reuse).
+
+                    Returns:
+                        A 3-tuple of ints representing the GPU thread block size.
+                    """
+                    if dims <= 1 or vrange is None or hrange is None or vrange <= 1:
+                        return _BLOCK_SIZE_1D
+
+                    reuse_ratio = total_input_bytes / max(independent_input_bytes, 1)
+
+                    # Very large horizontal range with no independent inputs: a taller block
+                    # (more y threads) can help exploit spatial locality.
+                    if (
+                        hrange >= _VERY_LARGE_HORIZONTAL
+                        and independent_input_bytes == 0
+                        and total_input_bytes <= 60
+                    ):
+                        return (64, 4, 1)
+
+                    # Large horizontal and large vertical range with moderate-to-high reuse:
+                    # a flat block (256x1) keeps the total thread count high and matches the
+                    # observed winners for full-column computations.
+                    if (
+                        hrange >= _LARGE_HORIZONTAL
+                        and vrange >= _LARGE_VERTICAL
+                        and reuse_ratio >= _HIGH_REUSE
+                        and reuse_ratio <= 8.0
+                    ):
+                        return (256, 1, 1)
+
+                    # Default balanced choice: (128, 2, 1) was best for ~80% of measured maps.
+                    return (128, 2, 1)
+                predict_block_size_2d = predict_block_size(
+                    dims_to_inspect,
+                    int(vertical_range),
+                    int(horizontal_range),
+                    independent_input_bytes,
+                    total_input_bytes,
+                )
+                block_size[0] = predict_block_size_2d[0]
+                block_size[1] = predict_block_size_2d[1]
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "4":
+            bytes_are_numeric = (
+                isinstance(independent_input_bytes, int)
+                and isinstance(total_input_bytes, int)
+            )
+            vertical_range = map_size[0] if len(map_size) > 0 else None
+            horizontal_range = map_size[1] if len(map_size) > 1 else None
+            horizontal_is_digit = str(horizontal_range).isdigit()
+            vertical_is_digit = str(vertical_range).isdigit()
+            if not (bytes_are_numeric and horizontal_is_digit and vertical_is_digit):
+                warnings.warn(
+                    f"GT4PY_BLOCK_SIZE_HEURISTICS=3 is enabled, but the map '{gpu_map}' has symbolic sizes. Falling back to default block size {self.block_size_2d}.",
+                    stacklevel=0,
+                )
+            else:
+                # Decision thresholds fitted from map_block_size_analysis.csv.
+                _SMALL_TOTAL_BYTES = 16
+                _MODERATE_TOTAL_BYTES = 40
+                _SMALL_VERTICAL_RANGE = 4
+                BLOCK_SIZE_1D = tuple(self.block_size_1d)
+
+                def predict_block_size(
+                    dims: int,
+                    vrange: int | None,
+                    hrange: int | None,
+                    independent_input_bytes: int,
+                    total_input_bytes: int,
+                ) -> tuple[int, int, int]:
+                    """Return the recommended (block_x, block_y, block_z) tuple.
+
+                    Args:
+                        dims: Number of non-trivial dimensions (1 or 2).
+                        vrange: Size of the vertical dimension for 2D maps; ignored for 1D.
+                        hrange: Size of the horizontal dimension.
+                        independent_input_bytes: Bytes touched independently of blocked dim.
+                        total_input_bytes: Total bytes touched (including reuse).
+
+                    Returns:
+                        A 3-tuple of ints representing the GPU thread block size.
+                    """
+                    if dims <= 1 or vrange is None or hrange is None or vrange <= 1:
+                        return BLOCK_SIZE_1D
+
+                    # Small decision tree fitted from the JW benchmark block-size sweep.
+                    # The data showed that total_input_bytes and vertical range together
+                    # explain most of the variation in the best block shape.
+                    if total_input_bytes <= _MODERATE_TOTAL_BYTES:
+                        # Small working set: prefer a balanced block. For the very smallest
+                        # maps (<=16 bytes) the measurements slightly favoured (64,4,1),
+                        # while maps with 17-40 bytes favoured (256,1,1).
+                        if total_input_bytes <= _SMALL_TOTAL_BYTES:
+                            return (64, 4, 1)
+                        return (256, 1, 1)
+
+                    # Larger working sets: tall blocks (more y-threads) help when the
+                    # vertical range is large; flat blocks are better for short vertical
+                    # ranges.
+                    if vrange <= _SMALL_VERTICAL_RANGE:
+                        return (64, 4, 1)
+                    return (32, 8, 1)
+                predict_block_size_2d = predict_block_size(
+                    dims_to_inspect,
+                    int(vertical_range),
+                    int(horizontal_range),
+                    independent_input_bytes,
+                    total_input_bytes,
+                )
+                block_size[0] = predict_block_size_2d[0]
+                block_size[1] = predict_block_size_2d[1]
+        if os.getenv("GT4PY_BLOCK_SIZE_HEURISTICS", "0") == "5":
+            bytes_are_numeric = (
+                isinstance(independent_input_bytes, int)
+                and isinstance(total_input_bytes, int)
+            )
+            vertical_range = map_size[0] if len(map_size) > 0 else None
+            horizontal_range = map_size[1] if len(map_size) > 1 else None
+            horizontal_is_digit = str(horizontal_range).isdigit()
+            vertical_is_digit = str(vertical_range).isdigit()
+            if not (bytes_are_numeric and horizontal_is_digit and vertical_is_digit):
+                warnings.warn(
+                    f"GT4PY_BLOCK_SIZE_HEURISTICS=3 is enabled, but the map '{gpu_map}' has symbolic sizes. Falling back to default block size {self.block_size_2d}.",
+                    stacklevel=0,
+                )
+            else:
+                # Thresholds fitted from the v4 profile data (R02B06, JW benchmark).
+                _VERY_LARGE_HORIZONTAL = 480_000
+                _SMALL_VERTICAL_RANGE = 15
+                _TINY_VERTICAL_RANGE = 3
+                _SMALL_TOTAL_BYTES = 20
+                # Default 1D block size used by the original benchmark.
+                BLOCK_SIZE_1D = tuple(self.block_size_1d)
+                
+                def predict_block_size(
+                    dims: int,
+                    vrange: int | None,
+                    hrange: int | None,
+                    independent_input_bytes: int,
+                    total_input_bytes: int,
+                ) -> tuple[int, int, int]:
+                    """Return the recommended (block_x, block_y, block_z) tuple.
+                
+                    Args:
+                        dims: Number of non-trivial dimensions (1 or 2).
+                        vrange: Size of the vertical dimension for 2D maps; ignored for 1D.
+                        hrange: Size of the horizontal dimension.
+                        independent_input_bytes: Bytes touched independently of blocked dim.
+                        total_input_bytes: Total bytes touched (including reuse).
+                
+                    Returns:
+                        A 3-tuple of ints representing the GPU thread block size.
+                    """
+                    if dims <= 1 or vrange is None or hrange is None or vrange <= 1:
+                        return BLOCK_SIZE_1D
+                
+                    if hrange >= _VERY_LARGE_HORIZONTAL:
+                        # Very wide horizontal range.
+                        if vrange <= _SMALL_VERTICAL_RANGE:
+                            # Shallow column: no reuse to exploit without independent
+                            # inputs -> maximize threads per block. With independent
+                            # inputs, a taller block amortizes their load.
+                            if independent_input_bytes == 0:
+                                return (256, 1, 1)
+                            return (64, 4, 1)
+                        # Deep column with a very wide horizontal range: a taller,
+                        # narrower block matched every observed winner in this regime.
+                        return (32, 8, 1)
+                
+                    # Moderate horizontal range.
+                    if vrange <= _TINY_VERTICAL_RANGE:
+                        # Near-flat map (vrange close to the 1D boundary): a taller block
+                        # was the consistent winner regardless of reuse or vertical depth.
+                        return (64, 4, 1)
+                
+                    if independent_input_bytes > 0:
+                        # Any independent inputs plus a non-trivial vertical range:
+                        # (32, 8, 1) matched every observed case in this regime.
+                        return (32, 8, 1)
+                
+                    # No independent inputs: fall back on total bytes touched.
+                    if total_input_bytes <= _SMALL_TOTAL_BYTES:
+                        return (64, 4, 1)
+                    return (256, 1, 1)
+                predict_block_size_2d = predict_block_size(
+                    dims_to_inspect,
+                    int(vertical_range),
+                    int(horizontal_range),
+                    independent_input_bytes,
+                    total_input_bytes,
+                )
+                block_size[0] = predict_block_size_2d[0]
+                block_size[1] = predict_block_size_2d[1]
         # Adjust the 2D block size to account for loop blocking, such that
         # the second thread-block dimension times the blocking factor is close
         # to the originally intended y dimension. This keeps the effective
@@ -1003,7 +1239,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
                         block_size[1] = map_size[0]
                     launch_bounds = str(original_thread_block_size)
             original_block_size_str = original_block_size if original_block_size is not None else "N/A"
-            print(f"For map {gpu_map.label} with ranges {map_size} original block size: {original_block_size_str} new block size: {list(block_size)}", flush=True)
+            print(f"For map {gpu_map.label} in {sdfg.name} with ranges {map_size} original block size: {original_block_size_str} new block size: {list(block_size)}", flush=True)
         gpu_map.gpu_block_size = tuple(block_size)
         # Only set `gpu_maxnreg` if it has not been set already (default is 0),
         #  to avoid overriding a value that was set by another transformation
