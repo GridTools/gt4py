@@ -40,7 +40,7 @@ class TrivialMapDimensionFolding(dace_transformation.SingleStateTransformation):
     only_toplevel_maps = dace_properties.Property(
         dtype=bool,
         default=False,
-        desc="Only process Maps that are on the top level.",
+        desc="See docs.",
     )
 
     def __init__(self, only_toplevel_maps: Optional[bool] = None, **kwargs: Any) -> None:
@@ -78,8 +78,6 @@ class TrivialMapDimensionFolding(dace_transformation.SingleStateTransformation):
 
         # Only apply if a parameter is still referenced, otherwise the transformation
         #  would apply again and again on the same Map.
-        # NOTE: `include_entry` is needed because the uses are on the out edges of
-        #   the MapEntry, which are not part of the scope subgraph otherwise.
         scope = graph.scope_subgraph(map_entry, include_entry=True, include_exit=True)
         for edge in scope.edges():
             if edge.data is not None and any(
