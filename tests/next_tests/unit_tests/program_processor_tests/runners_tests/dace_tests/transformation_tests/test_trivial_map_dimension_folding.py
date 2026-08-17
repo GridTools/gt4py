@@ -52,6 +52,7 @@ def test_trivial_map_dimension_folding():
     res = copy.deepcopy(ref)
     util.compile_and_run_sdfg(sdfg, **ref)
 
+    # a single application although applied repeatedly, i.e. the rewrite is a fixpoint
     nb_apply = sdfg.apply_transformations_repeated(
         gtx_transformations.TrivialMapDimensionFolding(),
         validate=True,
@@ -69,25 +70,16 @@ def test_trivial_map_dimension_folding():
     assert map_entry.map.params == ["__i", "__j"]
     assert str(map_entry.map.range[1][0]) == "7"
     assert all(
-        "__j" not in str(edge.data.subset)
+        "__j" not in str(subset)
         for state in sdfg.states()
         for edge in state.edges()
-        if edge.data is not None and edge.data.subset is not None
+        if edge.data is not None
+        for subset in (edge.data.subset, edge.data.other_subset)
+        if subset is not None
     )
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert all(np.allclose(ref[name], res[name]) for name in ref.keys())
-
-
-def test_trivial_map_dimension_folding_is_a_fixpoint():
-    """A second application must not be possible, else the pass would not terminate."""
-    sdfg = _mk_single_iteration_sdfg()
-    assert (
-        sdfg.apply_transformations_repeated(
-            gtx_transformations.TrivialMapDimensionFolding(), validate=True
-        )
-        == 1
-    )
 
 
 def test_trivial_map_dimension_folding_ignores_multi_iteration():

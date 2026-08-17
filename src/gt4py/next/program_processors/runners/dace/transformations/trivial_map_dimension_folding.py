@@ -28,11 +28,8 @@ class TrivialMapDimensionFolding(dace_transformation.SingleStateTransformation):
     fusion is rejected. Folding the value into the Memlets removes that blind spot.
 
     Note:
-        The dimension itself is kept, in contrast to DaCe's `TrivialMapElimination`
-        which removes it. Removing it changes the shape of the Map and prevents it
-        from being scheduled on the GPU, whereas folding only rewrites the uses of
-        the parameter and leaves the iteration space, the schedule and any blocking
-        applied later untouched.
+        Unlike DaCe's native `TrivialMapElimination` the dimension is not removed,
+        only the single value is folded into the body of the Map.
 
     Args:
         only_toplevel_maps: Only process Maps that are on the top level.
@@ -61,7 +58,7 @@ class TrivialMapDimensionFolding(dace_transformation.SingleStateTransformation):
         return {
             param: rng[0]
             for param, rng in zip(map_.params, map_.range.ranges)
-            if (rng[0] == rng[1]) == True and (rng[2] == 1) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
+            if (rng[0] == rng[1]) == True  # noqa: E712 [true-false-comparison]  # SymPy comparison
         }
 
     def can_be_applied(
@@ -99,11 +96,10 @@ class TrivialMapDimensionFolding(dace_transformation.SingleStateTransformation):
         replacements = self._single_iteration_parameters(map_entry.map)
         scope = graph.scope_subgraph(map_entry, include_entry=True, include_exit=True)
 
-        # `replace()` would also rewrite the Map's own parameters and range, which
+        # `replace_dict()` would also rewrite the Map's own parameters and range, which
         #  would drop the dimension, so they are restored afterwards.
         saved_params = copy.deepcopy(map_entry.map.params)
         saved_range = copy.deepcopy(map_entry.map.range)
-        for param, value in replacements.items():
-            scope.replace(param, value)
+        scope.replace_dict({param: str(value) for param, value in replacements.items()})
         map_entry.map.params = saved_params
         map_entry.map.range = saved_range
