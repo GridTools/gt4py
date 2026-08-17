@@ -72,7 +72,7 @@ Examples:
 
     >>> class AnotherSampleModel(DataModel):
     ...     name: str
-    ...     friends: List[str]
+    ...     friends: list[str]
     ...
     ...     @root_validator
     ...     def _root_validator(cls, instance):

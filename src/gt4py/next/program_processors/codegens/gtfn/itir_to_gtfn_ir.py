@@ -10,6 +10,8 @@ import dataclasses
 import functools
 from typing import Any, Callable, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
+from ordered_set import OrderedSet
+
 import gt4py.eve as eve
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common, utils
@@ -77,9 +79,10 @@ def _is_tuple_of_ref_or_literal(expr: itir.Expr) -> bool:
 
 
 def _get_domains(nodes: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    result = set()
+    # Ordered, here and in the collectors below: this order ends up in the generated code.
+    result: OrderedSet[itir.FunCall] = OrderedSet()
     for node in nodes:
-        result |= node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_set()
+        result.update(node.walk_values().if_isinstance(itir.SetAt).getattr("domain").to_list())
     return result
 
 
@@ -154,9 +157,9 @@ def _collect_offset_definitions(
     offset_definitions = {}
     offset_provider_type = {**offset_provider_type}
 
-    cartesian_offsets: set[itir.CartesianOffset] = (
-        node.walk_values().if_isinstance(itir.CartesianOffset)
-    ).to_set()
+    cartesian_offsets: OrderedSet[itir.CartesianOffset] = OrderedSet(
+        node.walk_values().if_isinstance(itir.CartesianOffset).to_list()
+    )
     for cart_offset in cartesian_offsets:
         dims = [
             ir_utils_misc.dim_from_axis_literal(v)
@@ -424,17 +427,17 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @staticmethod
     def _collect_offset_or_axis_node(
         node_type: Type, tree: eve.Node | Iterable[eve.Node]
-    ) -> set[str]:
+    ) -> OrderedSet[str]:
         if not isinstance(tree, Iterable):
             tree = [tree]
-        result = set()
+        result: OrderedSet[str] = OrderedSet()
         for n in tree:
             result.update(
                 n.pre_walk_values()
                 .if_isinstance(node_type)
                 .getattr("value")
                 .if_isinstance(str)
-                .to_set()
+                .to_list()
             )
         return result
 

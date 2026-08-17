@@ -42,7 +42,7 @@ T = TypeVar("T")
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
 
 #: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
-CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, None | str]
+CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, str | None]
 
 ArgStaticDescriptorsByType: TypeAlias = dict[
     type[arguments.ArgStaticDescriptor], dict[str, arguments.ArgStaticDescriptor]
@@ -170,12 +170,12 @@ def wait_for_compilation() -> None:
 
     Raises:
         Exception: The exception of the failed compilation. If several
-            compilations failed, a `RuntimeError` summarizing all of them
-            (chaining the first). Each failure is raised only once; the
-            original exception is raised again when the failed program
-            variant is called. Failures of programs that have been garbage
-            collected in the meantime are not reported (they could never
-            raise at call time either).
+            compilations failed, an `ExceptionGroup` (PEP 654) holding all of
+            them, so that every failure keeps its own traceback. Each failure
+            is raised only once; the original exception is raised again when
+            the failed program variant is called. Failures of programs that
+            have been garbage collected in the meantime are not reported
+            (they could never raise at call time either).
     """
     # TODO(havogt): reconsider tearing down the default runner here: a pure wait
     # on the tracked futures would keep the workers warm between compilation
@@ -190,11 +190,16 @@ def wait_for_compilation() -> None:
     if len(failures) == 1:
         raise failures[0][1]
     if failures:
-        # TODO(havogt): raise ExceptionGroup once Python 3.10 is dropped.
-        raise RuntimeError(
-            "Multiple compilations failed: "
-            + "; ".join(f"'{label}': {error!r}" for label, error in failures)
-        ) from failures[0][1]
+        # A group keeps every failure with its own traceback; flattening them into a
+        # single error would reduce failures 2..n to 'repr' text and let only the first
+        # one carry a '__cause__'. 'BaseExceptionGroup' is the constructor to use since
+        # 'Future.exception()' is typed as 'BaseException'; it returns a plain
+        # 'ExceptionGroup' whenever every member is an 'Exception', which is the case
+        # for anything a compilation realistically raises.
+        raise BaseExceptionGroup(
+            "Multiple compilations failed: " + ", ".join(f"'{label}'" for label, _ in failures),
+            [error for _, error in failures],
+        )
 
 
 def _make_tuple_expr(el_exprs: list[str]) -> str:
@@ -583,7 +588,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         artifact_future = self._compilation_jobs.pop(key)
         assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = artifact_future.result().load()
+        self.compiled_programs[key] = self.backend.load_artifact(artifact_future.result())
         return True
 
     def _compile_variant(
@@ -660,7 +665,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = future.result().load()
+            self.compiled_programs[key] = self.backend.load_artifact(future.result())
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (

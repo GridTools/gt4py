@@ -9,28 +9,23 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
-# dependencies = ["nox>=2025.02.09", "uv>=0.6.10", "tomli; python_version < '3.11'"]
+# requires-python = ">=3.12"
+# dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
 from __future__ import annotations
 
 import os
 import pathlib
+import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
-
-
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python < 3.11
-    import tomli as tomllib
 
 
 # This is needed because uv now fails to create an env when it already exists.
@@ -44,38 +39,24 @@ NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 # -- nox configuration --
 nox.options.default_venv_backend = "uv"
 nox.options.sessions = [
-    "test_cartesian-3.10(internal, cpu)",
-    "test_cartesian-3.10(dace, cpu)",
-    "test_cartesian-3.11(internal, cpu)",
-    "test_cartesian-3.11(dace, cpu)",
     "test_cartesian-3.12(internal, cpu)",
     "test_cartesian-3.12(dace, cpu)",
     "test_cartesian-3.13(internal, cpu)",
     "test_cartesian-3.13(dace, cpu)",
     "test_cartesian-3.14(internal, cpu)",
     "test_cartesian-3.14(dace, cpu)",
-    "test_eve-3.10",
-    "test_eve-3.11",
     "test_eve-3.12",
     "test_eve-3.13",
     "test_eve-3.14",
-    "test_next-3.10(internal, cpu, nomesh)",
-    "test_next-3.10(dace, cpu, nomesh)",
-    "test_next-3.11(internal, cpu, nomesh)",
-    "test_next-3.11(dace, cpu, nomesh)",
     "test_next-3.12(internal, cpu, nomesh)",
     "test_next-3.12(dace, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
     "test_next-3.14(internal, cpu, nomesh)",
     "test_next-3.14(dace, cpu, nomesh)",
-    "test_package-3.10",
-    "test_package-3.11",
     "test_package-3.12",
     "test_package-3.13",
     "test_package-3.14",
-    "test_storage-3.10(cpu)",
-    "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
     "test_storage-3.13(cpu)",
     "test_storage-3.14(cpu)",
@@ -340,11 +321,18 @@ def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
     install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
     session.run(
         "pytest",
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
         "typing_tests",
         *session.posargs,
     )

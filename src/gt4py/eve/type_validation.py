@@ -20,14 +20,12 @@ import typing
 from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
     Any,
-    Dict,
     Final,
     ForwardRef,
     Literal,
     Optional,
     Protocol,
     Sequence,
-    Type,
     TypeAnnotation,
     Union,
     cast,
@@ -46,8 +44,8 @@ class TypeValidator(Protocol):
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
         *,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         required: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -97,8 +95,8 @@ class TypeValidatorFactory(Protocol):
         name: Optional[str] = None,
         *,
         required: Literal[True] = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> FixedTypeValidator: ...
 
@@ -109,8 +107,8 @@ class TypeValidatorFactory(Protocol):
         name: Optional[str] = None,
         *,
         required: bool = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]: ...
 
@@ -121,8 +119,8 @@ class TypeValidatorFactory(Protocol):
         name: Optional[str] = None,
         *,
         required: bool = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         """Protocol for :class:`FixedTypeValidator`s.
@@ -154,8 +152,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         name: Optional[str] = None,
         *,
         required: Literal[True] = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> FixedTypeValidator: ...
 
@@ -166,8 +164,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         name: Optional[str] = None,
         *,
         required: bool = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]: ...
 
@@ -177,8 +175,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         name: Optional[str] = None,
         *,
         required: bool = True,
-        globalns: Optional[Dict[str, Any]] = None,
-        localns: Optional[Dict[str, Any]] = None,
+        globalns: Optional[dict[str, Any]] = None,
+        localns: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
@@ -198,6 +196,16 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 type_annotation, types.UnionType
             ):  # see https://github.com/python/cpython/issues/105499
                 type_annotation = typing.Union[type_annotation.__args__]
+
+            # A 'NameError' is deliberately left to propagate here, so that 'datamodels'
+            # can defer; see 'xtyping.eval_type_alias' for both failure modes.
+            try:
+                resolved_annotation = xtyping.eval_type_alias(type_annotation)
+            except TypeError as error:
+                # Keep its message: it names the alias and the cause.
+                raise exceptions.EveValueError(str(error)) from error
+            if resolved_annotation is not type_annotation:
+                return make_recursive(resolved_annotation)
 
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
@@ -464,7 +472,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
     @staticmethod
     def combine_validators_as_or(
-        name: str, *validators: FixedTypeValidator, error_type: Type[Exception] = TypeError
+        name: str, *validators: FixedTypeValidator, error_type: type[Exception] = TypeError
     ) -> FixedTypeValidator:
         def _combined_validator(value: Any, **kwargs: Any) -> None:
             for v in validators:
@@ -492,8 +500,8 @@ def simple_type_validator(
     type_annotation: TypeAnnotation,
     name: Optional[str] = None,
     *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
     required: bool = True,
     **kwargs: Any,
 ) -> None:
