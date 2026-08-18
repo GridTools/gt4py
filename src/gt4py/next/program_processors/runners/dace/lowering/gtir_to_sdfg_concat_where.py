@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Sequence
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
@@ -46,7 +46,7 @@ def _translate_concat_where_branch(
     output_domain: domain_utils.SymbolicDomain,
     output_type: ts.FieldType,
     output_desc: dace.data.Array,
-    output_node: dace.nodes.AccessNode,
+    output_node: dace_nodes.AccessNode,
     output_origin: Sequence[dace.symbolic.SymbolicType],
 ) -> None:
     """

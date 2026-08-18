@@ -9,7 +9,7 @@
 
 import numpy as np
 
-from gt4py._core.definitions import float32, float64, int8, int16, int32, int64  # noqa: F401
+from gt4py._core.types import float32, float64, int8, int16, int32, int64  # noqa: F401
 
 
 try:

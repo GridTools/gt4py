@@ -13,11 +13,11 @@ from __future__ import annotations
 import collections
 
 from . import concepts, datamodels, exceptions, visitors
-from .extended_typing import Any, Dict, Set, Type, no_type_check
+from .extended_typing import Any, no_type_check
 
 
 # ---  Node Traits ---
-@concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
+@concepts.register_annex_user("symtable", dict[str, concepts.Node], shared=True)
 @datamodels.datamodel
 class SymbolTableTrait:
     """
@@ -33,13 +33,13 @@ class SymbolTableTrait:
     @no_type_check
     @datamodels.root_validator
     @classmethod
-    def _collect_symbol_names(cls: Type[SymbolTableTrait], instance: concepts.Node) -> None:
+    def _collect_symbol_names(cls: type[SymbolTableTrait], instance: concepts.Node) -> None:
         collected_symbols = cls.SymbolsCollector.apply(instance)
         instance.annex.symtable = collected_symbols
 
     class SymbolsCollector(visitors.NodeVisitor):
         def __init__(self) -> None:
-            self.collected_symbols: Dict[str, concepts.Node] = {}
+            self.collected_symbols: dict[str, concepts.Node] = {}
 
         def visit_Node(self, node: concepts.Node, /) -> None:
             for field_name, attribute in node.__datamodel_fields__.items():
@@ -70,7 +70,7 @@ class SymbolTableTrait:
             return super().visit(node, **kwargs)
 
         @classmethod
-        def apply(cls, node: concepts.Node) -> Dict[str, concepts.Node]:
+        def apply(cls, node: concepts.Node) -> dict[str, concepts.Node]:
             collector = cls()
             # If the passed root node already contains a symbol table, the check in `visit_Node()`
             # will automatically stop the traversal. To avoid this premature stop, we start the
@@ -82,7 +82,7 @@ class SymbolTableTrait:
             return collector.collected_symbols
 
 
-@concepts.register_annex_user("symtable", Dict[str, concepts.Node], shared=True)
+@concepts.register_annex_user("symtable", dict[str, concepts.Node], shared=True)
 @datamodels.datamodel
 class SymbolRefsValidatorTrait:
     """Node trait adding automatic validation of symbol references appearing the node tree.
@@ -96,7 +96,7 @@ class SymbolRefsValidatorTrait:
     @no_type_check
     @datamodels.root_validator
     @classmethod
-    def _validate_symbol_refs(cls: Type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
+    def _validate_symbol_refs(cls: type[SymbolRefsValidatorTrait], instance: concepts.Node) -> None:
         validator = cls.SymbolRefsValidator()
         symtable = instance.annex.symtable
         for child_node in instance.iter_children_values():
@@ -109,10 +109,10 @@ class SymbolRefsValidatorTrait:
 
     class SymbolRefsValidator(visitors.NodeVisitor):
         def __init__(self) -> None:
-            self.missing_symbols: Set[str] = set()
+            self.missing_symbols: set[str] = set()
 
         def visit_Node(
-            self, node: concepts.Node, *, symtable: Dict[str, Any], **kwargs: Any
+            self, node: concepts.Node, *, symtable: dict[str, Any], **kwargs: Any
         ) -> None:
             for field_name, attribute in node.__datamodel_fields__.items():
                 if isinstance(attribute.type, type) and issubclass(
@@ -128,7 +128,7 @@ class SymbolRefsValidatorTrait:
             self.generic_visit(node, symtable=symtable, **kwargs)
 
         @classmethod
-        def apply(cls, node: concepts.Node, *, symtable: Dict[str, Any]) -> Set[str]:
+        def apply(cls, node: concepts.Node, *, symtable: dict[str, Any]) -> set[str]:
             validator = cls()
             validator.visit(node, symtable=symtable)
             return validator.missing_symbols

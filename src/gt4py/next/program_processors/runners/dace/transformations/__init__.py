@@ -17,9 +17,16 @@ from .auto_optimize import (
     GT4PyAutoOptHook,
     GT4PyAutoOptHookFun,
     GT4PyAutoOptHookStage,
+    TransientMemoryMode,
     gt_auto_optimize,
 )
+from .concat_where_mapper import (
+    gt_apply_concat_where_replacement_on_sdfg,
+    gt_check_if_concat_where_node_is_replaceable,
+    gt_replace_concat_where_node,
+)
 from .dead_dataflow_elimination import gt_eliminate_dead_dataflow, gt_remove_map
+from .fuse_horizontal_conditionblocks import FuseHorizontalConditionBlocks
 from .gpu_utils import (
     GPUSetBlockSize,
     gt_gpu_transform_non_standard_memlet,
@@ -53,6 +60,7 @@ from .multi_state_global_self_copy_elimination import (
 )
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
 from .remove_access_node_copies import RemoveAccessNodeCopies
+from .remove_scalar_copies import RemoveScalarCopies
 from .remove_views import RemovePointwiseViews
 from .scan_loop_unrolling import ScanLoopUnrolling
 from .simplify import (
@@ -77,12 +85,15 @@ from .strides import (
     gt_propagate_strides_from_access_node,
     gt_propagate_strides_of,
 )
-from .utils import gt_make_transients_persistent
+from .trivial_map_dimension_folding import TrivialMapDimensionFolding
+from .utils import gt_configure_transient_lifetime
+from .write_back_buffer_elimination import GT4PyWriteBackBufferElimination
 
 
 __all__ = [
     "CopyChainRemover",
     "DoubleWriteRemover",
+    "FuseHorizontalConditionBlocks",
     "GPUSetBlockSize",
     "GT4PyAutoOptHook",
     "GT4PyAutoOptHookFun",
@@ -90,6 +101,7 @@ __all__ = [
     "GT4PyMapBufferElimination",
     "GT4PyMoveTaskletIntoMap",
     "GT4PyStateFusion",
+    "GT4PyWriteBackBufferElimination",
     "HorizontalMapFusionCallback",
     "HorizontalMapSplitCallback",
     "LoopBlocking",
@@ -105,23 +117,28 @@ __all__ = [
     "MultiStateGlobalSelfCopyElimination2",
     "RemoveAccessNodeCopies",
     "RemovePointwiseViews",
+    "RemoveScalarCopies",
     "ScanLoopUnrolling",
     "SingleStateGlobalDirectSelfCopyElimination",
     "SingleStateGlobalSelfCopyElimination",
     "SplitAccessNode",
     "SplitConsumerMemlet",
+    "TransientMemoryMode",
+    "TrivialMapDimensionFolding",
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
     "constants",
+    "gt_apply_concat_where_replacement_on_sdfg",
     "gt_auto_optimize",
     "gt_change_strides",
+    "gt_check_if_concat_where_node_is_replaceable",
+    "gt_configure_transient_lifetime",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
     "gt_horizontal_map_split_fusion",
     "gt_inline_nested_sdfg",
-    "gt_make_transients_persistent",
     "gt_map_strides_to_dst_nested_sdfg",
     "gt_map_strides_to_src_nested_sdfg",
     "gt_multi_state_global_self_copy_elimination",
@@ -130,6 +147,7 @@ __all__ = [
     "gt_reduce_distributed_buffering",
     "gt_remove_copy_chain",
     "gt_remove_map",
+    "gt_replace_concat_where_node",
     "gt_set_gpu_blocksize",
     "gt_set_iteration_order",
     "gt_simplify",

@@ -1,0 +1,73 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+from __future__ import annotations
+
+from typing import Protocol, TypeAlias, TypeVar
+
+from gt4py.next.ffront import stages as ffront_stages
+from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import arguments, code_specs, stages, toolchain, workflow
+
+
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
+
+
+IRDefinitionT = TypeVar(
+    "IRDefinitionT",
+    ffront_stages.DSLFieldOperatorDef,
+    ffront_stages.DSLProgramDef,
+    ffront_stages.FOASTOperatorDef,
+    ffront_stages.PASTProgramDef,
+    itir.Program,
+)
+ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
+
+ConcreteProgramDef: TypeAlias = toolchain.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
+CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
+
+
+class TranslationStep(
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, stages.ProgramSource[CodeSpecT]],
+    Protocol[CodeSpecT],
+):
+    """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
+
+    ...
+
+
+class BindingStep(Protocol[CodeSpecT, TargetCodeSpecT]):
+    """
+    Generate Bindings for program source and package both together (ProgramSource -> ExtensionSource).
+
+    In the special cases where bindings are not required, such a step could also simply construct
+    an ``ExtensionSource`` from the ``ProgramSource`` with bindings set to ``None``.
+    """
+
+    def __call__(
+        self, program_source: stages.ProgramSource[CodeSpecT]
+    ) -> stages.ExtensionSource[CodeSpecT, TargetCodeSpecT]: ...
+
+
+class CompilationStep(
+    workflow.Workflow[
+        stages.ExtensionSource[CodeSpecT, TargetCodeSpecT], stages.CompilationArtifact
+    ],
+    Protocol[CodeSpecT, TargetCodeSpecT],
+):
+    """Run the build system and produce a ``stages.CompilationArtifact``.
+
+    Each backend defines its own concrete artifact dataclass (frozen,
+    picklable, with a ``load`` method); they all satisfy the
+    ``stages.CompilationArtifact`` Protocol structurally.
+    """
+
+    def __call__(
+        self, source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT]
+    ) -> stages.CompilationArtifact: ...

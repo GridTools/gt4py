@@ -74,22 +74,6 @@ class DimensionKind(StrEnum):
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
-_IMPLICIT_OFFSET_PREFIX: Final[str] = "_Off"
-
-
-def dimension_to_implicit_offset(dim: str) -> str:
-    """
-    Return name of offset implicitly defined by a dimension.
-
-    Each dimension implicitly also defines an offset, such that we can allow syntax like::
-
-        field(TDim + 1)
-
-    without having to explicitly define an offset for ``TDim``. This function defines the respective
-    naming convention.
-    """
-    return f"{_IMPLICIT_OFFSET_PREFIX}{dim}"
-
 
 @dataclasses.dataclass(frozen=True)
 class Dimension:
@@ -102,11 +86,73 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
 
-    def __add__(self, offset: int) -> Connectivity:
-        return CartesianConnectivity(self, offset)
+    def __add__(self, offset: int | float) -> Connectivity:
+        return connectivity_for_cartesian_shift(self, offset)
 
-    def __sub__(self, offset: int) -> Connectivity:
+    def __sub__(self, offset: int | float) -> Connectivity:
         return self + (-offset)
+
+    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
+        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
+    def __eq__(self, value: Dimension) -> bool: ...
+    @overload
+    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value == value.value and self.kind == value.kind
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
+        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
+        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+        return NotImplemented
+
+    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
+    def __ne__(self, value: Dimension) -> bool: ...
+    @overload
+    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
+        if isinstance(value, Dimension):
+            return self.value != value.value or self.kind != value.kind
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            raise NotImplementedError(
+                "'Dimension.__ne__' with an integer value produces two disjoint domains, "
+                "which is not supported. Use 'concat_where(dim < value, ...) "
+                "concat_where(dim > value, ...)' to express the condition, see ADR 22."
+            )
+        return NotImplemented
+
+
+if TYPE_CHECKING:
+    # These exist as on-the fly replacements for Dimension instances
+    # (which are not types) during typechecking (with mypy). We can
+    # track up to four distinct dimensions at a time, everything beyond
+    # becomes AnyDim
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimA(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimB(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimC(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _DimD(Dimension): ...
+
+    @dataclasses.dataclass(frozen=True)
+    class _AnyDim(Dimension): ...
 
 
 class Infinity(enum.Enum):
@@ -499,6 +545,36 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
+    def __or__(self, other: Domain) -> Domain:
+        """
+        Union of `Domain`s, currently limited to 1D overlapping or adjacent domains.
+
+        Raises `NotImplementedError` for multidimensional domains or disjoint 1D domains.
+        See ADR 22.
+        """
+        if self.ndim > 1 or other.ndim > 1:
+            raise NotImplementedError(
+                "Union of multidimensional domains is not supported, see ADR 22."
+            )
+        if self.ndim == 0:
+            return other
+        if other.ndim == 0:
+            return self
+        if self.dims[0] != other.dims[0]:
+            raise NotImplementedError(
+                f"Union of 1D domains with different dimensions '{self.dims[0]}' and '{other.dims[0]}' is not supported."
+            )
+        first, second = sorted((self, other), key=lambda x: x.ranges[0].start)
+        if first.ranges[0].stop >= second.ranges[0].start:
+            return Domain(
+                dims=(self.dims[0],),
+                ranges=(UnitRange(first.ranges[0].start, second.ranges[0].stop),),
+            )
+        raise NotImplementedError(
+            f"Union of disjoint domains '{first}' and '{second}' is not supported. "
+            f"Use nested 'concat_where' to express non-contiguous conditions, see ADR 22."
+        )
+
     @functools.cached_property
     def slice_at(self) -> utils.IndexerCallable[slice, Domain]:
         """
@@ -773,6 +849,18 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
+    def __lt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __le__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __gt__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
+    def __ge__(self, other: Field | core_defs.ScalarT) -> Field[Any, bool]: ...
+
+    @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
         """Only defined for `Field` of value type `bool`."""
 
@@ -872,40 +960,6 @@ class BufferInfo:
         return self.hash_key
 
 
-class ConnectivityKind(enum.Flag):
-    """
-    Describes the kind of connectivity field.
-
-    - `ALTER_DIMS`: change the dimensions of the data field domain.
-    - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
-
-    | Dims \\ Struct |    No                    |    Yes                   |
-    | -------------- | ------------------------ | ------------------------ |
-    |   No           | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |   Yes          | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
-
-    """
-
-    ALTER_DIMS = enum.auto()
-    ALTER_STRUCT = enum.auto()
-
-    @classmethod
-    def translation(cls) -> ConnectivityKind:
-        return cls(0)
-
-    @classmethod
-    def relocation(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS
-
-    @classmethod
-    def reshuffling(cls) -> ConnectivityKind:
-        return cls.ALTER_STRUCT
-
-    @classmethod
-    def remapping(cls) -> ConnectivityKind:
-        return cls.ALTER_DIMS | cls.ALTER_STRUCT
-
-
 @dataclasses.dataclass(frozen=True)
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
@@ -948,7 +1002,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         """
 
     def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_connectivity(self):
+        if is_neighbor_table(self):
             return NeighborConnectivityType(
                 domain=self.domain.dims,
                 codomain=self.codomain,
@@ -963,10 +1017,6 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
                 dtype=self.dtype,
                 skip_value=self.skip_value,
             )
-
-    @property
-    def kind(self) -> ConnectivityKind:
-        return ConnectivityKind.remapping()
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -994,34 +1044,46 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __lt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __le__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __gt__(self, other: Field | core_defs.IntegralScalar) -> Never:
+        raise TypeError("'Connectivity' does not support this operation.")
+
+    def __ge__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
@@ -1032,6 +1094,28 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'Connectivity' does not support this operation.")
+
+
+class GatherConnectivity(Connectivity[DimsT, DimT_co]):
+    """A `Connectivity` whose `premap` rearranges data via advanced indexing (a gather).
+
+    The defining contract is that the index map is materializable as an integer index table via
+    `ndarray` (table-backed today; in principle a function evaluated over the domain). The gather
+    algorithm (`embedded.nd_array_field._gather_premap`) is responsible for laying that table out
+    over the output domain. Affine connectivities (cartesian shifts / relocations) are *not*
+    `GatherConnectivity`: their `premap` is a compact domain relabel that moves no data and has no
+    `ndarray`. The affine-vs-gather distinction has no structural witness (an affine connectivity
+    still has an `ndarray` attribute, it just raises), so it is a nominal type, not a `Protocol`.
+    """
+
+    # TODO(havogt): This is a bare annotation, not an `@abc.abstractmethod`, on purpose. Making it
+    #  abstract would force `NdArrayConnectivityField` abstract too: with `GatherConnectivity` ahead
+    #  of `NdArrayField` in the MRO, the abstract `ndarray` shadows `NdArrayField`'s concrete one.
+    #  Reordering the bases would fix that but then `NdArrayField`'s arithmetic operators would
+    #  shadow `Connectivity`'s raising stubs (connectivities would start accepting `+` etc.). A bare
+    #  annotation documents the contract for type checkers with no runtime effect.
+    #  See also the TODO on `Field.ndarray`: ideally `ndarray` would not live on the abstract base.
+    ndarray: core_defs.NDArrayObject
 
 
 # Utility function to construct a `Field` from different buffer representations.
@@ -1061,12 +1145,20 @@ def _connectivity(
     raise NotImplementedError
 
 
-class NeighborConnectivity(Connectivity, Protocol):
+@runtime_checkable
+class NeighborTable(Connectivity, Protocol):
     # TODO(havogt): work towards encoding this properly in the type
     def __gt_type__(self) -> NeighborConnectivityType: ...
 
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        # Note that this property is currently already there from inheriting from `Field`,
+        # however this seems wrong, therefore we explicitly introduce it here (or it should come
+        # implicitly from the `NdArrayConnectivityField` protocol).
+        ...
 
-def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
+
+def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
     if not isinstance(obj, Connectivity):
         return False
     domain_dims = obj.domain.dims
@@ -1077,23 +1169,8 @@ def is_neighbor_connectivity(obj: Any) -> TypeGuard[NeighborConnectivity]:
     )
 
 
-class NeighborTable(
-    NeighborConnectivity, Protocol
-):  # TODO(havogt): try to express by inheriting from NdArrayConnectivityField (but this would require a protocol to move it out of `embedded.nd_array_field`)
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        # Note that this property is currently already there from inheriting from `Field`,
-        # however this seems wrong, therefore we explicitly introduce it here (or it should come
-        # implicitly from the `NdArrayConnectivityField` protocol).
-        ...
-
-
-def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
-    return is_neighbor_connectivity(obj) and hasattr(obj, "ndarray")
-
-
-OffsetProviderElem: TypeAlias = Dimension | NeighborConnectivity
-OffsetProviderTypeElem: TypeAlias = Dimension | NeighborConnectivityType
+OffsetProviderElem: TypeAlias = NeighborTable
+OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
@@ -1120,21 +1197,13 @@ def offset_provider_to_type(
     }
 
 
-def _get_dimension_name_from_implicit_offset(offset: str) -> str:
-    assert offset.startswith(_IMPLICIT_OFFSET_PREFIX)
-    return offset[len(_IMPLICIT_OFFSET_PREFIX) :]
-
-
 def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
     """
     Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
 
-    Note: This function handles implicit offsets. All accesses of `OffsetProvider` or
-    `OffsetProviderType` should go through this function.
+    Note: All accesses of `OffsetProvider` or `OffsetProviderType` should go through this function.
     """
     # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
-    if offset_tag.startswith(_IMPLICIT_OFFSET_PREFIX):
-        return Dimension(value=_get_dimension_name_from_implicit_offset(offset_tag))
     if offset_tag not in offset_provider:
         raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
     return offset_provider[offset_tag]  # TODO return a valid dimension
@@ -1205,7 +1274,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
-        return core_defs.Int32DType()  # type: ignore[return-value]
+        return core_defs.Int32DType()
 
     # This is a workaround to make this class concrete, since `codomain` is an
     # abstract property of the `Connectivity` Protocol.
@@ -1218,14 +1287,6 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     @property
     def skip_value(self) -> None:
         return None
-
-    @functools.cached_property
-    def kind(self) -> ConnectivityKind:
-        return (
-            ConnectivityKind.translation()
-            if self.domain_dim == self.codomain
-            else ConnectivityKind.relocation()
-        )
 
     @classmethod
     def for_translation(
@@ -1274,11 +1335,29 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-    return sorted(dims, key=lambda dim: (_DIM_KIND_ORDER[dim.kind], dim.value))
+    return sorted(
+        dims,
+        key=lambda dim: (
+            _DIM_KIND_ORDER[dim.kind],
+            as_non_staggered(dim).value,
+        ),
+    )
 
 
 def check_dims(dims: Sequence[Dimension]) -> None:
-    if dims != order_dimensions(dims):
+    # A dimension and its staggered counterpart (i.e. sharing the same non-staggered base dimension)
+    # denote different grid locations and must not appear together in the same field/domain: mixing
+    # them is ambiguous (it makes `order_dimensions` non-total and produces duplicate backend tags).
+    seen: dict[Dimension, Dimension] = {}
+    for dim in dims:
+        base = as_non_staggered(dim)
+        if base in seen:
+            raise ValueError(
+                f"Dimensions '{seen[base]}' and '{dim}' cannot be combined: a dimension and its "
+                f"staggered counterpart must not appear together in the same field or domain."
+            )
+        seen[base] = dim
+    if list(dims) != order_dimensions(dims):
         raise ValueError(
             f"Dimensions '{', '.join(map(str, dims))}' are not ordered correctly, expected '{', '.join(map(str, order_dimensions(dims)))}'."
         )
@@ -1362,3 +1441,48 @@ class FieldBuiltinFuncRegistry:
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
 _DEFAULT_SKIP_VALUE: Final[int] = -1
+_STAGGERED_PREFIX = "_Staggered"
+
+
+def is_staggered(dim: Dimension) -> bool:
+    """Return whether `dim` is a staggered dimension."""
+    return dim.value.startswith(_STAGGERED_PREFIX)
+
+
+def flip_staggered(dim: Dimension) -> Dimension:
+    """Return the staggered counterpart of `dim`."""
+    if is_staggered(dim):
+        return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
+    else:
+        return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
+
+
+def as_non_staggered(dim: Dimension) -> Dimension:
+    """Return the non-staggered base dimension of `dim` (`dim` itself if already non-staggered)."""
+    if is_staggered(dim):
+        return flip_staggered(dim)
+    return dim
+
+
+def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
+    """
+    Build the connectivity that shifts `dim` by `offset`.
+
+    An integer `offset` shifts within `dim` (the codomain stays `dim`). A half-integer `offset`
+    (fractional part `0.5`) shifts to the staggered counterpart of `dim` (the codomain becomes
+    `flip_staggered(dim)`).
+
+    The half-integer case encodes the convention that a staggered index sits half a cell *below*
+    its base index (see ADR 0024): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
+    shifting out of a non-staggered dimension needs a `+1` index correction that shifting out of a
+    staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
+    `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.
+    """
+    integral_offset, staggered_offset = divmod(offset, 1)
+    if staggered_offset == 0.5:
+        if not is_staggered(dim):
+            integral_offset += 1
+        return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
+    else:
+        assert staggered_offset == 0
+        return CartesianConnectivity(dim, int(integral_offset), codomain=dim)

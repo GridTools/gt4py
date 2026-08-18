@@ -121,7 +121,7 @@ class BaseModuleGenerator(abc.ABC):
         self.template = jinja2.Template(
             importlib_resources.files("gt4py.cartesian.backend.templates")
             .joinpath(self.TEMPLATE_RESOURCE)
-            .read_text()
+            .read_text(encoding="utf-8")
         )
 
     def __call__(self, args_data: ModuleData) -> str:
@@ -266,14 +266,12 @@ class BaseModuleGenerator(abc.ABC):
         for arg in self.builder.gtir.api_signature:
             if arg.is_keyword:
                 if arg.default:
-                    keyword_args.append(
-                        "{name}={default}".format(name=arg.name, default=arg.default)
-                    )
+                    keyword_args.append(f"{arg.name}={arg.default}")
                 else:
                     keyword_args.append(arg.name)
             else:
                 if arg.default:
-                    args.append("{name}={default}".format(name=arg.name, default=arg.default))
+                    args.append(f"{arg.name}={arg.default}")
                 else:
                     args.append(arg.name)
 

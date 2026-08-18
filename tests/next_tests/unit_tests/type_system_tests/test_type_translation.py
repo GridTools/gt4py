@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import enum
+import types
 import typing
 
 import numpy as np
@@ -14,7 +16,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extended_typing as xtyping, utils as eve_utils
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
@@ -30,6 +32,12 @@ class CustomInt32DType:
 
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
+
+# -- PEP 695 type aliases --
+type IFloatFieldAlias = gtx.Field[gtx.Dims[IDim], float]
+type ChainedFieldAlias = IFloatFieldAlias
+type GenericFieldAlias[T] = gtx.Field[gtx.Dims[IDim], T]
+type RecursiveAlias = RecursiveAlias
 
 
 @pytest.mark.parametrize(
@@ -389,7 +397,7 @@ def test_from_value(value, expected):
     assert type_translation.from_value(value) == expected
 
 
-def test_from_value_module():
+def test_from_value_namespace_proxy():
     import next_tests.artifacts.dummy_package as dummy_package
 
     # TODO(egparedes): the following import should not be necessary
@@ -397,15 +405,35 @@ def test_from_value_module():
     #  investigated.
     import next_tests.artifacts.dummy_package.dummy_module
 
-    assert isinstance(
-        type_translation.from_value(dummy_package), type_translation.UnknownPythonObject
-    )
+    assert isinstance(type_translation.from_value(dummy_package), type_translation.NamespaceProxy)
     assert type_translation.from_value(dummy_package).dummy_module.dummy_int == ts.ScalarType(
         kind=ts.ScalarKind.INT32
     )
     assert type_translation.from_value(dummy_package.dummy_module.dummy_int) == ts.ScalarType(
         kind=ts.ScalarKind.INT32
     )
+
+    frozen_namespace = eve_utils.FrozenNamespace(A=10)
+    assert isinstance(
+        type_translation.from_value(frozen_namespace), type_translation.NamespaceProxy
+    )
+    assert type_translation.from_value(frozen_namespace).A == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+
+    nested_frozen_namespace = eve_utils.FrozenNamespace(nested=frozen_namespace)
+    assert isinstance(
+        type_translation.from_value(nested_frozen_namespace), type_translation.NamespaceProxy
+    )
+    assert type_translation.from_value(nested_frozen_namespace).nested.A == ts.ScalarType(
+        kind=ts.ScalarKind.INT32
+    )
+
+    class FooEnum(gtx.int64, enum.Enum):
+        FOO = 10
+
+    assert isinstance(type_translation.from_value(FooEnum), type_translation.NamespaceProxy)
+    assert type_translation.from_value(FooEnum).FOO == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
 class SomeEnum(eve.IntEnum):
@@ -443,3 +471,42 @@ def test_unsafe_cast_to(value, type_, expected):
     result = type_translation.unsafe_cast_to(value, type_)
     assert result == expected
     assert type(result) is type(expected)
+
+
+def test_type_alias_annotations():
+    expected = ts.FieldType(
+        dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
+    )
+
+    assert type_translation.from_type_hint(IFloatFieldAlias) == expected
+    assert type_translation.from_type_hint(ChainedFieldAlias) == expected
+    assert type_translation.from_type_hint(GenericFieldAlias[np.float64]) == expected
+
+    # Aliases nested inside another annotation
+    assert type_translation.from_type_hint(
+        tuple[IFloatFieldAlias, IFloatFieldAlias]
+    ) == ts.TupleType(types=[expected, expected])
+
+
+def test_invalid_type_alias_annotations():
+    type LazyAlias = _never_defined  # noqa: F821 [undefined-name]  # intentionally undefined
+
+    with pytest.raises(ValueError, match="undefined forward references"):
+        type_translation.from_type_hint(LazyAlias)
+
+    with pytest.raises(ValueError, match="'RecursiveAlias' cannot be resolved"):
+        type_translation.from_type_hint(RecursiveAlias)
+
+
+def test_broken_type_alias_annotation_reports_the_underlying_cause():
+    # An alias value is evaluated lazily, so a typo inside it only fails here. It has
+    # to arrive as a 'ValueError' like any other bad annotation, otherwise callers
+    # cannot turn it into a located diagnostic and the user gets a raw traceback.
+    type BrokenAlias = gtx.Field[gtx.Dims[IDim], _empty_module.foat64]  # noqa: F821 [undefined-name]  # defined below
+
+    _empty_module = types.ModuleType("_empty_module")
+
+    with pytest.raises(ValueError, match="'BrokenAlias' cannot be resolved") as exc_info:
+        type_translation.from_type_hint(BrokenAlias)
+
+    assert "foat64" in str(exc_info.value)

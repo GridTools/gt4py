@@ -94,10 +94,10 @@ class MultiStateGlobalSelfCopyElimination(dace_transformation.Pass):
     def should_reapply(self, modified: dace_ppl.Modifies) -> bool:
         return modified & (dace_ppl.Modifies.Memlets | dace_ppl.Modifies.AccessNodes)
 
-    def depends_on(self) -> set[type[dace_transformation.Pass]]:
-        return {
+    def depends_on(self) -> list[type[dace_transformation.Pass]]:
+        return [
             dace_transformation.passes.FindAccessStates,
-        }
+        ]
 
     def apply_pass(
         self, sdfg: dace.SDFG, pipeline_results: dict[str, Any]
@@ -623,7 +623,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         transient_data: str,
         write_locations: list[AccessLocation],
         read_locations: list[AccessLocation],
-    ) -> Union[None, str]:
+    ) -> Union[str, None]:
         """Test if the transient can be eliminated.
 
         The function tests if transient data can be eliminated and be replaced by a
@@ -657,7 +657,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         # TODO(phimuell): To better handle `concat_where` also allow multiple producers.
         # TODO(phimuell): In `concat_where` we are using `dynamic` Memlets, they should
         #   also be checked.
-        global_data: Union[None, str] = None
+        global_data: Union[str, None] = None
         for state, transient_access_node in write_locations:
             for iedge in state.in_edges(transient_access_node):
                 src_node = iedge.src
@@ -700,7 +700,7 @@ class MultiStateGlobalSelfCopyElimination2(dace_transformation.Pass):
         self,
         sdfg: dace.SDFG,
         data_name: str,
-    ) -> Union[None, tuple[list[AccessLocation], list[AccessLocation]]]:
+    ) -> Union[tuple[list[AccessLocation], list[AccessLocation]], None]:
         """The function finds all locations were `data_name` is written and read.
 
         The function will scan the SDFG and returns all places where `data_name` is

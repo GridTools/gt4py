@@ -16,11 +16,10 @@ from typing import TypeVar, cast, overload
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common, utils
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, ir as itir
+from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.utils import tree_map
 
 
 def _type_synth_arg_cache_key(type_or_synth: TypeOrTypeSynthesizer) -> int:
@@ -156,7 +155,7 @@ def synthesize_binary_math_comparison_builtins(
         return ts.DomainType(dims=[rhs.dim])
     if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
         return ts.DomainType(dims=[lhs.dim])
-    assert all(isinstance(lhs, (ts.ScalarType, ts.DeferredType)) for arg in (lhs, rhs))
+    assert all(isinstance(arg, (ts.ScalarType, ts.DeferredType)) for arg in (lhs, rhs))
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
@@ -203,7 +202,7 @@ def if_(
     pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
 ) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
-        return tree_map(
+        return utils.tree_map(
             collection_type=ts.TupleType,
             result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
         )(functools.partial(if_, pred))(true_branch, false_branch)
@@ -283,7 +282,7 @@ def concat_where(
         tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
 
         assert tb_dtype == fb_dtype, (
-            f"Field arguments must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+            f"Field arguments to 'concat_where' must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
         )
         dtype = tb_dtype
 
@@ -382,9 +381,7 @@ def _convert_as_fieldop_input_to_iterator(
     Convert a field operation input into an iterator type, preserving its dimensions and data type.
     """
     input_dims = _collect_and_check_dimensions(input_)
-    element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-        type_info.extract_dtype, input_
-    )
+    element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
 
     return it_ts.IteratorType(
         position_dims=domain.dims, defined_dims=input_dims, element_type=element_type
@@ -436,9 +433,7 @@ def _canonicalize_nb_fields(
             )
         case ts.FieldType():
             input_dims = _collect_and_check_dimensions(input_)
-            element_type: ts.DataType = type_info.apply_to_primitive_constituents(
-                type_info.extract_dtype, input_
-            )
+            element_type: ts.DataType = type_info.tree_map_type(type_info.extract_dtype)(input_)
             defined_dims = []
             neighbor_dim = None
             for dim in input_dims:
@@ -458,7 +453,7 @@ def _canonicalize_nb_fields(
 
 def _resolve_dimensions(
     input_dims: list[common.Dimension],
-    shift_tuple: tuple[itir.OffsetLiteral, ...],
+    shift_tuple: tuple[itir.OffsetLiteral | itir.CartesianOffset, ...],
     offset_provider_type: common.OffsetProviderType,
 ) -> list[common.Dimension]:
     """
@@ -486,14 +481,25 @@ def _resolve_dimensions(
 
         >>> Edge = common.Dimension(value="Edge")
         >>> Vertex = common.Dimension(value="Vertex")
+        >>> Cell = common.Dimension(value="Cell")
         >>> K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
         >>> V2E = common.Dimension(value="V2E")
+        >>> C2V = common.Dimension(value="C2V")
         >>> input_dims = [Edge, K]
         >>> shift_tuple = (
+        ...     itir.OffsetLiteral(value="C2V"),
+        ...     itir.OffsetLiteral(value=0),
         ...     itir.OffsetLiteral(value="V2E"),
         ...     itir.OffsetLiteral(value=0),
         ... )
         >>> offset_provider_type = {
+        ...     "C2V": common.NeighborConnectivityType(
+        ...         domain=(Cell, C2V),
+        ...         codomain=Vertex,
+        ...         skip_value=None,
+        ...         dtype=None,
+        ...         max_neighbors=3,
+        ...     ),
         ...     "V2E": common.NeighborConnectivityType(
         ...         domain=(Vertex, V2E),
         ...         codomain=Edge,
@@ -501,24 +507,54 @@ def _resolve_dimensions(
         ...         dtype=None,
         ...         max_neighbors=4,
         ...     ),
-        ...     "KOff": K,
         ... }
         >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
-        [Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
+        [Dimension(value='Cell', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
+        >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+        >>> IDim = common.Dimension(value="IDim")
+        >>> IHalfDim = common.flip_staggered(IDim)
+        >>> JDim = common.Dimension(value="JDim")
+        >>> JHalfDim = common.flip_staggered(JDim)
+        >>> input_dims = [IDim, JDim]
+        >>> shift_tuple = (
+        ...     itir.CartesianOffset(
+        ...         domain=im.axis_literal(IDim), codomain=im.axis_literal(IHalfDim)
+        ...     ),
+        ...     itir.OffsetLiteral(value=0),
+        ...     itir.CartesianOffset(domain=im.axis_literal(JDim), codomain=im.axis_literal(IDim)),
+        ...     itir.OffsetLiteral(value=0),
+        ...     itir.CartesianOffset(
+        ...         domain=im.axis_literal(IHalfDim), codomain=im.axis_literal(JDim)
+        ...     ),
+        ...     itir.OffsetLiteral(value=0),
+        ... )
+        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
+        [Dimension(value='JDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='IDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+
     """
     resolved_dims = []
     for input_dim in input_dims:
-        for off_literal in reversed(
-            shift_tuple[::2]
-        ):  # Only OffsetLiterals are processed, located at even indices in shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is applied first.
-            assert isinstance(off_literal.value, str)
-            offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
-            if isinstance(offset_type, common.Dimension) and input_dim == offset_type:
-                continue  # No shift applied
-            if isinstance(offset_type, (fbuiltins.FieldOffset, common.NeighborConnectivityType)):
-                if input_dim == offset_type.codomain:  # Check if input fits to offset
-                    input_dim = offset_type.domain[0]  # Update input_dim for next iteration
-        resolved_dims.append(input_dim)
+        resolved_dim = input_dim
+        for off_literal in reversed(shift_tuple[::2]):
+            # Only OffsetLiterals/CartesianOffsets are processed, located at even indices in
+            # shift_tuple. Shifts are applied in reverse order: the last shift in the tuple is
+            # applied first.
+            if isinstance(off_literal, itir.CartesianOffset):
+                if resolved_dim == ir_misc.dim_from_axis_literal(off_literal.codomain):
+                    resolved_dim = ir_misc.dim_from_axis_literal(off_literal.domain)
+            else:
+                assert isinstance(off_literal, itir.OffsetLiteral) and isinstance(
+                    off_literal.value, str
+                )
+                offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
+                if isinstance(offset_type, common.NeighborConnectivityType):
+                    if resolved_dim == offset_type.codomain:  # Check if input fits to offset
+                        resolved_dim = offset_type.domain[0]  # Update input_dim for next iteration
+                else:
+                    raise NotImplementedError(
+                        f"'{offset_type}' is not a supported connectivity type."
+                    )
+        resolved_dims.append(resolved_dim)
     return resolved_dims
 
 
@@ -535,7 +571,7 @@ def as_fieldop(
         # For each stencil parameter all locations it is `deref`ed on
         #  see :func:`gt4py.next.iterator.transforms.trace_stencil`.
         shift_sequences_per_param: list[set[tuple[itir.OffsetLiteral, ...]]] | None,
-    ) -> ts.FieldType | ts.DeferredType:
+    ) -> ts.FieldType | ts.TupleType | ts.DeferredType:
         if any(
             isinstance(el, ts.DeferredType)
             for f in fields
@@ -578,13 +614,11 @@ def as_fieldop(
 
         assert isinstance(stencil_return, ts.DataType)
 
-        return type_info.apply_to_primitive_constituents(
-            lambda el_type: ts.FieldType(
-                dims=domain.dims,
-                dtype=el_type,
-            ),
-            stencil_return,
-        )
+        result = type_info.tree_map_type(
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type)
+        )(stencil_return)
+        assert isinstance(result, (ts.FieldType, ts.TupleType))
+        return result
 
     return applied_as_fieldop
 
@@ -615,7 +649,7 @@ def scan(
 
 
 @_register_builtin_type_synthesizer
-def map_(op: TypeSynthesizer) -> TypeSynthesizer:
+def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
     def applied_map(
         *args: ts.ListType, offset_provider_type: common.OffsetProviderType
@@ -631,6 +665,46 @@ def map_(op: TypeSynthesizer) -> TypeSynthesizer:
         return ts.ListType(element_type=el_type, offset_type=offset_type)
 
     return applied_map
+
+
+def _make_tuple_map_synthesizer(
+    builtin_name: str, *, recursive: bool
+) -> Callable[..., TypeOrTypeSynthesizer]:
+    """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
+
+    def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
+        @type_synthesizer
+        def applied_map(
+            arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
+        ) -> ts.TupleType:
+            if not isinstance(arg, ts.TupleType):
+                raise TypeError(
+                    f"'{builtin_name}' requires a 'TupleType' argument, got '{type(arg).__name__}'."
+                )
+
+            bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
+
+            if recursive:
+                return utils.tree_map(  # type: ignore[return-value]
+                    bound_op,
+                    collection_type=ts.TupleType,
+                    result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
+                )(arg)
+
+            # Non-recursive: apply `op` once per top-level element.
+            return ts.TupleType(types=[bound_op(el) for el in arg.types])
+
+        return applied_map
+
+    return tuple_map_synthesizer
+
+
+tree_map_tuple = _register_builtin_type_synthesizer(
+    _make_tuple_map_synthesizer("tree_map_tuple", recursive=True), fun_names=["tree_map_tuple"]
+)
+map_tuple = _register_builtin_type_synthesizer(
+    _make_tuple_map_synthesizer("map_tuple", recursive=False), fun_names=["map_tuple"]
+)
 
 
 @_register_builtin_type_synthesizer
@@ -664,22 +738,24 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
-                assert isinstance(offset_axis, it_ts.OffsetLiteralType) and isinstance(
-                    offset_axis.value, str
-                )
-                type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
-                if isinstance(type_, common.Dimension):
-                    pass
-                elif isinstance(type_, common.NeighborConnectivityType):
-                    found = False
-                    for i, dim in enumerate(new_position_dims):
-                        if dim.value == type_.source_dim.value:
-                            assert not found
-                            new_position_dims[i] = type_.codomain
-                            found = True
-                    assert found
+                source_dim: common.Dimension
+                target_dim: common.Dimension
+                if isinstance(offset_axis, it_ts.CartesianOffsetType):
+                    source_dim, target_dim = offset_axis.domain, offset_axis.codomain
                 else:
-                    raise NotImplementedError(f"{type_} is not a supported Connectivity type.")
+                    assert isinstance(offset_axis, it_ts.OffsetLiteralType)
+                    assert isinstance(offset_axis.value, str)
+                    type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
+                    assert isinstance(type_, common.NeighborConnectivityType)
+                    source_dim, target_dim = type_.domain[0], type_.codomain
+
+                found = False
+                for i, dim in enumerate(new_position_dims):
+                    if dim == source_dim:
+                        assert not found
+                        new_position_dims[i] = target_dim
+                        found = True
+                assert found
         else:
             # during re-inference we don't have an offset provider type
             new_position_dims = "unknown"

@@ -73,6 +73,9 @@ LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
 TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
+# PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
+type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]
+
 
 # --- Parsing ---
 def test_untyped_arg():
@@ -91,8 +94,23 @@ def test_mistyped_arg():
     def mistyped(inp: gtx.Field):
         return inp
 
-    with pytest.raises(ValueError, match="Field type requires two arguments, got 0."):
+    with pytest.raises(errors.InvalidAnnotationError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(mistyped)
+
+    assert any("Field type requires two arguments, got 0" in note for note in exc_info.value.notes)
+
+
+def test_type_alias_arg():
+    """PEP 695 type aliases are accepted in parameter and return annotations."""
+
+    def with_alias(inp: TFloatFieldAlias) -> TFloatFieldAlias:
+        return inp
+
+    parsed = FieldOperatorParser.apply_to_function(with_alias)
+
+    assert parsed.params[0].type == ts.FieldType(
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
+    )
 
 
 def test_return_type():
@@ -132,6 +150,15 @@ def test_invalid_assign_to_expr():
         _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
+def test_declaration_without_assignment():
+    def empty_assign() -> float:
+        x: float
+        return 1.0
+
+    with pytest.raises(errors.DSLError, match=r"without assignment"):
+        _ = FieldOperatorParser.apply_to_function(empty_assign)
+
+
 def test_temp_assignment():
     def copy_field(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp
@@ -158,14 +185,30 @@ def test_clashing_annotated_assignment():
 
 
 def test_binary_pow():
-    def power(inp: gtx.Field[[TDim], "float64"]):
+    def pow_op(inp: gtx.Field[[TDim], "float64"]):
         return inp**3
 
-    parsed = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(pow_op)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
+
+
+def test_field_operator_name_shadows_builtin():
+    def power(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        _ = FieldOperatorParser.apply_to_function(power)
+
+
+def test_field_operator_name_shadows_experimental_builtin():
+    def concat_where(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        _ = FieldOperatorParser.apply_to_function(concat_where)
 
 
 def test_binary_mod():
@@ -241,11 +284,11 @@ def test_conditional_wrong_arg_type():
     ) -> gtx.Field[[TDim], float64]:
         return where(mask, a, b)
 
-    msg = r"Could not promote scalars of different dtype \(not implemented\)."
-    with pytest.raises(errors.DSLError) as exc_info:
+    with pytest.raises(
+        errors.DSLError,
+        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+    ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
-
-    assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
 def test_ternary_with_field_condition():
@@ -314,6 +357,7 @@ def test_closure_symbols():
     from gt4py.eve.utils import FrozenNamespace
 
     nonlocals = FrozenNamespace(float_value=2.3, np_value=np.float32(3.4))
+    nonlocals_unreferenced = "nonlocals_unreferenced"
 
     def operator_with_refs(inp: gtx.Field[[TDim], "float64"], inp2: gtx.Field[[TDim], "float32"]):
         a = inp + nonlocals.float_value
@@ -336,6 +380,40 @@ def test_closure_symbols():
                 P(
                     foast.Assign,
                     value=P(foast.BinOp, right=P(foast.Constant, value=nonlocals.np_value)),
+                ),
+                P(foast.Return),
+            ],
+        ),
+    )
+    assert pattern_node.match(parsed, raise_exception=True)
+
+    import enum
+
+    class NonLocals(gtx.float32, enum.Enum):
+        FOO = 2.3
+        BAR = 3.4
+
+    def operator_with_refs(inp2: gtx.Field[[TDim], "float32"]):
+        a = inp2 + NonLocals.FOO
+        b = inp2 + NonLocals.BAR
+        return a, b
+
+    parsed = FieldOperatorParser.apply_to_function(operator_with_refs)
+    assert "nonlocals_unreferenced" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+    assert "NonLocals" not in {**parsed.annex.symtable, **parsed.body.annex.symtable}
+
+    pattern_node = P(
+        foast.FunctionDefinition,
+        body=P(
+            foast.BlockStmt,
+            stmts=[
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.FOO.value)),
+                ),
+                P(
+                    foast.Assign,
+                    value=P(foast.BinOp, right=P(foast.Constant, value=NonLocals.BAR.value)),
                 ),
                 P(foast.Return),
             ],

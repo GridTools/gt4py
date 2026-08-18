@@ -13,12 +13,13 @@ from __future__ import annotations
 import builtins
 import collections.abc
 import dataclasses
+import enum
 import functools
 import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional
+from typing import Any, ForwardRef, Optional, TypeAlias
 
 import numpy as np
 import numpy.typing as npt
@@ -126,6 +127,21 @@ def make_type(type_: type) -> ts.TypeSpec:
     raise ValueError(f"Type {type_} not supported")
 
 
+def _resolve_type_alias(type_hint: Any) -> Any:
+    """Resolve a PEP 695 type alias, reporting its failures the way annotations do."""
+    try:
+        return xtyping.eval_type_alias(type_hint)
+    except NameError as error:
+        raise ValueError(
+            f"Type annotation '{type_hint}' has undefined forward references."
+        ) from error
+    except TypeError as error:
+        # 'eval_type_alias' already names both the alias and what is actually wrong
+        # inside it, and its text is what callers surface as a note on the
+        # diagnostic, so re-wording it here would only repeat the alias name.
+        raise ValueError(str(error)) from error
+
+
 def canonicalize_type_hint(
     type_hint: Any,
     *,
@@ -146,6 +162,9 @@ def canonicalize_type_hint(
                 f"Type annotation '{type_hint}' has undefined forward references."
             ) from error
 
+    # Canonicalize PEP 695 type aliases ('type X = ...')
+    type_hint = _resolve_type_alias(type_hint)
+
     # Cannonicalize 'Annotated' annotations
     extra_args = []
     if typing.get_origin(type_hint) is typing.Annotated:
@@ -155,6 +174,8 @@ def canonicalize_type_hint(
             collections.abc.Callable,  # type:ignore[arg-type] # see https://github.com/python/mypy/issues/14928
         ):
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
+        # An 'Annotated' annotation may in turn wrap a type alias
+        type_hint = _resolve_type_alias(type_hint)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
     args = typing.get_args(type_hint)
@@ -211,7 +232,7 @@ def from_type_hint(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')."
                 ) from error
             if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
-                raise ValueError("Field dtype argument must be a scalar type (got '{dtype}').")
+                raise ValueError(f"Field dtype argument must be a scalar type (got '{dtype}').")
             return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
@@ -258,15 +279,36 @@ def from_type_hint(
     raise ValueError(f"'{type_hint}' type is not supported.")
 
 
-class UnknownPythonObject(ts.TypeSpec):
-    _object: Any
+ConstantPythonNamespaceObject: TypeAlias = eve_utils.FrozenNamespace | enum.EnumMeta
+PythonNamespaceObject: TypeAlias = ConstantPythonNamespaceObject | types.ModuleType
+
+
+class NamespaceProxy(ts.TypeSpec):
+    _object: PythonNamespaceObject
 
     def __getattr__(self, key: str) -> ts.TypeSpec:
-        value = getattr(self._object, key)
-        return from_value(value)
+        # `__getattr__` is called only when normal lookup fails. Two guards are
+        # needed so this never recurses:
+        #   1. Dunder probes: pickle / copy / cloudpickle look up things like
+        #      ``__setstate__``, ``__reduce_ex__``, ``__deepcopy__`` on freshly-
+        #      constructed instances *before* ``_object`` has been restored.
+        #      Forwarding them to ``self._object`` is both wrong and unbounded —
+        #      ``self._object`` itself would re-enter this method since
+        #      ``_object`` has not been assigned yet.
+        #   2. Any other attribute that arrives here before ``_object`` is bound:
+        #      use ``object.__getattribute__`` to consult the actual instance
+        #      dict so we reach base-class ``AttributeError`` rather than
+        #      recursing.
+        if key.startswith("_"):
+            raise AttributeError(key)
+        try:
+            obj = object.__getattribute__(self, "_object")
+        except AttributeError:
+            raise AttributeError(key) from None
+        return from_value(getattr(obj, key))
 
-    def __deepcopy__(self, _: dict[int, Any]) -> UnknownPythonObject:
-        return UnknownPythonObject(self._object)  # don't deep copy the module
+    def __deepcopy__(self, _: dict[int, Any]) -> NamespaceProxy:
+        return NamespaceProxy(self._object)  # don't deep copy the module
 
 
 def from_value(value: Any) -> ts.TypeSpec:
@@ -317,8 +359,8 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
-    elif isinstance(value, (types.ModuleType, eve_utils.FrozenNamespace)):
-        return UnknownPythonObject(value)
+    elif isinstance(value, PythonNamespaceObject):
+        return NamespaceProxy(value)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

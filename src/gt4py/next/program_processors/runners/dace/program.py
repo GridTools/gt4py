@@ -18,7 +18,7 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, recipes, toolchain
+from gt4py.next.otf import arguments, toolchain, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -39,12 +39,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider: gtx_common.OffsetProvider = self.connectivities or {}
+        offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
         gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
-            toolchain.CompilableProgram(
+            toolchain.ConcreteArtifact(
                 data=self.past_stage,
                 args=arguments.CompileTimeArgs(
                     args=tuple(p.type for p in self.past_stage.past_node.params),
@@ -76,22 +76,18 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        compile_workflow = typing.cast(
-            recipes.OTFCompileWorkflow,
-            self.backend.executor
-            if not hasattr(self.backend.executor, "step")
-            else self.backend.executor.step,
-        )  # We know which backend we are using, but we don't know if the compile workflow is cached.
-        compile_workflow_translation = (
-            compile_workflow.translation
-            if not hasattr(compile_workflow.translation, "step")
-            else compile_workflow.translation.step
+        otf_workflow = self.backend.executor
+        assert hasattr(otf_workflow, "translation")
+        otf_workflow_translation = (
+            otf_workflow.translation.step
+            if isinstance(otf_workflow.translation, workflow.CachedStep)
+            else otf_workflow.translation
         )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
-            compile_workflow_translation.replace(
+            otf_workflow_translation.replace(  # type: ignore[union-attr]
                 disable_itir_transforms=True,
                 disable_field_origin_on_program_arguments=True,
                 use_metrics=False,
@@ -150,12 +146,12 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         the offset providers are not part of GT4Py Program's arguments.
         Keep in mind, that `__sdfg_closure__` is called after `__sdfg__` method.
         """
-        if not self.connectivities:
+        if not self.compilation_options.connectivities:
             return {}
 
-        used_connectivities: dict[str, gtx_common.NeighborConnectivity] = {
+        used_connectivities: dict[str, gtx_common.NeighborTable] = {
             conn_id: conn
-            for offset, conn in self.connectivities.items()
+            for offset, conn in self.compilation_options.connectivities.items()
             if gtx_common.is_neighbor_table(conn)
             and (conn_id := gtx_dace_args.connectivity_identifier(offset))
             in self.sdfg_closure_cache["arrays"]
@@ -171,7 +167,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict: dict[str, dace.data.Array] = {}
-        offset_provider_type = gtx_common.offset_provider_to_type(self.connectivities)
+        offset_provider_type = gtx_common.offset_provider_to_type(
+            self.compilation_options.connectivities
+        )
         for conn_id, conn in used_connectivities.items():
             if conn_id not in self.connectivity_tables_data_descriptors:
                 self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(

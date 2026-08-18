@@ -10,18 +10,19 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Collection
 from typing import Any, Optional, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next import common, config
-from gt4py.next.otf import cpp_utils, languages, stages, workflow
+from gt4py.next.otf import code_specs, cpp_utils, stages
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_specifications as ts
 
 
-SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL, covariant=True)
+CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.CPPLikeCodeSpec, covariant=True)
 
 
 class Expr(eve.Node):
@@ -200,7 +201,9 @@ def _tuple_get(index: int, var: str) -> str:
     return f"gridtools::tuple_util::get<{index}>({var})"
 
 
-def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
+def make_argument(
+    name: str, type_: ts.TypeSpec, unstructured_horizontal_has_unit_stride: bool
+) -> str | BufferSID | Tuple:
     if isinstance(type_, ts.FieldType):
         return BufferSID(
             source_buffer=name,
@@ -209,7 +212,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
                     name=dim.value,
                     static_stride=1
                     if (
-                        config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+                        unstructured_horizontal_has_unit_stride
                         and dim.kind == common.DimensionKind.HORIZONTAL
                     )
                     else None,
@@ -219,7 +222,10 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
             scalar_type=type_.dtype,
         )
     elif isinstance(type_, ts.TupleType):
-        elements = [make_argument(_tuple_get(i, name), t) for i, t in enumerate(type_.types)]
+        elements = [
+            make_argument(_tuple_get(i, name), t, unstructured_horizontal_has_unit_stride)
+            for i, t in enumerate(type_.types)
+        ]
         return Tuple(elems=elements)
     elif isinstance(type_, ts.ScalarType):
         return name
@@ -228,8 +234,8 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | Tuple:
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
-) -> stages.BindingSource[SrcL, languages.Python]:
+    program_source: stages.ProgramSource[CodeSpecT], unstructured_horizontal_has_unit_stride: bool
+) -> stages.BindingSource[CodeSpecT, code_specs.PythonCodeSpec]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -238,15 +244,15 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if program_source.language not in [languages.CPP, languages.CUDA, languages.HIP]:
+    if not isinstance(program_source.code_spec, code_specs.CPPLikeCodeSpec):
         raise ValueError(
-            f"Can only create bindings for C++ program sources, received '{program_source.language}'."
+            f"Can only create bindings for C++ program sources, received '{program_source.code_spec.source_language}'."
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
     Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
-        callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
+        callee_header_file=f"{program_source.entry_point.name}.{program_source.code_spec.header_extension}",
         header_files=[
             "chrono",
             "optional",
@@ -274,12 +280,17 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(param.name, param.type_)
+                        make_argument(
+                            param.name, param.type_, unstructured_horizontal_has_unit_stride
+                        )
                         for param in program_source.entry_point.parameters
                     ],
                 )
             ),
-            on_device=(program_source.language in [languages.CUDA, languages.HIP]),
+            on_device=isinstance(
+                program_source.code_spec,
+                (code_specs.CUDACodeSpec, code_specs.HIPCodeSpec),
+            ),
         ),
         binding_module=BindingModule(
             name=program_source.entry_point.name,
@@ -296,14 +307,24 @@ def create_bindings(
     )
 
     src = interface.format_source(
-        program_source.language_settings, BindingCodeGenerator.apply(file_binding)
+        program_source.code_spec, BindingCodeGenerator.apply(file_binding)
     )
 
     return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
-@workflow.make_step
-def bind_source(
-    inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
-) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
-    return stages.CompilableSource(program_source=inp, binding_source=create_bindings(inp))
+@dataclasses.dataclass(frozen=True)
+class ExtensionGenerator:
+    """
+    Generate a Python extension module that contains the bindings for a C++ function.
+    """
+
+    unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+
+    def __call__(
+        self, program_source: stages.ProgramSource[CodeSpecT]
+    ) -> stages.ExtensionSource[CodeSpecT, code_specs.PythonCodeSpec]:
+        binding_source = create_bindings(
+            program_source, self.unstructured_horizontal_has_unit_stride
+        )
+        return stages.ExtensionSource(program_source=program_source, binding_source=binding_source)

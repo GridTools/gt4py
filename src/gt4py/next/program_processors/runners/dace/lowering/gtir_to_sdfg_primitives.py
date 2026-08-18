@@ -12,7 +12,7 @@ import abc
 from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
-from dace import subsets as dace_subsets
+from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
@@ -36,10 +36,6 @@ from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_concat_whe
 )
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
-
-
-if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg
 
 
 class PrimitiveTranslator(Protocol):
@@ -91,7 +87,7 @@ def _create_field_operator_impl(
     field_domain: gtir_domain.FieldopDomain,
     output_edge: gtir_dataflow.DataflowOutputEdge,
     output_type: ts.FieldType,
-    map_exit: dace.nodes.MapExit,
+    map_exit: dace_nodes.MapExit,
 ) -> gtir_to_sdfg_types.FieldopData:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -120,8 +116,7 @@ def _create_field_operator_impl(
         # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
         field_subset = dace_subsets.Range([])
     else:
-        field_indices = gtir_domain.get_domain_indices(field_dims, field_origin)
-        field_subset = dace_subsets.Range.from_indices(field_indices)
+        field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
         if output_edge.result.gt_dtype != output_type.dtype:
@@ -546,7 +541,7 @@ def _get_symbolic_value(
     symbolic_expr: dace.symbolic.SymExpr,
     scalar_type: ts.ScalarType,
     temp_name: Optional[str] = None,
-) -> dace.nodes.AccessNode:
+) -> dace_nodes.AccessNode:
     tasklet_node, connector_mapping = sdfg_builder.add_tasklet(
         name="get_value",
         sdfg=sdfg,

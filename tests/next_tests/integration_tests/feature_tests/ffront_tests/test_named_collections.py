@@ -14,11 +14,13 @@ from typing import NamedTuple
 
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
+from gt4py.next.ffront.fbuiltins import where
+from gt4py.next.ffront.experimental import concat_where
 import dataclasses
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
 
@@ -76,6 +78,7 @@ def constructed_outside_dataclass_program(
         constructed_outside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
 def test_named_tuple_like_constructed_outside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -134,6 +137,8 @@ def constructed_inside_dataclass_program(
         constructed_inside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_constructed_inside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -190,6 +195,8 @@ def constructed_inside_dataclass_program_with_domain(
         constructed_inside_dataclass_program_with_domain,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -254,6 +261,8 @@ def nested_mixed_named_collections_program(
     nested_mixed_named_collections(inp, out=out)
 
 
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_nested_mixed_named_collections(cartesian_case):
     inp = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "inp")()
     out = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "out")()
@@ -316,6 +325,8 @@ def scan_named_tuple_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[
     "testee",
     [scan_named_tuple_wrapper, scan_dataclass_wrapper],
 )
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
 def test_scan(cartesian_case, testee):
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -356,6 +367,9 @@ def scan_with_scalar_named_collection_wrapper(
     return scan_with_scalar_named_collection(inp, scalar=scalar)
 
 
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_with_scalar_named_collection(cartesian_case):
     inp = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, "inp")()
     out = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, cases.RETURN)()
@@ -398,4 +412,117 @@ def test_locally_defined_named_collection(cartesian_case):
         vel,
         out=out,
         ref=DataclassNamedCollection(u=vel[0] + vel[1], v=vel[0] - vel[1]),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
+def test_where_nested(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        i: cases.IField,
+        interior0: NamedTupleNamedCollection,
+        interior1: NamedTupleNamedCollection,
+        boundary0: NamedTupleNamedCollection,
+        boundary1: NamedTupleNamedCollection,
+    ) -> tuple[NamedTupleNamedCollection, NamedTupleNamedCollection]:
+        return where(i == 0, (boundary0, boundary1), (interior0, interior1))
+
+    i = cases.allocate(cartesian_case, testee, "i", strategy=cases.IndexInitializer())()
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(2))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(2))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    refs = tuple(
+        tuple(
+            np.where(
+                i.asnumpy()[:, np.newaxis] == 0,
+                tuple(vel.asnumpy() for vel in (boundary.u, boundary.v)),
+                tuple(vel.asnumpy() for vel in (interior.u, interior.v)),
+            )
+        )
+        for boundary, interior in zip(boundaries, interiors)
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        i,
+        *interiors,
+        *boundaries,
+        out=out,
+        ref=refs,
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
+def test_concat_where(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        interior: NamedTupleNamedCollection,
+        boundary: NamedTupleNamedCollection,
+    ) -> NamedTupleNamedCollection:
+        return concat_where(IDim == 0, boundary, interior)
+
+    interior = cases.allocate(cartesian_case, testee, f"interior")()
+    boundary = cases.allocate(cartesian_case, testee, f"boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    i = np.arange(cartesian_case.default_sizes[IDim])
+
+    ref = tuple(
+        np.where(
+            i[:, np.newaxis] == 0,
+            tuple(vel.asnumpy() for vel in (boundary.u, boundary.v)),
+            tuple(vel.asnumpy() for vel in (interior.u, interior.v)),
+        )
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interior,
+        boundary,
+        out=out,
+        ref=ref,
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
+def test_concat_where_nested(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        interior0: NamedTupleNamedCollection,
+        interior1: NamedTupleNamedCollection,
+        boundary0: NamedTupleNamedCollection,
+        boundary1: NamedTupleNamedCollection,
+    ) -> tuple[NamedTupleNamedCollection, NamedTupleNamedCollection]:
+        return concat_where(IDim == 0, (boundary0, boundary1), (interior0, interior1))
+
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(2))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(2))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    i = np.arange(cartesian_case.default_sizes[IDim])
+
+    refs = tuple(
+        tuple(
+            np.where(
+                i[:, np.newaxis] == 0,
+                tuple(vel.asnumpy() for vel in (boundary.u, boundary.v)),
+                tuple(vel.asnumpy() for vel in (interior.u, interior.v)),
+            )
+        )
+        for boundary, interior in zip(boundaries, interiors)
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        *interiors,
+        *boundaries,
+        out=out,
+        ref=refs,
     )

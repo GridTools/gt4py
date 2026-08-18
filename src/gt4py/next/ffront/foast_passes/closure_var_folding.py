@@ -6,16 +6,17 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import dataclass
+import dataclasses
+import enum
 from typing import Any
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.utils import FrozenNamespace
 from gt4py.next import errors
+from gt4py.next.type_system import type_translation
 
 
-@dataclass
+@dataclasses.dataclass
 class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     """
     Replace references to closure variables or their attributes with constants.
@@ -44,7 +45,7 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             definition = symtable[node.id]
             if definition in current_closure_vars:
                 value = self.closure_vars[node.id]
-                if isinstance(value, FrozenNamespace):
+                if isinstance(value, type_translation.ConstantPythonNamespaceObject):
                     return foast.Constant(value=value, location=node.location)
         return node
 
@@ -54,7 +55,10 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         value = self.visit(node.value, **kwargs)
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
-                return foast.Constant(value=getattr(value.value, node.attr), location=node.location)
+                const_value = getattr(value.value, node.attr)
+                if isinstance(const_value, enum.Enum):
+                    const_value = const_value.value
+                return foast.Constant(value=const_value, location=node.location)
             raise errors.MissingAttributeError(node.location, node.attr)
         return node
 

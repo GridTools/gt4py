@@ -29,17 +29,17 @@ class SwapHorizontalMaps(tn.ScheduleNodeVisitor):
         // computation here
     """
 
-    def visit_MapScope(self, node: tn.MapScope):
-        if node.node.params[0].startswith(Axis.J.iteration_symbol()) and node.node.params[
-            1
-        ].startswith(Axis.I.iteration_symbol()):
+    def visit_MapScope(self, node: tn.MapScope) -> None:
+        params = node.node.map.params
+        first_param_J = params[0].startswith(Axis.J.iteration_symbol())
+
+        if first_param_J and params[1].startswith(Axis.I.iteration_symbol()):
             # Swap params
-            tmp_index = node.node.params[0]
-            node.node.params[0] = node.node.params[1]
-            node.node.params[1] = tmp_index
+            param_J = params[0]
+            params[0] = params[1]
+            params[1] = param_J
+
             # Swap ranges
-            tmp_bounds = node.node.range[0]
-            node.node.range[0] = node.node.range[1]
-            node.node.range[1] = tmp_bounds
+            node.node.map.range.reorder([1, 0])
 
         self.visit(node.children)

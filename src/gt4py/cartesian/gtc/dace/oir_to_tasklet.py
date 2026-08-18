@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import operator
+import warnings
 from dataclasses import dataclass
 from functools import reduce
 from typing import Any, Final
@@ -101,9 +102,26 @@ class OIRToTasklet(eve.NodeVisitor):
         # Gather all parts of the variable name in this list
         name_parts = [tasklet_name]
 
+        # Domain sizes of data dimensions
+        data_domains: list[int] = (
+            ctx.tree.containers[node.name].shape[-len(node.data_index) :] if node.data_index else []
+        )
+
         # Data dimension subscript
         data_indices: list[str] = []
-        for index in node.data_index:
+        for dimension, index in enumerate(node.data_index):
+            # special case: domain size of this data dimension is one
+            if data_domains[dimension] == 1:
+                if not isinstance(index, oir.Literal):
+                    warnings.warn(
+                        f"Data dimension {dimension} of field {node.name} has static size one. Accessing without a Literal is suspicious.",
+                        stacklevel=2,
+                    )
+
+                # no need for data dimension subscript because that access
+                # is entirely captured in the memlet.
+                continue
+
             data_indices.append(self.visit(index, ctx=ctx, is_target=False))
 
         if isinstance(node.offset, oir.AbsoluteKIndex):
@@ -139,9 +157,6 @@ class OIRToTasklet(eve.NodeVisitor):
             return "".join(filter(None, name_parts))
 
         # Build Memlet and add it to inputs/outputs
-        data_domains: list[int] = (
-            ctx.tree.containers[node.name].shape[-len(node.data_index) :] if node.data_index else []
-        )
         memlet = Memlet(
             data=node.name,
             subset=_memlet_subset(node, data_domains, ctx),
@@ -211,38 +226,38 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.ABS: "abs",
             common.NativeFunction.MIN: "min",
             common.NativeFunction.MAX: "max",
-            common.NativeFunction.MOD: "fmod",
+            common.NativeFunction.MOD: "dace.math.fmod",
             common.NativeFunction.SIN: "dace.math.sin",
             common.NativeFunction.COS: "dace.math.cos",
             common.NativeFunction.TAN: "dace.math.tan",
-            common.NativeFunction.ARCSIN: "asin",
-            common.NativeFunction.ARCCOS: "acos",
-            common.NativeFunction.ARCTAN: "atan",
+            common.NativeFunction.ARCSIN: "dace.math.asin",
+            common.NativeFunction.ARCCOS: "dace.math.acos",
+            common.NativeFunction.ARCTAN: "dace.math.atan",
             common.NativeFunction.SINH: "dace.math.sinh",
             common.NativeFunction.COSH: "dace.math.cosh",
             common.NativeFunction.TANH: "dace.math.tanh",
-            common.NativeFunction.ARCSINH: "asinh",
-            common.NativeFunction.ARCCOSH: "acosh",
-            common.NativeFunction.ARCTANH: "atanh",
+            common.NativeFunction.ARCSINH: "dace.math.asinh",
+            common.NativeFunction.ARCCOSH: "dace.math.acosh",
+            common.NativeFunction.ARCTANH: "dace.math.atanh",
             common.NativeFunction.SQRT: "dace.math.sqrt",
             common.NativeFunction.POW: "dace.math.pow",
             common.NativeFunction.EXP: "dace.math.exp",
             common.NativeFunction.LOG: "dace.math.log",
-            common.NativeFunction.LOG10: "log10",
-            common.NativeFunction.GAMMA: "tgamma",
-            common.NativeFunction.CBRT: "cbrt",
+            common.NativeFunction.LOG10: "dace.math.log10",
+            common.NativeFunction.GAMMA: "dace.math.tgamma",
+            common.NativeFunction.CBRT: "dace.math.cbrt",
             common.NativeFunction.ISFINITE: "isfinite",
             common.NativeFunction.ISINF: "isinf",
             common.NativeFunction.ISNAN: "isnan",
             common.NativeFunction.FLOOR: "dace.math.ifloor",
-            common.NativeFunction.CEIL: "ceil",
-            common.NativeFunction.TRUNC: "trunc",
+            common.NativeFunction.CEIL: "dace.math.ceil",
+            common.NativeFunction.TRUNC: "dace.math.trunc",
             common.NativeFunction.INT32: "dace.int32",
             common.NativeFunction.INT64: "dace.int64",
             common.NativeFunction.FLOAT32: "dace.float32",
             common.NativeFunction.FLOAT64: "dace.float64",
-            common.NativeFunction.ERF: "erf",
-            common.NativeFunction.ERFC: "erfc",
+            common.NativeFunction.ERF: "dace.math.erf",
+            common.NativeFunction.ERFC: "dace.math.erfc",
             common.NativeFunction.ROUND: "nearbyint",
             common.NativeFunction.ROUND_AWAY_FROM_ZERO: "round",
         }
@@ -253,6 +268,18 @@ class OIRToTasklet(eve.NodeVisitor):
 
     def visit_NativeFuncCall(self, node: oir.NativeFuncCall, **kwargs: Any) -> str:
         function_name = self.visit(node.func, **kwargs)
+
+        # special case for integer powers of non-integer base
+        base = node.args[0]
+        if node.func == common.NativeFunction.POW and not base.dtype.isinteger():
+            exponent = node.args[1]
+            if isinstance(exponent, oir.Literal) and exponent.dtype.isinteger():
+                exp_value = int(exponent.value)
+                if exp_value == 0:
+                    return self.visit(oir.Literal(value="1", dtype=base.dtype), **kwargs)
+                if exp_value >= 1 and exp_value < 4:
+                    function_name = "dace.math.ipow"
+
         arguments = ",".join([self.visit(a, **kwargs) for a in node.args])
 
         return f"{function_name}({arguments})"

@@ -1,4 +1,4 @@
-#! /usr/bin/env -S uv run -q --script --python 3.11
+#!/usr/bin/env -S uv run -q --script --python 3.12
 #
 # GT4Py - GridTools Framework
 #
@@ -9,23 +9,28 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
 from __future__ import annotations
 
+import os
 import pathlib
+import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
-import tomllib
 
+
+# This is needed because uv now fails to create an env when it already exists.
+# See: https://github.com/astral-sh/uv/issues/17899
+os.environ["UV_VENV_CLEAR"] = "1"
 
 # This should just be `pytest.ExitCode.NO_TESTS_COLLECTED` but `pytest`
 # is not guaranteed to be available in the venv where `nox` is running.
@@ -34,38 +39,24 @@ NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 # -- nox configuration --
 nox.options.default_venv_backend = "uv"
 nox.options.sessions = [
-    "test_cartesian-3.10(internal, cpu)",
-    "test_cartesian-3.10(dace, cpu)",
-    "test_cartesian-3.11(internal, cpu)",
-    "test_cartesian-3.11(dace, cpu)",
     "test_cartesian-3.12(internal, cpu)",
     "test_cartesian-3.12(dace, cpu)",
     "test_cartesian-3.13(internal, cpu)",
     "test_cartesian-3.13(dace, cpu)",
     "test_cartesian-3.14(internal, cpu)",
     "test_cartesian-3.14(dace, cpu)",
-    "test_eve-3.10",
-    "test_eve-3.11",
     "test_eve-3.12",
     "test_eve-3.13",
     "test_eve-3.14",
-    "test_next-3.10(internal, cpu, nomesh)",
-    "test_next-3.10(dace, cpu, nomesh)",
-    "test_next-3.11(internal, cpu, nomesh)",
-    "test_next-3.11(dace, cpu, nomesh)",
     "test_next-3.12(internal, cpu, nomesh)",
     "test_next-3.12(dace, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
     "test_next-3.14(internal, cpu, nomesh)",
     "test_next-3.14(dace, cpu, nomesh)",
-    "test_package-3.10",
-    "test_package-3.11",
     "test_package-3.12",
     "test_package-3.13",
     "test_package-3.14",
-    "test_storage-3.10(cpu)",
-    "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
     "test_storage-3.13(cpu)",
     "test_storage-3.14(cpu)",
@@ -82,7 +73,7 @@ REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["pro
 ]
 
 # -- Parameter sets --
-DeviceOption: TypeAlias = Literal["cpu", "cuda12", "rocm6_0"]
+DeviceOption: TypeAlias = Literal["cpu", "cuda12", "cuda13", "rocm6", "rocm7"]
 DeviceNoxParam: Final[dict[DeviceOption, nox.param]] = {
     device: nox.param(device, id=device, tags=[device]) for device in DeviceOption.__args__
 }
@@ -100,15 +91,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": [], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
 }
-# Use dace-cartesian group to select the appropriate dace version
-CodeGenCartesianTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-cartesian"], "markers": ["requires_dace"]},
-}
-# Install dace-next group to select the appropriate dace version
-CodeGenNextTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "groups": ["dace-next"], "markers": ["requires_dace"]},
+CodeGenDaceTestSettings = CodeGenTestSettings | {
+    "dace": {"extras": [], "markers": ["requires_dace"]},
 }
 
 
@@ -135,7 +121,7 @@ def install_session_venv(
         # uv does not yet combine explicit python version requests with the
         # `requires-python` range in `pyproject.toml`, so we do it manually.
         # See: https://github.com/astral-sh/uv/issues/16654
-        f"{REQUIRES_PYTHON}, >={session.python!s}.0",
+        f"{REQUIRES_PYTHON}, ~={session.python!s}.0",
         "--no-dev",
         *(f"--extra={e}" for e in extras),
         *(f"--group={g}" for g in groups),
@@ -162,7 +148,7 @@ def test_cartesian(
 ) -> None:
     """Run selected 'gt4py.cartesian' tests."""
 
-    codegen_settings = CodeGenCartesianTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -245,7 +231,7 @@ def test_next(
 ) -> None:
     """Run selected 'gt4py.next' tests."""
 
-    codegen_settings = CodeGenNextTestSettings[codegen]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -327,6 +313,114 @@ def test_storage(
         *"pytest --doctest-modules -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "storage"),
         success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next"])
+def test_typing_exports(session: nox.Session) -> None:
+    """Test GT4Py usability in a typed client context."""
+    install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
+
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
+    session.run(
+        "pytest",
+        "-sv",
+        "--mypy-testing-base",
+        "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
+        "typing_tests",
+        *session.posargs,
+    )
+
+
+# -- DaCe codegen determinism check --
+#
+# The `test_next_dace_determinism` session below runs gt4py's pytest selection
+# twice with an isolated GT4PY_BUILD_CACHE_DIR per run, then verifies the
+# DaCe-generated source files are byte-identical between the two runs. A diff is
+# a determinism bug somewhere in the gt4py + dace toolchain for that selection.
+#
+# The orchestration (run twice + compare) and the hashing/comparison library
+# both live in `scripts/python/dace_determinism.py`, exposed as its
+# `ci-check` and `check` subcommands. This session installs the `scripts`
+# dependency group into the session venv and executes that script with the
+# venv's own python (a gt4py-capable interpreter) — it does not import the
+# module.
+#
+# Only `dace` codegen is checked (`internal` doesn't go through dace), so the
+# codegen parameter is dropped from this session's signature.
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next", "dace", "determinism"])
+@nox.parametrize(
+    "meshlib",
+    [
+        nox.param("nomesh", id="nomesh", tags=["nomesh"]),
+        nox.param("atlas", id="atlas", tags=["atlas"]),
+    ],
+)
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_next_dace_determinism(
+    session: nox.Session,
+    device: DeviceOption,
+    meshlib: Literal["nomesh", "atlas"],
+) -> None:
+    """Run selected 'gt4py.next' DaCe tests twice and verify codegen
+    is byte-identical between the two runs."""
+
+    codegen_settings = CodeGenDaceTestSettings["dace"]
+    device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
+    mesh_markers: list[str] = []
+
+    match meshlib:
+        case "nomesh":
+            mesh_markers.append("not requires_atlas")
+        case "atlas":
+            mesh_markers.append("requires_atlas")
+            groups.append("frameworks")
+
+    # The `scripts` group provides `typer`, needed by the dace-determinism CLI.
+    install_session_venv(session, extras=extras, groups=[*groups, "scripts"])
+
+    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+
+    # Execute the determinism script with the session venv's own python (resolved
+    # by nox from "python"); the script runs the pytest selection twice via
+    # `sys.executable` and compares the generated sources. A non-zero exit fails
+    # the session; the script writes report.txt + diffs/ under the workdir.
+    pytest_args = [
+        "--cache-clear",
+        "-sv",
+        "-n",
+        "auto",
+        "--dist",
+        "loadgroup",
+        "-m",
+        f"{markers}",
+        str(pathlib.Path("tests") / "next_tests"),
+    ]
+    session.run(
+        "python",
+        str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
+        "ci-check",
+        "--workdir",
+        str(REPO_ROOT / "_dace_deterministic_codegen"),
+        "--",
+        *pytest_args,
+        *session.posargs,
+        env=session.env,
     )
 
 

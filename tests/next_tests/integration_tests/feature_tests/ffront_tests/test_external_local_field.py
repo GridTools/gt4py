@@ -14,15 +14,13 @@ from gt4py.next import common, int32, neighbor_sum, astype, int64
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
     mesh_descriptor,
 )
 
 
-pytestmark = pytest.mark.uses_unstructured_shift
-
-
+@pytest.mark.uses_unstructured_shift
 def test_external_local_field(unstructured_case):
     @gtx.field_operator
     def testee(
@@ -94,6 +92,7 @@ def test_index_external_local_field_with_cast(request, unstructured_case):
 @pytest.mark.skip(
     "Reductions over only a non-shifted field with local dimension is not supported"
 )  # we keep the test in case we will change that in the future
+@pytest.mark.uses_unstructured_shift
 def test_external_local_field_only(unstructured_case):
     @gtx.field_operator
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
@@ -113,6 +112,7 @@ def test_external_local_field_only(unstructured_case):
 
 
 @pytest.mark.uses_sparse_fields_as_output
+@pytest.mark.uses_unstructured_shift
 def test_write_local_field(unstructured_case):
     @gtx.field_operator
     def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:

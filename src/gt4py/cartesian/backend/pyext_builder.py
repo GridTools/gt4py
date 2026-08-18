@@ -56,7 +56,6 @@ def get_gt_pyext_build_opts(
     opt_level: Literal["0", "1", "2", "3", "s"] = "3",
     extra_opt_flags: str = "",
     add_profile_info: bool = False,
-    uses_openmp: bool = True,
     uses_cuda: bool = False,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
     include_dirs: list[str] = []
@@ -84,33 +83,33 @@ def get_gt_pyext_build_opts(
 
     extra_compile_args = dict(
         cxx=[
-            "-std=c++17",
-            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+            "-std=c++20",
+            f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
             "-fvisibility=hidden",
             "-fPIC",
             # A compiler is allowed to choose if `char` is signed or unsigned. We force the signed behavior
             # because `char` is used to represent the `int8` type in GT4Py programs.
             "-fsigned-char",
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             *extra_compile_args_from_config["cxx"],
         ]
     )
     extra_compile_args["cuda"] = [
-        "-std=c++17",
-        "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+        "-std=c++20",
+        f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
-            "-isystem{}".format(gt_include_path),
+            f"-isystem{gt_include_path}",
             "-fvisibility=hidden",
             "-fPIC",
             *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
-            "-isystem={}".format(gt_include_path),
-            "-arch=sm_{}".format(cuda_arch),
+            f"-isystem={gt_include_path}",
+            f"-arch=sm_{cuda_arch}",
             "--expt-relaxed-constexpr",
             "--compiler-options",
             "-fvisibility=hidden",
@@ -128,16 +127,14 @@ def get_gt_pyext_build_opts(
     extra_link_args.extend(mode_flags)
 
     if dace_path := get_dace_module_path():
-        extra_compile_args["cxx"].append(
-            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
-        )
+        extra_compile_args["cxx"].append(f"-isystem{os.path.join(dace_path, 'runtime/include')}")
         if is_rocm_gpu:
             extra_compile_args["cuda"].append(
-                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
+                f"-isystem{os.path.join(dace_path, 'runtime/include')}"
             )
         else:
             extra_compile_args["cuda"].append(
-                "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+                f"-isystem={os.path.join(dace_path, 'runtime/include')}"
             )
 
     if add_profile_info:
@@ -159,20 +156,11 @@ def get_gt_pyext_build_opts(
             extra_link_args=extra_link_args,
         )
 
-    if uses_openmp:
-        cpp_flags = gt_config.build_settings["openmp_cppflags"]
-        if uses_cuda:
-            cuda_flags = []
-            for cpp_flag in cpp_flags:
-                if is_rocm_gpu:
-                    cuda_flags.extend([cpp_flag])
-                else:
-                    cuda_flags.extend(["--compiler-options", cpp_flag])
-            build_opts["extra_compile_args"]["cuda"].extend(cuda_flags)
-        elif cpp_flags:
-            build_opts["extra_compile_args"].extend(cpp_flags)
+    if gt_config.build_settings["openmp"]["use_openmp"] and not uses_cuda:
+        cpp_flags = gt_config.build_settings["openmp"]["cppflags"]
+        build_opts["extra_compile_args"].extend(cpp_flags)
 
-        ld_flags = gt_config.build_settings["openmp_ldflags"]
+        ld_flags = gt_config.build_settings["openmp"]["ldflags"]
         if ld_flags:
             build_opts["extra_link_args"].extend(ld_flags)
 
@@ -243,8 +231,8 @@ def build_pybind_ext(
         ext_modules=[py_extension],
         script_args=[
             "build_ext",
-            "--build-temp={}".format(build_path),
-            "--build-lib={}".format(build_path),
+            f"--build-temp={build_path}",
+            f"--build-lib={build_path}",
             "--force",
         ],
     )

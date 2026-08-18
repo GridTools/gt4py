@@ -22,7 +22,8 @@ def process_elements(
     arg_types: Optional[Iterable[ts.TypeSpec]] = None,
 ) -> itir.FunCall:
     """
-    Recursively applies a processing function to all primitive constituents of a tuple.
+    Recursively applies a processing function to all primitive constituents of a tuple or
+    named collection.
 
     Arguments:
         process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
@@ -37,7 +38,7 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = (objs,)
 
-    var_names = tuple(f"__val_{obj.fingerprint()}" for obj in objs)
+    var_names = tuple(f"__val_{itir.lenient_ir_fingerprinter(obj)}" for obj in objs)
     # Note: The same `var_name` might appear multiple times if the same object appears multiple
     # times. Since we use a dict to collect the bound variables, this is fine.
     bound_vars = {var_name: obj for var_name, obj in zip(var_names, objs)}
@@ -60,7 +61,7 @@ def _process_elements_impl(
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]],
 ) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
+    if isinstance(current_el_type, (ts.TupleType, ts.NamedCollectionType)):
         result = im.make_tuple(
             *(
                 _process_elements_impl(

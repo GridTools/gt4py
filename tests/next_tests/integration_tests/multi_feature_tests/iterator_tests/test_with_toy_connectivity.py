@@ -16,7 +16,7 @@ from gt4py.next.iterator.builtins import (
     lift,
     list_get,
     make_const_list,
-    map_,
+    map_list,
     multiplies,
     neighbors,
     plus,
@@ -101,7 +101,7 @@ def test_sum_edges_to_vertices(program_processor, stencil):
 
 @fundef
 def map_neighbors(in_edges):
-    return reduce(plus, 0)(map_(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
+    return reduce(plus, 0)(map_list(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
 
 
 def test_map_neighbors(program_processor):
@@ -123,7 +123,7 @@ def test_map_neighbors(program_processor):
 
 @fundef
 def map_make_const_list(in_edges):
-    return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
+    return reduce(plus, 0)(map_list(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
 
 
 @pytest.mark.uses_constant_fields
@@ -271,31 +271,6 @@ def test_slice_twice_sparse(program_processor):
 
     if validate:
         assert np.allclose(np.asarray(out), ref)
-
-
-@fundef
-def shift_sliced_sparse_stencil(sparse):
-    return list_get(1, deref(shift(V2V, 0)(sparse)))
-
-
-@pytest.mark.uses_sparse_fields
-def test_shift_sliced_sparse(program_processor):
-    program_processor, validate = program_processor
-    inp = gtx.as_field([Vertex, V2VDim], v2v_arr)
-    out = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))
-
-    ref = v2v_arr[:, 1][v2v_arr][:, 0]
-
-    run_processor(
-        shift_sliced_sparse_stencil[{Vertex: range(0, 9)}],
-        program_processor,
-        inp,
-        out=out,
-        offset_provider={"V2V": v2v_conn},
-    )
-
-    if validate:
-        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef

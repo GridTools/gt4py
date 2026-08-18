@@ -6,8 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
+import dataclasses
 import warnings
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
 import dace
 from dace import (
@@ -17,11 +20,28 @@ from dace import (
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
 )
+
+
+@dataclasses.dataclass(frozen=True)
+class _Fragment:
+    """One piece into which an AccessNode is split.
+
+    Attributes:
+        producers: The incoming edges that generate the data of the fragment.
+        consumers: The outgoing edges that read data of the fragment.
+        subset: The region of the original data that the fragment describes,
+            i.e. the union of what `producers` write.
+    """
+
+    producers: OrderedSet[dace_graph.MultiConnectorEdge]
+    consumers: OrderedSet[dace_graph.MultiConnectorEdge]
+    subset: dace_sbs.Subset
 
 
 def gt_split_access_nodes(
@@ -148,10 +168,10 @@ def _apply_split_access_node_non_recursive(
 class SplitAccessNode(dace_transformation.SingleStateTransformation):
     """The transformation will split an AccessNode into multiple ones.
 
-    If there is no interesection between a write and different reads,
-    i.e. if every read to the AccessNode can be satisfied by a single
-    write to the AccessNode and the AccessNode is only used at one
-    location, then the node is split.
+    The node is split into fragments, such that every read is served by a
+    single fragment and the AccessNode is only used at one location. A
+    fragment is usually defined by a single write, but if a read spans the
+    data of several writes, then those writes form one fragment together.
     This means that the reads will be satisfied directly and the node
     does not have to materialize.
 
@@ -166,8 +186,6 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             `self.access_node` really is single use data.
 
     Todo:
-        - Made it possible to merge splits, i.e. such that a fragment can
-            be described by two producers.
         - Create a version that is able to split over multiple states. This is
             mostly useful to enable more state fusion.
 
@@ -239,13 +257,15 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
             return False
 
         # Now check if a decomposition exist.
-        edge_reassignments = self._find_edge_reassignment(graph)
-        if edge_reassignments is None:
+        fragments = self._find_fragments(graph)
+        if fragments is None:
+            return False
+        if len(fragments) <= 1:
             return False
         if not self._check_split_constraints(
             state=graph,
             sdfg=sdfg,
-            edge_reassignments=edge_reassignments,
+            fragments=fragments,
         ):
             return False
 
@@ -268,12 +288,12 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
     ) -> dict[dace_sbs.Subset, dace_nodes.AccessNode]:
         access_node: dace_nodes.AccessNode = self.access_node
 
-        edge_reassignments = self._find_edge_reassignment(graph)
-        assert edge_reassignments is not None
+        fragments = self._find_fragments(graph)
+        assert fragments is not None
 
         # TODO(phimuell): Make it more general that it can take the full advantage
         #   of the splitter functionality.
-        split_description = [e.data.dst_subset for e in edge_reassignments.keys()]
+        split_description = [fragment.subset for fragment in fragments]
 
         fragment_access_nodes = gtx_dace_split.split_node(
             state=graph,
@@ -304,59 +324,116 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
         # Special extension to support certain workflows.
         return fragment_access_nodes
 
-    def _find_edge_reassignment(
+    def _find_fragments(
         self,
         state: dace.SDFGState,
-    ) -> dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]] | None:
+    ) -> list[_Fragment] | None:
         """Determine how the edges should be distributed to the fragments.
 
-        The current implementation defines the fragments, i.e. the pieces into
-        which `self.access_node` should be split into, through the incoming edges.
-        This means that every incoming edge defines one fragment.
-        Therefor, the function returns a `dict` that maps each incoming edge to the
-        set of out going edges that are associated to it, i.e. depend on the producer
-        edge or `None` if such a distribution does not exist.
+        A fragment, i.e. one of the pieces into which `self.access_node` is split,
+        is defined by a set of incoming edges together with the outgoing edges that
+        read what those incoming edges produce. In the simplest case a fragment is
+        made up of a single producer, but if a consumer reads data that is generated
+        by several producers, then all of them end up in the same fragment.
+        The function returns the list of fragments or `None` if no such distribution
+        exists.
 
         The function does not perform any checks if the split lead to a valid
         SDFG, for that reason the result should be checked by
         `_check_split_constraints()`.
-
-        Todo:
-            Extend the function such that a fragment is not limited to a single
-            incoming edge, but can also be defined through multiple edges.
         """
         access_node: dace_nodes.AccessNode = self.access_node
 
-        # NOTE: Build the assignments based on the producers. Basing the split on
-        #  the producers has the advantages that it naturally takes "double use"
-        #  into account, i.e. one producer computes something and two different
-        #  reads it. However, it is also quite unnatural, because the consumer
-        #  should define the split (i.e. more than one producer are needed to
-        #  generate the data for a consumer). This is hard to handle, but should
-        #  be implemented at some point.
-        edge_reassignments: dict[
-            dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]
-        ] = {}
+        producer_edges: list[dace_graph.MultiConnectorEdge] = []
         for iedge in state.in_edges(access_node):
             if iedge.data.dst_subset is None:
                 return None  # TODO(phimuell): Lift this.
             if iedge.data.wcr is not None:
                 return None
-            edge_reassignments[iedge] = set()
+            producer_edges.append(iedge)
 
-        # Now match the outgoing edges to their incoming producers.
+        # We use union find over the producers, i.e. `fragment_of_producer[i]` is
+        #  the id of another producer that is in the same fragment as producer `i`,
+        #  or `i` itself if `i` is the representative of its fragment. Every producer
+        #  starts alone and a consumer that straddles several producers merges them.
+        fragment_of_producer = list(range(len(producer_edges)))
+
+        def find_fragment(idx: int) -> int:
+            while fragment_of_producer[idx] != idx:
+                fragment_of_producer[idx] = fragment_of_producer[fragment_of_producer[idx]]
+                idx = fragment_of_producer[idx]
+            return idx
+
+        consumers_of_fragment: dict[int, OrderedSet[dace_graph.MultiConnectorEdge]] = {
+            i: OrderedSet() for i in range(len(producer_edges))
+        }
         for oedge in state.out_edges(access_node):
             if oedge.data.wcr is not None:
                 return None
-            possible_producer = self._find_producer(oedge, edge_reassignments.keys())
-            if possible_producer is None:
+            consumer_subset = oedge.data.get_src_subset(oedge, state)
+            if consumer_subset is None:
+                return None  # TODO(phimuell): Lift this.
+
+            # All producers that might contribute to what this consumer reads have
+            #  to be part of the same fragment. Several producers may already share a
+            #  fragment, so the ids are deduplicated before they are merged.
+            contributing = {
+                find_fragment(i)
+                for i, producer_edge in enumerate(producer_edges)
+                if gtx_dace_split.maybe_intersecting(producer_edge.data.dst_subset, consumer_subset)
+            }
+            if len(contributing) == 0:
                 return None
-            edge_reassignments[possible_producer].add(oedge)
+
+            merged_id = min(contributing)
+            for fragment_id in sorted(contributing):
+                if fragment_id != merged_id:
+                    fragment_of_producer[fragment_id] = merged_id
+                    consumers_of_fragment[merged_id] |= consumers_of_fragment.pop(fragment_id)
+            consumers_of_fragment[merged_id].add(oedge)
+
+        fragment_of = [find_fragment(i) for i in range(len(producer_edges))]
+        fragments: list[_Fragment] = []
+        for fragment_id, consumer_edges in consumers_of_fragment.items():
+            producers = OrderedSet(
+                producer_edge
+                for i, producer_edge in enumerate(producer_edges)
+                if fragment_of[i] == fragment_id
+            )
+            # NOTE: We must use the adjacency only merger here, producers that
+            #  overlap would describe the same memory twice, so we must not merge
+            #  them into one region.
+            subsets = gtx_dace_split.subset_merger(
+                [producer_edge.data.dst_subset for producer_edge in producers]
+            )
+            # The producers of a fragment must describe a single contiguous region,
+            #  otherwise it can not be turned into one data descriptor.
+            if len(subsets) != 1:
+                return None
+            fragments.append(
+                _Fragment(producers=producers, consumers=consumer_edges, subset=subsets[0])
+            )
+
+        # `split_node()` requires that every consumer edge is fully covered by
+        #  exactly one fragment, so a consumer must not straddle a fragment boundary.
+        for fragment in fragments:
+            for consumer_edge in fragment.consumers:
+                if not fragment.subset.covers(
+                    consumer_edge.data.get_src_subset(consumer_edge, state)
+                ):
+                    return None
+        for i, fragment in enumerate(fragments):
+            if any(
+                gtx_dace_split.maybe_intersecting(fragment.subset, other.subset)
+                for other in fragments[i + 1 :]
+            ):
+                return None
 
         unused_producers = [
             producer
-            for producer, assigned_consumers in edge_reassignments.items()
-            if len(assigned_consumers) == 0
+            for fragment in fragments
+            if len(fragment.consumers) == 0
+            for producer in fragment.producers
         ]
         if unused_producers:
             # This situation is generated by MapFusion, if the intermediate
@@ -368,82 +445,51 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 stacklevel=0,
             )
 
-        return edge_reassignments
-
-    def _find_producer(
-        self,
-        consumer_edge: dace_graph.MultiConnectorEdge,
-        producer_edges: Iterable[dace_graph.MultiConnectorEdge],
-    ) -> dace_graph.MultiConnectorEdge | None:
-        """Find the producer edge that generates what the consumer reads.
-
-        The function checks which producer covers what the consumer reads.
-        If there is not producer that does this, this function returns `None`.
-        This function does not perform any additional tests.
-
-        Args:
-            consumer_edge: The edge that reads from `self.access_node`.
-            producer_edges: List of all edges that writes to `self.access_node`.
-        """
-        consumer_subset = consumer_edge.data.src_subset
-
-        # The consumer subset does not exist, so we can not do the decomposition.
-        # TODO(phimuell): Fix this.
-        if consumer_subset is None:
-            return None
-
-        # This check only checks if that the producer really generates the data that
-        #  is consumed later. However, we also have to ensure that nothing is computed
-        #  what is not consumed later. Thus.
-        possible_producers = [
-            producer_edge
-            for producer_edge in producer_edges
-            if producer_edge.data.dst_subset.covers(consumer_subset)
-        ]
-
-        # We only allow the case that one producer covers the consumer. If we found
-        #  multiple candidates then we have an invalid SDFG, because multiple
-        #  producer writes to the same memory location.
-        if len(possible_producers) == 0:
-            return None
-        elif len(possible_producers) != 1:
-            # This might indicate an error (the same memory location is written by
-            #  multiple producer. However, there are some cases where it is not an
-            #  error. For example a Map, with two Tasklets, writes to the node,
-            #  one Tasklet writes `T[__i, 0]` the other `T[__i, 10]`, where `__i`
-            #  is the iteration index. Then Memlet propagation will set the subset
-            #  to something like `T[:, 0:10]`. So it is not an error in that case.
-            warnings.warn(
-                f"Found transient '{self.access_node.data}' that has multiple overlapping"
-                " incoming edges. Might indicate an error.",
-                stacklevel=0,
-            )
-            return None
-
-        return possible_producers[0]
+        return fragments
 
     def _check_split_constraints(
         self,
         state: dace.SDFGState,
         sdfg: dace.SDFG,
-        edge_reassignments: dict[dace_graph.MultiConnectorEdge, set[dace_graph.MultiConnectorEdge]],
+        fragments: list[_Fragment],
     ) -> bool:
         """Checks if the decomposition results in a valid SDFG.
 
         This function is used to validate the decomposition computed by
-        `self._find_edge_reassignment()`.
+        `self._find_fragments()`.
         """
 
-        for producer_edge, consumer_edges in edge_reassignments.items():
-            data_source = producer_edge.src
-
+        for fragment in fragments:
+            consumer_edges = fragment.consumers
             if len(consumer_edges) == 0:
                 continue
-            elif isinstance(data_source, dace_nodes.AccessNode):
-                # TODO(phimuell): Should we also ensure that the domains are tight?
-                if gtx_transformations.utils.is_view(data_source, sdfg):
+
+            for producer_edge in fragment.producers:
+                data_source = producer_edge.src
+                if isinstance(data_source, dace_nodes.AccessNode):
+                    # TODO(phimuell): Should we also ensure that the domains are tight?
+                    if gtx_transformations.utils.is_view(data_source, sdfg):
+                        return False
+                elif not isinstance(data_source, dace_nodes.MapExit):
                     return False
 
+            # For a fragment with a single producer we require that what is computed
+            #  is also read. We can not impose that on a fragment that is fed by
+            #  several producers, no consumer is associated to an individual producer
+            #  of it, so requiring that the fragment is read in full would reject the
+            #  whole node, including the fragments that are fine.
+            # NOTE: What stays unread is computed and stored for nothing, and unlike a
+            #   fragment without any consumer, which `DeadDataflowElimination` removes,
+            #   it can not be recovered later, the fragment is read. It is not a
+            #   regression, without the split the same producer computes the same
+            #   values and they are discarded just as well.
+            if len(fragment.producers) > 1:
+                continue
+
+            (producer_edge,) = fragment.producers
+            data_source = producer_edge.src
+
+            if isinstance(data_source, dace_nodes.AccessNode):
                 # If the source is a global data, then we do not impose any other
                 #  constraints.
                 if not data_source.desc(sdfg).transient:
@@ -453,9 +499,6 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                 #  In the first case there is only one consumer, in that case we
                 #  require that everything is read. In the second case, more than
                 #  one consumer, we do not impose any constraints.
-                #  We do this to ensure the tightness of the temporaries, i.e. what
-                #  is computed is also read, which is core assumption of the
-                #  `CopyChainRemover`.
                 # TODO(phimuell): Lift this limitation.
                 if len(consumer_edges) == 1:
                     if not next(iter(consumer_edges)).data.src_subset.covers(
@@ -463,7 +506,7 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                     ):
                         return False
 
-            elif isinstance(data_source, dace_nodes.MapExit):
+            else:
                 # The source is a Map, in this case we just generate a new transient
                 #  output and then perform some reconnection. However, we require that
                 #  all consumer read exactly what is is written by the map. This
@@ -473,7 +516,4 @@ class SplitAccessNode(dace_transformation.SingleStateTransformation):
                     for consumer_edge in consumer_edges
                 ):
                     return False
-
-            else:
-                return False
         return True

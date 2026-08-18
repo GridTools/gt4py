@@ -453,7 +453,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]],
+    ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
     >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
@@ -462,7 +462,17 @@ def domain(
     'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
     'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
+    >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
+    if isinstance(ranges_or_domain, common.Domain):
+        domain = ranges_or_domain
+        ranges = {d: (r.start, r.stop) for d, r in zip(domain.dims, domain.ranges)}
+    else:
+        assert isinstance(ranges_or_domain, dict)
+        ranges = ranges_or_domain
+
     if isinstance(grid_type, common.GridType):
         grid_type = f"{grid_type!s}_domain"
     expr = call(grid_type)(
@@ -578,6 +588,14 @@ def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
     return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
+def cartesian_offset(
+    domain: common.Dimension, codomain: Optional[common.Dimension] = None
+) -> itir.CartesianOffset:
+    if codomain is None:
+        codomain = domain
+    return itir.CartesianOffset(domain=axis_literal(domain), codomain=axis_literal(codomain))
+
+
 def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
     """
     Promotes the function `cast_` to a field_operator.
@@ -614,9 +632,19 @@ def index(dim: common.Dimension) -> itir.FunCall:
     return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
 
-def map_(op):
-    """Create a `map_` call."""
-    return call(call("map_")(op))
+def map_list(op):
+    """Create a `map_list` call."""
+    return call(call("map_list")(op))
+
+
+def tree_map_tuple(op):
+    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup)."""
+    return call(call("tree_map_tuple")(op))
+
+
+def map_tuple(op):
+    """Create a `map_tuple` call: map_tuple(op)(tup)."""
+    return call(call("map_tuple")(op))
 
 
 def reduce(op, expr):

@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import dataclasses
 
-from gt4py.next.otf import stages, step_types, workflow
+from gt4py.next.otf import definitions, stages, workflow
 
 
 @dataclasses.dataclass(frozen=True)
-class OTFCompileWorkflow(workflow.NamedStepSequence):
+class OTFCompileWorkflow(
+    workflow.NamedStepSequence[definitions.CompilableProgramDef, stages.CompilationArtifact]
+):
     """The typical compiled backend steps composed into a workflow."""
 
-    translation: step_types.TranslationStep
-    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource]
-    compilation: workflow.Workflow[stages.CompilableSource, stages.CompiledProgram]
-    decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]
+    translation: definitions.TranslationStep
+    bindings: workflow.Workflow[stages.ProgramSource, stages.ExtensionSource]
+    compilation: workflow.Workflow[stages.ExtensionSource, stages.CompilationArtifact]

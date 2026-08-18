@@ -6,16 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Final, Sequence
+from typing import Sequence
 
-from gt4py.next.otf import cpp_utils, languages
+from gt4py.next.otf import cpp_utils
 from gt4py.next.otf.binding import interface
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
-
-
-CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
-    formatter_key="cpp", formatter_style="LLVM", file_extension="cpp", header_extension="cpp.inc"
-)
 
 
 def render_function_declaration(function: interface.Function, body: str) -> str:

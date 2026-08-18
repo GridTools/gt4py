@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import dataclasses
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -13,6 +15,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
@@ -21,8 +24,10 @@ from gt4py.next.program_processors.runners.dace import transformations as gtx_tr
 class EdgeConnectionSpec:
     """Describes an edge in an abstract way, that is kind of independent of the direction.
 
-    It is always described in terms of a node, which is eader the `src` or the `dst`
-    of the edge, in terms of the subset the edge read or writes and the edge itself.
+    It is always described in terms of a node, which is either the source or the
+    destination of the edge. The subset it stores is always described for that node.
+    To get the "other side of the edge" use the `other_subset` and `other_node`
+    properties, respectively.
 
     To construct `EdgeConnectionSpec` you can use the `describe_incoming_edges()`
     and `describe_outgoing_edges()` function.
@@ -267,6 +272,18 @@ def split_node(
     assert desc_to_split.transient
     assert not gtx_transformations.utils.is_view(desc_to_split)
     assert isinstance(desc_to_split, dace_data.Array)
+
+    # DaCe reruns Memlet propagation after every applied transformation. It rebuilds
+    #  the Memlets on the edges of a NestedSDFG from the ones inside it and carries over
+    #  which side of the connection the data is on, although inside it refers to a
+    #  different data container, which can leave a read without a `src_subset`. The
+    #  rerouting below can not repair that, it runs while the old and the new edge are
+    #  both present, so it is done here, while the graph still tells where the data is.
+    # TODO(phimuell): Replace this with a cheaper repair, that fixes the Memlet
+    #   trees directly instead of every single Memlet. The cost is not the Memlet.
+    for edge in state.all_edges(node_to_split):
+        for memlet_tree in state.memlet_tree(edge).traverse_children(include_self=True):
+            memlet_tree.edge.data.try_initialize(sdfg, state, memlet_tree.edge)
 
     input_descriptions = describe_incoming_edges(state, node_to_split)
     output_descriptions = describe_outgoing_edges(state, node_to_split)
@@ -632,7 +649,7 @@ def _subset_merger_impl(
 def _try_to_merge_subsets(
     subset1: dace_sbs.Subset,
     subset2: dace_sbs.Subset,
-) -> Union[None, dace_sbs.Subset]:
+) -> Union[dace_sbs.Subset, None]:
     """Tries to merge the subsets together, it it is impossible return `None`.
 
     Two subset can only be merged if they have the same bounds in all but one
@@ -676,7 +693,7 @@ def _perform_node_split(
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
     new_access_nodes: dict[dace_sbs.Subset, dace_nodes.AccessNode],
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]],
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]],
     allow_to_bypass_nodes: bool,
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> None:
@@ -856,7 +873,7 @@ def _perform_node_split_with_bypass_impl(
     state: dace.SDFGState,
     sdfg: dace.SDFG,
     node_to_split: dace_nodes.AccessNode,
-    edges_to_relocate: set[EdgeConnectionSpec],
+    edges_to_relocate: OrderedSet[EdgeConnectionSpec],
     already_reconfigured_nodes: set[tuple[dace_nodes.Node, str]],
 ) -> list[dace_graph.MultiConnectorEdge]:
     """Performs the splitting but the edge might go directly to the consumer."""
@@ -1047,14 +1064,14 @@ def _generate_data_descriptors_for_split(
 def _compute_assignement_for_split(
     edge_descriptions: Sequence[EdgeConnectionSpec],
     split_description: Sequence[dace_sbs.Subset],
-) -> dict[dace_sbs.Subset, set[EdgeConnectionSpec]]:
+) -> dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]]:
     """For every subset, that defines a split find the set of edges that belongs into it.
 
     Note that it might happens that some splits have zero assigned edges.
     """
     assert all(split is not None for split in split_description)
-    assignment: dict[dace_sbs.Subset, set[EdgeConnectionSpec]] = {
-        split: set() for split in split_description
+    assignment: dict[dace_sbs.Subset, OrderedSet[EdgeConnectionSpec]] = {
+        split: OrderedSet() for split in split_description
     }
 
     for edge_description in edge_descriptions:

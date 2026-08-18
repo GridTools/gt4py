@@ -12,10 +12,11 @@ import functools
 import inspect
 import itertools
 import types
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
     ClassVar,
+    Final,
     Optional,
     ParamSpec,
     Sequence,
@@ -26,6 +27,24 @@ from typing import (
 )
 
 from gt4py.eve import utils as eve_utils
+
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+GT4PY_CLASS_METADATA_NS: Final[str] = "GT4PY_META"
+
+
+def gt4py_metadata(**kwargs: Any) -> dict[str, dict[str, Any]]:
+    """
+    Helper function to store dataclass/datamodel field metadata within a GT4Py namespace.
+
+    Individual fields can opt out of fingerprinting with
+    `foo = field(..., metadata=gt4py_metadata(fingerprint=False))`.
+    """
+    return {GT4PY_CLASS_METADATA_NS: kwargs}
 
 
 class RecursionGuard:
@@ -62,11 +81,6 @@ class RecursionGuard:
 
     def __exit__(self, *exc: Any) -> None:
         self.guarded_objects.remove(id(self.obj))
-
-
-_T = TypeVar("_T")
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
@@ -138,9 +152,9 @@ def tree_map(
 
         >>> tree_map(
         ...     collection_type=(list, tuple),
-        ...     result_collection_constructor=lambda value, elts: tuple(elts)
-        ...     if isinstance(value, list)
-        ...     else list(elts),
+        ...     result_collection_constructor=lambda value, elts: (
+        ...         tuple(elts) if isinstance(value, list) else list(elts)
+        ...     ),
         ... )(lambda x: x + 1)([(1, 2), 3])
         ([2, 3], 4)
 
@@ -185,19 +199,18 @@ def tree_map(
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
+                first_arg: Any = args[0]
                 non_path_args: Sequence[Any]
                 if with_path_arg:
                     *non_path_args, path = args
-                    args = (*non_path_args, tuple((*path, i) for i in range(len(args[0]))))
+                    args = (*non_path_args, tuple((*path, i) for i in range(len(first_arg))))
                 else:
                     non_path_args = args
 
-                assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg)
-                    for arg in non_path_args
-                )
+                assert all(isinstance(arg, collection_type) for arg in non_path_args)
+                assert all(len(first_arg) == len(arg) for arg in non_path_args)
                 assert result_collection_constructor is not None
-                ctor = functools.partial(result_collection_constructor, args[0])
+                ctor = functools.partial(result_collection_constructor, first_arg)
 
                 mapped = [impl(*arg) for arg in zip(*args)]
                 if unpack:

@@ -8,25 +8,28 @@
 
 """Test the translation stage of the dace backend workflow."""
 
-from unittest import mock
 import pytest
 
 import re
+import uuid
 from typing import Callable
+from unittest import mock
 
 dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import arguments as otf_arguments, toolchain as otf_toolchain
+from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
 from gt4py.next.program_processors.runners.dace.workflow import (
     translation as dace_wf_translation,
     common as dace_wf_common,
 )
 from gt4py.next.type_system import type_specifications as ts
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     V2E,
     Edge,
     IDim,
@@ -48,7 +51,8 @@ VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
         pytest.param(core_defs.DeviceType.CPU),
         pytest.param(core_defs.DeviceType.CUDA, marks=[pytest.mark.requires_gpu]),
         pytest.param(core_defs.DeviceType.ROCM, marks=[pytest.mark.requires_gpu]),
-    ]
+    ],
+    ids=["CPU", "CUDA", "ROCM"],
 )
 def device_type(request) -> str:
     return request.param
@@ -69,6 +73,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
+            unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
@@ -97,18 +102,21 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
         ],
     )
 
-    with mock.patch("gt4py.next.config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", has_unit_stride):
-        sdfg = _translate_gtir_to_sdfg(
-            ir=ir,
-            offset_provider=SKIP_VALUE_MESH.offset_provider,
-            device_type=core_defs.DeviceType.CPU,
-            auto_optimize=False,
-            async_sdfg_call=False,
-        )
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider=SKIP_VALUE_MESH.offset_provider,
+        device_type=core_defs.DeviceType.CPU,
+        auto_optimize=False,
+        async_sdfg_call=False,
+    )
 
-        constant_symbols = dace_wf_translation.find_constant_symbols(
-            ir, sdfg, SKIP_VALUE_MESH.offset_provider_type, disable_field_origin
-        )
+    constant_symbols = dace_wf_translation.find_constant_symbols(
+        ir=ir,
+        sdfg=sdfg,
+        offset_provider_type=SKIP_VALUE_MESH.offset_provider_type,
+        disable_field_origin_on_program_arguments=disable_field_origin,
+        unstructured_horizontal_has_unit_stride=has_unit_stride,
+    )
 
     expected = {}
     if has_unit_stride:
@@ -416,3 +424,104 @@ def test_generate_sdfg_async_call_multi_state(
     else:
         # There is no dependency between the states, so no sync.
         assert not _are_streams_synchronized(sdfg)
+
+
+def _make_simple_field_operator_compilable_program() -> otf_toolchain.ConcreteArtifact:
+    """Return a compilable program wrapping a minimal GTIR field operator."""
+    ir = itir.Program(
+        id="simple_field_operator",
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+    return otf_toolchain.ConcreteArtifact(
+        data=ir,
+        args=otf_arguments.CompileTimeArgs(
+            args=tuple(param.type for param in ir.params),
+            kwargs={},
+            offset_provider={},
+            column_axis=None,
+            argument_descriptor_contexts={},
+        ),
+    )
+
+
+def _increment_sdfg_guids(sdfg: dace.SDFG) -> None:
+    """Increment the `guid` value of every SDFG element by one."""
+    if hasattr(sdfg, "guid"):
+        guid = uuid.UUID(str(sdfg.guid))
+        sdfg.guid = str(uuid.UUID(int=guid.int + 1))
+    for state in sdfg.states():
+        if hasattr(state, "guid"):
+            guid = uuid.UUID(str(state.guid))
+            state.guid = str(uuid.UUID(int=guid.int + 1))
+        for node in state.nodes():
+            if hasattr(node, "guid"):
+                guid = uuid.UUID(str(node.guid))
+                node.guid = str(uuid.UUID(int=guid.int + 1))
+
+
+def test_translation_source_code_invariant_under_guid_change():
+    """SDFG `guid` changes must not alter the translation cache key.
+
+    `DaCeTranslator.__call__` serializes the SDFG via `serialize_sdfg_as_json`,
+    which drops `guid` values, before storing the SDFG JSON in
+    mocks `build_sdfg_from_gtir` so that the second lowering returns the same
+    SDFG with all `guid` values incremented by one, and verifies that the
+    resulting `source_code` strings are identical.
+    """
+    compilable_program = _make_simple_field_operator_compilable_program()
+
+    translator = dace_wf_translation.DaCeTranslator(
+        device_type=core_defs.DeviceType.CPU,
+        auto_optimize=False,
+        auto_optimize_args=None,
+        async_sdfg_call=False,
+        unstructured_horizontal_has_unit_stride=False,
+        use_metrics=False,
+    )
+
+    # Keep a reference to the real implementation so the mock can return the base
+    # SDFG from the real implementation on the first call, then a guid-shifted clone.
+    real_build_sdfg = dace_wf_translation.gtx_dace_lowering.build_sdfg_from_gtir
+    base_sdfg: dace.SDFG | None = None
+    call_count = 0
+
+    def _build_sdfg_from_gtir_with_guid_change(*args: object, **kwargs: object) -> dace.SDFG:
+        nonlocal base_sdfg, call_count
+        call_count += 1
+        if call_count == 1:
+            base_sdfg = real_build_sdfg(*args, **kwargs)
+            return base_sdfg
+        assert base_sdfg is not None
+        modified_sdfg = dace.SDFG.from_json(base_sdfg.to_json())
+        _increment_sdfg_guids(modified_sdfg)
+        assert modified_sdfg.to_json() != base_sdfg.to_json()
+        return modified_sdfg
+
+    with mock.patch.object(
+        dace_wf_translation.gtx_dace_lowering,
+        "build_sdfg_from_gtir",
+        side_effect=_build_sdfg_from_gtir_with_guid_change,
+    ):
+        first_source = translator(compilable_program)
+        second_source = translator(compilable_program)
+
+    # different object identities, same content
+    assert first_source.source_code is not second_source.source_code
+    assert first_source.source_code == second_source.source_code
+
+    assert first_source is not second_source
+    first_source_fingerprint = fingerprinting.strict_fingerprinter(first_source)
+    second_source_fingerprint = fingerprinting.strict_fingerprinter(second_source)
+    assert first_source_fingerprint == second_source_fingerprint

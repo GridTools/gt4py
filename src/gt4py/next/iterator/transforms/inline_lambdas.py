@@ -39,7 +39,7 @@ def inline_lambda(  # see todo above
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
             if ref_counts[param.id] > 1 and not isinstance(
-                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
+                node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral, ir.CartesianOffset)
             ):
                 eligible_params[i] = False
 
@@ -79,7 +79,7 @@ def inline_lambda(  # see todo above
         # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
         name_map: dict[str, str] = {}
 
-        for sym in clashes:
+        for sym in sorted(clashes):
             name_map[sym] = ir_misc.unique_symbol(sym, refs | syms | {*name_map.values()})
 
         # Let's rename the symbols (including params) of the function.

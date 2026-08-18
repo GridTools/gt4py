@@ -137,6 +137,7 @@ storing a reference to the piece of source code which originated the node.
 from __future__ import annotations
 
 import enum
+import numbers
 import operator
 import sys
 from abc import ABC
@@ -144,7 +145,7 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
-from gt4py.cartesian.definitions import CartesianSpace
+from gt4py.cartesian.gtc.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
     Dict as DictOf,
@@ -309,7 +310,7 @@ def frontend_type_to_native_type(
     }
 
 
-DataType.NATIVE_TYPE_TO_NUMPY = {
+DataType.NATIVE_TYPE_TO_NUMPY = {  # type: ignore[attr-defined]
     DataType.DEFAULT: "float_",
     DataType.BOOL: "bool",
     DataType.INT8: "int8",
@@ -320,7 +321,7 @@ DataType.NATIVE_TYPE_TO_NUMPY = {
     DataType.FLOAT64: "float64",
 }
 
-DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}
+DataType.NUMPY_TO_NATIVE_TYPE = {value: key for key, value in DataType.NATIVE_TYPE_TO_NUMPY.items()}  # type: ignore[attr-defined]
 
 
 # ---- IR: expressions ----
@@ -356,7 +357,7 @@ class Ref(Expr):
 @attribclass
 class VarRef(Ref):
     name = attribute(of=str)
-    index = attribute(of=int, optional=True)
+    index = attribute(of=numbers.Integral, optional=True)
     loc = attribute(of=Location, optional=True)
 
 
@@ -378,7 +379,7 @@ class IteratorAccess(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
+    offset = attribute(of=DictOf[str, UnionOf[numbers.Integral, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -412,7 +413,7 @@ class AxisPosition(Expr):
 class AxisIndex(Expr):
     axis = attribute(of=str)
     endpt = attribute(of=LevelMarker)
-    offset = attribute(of=int)
+    offset = attribute(of=numbers.Integral)
     data_type = attribute(of=DataType, default=DataType.INT32)
 
 
@@ -466,7 +467,7 @@ class NativeFunction(enum.Enum):
         return type(self).IR_OP_TO_NUM_ARGS[self]
 
 
-NativeFunction.IR_OP_TO_NUM_ARGS = {
+NativeFunction.IR_OP_TO_NUM_ARGS = {  # type: ignore[attr-defined]
     NativeFunction.ABS: 1,
     NativeFunction.MIN: 2,
     NativeFunction.MAX: 2,
@@ -536,13 +537,13 @@ class UnaryOperator(enum.Enum):
         return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
 
 
-UnaryOperator.IR_OP_TO_PYTHON_OP = {
+UnaryOperator.IR_OP_TO_PYTHON_OP = {  # type: ignore[attr-defined]
     UnaryOperator.POS: operator.pos,
     UnaryOperator.NEG: operator.neg,
     UnaryOperator.NOT: operator.not_,
 }
 
-UnaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
+UnaryOperator.IR_OP_TO_PYTHON_SYMBOL = {  # type: ignore[attr-defined]
     UnaryOperator.POS: "+",
     UnaryOperator.NEG: "-",
     UnaryOperator.NOT: "not",
@@ -586,7 +587,7 @@ class BinaryOperator(enum.Enum):
         return type(self).IR_OP_TO_PYTHON_SYMBOL[self]
 
 
-BinaryOperator.IR_OP_TO_PYTHON_OP = {
+BinaryOperator.IR_OP_TO_PYTHON_OP = {  # type: ignore[attr-defined]
     BinaryOperator.ADD: operator.add,
     BinaryOperator.SUB: operator.sub,
     BinaryOperator.MUL: operator.mul,
@@ -603,7 +604,7 @@ BinaryOperator.IR_OP_TO_PYTHON_OP = {
     BinaryOperator.NE: operator.ne,
 }
 
-BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {
+BinaryOperator.IR_OP_TO_PYTHON_SYMBOL = {  # type: ignore[attr-defined]
     BinaryOperator.ADD: "+",
     BinaryOperator.SUB: "-",
     BinaryOperator.MUL: "*",
@@ -652,7 +653,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
-    data_dims = attribute(of=ListOf[int], factory=list)
+    data_dims = attribute(of=ListOf[numbers.Integral], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 
@@ -661,7 +662,7 @@ class FieldDecl(Decl):
 class VarDecl(Decl):
     name = attribute(of=str)
     data_type = attribute(of=DataType)
-    length = attribute(of=int)
+    length = attribute(of=numbers.Integral)
     is_api = attribute(of=bool)
     init = attribute(of=Literal, optional=True)
     loc = attribute(of=Location, optional=True)
@@ -722,12 +723,6 @@ class IterationOrder(enum.Enum):
     def __str__(self) -> str:
         return self.name
 
-    def __lshift__(self, steps: int):
-        return self.cycle(steps=-steps)
-
-    def __rshift__(self, steps: int):
-        return self.cycle(steps=steps)
-
 
 class BaseAxisBound(Node, ABC):
     level = attribute(of=LevelMarker)
@@ -737,7 +732,7 @@ class BaseAxisBound(Node, ABC):
 @attribclass
 class AxisBound(BaseAxisBound):
     level = attribute(of=LevelMarker)
-    offset = attribute(of=int, default=0)
+    offset = attribute(of=numbers.Integral, default=0)
     loc = attribute(of=Location, optional=True)
 
 

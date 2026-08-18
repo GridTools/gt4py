@@ -17,6 +17,8 @@ Writing a new ADR is simple:
 ### General architecture #general
 
 - [0005 - Extending Iterator IR](0005-Extending_Iterator_IR.md)
+- [0023 - Fingerprinting](0023-Fingerprinting.md)
+- [0026 - Staggered Dimensions](0024-Staggered_Dimensions.md)
 
 ### Frontend and Parsing #frontend
 
@@ -32,7 +34,7 @@ Writing a new ADR is simple:
 
 ### Embedded Execution
 
-_None_
+- [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
 
 ### Transformations
 
@@ -46,6 +48,7 @@ _None_
 - [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
 - [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
+- [0027 - External Workspace Memory for DaCe Transients](0027-External_Workspace_Memory.md)
 
 ### Python Integration
 

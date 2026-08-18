@@ -23,13 +23,13 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import fundef, offset
+from gt4py.next.iterator.runtime import fundef
 
 from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = offset("I")
+I = gtx.CartesianConnectivity(IDim)
 
 
 @fundef
@@ -64,7 +64,7 @@ def test_simple_indirection(program_processor):
         inp,
         cond,
         out=out,
-        offset_provider={"I": IDim},
+        offset_provider={},
     )
 
     if validate:
@@ -95,7 +95,7 @@ def test_direct_offset_for_indirection(program_processor):
         inp,
         cond,
         out=out,
-        offset_provider={"I": IDim},
+        offset_provider={},
     )
 
     if validate:
