@@ -25,6 +25,9 @@ from gt4py.next.program_processors.runners.dace import (
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.lowering_stree import (
+    lower_program_to_stree as gtx_dace_lower_stree,
+)
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
 
@@ -358,6 +361,7 @@ class DaCeTranslator(
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+    use_stree_lowering: bool = True
 
     def generate_sdfg(
         self,
@@ -382,7 +386,19 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
+        if self.use_stree_lowering:
+            # Lower to Schedule Tree, then convert to SDFG.
+            # The skip list matches the cartesian backend's set (see ADR
+            # dace-schedule-tree.md): ScalarToSymbolPromotion (validation
+            # issues), ControlFlowRaising (we already emit CFGs/LoopRegions),
+            # LiftTrivialIf (catastrophic perf).
+            stree = gtx_dace_lower_stree(ir, offset_provider_type, column_axis)
+            sdfg = stree.as_sdfg(
+                validate=True,
+                skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
+            )
+        else:
+            sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,
