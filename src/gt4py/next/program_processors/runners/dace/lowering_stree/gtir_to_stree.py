@@ -52,7 +52,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import prune_casts as ir_prune_casts
+from gt4py.next.iterator.transforms import inline_literal, prune_casts as ir_prune_casts
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_codegen import (
@@ -772,18 +772,6 @@ def translate_if(
     return out_data
 
 
-def translate_literal(
-    node: gtir.Node,
-    ctx: SubgraphContext,
-    sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
-    """Generates the schedule-tree nodes for a ``ir.Literal`` node."""
-    assert isinstance(node, gtir.Literal)
-    # For scalars, the literal value is directly available as a symbol.
-    # We just return a FieldopData with the literal value as the name.
-    return FieldopData(str(node.value), node.type, origin=())
-
-
 def translate_symbol_ref(
     node: gtir.Node,
     ctx: SubgraphContext,
@@ -1357,7 +1345,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         ctx: SubgraphContext,
     ) -> FieldopResult:
-        return translate_literal(node, ctx, self)
+        raise ValueError(f"Unexpected 'Literal' node ({node}).")
 
     def visit_SymRef(
         self,
@@ -1395,6 +1383,7 @@ def lower_program_to_stree(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe stree backend.")
 
+    ir = inline_literal.InlineLiteral().visit(ir)
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
     ir = replace_invalid_symbols(ir)
