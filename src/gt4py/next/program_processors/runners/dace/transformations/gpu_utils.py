@@ -15,6 +15,7 @@ import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
 import dace
+import sympy
 from dace import (
     dtypes as dace_dtypes,
     properties as dace_properties,
@@ -761,11 +762,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             # Note that the comparison can be provably true for a symbolic map size, e.g.
             #  `5 - Max(0, N)` for a statically bounded domain with a runtime scalar `N`,
             #  but a block size must be a compile-time integer, so only cut down to
-            #  concrete sizes.
-            if not dace.symbolic.issymbolic(map_dim_size) and (
-                (map_dim_size < block_size[i]) == True  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
-            ):
-                block_size[i] = map_dim_size
+            #  concrete sizes. The type check is much cheaper than
+            #  `dace.symbolic.issymbolic()`, which traverses the expression tree.
+            if isinstance(map_dim_size, (int, sympy.Integer)) and map_dim_size < block_size[i]:
+                block_size[i] = int(map_dim_size)
 
         gpu_map.gpu_block_size = tuple(block_size)
         # Only set `gpu_maxnreg` if it has not been set already (default is 0),
