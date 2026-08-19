@@ -61,9 +61,9 @@ def _is_gpu_available() -> bool:
     return True
 
 
-# Unlike the `uses_*` feature markers, the `requires_*` markers describe the
-# *environment* a test needs, so they can be enforced here instead of relying on
-# the caller passing the matching `-m` filter (which only `noxfile.py` does).
+# `requires_*` markers describe the *environment* a test needs, so they can
+# be enforced here instead of relying on the caller passing the matching
+# `-m` filter (which only `noxfile.py` does).
 _REQUIREMENT_PROBES: Final[dict[str, tuple[Callable[[], bool], str]]] = {
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
     "requires_dace": (lambda: _is_importable("dace"), "the `dace` package"),
