@@ -52,7 +52,7 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import inline_literal, prune_casts as ir_prune_casts
+from gt4py.next.iterator.transforms import fuse_as_fieldop, prune_casts as ir_prune_casts
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_codegen import (
@@ -72,6 +72,7 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_uti
     get_map_variable,
     get_source,
     get_symbolic,
+    make_symbol_tree,
     make_tasklet_connector_for,
     replace_invalid_symbols,
 )
@@ -138,7 +139,7 @@ class DataflowBuilder(Protocol):
     ) -> tuple[str, dace.data.Array]:
         """Add a temporary array to the root's containers."""
         temp_name = self.unique_temp_name()
-        array = dace.data.Array(dtype, shape)
+        array = dace.data.Array(dtype, shape, transient=True)
         root.containers[temp_name] = array
         # Ensure free symbols in shape are on root.symbols
         _collect_free_symbols(shape, root)
@@ -161,7 +162,7 @@ class DataflowBuilder(Protocol):
     ) -> tuple[str, dace.data.Scalar]:
         """Add a temporary scalar to the root's containers."""
         temp_name = self.unique_temp_name()
-        scalar = dace.data.Scalar(dtype)
+        scalar = dace.data.Scalar(dtype, transient=True)
         root.containers[temp_name] = scalar
         return temp_name, scalar
 
@@ -356,7 +357,7 @@ def translate_as_fieldop(
         map_indices[r.dim] = get_map_variable(r.dim)
 
     # Generate the tasklet code using StreePythonCodegen.
-    expr_code, pre_statements = generate_tasklet_code(
+    expr_code, pre_statements, used_connectivities = generate_tasklet_code(
         stencil_expr.expr,
         field_args=field_args,
         map_indices=map_indices,
@@ -369,34 +370,46 @@ def translate_as_fieldop(
     # Build the full tasklet code: pre-statements + final assignment.
     tasklet_code = "\n".join(pre_statements) + f"\n__out = {expr_code}" if pre_statements else f"__out = {expr_code}"
 
-    # Create the TaskletNode.
-    # Input connectors: one per field argument (full arrays).
-    # Output connector: __out (writes to the result array).
-    input_connectors = set()
-    in_memlets: dict[str, dace.Memlet] = {}
-    for param_name, field_data in field_args.items():
-        conn = f"__field_{param_name}"
-        input_connectors.add(conn)
-        in_memlets[make_tasklet_connector_for(conn)] = _make_full_array_memlet(
-            field_data.name, ctx.root
-        )
-
     # Allocate the result array.
-    _field_dims, field_origin, field_shape = get_field_layout(field_domain)
-    result_name, _result_desc = sdfg_builder.add_temp_array(ctx.root, field_shape, gtx_dace_args.as_dace_type(node.type.dtype) if isinstance(node.type.dtype, ts.ScalarType) else gtx_dace_args.as_dace_type(node.type.dtype.element_type))
+    field_dims, field_origin, field_shape = get_field_layout(field_domain)
+    result_name, _ = sdfg_builder.add_temp_array(ctx.root, field_shape, gtx_dace_args.as_dace_type(node.type.dtype) if isinstance(node.type.dtype, ts.ScalarType) else gtx_dace_args.as_dace_type(node.type.dtype.element_type))
 
-    # Output memlet: single element at the map indices.
-    output_subset = _make_access_index_for_field(field_domain, FieldopData(result_name, node.type, tuple(field_origin)))
-    out_memlet = dace.Memlet(data=result_name, subset=output_subset)
-    out_memlets = {make_tasklet_connector_for("__out"): out_memlet}
+    # Connectivity tables referenced by ``neighbors`` in the stencil body must
+    # be passed to the tasklet as inputs (full-array memlets); otherwise the
+    # connectivity access inside the tasklet code would be a dangling
+    # reference.  The connector names are the connectivity identifiers, which
+    # ``add_tasklet`` prefixes and replaces in the code string.  In addition,
+    # the connectivity arrays (allocated transient by ``_add_sdfg_params``) are
+    # marked non-transient here so that (a) the caller provides them as SDFG
+    # arguments and (b) the unused-connectivity cleanup in ``visit_Program``
+    # — which only inspects top-level children and would miss tasklets nested
+    # in ``MapScope`` — does not drop them.
+    connectivity_inputs = {
+        aname: ctx.root.containers[aname] for aname in used_connectivities
+    }
+    for aname in used_connectivities:
+        ctx.root.containers[aname].transient = False
 
     # Create the Tasklet and TaskletNode.
     tasklet, _connector_mapping = sdfg_builder.add_tasklet(
         name="fieldop",
-        inputs=input_connectors,
+        inputs={inp: None for inp in field_args.keys()} | connectivity_inputs,
         outputs={"__out"},
         code=tasklet_code,
     )
+
+    # Setup input memlets.
+    in_memlets: dict[str, dace.Memlet] = {
+        _connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
+        for param_name, field_data in field_args.items()
+    }
+    for aname in used_connectivities:
+        in_memlets[_connector_mapping[aname]] = _make_full_array_memlet(aname, ctx.root)
+
+    # Output memlet: single element at the map indices.
+    output_subset = ",".join(f"{map_indices[dim]} - {origin}" for dim, origin in zip(field_dims, field_origin, strict=True))
+    out_memlet = dace.Memlet(data=result_name, subset=output_subset)
+    out_memlets = {_connector_mapping["__out"]: out_memlet}
 
     tasklet_node = tn.TaskletNode(
         node=tasklet,
@@ -773,12 +786,11 @@ def translate_if(
 
 
 def translate_symbol_ref(
-    node: gtir.Node,
+    node: gtir.SymRef,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
 ) -> FieldopResult:
     """Generates the schedule-tree nodes for a ``ir.SymRef`` node."""
-    assert isinstance(node, gtir.SymRef)
 
     # Check if the symbol is unused (domain is NEVER).
     from gt4py.next.iterator.transforms import infer_domain
@@ -786,33 +798,32 @@ def translate_symbol_ref(
     if node_domain == infer_domain.DomainAccessDescriptor.NEVER:
         return None
 
-    symbol_name = str(node.id)
-    if symbol_name in ctx.data_nodes:
-        return ctx.data_nodes[symbol_name]
+    def _translate_symbol_ref_inner(node: gtir.SymRef) -> FieldopData:
+        symbol_name = str(node.id)
+        if symbol_name in ctx.data_nodes:
+            return ctx.data_nodes[symbol_name]
+        elif symbol_name in ctx.root.containers:
+            return sdfg_builder.make_field(symbol_name, node.type)
+        elif symbol_name in ctx.root.symbols:
+            return translate_scalar_expr(node, ctx, sdfg_builder)
 
-    # Look up in root.containers and create a FieldopData.
-    if symbol_name in ctx.root.containers:
-        ctx.root.containers[symbol_name]
-        # Determine the GT4Py type from the scope_symbols.
-        gt_symbol_type = ctx.get_symbol_type(symbol_name)
-        return sdfg_builder.make_field(symbol_name, gt_symbol_type)
+        raise ValueError(f"Symbol '{symbol_name}' not found in scope.")
 
-    # If the symbol is a scalar symbol on root.symbols.
-    if symbol_name in ctx.root.symbols:
-        gt_symbol_type = ctx.get_symbol_type(symbol_name)
-        return FieldopData(symbol_name, gt_symbol_type, origin=())
 
-    raise ValueError(f"Symbol '{symbol_name}' not found in scope.")
-
+    if isinstance(node.type, ts.TupleType):
+        sym_tree = make_symbol_tree(str(node.id), node.type)
+        return gtx_utils.tree_map(lambda x: _translate_symbol_ref_inner(im.ref(x.id, x.type)))(sym_tree)
+    else:
+        return _translate_symbol_ref_inner(node)
 
 def translate_scalar_expr(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> FieldopData:
     """Generates a tasklet for a scalar-valued expression."""
-    assert isinstance(node, gtir.FunCall)
     assert isinstance(node.type, ts.ScalarType)
+    assert isinstance(node, (gtir.FunCall, gtir.Literal, gtir.SymRef))
 
     # Generate the Python code for the scalar expression.
     scalar_code = get_source(node)
@@ -1190,7 +1201,6 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         # Start: children are added directly to root (no GBlock —
         # from_schedule_tree does not support GBlock yet).
         # Pre-allocate storage for all program parameters.
-        scope_symbols = {str(p.id): p.type for p in node.params if isinstance(p.type, ts.DataType)}
         sdfg_arg_names = self._add_sdfg_params(
             root, node.params, symbolic_params=None, use_transient_storage=False
         )
@@ -1198,12 +1208,11 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
 
         # Visit one statement at a time.
         data_nodes: dict[str, FieldopData | None] = {}
-        for sym_name, sym_type in scope_symbols.items():
-            if isinstance(sym_type, ts.ScalarType) and sym_name in root.symbols:
-                data_nodes[sym_name] = FieldopData(sym_name, sym_type, origin=())
-            elif sym_name in root.containers:
+        for p in node.params:
+            sym_type = p.type
+            assert isinstance(sym_type, ts.DataType)
+            if (sym_name := str(p.id)) in root.containers:
                 data_nodes[sym_name] = self.make_field(sym_name, sym_type)
-            pass  # else: symbol not in scope, skip
 
         for i, stmt in enumerate(node.body):
             # Insert a StateBoundaryNode between statements to ensure
@@ -1244,13 +1253,18 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         source_tree = self._visit_expression(stmt.expr, ctx)
 
         # Visit the target expression.
-        target_tree = self._visit_expression(
-            stmt.target,
-            ctx=SubgraphContext(
-                root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
-            ),
-            use_temp=False,
-        )
+        if isinstance(stmt.target.type, ts.TupleType):
+            target_tree = gtx_utils.tree_map(
+                lambda x: self.make_field(str(x.id), x.type)
+            )(make_symbol_tree(str(stmt.target.id), stmt.target.type))
+        else:
+            target_tree = self._visit_expression(
+                stmt.target,
+                ctx=SubgraphContext(
+                    root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
+                ),
+                use_temp=False,
+            )
 
         # Write the result to the target using CopyNode(s).
         domain = extract_target_domain(stmt.domain)
@@ -1319,8 +1333,10 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         if cpm.is_applied_as_fieldop(node):
             return translate_as_fieldop(node, ctx, self)
 
-        # Name-matched builtins.
-        if isinstance(node.fun, gtir.SymRef):
+        if isinstance(node.type, ts.ScalarType):
+            return translate_scalar_expr(node, ctx, self)
+        elif isinstance(node.fun, gtir.SymRef):
+            # Name-matched builtins.
             name = str(node.fun.id)
             if name == "if_":
                 return translate_if(node, ctx, self)
@@ -1333,11 +1349,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
             if name == "index":
                 # TODO: implement index for stree lowering
                 raise NotImplementedError("'index' builtin not yet implemented in stree lowering.")
-
-        # Fallback: scalar-valued expressions (e.g. math builtins like plus, cast_).
-        if isinstance(node.type, ts.ScalarType):
-            return translate_scalar_expr(node, ctx, self)
-
+    
         raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Literal(
@@ -1345,7 +1357,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Literal,
         ctx: SubgraphContext,
     ) -> FieldopResult:
-        raise ValueError(f"Unexpected 'Literal' node ({node}).")
+        return translate_scalar_expr(node, ctx, self)
 
     def visit_SymRef(
         self,
@@ -1383,7 +1395,9 @@ def lower_program_to_stree(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe stree backend.")
 
-    ir = inline_literal.InlineLiteral().visit(ir)
+    ir = fuse_as_fieldop.FuseAsFieldOp.apply(
+        ir, uids=gtx_utils.IDGeneratorPool(), offset_provider_type=offset_provider_type
+    )
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
     ir = replace_invalid_symbols(ir)

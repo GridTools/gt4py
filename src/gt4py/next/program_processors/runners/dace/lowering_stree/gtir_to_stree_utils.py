@@ -80,6 +80,7 @@ def debug_info(
 
 def get_map_variable(dim: gtx_common.Dimension) -> str:
     """Format map variable name based on the naming convention for SDFG transformations."""
+    dim = gtx_common.as_non_staggered(dim)
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 
@@ -342,7 +343,7 @@ def _builtin_get_domain_range(field: str, axis: str) -> str:
 
 
 def _builtin_if(cond: str, true_val: str, false_val: str) -> str:
-    return f"{true_val} if {cond} else {false_val}"
+    return f"({true_val} if {cond} else {false_val})"
 
 
 def _builtin_tuple_get(index: str, tuple_name: str) -> str:
