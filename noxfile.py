@@ -164,6 +164,10 @@ def test_cartesian(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # The marker selection below is paired with the extras installed above, so an
+        # unmet `requires_*` marker means a broken environment. Fail loudly instead of
+        # letting the auto-skip in 'tests/conftest.py' turn the session into all-skips.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -255,6 +259,10 @@ def test_next(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # The marker selection below is paired with the extras installed above, so an
+        # unmet `requires_*` marker means a broken environment. Fail loudly instead of
+        # letting the auto-skip in 'tests/conftest.py' turn the session into all-skips.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
@@ -305,6 +313,10 @@ def test_storage(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # The marker selection below is paired with the extras installed above, so an
+        # unmet `requires_*` marker means a broken environment. Fail loudly instead of
+        # letting the auto-skip in 'tests/conftest.py' turn the session into all-skips.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -407,6 +419,8 @@ def test_next_dace_determinism(
         "auto",
         "--dist",
         "loadgroup",
+        # See the note in 'test_next' above.
+        "--require-optional-deps",
         "-m",
         f"{markers}",
         str(pathlib.Path("tests") / "next_tests"),
