@@ -373,7 +373,7 @@ def _insert_nested_sdfg(
     nsdfg_node = state.add_nested_sdfg(
         sdfg=nsdfg,
         inputs=input_node_map.keys(),
-        outputs={output_name},
+        outputs={output_name: None},
         symbol_mapping=first_map_param_mapping,
     )
 

@@ -270,7 +270,11 @@ def freeze_origin_domain_sdfg(
     inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
     outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
 
-    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
+    nsdfg = state.add_nested_sdfg(
+        inner_sdfg,
+        inputs={name: None for name in sorted(inputs)},
+        outputs={name: None for name in sorted(outputs)},
+    )
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin, domain
