@@ -266,15 +266,19 @@ def freeze_origin_domain_sdfg(
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
     # gather inputs & outputs (i.e. reads/writes without transients)
-    inputs, outputs = inner_sdfg.read_and_write_sets()
-    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
-    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
+    read_set, write_set = inner_sdfg.read_and_write_sets()
+    inputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in read_set and not desc.transient
+    }
+    outputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in write_set and not desc.transient
+    }
 
-    nsdfg = state.add_nested_sdfg(
-        inner_sdfg,
-        inputs={name: None for name in sorted(inputs)},
-        outputs={name: None for name in sorted(outputs)},
-    )
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
     _sdfg_add_arrays_and_edges(
         field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origin, domain
