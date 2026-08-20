@@ -764,7 +764,7 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             #  but a block size must be a compile-time integer, so only cut down to
             #  concrete sizes. The type check is much cheaper than
             #  `dace.symbolic.issymbolic()`, which traverses the expression tree.
-            if isinstance(map_dim_size, (int, sympy.Integer)) and map_dim_size < block_size[i]:
+            if str(map_dim_size).isdigit() and map_dim_size < block_size[i]:
                 block_size[i] = int(map_dim_size)
 
         gpu_map.gpu_block_size = tuple(block_size)
