@@ -41,7 +41,7 @@ def _update_sdfg_array_strides(
 ) -> None:
     for i, array_stride in enumerate(sdfg_arg_desc.strides):
         arg_stride = f"{arg}.__gt_buffer_info__.elem_strides[{i}]"
-        if isinstance(array_stride, int) or str(array_stride).isdigit():
+        if gtx_dace_args.is_compile_time_integer(array_stride):
             # The array stride is set to constant value in this dimension.
             code.append(
                 f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
@@ -155,7 +155,7 @@ def _parse_gt_param(
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
-                    if isinstance(array_size, int) or str(array_size).isdigit():
+                    if gtx_dace_args.is_compile_time_integer(array_size):
                         # The array shape in this dimension is set at compile-time.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.__gt_buffer_info__.shape[{i}]"
@@ -197,7 +197,7 @@ def _parse_gt_connectivities(
         if gtx_dace_args.is_connectivity_identifier(arg_name):
             assert isinstance(arg_desc, dace.data.Array)
             assert len(arg_desc.shape) == 2
-            assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
+            assert gtx_dace_args.is_compile_time_integer(arg_desc.shape[1])
             origin_size_arg = arg_desc.shape[0]
             assert len(origin_size_arg.free_symbols) == 1
             origin_size_param = next(iter(origin_size_arg.free_symbols))

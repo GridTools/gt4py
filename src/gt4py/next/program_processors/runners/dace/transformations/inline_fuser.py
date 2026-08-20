@@ -18,7 +18,10 @@ from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
 from ordered_set import OrderedSet
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
+    transformations as gtx_transformations,
+)
 
 
 InlineSpec: TypeAlias = tuple[
@@ -195,9 +198,9 @@ def find_nodes_to_inline(
         if (step != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return None
 
-        if str(start).isdigit():
+        if gtx_dace_args.is_compile_time_integer(start):
             # The start index is a digit, we require that the end is also a digit.
-            if not str(stop).isdigit():
+            if not gtx_dace_args.is_compile_time_integer(stop):
                 return None
 
             # There is an access done using a literal.
@@ -288,7 +291,7 @@ def find_nodes_to_inline(
     producer_subset = writing_edges[0].data.get_dst_subset(writing_edges[0], state)
     producer_shape = producer_subset.size()
     for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
-        if not str(pshp).isdigit():
+        if not gtx_dace_args.is_compile_time_integer(pshp):
             return None
         if (cshp <= pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             continue
@@ -736,7 +739,7 @@ def _compute_offset(
     offset: list[dace_sym.SymbolicType] = []
     avail_second_map_params = set(second_map_params)
     for start, _, _ in edge_to_replace.data.src_subset:
-        if str(start).isdigit():
+        if gtx_dace_args.is_compile_time_integer(start):
             offset.append(dace_sym.pystr_to_symbolic("0"))
         else:
             start_symbols = {str(sym) for sym in start.free_symbols}
