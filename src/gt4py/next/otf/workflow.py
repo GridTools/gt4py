@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar
 
 from typing_extensions import Self
 
-from gt4py._core import filecache
+from gt4py._core import definitions as core_defs, filecache
 from gt4py.eve.extended_typing import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
 
@@ -361,3 +361,37 @@ class CachedStep(
 
     def cache_key(self, inp: StartT) -> str:
         return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
+
+
+@typing.runtime_checkable
+class DeviceConfigurable(Protocol):
+    """A step that records the device it was configured for."""
+
+    device_type: core_defs.DeviceType
+
+
+def check_device_agreement(step: Any, device_type: core_defs.DeviceType, what: str) -> None:
+    """
+    Raise if an injected step is configured for a different device.
+
+    Builders configure the steps they create themselves from the requested
+    device, but an injected step is used verbatim. Without this check a
+    mismatch would silently produce a pipeline whose steps disagree about the
+    target device, which surfaces much later as a confusing compilation or
+    runtime failure.
+
+    Args:
+        step: The step to check. Steps that do not record a device are accepted.
+        device_type: The device the surrounding pipeline is built for.
+        what: Name of the step, used in the error message.
+
+    Raises:
+        ValueError: If `step` records a device other than `device_type`.
+    """
+    if isinstance(step, DeviceConfigurable) and step.device_type is not device_type:
+        raise ValueError(
+            f"The injected {what} is configured for device '{step.device_type.name}',"
+            f" but the workflow is being built for '{device_type.name}'. Build the step"
+            f" with 'device_type=DeviceType.{device_type.name}' or leave it out to get"
+            " the default."
+        )

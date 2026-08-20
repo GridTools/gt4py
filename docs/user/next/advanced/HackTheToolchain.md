@@ -46,25 +46,28 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow
+
+Compile workflows are plain frozen dataclasses, so a variant is built by
+replacing the steps you want to change on one the builders produced.
 
 ```python
+import dataclasses
+
+
 class MyCodeGen: ...
 
 
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.stages.CompilableProgramDef, gtx.otf.artifacts.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[
-        gtx.otf.artifacts.ProgramSource, gtx.otf.artifacts.ExtensionSource
-    ] = Cpp2BindingsGen()
-
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+pure_cpp2_workflow = dataclasses.replace(
+    gtx.program_processors.runners.gtfn.make_gtfn_compile_workflow(
+        cmake_build_type=gtx.config.CMakeBuildType.DEBUG
+    ),
+    translation=MyCodeGen(),
+    bindings=Cpp2BindingsGen(),
+)
 ```
 
 ## Invent new Workflow Types

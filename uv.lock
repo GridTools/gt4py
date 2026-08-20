@@ -1346,7 +1346,6 @@ dependencies = [
     { name = "dace" },
     { name = "deepdiff" },
     { name = "devtools" },
-    { name = "factory-boy" },
     { name = "filelock" },
     { name = "frozendict" },
     { name = "gridtools-cpp" },
@@ -1426,6 +1425,7 @@ dev = [
     { name = "coverage" },
     { name = "cython" },
     { name = "esbonio" },
+    { name = "factory-boy" },
     { name = "hypothesis" },
     { name = "jupytext" },
     { name = "matplotlib" },
@@ -1492,6 +1492,7 @@ scripts = [
 ]
 test = [
     { name = "coverage" },
+    { name = "factory-boy" },
     { name = "hypothesis" },
     { name = "nbmake" },
     { name = "nox" },
@@ -1541,7 +1542,6 @@ requires-dist = [
     { name = "dace", specifier = ">=2.0.0a7,<2.0.0a8" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
-    { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "filelock", specifier = ">=3.18.0" },
     { name = "frozendict", specifier = ">=2.3" },
     { name = "gridtools-cpp", specifier = "==2.*,>=2.3.9" },
@@ -1587,6 +1587,7 @@ dev = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
+    { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "jupytext", specifier = ">=1.14" },
     { name = "matplotlib", specifier = ">=3.9.0" },
@@ -1651,6 +1652,7 @@ scripts = [
 ]
 test = [
     { name = "coverage", extras = ["toml"], specifier = ">=7.6.1" },
+    { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "nbmake", specifier = ">=1.4.6" },
     { name = "nox", specifier = ">=2025.2.9" },
