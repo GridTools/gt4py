@@ -54,7 +54,7 @@ class FieldopData:
     """
 
     name: str
-    gt_type: ts.FieldType | ts.ScalarType
+    gt_type: ts.FieldType | ts.ScalarType | ts.ListType
     origin: tuple[dace.symbolic.SymbolicType, ...]
 
 
@@ -146,7 +146,9 @@ class SubgraphContext:
             else:
                 out_dims, out_origin, out_shape = get_field_layout(domain)
                 assert out_dims == src.gt_type.dims
-                out_name, out_desc = sdfg_builder.add_temp_array(self.root, out_shape, src_desc.dtype)
+                out_name, out_desc = sdfg_builder.add_temp_array(
+                    self.root, out_shape, src_desc.dtype
+                )
                 src_subset = ",".join(
                     f"{dst_o - src_o}:{dst_o - src_o + size}"
                     for dst_o, src_o, size in zip(out_origin, src.origin, out_shape, strict=True)
@@ -160,7 +162,11 @@ class SubgraphContext:
 
         copy_node = tn.CopyNode(
             target=out_name,
-            memlet=dace.Memlet(data=src.name, subset=dace_subsets.Range.from_string(src_subset), other_subset=dace.subsets.Range.from_array(out_desc)),
+            memlet=dace.Memlet(
+                data=src.name,
+                subset=dace_subsets.Range.from_string(src_subset),
+                other_subset=dace.subsets.Range.from_array(out_desc),
+            ),
         )
         self.current_scope.add_child(copy_node)
         return FieldopData(out_name, src.gt_type, tuple(out_origin))

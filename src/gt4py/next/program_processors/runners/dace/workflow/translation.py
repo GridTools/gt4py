@@ -358,10 +358,11 @@ class DaCeTranslator(
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
+    use_stree_lowering: bool = True
+    apply_common_transforms: bool = False
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
-    use_stree_lowering: bool = True
 
     def generate_sdfg(
         self,
@@ -377,21 +378,34 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        if not self.disable_itir_transforms:
+        if self.disable_itir_transforms:
+            pass
+        elif self.apply_common_transforms:
+            if not self.use_stree_lowering:
+                raise NotImplementedError(
+                    "The ITIR transform pipeline is only supported with the STree lowering."
+                )
+            ir = itir_transforms.apply_common_transforms(
+                ir,
+                offset_provider=offset_provider,
+                extract_temporaries=False,
+                unroll_reduce=False,
+                common_subexpression_elimination=True,
+                force_inline_lambda_args=False,
+                transform_concat_where_to_as_fieldop=False,
+                symbolic_domain_sizes=None,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            )
+        else:
             ir = itir_transforms.apply_fieldview_transforms(
                 ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 offset_provider=offset_provider,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
             )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
         if self.use_stree_lowering:
-            # Lower to Schedule Tree, then convert to SDFG.
-            # The skip list matches the cartesian backend's set (see ADR
-            # dace-schedule-tree.md): ScalarToSymbolPromotion (validation
-            # issues), ControlFlowRaising (we already emit CFGs/LoopRegions),
-            # LiftTrivialIf (catastrophic perf).
             stree = gtx_dace_lower_stree(ir, offset_provider_type, column_axis)
             sdfg = stree.as_sdfg(
                 validate=True,

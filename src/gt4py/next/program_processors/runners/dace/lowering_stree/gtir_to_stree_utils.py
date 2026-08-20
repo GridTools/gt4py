@@ -44,9 +44,7 @@ from gt4py.next.type_system import type_specifications as ts
 # ---------------------------------------------------------------------------
 
 # Magic local dimension used for list of values with length known at compile-time.
-_CONST_DIM: Final = gtx_common.Dimension(
-    value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL
-)
+_CONST_DIM: Final = gtx_common.Dimension(value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL)
 
 # Prefix string to be used for tasklet connectors.
 _TASKLET_CONNECTOR_PREFIX: Final[str] = "__tlet_"

@@ -34,7 +34,9 @@ Key design decisions (confirmed in the grilling session):
 from __future__ import annotations
 
 import abc
+import copy
 import dataclasses
+import itertools
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 
 import dace
@@ -52,10 +54,11 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import fuse_as_fieldop, prune_casts as ir_prune_casts
+from gt4py.next.iterator.transforms import infer_domain, prune_casts as ir_prune_casts
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_codegen import (
+    generate_list_tasklet_code,
     generate_tasklet_code,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import (
@@ -64,6 +67,7 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_typ
     SubgraphContext,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
+    _CONST_DIM,
     FieldopDomain,
     extract_target_domain,
     flatten_tuple_fields,
@@ -76,12 +80,21 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_uti
     make_tasklet_connector_for,
     replace_invalid_symbols,
 )
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import (
+    type_info as ti,
+    type_specifications as ts,
+    type_translation as tt,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
+
+
+def _root_symbol_names(ctx: SubgraphContext) -> frozenset[str]:
+    """Names of SDFG-level symbols and data containers (codegen ``SymRef`` fallback)."""
+    return frozenset(ctx.root.symbols) | frozenset(ctx.root.containers)
 
 
 def _replace_connectors_in_code_string(
@@ -100,9 +113,7 @@ def _flatten_tuple_symbols(symbols: Iterable[gtir.Sym]) -> list[gtir.Sym]:
     flat_symbols: list[gtir.Sym] = []
     for sym in symbols:
         if isinstance(sym.type, ts.TupleType):
-            flat_symbols.extend(
-                f for f in flatten_tuple_fields(sym.id, sym.type)
-            )
+            flat_symbols.extend(f for f in flatten_tuple_fields(sym.id, sym.type))
         else:
             flat_symbols.append(sym)
     return flat_symbols
@@ -209,15 +220,16 @@ class DataflowBuilder(Protocol):
         assert inputs.keys().isdisjoint(outputs.keys())
 
         connector_mapping = {
-            conn: make_tasklet_connector_for(conn)
-            for conn in (inputs.keys() | outputs.keys())
+            conn: make_tasklet_connector_for(conn) for conn in (inputs.keys() | outputs.keys())
         }
         new_code = _replace_connectors_in_code_string(code, language, connector_mapping)
 
         inputs = {connector_mapping[k]: v for k, v in inputs.items()}
         outputs = {connector_mapping[k]: v for k, v in outputs.items()}
         unique_name = self.unique_tasklet_name(name)
-        tasklet = dace.nodes.Tasklet(unique_name, inputs=inputs, outputs=outputs, code=new_code, language=language, **kwargs)
+        tasklet = dace.nodes.Tasklet(
+            unique_name, inputs=inputs, outputs=outputs, code=new_code, language=language, **kwargs
+        )
         return tasklet, connector_mapping
 
 
@@ -259,9 +271,7 @@ def _collect_free_symbols(shape_or_strides: Any, root: tn.ScheduleTreeRoot) -> N
                     root.symbols[sym.name] = gtx_dace_args.FIELD_SYMBOL_DTYPE
 
 
-def _make_access_index_for_field(
-    domain: FieldopDomain, data: FieldopData
-) -> dace.subsets.Range:
+def _make_access_index_for_field(domain: FieldopDomain, data: FieldopData) -> dace.subsets.Range:
     """Build a memlet subset of a field over the given domain."""
     if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
         assert data.origin is not None
@@ -294,8 +304,7 @@ def translate_as_fieldop(
     (via ``StreePythonCodegen``) and embedded in a ``TaskletNode`` inside
     a ``MapScope`` that ranges over the field domain.
     """
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
@@ -306,13 +315,29 @@ def translate_as_fieldop(
         return translate_scan(node, ctx, sdfg_builder)
 
     if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in stree lowering.")
+        assert isinstance(node.type, ts.TupleType)
+        if not isinstance(fieldop_expr, gtir.Lambda):
+            raise NotImplementedError(
+                "'as_fieldop' with tuple output and non-lambda stencil expression."
+            )
+        if any(isinstance(el_type, ts.TupleType) for el_type in node.type.types):
+            raise NotImplementedError("Nested tuple output of 'as_fieldop' not supported.")
+        # Lower each tuple element independently: extract the element from
+        # the lambda body with `tuple_get` and translate it as a separate
+        # single-output field operator.
+        results = []
+        for index, element_type in enumerate(node.type.types):
+            element_expr = im.tuple_get(index, fieldop_expr.expr)
+            element_expr.type = element_type
+            element_lambda = im.lambda_(*fieldop_expr.params)(element_expr)
+            element_call = im.as_fieldop(element_lambda, fieldop_domain_expr)(*node.args)
+            element_call.type = element_type
+            results.append(translate_as_fieldop(element_call, ctx, sdfg_builder))
+        return tuple(results)
 
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
-    field_domain = get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
-    )
+    field_domain = get_field_domain(domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr))
 
     # Handle special case: deref with field argument (copy)
     if cpm.is_ref_to(fieldop_expr, "deref"):
@@ -338,41 +363,135 @@ def translate_as_fieldop(
     for i, arg_expr in enumerate(node.args):
         arg = sdfg_builder.visit(arg_expr, ctx=ctx)
         if isinstance(arg, FieldopData):
-            param_name = str(stencil_expr.params[i].id) if i < len(stencil_expr.params) else f"__arg{i}"
+            param_name = (
+                str(stencil_expr.params[i].id) if i < len(stencil_expr.params) else f"__arg{i}"
+            )
             field_args[param_name] = arg
 
-    # Build the map over the field domain.
-    if len(field_domain) == 0:
-        map_range = {"__gt4py_zerodim": "0"}
-    else:
-        map_range = {
-            get_map_variable(r.dim): f"{r.start}:{r.stop}"
-            for r in field_domain
-        }
-    map_entry, _map_exit = sdfg_builder.add_map("fieldop", map_range)
-
-    # Build the map_indices mapping (Dimension -> map variable name).
+    # Build the map_indices mapping (Dimension -> map variable name).  Only
+    # the field-domain (global) dimensions; when the result field has a
+    # ``ListType`` dtype, the local dimension gets its own map variable,
+    # handled elementwise in the tasklet (see below).
     map_indices: dict[gtx_common.Dimension, str] = {}
     for r in field_domain:
         map_indices[r.dim] = get_map_variable(r.dim)
 
-    # Generate the tasklet code using StreePythonCodegen.
-    expr_code, pre_statements, used_connectivities = generate_tasklet_code(
-        stencil_expr.expr,
-        field_args=field_args,
-        map_indices=map_indices,
-        offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
-        if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
-        else ctx.root._offset_provider_type,
-        args_map={p.id: node.args[i] for i, p in enumerate(stencil_expr.params) if i < len(node.args)},
-    )
-
-    # Build the full tasklet code: pre-statements + final assignment.
-    tasklet_code = "\n".join(pre_statements) + f"\n__out = {expr_code}" if pre_statements else f"__out = {expr_code}"
-
-    # Allocate the result array.
     field_dims, field_origin, field_shape = get_field_layout(field_domain)
-    result_name, _ = sdfg_builder.add_temp_array(ctx.root, field_shape, gtx_dace_args.as_dace_type(node.type.dtype) if isinstance(node.type.dtype, ts.ScalarType) else gtx_dace_args.as_dace_type(node.type.dtype.element_type))
+
+    offset_provider_type = (
+        sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
+        if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
+        else ctx.root._offset_provider_type
+    )
+    args_map: dict[str, gtir.Node] = {
+        str(p.id): node.args[i] for i, p in enumerate(stencil_expr.params) if i < len(node.args)
+    }
+    output_subset_parts = [
+        f"{map_indices[dim]} - ({origin})"
+        for dim, origin in zip(field_dims, field_origin, strict=True)
+    ]
+
+    if isinstance(node.type.dtype, ts.ListType) and node.type.dtype.offset_type not in (
+        None,
+        _CONST_DIM,
+    ):
+        # Field operator computing a field with a local (neighbor) dimension,
+        # e.g. ``as_fieldop(λ(it) → neighbors(V2E, it), V_domain)(edge_f)``.
+        # Lower it elementwise: the map scope ranges over the field domain
+        # extended with the local dimension, and the tasklet writes one
+        # element of the local list (with the skip-value guard).  This mirrors
+        # ``_visit_neighbors`` in the SDFG iterator lowering.
+        list_dtype = node.type.dtype
+        assert list_dtype.offset_type is not None
+        local_dim = list_dtype.offset_type
+        conn_type = offset_provider_type.get(local_dim.value)
+        if not isinstance(conn_type, gtx_common.NeighborConnectivityType):
+            raise NotImplementedError(
+                f"'as_fieldop' with 'ListType' dtype over offset '{local_dim.value}' "
+                "is not supported."
+            )
+        local_var = get_map_variable(local_dim)
+
+        # Build the map over the field domain extended with the local dim.
+        map_range = (
+            {"__gt4py_zerodim": "0"}
+            if len(field_domain) == 0
+            else {get_map_variable(r.dim): f"{r.start}:{r.stop}" for r in field_domain}
+        )
+        map_range[local_var] = f"0:{conn_type.max_neighbors}"
+        map_entry, _map_exit = sdfg_builder.add_map("fieldop", map_range)
+
+        # Generate the elementwise tasklet code: one element of the local
+        # dimension, with the skip-value guard.
+        expr_code, pre_statements, used_connectivities, field_inputs = generate_list_tasklet_code(
+            stencil_expr.expr,
+            field_args=field_args,
+            map_indices=map_indices,
+            offset_provider_type=offset_provider_type,
+            args_map=args_map,
+            local_index=local_var,
+            root_symbols=_root_symbol_names(ctx),
+        )
+
+        # Build the full tasklet code: pre-statements + final assignment.
+        tasklet_code = (
+            "\n".join(pre_statements) + f"\n__out = {expr_code}"
+            if pre_statements
+            else f"__out = {expr_code}"
+        )
+
+        # Allocate the result array: the domain shape extended with the
+        # local dimension at its canonical position (local origin is 0).
+        extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
+        local_dim_index = extended_dims.index(local_dim)
+        field_shape.insert(local_dim_index, conn_type.max_neighbors)
+        assert isinstance(list_dtype.element_type, ts.ScalarType)
+        result_name, _ = sdfg_builder.add_temp_array(
+            ctx.root, field_shape, gtx_dace_args.as_dace_type(list_dtype.element_type)
+        )
+        output_subset_parts.insert(local_dim_index, local_var)
+    else:
+        # Build the map over the field domain.
+        if len(field_domain) == 0:
+            map_range = {"__gt4py_zerodim": "0"}
+        else:
+            map_range = {get_map_variable(r.dim): f"{r.start}:{r.stop}" for r in field_domain}
+        map_entry, _map_exit = sdfg_builder.add_map("fieldop", map_range)
+
+        # Generate the tasklet code using StreePythonCodegen.
+        expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+            stencil_expr.expr,
+            field_args=field_args,
+            map_indices=map_indices,
+            offset_provider_type=offset_provider_type,
+            args_map=args_map,
+            root_symbols=_root_symbol_names(ctx),
+        )
+
+        # Build the full tasklet code: pre-statements + final assignment.
+        tasklet_code = (
+            "\n".join(pre_statements) + f"\n__out = {expr_code}"
+            if pre_statements
+            else f"__out = {expr_code}"
+        )
+
+        # Allocate the result array.  A ``ListType`` dtype without a local
+        # offset dimension is a broadcast (const) list — all elements are
+        # equal, so the value is stored without the local dimension.
+        output_dtype: ts.DataType = node.type.dtype
+        if isinstance(output_dtype, ts.ListType):
+            output_dtype = output_dtype.element_type
+        assert isinstance(output_dtype, ts.ScalarType)
+        if len(field_shape) == 0:
+            # Zero-dimensional field: a scalar container, matching
+            # ``_create_field_operator_data`` in the SDFG lowering.
+            result_name, _ = sdfg_builder.add_temp_scalar(
+                ctx.root, gtx_dace_args.as_dace_type(output_dtype)
+            )
+        else:
+            result_name, _ = sdfg_builder.add_temp_array(
+                ctx.root, field_shape, gtx_dace_args.as_dace_type(output_dtype)
+            )
 
     # Connectivity tables referenced by ``neighbors`` in the stencil body must
     # be passed to the tasklet as inputs (full-array memlets); otherwise the
@@ -384,16 +503,38 @@ def translate_as_fieldop(
     # arguments and (b) the unused-connectivity cleanup in ``visit_Program``
     # — which only inspects top-level children and would miss tasklets nested
     # in ``MapScope`` — does not drop them.
-    connectivity_inputs = {
-        aname: ctx.root.containers[aname] for aname in used_connectivities
+    connectivity_inputs = {aname: None for aname in used_connectivities}
+
+    # When a field is accessed through ``field_inputs`` (scalar memlet
+    # on the input edge), the field parameter name does not appear in
+    # the tasklet code (only the ``field_inputs`` connector name does).
+    # In that case, skip the full-array memlet to avoid duplicate
+    # memlets for the same data, which can cause codegen issues.
+    _field_names_in_inputs = (
+        {fname for fname, _ in field_inputs.items() if isinstance(fname, str)}
+        if field_inputs
+        else set()
+    )
+    # Only add a full-array connector if the field name appears in the
+    # tasklet code (i.e. the field is accessed directly, not through
+    # ``field_inputs``).
+    import re
+
+    _full_array_param_names = {
+        param_name
+        for param_name, field_data in field_args.items()
+        if not field_inputs
+        or field_data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
     }
-    for aname in used_connectivities:
-        ctx.root.containers[aname].transient = False
 
     # Create the Tasklet and TaskletNode.
     tasklet, _connector_mapping = sdfg_builder.add_tasklet(
         name="fieldop",
-        inputs={inp: None for inp in field_args.keys()} | connectivity_inputs,
+        inputs={inp: None for inp in _full_array_param_names}
+        | connectivity_inputs
+        | {inp: None for inp in field_inputs.keys()},
         outputs={"__out"},
         code=tasklet_code,
     )
@@ -402,12 +543,23 @@ def translate_as_fieldop(
     in_memlets: dict[str, dace.Memlet] = {
         _connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
         for param_name, field_data in field_args.items()
+        if param_name in _full_array_param_names
     }
     for aname in used_connectivities:
+        ctx.root.containers[aname].transient = False
         in_memlets[_connector_mapping[aname]] = _make_full_array_memlet(aname, ctx.root)
+    # Scalar / 1D field accesses on the input edge: the memlet subset
+    # encodes all symbolic dimensions as exact indices (and dynamic
+    # dimensions as full ranges), so the tasklet receives a scalar or
+    # 1D array rather than the full multi-dimensional array.
+    for connector, (field_name, subset) in field_inputs.items():
+        in_memlets[_connector_mapping[connector]] = dace.Memlet(
+            data=field_name, subset=dace_subsets.Range.from_string(subset)
+        )
 
-    # Output memlet: single element at the map indices.
-    output_subset = ",".join(f"{map_indices[dim]} - {origin}" for dim, origin in zip(field_dims, field_origin, strict=True))
+    # Output memlet: single element at the map indices (plus the local
+    # dimension map variable for fields with a ``ListType`` dtype).
+    output_subset = ",".join(output_subset_parts) if output_subset_parts else "0"
     out_memlet = dace.Memlet(data=result_name, subset=output_subset)
     out_memlets = {_connector_mapping["__out"]: out_memlet}
 
@@ -424,6 +576,180 @@ def translate_as_fieldop(
     return FieldopData(result_name, node.type, tuple(field_origin))
 
 
+def translate_map_list(
+    node: gtir.FunCall,
+    ctx: SubgraphContext,
+    sdfg_builder: SDFGBuilder,
+) -> FieldopData:
+    """Lower ``map_list(op)(args...)`` to a ``MapScope`` + ``TaskletNode``.
+
+    The map iterates over the local (neighbor) dimension; each argument is
+    accessed at the current map index inside the tasklet.  This mirrors
+    ``_visit_map`` in ``lowering.gtir_to_sdfg_iterator``.
+
+    Args:
+        node: An applied ``map_list`` ``FunCall`` (``map_list(op)(args...)``).
+        ctx: The subgraph context.
+        sdfg_builder: The SDFG builder.
+
+    Returns:
+        A ``FieldopData`` for the 1-D result array (``ListType``).
+    """
+    assert cpm.is_applied_map(node)
+    assert isinstance(node.type, ts.ListType)
+    assert isinstance(node.fun, gtir.FunCall) and len(node.fun.args) == 1
+    map_op = node.fun.args[0]
+
+    # Determine the local dimension and its size from the input arguments.
+    # Skip ``make_const_list`` args — their offset type is ``_CONST_DIM``.
+    local_offset_type: gtx_common.Dimension | None = None
+    local_size: int | None = None
+    has_skip_values = False
+    for arg in node.args:
+        arg_type = arg.type
+        if isinstance(arg_type, ts.ListType) and arg_type.offset_type is not None:
+            offset_type = arg_type.offset_type
+            if offset_type == _CONST_DIM:
+                continue
+            offset_provider_t = sdfg_builder.get_offset_provider_type.__self__.offset_provider_type[  # type: ignore[attr-defined]
+                offset_type.value
+            ]
+            assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
+            local_offset_type = offset_type
+            local_size = offset_provider_t.max_neighbors
+            has_skip_values = offset_provider_t.has_skip_values
+            break
+
+    if local_offset_type is None or local_size is None:
+        raise ValueError(f"Missing information on local dimension for map node {node}.")
+
+    assert local_offset_type is not None
+    map_var = get_map_variable(local_offset_type)
+
+    # Visit the arguments to obtain FieldopData handles.  Arguments that
+    # don't lower to FieldopData (e.g. ``make_const_list``) are passed
+    # through ``args_map`` so the codegen can handle them.
+    field_args: dict[str, FieldopData] = {}
+    args_map: dict[str, gtir.Node] = {}
+    for i, arg_expr in enumerate(node.args):
+        param_name = f"__arg{i}"
+        arg = sdfg_builder.visit(arg_expr, ctx=ctx)
+        if isinstance(arg, FieldopData):
+            field_args[param_name] = arg
+        else:
+            args_map[param_name] = arg_expr
+
+    # Build the expression: ``map_op(__arg0, __arg1, ...)``.
+    map_expr = im.call(map_op)(*[im.ref(p) for p in [*(field_args.keys()), *(args_map.keys())]])
+
+    # Generate the tasklet code.  The map variable acts as the loop variable
+    # for element access (neighbors indexing, local field indexing, etc.).
+    map_indices = {local_offset_type: map_var}
+    expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+        map_expr,
+        field_args=field_args,
+        map_indices=map_indices,
+        offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
+        if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
+        else ctx.root._offset_provider_type,
+        args_map=args_map,
+        root_symbols=_root_symbol_names(ctx),
+    )
+
+    # Build the mapped tasklet expression.  When the connectivity has skip
+    # values, the tasklet writes a dummy value for invalid neighbors (matching
+    # the SDFG lowering's `map` with `__neighbor_idx` masking).
+    if has_skip_values:
+        conn_name = gtx_dace_args.connectivity_identifier(local_offset_type.value)
+        ctx.root.containers[conn_name].transient = False
+        used_connectivities.add(conn_name)
+        element_type = node.type.element_type
+        assert isinstance(element_type, ts.ScalarType)
+        skip_value = (
+            "math.nan"
+            if ti.is_floating_point(element_type)
+            else str(dace.dtypes.max_value(gtx_dace_args.as_dace_type(element_type)))
+        )
+        expr_code = (
+            f"({expr_code}) if {map_var} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
+        )
+
+    tasklet_code = (
+        "\n".join(pre_statements) + f"\n__out = {expr_code}"
+        if pre_statements
+        else f"__out = {expr_code}"
+    )
+
+    # Allocate the result array (1-D over the local dimension).
+    element_type = node.type.element_type
+    assert isinstance(element_type, ts.ScalarType)
+    dc_dtype = gtx_dace_args.as_dace_type(element_type)
+    result_name, _ = sdfg_builder.add_temp_array(ctx.root, (local_size,), dc_dtype)
+
+    # Connectivity tables referenced by ``neighbors`` must be passed as
+    # inputs (full-array memlets); see ``translate_as_fieldop`` for details.
+    connectivity_inputs = {aname: None for aname in used_connectivities}
+
+    # Determine which field args need a full-array memlet (vs. scalar memlet
+    # through ``field_inputs``).
+    import re
+
+    _field_names_in_inputs = (
+        {fname for fname, _ in field_inputs.items() if isinstance(fname, str)}
+        if field_inputs
+        else set()
+    )
+    _full_array_param_names = {
+        param_name
+        for param_name, field_data in field_args.items()
+        if not field_inputs
+        or field_data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
+    }
+
+    # Create the Tasklet and TaskletNode.
+    tasklet, _connector_mapping = sdfg_builder.add_tasklet(
+        name="map",
+        inputs={inp: None for inp in _full_array_param_names}
+        | connectivity_inputs
+        | {inp: None for inp in field_inputs.keys()},
+        outputs={"__out"},
+        code=tasklet_code,
+    )
+
+    # Setup input memlets.
+    in_memlets: dict[str, dace.Memlet] = {
+        _connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
+        for param_name, field_data in field_args.items()
+        if param_name in _full_array_param_names
+    }
+    for aname in used_connectivities:
+        ctx.root.containers[aname].transient = False
+        in_memlets[_connector_mapping[aname]] = _make_full_array_memlet(aname, ctx.root)
+    for connector, (field_name, subset) in field_inputs.items():
+        in_memlets[_connector_mapping[connector]] = dace.Memlet(
+            data=field_name, subset=dace_subsets.Range.from_string(subset)
+        )
+
+    # Output memlet: single element at the map index.
+    out_memlet = dace.Memlet(data=result_name, subset=map_var)
+    out_memlets = {_connector_mapping["__out"]: out_memlet}
+
+    tasklet_node = tn.TaskletNode(
+        node=tasklet,
+        in_memlets=in_memlets,
+        out_memlets=out_memlets,
+    )
+
+    # Create the MapScope over the local dimension.
+    map_entry, _map_exit = sdfg_builder.add_map("map", {map_var: f"0:{local_size}"})
+    map_scope = tn.MapScope(node=map_entry, children=[tasklet_node])
+    ctx.current_scope.add_child(map_scope)
+
+    return FieldopData(result_name, node.type, origin=())
+
+
 def translate_scan(
     node: gtir.Node,
     ctx: SubgraphContext,
@@ -437,8 +763,7 @@ def translate_scan(
     at the previous index: ``O[k-1] if k > start else A`` (forward) or
     ``O[k+1] if k < stop-1 else A`` (backward).
     """
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
@@ -448,27 +773,91 @@ def translate_scan(
 
     # Parse the domain of the scan field operator.
     assert isinstance(scan_domain_expr.type, ts.DomainType)
-    field_domain = get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(scan_domain_expr)
-    )
+    field_domain = get_field_domain(domain_utils.SymbolicDomain.from_expr(scan_domain_expr))
 
     # Parse scan parameters.
     assert len(scan_expr.args) == 3
     stencil_expr = scan_expr.args[0]
     assert isinstance(stencil_expr, gtir.Lambda)
 
-    # params[0]: the lambda parameter to propagate the scan carry.
-    str(stencil_expr.params[0].id)
-
-    # params[1]: boolean flag for forward/backward scan.
+    # scan args[1]: boolean flag for forward/backward scan.
     assert isinstance(scan_expr.args[1], gtir.Literal)
     scan_forward = scan_expr.args[1].value == "True"
 
-    # params[2]: the expression that computes the value for scan initialization.
+    # scan args[2]: the expression that computes the value for scan initialization.
     init_expr = scan_expr.args[2]
-    init_data = sdfg_builder.visit(init_expr, ctx=ctx)
-    assert isinstance(init_data, FieldopData)
-    init_value = init_data.name  # the name of the init data container or symbol
+
+    # The value produced by each scan step (and returned by the scanned
+    # lambda) may be a — possibly nested — tuple of values; the scan output
+    # is accordingly a (nested) tuple of fields.  The lowering flattens the
+    # value type into scalar leaves: one result array and one carry connector
+    # per leaf, with all leaves computed together in a single scan tasklet.
+    # ``state``-accesses in the stencil body (``tuple_get`` chains on the
+    # carry parameter) are resolved by the code generator, which routes each
+    # leaf to its carry variable.
+    def _scan_value_dtype(scan_type: ts.TypeSpec) -> ts.DataType:
+        """Extract the per-position value dtype of a scan output field.
+
+        Nested tuples of fields (e.g. a scan returning ``tuple[tuple[Field,
+        Field], Field]``) are traversed recursively, mirroring the nesting.
+        """
+        if isinstance(scan_type, ts.TupleType):
+            return ts.TupleType(types=[_scan_value_dtype(t) for t in scan_type.types])
+        if not isinstance(scan_type, ts.FieldType):
+            raise NotImplementedError(f"Unsupported scan output type: {scan_type}.")
+        dtype = scan_type.dtype
+        if not isinstance(dtype, ts.DataType):
+            raise NotImplementedError(f"Unsupported scan output dtype: {dtype}.")
+        return dtype
+
+    dtype_tree: ts.DataType = _scan_value_dtype(node.type)
+
+    def _flatten_leaves(
+        dtype: ts.DataType, path: tuple[int, ...] = ()
+    ) -> list[tuple[tuple[int, ...], ts.ScalarType | ts.ListType]]:
+        if isinstance(dtype, ts.TupleType):
+            flattened: list[tuple[tuple[int, ...], ts.ScalarType | ts.ListType]] = []
+            for i, subtype in enumerate(dtype.types):
+                if not isinstance(subtype, ts.DataType):
+                    raise NotImplementedError(f"Unsupported scan output type: {subtype}.")
+                flattened.extend(_flatten_leaves(subtype, (*path, i)))
+            return flattened
+        if not isinstance(dtype, (ts.ScalarType, ts.ListType)):
+            raise NotImplementedError(f"Unsupported scan output type: {dtype}.")
+        return [(path, dtype)]
+
+    leaves = _flatten_leaves(dtype_tree)
+
+    def _index_path(expr: gtir.Expr, path: tuple[int, ...]) -> gtir.Expr:
+        expr_ = expr
+        for index in path:
+            expr_ = im.tuple_get(index, expr_)
+        return expr_
+
+    # Compute the init data (name of a scalar container or SDFG symbol) per
+    # leaf.  NOTE: this must happen *before* the horizontal MapScope is
+    # created and added to the tree, so that producer nodes appear in the
+    # tree before their consumer scope — DaCe's `as_sdfg()` conversion drops
+    # a top-level node placed after the scope that consumes its data.
+    init_leaves_data = []
+    for path, _leaf_dtype in leaves:
+        init_data = sdfg_builder.visit(_index_path(init_expr, path), ctx=ctx)
+        assert isinstance(init_data, FieldopData)
+        init_leaves_data.append(init_data)
+
+    # Visit the field arguments (excluding the carry, which is handled
+    # specially as the output array at the previous index).  Same tree
+    # ordering constraint as above.
+    field_args: dict[str, FieldopData] = {}
+    for i, arg_expr in enumerate(node.args):
+        arg = sdfg_builder.visit(arg_expr, ctx=ctx)
+        if isinstance(arg, FieldopData):
+            param_name = (
+                str(stencil_expr.params[i + 1].id)
+                if i + 1 < len(stencil_expr.params)
+                else f"__arg{i}"
+            )
+            field_args[param_name] = arg
 
     # Find the column dimension.
     scan_dim_index = [sdfg_builder.is_column_axis(r.dim) for r in field_domain].index(True)
@@ -479,17 +868,18 @@ def translate_scan(
     # Determine the horizontal dimensions (all except the column axis).
     horizontal_dims = [r for r in field_domain if not sdfg_builder.is_column_axis(r.dim)]
 
-    # Allocate the result array.
+    # Allocate one result array per leaf (on the full scan domain).
     field_dims, field_origin, field_shape = get_field_layout(field_domain)
-    assert isinstance(node.type, ts.FieldType)
-    if isinstance(node.type.dtype, ts.ScalarType):
-        dtype = gtx_dace_args.as_dace_type(node.type.dtype)
-    else:
-        assert isinstance(node.type.dtype, ts.ListType)
-        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
-        dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
 
-    result_name, _result_desc = sdfg_builder.add_temp_array(ctx.root, field_shape, dtype)
+    result_names = []
+    for _path, leaf_dtype in leaves:
+        if isinstance(leaf_dtype, ts.ListType):
+            assert isinstance(leaf_dtype.element_type, ts.ScalarType)
+            dtype = gtx_dace_args.as_dace_type(leaf_dtype.element_type)
+        else:
+            dtype = gtx_dace_args.as_dace_type(leaf_dtype)
+        result_name, _result_desc = sdfg_builder.add_temp_array(ctx.root, field_shape, dtype)
+        result_names.append(result_name)
 
     # Build the MapScope over horizontal dimensions.
     if len(horizontal_dims) == 0:
@@ -497,29 +887,15 @@ def translate_scan(
         map_scope = None
         map_indices: dict[gtx_common.Dimension, str] = {}
     else:
-        map_range = {
-            get_map_variable(r.dim): f"{r.start}:{r.stop}"
-            for r in horizontal_dims
-        }
+        map_range = {get_map_variable(r.dim): f"{r.start}:{r.stop}" for r in horizontal_dims}
         map_entry, _map_exit = sdfg_builder.add_map("fieldop", map_range)
-        map_indices = {
-            r.dim: get_map_variable(r.dim) for r in horizontal_dims
-        }
+        map_indices = {r.dim: get_map_variable(r.dim) for r in horizontal_dims}
         map_scope = tn.MapScope(node=map_entry, children=[])
         ctx.current_scope.add_child(map_scope)
 
     # Add the scan dimension to map_indices (used by the code generator
     # to generate the carry read and output write).
     map_indices[scan_dim] = scan_loop_var
-
-    # Visit the field arguments (excluding the carry, which is handled
-    # specially as the output array at the previous index).
-    field_args: dict[str, FieldopData] = {}
-    for i, arg_expr in enumerate(node.args):
-        arg = sdfg_builder.visit(arg_expr, ctx=ctx)
-        if isinstance(arg, FieldopData):
-            param_name = str(stencil_expr.params[i + 1].id) if i + 1 < len(stencil_expr.params) else f"__arg{i}"
-            field_args[param_name] = arg
 
     # Build the carry expression.
     # Forward carry: O[k-1] if k > start else A
@@ -531,139 +907,184 @@ def translate_scan(
         carry_prev = f"{scan_loop_var} + 1"
         carry_cond = f"{scan_loop_var} < {scan_domain_range.stop} - 1"
 
-    # Build the array access for the carry: O[horizontal_indices, k-1]
-    # (or O[horizontal_indices, k+1] for backward).
-    carry_indices = []
+    # On the input edge, each carry is read as a scalar (the leaf's result
+    # array at the previous scan position along the column): `__carry_<i>` is
+    # a connector with a scalar memlet on `result_name_i` at
+    # `O[horizontal_indices, k-1]` (or `k+1` for backward scans).  Inside the
+    # tasklet, a pre-statement selects between the carry and the scan init
+    # value; the lambda carry parameter (``params[0]``) resolves to a nested
+    # `make_tuple` of per-leaf pre-statement variables via `args_map`, whose
+    # `tuple_get` accesses are collapsed by the code generator.
+    carry_conn_of = [f"__carry_{i}" for i in range(len(leaves))]
+    carry_subset_parts = []
     for dim, origin in zip(field_dims, field_origin, strict=True):
         map_var = map_indices.get(dim)
         assert map_var is not None, f"No map variable for dimension {dim}."
         if dim == scan_dim:
-            carry_indices.append(f"({carry_prev}) - {origin}")
+            carry_subset_parts.append(f"({carry_prev}) - ({origin})")
         else:
-            carry_indices.append(f"{map_var} - {origin}")
-    carry_expr = f"{result_name}[{', '.join(carry_indices)}] if {carry_cond} else {init_value}"
+            carry_subset_parts.append(f"({map_var}) - ({origin})")
+    carry_subset = dace_subsets.Range.from_string(",".join(carry_subset_parts))
 
-    # Generate the tasklet code using StreePythonCodegen.
-    # The carry is passed as the first lambda parameter.
-    {stencil_expr.params[0].id: gtir.SymRef(id=stencil_expr.params[0].id)}
-    # We need to set up the args_map so that the carry parameter maps
-    # to the carry expression. We do this by creating a temporary SymRef
-    # that the code generator will resolve to the carry expression.
-    # Actually, the code generator resolves through args_map, so we
-    # need to add the carry expression to the args_map.
-    # But args_map maps to gtir.Node, not to a code string. So we need
-    # a different approach: we add the carry expression as a pre-statement
-    # and use the variable name in the args_map.
+    # Free SDFG symbols can be used directly in the tasklet code; scalar
+    # containers are read through an additional scalar input edge per leaf.
+    init_codes: list[str] = []
+    init_connectors: dict[str, None] = {}
+    for i, init_data in enumerate(init_leaves_data):
+        if init_data.name in ctx.root.symbols:
+            init_codes.append(init_data.name)
+        else:
+            init_code = f"__init_{i}"
+            init_codes.append(init_code)
+            init_connectors[init_code] = None
 
-    # Alternative approach: generate the stencil code with the carry
-    # as a regular field argument, then replace the carry parameter
-    # with the carry expression.
-
-    # For now, let's generate the code by adding the carry to the
-    # args_map as a special "symbolic" value that the code generator
-    # can handle. We'll use a SymRef that the code generator will
-    # resolve to the carry expression.
-
-    # Actually, the simplest approach is to generate the code without
-    # the carry (as if the carry is a regular variable), then prepend
-    # the carry expression as a pre-statement.
-
-    # Let's use a different approach: generate the full code including
-    # the carry, by passing the carry expression through the args_map
-    # as a pre-statement.
-
-    # The cleanest approach: add the carry as a "field_arg" with a
-    # special name, and have the code generator generate the carry
-    # expression inline.
-
-    # For now, let's just generate the code manually:
-    # 1. Generate the stencil body (without the carry)
-    # 2. Add the carry as a pre-statement
-    # 3. Combine them
-
-    # Generate the stencil body with the carry as a placeholder.
-    # The carry is the first parameter of the stencil lambda.
-    # We'll add it to args_map as a SymRef to itself, and then
-    # replace it with the carry expression in the generated code.
-
-    # Actually, the simplest approach is to add the carry to args_map
-    # as a literal SymRef, and then have the code generator resolve
-    # it to the carry expression.
-
-    # Let me just set up the args_map properly:
-    # - The carry parameter maps to a SymRef that the code generator
-    #   will resolve to the carry expression.
-    # - The other parameters map to their field arguments.
-
-    # But the code generator's visit_SymRef resolves through args_map
-    # by visiting the mapped expression. So if we map the carry parameter
-    # to a SymRef with a special name, the code generator will return
-    # that name.
-
-    # The cleanest approach: add the carry expression as a pre-statement
-    # that assigns it to a temporary variable, then use that variable
-    # in the args_map.
-
-    # Let me implement this:
-    carry_var = "__gtir_scan_carry"
-    pre_statements_scan = [f"{carry_var} = {carry_expr}"]
-
-    # Set up the args_map: carry parameter -> SymRef(carry_var)
-    # and other parameters -> their arguments.
-    scan_args_map_final = {stencil_expr.params[0].id: gtir.SymRef(id=carry_var)}
-    for i, p in enumerate(stencil_expr.params[1:], start=1):
-        if i - 1 < len(node.args):
-            scan_args_map_final[p.id] = node.args[i - 1]
-
-    # Generate the tasklet code.
-    expr_code, pre_statements_body = generate_tasklet_code(
-        stencil_expr.expr,
-        field_args=field_args,
-        map_indices=map_indices,
-        offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
-        if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
-        else ctx.root._offset_provider_type,
-        args_map=scan_args_map_final,
-    )
-
-    # Combine all pre-statements and the final expression.
-    all_pre_statements = pre_statements_scan + pre_statements_body
-    tasklet_code = "\n".join(all_pre_statements) + f"\n__out = {expr_code}"
-
-    # Create the TaskletNode.
-    # Input connectors: the field args (full arrays) + the output array O (full array, for carry read).
-    input_connectors = set()
-    in_memlets: dict[str, dace.Memlet] = {}
-    for param_name, field_data in field_args.items():
-        conn = f"__field_{param_name}"
-        input_connectors.add(conn)
-        in_memlets[make_tasklet_connector_for(conn)] = _make_full_array_memlet(
-            field_data.name, ctx.root
+    carry_vars = [f"__gtir_scan_carry_{i}" for i in range(len(leaves))]
+    pre_statements_scan = [
+        f"{carry_var} = {carry_conn} if {carry_cond} else {init_code}"
+        for carry_var, carry_conn, init_code in zip(
+            carry_vars, carry_conn_of, init_codes, strict=True
         )
-    # Add the output array as an input (for the carry read).
-    carry_conn = "__O_carry"
-    input_connectors.add(carry_conn)
-    in_memlets[make_tasklet_connector_for(carry_conn)] = _make_full_array_memlet(
-        result_name, ctx.root
+    ]
+
+    # Set up the args_map for the lambda parameters: the carry parameter
+    # (``params[0]``) maps to a nested `make_tuple` of the per-leaf carry
+    # SymRefs (mirroring the scan value structure); ``params[1:]`` map to the
+    # scan arguments.
+    carry_leaf_iter = iter(carry_vars)
+
+    def _build_carry_tree(dtype: ts.DataType) -> gtir.Expr:
+        if isinstance(dtype, ts.TupleType):
+            subtree_args = []
+            for subtype in dtype.types:
+                if not isinstance(subtype, ts.DataType):
+                    raise NotImplementedError(f"Unsupported scan output type: {subtype}.")
+                subtree_args.append(_build_carry_tree(subtype))
+            return im.call("make_tuple")(*subtree_args)
+        return gtir.SymRef(id=next(carry_leaf_iter))
+
+    scan_args_map: dict[str, gtir.Node] = {
+        str(stencil_expr.params[0].id): _build_carry_tree(dtype_tree)
+    }
+    scan_args_map |= {
+        str(stencil_expr.params[i].id): node.args[i - 1]
+        for i in range(1, len(stencil_expr.params))
+        if i - 1 < len(node.args)
+    }
+
+    # The per-leaf carry SymRefs above resolve to the tasklet code variables
+    # holding the carry-or-init selection.
+    string_args = {carry_var: carry_var for carry_var in carry_vars}
+
+    # Generate the tasklet code per leaf using StreePythonCodegen.  All
+    # leaves share the temp counter, since their code (and the connector
+    # names generated in the process) is combined into a single tasklet.
+    temp_counter = itertools.count(1)
+    expr_codes: list[str] = []
+    pre_statements_body: list[str] = []
+    used_connectivities: set[str] = set()
+    field_inputs: dict[str, tuple[str, str]] = {}
+    for path, _leaf_dtype in leaves:
+        expr_code, pre_stmts, used_conns, tasklet_field_inputs = generate_tasklet_code(
+            _index_path(stencil_expr.expr, path),
+            field_args=field_args,
+            map_indices=map_indices,
+            offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
+            if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
+            else ctx.root._offset_provider_type,
+            args_map=scan_args_map,
+            string_args=string_args,
+            temp_counter=temp_counter,
+            root_symbols=_root_symbol_names(ctx),
+        )
+        expr_codes.append(expr_code)
+        pre_statements_body.extend(pre_stmts)
+        used_connectivities |= set(used_conns)
+        field_inputs |= tasklet_field_inputs
+
+    # Combine all pre-statements and the final (per-leaf) expressions.
+    out_conns = [f"__out_{i}" for i in range(len(leaves))]
+    tasklet_code = (
+        "\n".join(pre_statements_scan + pre_statements_body)
+        + "\n"
+        + "\n".join(
+            f"{out_conn} = {expr_code}"
+            for out_conn, expr_code in zip(out_conns, expr_codes, strict=True)
+        )
     )
 
-    # Output memlet: single element at (horizontal_indices, k).
+    # Connectivity tables referenced by ``neighbors`` in the stencil body must
+    # be passed to the tasklet as inputs (full-array memlets); see the comment
+    # in ``translate_as_fieldop`` for details.
+    connectivity_inputs = {aname: None for aname in used_connectivities}
+
+    # Skip the full-array memlet for fields that are only accessed through
+    # scalar memlets on the input edge (``field_inputs``), see the comment in
+    # ``translate_as_fieldop`` for details.
+    import re
+
+    _field_names_in_inputs = (
+        {fname for fname, _ in field_inputs.values()} if field_inputs else set()
+    )
+    _full_array_param_names = {
+        param_name
+        for param_name, field_data in field_args.items()
+        if not field_inputs
+        or field_data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
+    }
+
+    # Create the Tasklet and TaskletNode.
+    tasklet, connector_mapping = sdfg_builder.add_tasklet(
+        name="scan",
+        inputs={param_name: None for param_name in _full_array_param_names}
+        | connectivity_inputs
+        | {connector: None for connector in field_inputs}
+        | {carry_conn: None for carry_conn in carry_conn_of}
+        | init_connectors,
+        outputs=set(out_conns),
+        code=tasklet_code,
+    )
+
+    # Input connectors: the field args (full arrays) + connectivity tables +
+    # scalar field inputs + the carry reads (scalar memlets on the leaf result
+    # arrays).
+    in_memlets: dict[str, dace.Memlet] = {
+        connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
+        for param_name, field_data in field_args.items()
+        if param_name in _full_array_param_names
+    }
+    for aname in used_connectivities:
+        ctx.root.containers[aname].transient = False
+        in_memlets[connector_mapping[aname]] = _make_full_array_memlet(aname, ctx.root)
+    for connector, (field_name, subset) in field_inputs.items():
+        in_memlets[connector_mapping[connector]] = dace.Memlet(
+            data=field_name, subset=dace_subsets.Range.from_string(subset)
+        )
+    for carry_conn, result_name in zip(carry_conn_of, result_names, strict=True):
+        # NOTE: the subset objects must not be shared across memlets — DaCe
+        # validation rejects a subset instance referenced by multiple edges.
+        in_memlets[connector_mapping[carry_conn]] = dace.Memlet(
+            data=result_name, subset=copy.deepcopy(carry_subset)
+        )
+    for i, init_data in enumerate(init_leaves_data):
+        init_code = init_codes[i]
+        if init_code in init_connectors:
+            in_memlets[connector_mapping[init_code]] = dace.Memlet(data=init_data.name, subset="0")
+
+    # Output memlets: one element per leaf at (horizontal_indices, k).
     output_indices = []
     for dim, origin in zip(field_dims, field_origin, strict=True):
         map_var = map_indices.get(dim)
         assert map_var is not None
-        output_indices.append(f"{map_var} - {origin}")
+        output_indices.append(f"{map_var} - ({origin})")
     output_subset = dace.subsets.Range.from_string(",".join(output_indices))
-    out_memlet = dace.Memlet(data=result_name, subset=output_subset)
-    out_memlets = {make_tasklet_connector_for("__out"): out_memlet}
-
-    # Create the Tasklet and TaskletNode.
-    tasklet, _connector_mapping = sdfg_builder.add_tasklet(
-        name="scan",
-        inputs=input_connectors,
-        outputs={"__out"},
-        code=tasklet_code,
-    )
+    out_memlets = {
+        connector_mapping[out_conn]: dace.Memlet(
+            data=result_name, subset=copy.deepcopy(output_subset)
+        )
+        for out_conn, result_name in zip(out_conns, result_names, strict=True)
+    }
 
     tasklet_node = tn.TaskletNode(
         node=tasklet,
@@ -696,7 +1117,50 @@ def translate_scan(
     else:
         ctx.current_scope.add_child(for_scope)
 
-    return FieldopData(result_name, node.type, tuple(field_origin))
+    # Rebuild the (possibly nested) tuple of leaf results, mirroring the
+    # structure of the scan value type.
+    def _gt_type_at_path(path: tuple[int, ...]) -> ts.FieldType | ts.ScalarType | ts.ListType:
+        # Navigate `node.type`, consuming path indices through tuple nesting;
+        # entering a `FieldType`'s dtype does not consume a path element.
+        root_type = node.type
+        assert isinstance(root_type, (ts.FieldType, ts.TupleType))
+        leaf_type: ts.TypeSpec = root_type
+        for index in path:
+            if isinstance(leaf_type, ts.FieldType):
+                leaf_dtype = leaf_type.dtype
+                assert isinstance(leaf_dtype, ts.TypeSpec)
+                leaf_type = leaf_dtype
+            assert isinstance(leaf_type, ts.TupleType)
+            child = leaf_type.types[index]
+            assert isinstance(child, ts.TypeSpec)
+            leaf_type = child
+        if isinstance(root_type, ts.FieldType):
+            if not path:
+                # Scalar (non-tuple) scan output — return the field as-is.
+                return root_type
+            # Leaf reached through the field dtype: wrap it back in a field.
+            assert isinstance(leaf_type, (ts.ScalarType, ts.ListType))
+            return ts.FieldType(dims=root_type.dims, dtype=leaf_type)
+        assert isinstance(leaf_type, ts.FieldType)
+        return leaf_type
+
+    leaf_results = [
+        FieldopData(result_name, _gt_type_at_path(path), tuple(field_origin))
+        for result_name, (path, _leaf_dtype) in zip(result_names, leaves, strict=True)
+    ]
+    leaf_results_iter = iter(leaf_results)
+
+    def _rebuild_result(dtype: ts.DataType) -> FieldopResult:
+        if isinstance(dtype, ts.TupleType):
+            subresults = []
+            for subtype in dtype.types:
+                if not isinstance(subtype, ts.DataType):
+                    raise NotImplementedError(f"Unsupported scan output type: {subtype}.")
+                subresults.append(_rebuild_result(subtype))
+            return tuple(subresults)
+        return next(leaf_results_iter)
+
+    return _rebuild_result(dtype_tree)
 
 
 def translate_if(
@@ -713,16 +1177,45 @@ def translate_if(
     assert len(node.args) == 3
     cond_expr, true_expr, false_expr = node.args
 
+    if isinstance(node.type, ts.TupleType):
+        # Lower each tuple element independently: build a scalar-typed
+        # `if_` on the extracted elements of the true and false branches
+        # and translate it separately.  The domain annexes of tuple-typed
+        # expressions hold one domain per element.
+        results = []
+        for index, element_type in enumerate(node.type.types):
+
+            def _extract(
+                branch: gtir.Expr,
+                index: int = index,
+                element_type: ts.TypeSpec = element_type,
+            ) -> gtir.Expr:
+                element_branch = im.tuple_get(index, branch)
+                element_branch.type = element_type
+                if hasattr(branch.annex, "domain"):
+                    branch_domain = branch.annex.domain
+                    element_branch.annex.domain = (
+                        branch_domain[index] if isinstance(branch_domain, tuple) else branch_domain
+                    )
+                return element_branch
+
+            element_node = im.if_(cond_expr, _extract(true_expr), _extract(false_expr))
+            element_node.type = element_type
+            if hasattr(node.annex, "domain"):
+                element_node.annex.domain = (
+                    node.annex.domain[index]
+                    if isinstance(node.annex.domain, tuple)
+                    else node.annex.domain
+                )
+            results.append(translate_if(element_node, ctx, sdfg_builder))
+        return tuple(results)
+
     # Generate the condition code.
     cond_code = get_source(cond_expr)
 
     # Visit the true and false branches.
-    SubgraphContext(
-        root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
-    )
-    SubgraphContext(
-        root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
-    )
+    SubgraphContext(root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes)
+    SubgraphContext(root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes)
 
     # Allocate the output field (as a temp on root.containers).
     assert isinstance(node.type, ts.FieldType)
@@ -757,7 +1250,9 @@ def translate_if(
         if_scope.add_child(
             tn.CopyNode(
                 target=out_name,
-                memlet=dace.Memlet(data=true_result.name, subset=src_subset, other_subset=dst_subset),
+                memlet=dace.Memlet(
+                    data=true_result.name, subset=src_subset, other_subset=dst_subset
+                ),
             )
         )
 
@@ -778,7 +1273,9 @@ def translate_if(
         else_scope.add_child(
             tn.CopyNode(
                 target=out_name,
-                memlet=dace.Memlet(data=false_result.name, subset=src_subset, other_subset=dst_subset),
+                memlet=dace.Memlet(
+                    data=false_result.name, subset=src_subset, other_subset=dst_subset
+                ),
             )
         )
 
@@ -793,7 +1290,6 @@ def translate_symbol_ref(
     """Generates the schedule-tree nodes for a ``ir.SymRef`` node."""
 
     # Check if the symbol is unused (domain is NEVER).
-    from gt4py.next.iterator.transforms import infer_domain
     node_domain = getattr(node.annex, "domain", infer_domain.DomainAccessDescriptor.UNKNOWN)
     if node_domain == infer_domain.DomainAccessDescriptor.NEVER:
         return None
@@ -801,32 +1297,78 @@ def translate_symbol_ref(
     def _translate_symbol_ref_inner(node: gtir.SymRef) -> FieldopData:
         symbol_name = str(node.id)
         if symbol_name in ctx.data_nodes:
-            return ctx.data_nodes[symbol_name]
+            data = ctx.data_nodes[symbol_name]
+            assert data is not None
+            return data
         elif symbol_name in ctx.root.containers:
+            assert isinstance(node.type, ts.FieldType)
             return sdfg_builder.make_field(symbol_name, node.type)
         elif symbol_name in ctx.root.symbols:
             return translate_scalar_expr(node, ctx, sdfg_builder)
 
         raise ValueError(f"Symbol '{symbol_name}' not found in scope.")
 
-
     if isinstance(node.type, ts.TupleType):
-        sym_tree = make_symbol_tree(str(node.id), node.type)
-        return gtx_utils.tree_map(lambda x: _translate_symbol_ref_inner(im.ref(x.id, x.type)))(sym_tree)
+        symbol_name = str(node.id)
+        # A tuple may have been let-bound: it is stored in ``data_nodes``
+        # under its un-flattened name as a nested tuple of results (e.g. the
+        # result of a tuple-output scan consumed by a later statement).
+        if symbol_name in ctx.data_nodes:
+            data = ctx.data_nodes[symbol_name]
+            assert data is not None
+            return data
+        # Tuple program parameters are flattened into per-element
+        # symbols/containers (``__tuple_tmp_0`` → ``__tuple_tmp_0_0``, ...).
+        sym_tree = make_symbol_tree(symbol_name, node.type)
+        return gtx_utils.tree_map(lambda x: _translate_symbol_ref_inner(im.ref(x.id, x.type)))(
+            sym_tree
+        )
     else:
         return _translate_symbol_ref_inner(node)
+
 
 def translate_scalar_expr(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
 ) -> FieldopData:
-    """Generates a tasklet for a scalar-valued expression."""
+    """Generates a tasklet for a scalar-valued expression.
+
+    Symbols bound by let-lambdas (present in ``ctx.data_nodes``) are passed
+    to the tasklet as scalar input connectors; free SDFG symbols (in
+    ``ctx.root.symbols``) are emitted verbatim in the tasklet code.  Blindly
+    printing the expression with ``get_source`` would leave let-bound IR
+    symbols as dangling free symbols in the generated code.
+    """
     assert isinstance(node.type, ts.ScalarType)
     assert isinstance(node, (gtir.FunCall, gtir.Literal, gtir.SymRef))
 
+    # Collect free symbols and resolve them to data containers or SDFG
+    # symbols.
+    free_syms = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef).to_set()}
+    field_args: dict[str, FieldopData] = {}
+    for sym in free_syms:
+        if sym in ctx.data_nodes:
+            data = ctx.data_nodes[sym]
+            if isinstance(data, FieldopData):
+                assert isinstance(data.gt_type, ts.ScalarType)
+                field_args[sym] = data
+    string_args = {sym: sym for sym in free_syms if sym in ctx.root.symbols}
+
     # Generate the Python code for the scalar expression.
-    scalar_code = get_source(node)
+    expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+        node,
+        field_args=field_args,
+        map_indices={},
+        offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
+        if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
+        else ctx.root._offset_provider_type,
+        string_args=string_args,
+        root_symbols=_root_symbol_names(ctx),
+    )
+    assert not pre_statements, f"Unexpected pre-statements in scalar expression '{node}'."
+    assert not field_inputs, f"Unexpected field inputs in scalar expression '{node}'."
+    tasklet_code = f"out = {expr_code}"
 
     # Create a temporary scalar for the result.
     result_name, _ = sdfg_builder.add_temp_scalar(ctx.root, gtx_dace_args.as_dace_type(node.type))
@@ -834,32 +1376,80 @@ def translate_scalar_expr(
     # Create the TaskletNode.
     tasklet, connector_mapping = sdfg_builder.add_tasklet(
         name="scalar_expr",
-        inputs=set(),
+        inputs={sym: None for sym in field_args} | {c: None for c in used_connectivities},
         outputs={"out"},
-        code=f"out = {scalar_code}",
+        code=tasklet_code,
     )
-
-    tn.TaskletNode(
-        node=tasklet,
-        in_memlets={},
-        out_memlets={connector_mapping["out"]: dace.Memlet(data=result_name, subset="0")},
-    )
-    # Note: The TaskletNode needs to be added to the current scope.
-    # But we can't add it here because we need to return it.
-    # Actually, the TaskletNode is created by the caller (visit_FunCall).
-    # Let me fix this by creating the TaskletNode here and adding it to the current scope.
-    # Actually, looking at the existing code, the scalar_expr translator creates
-    # the tasklet and adds it to the state. In the new code, I need to create
-    # the TaskletNode and add it to the current scope.
-    # Let me redo this properly.
+    in_memlets: dict[str, dace.Memlet] = {
+        connector_mapping[sym]: dace.Memlet(data=data.name, subset="0")
+        for sym, data in field_args.items()
+    }
+    for aname in used_connectivities:
+        ctx.root.containers[aname].transient = False
+        in_memlets[connector_mapping[aname]] = _make_full_array_memlet(aname, ctx.root)
     tasklet_node = tn.TaskletNode(
         node=tasklet,
-        in_memlets={},
+        in_memlets=in_memlets,
         out_memlets={connector_mapping["out"]: dace.Memlet(data=result_name, subset="0")},
     )
     ctx.current_scope.add_child(tasklet_node)
 
     return FieldopData(result_name, node.type, origin=())
+
+
+def translate_index(
+    node: gtir.Node,
+    ctx: SubgraphContext,
+    sdfg_builder: SDFGBuilder,
+) -> FieldopData:
+    """Generates the schedule-tree nodes for the ``index`` builtin.
+
+    ``index(dim)`` produces a 1-D field whose value at each grid point is
+    the index along ``dim``.  It is lowered to a mapped tasklet writing the
+    map index to a temporary 1-D array over the node domain (taken from the
+    domain-inference annex), matching ``translate_index`` in the SDFG
+    lowering.
+    """
+    assert cpm.is_call_to(node, "index")
+    assert isinstance(node.type, ts.FieldType)
+
+    field_domain = get_field_domain(node.annex.domain)
+    assert len(field_domain) == 1
+    domain_range = field_domain[0]
+    map_index = get_map_variable(domain_range.dim)
+
+    # Allocate the result array.
+    _field_dims, field_origin, field_shape = get_field_layout(field_domain)
+    result_scalar_type = node.type.dtype
+    assert isinstance(result_scalar_type, ts.ScalarType)
+    result_name, _ = sdfg_builder.add_temp_array(
+        ctx.root, field_shape, gtx_dace_args.as_dace_type(result_scalar_type)
+    )
+
+    # Build the map over the index domain.
+    map_entry, _map_exit = sdfg_builder.add_map(
+        "index", {map_index: f"{domain_range.start}:{domain_range.stop}"}
+    )
+
+    tasklet, connector_mapping = sdfg_builder.add_tasklet(
+        name="index",
+        inputs={},
+        outputs={"__out"},
+        code=f"__out = {map_index}",
+    )
+    tasklet_node = tn.TaskletNode(
+        node=tasklet,
+        in_memlets={},
+        out_memlets={
+            connector_mapping["__out"]: dace.Memlet(
+                data=result_name, subset=f"{map_index} - ({field_origin[0]})"
+            )
+        },
+    )
+    map_scope = tn.MapScope(node=map_entry, children=[tasklet_node])
+    ctx.current_scope.add_child(map_scope)
+
+    return FieldopData(result_name, node.type, origin=tuple(field_origin))
 
 
 def translate_make_tuple(
@@ -883,7 +1473,6 @@ def translate_tuple_get(
 
     if not isinstance(node.args[0], gtir.Literal):
         raise ValueError("Tuple can only be subscripted with compile-time constants.")
-    from gt4py.next.type_system import type_info as ti
     assert ti.is_integral(node.args[0].type)
     index = int(node.args[0].value)
 
@@ -893,12 +1482,157 @@ def translate_tuple_get(
     return data_nodes[index]
 
 
+def _translate_concat_where_branch(
+    ctx: SubgraphContext,
+    sdfg_builder: SDFGBuilder,
+    source_expr: gtir.Expr,
+    is_lower: bool,
+    concat_dim: gtx_common.Dimension,
+    concat_dim_bound_expr: gtir.Expr,
+    branch_cond_domain: domain_utils.SymbolicDomain,
+    output_domain: domain_utils.SymbolicDomain,
+    output_type: ts.FieldType,
+    output_desc: dace.data.Array,
+    output_name: str,
+    output_origin: Sequence[dace.symbolic.SymbolicType],
+) -> None:
+    """
+    Translate one of the two branches of a 'concat_where' expression.
+
+    The 'concat_where' expression requires two input fields, one is written on the
+    lower part of the result domain, with respect to the domain boundary extracted
+    from the first argument; the other input field is written on the upper domain.
+    The handling of the two branches is similar, there is only one small difference
+    in case the input field does not contain the 'concat_where' dimension, which
+    is the case of scalar values or horizontal slice fields. In this case, the input
+    is broadcast on the full output domain by translating it into a 'deref' field
+    operator on the promoted domain, and the `is_lower` argument is used to select
+    which part of the output domain is written.
+
+    This is a direct port of the corresponding function in `gtir_to_sdfg_concat_where.py`.
+    """
+    assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
+
+    # The domain annex on program parameter references is the union of all
+    # accesses, which can be wider than the region actually read in this
+    # branch (the SDFG lowering path relies on per-branch `__cwcda` let
+    # bindings, see `canonicalize_domain_argument`, to obtain tight domains,
+    # but the stree pipeline inlines those lets again via `FuseAsFieldOp`).
+    # Intersect with the branch condition domain to tighten the read domain.
+    source_domain = source_expr.annex.domain
+    cond_dims_in_source = [
+        dim for dim in source_domain.ranges.keys() if dim in branch_cond_domain.ranges
+    ]
+    if cond_dims_in_source:
+        source_domain = domain_utils.domain_intersection(
+            source_domain,
+            domain_utils.promote_domain(
+                domain_utils.SymbolicDomain(
+                    branch_cond_domain.grid_type,
+                    {dim: branch_cond_domain.ranges[dim] for dim in cond_dims_in_source},
+                ),
+                source_domain.ranges.keys(),
+            ),
+        )
+    if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
+        output_type.dims
+    ):
+        # We promote the input expression to a field defined on the output domain:
+        # either a scalar value, broadcast on all dimensions, or a field defined
+        # on a slice of the output domain (e.g. a 2D boundary field broadcast on
+        # all levels of a 3D 'concat_where' result).
+        if concat_dim not in source_domain.ranges:
+            source_domain.ranges[concat_dim] = (
+                domain_utils.SymbolicRange(
+                    start=output_domain.ranges[concat_dim].start,
+                    stop=concat_dim_bound_expr,
+                )
+                if is_lower
+                else domain_utils.SymbolicRange(
+                    start=concat_dim_bound_expr,
+                    stop=output_domain.ranges[concat_dim].stop,
+                )
+            )
+        source_domain = domain_utils.promote_domain(source_domain, output_type.dims)
+        source_domain = domain_utils.domain_intersection(source_domain, output_domain)
+
+        # Use a 'deref' field operator to broadcast the input expression on the target domain.
+        bcast_expr = im.as_fieldop("deref", source_domain.as_expr())(source_expr)
+        bcast_expr.type = output_type
+
+        source = sdfg_builder.visit(bcast_expr, ctx=ctx)
+    else:
+        # The input field is defined on all dimensions of the result field.
+        source = sdfg_builder.visit(source_expr, ctx=ctx)
+
+    assert isinstance(source, FieldopData) and source.gt_type == output_type
+    source_domain_range = source_domain.ranges[concat_dim]
+    source_range_0 = get_symbolic(source_domain_range.start)
+    source_range_1 = get_symbolic(im.maximum(source_domain_range.start, source_domain_range.stop))
+    source_range_size = source_range_1 - source_range_0
+
+    assert isinstance(output_type.dtype, ts.ScalarType)
+    all_dims = gtx_common.order_dimensions(output_type.dims)
+
+    source_subset = []
+    output_subset = []
+    for dim, size, src_origin, dst_origin in zip(
+        all_dims,
+        output_desc.shape,
+        source.origin,
+        output_origin,
+        strict=True,
+    ):
+        if dim == concat_dim:
+            # Write only the subset corresponding to the range of lower or upper branch.
+            source_subset.append(
+                (
+                    source_range_0 - src_origin,
+                    source_range_1 - src_origin - 1,
+                    1,
+                )
+            )
+            output_subset.append(
+                (
+                    source_range_0 - dst_origin,
+                    source_range_0 - dst_origin + source_range_size - 1,
+                    1,
+                )
+            )
+        else:
+            # Write the full subset which covers the array size in this dimension.
+            source_subset.append(
+                (
+                    dst_origin - src_origin,
+                    dst_origin - src_origin + size - 1,
+                    1,
+                )
+            )
+            output_subset.append((0, size - 1, 1))
+
+    ctx.current_scope.add_child(
+        tn.CopyNode(
+            target=output_name,
+            memlet=dace.Memlet(
+                data=source.name,
+                subset=dace_subsets.Range(source_subset),
+                other_subset=dace_subsets.Range(output_subset),
+            ),
+        )
+    )
+
+
 def translate_concat_where(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
 ) -> FieldopResult:
-    """Generates the schedule-tree nodes for ``concat_where`` using CopyNode."""
+    """Generates the schedule-tree nodes for ``concat_where`` using CopyNode.
+
+    Lowers a `concat_where` expression to a dataflow where two memlets write
+    disjoint subsets, for the lower and upper domain, on one temporary field.
+    Direct port of the corresponding lowering in `gtir_to_sdfg_concat_where.py`.
+    """
     assert cpm.is_call_to(node, "concat_where")
     assert len(node.args) == 3
     assert isinstance(node.type, ts.FieldType)
@@ -915,70 +1649,57 @@ def translate_concat_where(
     if mask_domain.ranges[concat_dim].start in infinity_literals:
         bound_expr = mask_domain.ranges[concat_dim].stop
         lower_expr, upper_expr = node.args[1:]
+        lower_cond = mask_domain
+        upper_cond = domain_utils.domain_complement(mask_domain)
     elif mask_domain.ranges[concat_dim].stop in infinity_literals:
         bound_expr = mask_domain.ranges[concat_dim].start
         upper_expr, lower_expr = node.args[1:]
+        upper_cond = mask_domain
+        lower_cond = domain_utils.domain_complement(mask_domain)
     else:
         raise ValueError(f"Unexpected concat mask {mask_domain} with finite domain.")
+
+    if not isinstance(node.type.dtype, ts.ScalarType):
+        # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
+        raise NotImplementedError("'concat_where' with list output is not supported")
 
     # Allocate the output field.
     output_domain = get_field_domain(node.annex.domain)
     output_dims, output_origin, output_shape = get_field_layout(output_domain)
     assert output_dims == node.type.dims
-    assert isinstance(node.type.dtype, ts.ScalarType)
     dtype = gtx_dace_args.as_dace_type(node.type.dtype)
     output_name, output_desc = sdfg_builder.add_temp_array(ctx.root, output_shape, dtype)
 
-    # Translate the lower branch and create a CopyNode.
-    lower_data = sdfg_builder.visit(lower_expr, ctx=ctx)
-    assert isinstance(lower_data, FieldopData)
-    lower_domain = get_field_domain(lower_expr.annex.domain)
-    lower_subset = _make_access_index_for_field(lower_domain, lower_data)
-    # Compute the output subset for the lower branch.
-    bound_symbolic = get_symbolic(bound_expr)
-    lower_output_subset_parts = []
-    for dim, size, src_origin, dst_origin in zip(
-        output_dims, output_desc.shape, lower_data.origin, output_origin, strict=True
-    ):
-        if dim == concat_dim:
-            lower_output_subset_parts.append((
-                dst_origin - src_origin,
-                dst_origin - src_origin + bound_symbolic - src_origin - 1,
-                1,
-            ))
-        else:
-            lower_output_subset_parts.append((0, size - 1, 1))
-    lower_output_subset = dace_subsets.Range(lower_output_subset_parts)
-    ctx.current_scope.add_child(
-        tn.CopyNode(
-            target=output_name,
-            memlet=dace.Memlet(data=lower_data.name, subset=lower_subset, other_subset=lower_output_subset),
-        )
+    # Translate the input expression on the lower domain.
+    _translate_concat_where_branch(
+        ctx=ctx,
+        sdfg_builder=sdfg_builder,
+        source_expr=lower_expr,
+        is_lower=True,
+        concat_dim=concat_dim,
+        concat_dim_bound_expr=bound_expr,
+        branch_cond_domain=lower_cond,
+        output_domain=node.annex.domain,
+        output_type=node.type,
+        output_desc=output_desc,
+        output_name=output_name,
+        output_origin=output_origin,
     )
 
-    # Translate the upper branch and create a CopyNode.
-    upper_data = sdfg_builder.visit(upper_expr, ctx=ctx)
-    assert isinstance(upper_data, FieldopData)
-    upper_domain = get_field_domain(upper_expr.annex.domain)
-    upper_subset = _make_access_index_for_field(upper_domain, upper_data)
-    upper_output_subset_parts = []
-    for dim, size, _src_origin, dst_origin in zip(
-        output_dims, output_desc.shape, upper_data.origin, output_origin, strict=True
-    ):
-        if dim == concat_dim:
-            upper_output_subset_parts.append((
-                bound_symbolic - dst_origin,
-                bound_symbolic - dst_origin + size - 1,
-                1,
-            ))
-        else:
-            upper_output_subset_parts.append((0, size - 1, 1))
-    upper_output_subset = dace_subsets.Range(upper_output_subset_parts)
-    ctx.current_scope.add_child(
-        tn.CopyNode(
-            target=output_name,
-            memlet=dace.Memlet(data=upper_data.name, subset=upper_subset, other_subset=upper_output_subset),
-        )
+    # Translate the input expression on the upper domain.
+    _translate_concat_where_branch(
+        ctx=ctx,
+        sdfg_builder=sdfg_builder,
+        source_expr=upper_expr,
+        is_lower=False,
+        concat_dim=concat_dim,
+        concat_dim_bound_expr=bound_expr,
+        branch_cond_domain=upper_cond,
+        output_domain=node.annex.domain,
+        output_type=node.type,
+        output_desc=output_desc,
+        output_name=output_name,
+        output_origin=output_origin,
     )
 
     return FieldopData(output_name, node.type, tuple(output_origin))
@@ -1004,7 +1725,11 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
-    def __init__(self, offset_provider_type: gtx_common.OffsetProviderType, column_axis: Optional[gtx_common.Dimension] = None):
+    def __init__(
+        self,
+        offset_provider_type: gtx_common.OffsetProviderType,
+        column_axis: Optional[gtx_common.Dimension] = None,
+    ):
         self.offset_provider_type = offset_provider_type
         self.column_axis = column_axis
         self.uids = gtx_utils.IDGeneratorPool()
@@ -1037,9 +1762,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
             raise NotImplementedError(
                 "Fields with more than one local dimension are not supported."
             )
-        field_origin = tuple(
-            gtx_dace_args.range_start_symbol(name, dim) for dim in field_type.dims
-        )
+        field_origin = tuple(gtx_dace_args.range_start_symbol(name, dim) for dim in field_type.dims)
         return FieldopData(name, field_type, field_origin)
 
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
@@ -1196,7 +1919,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
             callback_mapping={},
             arg_names=[],
         )
-        root._offset_provider_type = self.offset_provider_type  # type: ignore[attr-defined]
+        root._offset_provider_type = self.offset_provider_type
 
         # Start: children are added directly to root (no GBlock —
         # from_schedule_tree does not support GBlock yet).
@@ -1210,8 +1933,8 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         data_nodes: dict[str, FieldopData | None] = {}
         for p in node.params:
             sym_type = p.type
-            assert isinstance(sym_type, ts.DataType)
             if (sym_name := str(p.id)) in root.containers:
+                assert isinstance(sym_type, ts.FieldType)
                 data_nodes[sym_name] = self.make_field(sym_name, sym_type)
 
         for i, stmt in enumerate(node.body):
@@ -1219,9 +1942,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
             # they are lowered to separate SDFG states.
             if i > 0:
                 root.add_child(tn.StateBoundaryNode())
-            ctx = SubgraphContext(
-                root=root, current_scope=root, data_nodes=data_nodes
-            )
+            ctx = SubgraphContext(root=root, current_scope=root, data_nodes=data_nodes)
             self.visit(stmt, ctx=ctx)
 
         # Remove unused connectivity tables.
@@ -1245,26 +1966,23 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
 
         return root
 
-    def visit_SetAt(
-        self, stmt: gtir.SetAt, ctx: SubgraphContext
-    ) -> None:
+    def visit_SetAt(self, stmt: gtir.SetAt, ctx: SubgraphContext) -> None:
         """Visits a ``SetAt`` statement and writes the result to the target."""
         # Visit the field operator expression.
         source_tree = self._visit_expression(stmt.expr, ctx)
 
-        # Visit the target expression.
-        if isinstance(stmt.target.type, ts.TupleType):
-            target_tree = gtx_utils.tree_map(
-                lambda x: self.make_field(str(x.id), x.type)
-            )(make_symbol_tree(str(stmt.target.id), stmt.target.type))
-        else:
-            target_tree = self._visit_expression(
-                stmt.target,
-                ctx=SubgraphContext(
-                    root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
-                ),
-                use_temp=False,
-            )
+        # Visit the target expression.  It can be a ``SymRef`` to an output
+        # field (including a tuple-typed symbol, handled by
+        # ``translate_symbol_ref``) or a ``make_tuple`` expression when the
+        # statement returns more than one field — same handling as the SDFG
+        # lowering.
+        target_tree = self._visit_expression(
+            stmt.target,
+            ctx=SubgraphContext(
+                root=ctx.root, current_scope=ctx.current_scope, data_nodes=ctx.data_nodes
+            ),
+            use_temp=False,
+        )
 
         # Write the result to the target using CopyNode(s).
         domain = extract_target_domain(stmt.domain)
@@ -1283,7 +2001,9 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
             ctx.current_scope.add_child(
                 tn.CopyNode(
                     target=target.name,
-                    memlet=dace.Memlet(data=source.name, subset=src_subset, other_subset=dst_subset),
+                    memlet=dace.Memlet(
+                        data=source.name, subset=src_subset, other_subset=dst_subset
+                    ),
                 )
             )
 
@@ -1333,23 +2053,30 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         if cpm.is_applied_as_fieldop(node):
             return translate_as_fieldop(node, ctx, self)
 
+        if cpm.is_applied_map(node):
+            return translate_map_list(node, ctx, self)
+
+        # ``tuple_get`` is handled at the IR level (indexing the nested result
+        # of the tuple expression) also when the result is a scalar — needed
+        # for tuples of scalars, e.g. flattened named-collection arguments.
+        if isinstance(node.fun, gtir.SymRef) and str(node.fun.id) == "tuple_get":
+            return translate_tuple_get(node, ctx, self)
+
         if isinstance(node.type, ts.ScalarType):
             return translate_scalar_expr(node, ctx, self)
-        elif isinstance(node.fun, gtir.SymRef):
+
+        if isinstance(node.fun, gtir.SymRef):
             # Name-matched builtins.
             name = str(node.fun.id)
             if name == "if_":
                 return translate_if(node, ctx, self)
             if name == "make_tuple":
                 return translate_make_tuple(node, ctx, self)
-            if name == "tuple_get":
-                return translate_tuple_get(node, ctx, self)
             if name == "concat_where":
                 return translate_concat_where(node, ctx, self)
             if name == "index":
-                # TODO: implement index for stree lowering
-                raise NotImplementedError("'index' builtin not yet implemented in stree lowering.")
-    
+                return translate_index(node, ctx, self)
+
         raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_Literal(
@@ -1395,15 +2122,26 @@ def lower_program_to_stree(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe stree backend.")
 
-    ir = fuse_as_fieldop.FuseAsFieldOp.apply(
-        ir, uids=gtx_utils.IDGeneratorPool(), offset_provider_type=offset_provider_type
-    )
     ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
     ir = ir_prune_casts.PruneCasts().visit(ir)
+
+    # DaCe requires C-compatible strings for the names of data containers,
+    # such as arrays and scalars. GT4Py uses a unicode symbols ('ᐞ') as name
+    # separator in the SSA pass, which generates invalid symbols for DaCe.
+    # Here we find new names for invalid symbols present in the IR.
     ir = replace_invalid_symbols(ir)
 
     visitor = GTIRToScheduleTree(offset_provider_type, column_axis)
+    import os
+
+    if os.environ.get("GT4PY_STREE_IR_DUMP"):
+        with open(f"/tmp/stree_ir_{ir.id}.txt", "w") as _f:
+            _f.write(str(ir))
     stree = visitor.visit(ir)
     assert isinstance(stree, tn.ScheduleTreeRoot)
+
+    if os.environ.get("GT4PY_STREE_IR_DUMP"):
+        with open(f"/tmp/stree_tree_{ir.id}.txt", "w") as _f:
+            _f.write(str(stree))
 
     return stree
