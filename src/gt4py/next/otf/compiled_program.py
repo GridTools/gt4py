@@ -461,10 +461,30 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                 )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
 
             else:
-                raise RuntimeError("No program compiled for this set of static arguments.")
+                raise RuntimeError(
+                    f"No program compiled for this set of static arguments of "
+                    f"'{self.definition.__name__}'{self._describe_argument_descriptors(key[0])}."
+                    " Note that a variant is also selected by the identity of the"
+                    " 'offset_provider' entries and, for generic programs, by the argument types."
+                )
 
         with compiled_program_call_context(self, key, args, kwargs, offset_provider):
             compiled_program(*args, **kwargs, offset_provider=offset_provider)
+
+    def _describe_argument_descriptors(self, descriptor_values: tuple[Hashable, ...]) -> str:
+        exprs = [
+            expr
+            for descriptor_cls, arg_exprs in (self.argument_descriptor_mapping or {}).items()
+            for arg_expr in arg_exprs
+            for expr in descriptor_cls.attribute_extractor_exprs(arg_expr).values()
+        ]
+        if not exprs:
+            return ""
+        # A length mismatch shortens the description; raising here would replace the
+        # error being built.
+        return ": " + ", ".join(
+            f"{expr}={value!r}" for expr, value in zip(exprs, descriptor_values)
+        )
 
     def _load_artifact(
         self, artifact_future: concurrent.futures.Future[stages.CompilationArtifact]
