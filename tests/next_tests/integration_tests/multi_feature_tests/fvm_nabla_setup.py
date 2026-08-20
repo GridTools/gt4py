@@ -62,7 +62,9 @@ class nabla_setup:
 
     def __init__(self, *, allocator, grid=None, config=None):
         if _ATLAS_IMPORT_ERROR is not None:
-            raise _ATLAS_IMPORT_ERROR
+            # A fresh exception per call: re-raising the stored one would append a
+            # frame to its traceback on every test in the session.
+            raise ImportError(str(_ATLAS_IMPORT_ERROR)) from _ATLAS_IMPORT_ERROR
         if grid is None:
             # Built here rather than in the signature: a default argument is evaluated
             # at import time, which would need `atlas4py` just to import this module.

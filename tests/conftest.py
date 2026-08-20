@@ -18,10 +18,6 @@ from typing import Final
 import pytest
 
 
-# `pytester` powers the wiring test in `package_tests` that runs a nested pytest
-# session with a stubbed probe; it must be enabled from the root conftest.
-pytest_plugins = ["pytester"]
-
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
 

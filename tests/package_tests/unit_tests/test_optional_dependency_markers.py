@@ -18,7 +18,10 @@ without teaching the conftest how to check for it.
 
 import importlib
 import importlib.util
+import os
 import pathlib
+import subprocess
+import sys
 import tomllib
 from typing import Any
 
@@ -77,41 +80,57 @@ def test_requires_gpu_marker_is_enforced():
     assert int(cp.zeros(1).sum()) == 0
 
 
-def test_auto_skip_hook_is_wired(pytester):
+def test_auto_skip_hook_is_wired(tmp_path):
     """A `requires_*` test must be skipped when its probe reports unavailable.
 
-    The canaries above only exercise this in environments where the dependency is
-    genuinely missing. This drives the real hook with a stubbed probe instead, so
-    the contract is checked whatever happens to be installed.
+    The canaries above only exercise this where the dependency is genuinely
+    missing. This drives the real hook with a stubbed probe, so the contract is
+    checked whatever happens to be installed.
     """
     root_conftest = _REPO_ROOT / "tests" / "conftest.py"
-    pytester.makeconftest(f"""
-        import importlib.util
-
-        _spec = importlib.util.spec_from_file_location("_root_conftest", r"{root_conftest}")
-        _root = importlib.util.module_from_spec(_spec)
-        _spec.loader.exec_module(_root)
-
-        _root._REQUIREMENT_PROBES = {{"requires_gpu": (lambda: False, "a stubbed dependency")}}
-        _root._unmet_requirement_marks.cache_clear()
-
-        pytest_addoption = _root.pytest_addoption
-        pytest_collection_modifyitems = _root.pytest_collection_modifyitems
-    """)
-    pytester.makepyfile("""
-        import pytest
-
-        @pytest.mark.requires_gpu
-        def test_marked():
-            raise AssertionError("should have been skipped")
-
-        def test_unmarked():
-            pass
-    """)
-    pytester.makeini("[pytest]\nmarkers =\n    requires_gpu: stubbed requirement\n")
-
-    pytester.runpytest("-p", "no:randomly").assert_outcomes(passed=1, skipped=1)
-    # ... and the escape hatch must let the failure through.
-    pytester.runpytest("-p", "no:randomly", "--require-optional-deps").assert_outcomes(
-        passed=1, failed=1
+    (tmp_path / "pytest.ini").write_text(
+        "[pytest]\nmarkers =\n    requires_gpu: stubbed requirement\n"
     )
+    (tmp_path / "conftest.py").write_text(f"""
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location("_root_conftest", r"{root_conftest}")
+_root = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_root)
+
+_root._REQUIREMENT_PROBES = {{"requires_gpu": (lambda: False, "a stubbed dependency")}}
+_root._unmet_requirement_marks.cache_clear()
+
+pytest_addoption = _root.pytest_addoption
+pytest_collection_modifyitems = _root.pytest_collection_modifyitems
+""")
+    (tmp_path / "test_stub.py").write_text("""
+import pytest
+
+@pytest.mark.requires_gpu
+def test_marked():
+    raise AssertionError("should have been skipped")
+
+def test_unmarked():
+    pass
+""")
+
+    def run(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "-m", "pytest", "-q", "--tb=no", str(tmp_path), *args],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            # Keep the nested session hermetic: no third-party plugin may deselect,
+            # skip or reorder the two tests this asserts on.
+            env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
+        )
+
+    result = run()
+    assert result.returncode == 0, result.stdout
+    assert "1 passed" in result.stdout and "1 skipped" in result.stdout, result.stdout
+
+    # ... and the escape hatch must let the failure through.
+    result = run("--require-optional-deps")
+    assert result.returncode == 1, result.stdout
+    assert "1 failed" in result.stdout and "1 passed" in result.stdout, result.stdout
