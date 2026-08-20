@@ -9,16 +9,31 @@
 import math
 
 import numpy as np
-from atlas4py import (
-    Config,
-    StructuredGrid,
-    StructuredMeshGenerator,
-    Topology,
-    build_edges,
-    build_median_dual_mesh,
-    build_node_to_edge_connectivity,
-    functionspace,
-)
+
+try:
+    from atlas4py import (
+        Config,
+        StructuredGrid,
+        StructuredMeshGenerator,
+        Topology,
+        build_edges,
+        build_median_dual_mesh,
+        build_node_to_edge_connectivity,
+        functionspace,
+    )
+except ImportError as error:
+    # Keep this module importable without `atlas4py`, so that collection succeeds and
+    # the `requires_atlas` marker can skip the tests. The error is kept and re-raised
+    # from `nabla_setup`: `requires_atlas` is probed with `importlib.util.find_spec`,
+    # which does not execute the module, so an `atlas4py` that is installed but not
+    # loadable (a missing `libatlas`, an ABI mismatch) is not skipped and has to fail
+    # with its own message rather than with a `None` sentinel.
+    _ATLAS_IMPORT_ERROR: ImportError | None = error
+    Config = StructuredGrid = StructuredMeshGenerator = Topology = None
+    build_edges = build_median_dual_mesh = build_node_to_edge_connectivity = None
+    functionspace = None
+else:
+    _ATLAS_IMPORT_ERROR = None
 
 from gt4py import next as gtx
 from gt4py.next.iterator import atlas_utils
@@ -45,7 +60,13 @@ class nabla_setup:
         config["angle"] = 20.0
         return config
 
-    def __init__(self, *, allocator, grid=StructuredGrid("O32"), config=None):
+    def __init__(self, *, allocator, grid=None, config=None):
+        if _ATLAS_IMPORT_ERROR is not None:
+            raise _ATLAS_IMPORT_ERROR
+        if grid is None:
+            # Built here rather than in the signature: a default argument is evaluated
+            # at import time, which would need `atlas4py` just to import this module.
+            grid = StructuredGrid("O32")
         if config is None:
             config = self._default_config()
         self.allocator = allocator

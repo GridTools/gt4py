@@ -166,6 +166,9 @@ def test_cartesian(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         # An unmet `requires_*` marker means a broken environment. Fail loudly
         # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # This disables auto-skipping for *every* `requires_*` marker, so adding a
+        # test with a marker this session does not install for is meant to fail here:
+        # either install the extra, or exclude the marker in the selection below.
         "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
@@ -260,11 +263,16 @@ def test_next(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         # An unmet `requires_*` marker means a broken environment. Fail loudly
         # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # This disables auto-skipping for *every* `requires_*` marker, so adding a
+        # test with a marker this session does not install for is meant to fail here:
+        # either install the extra, or exclude the marker in the selection below.
         "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        # No `NO_TESTS_COLLECTED_EXIT_CODE` here: every marker combination this
+        # session runs selects tests, so collecting none means the selection broke
+        # and must not be reported as success.
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
@@ -313,6 +321,9 @@ def test_storage(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
         # An unmet `requires_*` marker means a broken environment. Fail loudly
         # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # This disables auto-skipping for *every* `requires_*` marker, so adding a
+        # test with a marker this session does not install for is meant to fail here:
+        # either install the extra, or exclude the marker in the selection below.
         "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),

@@ -426,11 +426,14 @@ def gpu_device_count() -> int:
     A `cupy` install alone does not imply a usable GPU: the wheels install
     cleanly on machines with no driver and no visible device.
 
+    Returns:
+        The number of visible GPU devices, or 0 when `cupy` is missing or the
+        driver cannot be queried.
+
     Note:
-        Devices are enumerated rather than selected. Counting them needs no CUDA
-        context, while resolving the current device (as `cupy.cuda.Device()`
-        does) can initialize one, which is costly per process and unsafe to
-        inherit across a `fork`.
+        Enumerating is what makes the "installed but no visible device" case
+        answerable at all: it reports 0. A `cupy.cuda.Device()` probe only
+        resolves the *current* device and says nothing about how many exist.
     """
     if cp is None:
         return 0

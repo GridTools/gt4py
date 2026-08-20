@@ -13,10 +13,14 @@ import functools
 import importlib.util
 import sys
 import types
-from typing import Callable, Final
+from typing import Final
 
 import pytest
 
+
+# `pytester` powers the wiring test in `package_tests` that runs a nested pytest
+# session with a stubbed probe; it must be enabled from the root conftest.
+pytest_plugins = ["pytester"]
 
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]
@@ -41,7 +45,14 @@ def _get_pkg_marks(module_name: str) -> list[pytest.Mark | str]:
 
 
 def _is_importable(module_name: str) -> bool:
-    return importlib.util.find_spec(module_name) is not None
+    try:
+        return importlib.util.find_spec(module_name) is not None
+    except Exception:
+        # `find_spec` raises rather than returning `None` for a partially broken
+        # install (and for any meta-path finder that raises). This runs inside a
+        # collection hook, where an exception aborts the whole session, so treat
+        # anything unresolvable as simply unavailable.
+        return False
 
 
 def _is_gpu_available() -> bool:
@@ -54,7 +65,7 @@ def _is_gpu_available() -> bool:
 # `requires_*` markers describe the *environment* a test needs, so they can
 # be enforced here instead of relying on the caller passing the matching
 # `-m` filter (which only `noxfile.py` does).
-_REQUIREMENT_PROBES: Final[dict[str, tuple[Callable[[], bool], str]]] = {
+_REQUIREMENT_PROBES: Final[dict[str, tuple[collections.abc.Callable[[], bool], str]]] = {
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
     "requires_gpu": (_is_gpu_available, "`cupy` and a reachable GPU device"),
     "requires_jax": (lambda: _is_importable("jax"), "the `jax` package"),
@@ -117,5 +128,8 @@ def pytest_collection_modifyitems(
         # Skip tests whose `requires_*` markers are not satisfied here, so the
         # markers work the same no matter how `pytest` was invoked.
         for marker, skip_mark in unmet_marks.items():
-            if marker in item.keywords:
+            # Not `marker in item.keywords`: keywords also hold every node *name* in
+            # the chain, so a file or function merely named after a marker would be
+            # skipped without carrying it.
+            if item.get_closest_marker(marker) is not None:
                 item.add_marker(skip_mark)

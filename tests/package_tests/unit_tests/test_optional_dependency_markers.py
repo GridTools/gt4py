@@ -24,8 +24,6 @@ from typing import Any
 
 import pytest
 
-from gt4py._core import definitions as core_defs
-
 
 _REPO_ROOT = pathlib.Path(__file__).parents[3]
 
@@ -73,5 +71,47 @@ def test_requires_jax_marker_is_enforced():
 
 @pytest.mark.requires_gpu
 def test_requires_gpu_marker_is_enforced():
-    # An importable but unusable `cupy` must not count as a GPU.
-    assert core_defs.gpu_device_count() > 0
+    # Touch the device for real. Asserting `gpu_device_count() > 0` here would be
+    # circular: that is the probe which decided not to skip this test.
+    cp = importlib.import_module("cupy")
+    assert int(cp.zeros(1).sum()) == 0
+
+
+def test_auto_skip_hook_is_wired(pytester):
+    """A `requires_*` test must be skipped when its probe reports unavailable.
+
+    The canaries above only exercise this in environments where the dependency is
+    genuinely missing. This drives the real hook with a stubbed probe instead, so
+    the contract is checked whatever happens to be installed.
+    """
+    root_conftest = _REPO_ROOT / "tests" / "conftest.py"
+    pytester.makeconftest(f"""
+        import importlib.util
+
+        _spec = importlib.util.spec_from_file_location("_root_conftest", r"{root_conftest}")
+        _root = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_root)
+
+        _root._REQUIREMENT_PROBES = {{"requires_gpu": (lambda: False, "a stubbed dependency")}}
+        _root._unmet_requirement_marks.cache_clear()
+
+        pytest_addoption = _root.pytest_addoption
+        pytest_collection_modifyitems = _root.pytest_collection_modifyitems
+    """)
+    pytester.makepyfile("""
+        import pytest
+
+        @pytest.mark.requires_gpu
+        def test_marked():
+            raise AssertionError("should have been skipped")
+
+        def test_unmarked():
+            pass
+    """)
+    pytester.makeini("[pytest]\nmarkers =\n    requires_gpu: stubbed requirement\n")
+
+    pytester.runpytest("-p", "no:randomly").assert_outcomes(passed=1, skipped=1)
+    # ... and the escape hatch must let the failure through.
+    pytester.runpytest("-p", "no:randomly", "--require-optional-deps").assert_outcomes(
+        passed=1, failed=1
+    )

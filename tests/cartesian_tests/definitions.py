@@ -15,8 +15,7 @@ from gt4py import cartesian as gt4pyc
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import utils as gt_utils
 
-# Only bound when a GPU is genuinely usable: an importable `cupy` is not enough,
-# and probing with `cupy.cuda.Device()` can initialize a CUDA context.
+# Only bound when a GPU is genuinely usable: an importable `cupy` is not enough.
 cp = core_defs.cp if core_defs.gpu_device_count() > 0 else None
 
 
