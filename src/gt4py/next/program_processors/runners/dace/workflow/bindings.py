@@ -14,7 +14,10 @@ import dace
 
 from gt4py.eve import codegen
 from gt4py.next.otf import code_specs, stages
-from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
+    sdfg_utils as gtx_dace_utils,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -41,7 +44,7 @@ def _update_sdfg_array_strides(
 ) -> None:
     for i, array_stride in enumerate(sdfg_arg_desc.strides):
         arg_stride = f"{arg}.__gt_buffer_info__.elem_strides[{i}]"
-        if gtx_dace_args.is_compile_time_integer(array_stride):
+        if gtx_dace_utils.is_compile_time_integer(array_stride):
             # The array stride is set to constant value in this dimension.
             code.append(
                 f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
@@ -155,7 +158,7 @@ def _parse_gt_param(
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
-                    if gtx_dace_args.is_compile_time_integer(array_size):
+                    if gtx_dace_utils.is_compile_time_integer(array_size):
                         # The array shape in this dimension is set at compile-time.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.__gt_buffer_info__.shape[{i}]"
@@ -197,7 +200,7 @@ def _parse_gt_connectivities(
         if gtx_dace_args.is_connectivity_identifier(arg_name):
             assert isinstance(arg_desc, dace.data.Array)
             assert len(arg_desc.shape) == 2
-            assert gtx_dace_args.is_compile_time_integer(arg_desc.shape[1])
+            assert gtx_dace_utils.is_compile_time_integer(arg_desc.shape[1])
             origin_size_arg = arg_desc.shape[0]
             assert len(origin_size_arg.free_symbols) == 1
             origin_size_param = next(iter(origin_size_arg.free_symbols))

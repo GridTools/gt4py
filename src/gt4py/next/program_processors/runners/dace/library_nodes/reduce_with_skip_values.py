@@ -16,7 +16,7 @@ from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace import sdfg_utils as gtx_dace_utils
 
 
 @dace.library.node
@@ -75,7 +75,7 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         if len(mask_desc.shape) != 2:
             raise ValueError(f"Invalid shape {mask_desc.shape} of mask array, expected 2d array.")
         max_neighbors = mask_desc.shape[1]
-        if not gtx_dace_args.is_compile_time_integer(max_neighbors):
+        if not gtx_dace_utils.is_compile_time_integer(max_neighbors):
             raise ValueError(
                 f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
             )
@@ -118,7 +118,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         mask_desc = sdfg.arrays[maskedge.data.data]
         assert len(mask_desc.shape) == 2
         max_neighbors = mask_desc.shape[1]
-        assert gtx_dace_args.is_compile_time_integer(max_neighbors)
+        assert gtx_dace_utils.is_compile_time_integer(max_neighbors)
 
         # In validation, we already checked that the input subset collects exactly
         #  `max_neighbors` elements along one dimension.
