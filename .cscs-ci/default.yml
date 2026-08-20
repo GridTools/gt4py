@@ -9,7 +9,7 @@
 #
 
 include:
-  - local: 'ci/cscs-ci-base.yml'
+  - local: '.cscs-ci/base.yml'
 
 .test_python_versions: &test_python_versions ['3.12', '3.14']
 
