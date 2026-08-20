@@ -121,8 +121,7 @@ def test_unmarked():
             capture_output=True,
             text=True,
             cwd=tmp_path,
-            # Keep the nested session hermetic: no third-party plugin may deselect,
-            # skip or reorder the two tests this asserts on.
+            # Hermetic: no third-party plugin may skip or reorder these two tests.
             env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
         )
 

@@ -22,12 +22,9 @@ try:
         functionspace,
     )
 except ImportError as error:
-    # Keep this module importable without `atlas4py`, so that collection succeeds and
-    # the `requires_atlas` marker can skip the tests. The error is kept and re-raised
-    # from `nabla_setup`: `requires_atlas` is probed with `importlib.util.find_spec`,
-    # which does not execute the module, so an `atlas4py` that is installed but not
-    # loadable (a missing `libatlas`, an ABI mismatch) is not skipped and has to fail
-    # with its own message rather than with a `None` sentinel.
+    # Stay importable so collection succeeds and `requires_atlas` can skip the tests.
+    # `nabla_setup` re-raises the error, since the marker is probed with `find_spec`
+    # and would not skip an `atlas4py` that is installed but not loadable.
     _ATLAS_IMPORT_ERROR: ImportError | None = error
     Config = StructuredGrid = StructuredMeshGenerator = Topology = None
     build_edges = build_median_dual_mesh = build_node_to_edge_connectivity = None
@@ -62,12 +59,10 @@ class nabla_setup:
 
     def __init__(self, *, allocator, grid=None, config=None):
         if _ATLAS_IMPORT_ERROR is not None:
-            # A fresh exception per call: re-raising the stored one would append a
-            # frame to its traceback on every test in the session.
+            # Fresh exception: re-raising one object grows its traceback per call.
             raise ImportError(str(_ATLAS_IMPORT_ERROR)) from _ATLAS_IMPORT_ERROR
         if grid is None:
-            # Built here rather than in the signature: a default argument is evaluated
-            # at import time, which would need `atlas4py` just to import this module.
+            # Not a default argument: those are evaluated at import time.
             grid = StructuredGrid("O32")
         if config is None:
             config = self._default_config()

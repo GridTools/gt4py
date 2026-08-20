@@ -44,10 +44,8 @@ def _is_importable(module_name: str) -> bool:
     try:
         return importlib.util.find_spec(module_name) is not None
     except Exception:
-        # `find_spec` raises rather than returning `None` for a partially broken
-        # install (and for any meta-path finder that raises). This runs inside a
-        # collection hook, where an exception aborts the whole session, so treat
-        # anything unresolvable as simply unavailable.
+        # `find_spec` raises for a partially broken install, and this runs in a
+        # collection hook where that would abort the whole session.
         return False
 
 
@@ -124,8 +122,6 @@ def pytest_collection_modifyitems(
         # Skip tests whose `requires_*` markers are not satisfied here, so the
         # markers work the same no matter how `pytest` was invoked.
         for marker, skip_mark in unmet_marks.items():
-            # Not `marker in item.keywords`: keywords also hold every node *name* in
-            # the chain, so a file or function merely named after a marker would be
-            # skipped without carrying it.
+            # Not `in item.keywords`: that also holds every node *name* in the chain.
             if item.get_closest_marker(marker) is not None:
                 item.add_marker(skip_mark)
