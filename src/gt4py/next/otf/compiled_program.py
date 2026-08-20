@@ -598,6 +598,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
 
         artifact_future = self._compilation_jobs.pop(key)
         assert key not in self.compiled_programs
+        # A failing 'result()' keeps the future alive through its traceback, so the
+        # weak entry would survive until the next GC pass and be reported twice.
+        _ongoing_compilations.pop(artifact_future, None)
         self.compiled_programs[key] = self._load_artifact(artifact_future)
         return True
 
