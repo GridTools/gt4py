@@ -30,9 +30,12 @@ def is_compile_time_integer(expr: Any) -> bool:
     Examples:
         >>> is_compile_time_integer(3)
         True
-        >>> is_compile_time_integer(dace.symbol("N"))
-        False
         >>> is_compile_time_integer(1 / 3)
+        False
+        >>> import sympy
+        >>> is_compile_time_integer(sympy.Rational(1, 3))
+        False
+        >>> is_compile_time_integer(sympy.Symbol("N"))
         False
     """
     return str(expr).isdigit()
