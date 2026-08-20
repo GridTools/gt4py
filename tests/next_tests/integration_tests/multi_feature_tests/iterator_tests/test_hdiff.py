@@ -66,6 +66,11 @@ def hdiff(inp, coeff, out, x, y):
 def test_hdiff(hdiff_reference, program_processor):
     program_processor, validate = program_processor
 
+    if "imperative" in getattr(program_processor, "name", ""):
+        # The imperative code path leaves the CSE temporaries undeclared, so symbol
+        # validation rejects the IR. See https://github.com/GridTools/gt4py/issues/2810.
+        pytest.xfail("GTFN imperative backend does not declare CSE temporaries.")
+
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 

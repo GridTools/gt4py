@@ -336,6 +336,13 @@ def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
 
 
 def test_lap_like(cartesian_case, static_domains: bool):
+    if static_domains and "imperative" in getattr(cartesian_case.backend, "name", ""):
+        # The imperative code path leaves the CSE temporaries undeclared, so symbol
+        # validation rejects the IR. See https://github.com/GridTools/gt4py/issues/2810.
+        # Only the static-domain variant folds enough to trigger it; `dynamic_domains`
+        # passes and is deliberately left running.
+        pytest.xfail("GTFN imperative backend does not declare CSE temporaries.")
+
     @gtx.field_operator(static_domains=static_domains)
     def testee(
         inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]

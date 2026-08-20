@@ -16,7 +16,7 @@ from gt4py.next.program_processors.runners import gtfn
 
 @program_formatter.program_formatter
 def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
-    gtfn_translation = gtfn.GTFNCompileWorkflowFactory(cached_translation=False).translation
+    gtfn_translation = gtfn.make_gtfn_compile_workflow().translation
     assert isinstance(gtfn_translation, GTFNTranslationStep)
     return gtfn_translation.generate_stencil_source(
         program,
