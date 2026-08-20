@@ -29,9 +29,9 @@ from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.program_processors.runners import gtfn
 
 
-def test_backend_factory_trait_device():
-    cpu_version = gtfn.GTFNBackendFactory(gpu=False)
-    gpu_version = gtfn.GTFNBackendFactory(gpu=True)
+def test_make_gtfn_backend_trait_device():
+    cpu_version = gtfn.make_gtfn_backend(gpu=False)
+    gpu_version = gtfn.make_gtfn_backend(gpu=True)
 
     assert cpu_version.name == "run_gtfn_cpu"
     assert isinstance(cpu_version.executor.translation, workflow.CachedStep)
@@ -52,11 +52,11 @@ def test_backend_factory_trait_device():
     )
 
 
-def test_backend_factory_build_cache_config(monkeypatch):
+def test_make_gtfn_backend_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
-    session_version = gtfn.GTFNBackendFactory()
+    session_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
-    persistent_version = gtfn.GTFNBackendFactory()
+    persistent_version = gtfn.make_gtfn_backend()
 
     assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
@@ -65,11 +65,11 @@ def test_backend_factory_build_cache_config(monkeypatch):
     )
 
 
-def test_backend_factory_build_type_config(monkeypatch):
+def test_make_gtfn_backend_build_type_config(monkeypatch):
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
+    release_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
-    min_size_version = gtfn.GTFNBackendFactory()
+    min_size_version = gtfn.make_gtfn_backend()
 
     assert (
         release_version.executor.compilation.builder_factory.cmake_build_type
@@ -90,9 +90,9 @@ def test_cmake_build_type_changes_build_folder(monkeypatch, tmp_path):
     land in different cache folders.
     """
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
+    release_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.DEBUG)
-    debug_version = gtfn.GTFNBackendFactory()
+    debug_version = gtfn.make_gtfn_backend()
 
     release_compiler = release_version.executor.compilation
     debug_compiler = debug_version.executor.compilation
