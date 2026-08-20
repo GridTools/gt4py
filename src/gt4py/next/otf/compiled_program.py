@@ -432,10 +432,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             arg_specialization_key,
         )
 
-        try:
-            compiled_program = self.compiled_programs[key]
+        # Note: no `KeyError` handler, as anything raised inside one gets chained to it.
+        compiled_program = self.compiled_programs.get(key)
 
-        except KeyError as e:
+        if compiled_program is None:
             if self._finish_compilation_job(key):
                 compiled_program = self.compiled_programs[key]
             elif enable_jit:
@@ -458,13 +458,44 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
                     offset_provider=offset_provider,
                     enable_jit=False,
                     **canonical_kwargs,
-                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call`
+                )  # passing `enable_jit=False` because a cache miss should be a hard-error in this call
 
             else:
-                raise RuntimeError("No program compiled for this set of static arguments.") from e
+                raise RuntimeError(
+                    f"No program compiled for this set of static arguments of "
+                    f"'{self.definition.__name__}'{self._describe_argument_descriptors(key[0])}."
+                    " Note that a variant is also selected by the identity of the"
+                    " 'offset_provider' entries and, for generic programs, by the argument types."
+                )
 
         with compiled_program_call_context(self, key, args, kwargs, offset_provider):
             compiled_program(*args, **kwargs, offset_provider=offset_provider)
+
+    def _describe_argument_descriptors(self, descriptor_values: tuple[Hashable, ...]) -> str:
+        exprs = [
+            expr
+            for descriptor_cls, arg_exprs in (self.argument_descriptor_mapping or {}).items()
+            for arg_expr in arg_exprs
+            for expr in descriptor_cls.attribute_extractor_exprs(arg_expr).values()
+        ]
+        if not exprs:
+            return ""
+        # A length mismatch shortens the description; raising here would replace the
+        # error being built.
+        return ": " + ", ".join(
+            f"{expr}={value!r}" for expr, value in zip(exprs, descriptor_values)
+        )
+
+    def _load_artifact(
+        self, artifact_future: concurrent.futures.Future[stages.CompilationArtifact]
+    ) -> stages.ExecutableProgram:
+        artifact = artifact_future.result()  # re-raises errors from the compilation worker
+        try:
+            return self.backend.load_artifact(artifact)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load the compiled program '{self.definition.__name__}'."
+            ) from e
 
     @functools.cached_property
     def _primitive_values_extractor(self) -> Callable | None:
@@ -586,9 +617,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             return False
 
         artifact_future = self._compilation_jobs.pop(key)
-        assert isinstance(artifact_future, concurrent.futures.Future)
         assert key not in self.compiled_programs
-        self.compiled_programs[key] = self.backend.load_artifact(artifact_future.result())
+        # A failing 'result()' keeps the future alive through its traceback, so the
+        # weak entry would survive until the next GC pass and be reported twice.
+        _ongoing_compilations.pop(artifact_future, None)
+        self.compiled_programs[key] = self._load_artifact(artifact_future)
         return True
 
     def _compile_variant(
@@ -665,7 +698,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.
-            self.compiled_programs[key] = self.backend.load_artifact(future.result())
+            self.compiled_programs[key] = self._load_artifact(future)
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (
