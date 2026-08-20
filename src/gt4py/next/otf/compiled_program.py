@@ -472,8 +472,6 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             compiled_program(*args, **kwargs, offset_provider=offset_provider)
 
     def _describe_argument_descriptors(self, descriptor_values: tuple[Hashable, ...]) -> str:
-        # Note: not `zip(..., strict=True)`: this runs while building an error message, so a
-        # mismatch must degrade to a shorter description instead of replacing the error.
         exprs = [
             expr
             for descriptor_cls, arg_exprs in (self.argument_descriptor_mapping or {}).items()
@@ -482,6 +480,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         ]
         if not exprs:
             return ""
+        # A length mismatch shortens the description; raising here would replace the
+        # error being built.
         return ": " + ", ".join(
             f"{expr}={value!r}" for expr, value in zip(exprs, descriptor_values)
         )
