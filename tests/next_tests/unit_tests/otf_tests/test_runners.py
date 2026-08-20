@@ -237,8 +237,12 @@ def test_wait_for_compilation_groups_multiple_failures():
     compiled_program.wait_for_compilation()
 
 
-def test_wait_for_compilation_inherits_failures_left_by_other_code():
-    """Document the leak the `isolate_ongoing_compilations` fixture exists to contain."""
+def test_wait_for_compilation_drains_foreign_entries():
+    """Pin the leak the `isolate_ongoing_compilations` fixture exists to contain.
+
+    The drain is process-global, so it reports entries this test never created.
+    Across tests that is what makes one test fail with another one's error.
+    """
     # The future has to stay referenced: tracking is weak, so a collected future
     # is not reported at all.
     foreign = concurrent.futures.Future()

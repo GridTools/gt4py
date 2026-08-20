@@ -23,7 +23,9 @@ def reset_ongoing_compilations() -> None:
     behaviour. A compiled program keeps its own reference to the future in
     `CompiledProgramsPool._compilation_jobs`, so dropping the entry here only
     removes the program from that global drain; a failed variant still raises
-    its original error when it is called.
+    its original error the next time it is called. Only the next one: the pool
+    pops the job before re-raising and never reaches `compiled_programs`, so a
+    further call reports a plain cache miss instead.
     """
     compiled_program._ongoing_compilations.clear()
 
@@ -36,6 +38,14 @@ def isolate_ongoing_compilations() -> Iterator[None]:
     next `gtx.wait_for_compilation()` anywhere in the process, so an unrelated
     test drains it and fails with a foreign error. Which test is hit depends on
     ordering, so the failures look non-deterministic. See GitHub issue #2800.
+
+    Note: being function-scoped, this also drops the failure of a compilation
+    that is never awaited within the test that submitted it. That is harmless
+    while every compiling fixture is function-scoped too, as it is today, but a
+    module- or session-scoped one would have its failures silently swallowed by
+    any later `wait_for_compilation()`. Give such a fixture its own explicit
+    wait instead of relying on the global drain.
     """
+    reset_ongoing_compilations()
     yield
     reset_ongoing_compilations()
