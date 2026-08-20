@@ -137,7 +137,7 @@ pytest -v -l -s tests/
 ```
 
 Tests which need an optional dependency carry a `requires_*` marker
-(`requires_gpu`, `requires_dace`, `requires_jax`, `requires_atlas`) and are
+(`requires_gpu`, `requires_jax`, `requires_atlas`) and are
 skipped automatically when that dependency is unavailable. Use
 `--require-optional-deps` to disable the automatic skipping and see the actual
 error instead:

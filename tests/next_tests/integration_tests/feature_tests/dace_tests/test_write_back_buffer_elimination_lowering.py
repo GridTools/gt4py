@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import dataclasses
 
+import dace
 import numpy as np
 import pytest
-
-dace = pytest.importorskip("dace")
 
 from dace import data as dace_data
 
@@ -53,7 +52,6 @@ C2E_TABLE = np.array(
     dtype=gtx.IndexType,
 )
 N_CELLS, N_EDGES = 8, 18
-
 
 # The transformation only matches a transient that is written back into a program
 #  output and is additionally consumed. `base` below is such a transient: it is a

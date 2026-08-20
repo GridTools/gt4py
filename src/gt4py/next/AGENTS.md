@@ -89,6 +89,6 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
   comes from `uv run nox -s "test_next-<py>(...)"`. GPU sessions
   may be unavailable locally and will skip. Tests carrying a `requires_*`
-  marker (`requires_gpu`, `requires_dace`, `requires_jax`, `requires_atlas`)
+  marker (`requires_gpu`, `requires_jax`, `requires_atlas`)
   are skipped automatically when that dependency is missing; pass
   `--require-optional-deps` to turn those skips back into real failures.

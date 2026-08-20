@@ -6,20 +6,18 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-try:
-    import cupy as cp
-
-    cp.cuda.Device()
-except (ImportError, RuntimeError):
-    cp = None
-
 import datetime
 
 import numpy as np
 import pytest
 
 from gt4py import cartesian as gt4pyc
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import utils as gt_utils
+
+# Only bound when a GPU is genuinely usable: an importable `cupy` is not enough,
+# and probing with `cupy.cuda.Device()` can initialize a CUDA context.
+cp = core_defs.cp if core_defs.gpu_device_count() > 0 else None
 
 
 def _backend_name_as_param(name: str):
@@ -27,7 +25,7 @@ def _backend_name_as_param(name: str):
     if gt4pyc.backend.from_name(name).storage_info["device"] == "gpu":
         marks.append(pytest.mark.requires_gpu)
     if "dace" in name:
-        marks.append(pytest.mark.requires_dace)
+        marks.append(pytest.mark.uses_dace)
     return pytest.param(name, marks=marks)
 
 

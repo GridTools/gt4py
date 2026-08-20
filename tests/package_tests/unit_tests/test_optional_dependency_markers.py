@@ -24,6 +24,8 @@ from typing import Any
 
 import pytest
 
+from gt4py._core import definitions as core_defs
+
 
 _REPO_ROOT = pathlib.Path(__file__).parents[3]
 
@@ -64,11 +66,6 @@ def test_requires_atlas_marker_is_enforced():
     importlib.import_module("atlas4py")
 
 
-@pytest.mark.requires_dace
-def test_requires_dace_marker_is_enforced():
-    importlib.import_module("dace")
-
-
 @pytest.mark.requires_jax
 def test_requires_jax_marker_is_enforced():
     importlib.import_module("jax")
@@ -76,5 +73,5 @@ def test_requires_jax_marker_is_enforced():
 
 @pytest.mark.requires_gpu
 def test_requires_gpu_marker_is_enforced():
-    cp = importlib.import_module("cupy")
-    cp.cuda.Device()  # importable but unusable `cupy` must not count as a GPU
+    # An importable but unusable `cupy` must not count as a GPU.
+    assert core_defs.gpu_device_count() > 0

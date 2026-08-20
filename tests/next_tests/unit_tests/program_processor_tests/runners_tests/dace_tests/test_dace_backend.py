@@ -13,11 +13,9 @@ import re
 import unittest.mock as mock
 from typing import Any
 
+import dace
 import numpy as np
 import pytest
-
-
-dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs

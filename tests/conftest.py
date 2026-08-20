@@ -45,25 +45,10 @@ def _is_importable(module_name: str) -> bool:
 
 
 def _is_gpu_available() -> bool:
-    """Check that `cupy` is importable *and* the driver reports a usable device.
+    """Check that a GPU device is actually usable, not merely that `cupy` is installed."""
+    from gt4py._core import definitions as core_defs
 
-    Importing `cupy` alone is not enough, since its wheels install fine on
-    machines without a driver or a visible device.
-
-    Note:
-        Enumerating devices is deliberate: `cupy.cuda.Device()` resolves the
-        *current* device and can initialize a CUDA context, which every `xdist`
-        worker would then pay for (and which is unsafe to inherit across the
-        `fork` used to start compilation workers). Counting devices needs no
-        context. `tests/cartesian_tests/definitions.py` still uses the
-        `Device()` form.
-    """
-    try:
-        import cupy as cp
-
-        return cp.cuda.runtime.getDeviceCount() > 0
-    except Exception:
-        return False
+    return core_defs.gpu_device_count() > 0
 
 
 # `requires_*` markers describe the *environment* a test needs, so they can
@@ -71,7 +56,6 @@ def _is_gpu_available() -> bool:
 # `-m` filter (which only `noxfile.py` does).
 _REQUIREMENT_PROBES: Final[dict[str, tuple[Callable[[], bool], str]]] = {
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
-    "requires_dace": (lambda: _is_importable("dace"), "the `dace` package"),
     "requires_gpu": (_is_gpu_available, "`cupy` and a reachable GPU device"),
     "requires_jax": (lambda: _is_importable("jax"), "the `jax` package"),
 }
