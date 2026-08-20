@@ -45,20 +45,25 @@ def _is_importable(module_name: str) -> bool:
 
 
 def _is_gpu_available() -> bool:
-    """Check that `cupy` is importable *and* an actual device is reachable.
+    """Check that `cupy` is importable *and* the driver reports a usable device.
+
+    Importing `cupy` alone is not enough, since its wheels install fine on
+    machines without a driver or a visible device.
 
     Note:
-        Same probe as in `tests/cartesian_tests/definitions.py`. Importing
-        `cupy` alone is not enough, since its wheels install fine on machines
-        without a driver or a visible device.
+        Enumerating devices is deliberate: `cupy.cuda.Device()` resolves the
+        *current* device and can initialize a CUDA context, which every `xdist`
+        worker would then pay for (and which is unsafe to inherit across the
+        `fork` used to start compilation workers). Counting devices needs no
+        context. `tests/cartesian_tests/definitions.py` still uses the
+        `Device()` form.
     """
     try:
         import cupy as cp
 
-        cp.cuda.Device()
+        return cp.cuda.runtime.getDeviceCount() > 0
     except Exception:
         return False
-    return True
 
 
 # `requires_*` markers describe the *environment* a test needs, so they can
