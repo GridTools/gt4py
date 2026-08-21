@@ -232,7 +232,7 @@ def compute_amd_block_config(
     if len(map_params) != 2:
         return None
 
-    map_size = map_entry.map.range.size_exact()
+    map_size = map_entry.map.range.size()
     n_vert = _resolve_int(map_size[0])
     n_horiz = _resolve_int(map_size[1])
     if n_vert is None or n_horiz is None or n_vert == 1 or n_horiz == 1:
