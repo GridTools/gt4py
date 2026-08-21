@@ -420,6 +420,30 @@ CUPY_DEVICE_TYPE = (
 )
 
 
+def gpu_device_count() -> int:
+    """Return how many GPU devices are usable, or 0 if there are none.
+
+    A `cupy` install alone does not imply a usable GPU: the wheels install
+    cleanly on machines with no driver and no visible device.
+
+    Returns:
+        The number of visible GPU devices, or 0 when `cupy` is missing or the
+        driver cannot be queried.
+
+    Note:
+        Enumerating is what makes the "installed but no visible device" case
+        answerable at all: it reports 0. A `cupy.cuda.Device()` probe only
+        resolves the *current* device and says nothing about how many exist.
+    """
+    if cp is None:
+        return 0
+    try:
+        return cp.cuda.runtime.getDeviceCount()
+    except Exception:
+        # A broken driver or runtime raises rather than reporting zero devices.
+        return 0
+
+
 @dataclasses.dataclass(frozen=True)
 class Device(Generic[DeviceTypeT]):
     """

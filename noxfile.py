@@ -91,10 +91,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "markers": ["uses_dace"]},
 }
 
 
@@ -164,6 +164,10 @@ def test_cartesian(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -255,10 +259,15 @@ def test_next(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        # No `NO_TESTS_COLLECTED_EXIT_CODE` here: every combination selects tests,
+        # so collecting none means the selection broke.
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
@@ -305,6 +314,10 @@ def test_storage(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -407,6 +420,8 @@ def test_next_dace_determinism(
         "auto",
         "--dist",
         "loadgroup",
+        # See the note in 'test_next' above.
+        "--require-optional-deps",
         "-m",
         f"{markers}",
         str(pathlib.Path("tests") / "next_tests"),
