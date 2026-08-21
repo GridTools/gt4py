@@ -13,11 +13,9 @@ import re
 import unittest.mock as mock
 from typing import Any
 
+import dace
 import numpy as np
 import pytest
-
-
-dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
@@ -45,8 +43,6 @@ from next_tests.integration_tests.cases_utils import KDim
     ids=["CPU", "GPU"],
 )
 def device_type(request) -> gtx.DeviceType:
-    if request.param == core_defs.CUPY_DEVICE_TYPE:
-        pytest.importorskip("cupy")
     return request.param
 
 
@@ -168,7 +164,8 @@ def _make_external_workspace(
 ) -> dace_wf_common.ExternalWorkspace:
     """Return a sufficiently large array-like workspace for ``device_type``."""
     if device_type == core_defs.CUPY_DEVICE_TYPE:
-        cupy = pytest.importorskip("cupy")
+        import cupy
+
         return cupy.empty(nbytes, dtype=cupy.uint8)
     return np.empty(nbytes, dtype=np.uint8)
 

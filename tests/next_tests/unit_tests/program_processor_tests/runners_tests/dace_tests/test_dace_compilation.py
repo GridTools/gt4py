@@ -18,9 +18,8 @@ import pickle
 import unittest.mock as mock
 from typing import Any
 
+import dace
 import pytest
-
-dace = pytest.importorskip("dace")
 
 from dace.sdfg import nodes as dace_nodes
 
