@@ -23,10 +23,8 @@ import ctypes
 import pathlib
 import shutil
 
+import dace
 import pytest
-
-
-dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting

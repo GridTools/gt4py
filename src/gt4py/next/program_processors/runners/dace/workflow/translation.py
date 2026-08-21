@@ -210,7 +210,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={"time"},
+        outputs={"time": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -242,8 +242,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
     # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
-        inputs={"run_cpp_start_time"},
-        outputs={"duration"},
+        inputs={"run_cpp_start_time": None},
+        outputs={"duration": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -327,8 +327,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "sync_tlet",
-        inputs=set(),
-        outputs=set(),
+        inputs={},
+        outputs={},
         code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,

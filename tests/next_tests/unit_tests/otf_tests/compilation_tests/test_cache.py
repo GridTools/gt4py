@@ -44,13 +44,25 @@ def test_pyext_marker_only_when_bindings_present(extension_source_example):
     with_bindings = cache.get_cache_folder(
         extension_source_example, config.BuildCacheLifetime.SESSION
     )
-    assert "_pyext" in with_bindings.name
+    assert cache.BINDINGS_NAME_SUFFIX in with_bindings.name
 
     without_bindings = cache.get_cache_folder(
         dataclasses.replace(extension_source_example, binding_source=None),
         config.BuildCacheLifetime.SESSION,
     )
-    assert "_pyext" not in without_bindings.name
+    assert cache.BINDINGS_NAME_SUFFIX not in without_bindings.name
+
+
+def test_translation_caches_share_one_parent(tmp_path):
+    folders = [
+        cache.get_translation_cache_folder(tmp_path, backend)
+        for backend in cache.TRANSLATION_CACHE_BACKENDS
+    ]
+
+    assert len(folders) == len(set(folders))
+    assert {folder.parent for folder in folders} == {tmp_path / cache.TRANSLATION_CACHE_DIR_NAME}
+    # a translation cache is never mistaken for a build folder of a program
+    assert not any(re.fullmatch(cache.CACHE_FOLDER_NAME_PATTERN, f.parent.name) for f in folders)
 
 
 def test_build_context_id_busts_cache_folder(extension_source_example):

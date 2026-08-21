@@ -23,7 +23,10 @@ from dace import (
 from dace.codegen.targets import cpp as dace_cpp
 from dace.sdfg import memlet_utils as dace_mutils, nodes as dace_nodes
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_utils as gtx_dace_utils,
+    transformations as gtx_transformations,
+)
 
 
 def gt_gpu_transformation(
@@ -757,9 +760,13 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         # TODO(phimuell): Also think of how to connect this with the loop blocking.
         assert dims_to_inspect <= 3
         for i in range(dims_to_inspect):
-            map_dim_idx_to_inspect = len(gpu_map.params) - 1 - i
-            if (map_size[map_dim_idx_to_inspect] < block_size[i]) == True:  # noqa: E712 [true-false-comparison]  # SymPy Fancy comparison.
-                block_size[i] = map_size[map_dim_idx_to_inspect]
+            map_dim_size = map_size[len(gpu_map.params) - 1 - i]
+            # Note that the comparison can be provably true for a symbolic map size, e.g.
+            #  `5 - Max(0, N)` for a statically bounded domain with a runtime scalar `N`,
+            #  but a block size must be a compile-time integer, so only cut down to
+            #  concrete sizes.
+            if gtx_dace_utils.is_compile_time_size(map_dim_size) and map_dim_size < block_size[i]:
+                block_size[i] = int(map_dim_size)
 
         gpu_map.gpu_block_size = tuple(block_size)
         # Only set `gpu_maxnreg` if it has not been set already (default is 0),
