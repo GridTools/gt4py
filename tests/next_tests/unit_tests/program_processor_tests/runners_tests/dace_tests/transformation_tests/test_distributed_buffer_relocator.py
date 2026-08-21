@@ -346,6 +346,62 @@ def test_distributed_buffer_non_sink_temporary():
     assert wb_state.number_of_nodes() == 0
 
 
+def _make_distributed_buffer_partial_write_back_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
+    """Creates an SDFG in which the write-back state also writes the temporary.
+
+    The temporary `t` is partially written in the first state and the second
+    (write-back) state also contains a partial write to `t`, i.e. the `t` node
+    in the write-back state has an incoming edge. This is, in essence, the
+    pattern that is emitted by the stree lowering of `concat_where`. The
+    relocator must not treat such a node as a pure write-back (previously this
+    tripped an assertion in the transformation).
+    """
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_partial_write_back_sdfg"))
+    for name in ["a", "b", "o"]:
+        sdfg.add_array(name=name, shape=(20,), dtype=dace.float64, transient=False)
+    sdfg.add_array(name="t", shape=(20,), dtype=dace.float64, transient=True)
+
+    state1 = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        code="__out = __in + 10.0",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        external_edges=True,
+    )
+
+    state2 = sdfg.add_state_after(state1)
+    t2 = state2.add_access("t")
+    state2.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "10:20"},
+        inputs={"__in": dace.Memlet("b[__i]")},
+        code="__out = __in + 12.0",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        output_nodes={t2},
+        external_edges=True,
+    )
+    state2.add_nedge(t2, state2.add_access("o"), dace.Memlet("t[0:20]"))
+
+    sdfg.validate()
+    return sdfg, state2
+
+
+def test_distributed_buffer_partial_write_back():
+    """Tests that a temporary that is also written in the write-back state is ignored."""
+    sdfg, state2 = _make_distributed_buffer_partial_write_back_sdfg()
+    assert state2.number_of_nodes() == 6
+
+    # The write-back node of `t` in `state2` has an incoming edge, thus it is not
+    #  a candidate and nothing must be relocated.
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    sdfg.validate()
+
+    assert res is None or "DistributedBufferRelocator" not in res[sdfg]
+    assert state2.number_of_nodes() == 6
+
+
 def _make_distributed_buffer_conditional_block_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
     sdfg = dace.SDFG("distributed_buffer_conditional_block_sdfg")
 
