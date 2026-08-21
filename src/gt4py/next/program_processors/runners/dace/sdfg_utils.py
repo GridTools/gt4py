@@ -38,4 +38,5 @@ def is_compile_time_integer(expr: Any) -> bool:
         >>> is_compile_time_integer(sympy.Symbol("N"))
         False
     """
+    # NOTE: This approach was selected because benchmarking on the full pipeline showed that it was the fastest and most robust way of doing it.
     return str(expr).isdigit()
