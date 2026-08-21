@@ -674,23 +674,35 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         # Build the index expressions starting from the map variables
         # (field-operator domain dimensions), then apply shift replacements
-        # to map them to the field's dimensions.  Shifts are collected from
-        # the outermost inwards towards the field; they are applied in
-        # collection order (outermost first) because a shift's ``old_dim``
-        # is only present in ``indices`` after the shift closer to the
-        # current map location has introduced it (e.g. for
-        # ``⟪C2E, 0ₒ⟫(⟪E2V, 0ₒ⟫(inp))`` evaluated at a cell, first the
-        # ``Cell→Edge`` replacement and then the ``Edge→Vertex`` one).
-        # This mirrors ``_visit_shift_multidim`` in the SDFG lowering,
-        # which applies the outer shift before recursing into the inner
-        # one.
+        # to map them to the field's dimensions.  The replacements are
+        # collected from the outermost shift inwards; this collection order
+        # may consume the current map dimension at a late hop (e.g. for
+        # ``⟪E2V, 0⟫(⟪C2E, 0⟫(it))`` evaluated over cells, the first hop is
+        # the C2E replacement collected second), so the replacements are
+        # applied in an order driven by which source dimension is currently
+        # indexed.
         indices: dict[gtx_common.Dimension, tuple[str, bool]] = {
             dim: (map_var, dim in ctx.dynamic_map_indices)
             for dim, map_var in ctx.map_indices.items()
         }
-        for old_dim, repl in shift_replacements:
-            if old_dim not in indices:
-                raise ValueError(f"No map variable for shifted dimension {old_dim}.")
+        pending_shift_replacements = list(shift_replacements)
+        while pending_shift_replacements:
+            next_i = next(
+                (
+                    i
+                    for i, (old_dim, _) in enumerate(pending_shift_replacements)
+                    if old_dim in indices
+                ),
+                None,
+            )
+            if next_i is None:
+                raise ValueError(
+                    "Unable to compose shifts from the map variables: no pending"
+                    " shift consumers an indexed dimension; missing sources:"
+                    f" {[dim.value for dim, _ in pending_shift_replacements]};"
+                    f" indexed dimensions: {[dim.value for dim in indices]}."
+                )
+            old_dim, repl = pending_shift_replacements.pop(next_i)
             old_index, _ = indices[old_dim]
             new_index = repl.apply(old_index)
             del indices[old_dim]
