@@ -201,6 +201,19 @@ class CartesianShiftReplacement(ShiftReplacement):
         return f"({old_index} + {self.offset_str})"
 
 
+def connectivity_table_index(max_neighbors: int, conn_name: str, row: str, col: str) -> str:
+    """Subscript a connectivity table inside tasklet code.
+
+    When ``max_neighbors == 1``, the neighbor dimension of the table has
+    extent 1 in the input memlet; DaCe squeezes extent-1 memlet dims in
+    the tasklet's connector type, so the neighbor index must be omitted
+    from the subscript.
+    """
+    if max_neighbors == 1:
+        return f"{conn_name}[{row}]"
+    return f"{conn_name}[{row}, {col}]"
+
+
 @dataclasses.dataclass(frozen=True)
 class UnstructuredShiftReplacement(ShiftReplacement):
     """Unstructured shift: ``new_index = conn_name[old_index, offset_str]``.
@@ -211,9 +224,12 @@ class UnstructuredShiftReplacement(ShiftReplacement):
 
     conn_name: str
     offset_str: str
+    max_neighbors: int
 
     def apply(self, old_index: str) -> str:
-        return f"{self.conn_name}[{old_index}, {self.offset_str}]"
+        return connectivity_table_index(
+            self.max_neighbors, self.conn_name, old_index, self.offset_str
+        )
 
 
 def _sym_tree_to_make_tuple(tree: object) -> gtir.Expr:
@@ -351,6 +367,10 @@ class StreePythonCodegen(eve.NodeVisitor):
         # Handle neighbors
         if cpm.is_call_to(node, "neighbors"):
             return self._visit_neighbors(node, ctx=ctx)
+
+        # Handle can_deref
+        if cpm.is_call_to(node, "can_deref"):
+            return self._visit_can_deref(node, ctx=ctx)
 
         # Handle make_const_list: broadcast value, no indexing
         if cpm.is_call_to(node, "make_const_list"):
@@ -603,6 +623,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                                     conn_name=conn_name,
                                     offset_str=str(offset_value.value),
                                     is_symbolic=False,
+                                    max_neighbors=offset_type.max_neighbors,
                                 ),
                             )
                         )
@@ -616,6 +637,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                                     conn_name=conn_name,
                                     offset_str=offset_str,
                                     is_symbolic=False,
+                                    max_neighbors=offset_type.max_neighbors,
                                 ),
                             )
                         )
@@ -657,6 +679,78 @@ class StreePythonCodegen(eve.NodeVisitor):
             indices[repl.new_dim] = (new_index, not repl.is_symbolic)
 
         return arg, data, indices, used_connectivities_in_shift
+
+    def _visit_can_deref(self, node: gtir.FunCall, *, ctx: CodegenContext) -> str:
+        """Lower ``can_deref(it)`` to a dereferencability predicate.
+
+        Walks the shift chain applied to the iterator (as in
+        ``_resolve_shifts``) and builds a conjunction of predicates, one
+        per unstructured shift: a shift through the ``X`` connectivity by
+        ``off`` is dereferencable iff ``gt_conn_X[{source_index}, {off}]``
+        is not the skip value.  Cartesian shifts are always dereferencable
+        inside the field-operator domain (the domain is shrunk by domain
+        inference), so they only adjust the position used by the shifts
+        further down the chain.
+
+        The predicates are ordered innermost shift first, so that the
+        short-circuiting ``&&`` does not evaluate a connectivity-table
+        lookup whose row index is itself a skip value.
+        """
+        assert cpm.is_call_to(node, "can_deref") and len(node.args) == 1
+        arg = node.args[0]
+
+        # Position per dimension, starting at the field-operator map variables.
+        indices = {dim: map_var for dim, map_var in ctx.map_indices.items()}
+        predicates: list[str] = []
+        while True:
+            arg = self._resolve_args_map_symbol(arg, ctx)
+            if not cpm.is_applied_shift(arg):
+                break
+            shift_args = arg.fun.args  # FunCall(SymRef("shift"), [offset_args...])
+            assert len(shift_args) >= 2 and len(shift_args) % 2 == 0
+            for i in range(0, len(shift_args), 2):
+                offset = shift_args[i]
+                offset_value = shift_args[i + 1]
+                if isinstance(offset, gtir.CartesianOffset):
+                    old_dim = itir_misc.dim_from_axis_literal(offset.domain)
+                    new_dim = itir_misc.dim_from_axis_literal(offset.codomain)
+                    if old_dim not in indices:
+                        raise ValueError(f"No map variable for shifted dimension {old_dim}.")
+                    old_index = indices.pop(old_dim)
+                    if isinstance(offset_value, gtir.OffsetLiteral):
+                        offset_str = str(offset_value.value)
+                    else:
+                        offset_str = self.visit(offset_value, ctx=ctx.child(is_inner_expr=True))
+                    indices[new_dim] = (
+                        old_index if offset_str == "0" else f"({old_index} + {offset_str})"
+                    )
+                else:
+                    assert isinstance(offset, gtir.OffsetLiteral)
+                    assert isinstance(offset.value, str)
+                    offset_type = ctx.offset_provider_type[offset.value]
+                    assert isinstance(offset_type, gtx_common.NeighborConnectivityType)
+                    conn_name = gtx_dace_args.connectivity_identifier(offset.value)
+                    ctx.used_connectivities.add(conn_name)
+                    if offset_type.source_dim not in indices:
+                        raise ValueError(
+                            f"No map variable for shifted dimension {offset_type.source_dim}."
+                        )
+                    old_index = indices.pop(offset_type.source_dim)
+                    if isinstance(offset_value, gtir.OffsetLiteral):
+                        offset_str = str(offset_value.value)
+                    else:
+                        offset_str = self.visit(offset_value, ctx=ctx.child(is_inner_expr=True))
+                    neighbor_index = connectivity_table_index(
+                        offset_type.max_neighbors, conn_name, old_index, offset_str
+                    )
+                    if offset_type.has_skip_values:
+                        predicates.append(f"{neighbor_index} != {gtx_common._DEFAULT_SKIP_VALUE}")
+                    indices[offset_type.codomain] = neighbor_index
+            arg = arg.args[0]  # the iterator
+
+        if not predicates:
+            return "True"
+        return "(" + " && ".join(reversed(predicates)) + ")"
 
     def _visit_deref(self, node: gtir.FunCall, *, ctx: CodegenContext) -> str:
         """Lower ``deref(expr)`` to a scalar or 1D field access.
@@ -824,10 +918,13 @@ class StreePythonCodegen(eve.NodeVisitor):
         # connectivity table; all other dimensions use their index from
         # ``indices`` (which may have been adjusted by cartesian or
         # unstructured shifts).
+        neighbor_index = connectivity_table_index(
+            offset_type.max_neighbors, conn_name, source_index, neighbor_var
+        )
         index_parts = []
         for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
             if dim == offset_type.codomain:
-                index_parts.append(f"({conn_name}[{source_index}, {neighbor_var}] - ({origin}))")
+                index_parts.append(f"({neighbor_index} - ({origin}))")
             else:
                 idx, _ = indices.get(dim, (None, None))
                 assert idx is not None, f"No map variable for dimension {dim}."
@@ -838,7 +935,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         if not offset_type.has_skip_values:
             return ListElementAccess(expr=access_expr)
 
-        mask = f"{conn_name}[{source_index}, {neighbor_var}] != {gtx_common._DEFAULT_SKIP_VALUE}"
+        mask = f"{neighbor_index} != {gtx_common._DEFAULT_SKIP_VALUE}"
         field_dtype = data.gt_type.dtype
         if isinstance(field_dtype, ts.ScalarType):
             dc_dtype = gtx_dace_args.as_dace_type(field_dtype)
