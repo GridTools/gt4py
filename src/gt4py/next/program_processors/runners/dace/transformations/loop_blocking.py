@@ -971,8 +971,8 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
                     copy_tlet = state.add_tasklet(
                         name=f"loop_blocking_copy_tlet_{independent_node.data}_{copy_tlet_counter}",
-                        inputs={"__in"},
-                        outputs={"__out"},
+                        inputs={"__in": None},
+                        outputs={"__out": None},
                         code="__out = __in",
                     )
                     copy_tlet_counter += 1

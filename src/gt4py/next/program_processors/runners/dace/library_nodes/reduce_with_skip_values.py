@@ -142,7 +142,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         init_tasklet = st_init.add_tasklet(
             name="write",
             inputs={},
-            outputs={"__tlet_out"},
+            outputs={"__tlet_out": None},
             code=f"__tlet_out = {input_desc.dtype}({node.init})",
         )
         st_init.add_edge(

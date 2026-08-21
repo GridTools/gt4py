@@ -14,7 +14,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Optional, TypeVar
+from typing import Final, Optional, TypeVar
 
 from gt4py._core import file_utils, locking
 from gt4py.next import config, errors, fingerprinting
@@ -25,6 +25,11 @@ from gt4py.next.otf.compilation.build_systems import cmake
 
 
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
+
+#: Name prefix of the synthetic program under which the shared compiledb is cached.
+#: Its cache folder sits next to the folders of real programs, so tools that scan
+#: the build cache use this to tell the two apart.
+COMPILEDB_PROTOTYPE_NAME_PREFIX: Final[str] = "compile_commands_cache"
 
 
 @dataclasses.dataclass
@@ -240,7 +245,7 @@ class CompiledbProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.Py
 def _cc_prototype_program_name(
     deps: tuple[interface.LibraryDependency, ...], build_type: str, flags: list[str]
 ) -> str:
-    base_name = "compile_commands_cache"
+    base_name = COMPILEDB_PROTOTYPE_NAME_PREFIX
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(re.sub(r"\W+", "", f) for f in flags)
     return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
