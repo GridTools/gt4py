@@ -266,9 +266,17 @@ def freeze_origin_domain_sdfg(
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
     # gather inputs & outputs (i.e. reads/writes without transients)
-    inputs, outputs = inner_sdfg.read_and_write_sets()
-    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
-    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
+    read_set, write_set = inner_sdfg.read_and_write_sets()
+    inputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in read_set and not desc.transient
+    }
+    outputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in write_set and not desc.transient
+    }
 
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
@@ -426,7 +434,11 @@ class SDFGManager:
         sdfg = stree.as_sdfg(
             validate=validate,
             simplify=simplify,
-            skip={"ScalarToSymbolPromotion", "ControlFlowRaising"},
+            # We skip
+            #  - `ScalarToSymbolPromotion` because we've seen validation issue in the past
+            #  - `ControlFlowRaising` because we already generate CFGs in stree -> SDFG
+            #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+            skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
 
         if do_cache:
@@ -485,11 +497,11 @@ class DaCeExtGenerator(BackendCodegen):
         manager = SDFGManager(self.backend.builder)
 
         sdfg = manager.sdfg_via_schedule_tree()
-        _specialize_transient_strides(
-            sdfg,
-            self.backend.storage_info,
-        )
-        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion"})
+        _specialize_transient_strides(sdfg, self.backend.storage_info)
+        # We skip
+        #  - `ScalarToSymbolPromotion` because we've seen validation issues in the past
+        #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
+        sdfg.simplify(validate=True, skip={"ScalarToSymbolPromotion", "LiftTrivialIf"})
 
         # NOTE
         # The glue code in DaCeComputationCodegen.apply() (just below) will define all the
@@ -591,8 +603,6 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
         def keep_line(line: str) -> bool:
             line = line.strip()
             if line == '#include "../../include/hash.h"':
-                return False
-            if line.startswith("DACE_EXPORTED") and line.endswith(");"):
                 return False
             if line == "#include <cuda_runtime.h>":
                 return False

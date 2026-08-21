@@ -13,7 +13,7 @@ import textwrap
 import typing
 
 import gt4py.eve as eve
-from gt4py.eve.extended_typing import Any, NestedTuple, Type
+from gt4py.eve.extended_typing import Any, NestedTuple
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -29,7 +29,7 @@ from gt4py.next.ffront.ast_passes import (
     StringifyAnnotationsPass,
     UnchainComparesPass,
 )
-from gt4py.next.ffront.dialect_parser import DialectParser
+from gt4py.next.ffront.dialect_parser import DialectParser, type_from_annotation
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
@@ -117,6 +117,16 @@ def adapted_func_to_foast_factory(
     return toolchain.DataOnlyAdapter(func_to_foast_factory(**kwargs))
 
 
+def _returned_value_location(foast_node: foast.FunctionDefinition) -> eve.SourceLocation:
+    """Locate the expression the deduced return type comes from.
+
+    Falls back to the whole function definition when the type cannot be pinned on a
+    single expression, i.e. when the function returns from more than one place.
+    """
+    returns = foast_node.walk_values().if_isinstance(foast.Return).to_list()
+    return returns[0].value.location if len(returns) == 1 else foast_node.location
+
+
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     """
     Parse field operator function definition from source code into FOAST.
@@ -182,21 +192,52 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         # check deduced matches annotated return type
         if "return" in annotations:
-            annotated_return_type = type_translation.from_type_hint(annotations["return"])
+            # The annotation itself was already validated in 'visit_FunctionDef', where
+            # its source location was still available, so this cannot raise.
+            annotated_return_type = type_from_annotation(
+                annotations["return"],
+                foast_node.location,
+                description="return type annotation",
+            )
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
-                    foast_node.location,
+                    _returned_value_location(foast_node),
                     "Annotated return type does not match deduced return type: annotation is "
-                    f"'{annotated_return_type}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
-                    f", got '{foast_node.type.returns}'.",
+                    f"'{annotated_return_type}'"
+                    f", got '{foast_node.type.returns}'.",  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
                 )
         return foast_node
+
+    def _reject_invalid_return_annotation(self, node: ast.FunctionDef) -> None:
+        """Raise if the return annotation is not a GT4Py type, pointing at the annotation.
+
+        '_postprocess_dialect_ast' has to translate this annotation again, to compare it
+        against the deduced return type. It cannot report the failure, though: by then
+        the `ast` is gone and it could point no further than the whole function
+        definition. So the invalid case is rejected here, where 'node.returns' still
+        carries the source location, and the translation there no longer raises.
+
+        The check cannot simply be moved here instead, because the deduced type it is
+        compared against does not exist until the body has been typed.
+        """
+        if node.returns is not None and "return" in self.annotations:
+            type_from_annotation(
+                self.annotations["return"],
+                self.get_location(node.returns),
+                description="return type annotation",
+            )
 
     def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
         self._check_not_a_reserved_name(node.name, loc)
+        # TODO(egparedes): run the unsupported-syntax scan before this loop. Typing the
+        # closure variables first means a name that only appears in unsupported syntax
+        # is reported as a bad closure variable instead of as the construct that
+        # introduced it -- e.g. 'try: ... except ValueError: ...' raises "Unexpected
+        # object 'ValueError' ..." spanning the whole signature, rather than the
+        # 'try'-statement diagnostic catalogued in 'dialect_parser'.
         closure_var_symbols: list[foast.Symbol] = []
         for name in self.closure_vars.keys():
             try:
@@ -214,6 +255,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     loc,
                     f"Unexpected object '{name}' of type '{type(self.closure_vars[name])}' encountered.",
                 ) from e
+
+        self._reject_invalid_return_annotation(node)
 
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
@@ -235,7 +278,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        new_type = type_from_annotation(
+            annotation, loc, description=f"type annotation for parameter '{node.arg}'"
+        )
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
@@ -279,7 +324,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
         new_value = self.visit(node.value)
-        constraint_type: Type[ts.DataType] = ts.DataType
+        constraint_type: type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ts.TupleType
         elif (
@@ -313,7 +358,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
             context = {**fbuiltins.BUILTINS, **self.closure_vars}
             annotation = eval(node.annotation.value, context)
-            target_type = type_translation.from_type_hint(annotation, globalns=context)
+            target_type = type_from_annotation(
+                annotation,
+                self.get_location(node.annotation),
+                description="variable type annotation",
+                globalns=context,
+            )
         else:
             target_type = ts.DeferredType()
 
@@ -421,8 +471,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             self.get_location(node),
             "logical operators `and`, `or`",
             notes=[
-                "`and` and `or` operate on whole truth values, but fields contain "
-                "one boolean per grid point."
+                (
+                    "`and` and `or` operate on whole truth values, but fields contain "
+                    "one boolean per grid point."
+                )
             ],
             hints=["Use the element-wise operators '&' and '|' instead."],
         )

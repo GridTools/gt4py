@@ -8,28 +8,29 @@
 
 from __future__ import annotations
 
+import builtins
+import collections
 import collections.abc
+import contextlib
+import re
 import sys
 import types
 import typing
 
 import pytest
+import typing_extensions
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     Annotated,
     Any,
     Callable,
-    Dict,
     ForwardRef,
-    FrozenSet,
-    List,
     Mapping,
+    Optional,
     Sequence,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
+    Union,
 )
 
 
@@ -169,6 +170,77 @@ def test_supports_dlpack():
     assert not supports_dlpack(DLPackBufferWithWrongDevice())
 
 
+DEPRECATED_TYPING_ALIASES = [
+    ("Dict", "dict"),
+    ("FrozenSet", "frozenset"),
+    ("List", "list"),
+    ("Set", "set"),
+    ("Tuple", "tuple"),
+    ("Type", "type"),
+]
+
+
+@pytest.mark.parametrize(["name", "replacement"], DEPRECATED_TYPING_ALIASES)
+def test_deprecated_typing_alias_is_not_exported(name, replacement):
+    # These names are still bound by the 'typing' / 'typing_extensions' star imports in
+    # 'extended_typing', and its module '__getattr__' would otherwise forward them. Pin
+    # the rejection: dropping the guard would not make the names disappear, it would
+    # silently resolve them to the deprecated 'typing' objects instead of the builtins.
+    with pytest.raises(AttributeError, match=f"'{name}' is a deprecated 'typing' alias"):
+        getattr(xtyping, name)
+
+    assert replacement in str(pytest.raises(AttributeError, lambda: getattr(xtyping, name)).value)
+
+    with pytest.raises(ImportError):
+        exec(f"from gt4py.eve.extended_typing import {name}")
+
+    assert name not in dir(xtyping)
+
+
+@pytest.mark.parametrize(
+    ["name", "expected"],
+    [
+        ("Sequence", collections.abc.Sequence),
+        ("Callable", collections.abc.Callable),
+        ("AbstractSet", collections.abc.Set),
+        ("Match", re.Match),
+        ("ContextManager", contextlib.AbstractContextManager),
+        ("deque", collections.deque),
+    ],
+)
+def test_non_deprecated_aliases_are_still_re_exported(name, expected):
+    # Unlike the builtin generics above, these names are not deprecated -- only their
+    # 'typing' home is -- so 'extended_typing' keeps pointing them at the modern object.
+    assert getattr(xtyping, name) is expected
+
+
+@pytest.mark.parametrize(
+    ["name", "replacement", "args"],
+    [
+        (name, replacement, "int, str" if name == "Dict" else "int")
+        for name, replacement in DEPRECATED_TYPING_ALIASES
+    ],
+)
+def test_deprecated_typing_alias_still_resolves_in_forward_refs(name, replacement, args):
+    # These names stay valid in user-written annotations, so resolving a forward
+    # reference must not hit the rejection above. Both the bare and the 'typing.'-
+    # qualified spelling normalize to the *builtin* generic, which is what resolving
+    # through this module has always produced.
+    expected_args = tuple(eval(a) for a in args.split(", "))
+
+    for ref in (f"{name}[{args}]", f"typing.{name}[{args}]"):
+        resolved = xtyping.eval_forward_ref(ref)
+
+        assert xtyping.get_origin(resolved) is getattr(builtins, replacement)
+        assert xtyping.get_args(resolved) == expected_args
+        # A builtin generic alias, not the deprecated 'typing._GenericAlias' object.
+        assert type(resolved) is types.GenericAlias
+
+    # An explicit 'globalns' is left alone, so the bare name is not injected there.
+    with pytest.raises(NameError):
+        xtyping.eval_forward_ref(f"{name}[{args}]", globalns={})
+
+
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
 def test_is_actual_valid_type(t):
     assert xtyping.is_actual_type(t)
@@ -177,11 +249,11 @@ def test_is_actual_valid_type(t):
 @pytest.mark.parametrize(
     "t",
     (
-        Tuple[int],
-        Tuple[int, ...],
-        Tuple[int, int],
-        Dict[str, Any],
-        Dict[str, float],
+        tuple[int],
+        tuple[int, ...],
+        tuple[int, int],
+        dict[str, Any],
+        dict[str, float],
         Mapping[int, float],
     ),
 )
@@ -196,8 +268,10 @@ ACTUAL_TYPE_SAMPLES = [
     (int, type),
     (tuple, type),
     (list, type),
-    (Tuple[int, float], type(Tuple[int, float])),
-    (List[int], type(List[int])),
+    # The deprecated 'typing' aliases and the builtin generics are distinct objects with
+    # distinct alias types, so both spellings are covered.
+    (typing.Tuple[int, float], type(typing.Tuple[int, float])),
+    (typing.List[int], type(typing.List[int])),
     (tuple[int, float], types.GenericAlias),
     (list[int], types.GenericAlias),
 ]
@@ -281,15 +355,15 @@ def test_get_partial_type_hints():
         "return": int,
     }
 
-    def f_nested_partial(a: int) -> Dict[str, MissingRef]: ...
+    def f_nested_partial(a: int) -> dict[str, MissingRef]: ...
 
     assert xtyping.get_partial_type_hints(f_nested_partial) == {
         "a": int,
-        "return": ForwardRef("Dict[str, MissingRef]"),
+        "return": ForwardRef("dict[str, MissingRef]"),
     }
     assert xtyping.get_partial_type_hints(f_nested_partial, localns={"MissingRef": MissingRef}) == {
         "a": int,
-        "return": Dict[str, MissingRef],
+        "return": dict[str, MissingRef],
     }
 
     def f_annotated(a: Annotated[int, "Foo"]) -> float:  # type: ignore[name-defined]  # used to work, now mypy is going berserk for unknown reasons
@@ -307,10 +381,10 @@ def test_get_partial_type_hints():
 
 
 def test_eval_forward_ref():
-    assert xtyping.eval_forward_ref("Dict[str, Tuple[int, float]]") == Dict[str, Tuple[int, float]]
+    assert xtyping.eval_forward_ref("dict[str, tuple[int, float]]") == dict[str, tuple[int, float]]
     assert (
-        xtyping.eval_forward_ref(ForwardRef("Dict[str, Tuple[int, float]]"))
-        == Dict[str, Tuple[int, float]]
+        xtyping.eval_forward_ref(ForwardRef("dict[str, tuple[int, float]]"))
+        == dict[str, tuple[int, float]]
     )
 
     class MissingRef: ...
@@ -356,19 +430,19 @@ def test_infer_type():
     assert xtyping.infer_type(None, none_as_type=False) is None
     assert xtyping.infer_type(type(None), none_as_type=False) is None
 
-    assert xtyping.infer_type(Dict[str, int]) == Dict[str, int]
+    assert xtyping.infer_type(dict[str, int]) == dict[str, int]
 
-    assert xtyping.infer_type({1, 2, 3}) == Set[int]
-    assert xtyping.infer_type(frozenset({"1", "2", "3"})) == FrozenSet[str]
+    assert xtyping.infer_type({1, 2, 3}) == set[int]
+    assert xtyping.infer_type(frozenset({"1", "2", "3"})) == frozenset[str]
 
-    assert xtyping.infer_type({"a": [0], "b": [1]}) == Dict[str, List[int]]
+    assert xtyping.infer_type({"a": [0], "b": [1]}) == dict[str, list[int]]
 
-    assert xtyping.infer_type(str) == Type[str]
+    assert xtyping.infer_type(str) == type[str]
 
     class A: ...
 
     assert xtyping.infer_type(A()) == A
-    assert xtyping.infer_type(A) == Type[A]
+    assert xtyping.infer_type(A) == type[A]
 
     def f1(): ...
 
@@ -379,30 +453,30 @@ def test_infer_type():
     assert xtyping.infer_type(f2) == Callable[[int, float], type(None)]
 
     def f3(
-        a: Dict[Tuple[str, ...], List[int]],
-        b: List[Callable[[List[int]], Set[Set[int]]]],
-        c: Type[List[int]],
+        a: dict[tuple[str, ...], list[int]],
+        b: list[Callable[[list[int]], set[set[int]]]],
+        c: type[list[int]],
     ) -> Any: ...
 
     assert (
         xtyping.infer_type(f3)
         == Callable[
             [
-                Dict[Tuple[str, ...], List[int]],
-                List[Callable[[List[int]], Set[Set[int]]]],
-                Type[List[int]],
+                dict[tuple[str, ...], list[int]],
+                list[Callable[[list[int]], set[set[int]]]],
+                type[list[int]],
             ],
             Any,
         ]
     )
 
-    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None: ...
+    def f4(a: int, b: float, *, foo: tuple[str, ...] = ()) -> None: ...
 
     assert xtyping.infer_type(f4) == Callable[[int, float], type(None)]
     assert (
         xtyping.infer_type(f4, annotate_callable_kwargs=True)
         == Annotated[
-            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": Tuple[str, ...]})
+            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": tuple[str, ...]})
         ]
     )
 
@@ -416,3 +490,129 @@ def test_is_single_dispatch_callable():
     # Plain callables and non-callables are rejected.
     assert not xtyping.is_single_dispatch_callable(lambda _: None)
     assert not xtyping.is_single_dispatch_callable(42)
+
+
+# -- PEP 695 type aliases --
+type SampleIntAlias = int
+type SampleChainedAlias = SampleIntAlias
+type SampleGenericAlias[T] = tuple[T, T]
+type SampleRecursiveAlias = SampleRecursiveAlias
+type SampleMutualAliasA = SampleMutualAliasB
+type SampleMutualAliasB = SampleMutualAliasA
+type SampleDivergingGenericAlias[T] = SampleDivergingGenericAlias[tuple[T]]
+
+
+def test_is_type_alias():
+    # Both the native 'typing' class and the 'typing_extensions' backport have to be
+    # recognized: they are distinct classes and a native alias is not an instance
+    # of the backport.
+    assert xtyping.is_type_alias(SampleIntAlias)
+    assert xtyping.is_type_alias(typing_extensions.TypeAliasType("Backported", str))
+
+    assert not xtyping.is_type_alias(int)
+    assert not xtyping.is_type_alias(list[int])
+    assert not xtyping.is_type_alias(SampleGenericAlias[int])
+
+
+def test_eval_type_alias():
+    assert xtyping.eval_type_alias(SampleIntAlias) is int
+    assert xtyping.eval_type_alias(SampleChainedAlias) is int
+    assert xtyping.eval_type_alias(SampleGenericAlias[int]) == tuple[int, int]
+
+
+def test_eval_type_alias_passes_through_non_aliases():
+    for annotation in (int, list[int], xtyping.Any, None):
+        assert xtyping.eval_type_alias(annotation) is annotation
+
+
+def test_eval_type_alias_with_undefined_value():
+    # Alias values are evaluated lazily, so the name is only looked up here.
+    type LazyAlias = _defined_later  # noqa: F821 [undefined-name]  # defined below
+
+    with pytest.raises(NameError):
+        xtyping.eval_type_alias(LazyAlias)
+
+    _defined_later = int
+
+    assert xtyping.eval_type_alias(LazyAlias) is int
+
+
+def test_eval_type_alias_with_recursive_alias():
+    with pytest.raises(TypeError, match="recursive definition"):
+        xtyping.eval_type_alias(SampleRecursiveAlias)
+
+
+def test_eval_type_alias_with_mutually_recursive_aliases():
+    # Reported as recursive rather than as too deeply nested, which is what a bare
+    # depth bound would have to say: a cycle repeats an alias, so it is detected as
+    # soon as one is seen twice, however long the cycle is.
+    with pytest.raises(TypeError, match="'SampleMutualAliasA' cannot be resolved.*recursive"):
+        xtyping.eval_type_alias(SampleMutualAliasA)
+
+
+def test_eval_type_alias_with_diverging_generic_alias():
+    # A parametrized alias which grows on every step never repeats an annotation, so
+    # the visited-alias check cannot see it and the depth bound is what stops it.
+    with pytest.raises(TypeError, match="nested too deeply"):
+        xtyping.eval_type_alias(SampleDivergingGenericAlias[int])
+
+
+def test_eval_type_alias_with_failing_value():
+    # Anything the lazily evaluated alias value raises is a problem with the alias
+    # itself, so it is reported as such instead of escaping as a raw error. Only
+    # 'NameError' stays unwrapped, since callers defer on it (see the test above).
+    type BrokenAlias = _empty_module.missing_attribute  # noqa: F821 [undefined-name]  # defined below
+
+    _empty_module = types.ModuleType("_empty_module")
+
+    with pytest.raises(TypeError, match="'BrokenAlias' cannot be resolved") as exc_info:
+        xtyping.eval_type_alias(BrokenAlias)
+
+    # The actual cause is kept, both in the message and as the chained exception.
+    assert "missing_attribute" in str(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, AttributeError)
+
+
+# -- get_represented_types --
+class SampleReprA: ...
+
+
+class SampleReprB: ...
+
+
+type SampleUnionAlias = SampleReprA | SampleReprB
+type SampleNestedUnionAlias = SampleUnionAlias | int
+
+
+def test_get_represented_types():
+    assert xtyping.get_represented_types(int) == (int,)
+    assert xtyping.get_represented_types(Union[SampleReprA, SampleReprB]) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(SampleReprA | SampleReprB) == (
+        SampleReprA,
+        SampleReprB,
+    )
+    assert xtyping.get_represented_types(list[int]) == (list,)
+
+
+def test_get_represented_types_resolves_type_aliases():
+    # An unresolved alias would silently yield an empty tuple, which turns every
+    # downstream 'isinstance()' check against the result into a constant 'False'.
+    assert xtyping.get_represented_types(SampleIntAlias) == (int,)
+    assert xtyping.get_represented_types(SampleUnionAlias) == (SampleReprA, SampleReprB)
+    assert xtyping.get_represented_types(SampleNestedUnionAlias) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )
+
+
+def test_get_represented_types_with_alias_nested_in_annotation():
+    assert xtyping.get_represented_types(Optional[SampleIntAlias]) == (int, type(None))
+    assert xtyping.get_represented_types(Union[SampleUnionAlias, int]) == (
+        SampleReprA,
+        SampleReprB,
+        int,
+    )

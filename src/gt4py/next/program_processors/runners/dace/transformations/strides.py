@@ -15,6 +15,7 @@ from dace.sdfg import nodes as dace_nodes
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
     sdfg_args as gtx_dace_args,
+    sdfg_utils as gtx_dace_utils,
     transformations as gtx_transformations,
 )
 
@@ -540,7 +541,7 @@ def _gt_map_strides_into_nested_sdfg(
     #  is lost. However, this is probably not much of an issue for the strides, but
     #  more problematic for the shape, whose symbols are likely to appear as loop bounds.
     for i, dim_ostride in enumerate(new_strides):
-        if str(dim_ostride).isdigit():
+        if gtx_dace_utils.is_compile_time_size(dim_ostride):
             # A literal stride (e.g. `1`) can be set directly
             new_strides[i] = dim_ostride
         else:

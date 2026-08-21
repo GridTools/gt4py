@@ -13,7 +13,7 @@ import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
 from gt4py.eve.extended_typing import NestedTuple
-from gt4py.next import errors
+from gt4py.next import common, errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -157,8 +157,10 @@ def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> d
         ],
         "notes": ["GT4Py does not implicitly convert between datatypes."],
         "hints": [
-            "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
-            "or make the datatypes of the inputs match."
+            (
+                "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
+                "or make the datatypes of the inputs match."
+            )
         ],
     }
 
@@ -353,8 +355,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
-                    assert isinstance(new_type, ts.DataType)
+                    element_type = values.type.types[index]
+                    assert isinstance(element_type, ts.DataType)
+                    new_type = element_type
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )
@@ -613,13 +616,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        # e.g. `IDim+1`
-        if (
-            isinstance(left.type, ts.DimensionType)
-            and isinstance(right.type, ts.ScalarType)
-            and type_info.is_integral(right.type)
-        ):
-            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
         if isinstance(left.type, ts.OffsetType):
             raise errors.DSLError(
                 node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
@@ -645,9 +641,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     hints = []
                     if node.op not in logical_ops and type_info.is_logical(arg.type):
                         hints = [
-                            "To select values based on a boolean mask, use 'where(mask, a, b)'. "
-                            "To compute with a boolean field, convert it explicitly, "
-                            "e.g. 'astype(mask, int32)'."
+                            (
+                                "To select values based on a boolean mask, use 'where(mask, a, b)'. "
+                                "To compute with a boolean field, convert it explicitly, "
+                                "e.g. 'astype(mask, int32)'."
+                            )
                         ]
                     raise errors.DSLError(
                         arg.location,
@@ -685,6 +683,36 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"must be one of {', '.join((str(op) for op in logical_ops))}.",
                 )
             return ts.DomainType(dims=promote_dims(left.type.dims, right.type.dims))
+        elif (
+            node.op in (dialect_ast_enums.BinaryOperator.ADD, dialect_ast_enums.BinaryOperator.SUB)
+            and isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_arithmetic(right.type)
+        ):
+            # e.g. `IDim+1` or `IDim+0.5`
+            if not isinstance(right, foast.Constant):
+                raise errors.DSLError(
+                    right.location,
+                    "Cartesian offsets are only supported with a literal right-hand side, "
+                    "e.g. 'IDim + 1', but not 'IDim + expr'.",
+                )
+            offset_index = right.value
+            if node.op == dialect_ast_enums.BinaryOperator.SUB:
+                offset_index *= -1
+            if not isinstance(offset_index, (int, float)) or offset_index % 1 not in (0, 0.5):
+                raise errors.DSLError(
+                    right.location,
+                    f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
+                    f"'{left.type.dim.value}'.",
+                    hints=[
+                        (
+                            "Use an integer offset to shift within the dimension, or a half-integer "
+                            "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                        )
+                    ],
+                )
+            conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
+            return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
         else:
             raise errors.DSLError(node.location, err_msg)
 

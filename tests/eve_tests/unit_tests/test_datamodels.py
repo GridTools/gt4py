@@ -40,7 +40,7 @@ import factory
 import pytest
 import pytest_factoryboy as pytfboy
 
-from gt4py.eve import datamodels, utils
+from gt4py.eve import datamodels, exceptions, utils
 
 
 T = TypeVar("T")
@@ -1007,10 +1007,34 @@ def test_field_metadata():
     assert Model.__datamodel_fields__.value.metadata["my_metadata"] == "META"
 
 
+# Nested models for the 'frozen="strict"' tests. They have to live at module level:
+# this file uses PEP 563 annotations, and forward references are resolved against
+# module globals only, so a class defined inside a test method is not visible.
+@datamodels.datamodel(frozen="strict")
+class StrictFrozenInner:
+    value: int
+
+
+@datamodels.datamodel(frozen=True)
+class PlainFrozenInner:
+    values: List[int]
+
+
+MutableBoundT = TypeVar("MutableBoundT", bound=Tuple[List[int], ...])
+
+# Module level, since this file uses PEP 563: a function-local alias would only ever be
+# seen as an unresolvable forward reference and the tests below would pass for the wrong
+# reason.
+type ImmutableAlias = tuple[int, int]
+type MutableAlias = tuple[list[int], ...]
+type PairAlias[T] = tuple[T, T]
+type BrokenAlias = _undefined_alias_target  # noqa: F821 [undefined-name]
+
+
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
-        import attr  # Missing library stubs for Python 3.10)
+        import attr
 
         @datamodels.datamodel(frozen=True)
         class FrozenModel:
@@ -1065,6 +1089,159 @@ class TestDatamodelOptions:
         string_value = "this is a really long string to avoid string interning 1234567890 +:?.!"
 
         assert hash(FrozenModel(value=string_value)) == hash(FrozenModel(value=string_value))
+
+    def test_strict_frozen_with_hashable_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            value: int
+            name: str
+
+        assert StrictModel.__datamodel_params__.frozen is True
+        assert StrictModel.__datamodel_params__.strict_frozen is True
+        assert hash(StrictModel(value=1, name="a")) == hash(StrictModel(value=1, name="a"))
+
+    def test_strict_frozen_rejects_unhashable_fields(self):
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class StrictModelWithList:
+                values: List[int]
+
+    def test_strict_frozen_accepts_nested_strict_frozen_model(self):
+        @datamodels.datamodel(frozen="strict")
+        class Outer:
+            inner: StrictFrozenInner
+
+        assert hash(Outer(inner=StrictFrozenInner(value=1))) == hash(
+            Outer(inner=StrictFrozenInner(value=1))
+        )
+
+    def test_strict_frozen_rejects_non_strict_datamodel_field(self):
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class Outer:
+                inner: PlainFrozenInner
+
+    def test_strict_frozen_rejects_union_wrapped_unhashable_fields(self):
+        # A union member must satisfy the same rules as a bare annotation, otherwise
+        # 'Optional[...]' would be a trivial way around the check.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class OptionalNonStrictModel:
+                inner: Optional[PlainFrozenInner] = None
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class OptionalListModel:
+                values: Optional[List[int]] = None
+
+    def test_strict_frozen_rejects_container_wrapped_unhashable_fields(self):
+        # A 'tuple' is hashable only if its items are, so the type arguments of a
+        # generic container must satisfy the same rules as a bare annotation.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TupleOfListsModel:
+                values: Tuple[List[int], ...]
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TupleOfNonStrictModels:
+                inners: Tuple[PlainFrozenInner, ...]
+
+    def test_strict_frozen_rejects_unparametrized_container_fields(self):
+        # A bare 'tuple' hashes its items, which nothing proves immutable: it must be
+        # rejected for exactly the same reason as the explicit 'Tuple[Any, ...]' below.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BareTupleModel:
+                values: tuple
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BareTypingTupleModel:
+                values: Tuple
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class AnyItemTupleModel:
+                values: Tuple[Any, ...]
+
+    def test_strict_frozen_rejects_type_var_with_mutable_bound(self):
+        # The bound has to be checked as an annotation, not flattened to its origin,
+        # otherwise 'tuple[list[int], ...]' would come back as a plain (hashable) 'tuple'.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class TypeVarModel:
+                value: MutableBoundT
+
+    def test_strict_frozen_resolves_pep695_type_aliases(self):
+        # A PEP 695 alias stands for the annotation it resolves to, so it has to be
+        # checked through that: otherwise an alias for an immutable type would be
+        # rejected just for being an alias, and one hiding a mutable type would only be
+        # rejected by accident.
+        @datamodels.datamodel(frozen="strict")
+        class ImmutableAliasModel:
+            value: ImmutableAlias
+
+        @datamodels.datamodel(frozen="strict")
+        class ParametrizedAliasModel:
+            value: PairAlias[int]
+
+        assert hash(ImmutableAliasModel(value=(1, 2))) is not None
+        assert hash(ParametrizedAliasModel(value=(1, 2))) is not None
+
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class MutableAliasModel:
+                value: MutableAlias
+
+    def test_strict_frozen_rejects_unevaluable_pep695_type_alias(self):
+        # Alias values are evaluated lazily, so a broken one only fails here. It proves
+        # nothing about immutability and must be rejected rather than escaping as the
+        # raw 'NameError' / 'TypeError' from the alias evaluation.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class BrokenAliasModel:
+                value: BrokenAlias
+
+    def test_strict_frozen_rejects_unresolved_forward_reference(self):
+        # A self-reference cannot be resolved while the class is being created, so it
+        # cannot be proven immutable: the check must reject it instead of raising the
+        # bare 'NameError' coming from the annotation resolution.
+        with pytest.raises(exceptions.EveTypeError, match="strictly immutable"):
+
+            @datamodels.datamodel(frozen="strict")
+            class RecursiveModel:
+                child: Optional[RecursiveModel] = None
+
+    def test_strict_frozen_accepts_optional_and_literal_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            value: Optional[int] = None
+            mode: Literal["a", "b"] = "a"
+            inner: Optional[StrictFrozenInner] = None
+
+        assert hash(StrictModel()) == hash(StrictModel())
+
+    def test_strict_frozen_accepts_container_of_immutable_fields(self):
+        @datamodels.datamodel(frozen="strict")
+        class StrictModel:
+            values: Tuple[int, ...]
+            inners: Tuple[StrictFrozenInner, ...] = ()
+
+        model = StrictModel(values=(1, 2), inners=(StrictFrozenInner(value=1),))
+        assert hash(model) == hash(StrictModel(values=(1, 2), inners=(StrictFrozenInner(value=1),)))
 
 
 # Test module functions
@@ -1287,3 +1464,118 @@ def test_datamodel_abc_virtual_subclasses():
     assert isinstance(Model(value=1), datamodels.DataModelABC)
     assert not issubclass(Plain, datamodels.DataModelABC)
     assert not isinstance(Plain(), datamodels.DataModelABC)
+
+
+# -- PEP 695 type aliases --
+type SampleAliasInt = int
+type SampleAliasNested = typing.List[SampleAliasInt]
+type SampleAliasPair[T] = typing.Tuple[T, T]
+
+
+def test_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: SampleAliasInt
+
+    assert Model(value=1).value == 1
+    with pytest.raises(TypeError, match="Model.value"):
+        Model(value="1")
+
+
+def test_nested_type_alias_field():
+    class Model(datamodels.DataModel):
+        direct: SampleAliasNested
+        inline: typing.List[SampleAliasInt]
+        parametrized: SampleAliasPair[int]
+
+    model = Model(direct=[1], inline=[2], parametrized=(3, 4))
+    assert model.direct == [1]
+
+    with pytest.raises(TypeError, match="Model.inline"):
+        Model(direct=[1], inline=["2"], parametrized=(3, 4))
+
+
+def test_coerced_type_alias_field():
+    class Model(datamodels.DataModel):
+        value: datamodels.Coerced[SampleAliasInt]
+
+    assert Model(value="42").value == 42
+
+
+def test_type_alias_field_with_undefined_value_is_deferred():
+    # The alias value is evaluated lazily, so the class body must not fail even
+    # though 'DefinedLater' does not exist yet. Validation happens on the first
+    # instantiation, like for forward references.
+    #
+    # This is 'exec'-ed instead of written inline because this test module uses
+    # 'from __future__ import annotations', which would turn the annotation into
+    # the string 'LazyAlias' and exercise the plain forward-reference path
+    # instead of the type-alias one. 'dont_inherit=True' is required for the
+    # same reason: 'exec()' inherits the '__future__' flags of the calling module.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: LazyAlias
+
+class DefinedLater:
+    pass
+"""
+    namespace: Dict[str, Any] = {}
+    exec(compile(source, "<test_type_alias_deferral>", "exec", dont_inherit=True), namespace)
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=DefinedLater()).value, DefinedLater)
+    # Note: the deferred validator reports the bare field name instead of the
+    # qualified 'Model.value', as it does for regular forward references.
+    with pytest.raises(TypeError, match="'value' must be"):
+        Model(value=1)
+
+
+def test_coerced_type_alias_field_with_undefined_value_is_deferred():
+    # Same as above for coerced fields: the converter is created on the first
+    # coercion instead of at class creation. See the note there on 'exec()'.
+    source = """
+from gt4py.eve import datamodels
+
+type LazyAlias = DefinedLater
+
+class Model(datamodels.DataModel):
+    value: datamodels.Coerced[LazyAlias]
+
+class DefinedLater:
+    def __init__(self, value):
+        self.value = value
+"""
+    namespace: Dict[str, Any] = {}
+    exec(
+        compile(source, "<test_coerced_type_alias_deferral>", "exec", dont_inherit=True), namespace
+    )
+    Model, DefinedLater = namespace["Model"], namespace["DefinedLater"]
+
+    assert isinstance(Model(value=42).value, DefinedLater)
+    assert Model(value=42).value.value == 42
+
+
+@pytest.mark.parametrize("coerced", [False, True])
+def test_type_alias_field_with_failing_value_fails_at_class_creation(coerced):
+    # Deferral is only right for a name which is not defined _yet_. A value which
+    # raises for any other reason will never resolve, so it has to fail right away
+    # and name the actual cause, rather than be deferred to the first instantiation.
+    annotation = "datamodels.Coerced[BrokenAlias]" if coerced else "BrokenAlias"
+    source = f"""
+import types
+from gt4py.eve import datamodels
+
+_empty_module = types.ModuleType("_empty_module")
+
+type BrokenAlias = _empty_module.missing_attribute
+
+class Model(datamodels.DataModel):
+    value: {annotation}
+"""
+    with pytest.raises(Exception, match="'BrokenAlias' cannot be resolved") as exc_info:
+        exec(compile(source, "<test_broken_type_alias>", "exec", dont_inherit=True), {})
+
+    assert "missing_attribute" in str(exc_info.value)

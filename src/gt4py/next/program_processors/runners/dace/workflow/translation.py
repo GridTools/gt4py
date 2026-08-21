@@ -207,7 +207,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={"time"},
+        outputs={"time": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -239,8 +239,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
     # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
-        inputs={"run_cpp_start_time"},
-        outputs={"duration"},
+        inputs={"run_cpp_start_time": None},
+        outputs={"duration": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -324,8 +324,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "sync_tlet",
-        inputs=set(),
-        outputs=set(),
+        inputs={},
+        outputs={},
         code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
@@ -459,39 +459,11 @@ class DaCeTranslator(
 
         module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
-            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-            #   which makes the JSON serialization stable.
-            # `guid` is a per-element identity token: it does not affect code generation, and
-            #   `SDFG.from_json()` assigns fresh ids anyway. Keeping it would make the compile
-            #   cache key depend on element creation order, so two structurally identical
-            #   lowerings of the same program would not share a cached build.
-            source_code=_drop_element_ids(sdfg.to_json(hash=True)),
+            source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
             code_spec=code_specs.SDFGCodeSpec(),
         )
         return module
-
-
-def _drop_element_ids(json_obj: Any) -> Any:
-    """
-    Remove ``guid`` keys from a serialized SDFG with recursion.
-
-    We remove ``guid`` keys because of indeterminism of the ``guid`` values, which
-    would cause two identical programs to result in different compiled SDFGs, since
-    the cache key contains the hash of the serialized SDFG (a JSON string).
-    # FIXME(edopao): remove this workaround once the SDFG lowering is stable.
-
-    Note that this recursive implementation is 2-3x faster than the iterative one,
-    on a large SDFG, and it is also simpler to read.
-    """
-    if isinstance(json_obj, dict):
-        return {k: _drop_element_ids(v) for k, v in json_obj.items() if k != "guid"}
-    if isinstance(json_obj, list):
-        return [_drop_element_ids(v) for v in json_obj]
-    if isinstance(json_obj, tuple):
-        return tuple(_drop_element_ids(v) for v in json_obj)
-    return json_obj
 
 
 class DaCeTranslationStepFactory(factory.Factory):
