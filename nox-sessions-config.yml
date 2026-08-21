@@ -15,7 +15,7 @@ sessions:
       - "src/gt4py/eve/**"
       - "tests/eve_tests/**"
       - ".github/workflows/**"
-      - "ci/**"
+      - ".cscs-ci/**"
       - "*.lock"
       - "*.toml"
       - "*.yml"
@@ -35,7 +35,7 @@ sessions:
       - "src/gt4py/cartesian/backend/**" # For DaCe storages
       - "tests/storage_tests/**"
       - ".github/workflows/**"
-      - "ci/**"
+      - ".cscs-ci/**"
       - "*.lock"
       - "*.toml"
       - "*.yml"

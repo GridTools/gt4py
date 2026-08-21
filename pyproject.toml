@@ -192,7 +192,7 @@ source_pkgs = ['gt4py']
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = ['^setup\.py$', 'build/.*$', 'ci/*.$', 'docs/.*$', 'tests/.*$']
+exclude = ['^setup\.py$', 'build/.*$', '.cscs-ci/*.$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
