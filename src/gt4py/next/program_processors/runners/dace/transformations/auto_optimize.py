@@ -153,6 +153,7 @@ def gt_auto_optimize(
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     gpu_maxnreg: Optional[int] = None,
+    amd_heuristic: bool = False,
     blocking_dims: Optional[Sequence[gtx_common.Dimension]] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
@@ -213,6 +214,11 @@ def gt_auto_optimize(
         gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
             1, 2 and 3 dimension Maps individually. See the `gpu_block_size_spec`
             argument of `gt_gpu_transformation()` for more.
+        amd_heuristic: If `True`, use the AMD thread-block-size / loop-blocking
+            heuristic (see `amd_block_heuristic.py`) for `GPUSetBlockSize` and
+            `LoopBlocking`. Where it applies it takes priority over the explicit
+            `gpu_block_size*`/`blocking_size` values. See the `amd_heuristic`
+            argument of those transformations for more.
         blocking_dims: On which dimensions blocking should be applied. Priority based on the order of the passed dimensions.
         blocking_size: How many elements each block should process.
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
@@ -362,6 +368,7 @@ def gt_auto_optimize(
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
             promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
             blocking_independent_node_threshold=blocking_independent_node_threshold,
+            amd_heuristic=amd_heuristic,
             scan_loop_unrolling=scan_loop_unrolling,
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
@@ -423,6 +430,7 @@ def gt_auto_optimize(
             gpu_launch_factor=gpu_launch_factor,
             gpu_launch_bounds=gpu_launch_bounds,
             gpu_maxnreg=gpu_maxnreg,
+            amd_heuristic=amd_heuristic,
             optimization_hooks=optimization_hooks,
             gpu_block_size_spec=gpu_block_size_spec if gpu_block_size_spec else None,
             validate_all=validate_all,
@@ -738,6 +746,7 @@ def _gt_auto_process_dataflow_inside_maps(
     blocking_only_if_independent_nodes: Optional[bool],
     promote_independent_memlets_for_blocking: Optional[bool],
     blocking_independent_node_threshold: Optional[int],
+    amd_heuristic: bool,
     scan_loop_unrolling: bool,
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
@@ -767,6 +776,7 @@ def _gt_auto_process_dataflow_inside_maps(
                 require_independent_nodes=blocking_only_if_independent_nodes,
                 promote_independent_memlets=promote_independent_memlets_for_blocking,
                 independent_node_threshold=blocking_independent_node_threshold,
+                amd_heuristic=amd_heuristic,
             ),
             validate=False,
             validate_all=validate_all,
@@ -880,6 +890,7 @@ def _gt_auto_configure_maps_and_strides(
     gpu_launch_bounds: Optional[int | str],
     gpu_launch_factor: Optional[int],
     gpu_maxnreg: Optional[int],
+    amd_heuristic: bool,
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]],
     validate_all: bool,
@@ -957,6 +968,7 @@ def _gt_auto_configure_maps_and_strides(
             gpu_launch_factor=gpu_launch_factor,
             gpu_block_size_spec=gpu_block_size_spec,
             gpu_maxnreg=gpu_maxnreg,
+            amd_heuristic=amd_heuristic,
             validate=False,
             validate_all=validate_all,
             try_removing_trivial_maps=True,

@@ -14,6 +14,7 @@ dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace.transformations import (
+    amd_block_heuristic as gtx_amd_block_heuristic,
     gpu_utils as gtx_dace_fieldview_gpu_utils,
 )
 
@@ -380,3 +381,151 @@ def test_set_gpu_maxnreg():
         gpu_maxnreg=128,
     )
     assert me.gpu_maxnreg == 128
+
+
+def _build_amd_heuristic_gpu_map(
+    n_vert: int | str,
+    n_horiz: int | str,
+    num_dependent_inputs: int = 1,
+) -> tuple[dace.SDFG, dace_nodes.MapEntry]:
+    """Builds a 2D GPU map suitable for exercising the AMD block-size heuristic.
+
+    The map iterates `i0` (vertical, size `n_vert`) x `i1` (horizontal, size
+    `n_horiz`). It reads one input that does not depend on `i0` (`indep[i1]`)
+    and `num_dependent_inputs` inputs that do (`dep_k[i0, i1]`), each
+    `float64` (8 bytes), and writes to `out[i0, i1]`.
+    """
+    sdfg = dace.SDFG(util.unique_name("amd_heuristic_gpu_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    storage = dace.dtypes.StorageType.GPU_Global
+
+    if isinstance(n_vert, str):
+        sdfg.add_symbol(n_vert, dace.int32)
+    if isinstance(n_horiz, str):
+        sdfg.add_symbol(n_horiz, dace.int32)
+
+    sdfg.add_array("indep", shape=(n_horiz,), dtype=dace.float64, storage=storage)
+    sdfg.add_array("out", shape=(n_vert, n_horiz), dtype=dace.float64, storage=storage)
+    inputs = {"__in_indep": dace.Memlet("indep[i1]")}
+    code_terms = ["__in_indep"]
+    for k in range(num_dependent_inputs):
+        name = f"dep_{k}"
+        sdfg.add_array(name, shape=(n_vert, n_horiz), dtype=dace.float64, storage=storage)
+        inputs[f"__in_{name}"] = dace.Memlet(f"{name}[i0, i1]")
+        code_terms.append(f"__in_{name}")
+
+    _, me, _ = state.add_mapped_tasklet(
+        "amd_heuristic_tasklet",
+        map_ranges={"i0": f"0:{n_vert}", "i1": f"0:{n_horiz}"},
+        inputs=inputs,
+        code=f"__out = {' + '.join(code_terms)}",
+        outputs={"__out": dace.Memlet("out[i0, i1]")},
+        external_edges=True,
+        schedule=dace.dtypes.ScheduleType.GPU_Device,
+    )
+    sdfg.validate()
+    return sdfg, me
+
+
+@pytest.mark.parametrize(
+    "n_vert, expected_config",
+    [
+        (2, gtx_amd_block_heuristic.FLAT),
+        (5, gtx_amd_block_heuristic.HBLK),
+    ],
+)
+def test_amd_heuristic_small_horizontal(
+    n_vert: int, expected_config: gtx_amd_block_heuristic.Config
+):
+    """For small `n_horiz` the choice between `FLAT` and `HBLK` depends only on `n_vert`."""
+    sdfg, me = _build_amd_heuristic_gpu_map(n_vert=n_vert, n_horiz=300)
+
+    configured_maps = gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg, block_size=None, amd_heuristic=True
+    )
+
+    assert configured_maps == 1
+    assert me.map.gpu_block_size == [expected_config.block_x, expected_config.block_y, 1]
+
+
+@pytest.mark.parametrize(
+    "num_dependent_inputs, expected_config",
+    [
+        (3, gtx_amd_block_heuristic.HBLK),  # ratio = 8 / (8 + 3 * 8) = 0.25 < 0.30
+        (1, gtx_amd_block_heuristic.DEEP),  # ratio = 8 / (8 + 8) = 0.5 >= 0.30
+    ],
+)
+def test_amd_heuristic_large_horizontal_ratio(
+    num_dependent_inputs: int, expected_config: gtx_amd_block_heuristic.Config
+):
+    """For large, tile-aligned `n_horiz` the choice between `HBLK` and `DEEP` depends on the
+    independent/total input-byte ratio.
+    """
+    n_horiz = gtx_amd_block_heuristic.TILE * 500  # > LARGE_NHORIZ, divisible by TILE
+    sdfg, me = _build_amd_heuristic_gpu_map(
+        n_vert=20, n_horiz=n_horiz, num_dependent_inputs=num_dependent_inputs
+    )
+
+    configured_maps = gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg, block_size=None, amd_heuristic=True
+    )
+
+    assert configured_maps == 1
+    assert me.map.gpu_block_size == [expected_config.block_x, expected_config.block_y, 1]
+
+
+def test_amd_heuristic_priority_over_explicit_block_size():
+    """The heuristic overrides an explicitly configured `block_size_2d`."""
+    sdfg, me = _build_amd_heuristic_gpu_map(n_vert=2, n_horiz=300)
+
+    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg,
+        block_size=None,
+        block_size_2d=(64, 8, 1),
+        amd_heuristic=True,
+    )
+
+    assert me.map.gpu_block_size == [
+        gtx_amd_block_heuristic.FLAT.block_x,
+        gtx_amd_block_heuristic.FLAT.block_y,
+        1,
+    ]
+
+
+def test_amd_heuristic_falls_back_for_non_2d_map():
+    """The heuristic does not engage for a 1D map; the existing logic still applies."""
+    sdfg = dace.SDFG(util.unique_name("amd_heuristic_1d_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    storage = dace.dtypes.StorageType.GPU_Global
+    sdfg.add_array("a", shape=(10,), dtype=dace.float64, storage=storage)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, storage=storage)
+    _, me, _ = state.add_mapped_tasklet(
+        "map_1d",
+        map_ranges={"i0": "0:10"},
+        inputs={"__in": dace.Memlet("a[i0]")},
+        code="__out = __in",
+        outputs={"__out": dace.Memlet("b[i0]")},
+        external_edges=True,
+        schedule=dace.dtypes.ScheduleType.GPU_Device,
+    )
+    sdfg.validate()
+
+    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg, block_size_1d=(64, 1, 1), block_size=None, amd_heuristic=True
+    )
+
+    # Clamped from 64 down to the map's actual size (10) by the (unmodified) existing logic.
+    assert me.map.gpu_block_size == [10, 1, 1]
+
+
+def test_amd_heuristic_falls_back_for_unresolved_symbolic_range():
+    """The heuristic does not engage when the Map's range still has free symbols."""
+    sdfg, me = _build_amd_heuristic_gpu_map(n_vert="N", n_horiz="M")
+
+    gtx_dace_fieldview_gpu_utils.gt_set_gpu_blocksize(
+        sdfg=sdfg, block_size_2d=(64, 2, 1), block_size=None, amd_heuristic=True
+    )
+
+    # The heuristic cannot resolve `N`/`M` to concrete ints, so it falls back
+    # to the explicitly configured `block_size_2d`.
+    assert me.map.gpu_block_size == [64, 2, 1]

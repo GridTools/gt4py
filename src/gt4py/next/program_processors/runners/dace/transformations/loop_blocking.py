@@ -34,6 +34,9 @@ from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_lib,
     lowering as gtx_dace_lowering,
 )
+from gt4py.next.program_processors.runners.dace.transformations import (
+    amd_block_heuristic as gtx_amd_heuristic,
+)
 
 
 @dace_properties.make_properties
@@ -62,6 +65,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             actually contains independent nodes. Defaults to `True`.
         promote_independent_memlets: If `True` then memlets with independent data are promoted to the outer map.
         independent_node_threshold: Minimum number of independent nodes required to apply blocking (non-inclusive).
+        amd_heuristic: If `True`, use the AMD block-size heuristic (see
+            `amd_block_heuristic.py`) to decide the blocking factor for
+            genuinely two dimensional, non degenerate Maps whose extents
+            resolve to concrete integers. When it applies, it takes priority
+            over `blocking_size`.
 
     Todo:
         - Modify the inner map such that it always starts at zero.
@@ -106,8 +114,12 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         require_independent_nodes: Optional[bool] = None,
         promote_independent_memlets: Optional[bool] = None,
         independent_node_threshold: Optional[int] = None,
+        amd_heuristic: bool = False,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__(*args, **kwargs)
+        self._amd_heuristic = amd_heuristic
         if blocking_parameters is not None:
             self.blocking_parameters = [
                 gtx_dace_lowering.get_map_variable(p) if isinstance(p, gtx_common.Dimension) else p
@@ -168,8 +180,6 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
         if not self.blocking_parameters:
             raise ValueError("No blocking parameters were specified.")
-        elif not self.blocking_size:
-            raise ValueError("The blocking size was not specified.")
 
         outer_entry: dace_nodes.MapEntry = self.outer_entry
         map_params: list[str] = outer_entry.map.params
@@ -191,6 +201,25 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         if map_range[block_var_idx][2] != 1:
             return False
+
+        # If the AMD heuristic is enabled and applies to this (genuinely 2D,
+        # non degenerate) Map, it decides the blocking factor for whichever
+        # axis `matched_blocking_var` corresponds to (vertical if it is the
+        # first Map parameter, horizontal otherwise -- see
+        # `amd_block_heuristic.py`), taking priority over `blocking_size`.
+        amd_config = (
+            gtx_amd_heuristic.compute_amd_block_config(outer_entry, graph, sdfg)
+            if self._amd_heuristic
+            else None
+        )
+        if amd_config is not None:
+            blocking_factor = amd_config.vlb if block_var_idx == 0 else amd_config.hlb
+            if blocking_factor == 0:
+                # The heuristic recommends not blocking this axis.
+                return False
+            self.blocking_size = blocking_factor
+        elif not self.blocking_size:
+            raise ValueError("The blocking size was not specified.")
 
         # Require that there are more iteration than the blocking size.
         # TODO(phimuell): Synchronize this with the GPU block size since it also

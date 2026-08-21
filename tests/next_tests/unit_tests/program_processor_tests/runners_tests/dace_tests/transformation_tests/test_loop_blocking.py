@@ -20,6 +20,9 @@ from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.transformations import (
+    amd_block_heuristic as gtx_amd_block_heuristic,
+)
 
 
 from . import util
@@ -1886,3 +1889,186 @@ def test_loop_blocking_sdfg_with_everything(
     new_scope_of_inner_map = state.scope_dict()[ime]
     assert isinstance(new_scope_of_inner_map, dace_nodes.MapEntry)
     assert new_scope_of_inner_map is not (me if count == 1 else None)
+
+
+def _get_amd_heuristic_sdfg(
+    n_vert: int | str,
+    n_horiz: int | str,
+) -> tuple[dace.SDFG, dace_nodes.MapEntry]:
+    """Builds a 2D map (`i0` vertical x `i1` horizontal) suitable for exercising
+    the AMD loop-blocking heuristic.
+
+    Contains one Tasklet that is independent of `i0` (reads only `indep[i1]`)
+    and one dependent Tasklet (reads the independent Tasklet's output and
+    `dep[i0, i1]`), writing to `out[i0, i1]`.
+    """
+    sdfg = dace.SDFG(util.unique_name("amd_heuristic_loop_blocking_sdfg"))
+    state = sdfg.add_state("state", is_start_block=True)
+
+    if isinstance(n_vert, str):
+        sdfg.add_symbol(n_vert, dace.int32)
+    if isinstance(n_horiz, str):
+        sdfg.add_symbol(n_horiz, dace.int32)
+
+    sdfg.add_array("indep", (n_horiz,), dace.float64, transient=False)
+    sdfg.add_array("dep", (n_vert, n_horiz), dace.float64, transient=False)
+    sdfg.add_array("out", (n_vert, n_horiz), dace.float64, transient=False)
+    sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+    indep, dep, out, tmp = (state.add_access(name) for name in ["indep", "dep", "out", "tmp"])
+
+    task1 = state.add_tasklet(
+        "task1_independent",
+        inputs={"__in0"},
+        outputs={"__out0"},
+        code="__out0 = __in0 + 1.0",
+    )
+    task2 = state.add_tasklet(
+        "task2_dependent",
+        inputs={"__in0", "__in1"},
+        outputs={"__out0"},
+        code="__out0 = __in0 + __in1",
+    )
+
+    mentry, mexit = state.add_map("map", ndrange={"i0": f"0:{n_vert}", "i1": f"0:{n_horiz}"})
+
+    state.add_edge(mentry, "OUT_indep", task1, "__in0", dace.Memlet("indep[i1]"))
+    state.add_edge(task1, "__out0", tmp, None, dace.Memlet("tmp[0]"))
+
+    state.add_edge(tmp, None, task2, "__in0", dace.Memlet("tmp[0]"))
+    state.add_edge(mentry, "OUT_dep", task2, "__in1", dace.Memlet("dep[i0, i1]"))
+    state.add_edge(task2, "__out0", mexit, "IN_out", dace.Memlet("out[i0, i1]"))
+
+    state.add_edge(indep, None, mentry, "IN_indep", sdfg.make_array_memlet("indep"))
+    state.add_edge(dep, None, mentry, "IN_dep", sdfg.make_array_memlet("dep"))
+    state.add_edge(mexit, "OUT_out", out, None, sdfg.make_array_memlet("out"))
+    for name in ["indep", "dep"]:
+        mentry.add_in_connector("IN_" + name)
+        mentry.add_out_connector("OUT_" + name)
+    mexit.add_in_connector("IN_out")
+    mexit.add_out_connector("OUT_out")
+
+    dace_propagation.propagate_states(sdfg)
+    sdfg.validate()
+
+    return sdfg, mentry
+
+
+def _get_inner_sequential_map(state: dace.SDFGState) -> dace_nodes.MapEntry:
+    inner_maps = [
+        node
+        for node in state.nodes()
+        if isinstance(node, dace_nodes.MapEntry)
+        and node.map.schedule == dace.dtypes.ScheduleType.Sequential
+    ]
+    assert len(inner_maps) == 1
+    return inner_maps[0]
+
+
+def test_amd_heuristic_loop_blocking_applies_recommended_factor():
+    """In the untested `VBLK` band, the heuristic sets `blocking_size` to `VBLK.vlb`,
+    overriding the (unused, since left as `None`) default.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert=10, n_horiz=80_000)
+    state = sdfg.states()[0]
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    inner_map = _get_inner_sequential_map(state)
+    assert inner_map.map.unroll_factor == gtx_amd_block_heuristic.VBLK.vlb
+
+
+def test_amd_heuristic_loop_blocking_priority_over_explicit_blocking_size():
+    """The heuristic overrides an explicitly configured `blocking_size`."""
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert=10, n_horiz=80_000)
+    state = sdfg.states()[0]
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(
+            blocking_parameters=["i0"], blocking_size=99, amd_heuristic=True
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    inner_map = _get_inner_sequential_map(state)
+    assert inner_map.map.unroll_factor == gtx_amd_block_heuristic.VBLK.vlb
+
+
+def test_amd_heuristic_loop_blocking_rejects_zero_recommended_factor():
+    """In the small-horizontal regime with `n_vert > 2`, the heuristic picks `HBLK`, whose
+    `vlb` is `0`: blocking the vertical dimension is not recommended, so the transformation
+    must not apply.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert=5, n_horiz=300)
+    assert gtx_amd_block_heuristic.HBLK.vlb == 0
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
+
+
+def test_amd_heuristic_loop_blocking_symbolic_range_falls_back_to_explicit_blocking_size():
+    """When the Map's ranges contain free symbols instead of concrete numbers, the heuristic
+    cannot resolve `n_vert`/`n_horiz` to concrete ints and does not engage; the transformation
+    then falls back to the explicitly configured `blocking_size`, exactly as without
+    `amd_heuristic`.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert="N", n_horiz="M")
+    state = sdfg.states()[0]
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(
+            blocking_parameters=["i0"], blocking_size=4, amd_heuristic=True
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    inner_map = _get_inner_sequential_map(state)
+    assert inner_map.map.unroll_factor == 4
+
+
+def test_loop_blocking_symbolic_range_with_amd_heuristic_disabled():
+    """Same setup as `test_amd_heuristic_loop_blocking_symbolic_range_falls_back_to_explicit_blocking_size`,
+    but with `amd_heuristic=False`: the explicitly configured `blocking_size` is used directly,
+    without ever consulting the heuristic. This is the same outcome as the heuristic-enabled
+    case (both end up using `blocking_size=4`), confirming that a disabled heuristic does not
+    change the pre-existing, symbolic-range behavior of `LoopBlocking`.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert="N", n_horiz="M")
+    state = sdfg.states()[0]
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(
+            blocking_parameters=["i0"], blocking_size=4, amd_heuristic=False
+        ),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    inner_map = _get_inner_sequential_map(state)
+    assert inner_map.map.unroll_factor == 4
+
+
+def test_amd_heuristic_loop_blocking_symbolic_range_without_fallback_raises():
+    """With symbolic ranges, no explicit `blocking_size`, and `amd_heuristic` enabled, the
+    heuristic cannot supply a value and none was configured, so `can_be_applied` must still
+    raise, exactly as it does without `amd_heuristic`.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert="N", n_horiz="M")
+
+    xform = gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True)
+    with pytest.raises(ValueError, match="The blocking size was not specified."):
+        sdfg.apply_transformations_once_everywhere(xform, validate=True, validate_all=True)

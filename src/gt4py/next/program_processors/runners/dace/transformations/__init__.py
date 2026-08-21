@@ -12,7 +12,7 @@ Please also see [ADR0018](https://github.com/GridTools/gt4py/tree/main/docs/deve
 that explains the general structure and requirements on the SDFGs.
 """
 
-from . import constants, splitting_tools
+from . import amd_block_heuristic, constants, splitting_tools
 from .auto_optimize import (
     GT4PyAutoOptHook,
     GT4PyAutoOptHookFun,
@@ -127,6 +127,7 @@ __all__ = [
     "TrivialMapDimensionFolding",
     "VerticalMapFusionCallback",
     "VerticalMapSplitCallback",
+    "amd_block_heuristic",
     "constants",
     "gt_apply_concat_where_replacement_on_sdfg",
     "gt_auto_optimize",

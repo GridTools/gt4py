@@ -24,6 +24,9 @@ from dace.codegen.targets import cpp as dace_cpp
 from dace.sdfg import memlet_utils as dace_mutils, nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace.transformations import (
+    amd_block_heuristic as gtx_amd_heuristic,
+)
 
 
 def gt_gpu_transformation(
@@ -35,6 +38,7 @@ def gt_gpu_transformation(
     gpu_launch_factor: Optional[int] = None,
     gpu_block_size_spec: Optional[dict[str, Sequence[int | str] | str]] = None,
     gpu_maxnreg: Optional[int] = None,
+    amd_heuristic: bool = False,
     validate: bool = True,
     validate_all: bool = False,
     **kwargs: Any,
@@ -62,6 +66,11 @@ def gt_gpu_transformation(
             Will only take effect if `gpu_block_size` is specified.
         gpu_block_size_spec: Specify thread block size per dimension, see
             `gt_set_gpu_blocksize()` for more.
+        amd_heuristic: If `True`, use the AMD block-size heuristic (see
+            `amd_block_heuristic.py`) instead of / in addition to `gpu_block_size`;
+            forwarded to `GPUSetBlockSize`. Setting this alone (without
+            `gpu_block_size`/`gpu_block_size_spec`) is enough to enable
+            `gt_set_gpu_blocksize()`.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -115,8 +124,8 @@ def gt_gpu_transformation(
         validate_all=validate_all,
     )
 
-    # Set the GPU block size if it is known.
-    if gpu_block_size is not None or gpu_block_size_spec is not None:
+    # Set the GPU block size if it is known, or if the AMD heuristic should decide it.
+    if gpu_block_size is not None or gpu_block_size_spec is not None or amd_heuristic:
         gpu_block_size_spec = gpu_block_size_spec or {}
         gt_set_gpu_blocksize(
             sdfg=sdfg,
@@ -125,6 +134,7 @@ def gt_gpu_transformation(
             launch_factor=gpu_launch_factor,
             **gpu_block_size_spec,
             gpu_maxnreg=gpu_maxnreg,
+            amd_heuristic=amd_heuristic,
             validate=False,
             validate_all=validate_all,
         )
@@ -543,6 +553,10 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             dimensional maps.
         launch_factor_Xd: If no `launch_bounds` was given use the number of threads
             in a block multiplied by this number, for maps of dimension `X`.
+        amd_heuristic: If `True`, use the AMD block-size heuristic (see
+            `amd_block_heuristic.py`) for genuinely two dimensional, non
+            degenerate Maps whose extents resolve to concrete integers. When
+            it applies, it takes priority over `block_size_2d`.
 
     Note:
         - You should use the `gt_set_gpu_blocksize()` function.
@@ -617,8 +631,12 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
         launch_factor_2d: int | None = None,
         launch_factor_3d: int | None = None,
         maxnreg: int | None = None,
+        amd_heuristic: bool = False,
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
-        super().__init__()
+        super().__init__(*args, **kwargs)
+        self._amd_heuristic = amd_heuristic
         if block_size_1d is not None:
             self.block_size_1d = block_size_1d
             if self.block_size_1d[1] != 1 or self.block_size_1d[2] != 1:
@@ -739,7 +757,17 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
             launch_bounds = self.launch_bounds_1d
 
         elif num_map_params == 2:
-            block_size = list(self.block_size_2d)
+            # AMD heuristics were tuned only for 2D maps, so we only apply them in that case.
+            amd_config = (
+                gtx_amd_heuristic.compute_amd_block_config(self.map_entry, graph, sdfg)
+                if self._amd_heuristic
+                else None
+            )
+            block_size = (
+                list(self.block_size_2d)
+                if amd_config is None
+                else [amd_config.block_x, amd_config.block_y, 1]
+            )
             launch_bounds = self.launch_bounds_2d
 
         else:
