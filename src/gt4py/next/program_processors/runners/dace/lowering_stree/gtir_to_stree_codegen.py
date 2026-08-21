@@ -72,11 +72,20 @@ class ListElementAccess:
             floating-point, the dtype's max value for integers (matching
             the SDFG lowering, where the dummy is masked out by any
             skip-aware consumer).
+        body: Statements evaluating ``expr`` — non-empty only for
+            ``neighbors(offset, (↑stencil)(...))`` sources, where the
+            stencil body (e.g. containing a nested ``reduce``) is evaluated
+            per neighbor and generates its own accumulation loop (see
+            ``_single_lifted_map_element``).  Callers must emit these at
+            the element-evaluation site, guarded by ``mask`` when present —
+            the inner loop reads the connectivity table at the neighbor
+            position, which is out of bounds for a skipped neighbor.
     """
 
     expr: str
     mask: str | None = None
     dummy: str = ""
+    body: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass
@@ -111,6 +120,13 @@ class CodegenContext:
             memlet subset.  This avoids multi-dimensional array access
             (``a[i, j, k]``) inside the tasklet, which DaCe's Python-to-C++
             transpiler cannot lower.
+        dynamic_map_indices: Dimensions whose ``map_indices`` entry is a
+            runtime index expression rather than a map variable — e.g. the
+            neighbor position ``gt_conn_X[i, n]`` injected by
+            ``_single_lifted_map_element`` to evaluate a nested reduce per
+            neighbor.  Such indices classify as dynamic in ``deref`` (they
+            read the connectivity table, which is not available on the
+            memlet edge).
         _temp_counter: Counter for generating unique temporary names.
     """
 
@@ -118,6 +134,7 @@ class CodegenContext:
     data_args: dict[str, DataRef]
     map_indices: dict[gtx_common.Dimension, str]
     offset_provider_type: gtx_common.OffsetProviderType
+    dynamic_map_indices: frozenset[gtx_common.Dimension] = frozenset()
     #: Names of SDFG-level symbols and data containers; a ``SymRef``
     #: resolving to one of these is emitted literally (they are free symbols
     #: inside the tasklet code).
@@ -668,7 +685,8 @@ class StreePythonCodegen(eve.NodeVisitor):
         # which applies the outer shift before recursing into the inner
         # one.
         indices: dict[gtx_common.Dimension, tuple[str, bool]] = {
-            dim: (map_var, False) for dim, map_var in ctx.map_indices.items()
+            dim: (map_var, dim in ctx.dynamic_map_indices)
+            for dim, map_var in ctx.map_indices.items()
         }
         for old_dim, repl in shift_replacements:
             if old_dim not in indices:
@@ -951,6 +969,95 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         return ListElementAccess(expr=access_expr, mask=mask, dummy=dummy)
 
+    def _single_lifted_map_element(
+        self, node: gtir.FunCall, source: gtir.FunCall, neighbor_var: str, ctx: CodegenContext
+    ) -> ListElementAccess:
+        """Element access for ``neighbors(offset, (↑stencil)(args...))``.
+
+        The source of the ``neighbors`` call is an applied lifted stencil —
+        e.g. a field operator containing a nested ``reduce``, fused into the
+        outer ``reduce`` by ``FuseAsFieldOp`` (see `test_nested_reduction` in
+        `tests/next_tests/integration_tests/feature_tests/ffront_tests/test_reductions.py`).
+        The n-th element of the neighbor list is the stencil body evaluated
+        with the lifted iterators positioned at the n-th neighbor of the
+        current location: the position along the connectivity's codomain
+        dimension is the runtime connectivity-table entry
+        ``conn[source_position, n]``.
+
+        The body is visited in a child context whose ``map_indices`` entry
+        for the codomain dimension holds that position expression, with the
+        stencil parameters bound to the call arguments (any statements the
+        body generates — e.g. the accumulation loop of the nested ``reduce``
+        — are captured in a fresh ``pre_statements`` buffer and returned in
+        ``ListElementAccess.body``; mutable state such as the temp counter,
+        ``used_connectivities`` and ``field_inputs`` is shared with the
+        parent context).  The caller must emit ``body`` at the
+        element-evaluation site, guarded by ``mask`` when the connectivity
+        has skip values.
+
+        Args:
+            node: The ``neighbors(offset, source)`` call.
+            source: The applied lift ``(↑stencil)(args...)`` (already
+                resolved through ``args_map``).
+            neighbor_var: The C variable used to index the neighbor
+                (i.e. the connectivity table's second axis).
+            ctx: The codegen context.
+
+        Returns:
+            A ``ListElementAccess`` whose ``expr`` is the stencil body's
+            result expression and whose non-empty ``body`` contains the
+            statements computing it for the current neighbor.
+        """
+        offset = node.args[0]
+        assert isinstance(offset, gtir.OffsetLiteral) and isinstance(offset.value, str)
+        offset_type = ctx.offset_provider_type[offset.value]
+        assert isinstance(offset_type, gtx_common.NeighborConnectivityType)
+        conn_name = gtx_dace_args.connectivity_identifier(offset.value)
+        ctx.used_connectivities.add(conn_name)
+        source_index = ctx.map_indices.get(offset_type.source_dim)
+        assert source_index is not None, (
+            f"No map variable for source dimension {offset_type.source_dim}."
+        )
+        neighbor_position = f"{conn_name}[{source_index}, {neighbor_var}]"
+
+        assert isinstance(source.fun, gtir.FunCall)
+        lifted_lambda = source.fun.args[0]
+        assert isinstance(lifted_lambda, gtir.Lambda)
+        new_bindings = {
+            param.id: arg for param, arg in zip(lifted_lambda.params, source.args, strict=True)
+        }
+        child_ctx = self._bind_inlined_args(
+            new_bindings,
+            ctx.child(
+                map_indices={**ctx.map_indices, offset_type.codomain: f"({neighbor_position})"},
+                dynamic_map_indices=ctx.dynamic_map_indices | {offset_type.codomain},
+                pre_statements=[],
+            ),
+        )
+        element_expr = self.visit(lifted_lambda.expr, ctx=child_ctx)
+
+        mask: str | None = None
+        if offset_type.has_skip_values:
+            # Skip invalid neighbors, matching `ReduceWithSkipValues` in the
+            # SDFG lowering; the guard must also wrap the statements in
+            # ``body`` since they read the connectivity table at the
+            # neighbor position.
+            mask = f"{neighbor_position} != {gtx_common._DEFAULT_SKIP_VALUE}"
+
+        assert isinstance(node.type, ts.ListType)
+        element_type = node.type.element_type
+        assert isinstance(element_type, ts.ScalarType)
+        dc_element_type = gtx_dace_args.as_dace_type(element_type)
+        dummy = (
+            "math.nan"
+            if np.issubdtype(dc_element_type.as_numpy_dtype(), np.floating)
+            else str(dace.dtypes.max_value(dc_element_type))
+        )
+
+        return ListElementAccess(
+            expr=element_expr, mask=mask, dummy=dummy, body=tuple(child_ctx.pre_statements)
+        )
+
     def _visit_neighbors(self, node: gtir.FunCall, *, ctx: CodegenContext) -> str:
         """Lower ``neighbors(SymRef("x"), offset)`` to a local list.
 
@@ -986,16 +1093,27 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         neighbor_var = ctx.fresh_temp()
         result_var = ctx.fresh_temp()
-        access = self._single_neighbor_access(node, neighbor_var, ctx)
-        assign_expr = (
-            f"({access.expr}) if {access.mask} else {access.dummy}"
-            if access.mask is not None
-            else access.expr
-        )
+        access, _ = self._single_map_element(node, neighbor_var, ctx)
 
         ctx.pre_statements.append(f"{result_var} = [0] * {max_neighbors}")
         ctx.pre_statements.append(f"for {neighbor_var} in range({max_neighbors}):")
-        ctx.pre_statements.append(f"    {result_var}[{neighbor_var}] = {assign_expr}")
+        if access.mask is None:
+            ctx.pre_statements.extend(f"    {line}" for line in access.body)
+            ctx.pre_statements.append(f"    {result_var}[{neighbor_var}] = {access.expr}")
+        elif not access.body:
+            ctx.pre_statements.append(
+                f"    {result_var}[{neighbor_var}] ="
+                f" ({access.expr}) if {access.mask} else {access.dummy}"
+            )
+        else:
+            # Guard the per-element statements on the connectivity-table
+            # entry: the statements read the connectivity at the neighbor
+            # position, which is out of bounds for a skipped neighbor.
+            ctx.pre_statements.append(f"    if {access.mask}:")
+            ctx.pre_statements.extend(f"        {line}" for line in access.body)
+            ctx.pre_statements.append(f"        {result_var}[{neighbor_var}] = {access.expr}")
+            ctx.pre_statements.append("    else:")
+            ctx.pre_statements.append(f"        {result_var}[{neighbor_var}] = {access.dummy}")
         return result_var
 
     def _visit_reduce(self, node: gtir.FunCall, *, ctx: CodegenContext) -> str:
@@ -1090,16 +1208,22 @@ class StreePythonCodegen(eve.NodeVisitor):
                 f"{result_var} = {_apply_reduce_op([result_var, *[e.expr for e, _ in elements]])}"
             )
             masks = [e.mask for e, _ in elements if e.mask is not None]
-            # Skip invalid neighbors: guard the accumulation on the
+            # Skip invalid neighbors: guard the accumulation (and the
+            # per-element statements such as a nested reduce loop, which
+            # reads the connectivity table at the neighbor position) on the
             # connectivity-table entries, matching `ReduceWithSkipValues`
             # in the SDFG lowering.
             guard = " and ".join(masks) if masks else None
+            indent = "        " if guard is not None else "    "
+            # Per-element statements (e.g. the accumulation loop of a nested
+            # reduce, see `_single_lifted_map_element`) are emitted inside
+            # the loop body, before the accumulation.
+            body = [f"{indent}{line}" for e, _ in elements for line in e.body]
             ctx.pre_statements.append(f"for {loop_var} in range({local_size}):")
             if guard is not None:
                 ctx.pre_statements.append(f"    if {guard}:")
-                ctx.pre_statements.append(f"        {accumulate}")
-            else:
-                ctx.pre_statements.append(f"    {accumulate}")
+            ctx.pre_statements.extend(body)
+            ctx.pre_statements.append(f"{indent}{accumulate}")
             return result_var
 
         inner = node.args[0]
@@ -1153,12 +1277,13 @@ class StreePythonCodegen(eve.NodeVisitor):
                         accumulate = (
                             f"{result_var} = {_apply_reduce_op([result_var, element_access.expr])}"
                         )
+                        indent = "        " if mask is not None else "    "
+                        body = [f"{indent}{line}" for line in element_access.body]
                         ctx.pre_statements.append(f"for {loop_var} in range({local_size}):")
                         if mask is not None:
                             ctx.pre_statements.append(f"    if {mask}:")
-                            ctx.pre_statements.append(f"        {accumulate}")
-                        else:
-                            ctx.pre_statements.append(f"    {accumulate}")
+                        ctx.pre_statements.extend(body)
+                        ctx.pre_statements.append(f"{indent}{accumulate}")
                         return result_var
 
         # --- Fuse reduce + map_list ---------------------------------------
@@ -1194,17 +1319,25 @@ class StreePythonCodegen(eve.NodeVisitor):
             accumulate = f"{result_var} = {_apply_reduce_op([result_var, mapped_expr])}"
             if masks:
                 guard = " and ".join(masks)
+                # Per-element statements (e.g. a nested reduce loop) go
+                # inside the skip-value guard: they read the connectivity
+                # table at the neighbor position, which is out of bounds
+                # for a skipped neighbor.
+                body = [f"        {line}" for e, _ in elements for line in e.body]
                 ctx.pre_statements.extend(
                     [
                         f"for {loop_var} in range({local_size}):",
                         f"    if {guard}:",
+                        *body,
                         f"        {accumulate}",
                     ]
                 )
             else:
+                body = [f"    {line}" for e, _ in elements for line in e.body]
                 ctx.pre_statements.extend(
                     [
                         f"for {loop_var} in range({local_size}):",
+                        *body,
                         f"    {accumulate}",
                     ]
                 )
@@ -1318,7 +1451,11 @@ class StreePythonCodegen(eve.NodeVisitor):
         """
         # Case 1: neighbors(offset, source) — single neighbor access
         if cpm.is_call_to(arg, "neighbors"):
-            element = self._single_neighbor_access(arg, loop_var, ctx)
+            source = self._resolve_args_map_symbol(arg.args[1], ctx)
+            if cpm.is_applied_lift(source):
+                element = self._single_lifted_map_element(arg, source, loop_var, ctx)
+            else:
+                element = self._single_neighbor_access(arg, loop_var, ctx)
             offset_lit = arg.args[0]
             assert isinstance(offset_lit, gtir.OffsetLiteral) and isinstance(offset_lit.value, str)
             offset_type = ctx.offset_provider_type[offset_lit.value]
@@ -1514,6 +1651,17 @@ class StreePythonCodegen(eve.NodeVisitor):
             indexed_args = []
             for arg in map_args:
                 element, _size = self._single_map_element(arg, index, ctx)
+                # Per-element statements (e.g. a nested reduce loop) are
+                # evaluated once, preceding the expression they compute.
+                # When masked, guard them — they read the connectivity
+                # table at the neighbor position, which is out of bounds
+                # for a skipped neighbor (and ``element.expr`` is only
+                # evaluated when the mask holds, see the conditional below).
+                if element.body and element.mask is not None:
+                    ctx.pre_statements.append(f"if {element.mask}:")
+                    ctx.pre_statements.extend(f"    {line}" for line in element.body)
+                else:
+                    ctx.pre_statements.extend(element.body)
                 indexed_args.append(
                     f"({element.expr}) if {element.mask} else {element.dummy}"
                     if element.mask is not None
@@ -1525,7 +1673,16 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         # Fuse list_get + neighbors: single neighbor access at the index.
         if cpm.is_call_to(inner, "neighbors"):
-            access = self._single_neighbor_access(inner, index, ctx)
+            source = self._resolve_args_map_symbol(inner.args[1], ctx)
+            if cpm.is_applied_lift(source):
+                access = self._single_lifted_map_element(inner, source, index, ctx)
+            else:
+                access = self._single_neighbor_access(inner, index, ctx)
+            if access.body and access.mask is not None:
+                ctx.pre_statements.append(f"if {access.mask}:")
+                ctx.pre_statements.extend(f"    {line}" for line in access.body)
+            else:
+                ctx.pre_statements.extend(access.body)
             return (
                 f"({access.expr}) if {access.mask} else {access.dummy}"
                 if access.mask is not None
@@ -1657,6 +1814,16 @@ def generate_list_tasklet_code(
         root_symbols=root_symbols,
     )
     element, _local_size = StreePythonCodegen()._single_map_element(expr, local_index, ctx)
+    # Per-element statements (e.g. a nested reduce loop) precede the
+    # expression they compute; when masked, guard them — they read the
+    # connectivity table at the neighbor position, which is out of bounds
+    # for a skipped neighbor (and `element.expr` is only used when the mask
+    # holds, see the conditional below).
+    if element.body and element.mask is not None:
+        ctx.pre_statements.append(f"if {element.mask}:")
+        ctx.pre_statements.extend(f"    {line}" for line in element.body)
+    else:
+        ctx.pre_statements.extend(element.body)
     expr_code = element.expr
     if element.mask is not None:
         dummy = element.dummy
