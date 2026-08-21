@@ -6,10 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
-from typing import TypeVar
+from typing import Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.extended_typing import Self
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -22,6 +23,50 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 PRG = TypeVar("PRG", bound=itir.Program | itir.Expr)
+
+
+def _broadcast_to(expr: itir.Expr, target_dims: list[common.Dimension]) -> itir.Expr:
+    """Broadcast `expr` to `target_dims` if it does not have these dimensions already."""
+    assert isinstance(expr.type, (ts.FieldType, ts.ScalarType))
+    if type_info.extract_dims(expr.type) != target_dims:
+        return im.broadcast(expr, target_dims)
+    return expr
+
+
+def _node_with_explicit_broadcast(
+    node: itir.FunCall,
+    *,
+    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
+) -> itir.FunCall:
+    """
+    Make the implicit broadcast in the branches of a `concat_where` explicit.
+
+    The resulting expression is domain inferred, since the domain of a branch is restricted
+    to the branch's own dimensions. E.g., in `concat_where(K < 0, a, b)` with
+    `a: Field[[Vertex]]` accessed on
+    `Vertex: [0, 10), K: [0, 10)` the domain of `a` is just `Vertex: [0, 10)` — the empty
+    range `K: [0, 0)`, which decides that `a` is never selected, is dropped as `a` does not
+    have the `K` dimension — while the domain of the corresponding
+    `broadcast(a, (Vertex, K))` retains it. Domain inference instead of computing the
+    domain of the broadcast is used for simplicity and to not duplicate the domain
+    semantics of `concat_where`.
+    """
+    assert isinstance(node.type, (ts.FieldType, ts.ScalarType))
+    target_dims = type_info.extract_dims(node.type)
+    cond_expr, tb, fb = node.args
+    new_node, _ = infer_domain.infer_expr(
+        im.concat_where(
+            cond_expr,
+            _broadcast_to(tb, target_dims),
+            _broadcast_to(fb, target_dims),
+        ),
+        node.annex.domain,
+        offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        revisit_already_inferred=False,
+    )
+    return new_node
 
 
 @dataclasses.dataclass
@@ -54,14 +99,25 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     ...     ),
     ...     offset_provider={},
     ... )
-    >>> assert prune_empty_concat_where(expr) == im.ref("b")
+    >>> assert prune_empty_concat_where(expr, offset_provider={}) == im.ref("b")
     """
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
+    offset_provider: common.OffsetProvider | common.OffsetProviderType
+    symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None
+
     @classmethod
-    def apply(cls: type[Self], node: PRG) -> PRG:
-        return cls().visit(node)
+    def apply(
+        cls: type[Self],
+        node: PRG,
+        *,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+        symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
+    ) -> PRG:
+        return cls(
+            offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
+        ).visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> itir.Expr:
         node = self.generic_visit(node)
@@ -71,33 +127,11 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             if not isinstance(node.type, (ts.FieldType, ts.ScalarType)):
                 return node
 
-            def make_broadcast_explicit(branch: itir.Expr) -> itir.Expr:
-                assert isinstance(branch.type, (ts.FieldType, ts.ScalarType))
-                assert isinstance(node.type, (ts.FieldType, ts.ScalarType))
-                if type_info.extract_dims(branch.type) != type_info.extract_dims(node.type):
-                    return im.broadcast(branch, type_info.extract_dims(node.type))
-                return branch
-
-            cond_expr, tb, fb = node.args
-
-            # transform implicit broadcast in the branches in explicit ones and reinfer domain,
-            # since the domain of a branch is restricted to the branch's own dimensions. E.g.,
-            # in `concat_where(K < 0, a, b)` with `a: Field[[Vertex]]` accessed on
-            # `Vertex: [0, 10), K: [0, 10)` the domain of `a` is just `Vertex: [0, 10)` — the
-            #  empty range `K: [0, 0)`, which decides that `a` is never selected, is dropped as
-            # `a` does not have the `K` dimension — while the domain of the corresponding
-            # `broadcast(a, (Vertex, K))` retains it. Domain inference instead of computing the
-            # domain of the broadcast is used for simplicity and to not duplicate the domain
-            # semantics of `concat_where`.
-            node_with_explicit_broadcast, _ = infer_domain.infer_expr(
-                im.concat_where(
-                    cond_expr, make_broadcast_explicit(tb), make_broadcast_explicit(fb)
-                ),
-                node.annex.domain,
-                offset_provider={},  # not needed on field-view level expressions
-                revisit_already_inferred=False,
-            )
-            cond_expr, tb, fb = node_with_explicit_broadcast.args
+            _, tb, fb = _node_with_explicit_broadcast(
+                node,
+                offset_provider=self.offset_provider,
+                symbolic_domain_sizes=self.symbolic_domain_sizes,
+            ).args
 
             if tb == fb:
                 # The branch is selected on the entire domain of the `concat_where`, but its
@@ -111,7 +145,8 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
                     node.annex.domain,
                     keep_existing_domains=False,
                     revisit_already_inferred=True,
-                    offset_provider={},
+                    offset_provider=self.offset_provider,
+                    symbolic_domain_sizes=self.symbolic_domain_sizes,
                 )
                 return new_node
 

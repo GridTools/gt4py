@@ -5,9 +5,10 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import numpy as np
 import pytest
 
-from gt4py.next import common
+from gt4py.next import common, constructors
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.prune_empty_concat_where import prune_empty_concat_where
@@ -18,22 +19,29 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_u
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
+Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
+V2EDim = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
 K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
 
 float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 vertex_k_field = ts.FieldType(dims=[Vertex, K], dtype=float64)
 vertex_field = ts.FieldType(dims=[Vertex], dtype=float64)
 k_field = ts.FieldType(dims=[K], dtype=float64)
+edge_field = ts.FieldType(dims=[Edge], dtype=float64)
 
 
-def _infer(testee, accessed_domain):
+def _infer(
+    testee: itir.Expr,
+    accessed_domain: dict[common.Dimension, tuple],
+    offset_provider: common.OffsetProvider | None = None,
+) -> itir.Expr:
     testee = canonicalize_domain_argument(testee)
     testee, _ = infer_expr(
         testee,
         domain_utils.SymbolicDomain.from_expr(
             im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
         ),
-        offset_provider={},
+        offset_provider=offset_provider or {},
     )
     return testee
 
@@ -206,7 +214,7 @@ def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_bra
     expected = canonicalize_domain_argument(expected)
     expected = InlineLambdas.apply(expected)
 
-    actual = prune_empty_concat_where(testee)
+    actual = prune_empty_concat_where(testee, offset_provider={})
     # on pruning, the domain annex is populated from the pruned `concat_where`
     #  (`RemoveBroadcast` relies on it)
     assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
@@ -228,3 +236,42 @@ def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_bra
         )
     actual = InlineLambdas.apply(actual)
     assert actual == expected
+
+
+def test_prune_equal_branches_containing_unstructured_shift():
+    """
+    Pruning equal branches reinfers the domains of the surviving branch on the full domain of
+    the `concat_where`, which requires the actual offset provider when the branch contains an
+    unstructured shift (regression test: the pass previously used an empty offset provider,
+    failing on the `V2E` translation during the re-inference).
+    """
+    offset_provider = {
+        "V2E": constructors.as_connectivity(
+            domain={Vertex: 1, V2EDim: 2},
+            codomain=Edge,
+            data=np.array([[0, 1]], dtype=np.int32),
+        )
+    }
+    stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
+    branch = im.as_fieldop(stencil)(im.ref("e", edge_field))
+    accessed_domain = {Vertex: (0, 1), K: (0, 10)}
+
+    testee = im.concat_where(
+        im.domain(common.GridType.UNSTRUCTURED, {K: (2, itir.InfinityLiteral.POSITIVE)}),
+        branch,
+        branch,
+    )
+    testee = _infer(testee, accessed_domain, offset_provider)
+
+    actual = prune_empty_concat_where(testee, offset_provider=offset_provider)
+
+    expected = im.broadcast(
+        im.as_fieldop(stencil, im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 1)}))(
+            im.ref("e")
+        ),
+        (Vertex, K),
+    )
+    assert actual == expected
+    assert actual.annex.domain == domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, accessed_domain)
+    )
