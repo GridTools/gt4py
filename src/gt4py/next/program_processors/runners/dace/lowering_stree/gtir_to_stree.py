@@ -62,8 +62,8 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_cod
     generate_tasklet_code,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import (
-    FieldopData,
-    FieldopResult,
+    DataRef,
+    DataRefTree,
     SubgraphContext,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
@@ -241,7 +241,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         self,
         name: str,
         data_type: ts.FieldType,
-    ) -> FieldopData: ...
+    ) -> DataRef: ...
 
     @abc.abstractmethod
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool: ...
@@ -271,7 +271,7 @@ def _collect_free_symbols(shape_or_strides: Any, root: tn.ScheduleTreeRoot) -> N
                     root.symbols[sym.name] = gtx_dace_args.FIELD_SYMBOL_DTYPE
 
 
-def _make_access_index_for_field(domain: FieldopDomain, data: FieldopData) -> dace.subsets.Range:
+def _make_access_index_for_field(domain: FieldopDomain, data: DataRef) -> dace.subsets.Range:
     """Build a memlet subset of a field over the given domain."""
     if isinstance(data.gt_type, ts.FieldType) and len(data.gt_type.dims) != 0:
         assert data.origin is not None
@@ -297,7 +297,7 @@ def translate_as_fieldop(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for the ``as_fieldop`` builtin.
 
     The stencil expression is lowered to a single Python code string
@@ -348,7 +348,7 @@ def translate_as_fieldop(
             stencil_expr.expr.type = node.type.dtype
         else:
             arg = sdfg_builder.visit(node.args[0], ctx=ctx)
-            assert isinstance(arg, FieldopData)
+            assert isinstance(arg, DataRef)
             return ctx.copy_data(sdfg_builder, arg, domain=field_domain)
     elif isinstance(fieldop_expr, gtir.Lambda):
         stencil_expr = fieldop_expr
@@ -358,15 +358,15 @@ def translate_as_fieldop(
         )
 
     # Visit the arguments to be passed to the lambda expression.
-    # Each argument is visited to obtain a FieldopData handle.
-    field_args: dict[str, FieldopData] = {}
+    # Each argument is visited to obtain a DataRef handle.
+    data_args: dict[str, DataRef] = {}
     for i, arg_expr in enumerate(node.args):
         arg = sdfg_builder.visit(arg_expr, ctx=ctx)
-        if isinstance(arg, FieldopData):
+        if isinstance(arg, DataRef):
             param_name = (
                 str(stencil_expr.params[i].id) if i < len(stencil_expr.params) else f"__arg{i}"
             )
-            field_args[param_name] = arg
+            data_args[param_name] = arg
 
     # Build the map_indices mapping (Dimension -> map variable name).  Only
     # the field-domain (global) dimensions; when the result field has a
@@ -425,7 +425,7 @@ def translate_as_fieldop(
         # dimension, with the skip-value guard.
         expr_code, pre_statements, used_connectivities, field_inputs = generate_list_tasklet_code(
             stencil_expr.expr,
-            field_args=field_args,
+            data_args=data_args,
             map_indices=map_indices,
             offset_provider_type=offset_provider_type,
             args_map=args_map,
@@ -461,7 +461,7 @@ def translate_as_fieldop(
         # Generate the tasklet code using StreePythonCodegen.
         expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
             stencil_expr.expr,
-            field_args=field_args,
+            data_args=data_args,
             map_indices=map_indices,
             offset_provider_type=offset_provider_type,
             args_map=args_map,
@@ -522,10 +522,10 @@ def translate_as_fieldop(
 
     _full_array_param_names = {
         param_name
-        for param_name, field_data in field_args.items()
+        for param_name, data in data_args.items()
         if not field_inputs
-        or field_data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
         or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
     }
 
@@ -541,8 +541,8 @@ def translate_as_fieldop(
 
     # Setup input memlets.
     in_memlets: dict[str, dace.Memlet] = {
-        _connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
-        for param_name, field_data in field_args.items()
+        _connector_mapping[param_name]: _make_full_array_memlet(data.name, ctx.root)
+        for param_name, data in data_args.items()
         if param_name in _full_array_param_names
     }
     for aname in used_connectivities:
@@ -573,14 +573,14 @@ def translate_as_fieldop(
     map_scope = tn.MapScope(node=map_entry, children=[tasklet_node])
     ctx.current_scope.add_child(map_scope)
 
-    return FieldopData(result_name, node.type, tuple(field_origin))
+    return DataRef(result_name, node.type, tuple(field_origin))
 
 
 def translate_map_list(
     node: gtir.FunCall,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopData:
+) -> DataRef:
     """Lower ``map_list(op)(args...)`` to a ``MapScope`` + ``TaskletNode``.
 
     The map iterates over the local (neighbor) dimension; each argument is
@@ -593,7 +593,7 @@ def translate_map_list(
         sdfg_builder: The SDFG builder.
 
     Returns:
-        A ``FieldopData`` for the 1-D result array (``ListType``).
+        A ``DataRef`` for the 1-D result array (``ListType``).
     """
     assert cpm.is_applied_map(node)
     assert isinstance(node.type, ts.ListType)
@@ -626,28 +626,28 @@ def translate_map_list(
     assert local_offset_type is not None
     map_var = get_map_variable(local_offset_type)
 
-    # Visit the arguments to obtain FieldopData handles.  Arguments that
-    # don't lower to FieldopData (e.g. ``make_const_list``) are passed
+    # Visit the arguments to obtain DataRef handles.  Arguments that
+    # don't lower to DataRef (e.g. ``make_const_list``) are passed
     # through ``args_map`` so the codegen can handle them.
-    field_args: dict[str, FieldopData] = {}
+    data_args: dict[str, DataRef] = {}
     args_map: dict[str, gtir.Node] = {}
     for i, arg_expr in enumerate(node.args):
         param_name = f"__arg{i}"
         arg = sdfg_builder.visit(arg_expr, ctx=ctx)
-        if isinstance(arg, FieldopData):
-            field_args[param_name] = arg
+        if isinstance(arg, DataRef):
+            data_args[param_name] = arg
         else:
             args_map[param_name] = arg_expr
 
     # Build the expression: ``map_op(__arg0, __arg1, ...)``.
-    map_expr = im.call(map_op)(*[im.ref(p) for p in [*(field_args.keys()), *(args_map.keys())]])
+    map_expr = im.call(map_op)(*[im.ref(p) for p in [*(data_args.keys()), *(args_map.keys())]])
 
     # Generate the tasklet code.  The map variable acts as the loop variable
     # for element access (neighbors indexing, local field indexing, etc.).
     map_indices = {local_offset_type: map_var}
     expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
         map_expr,
-        field_args=field_args,
+        data_args=data_args,
         map_indices=map_indices,
         offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
         if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
@@ -701,10 +701,10 @@ def translate_map_list(
     )
     _full_array_param_names = {
         param_name
-        for param_name, field_data in field_args.items()
+        for param_name, data in data_args.items()
         if not field_inputs
-        or field_data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
         or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
     }
 
@@ -720,8 +720,8 @@ def translate_map_list(
 
     # Setup input memlets.
     in_memlets: dict[str, dace.Memlet] = {
-        _connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
-        for param_name, field_data in field_args.items()
+        _connector_mapping[param_name]: _make_full_array_memlet(data.name, ctx.root)
+        for param_name, data in data_args.items()
         if param_name in _full_array_param_names
     }
     for aname in used_connectivities:
@@ -747,14 +747,14 @@ def translate_map_list(
     map_scope = tn.MapScope(node=map_entry, children=[tasklet_node])
     ctx.current_scope.add_child(map_scope)
 
-    return FieldopData(result_name, node.type, origin=())
+    return DataRef(result_name, node.type, origin=())
 
 
 def translate_scan(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for a scan field operator.
 
     The scan is lowered as a ``ForScope`` inside a ``MapScope``.  The
@@ -842,22 +842,22 @@ def translate_scan(
     init_leaves_data = []
     for path, _leaf_dtype in leaves:
         init_data = sdfg_builder.visit(_index_path(init_expr, path), ctx=ctx)
-        assert isinstance(init_data, FieldopData)
+        assert isinstance(init_data, DataRef)
         init_leaves_data.append(init_data)
 
     # Visit the field arguments (excluding the carry, which is handled
     # specially as the output array at the previous index).  Same tree
     # ordering constraint as above.
-    field_args: dict[str, FieldopData] = {}
+    data_args: dict[str, DataRef] = {}
     for i, arg_expr in enumerate(node.args):
         arg = sdfg_builder.visit(arg_expr, ctx=ctx)
-        if isinstance(arg, FieldopData):
+        if isinstance(arg, DataRef):
             param_name = (
                 str(stencil_expr.params[i + 1].id)
                 if i + 1 < len(stencil_expr.params)
                 else f"__arg{i}"
             )
-            field_args[param_name] = arg
+            data_args[param_name] = arg
 
     # Find the column dimension.
     scan_dim_index = [sdfg_builder.is_column_axis(r.dim) for r in field_domain].index(True)
@@ -986,7 +986,7 @@ def translate_scan(
     for path, _leaf_dtype in leaves:
         expr_code, pre_stmts, used_conns, tasklet_field_inputs = generate_tasklet_code(
             _index_path(stencil_expr.expr, path),
-            field_args=field_args,
+            data_args=data_args,
             map_indices=map_indices,
             offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
             if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
@@ -1027,10 +1027,10 @@ def translate_scan(
     )
     _full_array_param_names = {
         param_name
-        for param_name, field_data in field_args.items()
+        for param_name, data in data_args.items()
         if not field_inputs
-        or field_data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(field_data.name) + r"\b", tasklet_code)
+        or data.name not in _field_names_in_inputs
+        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
         or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
     }
 
@@ -1050,8 +1050,8 @@ def translate_scan(
     # scalar field inputs + the carry reads (scalar memlets on the leaf result
     # arrays).
     in_memlets: dict[str, dace.Memlet] = {
-        connector_mapping[param_name]: _make_full_array_memlet(field_data.name, ctx.root)
-        for param_name, field_data in field_args.items()
+        connector_mapping[param_name]: _make_full_array_memlet(data.name, ctx.root)
+        for param_name, data in data_args.items()
         if param_name in _full_array_param_names
     }
     for aname in used_connectivities:
@@ -1145,12 +1145,12 @@ def translate_scan(
         return leaf_type
 
     leaf_results = [
-        FieldopData(result_name, _gt_type_at_path(path), tuple(field_origin))
+        DataRef(result_name, _gt_type_at_path(path), tuple(field_origin))
         for result_name, (path, _leaf_dtype) in zip(result_names, leaves, strict=True)
     ]
     leaf_results_iter = iter(leaf_results)
 
-    def _rebuild_result(dtype: ts.DataType) -> FieldopResult:
+    def _rebuild_result(dtype: ts.DataType) -> DataRefTree:
         if isinstance(dtype, ts.TupleType):
             subresults = []
             for subtype in dtype.types:
@@ -1167,7 +1167,7 @@ def translate_if(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for the ``if_`` builtin (statement level).
 
     Uses ``IfScope``/``ElseScope`` at the statement level.  Inside the stencil
@@ -1228,7 +1228,7 @@ def translate_if(
         assert isinstance(node.type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
     out_name, _ = sdfg_builder.add_temp_array(ctx.root, field_shape, dtype)
-    out_data = FieldopData(out_name, node.type, tuple(field_origin))
+    out_data = DataRef(out_name, node.type, tuple(field_origin))
 
     # Visit the true branch — results are added to the IfScope.
     if_scope = tn.IfScope(
@@ -1242,7 +1242,7 @@ def translate_if(
     true_result = sdfg_builder.visit(true_expr, ctx=true_ctx_inner)
 
     # Add a CopyNode to write the true result to the output.
-    if true_result is not None and isinstance(true_result, FieldopData):
+    if true_result is not None and isinstance(true_result, DataRef):
         src_subset = _make_access_index_for_field(
             get_field_domain(true_expr.annex.domain), true_result
         )
@@ -1265,7 +1265,7 @@ def translate_if(
     false_result = sdfg_builder.visit(false_expr, ctx=false_ctx_inner)
 
     # Add a CopyNode to write the false result to the output.
-    if false_result is not None and isinstance(false_result, FieldopData):
+    if false_result is not None and isinstance(false_result, DataRef):
         src_subset = _make_access_index_for_field(
             get_field_domain(false_expr.annex.domain), false_result
         )
@@ -1286,7 +1286,7 @@ def translate_symbol_ref(
     node: gtir.SymRef,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for a ``ir.SymRef`` node."""
 
     # Check if the symbol is unused (domain is NEVER).
@@ -1294,7 +1294,7 @@ def translate_symbol_ref(
     if node_domain == infer_domain.DomainAccessDescriptor.NEVER:
         return None
 
-    def _translate_symbol_ref_inner(node: gtir.SymRef) -> FieldopData:
+    def _translate_symbol_ref_inner(node: gtir.SymRef) -> DataRef:
         symbol_name = str(node.id)
         if symbol_name in ctx.data_nodes:
             data = ctx.data_nodes[symbol_name]
@@ -1331,7 +1331,7 @@ def translate_scalar_expr(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopData:
+) -> DataRef:
     """Generates a tasklet for a scalar-valued expression.
 
     Symbols bound by let-lambdas (present in ``ctx.data_nodes``) are passed
@@ -1346,19 +1346,19 @@ def translate_scalar_expr(
     # Collect free symbols and resolve them to data containers or SDFG
     # symbols.
     free_syms = {str(sym.id) for sym in eve.walk_values(node).if_isinstance(gtir.SymRef).to_set()}
-    field_args: dict[str, FieldopData] = {}
+    data_args: dict[str, DataRef] = {}
     for sym in free_syms:
         if sym in ctx.data_nodes:
             data = ctx.data_nodes[sym]
-            if isinstance(data, FieldopData):
+            if isinstance(data, DataRef):
                 assert isinstance(data.gt_type, ts.ScalarType)
-                field_args[sym] = data
+                data_args[sym] = data
     string_args = {sym: sym for sym in free_syms if sym in ctx.root.symbols}
 
     # Generate the Python code for the scalar expression.
     expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
         node,
-        field_args=field_args,
+        data_args=data_args,
         map_indices={},
         offset_provider_type=sdfg_builder.get_offset_provider_type.__self__.offset_provider_type
         if hasattr(sdfg_builder.get_offset_provider_type, "__self__")
@@ -1376,13 +1376,13 @@ def translate_scalar_expr(
     # Create the TaskletNode.
     tasklet, connector_mapping = sdfg_builder.add_tasklet(
         name="scalar_expr",
-        inputs={sym: None for sym in field_args} | {c: None for c in used_connectivities},
+        inputs={sym: None for sym in data_args} | {c: None for c in used_connectivities},
         outputs={"out"},
         code=tasklet_code,
     )
     in_memlets: dict[str, dace.Memlet] = {
         connector_mapping[sym]: dace.Memlet(data=data.name, subset="0")
-        for sym, data in field_args.items()
+        for sym, data in data_args.items()
     }
     for aname in used_connectivities:
         ctx.root.containers[aname].transient = False
@@ -1394,14 +1394,14 @@ def translate_scalar_expr(
     )
     ctx.current_scope.add_child(tasklet_node)
 
-    return FieldopData(result_name, node.type, origin=())
+    return DataRef(result_name, node.type, origin=())
 
 
 def translate_index(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopData:
+) -> DataRef:
     """Generates the schedule-tree nodes for the ``index`` builtin.
 
     ``index(dim)`` produces a 1-D field whose value at each grid point is
@@ -1449,14 +1449,14 @@ def translate_index(
     map_scope = tn.MapScope(node=map_entry, children=[tasklet_node])
     ctx.current_scope.add_child(map_scope)
 
-    return FieldopData(result_name, node.type, origin=tuple(field_origin))
+    return DataRef(result_name, node.type, origin=tuple(field_origin))
 
 
 def translate_make_tuple(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for ``make_tuple``."""
     assert cpm.is_call_to(node, "make_tuple")
     return tuple(sdfg_builder.visit(arg, ctx=ctx) for arg in node.args)
@@ -1466,7 +1466,7 @@ def translate_tuple_get(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for ``tuple_get``."""
     assert cpm.is_call_to(node, "tuple_get")
     assert len(node.args) == 2
@@ -1565,7 +1565,7 @@ def _translate_concat_where_branch(
         # The input field is defined on all dimensions of the result field.
         source = sdfg_builder.visit(source_expr, ctx=ctx)
 
-    assert isinstance(source, FieldopData) and source.gt_type == output_type
+    assert isinstance(source, DataRef) and source.gt_type == output_type
     source_domain_range = source_domain.ranges[concat_dim]
     source_range_0 = get_symbolic(source_domain_range.start)
     source_range_1 = get_symbolic(im.maximum(source_domain_range.start, source_domain_range.stop))
@@ -1626,7 +1626,7 @@ def translate_concat_where(
     node: gtir.Node,
     ctx: SubgraphContext,
     sdfg_builder: SDFGBuilder,
-) -> FieldopResult:
+) -> DataRefTree:
     """Generates the schedule-tree nodes for ``concat_where`` using CopyNode.
 
     Lowers a `concat_where` expression to a dataflow where two memlets write
@@ -1702,7 +1702,7 @@ def translate_concat_where(
         output_origin=output_origin,
     )
 
-    return FieldopData(output_name, node.type, tuple(output_origin))
+    return DataRef(output_name, node.type, tuple(output_origin))
 
 
 # ---------------------------------------------------------------------------
@@ -1741,7 +1741,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         self,
         name: str,
         data_type: ts.FieldType,
-    ) -> FieldopData:
+    ) -> DataRef:
         """Retrieve the field descriptor for a data container by name."""
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
@@ -1763,7 +1763,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
                 "Fields with more than one local dimension are not supported."
             )
         field_origin = tuple(gtx_dace_args.range_start_symbol(name, dim) for dim in field_type.dims)
-        return FieldopData(name, field_type, field_origin)
+        return DataRef(name, field_type, field_origin)
 
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
         assert self.column_axis
@@ -1930,7 +1930,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         root.arg_names = sdfg_arg_names
 
         # Visit one statement at a time.
-        data_nodes: dict[str, FieldopData | None] = {}
+        data_nodes: dict[str, DataRef | None] = {}
         for p in node.params:
             sym_type = p.type
             if (sym_name := str(p.id)) in root.containers:
@@ -1988,8 +1988,8 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         domain = extract_target_domain(stmt.domain)
 
         def _write_target(
-            source: FieldopData | None,
-            target: FieldopData | None,
+            source: DataRef | None,
+            target: DataRef | None,
             target_domain: Any,
         ) -> None:
             if source is None or target is None:
@@ -2014,13 +2014,13 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         node: gtir.Expr,
         ctx: SubgraphContext,
         use_temp: bool = True,
-    ) -> FieldopResult:
+    ) -> DataRefTree:
         """Specialized visit method for fieldview expressions."""
         result = self.visit(node, ctx=ctx)
 
         if use_temp and result is not None:
             # Copy the full shape of global data to temporary storage.
-            def _maybe_copy(x: FieldopData | None) -> FieldopData | None:
+            def _maybe_copy(x: DataRef | None) -> DataRef | None:
                 if x is None:
                     return None
                 if x.name in ctx.root.containers and not ctx.root.containers[x.name].transient:
@@ -2035,7 +2035,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         self,
         node: gtir.FunCall,
         ctx: SubgraphContext,
-    ) -> FieldopResult:
+    ) -> DataRefTree:
         # Let-lambda: inline via data_nodes | args (no nested SDFG).
         if isinstance(node.fun, gtir.Lambda):
             args = {
@@ -2083,14 +2083,14 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         self,
         node: gtir.Literal,
         ctx: SubgraphContext,
-    ) -> FieldopResult:
+    ) -> DataRefTree:
         return translate_scalar_expr(node, ctx, self)
 
     def visit_SymRef(
         self,
         node: gtir.SymRef,
         ctx: SubgraphContext,
-    ) -> FieldopResult:
+    ) -> DataRefTree:
         return translate_symbol_ref(node, ctx, self)
 
 
