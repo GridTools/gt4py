@@ -12,8 +12,6 @@ import dataclasses
 import warnings
 from typing import Any, Final
 
-import factory
-
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
@@ -38,43 +36,6 @@ class DaCeBackend(backend.Backend[Any]):
         # Inject the backend-level workspace so it is used when arguments are constructed.
         program.set_external_workspace(self.external_workspace or {})
         return program
-
-
-class DaCeBackendFactory(factory.Factory):
-    """
-    Workflow factory for the GTIR-DaCe backend.
-
-    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
-
-    Args:
-        auto_optimize: Enables the SDFG transformation pipeline.
-    """
-
-    class Meta:
-        model = DaCeBackend
-
-    class Params:
-        name_device = "cpu"
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
-        device_type = core_defs.DeviceType.CPU
-        otf_workflow = factory.SubFactory(
-            gtx_wfdfactory.DaCeWorkflowFactory,
-            cached_translation=True,
-            device_type=factory.SelfAttribute("..device_type"),
-            auto_optimize=factory.SelfAttribute("..auto_optimize"),
-        )
-        auto_optimize = factory.Trait(name_postfix="_opt")
-
-    name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
-    external_workspace = None
 
 
 def make_dace_backend(
@@ -154,16 +115,36 @@ def make_dace_backend(
             gtx_transformations.TransientMemoryMode.EXTERNAL
         )
 
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
-        gpu=gpu,
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    device_type: core_defs.DeviceType
+    if gpu:
+        allocator = next_allocators.StandardGPUFieldBufferAllocator()
+        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+        name_device = "gpu"
+    else:
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        device_type = core_defs.DeviceType.CPU
+        name_device = "cpu"
+
+    translation = gtx_wfdfactory.make_dace_translator(
+        device_type=device_type,
         auto_optimize=auto_optimize,
+        auto_optimize_args=optimization_args,
+        async_sdfg_call=(async_sdfg_call if gpu else False),
+        unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+        use_metrics=use_metrics,
+        disable_field_origin_on_program_arguments=use_zero_origin,
+        use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
+
+    return DaCeBackend(
+        name=f"run_dace_{name_device}{'_opt' if auto_optimize else ''}",
+        executor=gtx_wfdfactory.make_dace_compile_workflow(
+            device_type=device_type, cached_translation=True, translation=translation
+        ),
+        allocator=allocator,
+        transforms=backend.DEFAULT_TRANSFORMS,
         external_workspace=external_workspace,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-        otf_workflow__bare_translation__use_metrics=use_metrics,
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
-        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
 
