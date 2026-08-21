@@ -363,8 +363,8 @@ def test_with_tuples(cartesian_case, static_domains: bool):
 
 
 @pytest.mark.uses_tuple_returns
-def test_with_nested_tuples(cartesian_case):
-    @gtx.field_operator
+def test_with_nested_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         interior0: cases.IJKField,
         boundary0: cases.IJField,
@@ -410,8 +410,8 @@ def test_with_nested_tuples(cartesian_case):
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_sparse_fields
-def test_with_tuples_of_local_fields(unstructured_case):
-    @gtx.field_operator
+def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         a: cases.VField,
         b: cases.VField,

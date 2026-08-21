@@ -554,9 +554,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
             or (node.func.id == "tuple" and isinstance(arg, ast.GeneratorExp))
         ):
+            allowed = (
+                "literal arguments or a generator expression"
+                if node.func.id == "tuple"
+                else "literal arguments"
+            )
             raise errors.DSLError(
                 self.get_location(node),
-                f"'{self._func_name(node)}()' only takes literal arguments or a generator expression.",
+                f"'{self._func_name(node)}()' only takes {allowed}.",
             )
 
     def _func_name(self, node: ast.Call) -> str:
@@ -573,14 +578,20 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ):
                 if len(gen_expr.generators) != 1:
                     raise errors.DSLError(
-                        self.get_location(node),
+                        self.get_location(gen_expr),
                         "Nested generator expressions are not supported.",
+                        hints=["Use a single 'for' clause iterating over one tuple."],
                     )
                 if gen_expr.generators[0].ifs != []:
                     raise errors.DSLError(
-                        self.get_location(node),
-                        "Conditionals are not supported in generator expressions as the size of "
-                        "the result can only be deduced at runtime.",
+                        self.get_location(gen_expr.generators[0].ifs[0]),
+                        "Conditionals are not supported in generator expressions.",
+                        notes=[
+                            (
+                                "The length of the resulting tuple must be known at compile time, "
+                                "but an 'if' filter makes it depend on runtime values."
+                            )
+                        ],
                     )
 
                 def parse_target(target: ast.expr) -> NestedTuple[foast.DataSymbol]:
