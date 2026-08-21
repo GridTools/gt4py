@@ -359,9 +359,9 @@ class DaCeTranslator(
     async_sdfg_call: bool
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
+    use_stree_lowering: bool
+    apply_common_transforms: bool
 
-    use_stree_lowering: bool = True
-    apply_common_transforms: bool = True
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None

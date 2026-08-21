@@ -73,6 +73,16 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
+    DACE_STREE_FVIEW_CPU = "gt4py.next.program_processors.runners.dace.run_dace_stree_fview_cpu"
+    DACE_STREE_FVIEW_GPU = "gt4py.next.program_processors.runners.dace.run_dace_stree_fview_gpu"
+    DACE_STREE_FVIEW_CPU_NO_OPT = (
+        "gt4py.next.program_processors.runners.dace.run_dace_stree_fview_cpu_noopt"
+    )
+    DACE_STREE_IVIEW_CPU = "gt4py.next.program_processors.runners.dace.run_dace_stree_iview_cpu"
+    DACE_STREE_IVIEW_GPU = "gt4py.next.program_processors.runners.dace.run_dace_stree_iview_gpu"
+    DACE_STREE_IVIEW_CPU_NO_OPT = (
+        "gt4py.next.program_processors.runners.dace.run_dace_stree_iview_cpu_noopt"
+    )
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -164,6 +174,21 @@ DACE_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST
     + DOMAIN_INFERENCE_SKIP_LIST
     + [
+        (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+    ]
+)
+# Skip list for the schedule-tree lowering (`run_dace_stree_*`) backends; kept
+# separate from `DACE_SKIP_TEST_LIST` since it has diverged.
+DACE_STREE_SKIP_TEST_LIST = (
+    COMMON_SKIP_TEST_LIST
+    + DOMAIN_INFERENCE_SKIP_LIST
+    + [
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
@@ -213,6 +238,12 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_FVIEW_CPU: DACE_STREE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_FVIEW_GPU: DACE_STREE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_FVIEW_CPU_NO_OPT: DACE_STREE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_IVIEW_CPU: DACE_STREE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_IVIEW_GPU: DACE_STREE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_STREE_IVIEW_CPU_NO_OPT: DACE_STREE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
