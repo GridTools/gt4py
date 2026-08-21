@@ -44,9 +44,7 @@ from gt4py.next.iterator.ir_utils import (
     misc as itir_misc,
 )
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
-from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import (
-    FieldopData,
-)
+from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import DataRef
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
     _CONST_DIM,
     format_builtin,
@@ -89,7 +87,7 @@ class CodegenContext:
         args_map: Maps lambda parameter names to their argument expressions.
             Updated when a let-lambda is encountered (dict-union = lexical
             shadowing).
-        field_args: Maps lambda parameter names to ``FieldopData`` handles.
+        data_args: Maps lambda parameter names to ``DataRef`` handles.
             Set once at the fieldop level and used to generate array-access
             expressions for ``deref``.
         map_indices: Maps ``Dimension`` to the corresponding map variable
@@ -117,7 +115,7 @@ class CodegenContext:
     """
 
     args_map: dict[str, gtir.Node]
-    field_args: dict[str, FieldopData]
+    data_args: dict[str, DataRef]
     map_indices: dict[gtx_common.Dimension, str]
     offset_provider_type: gtx_common.OffsetProviderType
     #: Names of SDFG-level symbols and data containers; a ``SymRef``
@@ -153,30 +151,26 @@ class CodegenContext:
         """Bind new lambda arguments in a child context.
 
         The bindings are merged into ``args_map`` (lexical shadowing); names
-        that are also present in ``field_args`` are removed from there, so
+        that are also present in ``data_args`` are removed from there, so
         that an inner lambda parameter shadowing a field-operator parameter
         (e.g. from a fused-in lambda) resolves to the inner binding and not
         to the outer field.
         """
         bound_names = {str(k) for k in new_bindings}
         args_map = self.args_map | {str(k): v for k, v in new_bindings.items()}
-        field_args = {
-            name: data for name, data in self.field_args.items() if name not in bound_names
-        }
-        return self.child(args_map=args_map, field_args=field_args)
+        data_args = {name: data for name, data in self.data_args.items() if name not in bound_names}
+        return self.child(args_map=args_map, data_args=data_args)
 
     def bind_strings(self, new_bindings: Mapping[str, str]) -> CodegenContext:
         """Bind new string-valued arguments in a child context.
 
         Same scoping rule as ``bind_args`` — the bound names are removed from
-        ``field_args`` so that they shadow field-operator parameters.
+        ``data_args`` so that they shadow field-operator parameters.
         """
         bound_names = {str(k) for k in new_bindings}
         string_args = self.string_args | {str(k): v for k, v in new_bindings.items()}
-        field_args = {
-            name: data for name, data in self.field_args.items() if name not in bound_names
-        }
-        return self.child(string_args=string_args, field_args=field_args)
+        data_args = {name: data for name, data in self.data_args.items() if name not in bound_names}
+        return self.child(string_args=string_args, data_args=data_args)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -246,7 +240,7 @@ class StreePythonCodegen(eve.NodeVisitor):
 
     Usage::
 
-        ctx = CodegenContext(args_map=..., field_args=..., map_indices=..., ...)
+        ctx = CodegenContext(args_map=..., data_args=..., map_indices=..., ...)
         expr_code = StreePythonCodegen().visit(stencil_expr, ctx=ctx)
         tasklet_code = "\\n".join(ctx.pre_statements) + f"\\n__out = {expr_code}"
     """
@@ -279,7 +273,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         for name, value in new_bindings.items():
             if cpm.is_call_to(value, "deref"):
                 deref_arg = self._resolve_args_map_symbol(value.args[0], ctx)
-                if isinstance(deref_arg, gtir.SymRef) and str(deref_arg.id) in ctx.field_args:
+                if isinstance(deref_arg, gtir.SymRef) and str(deref_arg.id) in ctx.data_args:
                     string_bindings[str(name)] = self._visit_deref(value, ctx=ctx)
                     continue
             args_bindings[str(name)] = value
@@ -288,9 +282,9 @@ class StreePythonCodegen(eve.NodeVisitor):
             # The eagerly-resolved derefs replace the field arguments:
             # remove them so the string bindings take effect.
             child_ctx = child_ctx.child(
-                field_args={
+                data_args={
                     name: data
-                    for name, data in child_ctx.field_args.items()
+                    for name, data in child_ctx.data_args.items()
                     if name not in string_bindings
                 }
             )
@@ -305,7 +299,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         (it refers to an SDFG symbol or a data container).
         """
         symid = str(node.id)
-        if symid in ctx.field_args:
+        if symid in ctx.data_args:
             return symid
         elif symid in ctx.string_args:
             return ctx.string_args[symid]
@@ -495,13 +489,13 @@ class StreePythonCodegen(eve.NodeVisitor):
         assert isinstance(node, gtir.FunCall)
         return node
 
-    def _resolve_field_arg(self, node: gtir.SymRef, ctx: CodegenContext) -> FieldopData | None:
-        """Resolve a SymRef (possibly through args_map) to its FieldopData.
+    def _resolve_data_arg(self, node: gtir.SymRef, ctx: CodegenContext) -> DataRef | None:
+        """Resolve a SymRef (possibly through args_map) to its DataRef.
 
-        The symbol is first looked up directly in ``field_args`` (the common
+        The symbol is first looked up directly in ``data_args`` (the common
         case: it is a field-operator lambda parameter).  If not found, the
         ``args_map`` chain — updated when let-lambdas are encountered in
-        ``visit_FunCall`` — is followed until a symbol in ``field_args`` is
+        ``visit_FunCall`` — is followed until a symbol in ``data_args`` is
         reached.
 
         Returns ``None`` if the symbol does not resolve to a field argument
@@ -509,16 +503,16 @@ class StreePythonCodegen(eve.NodeVisitor):
         back to ``visit_SymRef`` in that case.
         """
         symbol = str(node.id)
-        if symbol in ctx.field_args:
-            return ctx.field_args[symbol]
+        if symbol in ctx.data_args:
+            return ctx.data_args[symbol]
 
         seen: set[str] = {symbol}
         while symbol in ctx.args_map:
             mapped = ctx.args_map[symbol]
             if isinstance(mapped, gtir.SymRef):
                 symbol = str(mapped.id)
-                if symbol in ctx.field_args:
-                    return ctx.field_args[symbol]
+                if symbol in ctx.data_args:
+                    return ctx.data_args[symbol]
                 if symbol in seen:
                     break
                 seen.add(symbol)
@@ -532,14 +526,14 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         Fused field operators pass shifted iterators and other expressions
         as lambda arguments (e.g. ``_cs_1`` -> ``⟪IDim→IDim, 1ₒ⟫(in_field)``).
-        Symbols present in ``field_args`` are lambda parameters with an
+        Symbols present in ``data_args`` are lambda parameters with an
         already-lowered field handle and are never resolved away; the
         identity check stops self-referential mappings
         (e.g. ``args_map={'in_field': SymRef('in_field')}``).
         """
         while isinstance(arg, gtir.SymRef):
             symbol = str(arg.id)
-            if symbol in ctx.field_args or symbol not in ctx.args_map:
+            if symbol in ctx.data_args or symbol not in ctx.args_map:
                 break
             mapped = ctx.args_map[symbol]
             if mapped == arg or not isinstance(mapped, gtir.Expr):
@@ -549,18 +543,16 @@ class StreePythonCodegen(eve.NodeVisitor):
 
     def _resolve_shifts(
         self, arg: gtir.Expr, ctx: CodegenContext
-    ) -> tuple[
-        gtir.SymRef, FieldopData | None, dict[gtx_common.Dimension, tuple[str, bool]], set[str]
-    ]:
+    ) -> tuple[gtir.SymRef, DataRef | None, dict[gtx_common.Dimension, tuple[str, bool]], set[str]]:
         """Walk a shift chain and return the field data and indices.
 
         Shared logic between ``_visit_deref`` and ``_single_neighbor_access``:
         collects cartesian and unstructured shifts, applies them
         (innermost first), and returns the resolved ``SymRef``,
-        ``FieldopData``, and index expressions.
+        ``DataRef``, and index expressions.
 
         Returns:
-            ``(sym_ref, field_data, indices, used_connectivities)`` where
+            ``(sym_ref, data, indices, used_connectivities)`` where
             ``indices`` maps each dimension to ``(index_expr, is_dynamic)``
             and ``used_connectivities`` is the set of connectivity-table
             names referenced by unstructured shifts.
@@ -636,9 +628,9 @@ class StreePythonCodegen(eve.NodeVisitor):
                     f"reduce operator) is not supported: {arg}"
                 )
             raise ValueError(f"Unexpected deref argument: {arg}")
-        field_data = self._resolve_field_arg(arg, ctx)
+        data = self._resolve_data_arg(arg, ctx)
 
-        if field_data is None:
+        if data is None:
             return arg, None, {}, used_connectivities_in_shift
 
         # Build the index expressions starting from the map variables
@@ -664,7 +656,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             del indices[old_dim]
             indices[repl.new_dim] = (new_index, not repl.is_symbolic)
 
-        return arg, field_data, indices, used_connectivities_in_shift
+        return arg, data, indices, used_connectivities_in_shift
 
     def _visit_deref(self, node: gtir.FunCall, *, ctx: CodegenContext) -> str:
         """Lower ``deref(expr)`` to a scalar or 1D field access.
@@ -705,22 +697,22 @@ class StreePythonCodegen(eve.NodeVisitor):
             # current location.
             return self.visit(deref_arg, ctx=ctx)
 
-        _sym_ref, field_data, indices, used_connectivities_in_shift = self._resolve_shifts(
+        _sym_ref, data, indices, used_connectivities_in_shift = self._resolve_shifts(
             node.args[0], ctx
         )
 
-        if field_data is None:
+        if data is None:
             # Not a field argument — visit as a regular expression
             return self.visit(node.args[0], ctx=ctx)
 
-        if isinstance(field_data.gt_type, ts.ScalarType):
+        if isinstance(data.gt_type, ts.ScalarType):
             # Scalar access (no index).  NOTE: use the connector-safe name
             # (`_access_name`) — referencing the raw container name breaks
             # if DaCe transformations (scalar promotion/cloning) rename the
             # container, while keeping a tasklet connector alias intact.
-            return self._access_name(field_data, ctx)
+            return self._access_name(data, ctx)
 
-        assert isinstance(field_data.gt_type, ts.FieldType)
+        assert isinstance(data.gt_type, ts.FieldType)
 
         # Record used connectivities so the caller can add them as inputs.
         ctx.used_connectivities.update(used_connectivities_in_shift)
@@ -732,32 +724,32 @@ class StreePythonCodegen(eve.NodeVisitor):
         # result is used as a dynamic index.
         if ctx.is_inner_expr:
             parts = []
-            for dim, origin in zip(field_data.gt_type.dims, field_data.origin, strict=True):
+            for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
                 if dim not in indices:
                     raise ValueError(f"No map variable for dimension {dim}.")
                 index_expr, _ = indices[dim]
                 parts.append(f"({index_expr} - ({origin}))")
-            return f"{field_data.name}[{', '.join(parts)}]"
+            return f"{data.name}[{', '.join(parts)}]"
 
         # Fields with a local dimension still need the full array inside
         # the tasklet because the local dimension is indexed by a loop
         # variable.  This is the same limitation as in the SDFG lowering,
         # where ``get_memlet_subset`` only handles ``SymbolExpr`` indices.
         # TODO(edopao): handle local dimensions via input edge too.
-        if isinstance(field_data.gt_type.dtype, ts.ListType):
+        if isinstance(data.gt_type.dtype, ts.ListType):
             parts = []
-            for dim, origin in zip(field_data.gt_type.dims, field_data.origin, strict=True):
+            for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
                 if dim not in indices:
                     raise ValueError(f"No map variable for dimension {dim}.")
                 index_expr, _ = indices[dim]
                 parts.append(f"({index_expr} - ({origin}))")
-            return f"{field_data.name}[{', '.join(parts)}]"
+            return f"{data.name}[{', '.join(parts)}]"
 
         # Build per-dimension index expressions for the field's dimensions
         # and classify each as symbolic (compile-time known) or dynamic
         # (runtime value).
         dim_info: list[tuple[gtx_common.Dimension, str, bool]] = []
-        for dim, origin in zip(field_data.gt_type.dims, field_data.origin, strict=True):
+        for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
             if dim not in indices:
                 raise ValueError(f"No map variable for dimension {dim}.")
             index_expr, is_dynamic = indices[dim]
@@ -772,7 +764,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             # A 0-dimensional field has an empty subset list; its single
             # element is addressed with `0`.
             subset = ", ".join(index_expr for _, index_expr, _ in dim_info) or "0"
-            ctx.field_inputs[connector] = (field_data.name, subset)
+            ctx.field_inputs[connector] = (data.name, subset)
             return connector
 
         # Some indices are dynamic.  As in the SDFG lowering
@@ -781,7 +773,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         # computed inline.  DaCe's Python-to-C++ transpiler can lower
         # 1D and 2D array access; higher-dimensional access is a known
         # limitation (TODO).
-        return f"{field_data.name}[{', '.join(index_expr for _, index_expr, _ in dim_info)}]"
+        return f"{data.name}[{', '.join(index_expr for _, index_expr, _ in dim_info)}]"
 
     def _single_neighbor_access(
         self, node: gtir.FunCall, neighbor_var: str, ctx: CodegenContext
@@ -818,10 +810,10 @@ class StreePythonCodegen(eve.NodeVisitor):
         # ``_visit_deref``: build an ``indices`` dict by applying shift
         # replacements, then replace the source dimension with the
         # connectivity-table index.
-        _sym_ref, field_data, indices, used_conns = self._resolve_shifts(source, ctx)
+        _sym_ref, data, indices, used_conns = self._resolve_shifts(source, ctx)
         ctx.used_connectivities.update(used_conns)
-        assert field_data is not None, f"Field argument '{source}' not found."
-        assert isinstance(field_data.gt_type, ts.FieldType)
+        assert data is not None, f"Field argument '{source}' not found."
+        assert isinstance(data.gt_type, ts.FieldType)
 
         source_dim = offset_type.source_dim
         source_index, _ = indices.get(source_dim, (None, None))
@@ -833,7 +825,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         # ``indices`` (which may have been adjusted by cartesian or
         # unstructured shifts).
         index_parts = []
-        for dim, origin in zip(field_data.gt_type.dims, field_data.origin, strict=True):
+        for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
             if dim == offset_type.codomain:
                 index_parts.append(f"({conn_name}[{source_index}, {neighbor_var}] - ({origin}))")
             else:
@@ -841,13 +833,13 @@ class StreePythonCodegen(eve.NodeVisitor):
                 assert idx is not None, f"No map variable for dimension {dim}."
                 index_parts.append(f"({idx}) - ({origin})")
 
-        access_expr = f"{self._access_name(field_data, ctx)}[{', '.join(index_parts)}]"
+        access_expr = f"{self._access_name(data, ctx)}[{', '.join(index_parts)}]"
 
         if not offset_type.has_skip_values:
             return ListElementAccess(expr=access_expr)
 
         mask = f"{conn_name}[{source_index}, {neighbor_var}] != {gtx_common._DEFAULT_SKIP_VALUE}"
-        field_dtype = field_data.gt_type.dtype
+        field_dtype = data.gt_type.dtype
         if isinstance(field_dtype, ts.ScalarType):
             dc_dtype = gtx_dace_args.as_dace_type(field_dtype)
         else:
@@ -1029,13 +1021,13 @@ class StreePythonCodegen(eve.NodeVisitor):
         if cpm.is_call_to(inner, "deref") or isinstance(inner, gtir.SymRef):
             inner_ref = inner.args[0] if cpm.is_call_to(inner, "deref") else inner
             if isinstance(inner_ref, gtir.SymRef):
-                field_data = self._resolve_field_arg(inner_ref, ctx)
+                data = self._resolve_data_arg(inner_ref, ctx)
                 if (
-                    field_data is not None
-                    and isinstance(field_data.gt_type, ts.FieldType)
-                    and isinstance(field_data.gt_type.dtype, ts.ListType)
+                    data is not None
+                    and isinstance(data.gt_type, ts.FieldType)
+                    and isinstance(data.gt_type.dtype, ts.ListType)
                 ):
-                    local_offset = field_data.gt_type.dtype.offset_type
+                    local_offset = data.gt_type.dtype.offset_type
                     assert local_offset is not None
                     offset_provider_t = ctx.offset_provider_type.get(local_offset.value)
                     if isinstance(offset_provider_t, gtx_common.NeighborConnectivityType):
@@ -1178,7 +1170,7 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         return f"[{mapped_expr} for {loop_var} in range({local_size})]"
 
-    def _access_name(self, field_data: FieldopData, ctx: CodegenContext) -> str:
+    def _access_name(self, data: DataRef, ctx: CodegenContext) -> str:
         """Name used to reference a field inside tasklet code.
 
         The lambda parameter name is preferred when the field is a field
@@ -1188,10 +1180,10 @@ class StreePythonCodegen(eve.NodeVisitor):
         stride symbols).  Raw container names are only safe for
         one-dimensional access to non-transient SDFG arguments.
         """
-        for param_name, other in ctx.field_args.items():
-            if other is field_data:
+        for param_name, other in ctx.data_args.items():
+            if other is data:
                 return param_name
-        return field_data.name
+        return data.name
 
     def _map_op_expr(self, map_op: gtir.Expr, element_exprs: list[str], ctx: CodegenContext) -> str:
         """Build the expression ``map_op(elem_0, elem_1, ...)``.
@@ -1277,8 +1269,8 @@ class StreePythonCodegen(eve.NodeVisitor):
         if cpm.is_call_to(arg, "deref") and isinstance(arg.args[0], gtir.SymRef):
             symref = arg.args[0]
         if isinstance(symref, gtir.SymRef):
-            field_data = self._resolve_field_arg(symref, ctx)
-            if field_data is not None and isinstance(field_data.gt_type, ts.FieldType):
+            data = self._resolve_data_arg(symref, ctx)
+            if data is not None and isinstance(data.gt_type, ts.FieldType):
                 # Local data — an extra (local) dimension indexed by the
                 # loop variable.  Two shapes:
                 # - field `dims` (all covered by map dims) + `ListType`
@@ -1288,7 +1280,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                 #   `Field[[Vertex, V2EDim]]` used as a neighbor list.
                 indices: list[str] = []
                 unmapped_dims: list[gtx_common.Dimension] = []
-                for dim, origin in zip(field_data.gt_type.dims, field_data.origin, strict=True):
+                for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
                     map_var = ctx.map_indices.get(dim)
                     if map_var is None:
                         unmapped_dims.append(dim)
@@ -1296,8 +1288,8 @@ class StreePythonCodegen(eve.NodeVisitor):
                         indices.append(f"({map_var}) - ({origin})")
 
                 local_offset_dim = None
-                if isinstance(field_data.gt_type.dtype, ts.ListType):
-                    list_dtype = field_data.gt_type.dtype
+                if isinstance(data.gt_type.dtype, ts.ListType):
+                    list_dtype = data.gt_type.dtype
                     if list_dtype.offset_type is None or list_dtype.offset_type == _CONST_DIM:
                         # Broadcast (const) list: all list elements are
                         # equal, so the field is stored without the local
@@ -1305,7 +1297,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                         # every list position.
                         connector = ctx.fresh_deref_connector()
                         ctx.field_inputs[connector] = (
-                            field_data.name,
+                            data.name,
                             ",".join(indices) if indices else "0",
                         )
                         return ListElementAccess(expr=connector), None
@@ -1333,7 +1325,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                         # local dimension".
                         return (
                             ListElementAccess(
-                                expr=f"{self._access_name(field_data, ctx)}"
+                                expr=f"{self._access_name(data, ctx)}"
                                 f"[{', '.join([*indices, loop_var])}]"
                             ),
                             None,
@@ -1357,7 +1349,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                             f"{conn_name}[{source_index}, {loop_var}]"
                             f" != {gtx_common._DEFAULT_SKIP_VALUE}"
                         )
-                        field_type = field_data.gt_type
+                        field_type = data.gt_type
                         assert isinstance(field_type, ts.FieldType)
                         element_type: ts.DataType = (
                             field_type.dtype.element_type
@@ -1379,21 +1371,19 @@ class StreePythonCodegen(eve.NodeVisitor):
                     # cannot lower multi-dimensional access to transient
                     # (temp) arrays in tasklet code.
                     connector = ctx.fresh_deref_connector()
-                    all_dims = gtx_common.order_dimensions(
-                        [*field_data.gt_type.dims, local_offset_dim]
-                    )
+                    all_dims = gtx_common.order_dimensions([*data.gt_type.dims, local_offset_dim])
                     subset_parts = list(indices)
                     subset_parts.insert(int(all_dims.index(local_offset_dim)), f"0:{max_neighbors}")
-                    ctx.field_inputs[connector] = (field_data.name, ",".join(subset_parts))
+                    ctx.field_inputs[connector] = (data.name, ",".join(subset_parts))
                     return (
                         ListElementAccess(expr=f"{connector}[{loop_var}]", mask=mask, dummy=dummy),
                         max_neighbors,
                     )
 
-            if field_data is not None and isinstance(field_data.gt_type, ts.ScalarType):
+            if data is not None and isinstance(data.gt_type, ts.ScalarType):
                 # Scalar: no indexing — use the connector-safe name
                 # (`_access_name`), see `_visit_deref`.
-                return ListElementAccess(expr=self._access_name(field_data, ctx)), None
+                return ListElementAccess(expr=self._access_name(data, ctx)), None
 
         # Case 5: generic — visit and index by loop variable
         return ListElementAccess(expr=f"{self.visit(arg, ctx=ctx)}[{loop_var}]"), None
@@ -1451,13 +1441,13 @@ class StreePythonCodegen(eve.NodeVisitor):
         # subscripts would be rejected by DaCe's tasklet validation).
         inner_symref = inner.args[0] if cpm.is_call_to(inner, "deref") else inner
         if isinstance(inner_symref, gtir.SymRef):
-            field_data = self._resolve_field_arg(inner_symref, ctx)
+            data = self._resolve_data_arg(inner_symref, ctx)
             if (
-                field_data is not None
-                and isinstance(field_data.gt_type, ts.FieldType)
+                data is not None
+                and isinstance(data.gt_type, ts.FieldType)
                 and (
-                    isinstance(field_data.gt_type.dtype, ts.ListType)
-                    or any(dim not in ctx.map_indices for dim in field_data.gt_type.dims)
+                    isinstance(data.gt_type.dtype, ts.ListType)
+                    or any(dim not in ctx.map_indices for dim in data.gt_type.dims)
                 )
             ):
                 element, _size = self._single_map_element(inner, index, ctx)
@@ -1469,7 +1459,7 @@ class StreePythonCodegen(eve.NodeVisitor):
 def generate_tasklet_code(
     expr: gtir.Expr,
     *,
-    field_args: dict[str, FieldopData],
+    data_args: dict[str, DataRef],
     map_indices: dict[gtx_common.Dimension, str],
     offset_provider_type: gtx_common.OffsetProviderType,
     args_map: dict[str, gtir.Node] | None = None,
@@ -1481,7 +1471,7 @@ def generate_tasklet_code(
 
     Args:
         expr: The GTIR expression (stencil body) to lower.
-        field_args: Mapping from lambda parameter names to ``FieldopData``.
+        data_args: Mapping from lambda parameter names to ``DataRef``.
         map_indices: Mapping from ``Dimension`` to map variable name.
         offset_provider_type: The offset provider type table.
         args_map: Initial args_map for let-lambda inlining (usually empty).
@@ -1511,7 +1501,7 @@ def generate_tasklet_code(
     ctx = CodegenContext(
         args_map=args_map or {},
         string_args=string_args or {},
-        field_args=field_args,
+        data_args=data_args,
         map_indices=map_indices,
         offset_provider_type=offset_provider_type,
         root_symbols=root_symbols,
@@ -1525,7 +1515,7 @@ def generate_tasklet_code(
 def generate_list_tasklet_code(
     expr: gtir.Expr,
     *,
-    field_args: dict[str, FieldopData],
+    data_args: dict[str, DataRef],
     map_indices: dict[gtx_common.Dimension, str],
     offset_provider_type: gtx_common.OffsetProviderType,
     args_map: dict[str, gtir.Node] | None = None,
@@ -1548,7 +1538,7 @@ def generate_list_tasklet_code(
     Args:
         expr: The GTIR expression (stencil body) to lower; must be typed
             ``ListType``.
-        field_args: Mapping from lambda parameter names to ``FieldopData``.
+        data_args: Mapping from lambda parameter names to ``DataRef``.
         map_indices: Mapping from ``Dimension`` to map variable name —
             only the *global* dimensions (the local dimension is given
             by ``local_index``).
@@ -1564,7 +1554,7 @@ def generate_list_tasklet_code(
     assert isinstance(expr.type, ts.ListType)
     ctx = CodegenContext(
         args_map=args_map or {},
-        field_args=field_args,
+        data_args=data_args,
         map_indices=map_indices,
         offset_provider_type=offset_provider_type,
         root_symbols=root_symbols,

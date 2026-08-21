@@ -23,32 +23,29 @@ from typing import Any, TypeAlias
 import dace
 from dace import subsets as dace_subsets
 
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next.type_system import type_specifications as ts
 
 
-# Type alias for values that may be nested in tuples, as returned by the
-# fieldview-level visitor methods (``visit_SymRef``, ``visit_FunCall``, etc.).
-FieldopResult: TypeAlias = Any
-"""The result of visiting a GTIR expression at the fieldview level.
-
-Either a ``FieldopData``, ``None`` (for unused fields), or a nested tuple
-of these.
-"""
-
-
 @dataclasses.dataclass(frozen=True)
-class FieldopData:
-    """Handle to a data container on the ``ScheduleTreeRoot``.
+class DataRef:
+    """Reference (by name) to a data container on the ``ScheduleTreeRoot``.
 
-    In the schedule-tree lowering, data is referenced by name (``str``)
-    rather than by a ``dace.nodes.AccessNode`` instance.  This is because
-    the schedule tree has a single flat descriptor repository at the root
-    and ``from_schedule_tree`` creates the access nodes on demand.
+    A ``DataRef`` couples the name under which a value is stored in the
+    schedule-tree context with the GT4Py knowledge needed to index it: the
+    GT4Py type (which carries the field domain) and the per-dimension origin.
+    Note this class is *not* the data itself — the actual container
+    descriptors live in ``root.containers`` (or ``root.symbols``) and the
+    schedule tree creates the access nodes on demand.  In the schedule-tree
+    lowering, data is referenced by name (``str``) rather than by a
+    ``dace.nodes.AccessNode`` instance, because the tree uses a single flat
+    descriptor repository at the root (``ScheduleTreeRoot.containers``).
 
     Attributes:
         name: Name of the data container (or SDFG symbol) on ``root.containers``
             or ``root.symbols``.
-        gt_type: The GT4Py data type, either a ``FieldType`` or a ``ScalarType``.
+        gt_type: The GT4Py data type: a ``FieldType``, ``ScalarType``, or
+            ``ListType`` (for neighbor-list values).
         origin: The per-dimension origin of the field.  For scalar data this
             is an empty tuple.
     """
@@ -56,6 +53,16 @@ class FieldopData:
     name: str
     gt_type: ts.FieldType | ts.ScalarType | ts.ListType
     origin: tuple[dace.symbolic.SymbolicType, ...]
+
+
+DataRefTree: TypeAlias = MaybeNestedInTuple[DataRef | None]
+"""A tree of ``DataRef`` leaves, mirroring the type of the lowered GTIR expression.
+
+A scalar, field or local-list expression lowers to a single ``DataRef``; a
+tuple-typed expression lowers to a (nested) tuple of these. A leaf may be
+``None`` when the field is not used and therefore is not computed (per the
+domain information attached to GTIR nodes by domain inference).
+"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -85,14 +92,14 @@ class SubgraphContext:
 
     The ``data_nodes`` dict plays the same role as in the
     ``dace_lowering_without_nesting`` branch: it maps GTIR symbol names to
-    their ``FieldopData`` handles, and let-lambdas are inlined by creating
+    their ``DataRef`` handles, and let-lambdas are inlined by creating
     a child context with ``data_nodes | args`` (dict-union = lexical
     shadowing, Python call stack = implicit push/pop).
     """
 
     root: dace.sdfg.analysis.schedule_tree.treenodes.ScheduleTreeRoot
     current_scope: dace.sdfg.analysis.schedule_tree.treenodes.ScheduleTreeScope
-    data_nodes: dict[str, FieldopData | None]
+    data_nodes: dict[str, DataRef | None]
 
     def get_symbol_type(self, symbol_name: str) -> ts.DataType:
         """Retrieve the GT4Py type of a symbol in the current scope."""
@@ -121,9 +128,9 @@ class SubgraphContext:
     def copy_data(
         self,
         sdfg_builder: Any,
-        src: FieldopData,
+        src: DataRef,
         domain: Any = None,
-    ) -> FieldopData:
+    ) -> DataRef:
         """Copy data from a source field into a new transient buffer.
 
         This is the schedule-tree analogue of
@@ -169,19 +176,4 @@ class SubgraphContext:
             ),
         )
         self.current_scope.add_child(copy_node)
-        return FieldopData(out_name, src.gt_type, tuple(out_origin))
-
-    def map_nsdfg_field(
-        self,
-        sdfg_builder: Any,
-        nsdfg_field: FieldopData,
-        nsdfg: dace.SDFG,
-        symbol_mapping: dict[str, dace.symbolic.SymbolicType],
-    ) -> FieldopData:
-        """Make data from a nested SDFG available in this context.
-
-        In the schedule-tree lowering, nested SDFGs are not used for
-        let-lambdas.  This method is retained for potential future use
-        (e.g., if ``if_`` or scan still require nested SDFGs).
-        """
-        raise NotImplementedError("map_nsdfg_field is not supported in the stree lowering.")
+        return DataRef(out_name, src.gt_type, tuple(out_origin))
