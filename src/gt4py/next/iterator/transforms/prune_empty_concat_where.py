@@ -33,7 +33,7 @@ def _broadcast_to(expr: itir.Expr, target_dims: list[common.Dimension]) -> itir.
     return expr
 
 
-def _node_with_explicit_broadcast(
+def _concat_where_with_explicit_broadcast(
     node: itir.FunCall,
     *,
     offset_provider: common.OffsetProvider | common.OffsetProviderType,
@@ -127,7 +127,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
             if not isinstance(node.type, (ts.FieldType, ts.ScalarType)):
                 return node
 
-            _, tb, fb = _node_with_explicit_broadcast(
+            _, tb, fb = _concat_where_with_explicit_broadcast(
                 node,
                 offset_provider=self.offset_provider,
                 symbolic_domain_sizes=self.symbolic_domain_sizes,
