@@ -359,8 +359,10 @@ class DaCeTranslator(
     async_sdfg_call: bool
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
-    use_stree_lowering: bool
-    apply_common_transforms: bool
+
+    # Flags for schedule-tree lowering of ITIR programs (experimental).
+    use_stree_lowering: bool = False
+    apply_common_transforms: bool = False
 
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
