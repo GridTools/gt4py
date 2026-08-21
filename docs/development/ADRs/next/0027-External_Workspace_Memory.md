@@ -9,6 +9,8 @@ tags: []
 - **Created**: 2026-07-27
 - **Updated**: 2026-08-03
 
+Partially superseded by [0029 - Toolchain Naming and Pipeline Simplification](0029-Toolchain-Naming-and-Pipeline-Simplification.md) (the workspace is carried by an explicit `Toolchain.loading` step instead of a `DaCeBackend` subclass overriding `Backend.load_artifact`; the decision to inject the workspace at load time is unchanged).
+
 In the context of `gt4py.next` DaCe backends that run the same compiled SDFG
 many times (e.g. inside a time loop), facing per-call GPU transient allocation
 overhead and the desire to bound workspace memory to one SDFG's transient

@@ -50,6 +50,7 @@ Writing a new ADR is simple:
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
 - [0027 - External Workspace Memory for DaCe Transients](0027-External_Workspace_Memory.md)
 - [0028 - Plain Builders Instead of factory-boy Factories](0028-Plain-Builders-Instead-of-Factories.md)
+- [0029 - Toolchain Naming and Pipeline Simplification](0029-Toolchain-Naming-and-Pipeline-Simplification.md)
 
 ### Python Integration
 
