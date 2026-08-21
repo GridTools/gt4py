@@ -273,7 +273,7 @@ class MapPromoter(dace_transformation.SingleStateTransformation):
         #  To prevent that we require that the number of iterations the second Map
         #  performs, at compile time, is larger than zero.
         second_map_iterations: Any = second_map_entry.map.range.num_elements()
-        if gtx_dace_utils.is_compile_time_integer(second_map_iterations):
+        if gtx_dace_utils.is_compile_time_size(second_map_iterations):
             second_map_iterations = int(str(second_map_iterations))
             if second_map_iterations <= 0:
                 return False

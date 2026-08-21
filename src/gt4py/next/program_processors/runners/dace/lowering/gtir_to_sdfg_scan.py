@@ -191,7 +191,7 @@ def _create_scan_field_operator_impl(
         # function, so we know that its stride is constant. We just need to set it on
         # the inside array, and we do not need to map any stride symbol.
         outside_output_stride = field_desc.strides[scan_dim_index]
-        assert gtx_dace_utils.is_compile_time_integer(outside_output_stride)
+        assert gtx_dace_utils.is_compile_time_size(outside_output_stride)
         inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
     else:
         # Special case where we only write the last level of the scan column.

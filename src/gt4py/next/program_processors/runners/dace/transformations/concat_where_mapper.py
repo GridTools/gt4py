@@ -25,7 +25,10 @@ from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
 from gt4py.next import config as gtx_config
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_utils as gtx_dace_utils,
+    transformations as gtx_transformations,
+)
 
 
 @dace_properties.make_properties
@@ -1412,17 +1415,15 @@ def _handle_special_case_of_gt4py_scan_point_impl(
     assert scope_dict[edge.dst] is None  # really strange case.
 
     for i, end in enumerate(consumed_subset.max_element()):
-        end_str = str(end)
-        if end_str.isdigit():
-            if (int(end_str) + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
+        if gtx_dace_utils.is_compile_time_size(end):
+            if (int(end) + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
                 return False
+        # In case of a symbol, we only check for the pathological case, i.e. a Map
+        # parameter is the end value. We also allow only one symbol value.
+        elif (end_str := str(end)) in map_params:
+            map_params.discard(end_str)
         else:
-            # It is a symbol, we only check for the pathological case, i.e. a Map
-            #  parameter is the end value. We also allow only one value.
-            if end_str not in map_params:
-                return False
-            else:
-                map_params.discard(end_str)
+            return False
 
     return True
 

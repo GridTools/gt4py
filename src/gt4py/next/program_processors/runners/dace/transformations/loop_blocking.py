@@ -783,7 +783,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         promote_subset: dace_subsets.Subset = edge.data.subset  # Works because of canonicalization.
         buffer_shape = tuple(dace_symb.overapproximate(promote_subset.size()))
-        if not all(gtx_dace_utils.is_compile_time_integer(x) for x in buffer_shape):
+        if not all(gtx_dace_utils.is_compile_time_size(x) for x in buffer_shape):
             return False
         for buffer_dim in buffer_shape:
             # We don't want to promote memlets that are too big because then the register or stack usage would increase a lot and we will get worse performance.

@@ -37,7 +37,7 @@ def get_array_shape_symbols(
 ) -> dict[str, int]:
     array_symbols = {}
     for array_size, size in zip(array_desc.shape, ndarray.shape, strict=True):
-        if gtx_dace_utils.is_compile_time_integer(array_size):
+        if gtx_dace_utils.is_compile_time_size(array_size):
             if int(array_size) != size:
                 raise RuntimeError(f"Array shape mismatch: expected {array_size}, got {size}.")
         else:
@@ -53,7 +53,7 @@ def get_array_stride_symbols(
     for array_stride, value in zip(array_desc.strides, ndarray.strides, strict=True):
         assert divmod(value, ndarray.itemsize)[1] == 0
         stride = value // ndarray.itemsize
-        if gtx_dace_utils.is_compile_time_integer(array_stride):
+        if gtx_dace_utils.is_compile_time_size(array_stride):
             if int(array_stride) != stride:
                 raise RuntimeError(f"Array stride mismatch: expected {array_stride}, got {stride}.")
         else:

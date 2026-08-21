@@ -541,7 +541,7 @@ def _gt_map_strides_into_nested_sdfg(
     #  is lost. However, this is probably not much of an issue for the strides, but
     #  more problematic for the shape, whose symbols are likely to appear as loop bounds.
     for i, dim_ostride in enumerate(new_strides):
-        if gtx_dace_utils.is_compile_time_integer(dim_ostride):
+        if gtx_dace_utils.is_compile_time_size(dim_ostride):
             # A literal stride (e.g. `1`) can be set directly
             new_strides[i] = dim_ostride
         else:
