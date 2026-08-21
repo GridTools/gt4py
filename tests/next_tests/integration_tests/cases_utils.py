@@ -115,6 +115,30 @@ no_backend = NoBackend(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
             marks=pytest.mark.uses_dace,
         ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_FVIEW_CPU,
+            marks=pytest.mark.uses_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_FVIEW_GPU,
+            marks=(pytest.mark.uses_dace, pytest.mark.requires_gpu),
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_FVIEW_CPU_NO_OPT,
+            marks=pytest.mark.uses_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_IVIEW_CPU,
+            marks=pytest.mark.uses_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_IVIEW_GPU,
+            marks=(pytest.mark.uses_dace, pytest.mark.requires_gpu),
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_STREE_IVIEW_CPU_NO_OPT,
+            marks=pytest.mark.uses_dace,
+        ),
     ],
     ids=lambda p: p.short_id(),
 )

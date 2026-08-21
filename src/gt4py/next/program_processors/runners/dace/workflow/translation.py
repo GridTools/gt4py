@@ -18,12 +18,17 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms.pass_manager import _process_symbolic_domains_option
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
+)
+from gt4py.next.program_processors.runners.dace.lowering_stree import (
+    lower_program_to_stree as gtx_dace_lower_stree,
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
@@ -355,6 +360,10 @@ class DaCeTranslator(
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
+    # Flags for schedule-tree lowering of ITIR programs (experimental).
+    use_stree_lowering: bool = False
+    apply_common_transforms: bool = False
+
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
@@ -373,16 +382,58 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        if not self.disable_itir_transforms:
+        if self.disable_itir_transforms:
+            pass
+        elif self.apply_common_transforms:
+            if not self.use_stree_lowering:
+                raise NotImplementedError(
+                    "The ITIR transform pipeline is only supported with the STree lowering."
+                )
+            symbolic_domain_sizes = _process_symbolic_domains_option(
+                ir, offset_provider, None, self.use_max_domain_range_on_unstructured_shift
+            )
+            ir = itir_transforms.apply_common_transforms(
+                ir,
+                offset_provider=offset_provider,
+                extract_temporaries=False,
+                unroll_reduce=False,
+                common_subexpression_elimination=True,
+                force_inline_lambda_args=False,
+                transform_concat_where_to_as_fieldop=False,
+                symbolic_domain_sizes=symbolic_domain_sizes,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            )
+            # The inlining passes in `apply_common_transforms` (`InlineLambdas`,
+            # `ConstantFolding`, `CollapseTuple`, `FuseAsFieldOp`, ...) run after domain
+            # inference and rebuild IR nodes without preserving the domain annexes
+            # (`node.annex.domain`) that the schedule-tree lowering relies on (e.g. in
+            # `translate_concat_where`, `translate_if`, `translate_index`). Re-run domain
+            # inference to restore them; existing annexes are kept and nodes that cannot be
+            # re-inferred are simply left without an annex rather than raising an error.
+            ir = infer_domain.infer_program(
+                ir,
+                offset_provider=offset_provider,
+                symbolic_domain_sizes=symbolic_domain_sizes,
+                allow_uninferred=True,
+                keep_existing_domains=True,
+            )
+        else:
             ir = itir_transforms.apply_fieldview_transforms(
                 ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 offset_provider=offset_provider,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
             )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        if self.use_stree_lowering:
+            stree = gtx_dace_lower_stree(ir, offset_provider_type, column_axis)
+            sdfg = stree.as_sdfg(
+                validate=True,
+                skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
+            )
+        else:
+            sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,

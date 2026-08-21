@@ -240,7 +240,13 @@ def _can_deref_lifted(inp):
     return if_(can_deref(shifted), deref(shifted), -1)
 
 
-@pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
+@pytest.mark.parametrize(
+    "stencil",
+    [
+        pytest.param(_can_deref, marks=pytest.mark.uses_can_deref),
+        pytest.param(_can_deref_lifted, marks=[pytest.mark.uses_can_deref, pytest.mark.uses_lift]),
+    ],
+)
 @pytest.mark.uses_can_deref
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
