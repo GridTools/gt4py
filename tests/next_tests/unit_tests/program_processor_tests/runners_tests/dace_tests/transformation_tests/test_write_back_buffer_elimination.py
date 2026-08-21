@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import dace
 import numpy as np
 import pytest
-
-dace = pytest.importorskip("dace")
 
 from dace.sdfg import nodes as dace_nodes
 from dace.sdfg.state import ConditionalBlock, ControlFlowRegion, LoopRegion

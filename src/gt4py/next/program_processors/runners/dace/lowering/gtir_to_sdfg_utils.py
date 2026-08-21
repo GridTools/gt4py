@@ -45,6 +45,11 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
+    # A staggered dimension can share its index space with the base dimension, as a field can only
+    # ever carry either the staggered or the base dimension. The dace transformations for map
+    # fusion and map splitting rely on the names of the map variables to match the field
+    # dimensions and decide whether two maps have the same iteration space.
+    dim = gtx_common.as_non_staggered(dim)
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
     return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
 

@@ -20,13 +20,9 @@ in that submodule as opposed to being in this file.
 from __future__ import annotations
 
 import difflib
-import sys
-from typing import Any, ClassVar, Iterable, Optional, Sequence
+from typing import Any, ClassVar, Iterable, Optional, Self, Sequence
 
 from gt4py.eve import SourceLocation
-
-# TODO(havogt): import 'Self' from 'typing' directly once the Python floor is >=3.12.
-from gt4py.eve.extended_typing import Self
 from gt4py.next.errors import formatting
 
 
@@ -95,18 +91,8 @@ class DSLError(GT4PyError):
         self.location = location
         return self
 
-    # TODO(havogt): drop this shim and the matching '__notes__' fold-in in
-    #  '__str__' once the Python floor is >=3.11, where 'BaseException.add_note'
-    #  (PEP 678) and its automatic '__notes__' traceback rendering are built in.
-    if sys.version_info < (3, 11):
-
-        def add_note(self, note: str) -> None:
-            if not hasattr(self, "__notes__"):
-                self.__notes__ = []
-            self.__notes__.append(note)
-
     def __str__(self) -> str:
-        body = formatting.format_diagnostic_parts(
+        return formatting.format_diagnostic_parts(
             self.message,
             self.location,
             label=self.label,
@@ -114,12 +100,6 @@ class DSLError(GT4PyError):
             notes=self.notes,
             hints=self.hints,
         )
-        if sys.version_info < (3, 11):
-            # On 3.10 the traceback machinery doesn't render '__notes__'; fold
-            # them in so they surface through 'str()' (pytest, IPython, logging)
-            # the way the >=3.11 machinery does automatically.
-            body += "".join(f"\n{note}" for note in getattr(self, "__notes__", []))
-        return body
 
 
 class UnsupportedPythonFeatureError(DSLError):

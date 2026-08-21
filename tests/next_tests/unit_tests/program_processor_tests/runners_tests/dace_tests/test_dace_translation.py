@@ -8,14 +8,13 @@
 
 """Test the translation stage of the dace backend workflow."""
 
+import dace
 import pytest
 
 import re
 import uuid
 from typing import Callable
 from unittest import mock
-
-dace = pytest.importorskip("dace")
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, fingerprinting
