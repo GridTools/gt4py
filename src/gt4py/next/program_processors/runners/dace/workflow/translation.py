@@ -18,6 +18,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms.pass_manager import _process_symbolic_domains_option
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
@@ -359,7 +361,7 @@ class DaCeTranslator(
     use_metrics: bool
 
     use_stree_lowering: bool = True
-    apply_common_transforms: bool = False
+    apply_common_transforms: bool = True
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
@@ -385,6 +387,9 @@ class DaCeTranslator(
                 raise NotImplementedError(
                     "The ITIR transform pipeline is only supported with the STree lowering."
                 )
+            symbolic_domain_sizes = _process_symbolic_domains_option(
+                ir, offset_provider, None, self.use_max_domain_range_on_unstructured_shift
+            )
             ir = itir_transforms.apply_common_transforms(
                 ir,
                 offset_provider=offset_provider,
@@ -393,8 +398,22 @@ class DaCeTranslator(
                 common_subexpression_elimination=True,
                 force_inline_lambda_args=False,
                 transform_concat_where_to_as_fieldop=False,
-                symbolic_domain_sizes=None,
+                symbolic_domain_sizes=symbolic_domain_sizes,
                 use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            )
+            # The inlining passes in `apply_common_transforms` (`InlineLambdas`,
+            # `ConstantFolding`, `CollapseTuple`, `FuseAsFieldOp`, ...) run after domain
+            # inference and rebuild IR nodes without preserving the domain annexes
+            # (`node.annex.domain`) that the schedule-tree lowering relies on (e.g. in
+            # `translate_concat_where`, `translate_if`, `translate_index`). Re-run domain
+            # inference to restore them; existing annexes are kept and nodes that cannot be
+            # re-inferred are simply left without an annex rather than raising an error.
+            ir = infer_domain.infer_program(
+                ir,
+                offset_provider=offset_provider,
+                symbolic_domain_sizes=symbolic_domain_sizes,
+                allow_uninferred=True,
+                keep_existing_domains=True,
             )
         else:
             ir = itir_transforms.apply_fieldview_transforms(
