@@ -2000,6 +2000,45 @@ def test_amd_heuristic_loop_blocking_priority_over_explicit_blocking_size():
     assert inner_map.map.unroll_factor == gtx_amd_block_heuristic.VBLK.vlb
 
 
+def test_amd_heuristic_loop_blocking_without_blocking_parameters_or_blocking_size():
+    """The heuristic can pick both which axis to block and the blocking factor, so
+    `blocking_parameters`/`blocking_size` are not required when it applies.
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert=10, n_horiz=80_000)
+    state = sdfg.states()[0]
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(amd_heuristic=True),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 1
+    inner_map = _get_inner_sequential_map(state)
+    assert inner_map.map.unroll_factor == gtx_amd_block_heuristic.VBLK.vlb
+    # `VBLK.vlb > 0`, so the heuristic picked the vertical axis (`i0`, the
+    # first Map parameter) as the blocked dimension.
+    assert inner_map.map.params == ["i0"]
+
+
+def test_amd_heuristic_loop_blocking_without_any_config_and_symbolic_range_skips_gracefully():
+    """With no `blocking_parameters`/`blocking_size` given at all, and symbolic ranges the
+    heuristic cannot resolve, there is nothing telling `can_be_applied` what to block: it
+    must skip the Map (return `False`) rather than raise, since `amd_heuristic=True` alone
+    is a valid, complete configuration (unlike leaving `amd_heuristic=False` with no
+    `blocking_parameters`, which is still a misconfiguration and still raises).
+    """
+    sdfg, mentry = _get_amd_heuristic_sdfg(n_vert="N", n_horiz="M")
+
+    count = sdfg.apply_transformations_once_everywhere(
+        gtx_transformations.LoopBlocking(amd_heuristic=True),
+        validate=True,
+        validate_all=True,
+    )
+
+    assert count == 0
+
+
 def test_amd_heuristic_loop_blocking_rejects_zero_recommended_factor():
     """In the small-horizontal regime with `n_vert > 2`, the heuristic picks `HBLK`, whose
     `vlb` is `0`: blocking the vertical dimension is not recommended, so the transformation

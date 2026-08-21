@@ -768,7 +768,7 @@ def _gt_auto_process_dataflow_inside_maps(
     # Separate Tasklets into dependent and independent parts to promote data
     #  reusability. It is important that this step has to be performed before
     #  `TaskletFusion` is used.
-    if blocking_dims is not None and blocking_size > 0:
+    if (blocking_dims is not None and blocking_size > 0) or amd_heuristic:
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.LoopBlocking(
                 blocking_size=blocking_size,

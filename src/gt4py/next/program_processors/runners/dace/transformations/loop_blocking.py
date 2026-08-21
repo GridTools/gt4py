@@ -66,10 +66,11 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         promote_independent_memlets: If `True` then memlets with independent data are promoted to the outer map.
         independent_node_threshold: Minimum number of independent nodes required to apply blocking (non-inclusive).
         amd_heuristic: If `True`, use the AMD block-size heuristic (see
-            `amd_block_heuristic.py`) to decide the blocking factor for
-            genuinely two dimensional, non degenerate Maps whose extents
-            resolve to concrete integers. When it applies, it takes priority
-            over `blocking_size`.
+            `amd_block_heuristic.py`) to decide both which axis to block and
+            the blocking factor, for genuinely two dimensional, non
+            degenerate Maps whose extents resolve to concrete integers. When
+            it applies, it takes priority over `blocking_parameters`/
+            `blocking_size`, which are then not required.
 
     Todo:
         - Modify the inner map such that it always starts at zero.
@@ -178,48 +179,61 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         - The map range must have step size of 1.
         - The partition must exists (see `partition_map_output()`).
         """
-        if not self.blocking_parameters:
-            raise ValueError("No blocking parameters were specified.")
-
         outer_entry: dace_nodes.MapEntry = self.outer_entry
         map_params: list[str] = outer_entry.map.params
         map_range: dace_subsets.Range = outer_entry.map.range
-
-        matched_blocking_var: str | None = self._get_blocking_parameter(map_params)
-        if matched_blocking_var is None:
-            return False
 
         scope = graph.scope_dict()
         if scope[outer_entry] is not None:
             return False
 
-        block_var_idx = map_params.index(matched_blocking_var)
         map_range_size = map_range.size()
-
         if all((map_range_size_i == 1) == True for map_range_size_i in map_range_size):  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools.
             return False
 
-        if map_range[block_var_idx][2] != 1:
-            return False
-
         # If the AMD heuristic is enabled and applies to this (genuinely 2D,
-        # non degenerate) Map, it decides the blocking factor for whichever
-        # axis `matched_blocking_var` corresponds to (vertical if it is the
-        # first Map parameter, horizontal otherwise -- see
-        # `amd_block_heuristic.py`), taking priority over `blocking_size`.
+        # non degenerate) Map, it decides both which axis to block and the
+        # blocking factor (vertical is the first Map parameter, horizontal
+        # the second -- see `amd_block_heuristic.py`), taking priority over
+        # `blocking_parameters`/`blocking_size`.
         amd_config = (
             gtx_amd_heuristic.compute_amd_block_config(outer_entry, graph, sdfg)
             if self._amd_heuristic
             else None
         )
+
         if amd_config is not None:
-            blocking_factor = amd_config.vlb if block_var_idx == 0 else amd_config.hlb
-            if blocking_factor == 0:
-                # The heuristic recommends not blocking this axis.
+            blocking_factor = amd_config.vlb if amd_config.vlb > 0 else amd_config.hlb
+            block_var_idx = 0 if amd_config.vlb > 0 else (1 if amd_config.hlb > 0 else None)
+            if block_var_idx is None or blocking_factor == 0:
+                # The heuristic recommends not blocking any axis.
                 return False
+            matched_blocking_var: str | None = map_params[block_var_idx]
             self.blocking_size = blocking_factor
-        elif not self.blocking_size:
-            raise ValueError("The blocking size was not specified.")
+        else:
+            if not self.blocking_parameters:
+                if self._amd_heuristic:
+                    # The heuristic is enabled but did not resolve for this Map (e.g. it
+                    # was already blocked -- its params/range no longer look 2D and
+                    # non degenerate -- or its inputs are not concrete ints), and no
+                    # explicit `blocking_parameters` were given as a fallback either.
+                    # There is nothing telling us what to block, so just skip this Map.
+                    return False
+                raise ValueError("No blocking parameters were specified.")
+
+            matched_blocking_var = self._get_blocking_parameter(map_params)
+            if matched_blocking_var is None:
+                return False
+
+            block_var_idx = map_params.index(matched_blocking_var)
+
+            if not self.blocking_size:
+                raise ValueError("The blocking size was not specified.")
+
+        assert matched_blocking_var is not None
+
+        if map_range[block_var_idx][2] != 1:
+            return False
 
         # Require that there are more iteration than the blocking size.
         # TODO(phimuell): Synchronize this with the GPU block size since it also
@@ -282,7 +296,22 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
         outer_entry: dace_nodes.MapEntry = self.outer_entry
         map_params: list[str] = outer_entry.map.params
-        matched_blocking_var: str | None = self._get_blocking_parameter(map_params)
+
+        # Mirrors the axis/factor selection in `can_be_applied` (recomputed here,
+        # since `apply()` does not receive any state from that call).
+        amd_config = (
+            gtx_amd_heuristic.compute_amd_block_config(outer_entry, graph, sdfg)
+            if self._amd_heuristic
+            else None
+        )
+        if amd_config is not None:
+            block_var_idx = 0 if amd_config.vlb > 0 else (1 if amd_config.hlb > 0 else None)
+            assert block_var_idx is not None
+            matched_blocking_var: str | None = map_params[block_var_idx]
+            self.blocking_size = amd_config.vlb if amd_config.vlb > 0 else amd_config.hlb
+            assert self.blocking_size > 0
+        else:
+            matched_blocking_var = self._get_blocking_parameter(map_params)
         assert matched_blocking_var is not None
 
         # Now compute the partitions of the nodes.
