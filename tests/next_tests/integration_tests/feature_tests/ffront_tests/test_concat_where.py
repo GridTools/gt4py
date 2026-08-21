@@ -415,3 +415,26 @@ def test_with_tuples_different_domain(cartesian_case, static_domains: bool):
         out=out,
         ref=(ref0, ref1),
     )
+
+
+def test_concat_where_field_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
+    """
+    A field branch with fewer dimensions than the expression is implicitly broadcast.
+
+    `b` only has the `K` dimension, but is selected everywhere, so it is broadcast to the
+    three-dimensional result. With `static_domains` this also tests pruning: the domain bounds
+    are statically known, so `prune_empty_concat_where` decides that `a` is never selected and
+    must reintroduce the implicit broadcast of the `concat_where` instead of replacing the
+    three-dimensional expression by a one-dimensional one.
+    """
+
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.IJKField, b: cases.KField) -> cases.IJKField:
+        return concat_where(KDim < 0, a, b)
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    ref = np.broadcast_to(b.asnumpy()[np.newaxis, np.newaxis, :], out.domain.shape)
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
