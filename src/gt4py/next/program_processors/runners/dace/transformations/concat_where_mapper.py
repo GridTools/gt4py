@@ -1419,7 +1419,7 @@ def _handle_special_case_of_gt4py_scan_point_impl(
             if (int(end) + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
                 return False
         # In case of a symbol, we only check for the pathological case, i.e. a Map
-        # parameter is the end value. We also allow only one symbol value.
+        #  parameter is the end value. We also allow only one symbol value.
         elif (end_str := str(end)) in map_params:
             map_params.discard(end_str)
         else:
