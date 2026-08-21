@@ -26,7 +26,7 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import (
     compilation as dace_wf_compilation,
@@ -89,18 +89,18 @@ def program_source() -> dace_wf_compilation.SDFGExtensionSource:
     Using a real source (rather than a `MagicMock`) lets the unmocked `get_cache_folder`
     fingerprint the program source for the build-folder name.
     """
-    program_source = stages.ProgramSource(
+    program_source = artifacts.ProgramSource(
         entry_point=interface.Function("gpu_program", parameters=()),
         source_code=_make_sdfg_with_gpu_map().to_json(),
         library_deps=(),
-        code_spec=code_specs.SDFGCodeSpec(),
+        code_spec=artifacts.SDFGCodeSpec(),
     )
-    binding_source = stages.BindingSource(source_code="", library_deps=())
-    return stages.ExtensionSource(program_source=program_source, binding_source=binding_source)
+    binding_source = artifacts.BindingSource(source_code="", library_deps=())
+    return artifacts.ExtensionSource(program_source=program_source, binding_source=binding_source)
 
 
 def _run_compiler(
-    inp: stages.ExtensionSource,
+    inp: artifacts.ExtensionSource,
     *,
     add_gpu_trace_markers: bool = False,
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.RELEASE,
