@@ -135,6 +135,26 @@ class TypeValidatorFactory(Protocol):
 
 
 # Implementations
+@dataclasses.dataclass
+class _DeferredTypeValidator:
+    """A :class:`FixedTypeValidator` forwarding to a validator which is not known yet.
+
+    This indirection is what makes recursive type aliases work: the validator of
+    ``type NestedTuple[T] = tuple[T | NestedTuple[T], ...]`` cannot be built before the
+    alias occurring inside its own definition has one, so the inner occurrence gets this
+    placeholder and the real validator is filled in once the definition is processed.
+    """
+
+    name: str
+    validator: Optional[FixedTypeValidator] = None
+
+    def __call__(self, value: Any, **kwargs: Any) -> None:
+        assert self.validator is not None, (
+            f"Validator for '{self.name}' has not been completely defined yet."
+        )
+        self.validator(value, **kwargs)
+
+
 @dataclasses.dataclass(frozen=True)
 class SimpleTypeValidatorFactory(TypeValidatorFactory):
     """A simple :class:`TypeValidatorFactory` implementation.
@@ -177,15 +197,25 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         required: bool = True,
         globalns: Optional[dict[str, Any]] = None,
         localns: Optional[dict[str, Any]] = None,
+        _alias_memo: Optional[dict[Any, _DeferredTypeValidator]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
         # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
         #
         if name is None:
             name = "<value>"
+        if _alias_memo is None:
+            # Type aliases whose validator is currently being built, used to break the
+            # cycles introduced by recursive aliases.
+            _alias_memo = {}
 
         make_recursive = functools.partial(
-            self.__call__, name=name, globalns=globalns, localns=localns, **kwargs
+            self.__call__,
+            name=name,
+            globalns=globalns,
+            localns=localns,
+            _alias_memo=_alias_memo,
+            **kwargs,
         )
 
         try:
@@ -205,7 +235,15 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 # Keep its message: it names the alias and the cause.
                 raise exceptions.EveValueError(str(error)) from error
             if resolved_annotation is not type_annotation:
-                return make_recursive(resolved_annotation)
+                # A recursive alias reaches this point again, with the very same annotation,
+                # while its own validator is still being built. Handing the inner occurrence
+                # a placeholder breaks that cycle; it is filled in right below, before any
+                # value can be validated.
+                if (deferred := _alias_memo.get(type_annotation, None)) is not None:
+                    return deferred
+                _alias_memo[type_annotation] = deferred = _DeferredTypeValidator(name)
+                deferred.validator = validator = make_recursive(resolved_annotation)
+                return validator
 
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
