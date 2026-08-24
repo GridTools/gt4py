@@ -158,6 +158,7 @@ type SampleIntAlias = int
 type SampleChainedAlias = SampleIntAlias
 type SampleListAlias = list[SampleIntAlias]
 type SamplePairAlias[T] = tuple[T, T]
+type SampleNestedTupleAlias[T] = tuple[T | SampleNestedTupleAlias[T], ...]
 
 
 SAMPLE_TYPE_DEFINITIONS.extend(
@@ -168,6 +169,36 @@ SAMPLE_TYPE_DEFINITIONS.extend(
         (list[SampleIntAlias], ([1, 2, 3], []), (1, [1.0]), None, None),
         (Optional[SampleIntAlias], [1, None], ["1"], None, None),
         (SamplePairAlias[int], [(1, 2)], [(1, "2"), (1,)], None, None),
+        # Aliases recursing through a container
+        (
+            SampleNestedTupleAlias[int],
+            ((), (1, 2), (1, (2, (3, 4)), ())),
+            (1, [1], (1, "2"), (1, [2])),
+            None,
+            None,
+        ),
+        (
+            SampleNestedTupleAlias[SampleDataClass],
+            ((), (SampleDataClass(1),), (SampleDataClass(1), ((SampleDataClass(2),), ()))),
+            (SampleDataClass(1), [SampleDataClass(1)], (1,), (SampleDataClass(1), (1,))),
+            None,
+            None,
+        ),
+        (
+            xtyping.NestedTuple[int],
+            ((), (1, 2), (1, (2, (3, 4)), ())),
+            (1, [1], (1, "2"), (1, [2])),
+            None,
+            None,
+        ),
+        (
+            xtyping.NestedList[int],
+            ([], [1, 2], [1, [2, [3, 4]], []]),
+            (1, (1,), [1, "2"], [1, (2,)]),
+            None,
+            None,
+        ),
+        (xtyping.MaybeNestedInTuple[int], (1, (), (1, (2, 3))), ("1", [1], (1, "2")), None, None),
     ]
 )
 
@@ -270,7 +301,9 @@ def test_simple_validation_particularities():
         type_val.simple_type_validator_factory(InvalidAnnotation, "value")
 
 
-def test_recursive_type_alias_is_not_supported():
+def test_cyclic_type_alias_is_not_supported():
+    # An alias standing for itself directly never reaches an actual annotation, unlike
+    # one recursing through a container (see the samples above).
     type RecursiveAlias = RecursiveAlias
 
     # The reason the alias could not be resolved is kept instead of the generic
