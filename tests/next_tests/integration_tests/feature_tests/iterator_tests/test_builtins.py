@@ -243,8 +243,8 @@ def _can_deref_lifted(inp):
 @pytest.mark.parametrize(
     "stencil",
     [
-        pytest.param(_can_deref, marks=pytest.mark.uses_can_deref),
-        pytest.param(_can_deref_lifted, marks=[pytest.mark.uses_can_deref, pytest.mark.uses_lift]),
+        pytest.param(_can_deref),
+        pytest.param(_can_deref_lifted, marks=pytest.mark.uses_lift),
     ],
 )
 @pytest.mark.uses_can_deref
