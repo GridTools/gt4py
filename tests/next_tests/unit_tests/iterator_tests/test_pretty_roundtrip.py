@@ -23,11 +23,6 @@ from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-_XFAIL_LITERAL_TYPE = pytest.mark.xfail(
-    reason="`Literal.type` is not printed; the parser re-types the lexeme", strict=True
-)
-
-
 _SET_AT = ir.SetAt(
     expr=ir.SymRef(id="x"),
     domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -58,7 +53,6 @@ ROUNDTRIP_CASES = [
             ],
         ),
         id="arithmetic",
-        marks=_XFAIL_LITERAL_TYPE,
     ),
     pytest.param(
         ir.FunCall(
@@ -75,7 +69,6 @@ ROUNDTRIP_CASES = [
             ],
         ),
         id="associativity",
-        marks=_XFAIL_LITERAL_TYPE,
     ),
     pytest.param(ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")]), id="deref"),
     pytest.param(ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")]), id="lift"),
@@ -227,6 +220,11 @@ ROUNDTRIP_CASES = [
         ),
         id="program",
     ),
+    pytest.param(im.literal("1.0", "float32"), id="literal_float32"),
+    pytest.param(im.literal("1", "int64"), id="literal_int64"),
+    pytest.param(im.literal("1", "int8"), id="literal_int8"),
+    pytest.param(im.literal("1", "int16"), id="literal_int16"),
+    pytest.param(im.literal("True", "bool"), id="literal_bool"),
     pytest.param(
         ir.Temporary(
             id="t",

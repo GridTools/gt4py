@@ -99,6 +99,36 @@ def test_offset_literal():
     assert actual == expected
 
 
+def test_literal_type_annotation():
+    assert pformat(im.literal("1.0", "float32")) == "1.0:f32"
+    assert pformat(im.literal("1", "int64")) == "1:i64"
+    assert pformat(im.literal("1", "int16")) == "1:i16"
+
+
+def test_literal_type_annotation_rejects_a_shaped_type():
+    # the annotation grammar takes a bare scalar name; `1:f64[3]` would reparse as
+    # `tuple_get(3, 1:f64)`, so refuse to emit it rather than emit something wrong
+    testee = ir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]))
+    with pytest.raises(NotImplementedError, match="shaped type"):
+        pformat(testee)
+    assert pformat(testee, types="none") == "1"
+
+
+def test_literal_type_annotation_elided_when_implied():
+    assert pformat(im.literal("1.0", "float64")) == "1.0"
+    assert pformat(im.literal("1", "int32")) == "1"
+    assert pformat(im.literal("2147483648", "int64")) == "2147483648"
+    assert pformat(im.literal("True", "bool")) == "True"
+
+
+def test_literal_type_annotation_modes():
+    assert pformat(im.literal("1.0", "float32"), types="none") == "1.0"
+    assert pformat(im.literal("1.0", "float32"), types="all") == "1.0:f32"
+    assert pformat(im.literal("1.0", "float64"), types="none") == "1.0"
+    assert pformat(im.literal("1.0", "float64"), types="all") == "1.0:f64"
+    assert pformat(im.literal("True", "bool"), types="all") == "True:i1"
+
+
 def test_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="divides"),
@@ -119,7 +149,7 @@ def test_arithmetic():
             im.literal("4", "int64"),
         ],
     )
-    expected = "(1 + 2) × 3 / 4"
+    expected = "(1:i64 + 2:i64) × 3:i64 / 4:i64"
     actual = pformat(testee)
     assert actual == expected
 
@@ -138,7 +168,7 @@ def test_associativity():
             ),
         ],
     )
-    expected = "1 + 2 + (3 + 4)"
+    expected = "1:i64 + 2:i64 + (3:i64 + 4:i64)"
     actual = pformat(testee)
     assert actual == expected
 

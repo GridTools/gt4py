@@ -17,8 +17,7 @@ from lark import (
 )
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS
+from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS, implied_literal_type
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -85,6 +84,7 @@ GRAMMAR = """
         | "c⟨" ( prec0 "," )* prec0? "⟩" -> cartesian_domain
 
     ?prec9: _literal
+        | typed_literal
         | SYM_REF
         | named_range
         | cartesian_offset
@@ -95,6 +95,10 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
+    // Only a bare scalar name: `Literal.type` is a `ts.ScalarType`, and admitting
+    // the bracketed forms here would make `1:i16[2]` and `1:tuple[f32]` ambiguous
+    // with `tuple_get`, which is also `prec8 "[" prec0 "]"`.
+    typed_literal: ( INT_LITERAL | FLOAT_LITERAL | SYM_REF ) ":" TYPE_LITERAL
     ?type_expr: TYPE_LITERAL
         | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type
         | "tuple" "[" type_expr ("," type_expr)* "]" -> tuple_type
@@ -112,6 +116,13 @@ GRAMMAR = """
 """  # noqa: RUF001 [ambiguous-unicode-character-string]
 
 
+def _bare_literal(value: str) -> ir.Literal:
+    """A literal written without a type annotation; `pretty_printer` elides against this."""
+    type_ = implied_literal_type(value)
+    assert type_ is not None, f"'{value}' is not a literal lexeme."
+    return ir.Literal(value=value, type=type_)
+
+
 @lark_visitors.v_args(inline=True)
 class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
@@ -119,16 +130,16 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
-            return im.literal(value.value, "bool")
+            return _bare_literal(value.value)
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal_from_value(int(value.value))
+        return _bare_literal(str(int(value.value)))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal(value.value, "float64")
+        return _bare_literal(value.value)
 
-    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
+    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.ScalarType:
         if (kind := SCALAR_TYPE_KINDS.get(value.value)) is not None:
             return ts.ScalarType(kind=kind)
         raise ValueError(
@@ -140,6 +151,14 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def tuple_type(self, *types: ts.DataType) -> ts.TupleType:
         return ts.TupleType(types=list(types))
+
+    def typed_literal(
+        self, value: Union[ir.Literal, ir.SymRef], type_: ts.ScalarType
+    ) -> Union[ir.Literal, ir.SymRef]:
+        if isinstance(value, ir.Literal):
+            return ir.Literal(value=value.value, type=type_)
+        value.type = type_
+        return value
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
