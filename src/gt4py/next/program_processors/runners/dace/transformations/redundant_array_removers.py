@@ -544,6 +544,23 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
         if not temp_desc.transient:
             return False
 
+        # The write into the final consumers will be distributed into the Map,
+        #  i.e. it is performed directly by each Map iteration. Therefore, none
+        #  of the final consumers may be read inside the Map scope, otherwise
+        #  the read could observe the newly written value instead of the
+        #  original one (WAR hazard within the Map body).
+        scope_children = graph.scope_children()
+        scopes_to_scan = [graph.entry_node(map_exit)]
+        data_read_in_scope: set[str] = set()
+        while len(scopes_to_scan) != 0:
+            scope_owner = scopes_to_scan.pop()
+            for inner_node in scope_children[scope_owner]:
+                if isinstance(inner_node, dace_nodes.EntryNode):
+                    scopes_to_scan.append(inner_node)
+                for inner_read_edge in graph.in_edges(inner_node):
+                    if not inner_read_edge.data.is_empty():
+                        data_read_in_scope.add(inner_read_edge.data.data)
+
         # Check the consumer
         for consumer_edge in graph.out_edges(temp_node):
             consumer_sbs: dace_sbs.Range = consumer_edge.data.get_src_subset(consumer_edge, graph)
@@ -567,6 +584,11 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             if not isinstance(consumer_desc, dace_data.Array):
                 return False
             if isinstance(consumer_desc, dace_data.View):
+                return False
+
+            # The destination must not be read inside the Map scope (WAR
+            #  hazard, see above).
+            if consumer_node.data in data_read_in_scope:
                 return False
 
         # `temp_node` will be removed this means it must be single use.
