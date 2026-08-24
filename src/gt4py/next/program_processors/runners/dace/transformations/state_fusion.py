@@ -382,7 +382,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             `True` if the fusion would create a WAR hazard on `data`.
         """
 
-        def _has_path(state: dace.SDFGState, src, dst) -> bool:
+        def _has_path(
+            state: dace.SDFGState, src: dace_nodes.AccessNode, dst: dace_nodes.AccessNode
+        ) -> bool:
             if src is dst:
                 return True
             visited = {src}
