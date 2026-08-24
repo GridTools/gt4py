@@ -252,6 +252,14 @@ def compute_amd_block_config(
 
     ratio = independent_input_bytes / total_input_bytes
 
+    print(
+        f"AMD heuristic for [{sdfg.name}]({map_entry.map.label}): "
+        f"n_vert={n_vert}, n_horiz={n_horiz}, "
+        f"independent_input_bytes={independent_input_bytes}, "
+        f"total_input_bytes={total_input_bytes}, ratio={ratio:.3f}, "
+        f"tasklet_count={tasklet_count}"
+    )
+
     return select_block_config(
         n_vert=n_vert,
         n_horiz=n_horiz,
