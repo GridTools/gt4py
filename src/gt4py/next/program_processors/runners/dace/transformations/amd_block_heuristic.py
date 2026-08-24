@@ -336,16 +336,22 @@ def compute_amd_block_config(
         blocked_dim_idx, blocking_factor = applied_blocking
         if blocked_dim_idx == horizontal_idx:
             # Only `HBLK` blocks the horizontal axis.
-            return HBLK
-        # The vertical axis was blocked.
-        if blocking_factor == 4:
-            # Only `DEEP` blocks the vertical axis by 4.
-            return DEEP
-        if blocking_factor == 2:
+            config = HBLK
+        elif blocking_factor == 4:
+            # The vertical axis was blocked; only `DEEP` blocks it by 4.
+            config = DEEP
+        elif blocking_factor == 2:
             # Both `FLAT` and `VBLK` block the vertical axis by 2; `FLAT` is
             # the only one of the two ever chosen when `n_horiz` is small.
-            return FLAT if n_horiz <= SMALL_NHORIZ else VBLK
-        return None
+            config = FLAT if n_horiz <= SMALL_NHORIZ else VBLK
+        else:
+            config = None
+        print(
+            f"[amd_heuristic] {map_entry.map.label}: already blocked "
+            f"(axis={'horizontal' if blocked_dim_idx == horizontal_idx else 'vertical'}, "
+            f"factor={blocking_factor}) -> {config}"
+        )
+        return config
 
     independent_input_bytes_raw, total_input_bytes_raw = _compute_input_bytes(
         map_entry, state, sdfg, vertical_param_name=vertical_param
@@ -361,7 +367,7 @@ def compute_amd_block_config(
 
     ratio = independent_input_bytes / total_input_bytes
 
-    return select_block_config(
+    config = select_block_config(
         n_vert=n_vert,
         n_horiz=n_horiz,
         independent_input_bytes=independent_input_bytes,
@@ -369,3 +375,10 @@ def compute_amd_block_config(
         ratio=ratio,
         tasklet_count=tasklet_count,
     )
+    print(
+        f"[amd_heuristic] {map_entry.map.label}: vertical={vertical_param}(n={n_vert}) "
+        f"horizontal={horizontal_param}(n={n_horiz}) indep_bytes={independent_input_bytes} "
+        f"total_bytes={total_input_bytes} ratio={ratio:.3f} tasklets={tasklet_count} "
+        f"-> {config}"
+    )
+    return config
