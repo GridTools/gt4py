@@ -53,6 +53,16 @@ def test_arithmetic():
     assert actual == expected
 
 
+def test_comparison():
+    def cmp(builtin):
+        return ir.FunCall(fun=ir.SymRef(id=builtin), args=[ir.SymRef(id="a"), ir.SymRef(id="b")])
+
+    assert pparse("a < b") == cmp("less")
+    assert pparse("a > b") == cmp("greater")
+    assert pparse("a <= b") == cmp("less_equal")
+    assert pparse("a >= b") == cmp("greater_equal")
+
+
 def test_deref():
     testee = "·x"
     expected = ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")])

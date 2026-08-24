@@ -52,6 +52,8 @@ GRAMMAR = """
         | prec4 "==" prec5 -> eq
         | prec4 "<" prec5 -> less
         | prec4 ">" prec5 -> greater
+        | prec4 "<=" prec5 -> less_equal
+        | prec4 ">=" prec5 -> greater_equal
 
     ?prec5: prec6
         | prec5 "+" prec6 -> plus
@@ -183,6 +185,12 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def less(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="less"), args=[lhs, rhs])
+
+    def less_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[lhs, rhs])
+
+    def greater_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="greater_equal"), args=[lhs, rhs])
 
     def deref(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="deref"), args=[arg])

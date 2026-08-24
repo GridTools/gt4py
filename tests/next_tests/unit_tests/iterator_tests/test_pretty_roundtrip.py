@@ -23,9 +23,6 @@ from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-_XFAIL_COMPARISON = pytest.mark.xfail(
-    reason="`<=`/`>=` are printed but the grammar has no rule for them", strict=True
-)
 _XFAIL_LITERAL_TYPE = pytest.mark.xfail(
     reason="`Literal.type` is not printed; the parser re-types the lexeme", strict=True
 )
@@ -246,12 +243,10 @@ ROUNDTRIP_CASES = [
     pytest.param(
         ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[ir.SymRef(id="a"), ir.SymRef(id="b")]),
         id="less_equal",
-        marks=_XFAIL_COMPARISON,
     ),
     pytest.param(
         ir.FunCall(fun=ir.SymRef(id="greater_equal"), args=[ir.SymRef(id="a"), ir.SymRef(id="b")]),
         id="greater_equal",
-        marks=_XFAIL_COMPARISON,
     ),
 ]
 
