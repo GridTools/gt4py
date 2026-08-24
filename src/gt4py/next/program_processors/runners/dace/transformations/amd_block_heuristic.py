@@ -233,8 +233,8 @@ def compute_amd_block_config(
         return None
 
     map_size = map_entry.map.range.size()
-    n_vert = _resolve_int(map_size[0])
-    n_horiz = _resolve_int(map_size[1])
+    n_vert = _resolve_int(map_size[1])
+    n_horiz = _resolve_int(map_size[0])
     if n_vert is None or n_horiz is None or n_vert == 1 or n_horiz == 1:
         return None
 
@@ -251,14 +251,6 @@ def compute_amd_block_config(
         return None
 
     ratio = independent_input_bytes / total_input_bytes
-
-    print(
-        f"AMD heuristic for [{sdfg.name}]({map_entry.map.label}): "
-        f"n_vert={n_vert}, n_horiz={n_horiz}, "
-        f"independent_input_bytes={independent_input_bytes}, "
-        f"total_input_bytes={total_input_bytes}, ratio={ratio:.3f}, "
-        f"tasklet_count={tasklet_count}"
-    )
 
     return select_block_config(
         n_vert=n_vert,
