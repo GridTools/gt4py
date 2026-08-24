@@ -27,8 +27,11 @@ Key design decisions (confirmed in the grilling session):
   = implicit push/pop).  No nested SDFGs.
 - **No library nodes**: reductions lowered directly to Python code inside
   the tasklet.
-- **Scan** as a ``ForScope`` inside a ``MapScope``; carry =
-  ``O[i-1] if i > 0 else A`` (no separate transient).
+- **Scan** as a ``ForScope`` inside a ``MapScope``; the scalar carry
+  transient is initialized with ``init`` before the loop and read/written
+  each iteration.  List-typed leaves keep a ``carry if k > start else init``
+  ternary because their carry is read from the result array at the previous
+  index, which is out of bounds on the first iteration.
 """
 
 from __future__ import annotations
@@ -794,9 +797,14 @@ def translate_scan(
 
     The scan is lowered as a ``ForScope`` inside a ``MapScope``.  The
     horizontal domain is mapped, and the vertical (column) dimension is
-    iterated by the ``ForScope``.  The carry is read from the output array
-    at the previous index: ``O[k-1] if k > start else A`` (forward) or
-    ``O[k+1] if k < stop-1 else A`` (backward).
+    iterated by the ``ForScope``.  For scalar leaves the carry is stored in
+    a scalar transient container that is initialized with the scan's
+    ``init`` value before the loop and then written at the end of each
+    iteration; it is read directly by the next iteration.  For list-typed
+    leaves the carry is read from the result array at the previous index
+    (``O[k-1] if k > start else A`` for forward scans), because the init
+    value cannot be written into the result array without going out of
+    bounds.
     """
     assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
@@ -912,9 +920,7 @@ def translate_scan(
     # a single shared scalar (as used previously) races across columns and
     # produces nondeterministic results.  For 1D scans (no horizontal map)
     # ``horizontal_carry_shape`` is empty and the carry stays a scalar.
-    horizontal_carry_shape = [
-        field_shape[i] for i, dim in enumerate(field_dims) if dim != scan_dim
-    ]
+    horizontal_carry_shape = [field_shape[i] for i, dim in enumerate(field_dims) if dim != scan_dim]
 
     result_names = []
     # For scalar leaves, the scan carry is stored in a scalar transient container,
@@ -944,6 +950,18 @@ def translate_scan(
         else:
             carry_container_names.append(None)
 
+    # Free SDFG symbols can be used directly in the tasklet code; scalar
+    # containers are read through an additional scalar input edge per leaf.
+    init_codes: list[str] = []
+    init_connectors: dict[str, None] = {}
+    for i, init_data in enumerate(init_leaves_data):
+        if init_data.name in ctx.root.symbols:
+            init_codes.append(init_data.name)
+        else:
+            init_code = f"__init_{i}"
+            init_codes.append(init_code)
+            init_connectors[init_code] = None
+
     # Build the MapScope over horizontal dimensions.
     if len(horizontal_dims) == 0:
         # 1D scan: no horizontal map needed.
@@ -955,6 +973,84 @@ def translate_scan(
         map_indices = {r.dim: get_map_variable(r.dim) for r in horizontal_dims}
         map_scope = tn.MapScope(node=map_entry, children=[])
         ctx.current_scope.add_child(map_scope)
+
+    # Horizontal subset (no scan dimension) used to index the per-column
+    # scalar carry containers (init before the loop, read/write each
+    # iteration); mirrors the horizontal part of ``carry_subset``.  Empty for
+    # 1D scans, where the carry is a single scalar accessed at ``"0"``.
+    horizontal_carry_subset_parts = [
+        f"({map_indices[dim]}) - ({origin})"
+        for dim, origin in zip(field_dims, field_origin, strict=True)
+        if dim != scan_dim
+    ]
+    horizontal_carry_subset = (
+        dace_subsets.Range.from_string(",".join(horizontal_carry_subset_parts))
+        if horizontal_carry_subset_parts
+        else "0"
+    )
+
+    # Initialize the carry container of each scalar leaf with the scan's
+    # ``init`` value before entering the scan loop.  Without this, the first
+    # scan iteration reads the carry container before it is ever written;
+    # the value is discarded by a ``carry if k > start else init`` ternary
+    # inside the tasklet, but the read itself is genuine uninitialized
+    # memory (flagged by DaCe's SDFG validator on every stree scan compile).
+    # Pre-initializing the carry lets the scan tasklet read it directly and
+    # makes the ternary (and its ``init`` input connector) redundant for
+    # scalar leaves.  List-typed leaves keep the ternary because their carry
+    # is read from the result array at the previous scan index, which would
+    # be out of bounds on the first iteration.
+    scalar_carry_init_lines = [
+        f"__carry_w_{i} = {init_codes[i]}"
+        for i in range(len(leaves))
+        if carry_container_names[i] is not None
+    ]
+    if scalar_carry_init_lines:
+        scalar_init_connectors = {
+            init_codes[i]: None
+            for i in range(len(leaves))
+            if carry_container_names[i] is not None and init_codes[i] in init_connectors
+        }
+        carry_init_tasklet, carry_init_mapping = sdfg_builder.add_tasklet(
+            name="scan_carry_init",
+            inputs=scalar_init_connectors,
+            outputs={
+                f"__carry_w_{i}" for i in range(len(leaves)) if carry_container_names[i] is not None
+            },
+            code="\n".join(scalar_carry_init_lines),
+        )
+        carry_init_in_memlets: dict[str, dace.Memlet] = {}
+        for i in range(len(leaves)):
+            if carry_container_names[i] is None:
+                continue
+            init_code = init_codes[i]
+            if init_code in scalar_init_connectors:
+                carry_init_in_memlets[carry_init_mapping[init_code]] = dace.Memlet(
+                    data=init_leaves_data[i].name, subset="0"
+                )
+        carry_init_out_memlets: dict[str, dace.Memlet] = {}
+        for i in range(len(leaves)):
+            if carry_container_names[i] is not None:
+                # Write the init value into the current map point's slot of the
+                # per-column carry (not the shared "0" slot): the init tasklet
+                # runs inside the horizontal MapScope, so each column must
+                # initialize its own carry element.  1D scans have a scalar
+                # carry accessed at "0".
+                carry_init_out_memlets[carry_init_mapping[f"__carry_w_{i}"]] = dace.Memlet(
+                    data=carry_container_names[i],
+                    subset=copy.deepcopy(horizontal_carry_subset)
+                    if horizontal_carry_subset_parts
+                    else "0",
+                )
+        carry_init_node = tn.TaskletNode(
+            node=carry_init_tasklet,
+            in_memlets=carry_init_in_memlets,
+            out_memlets=carry_init_out_memlets,
+        )
+        if map_scope is not None:
+            map_scope.add_child(carry_init_node)
+        else:
+            ctx.current_scope.add_child(carry_init_node)
 
     # Add the scan dimension to map_indices (used by the code generator
     # to generate the carry read and output write).
@@ -989,37 +1085,18 @@ def translate_scan(
             carry_subset_parts.append(f"({map_var}) - ({origin})")
     carry_subset = dace_subsets.Range.from_string(",".join(carry_subset_parts))
 
-    # Horizontal subset (no scan dimension) used to read and write the per-column
-    # scalar carry; mirrors the horizontal part of ``carry_subset``.  Empty for
-    # 1D scans, where the carry is a single scalar accessed at ``"0"``.
-    horizontal_carry_subset_parts = [
-        f"({map_indices[dim]}) - ({origin})"
-        for dim, origin in zip(field_dims, field_origin, strict=True)
-        if dim != scan_dim
-    ]
-    horizontal_carry_subset = (
-        dace_subsets.Range.from_string(",".join(horizontal_carry_subset_parts))
-        if horizontal_carry_subset_parts
-        else "0"
-    )
-
-    # Free SDFG symbols can be used directly in the tasklet code; scalar
-    # containers are read through an additional scalar input edge per leaf.
-    init_codes: list[str] = []
-    init_connectors: dict[str, None] = {}
-    for i, init_data in enumerate(init_leaves_data):
-        if init_data.name in ctx.root.symbols:
-            init_codes.append(init_data.name)
-        else:
-            init_code = f"__init_{i}"
-            init_codes.append(init_code)
-            init_connectors[init_code] = None
-
     carry_vars = [f"__gtir_scan_carry_{i}" for i in range(len(leaves))]
+    # Scalar leaves: the carry container was initialized before the loop, so
+    # the tasklet reads it directly.  List leaves: the carry is read from the
+    # result array at the previous index, which is out of bounds on the first
+    # iteration, so the ternary (selecting ``init`` on the first iteration)
+    # is still needed.
     pre_statements_scan = [
-        f"{carry_var} = {carry_conn} if {carry_cond} else {init_code}"
-        for carry_var, carry_conn, init_code in zip(
-            carry_vars, carry_conn_of, init_codes, strict=True
+        f"{carry_var} = {carry_conn}"
+        if carry_container_names[i] is not None
+        else f"{carry_var} = {carry_conn} if {carry_cond} else {init_code}"
+        for i, (carry_var, carry_conn, init_code) in enumerate(
+            zip(carry_vars, carry_conn_of, init_codes, strict=True)
         )
     ]
 
@@ -1122,6 +1199,14 @@ def translate_scan(
         or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
     }
 
+    # Init connectors for list-leaf inits only — scalar-leaf inits are now
+    # written to the carry container before the loop by a separate tasklet.
+    list_init_connectors = {
+        init_codes[i]: None
+        for i in range(len(leaves))
+        if carry_container_names[i] is None and init_codes[i] in init_connectors
+    }
+
     # Create the Tasklet and TaskletNode.
     tasklet, connector_mapping = sdfg_builder.add_tasklet(
         name="scan",
@@ -1129,7 +1214,7 @@ def translate_scan(
         | connectivity_inputs
         | {connector: None for connector in field_inputs}
         | {carry_conn: None for carry_conn in carry_conn_of}
-        | init_connectors,
+        | list_init_connectors,
         outputs=set(out_conns)
         | {carry_w_conn for carry_w_conn in carry_write_conns if carry_w_conn is not None},
         code=tasklet_code,
@@ -1173,7 +1258,7 @@ def translate_scan(
             )
     for i, init_data in enumerate(init_leaves_data):
         init_code = init_codes[i]
-        if init_code in init_connectors:
+        if init_code in list_init_connectors:
             in_memlets[connector_mapping[init_code]] = dace.Memlet(data=init_data.name, subset="0")
 
     # Output memlets: one element per leaf at (horizontal_indices, k).
