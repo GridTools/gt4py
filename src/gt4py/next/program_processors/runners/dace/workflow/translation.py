@@ -28,6 +28,7 @@ from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree import (
+    inline_symbolic_scalar_let_args as gtx_dace_inline_symbolic_scalar_lets,
     lower_program_to_stree as gtx_dace_lower_stree,
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon

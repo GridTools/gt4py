@@ -2074,9 +2074,7 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         #  in a separate, later state: inside one SDFG state the copy would race
         #  with the reads of the old value, since the dataflow graph only orders
         #  read-after-write dependencies (WAR hazards are not tracked).
-        expr_reads = {
-            str(sym.id) for sym in stmt.expr.pre_walk_values().if_isinstance(gtir.SymRef)
-        }
+        expr_reads = {str(sym.id) for sym in stmt.expr.pre_walk_values().if_isinstance(gtir.SymRef)}
         target_writes = {
             str(sym.id) for sym in stmt.target.pre_walk_values().if_isinstance(gtir.SymRef)
         }
