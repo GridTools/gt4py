@@ -23,9 +23,6 @@ from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-_XFAIL_INFINITY = pytest.mark.xfail(
-    reason="`∞`/`-∞` are printed but the grammar has no token for them", strict=True
-)
 _XFAIL_COMPARISON = pytest.mark.xfail(
     reason="`<=`/`>=` are printed but the grammar has no rule for them", strict=True
 )
@@ -233,8 +230,8 @@ ROUNDTRIP_CASES = [
         ),
         id="program",
     ),
-    pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive", marks=_XFAIL_INFINITY),
-    pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative", marks=_XFAIL_INFINITY),
+    pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive"),
+    pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(
         ir.FunCall(
             fun=ir.SymRef(id="named_range"),
@@ -245,7 +242,6 @@ ROUNDTRIP_CASES = [
             ],
         ),
         id="named_range_unbounded",
-        marks=_XFAIL_INFINITY,
     ),
     pytest.param(
         ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[ir.SymRef(id="a"), ir.SymRef(id="b")]),

@@ -32,7 +32,8 @@ GRAMMAR = """
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
-    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL
+    INFINITY_LITERAL: "∞" | "-∞"
+    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
 
     ?prec0: prec1
@@ -129,6 +130,11 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def ID_NAME(self, value: lark_lexer.Token) -> str:
         return value.value
+
+    def INFINITY_LITERAL(self, value: lark_lexer.Token) -> ir.InfinityLiteral:
+        if value.value.startswith("-"):
+            return ir.InfinityLiteral.NEGATIVE
+        return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
         name = value.value[:-1]
