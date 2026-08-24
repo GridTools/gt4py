@@ -319,10 +319,17 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             else None
         )
         if amd_config is not None:
-            block_var_idx = 0 if amd_config.vlb > 0 else (1 if amd_config.hlb > 0 else None)
-            assert block_var_idx is not None
-            matched_blocking_var: str | None = map_params[block_var_idx]
-            self.blocking_size = amd_config.vlb if amd_config.vlb > 0 else amd_config.hlb
+            if amd_config.vlb > 0:
+                matched_blocking_var: str | None = gtx_amd_heuristic.find_axis_param(
+                    map_params, "vertical"
+                )
+                self.blocking_size = amd_config.vlb
+            elif amd_config.hlb > 0:
+                matched_blocking_var = gtx_amd_heuristic.find_axis_param(map_params, "horizontal")
+                self.blocking_size = amd_config.hlb
+            else:
+                matched_blocking_var = None
+            assert matched_blocking_var is not None
             assert self.blocking_size > 0
         else:
             matched_blocking_var = self._get_blocking_parameter(map_params)

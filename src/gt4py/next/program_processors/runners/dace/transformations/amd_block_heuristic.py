@@ -148,6 +148,15 @@ def find_loop_blocking_signature(
     coarsened (see `_prepare_inner_outer_maps`), so it no longer matches the
     inner Map's parameter by exact name -- only by that prefix.
 
+    A `Sequential`-scheduled, unrolled, single-parameter inner Map is not by
+    itself unique to `LoopBlocking`, though: a compile-time-fixed-size
+    reduction over a `LOCAL`/neighbor connectivity dimension (e.g. summing
+    over `E2C`) is commonly compiled the exact same way. To rule those out,
+    only an inner Map whose parameter is itself a recognized vertical or
+    horizontal axis name (see `find_axis_param`) counts as a match -- a
+    `LOCAL`-dimension parameter's name contains `"local"`, not
+    `"vertical"`/`"horizontal"`.
+
     Returns:
         `(blocked_dim_idx, blocking_factor)` -- the index into
         `map_entry.map.params` of the already-blocked dimension, and the
@@ -164,6 +173,8 @@ def find_loop_blocking_signature(
         ):
             continue
         inner_param = node.map.params[0]
+        if "vertical" not in inner_param and "horizontal" not in inner_param:
+            continue
         coarse_param = f"__gtx_coarse_{inner_param}"
         for blocked_dim_idx, outer_param in enumerate(map_entry.map.params):
             if outer_param in (inner_param, coarse_param):
