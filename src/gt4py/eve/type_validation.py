@@ -143,6 +143,9 @@ class _DeferredTypeValidator:
     ``type NestedTuple[T] = tuple[T | NestedTuple[T], ...]`` cannot be built before the
     alias occurring inside its own definition has one, so the inner occurrence gets this
     placeholder and the real validator is filled in once the definition is processed.
+
+    Unlike ``datamodels.ForwardRefValidator``, which resolves itself lazily on its first
+    call, this one is always completed by its creator before any value reaches it.
     """
 
     name: str

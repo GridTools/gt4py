@@ -187,19 +187,14 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
 
 _T_co = TypeVar("_T_co", covariant=True)
 
-# Note: these recursive aliases have to be defined with the PEP 695 `type` statement. Written as
-# plain assignments (`NestedTuple = tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]`), subscription
-# does not substitute the type parameter inside the string annotation, so `NestedTuple[int]` keeps
-# an unparametrized `ForwardRef("NestedTuple[_T_co]")` which cannot be resolved in the namespace
-# of the annotated object (see `get_partial_type_hints`).
-type NestedSequence[T] = Sequence[T | NestedSequence[T]]
-type NestedList[T] = list[T | NestedList[T]]
-type NestedTuple[T] = tuple[T | NestedTuple[T], ...]
+type NestedSequence[_T_co] = Sequence[_T_co | NestedSequence[_T_co]]
+type NestedList[_T_co] = list[_T_co | NestedList[_T_co]]
+type NestedTuple[_T_co] = tuple[_T_co | NestedTuple[_T_co], ...]
 
-type MaybeNested[T] = T | NestedSequence[T]
-type MaybeNestedInSequence[T] = T | NestedSequence[T]
-type MaybeNestedInList[T] = T | NestedList[T]
-type MaybeNestedInTuple[T] = T | NestedTuple[T]
+type MaybeNested[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInSequence[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInList[_T_co] = _T_co | NestedList[_T_co]
+type MaybeNestedInTuple[_T_co] = _T_co | NestedTuple[_T_co]
 
 
 def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
