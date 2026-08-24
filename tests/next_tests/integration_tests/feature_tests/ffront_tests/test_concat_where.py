@@ -264,6 +264,74 @@ def test_dimension_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
 
 
 @pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_not_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim != 2), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k != 2, boundary, interior)
+    )
+
+
+def test_dimension_less_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim <= 2), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k <= 2, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 > KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 > k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 >= KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 >= k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 == KDim), interior, boundary)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 == k, interior, boundary)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_reverse_not_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 != KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 != k, boundary, interior)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
 def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
