@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import os
+import uuid
 import warnings
 from collections.abc import Sequence
 from typing import Any, Final, Optional, Union
@@ -310,6 +312,49 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """
         outer_entry: dace_nodes.MapEntry = self.outer_entry
         map_params: list[str] = outer_entry.map.params
+
+        if os.getenv("GT4PY_ENABLE_SWEEP_INFO") and "customhash" not in outer_entry.map.label:
+            _original_label = outer_entry.map.label
+            _kernel_hash = uuid.uuid4().hex[:8]
+            outer_entry.map.label = f"{_original_label}_customhash__{_kernel_hash}__"
+
+            vertical_param = gtx_amd_heuristic.find_axis_param(map_params, "vertical")
+            horizontal_param = gtx_amd_heuristic.find_axis_param(map_params, "horizontal")
+            if vertical_param is not None and horizontal_param is not None:
+                vertical_idx = map_params.index(vertical_param)
+                horizontal_idx = map_params.index(horizontal_param)
+
+                map_size = list(outer_entry.map.range.size())
+
+                n_vert = gtx_amd_heuristic._resolve_int(map_size[vertical_idx])
+                n_horiz = gtx_amd_heuristic._resolve_int(map_size[horizontal_idx])
+
+                tasklet_count = gtx_amd_heuristic.gt_count_weighted_tasklets_in_map(
+                    graph, outer_entry
+                )
+
+                independent_input_bytes_raw, total_input_bytes_raw = (
+                    gtx_amd_heuristic._compute_input_bytes(
+                        outer_entry, graph, sdfg, vertical_param_name=vertical_param
+                    )
+                )
+                independent_input_bytes = gtx_amd_heuristic._resolve_int(
+                    independent_input_bytes_raw
+                )
+                total_input_bytes = gtx_amd_heuristic._resolve_int(total_input_bytes_raw)
+
+                ratio = (
+                    independent_input_bytes / total_input_bytes
+                    if independent_input_bytes is not None and total_input_bytes
+                    else -1
+                )
+
+                print(
+                    f"[amd_heuristic] [{sdfg.name}]({outer_entry.map.label}): "
+                    f"vertical={vertical_param}(n={n_vert}) "
+                    f"horizontal={horizontal_param}(n={n_horiz}) indep_bytes={independent_input_bytes} "
+                    f"total_bytes={total_input_bytes} ratio={ratio:.3f} tasklets={tasklet_count}"
+                )
 
         # Mirrors the axis/factor selection in `can_be_applied` (recomputed here,
         # since `apply()` does not receive any state from that call).

@@ -358,7 +358,7 @@ def compute_amd_block_config(
         else:
             config = None
         print(
-            f"[amd_heuristic] {map_entry.map.label}: already blocked "
+            f"[amd_heuristic] [{sdfg.name}]({map_entry.map.label}): already blocked "
             f"(axis={'horizontal' if blocked_dim_idx == horizontal_idx else 'vertical'}, "
             f"factor={blocking_factor}) -> {config}"
         )
@@ -387,7 +387,7 @@ def compute_amd_block_config(
         tasklet_count=tasklet_count,
     )
     print(
-        f"[amd_heuristic] {map_entry.map.label}: vertical={vertical_param}(n={n_vert}) "
+        f"[amd_heuristic] [{sdfg.name}]({map_entry.map.label}): vertical={vertical_param}(n={n_vert}) "
         f"horizontal={horizontal_param}(n={n_horiz}) indep_bytes={independent_input_bytes} "
         f"total_bytes={total_input_bytes} ratio={ratio:.3f} tasklets={tasklet_count} "
         f"-> {config}"

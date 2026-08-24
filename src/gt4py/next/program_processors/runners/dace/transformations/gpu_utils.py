@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import copy
+import os
+import uuid
 import warnings
 from typing import Any, Callable, Final, Optional, Sequence, Union
 
@@ -699,6 +701,49 @@ class GPUSetBlockSize(dace_transformation.SingleStateTransformation):
     ) -> None:
         """Modify the map as requested."""
         gpu_map: dace_nodes.Map = self.map_entry.map
+        if os.getenv("GT4PY_ENABLE_SWEEP_INFO") and "customhash" not in gpu_map.label:
+            _original_label = gpu_map.label
+            _kernel_hash = uuid.uuid4().hex[:8]
+            gpu_map.label = f"{_original_label}_customhash__{_kernel_hash}__"
+
+            map_params = gpu_map.params
+            vertical_param = gtx_amd_heuristic.find_axis_param(map_params, "vertical")
+            horizontal_param = gtx_amd_heuristic.find_axis_param(map_params, "horizontal")
+            if vertical_param is not None and horizontal_param is not None:
+                vertical_idx = map_params.index(vertical_param)
+                horizontal_idx = map_params.index(horizontal_param)
+
+                map_size = list(gpu_map.range.size())
+
+                n_vert = gtx_amd_heuristic._resolve_int(map_size[vertical_idx])
+                n_horiz = gtx_amd_heuristic._resolve_int(map_size[horizontal_idx])
+
+                tasklet_count = gtx_amd_heuristic.gt_count_weighted_tasklets_in_map(
+                    graph, self.map_entry
+                )
+
+                independent_input_bytes_raw, total_input_bytes_raw = (
+                    gtx_amd_heuristic._compute_input_bytes(
+                        self.map_entry, graph, sdfg, vertical_param_name=vertical_param
+                    )
+                )
+                independent_input_bytes = gtx_amd_heuristic._resolve_int(
+                    independent_input_bytes_raw
+                )
+                total_input_bytes = gtx_amd_heuristic._resolve_int(total_input_bytes_raw)
+
+                ratio = (
+                    independent_input_bytes / total_input_bytes
+                    if independent_input_bytes is not None and total_input_bytes
+                    else -1
+                )
+
+                print(
+                    f"[amd_heuristic] [{sdfg.name}]({gpu_map.label}): vertical={vertical_param}(n={n_vert}) "
+                    f"horizontal={horizontal_param}(n={n_horiz}) indep_bytes={independent_input_bytes} "
+                    f"total_bytes={total_input_bytes} ratio={ratio:.3f} tasklets={tasklet_count}"
+                )
+
         map_size = gpu_map.range.size()
         dims_to_inspect = len(map_size)
         num_map_params = dims_to_inspect  # Might be modified
