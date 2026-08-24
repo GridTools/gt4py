@@ -48,13 +48,17 @@ from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from gt4py import eve
 from gt4py.eve import concepts
 from gt4py.next import common as gtx_common, utils as gtx_utils
-from gt4py.next.iterator import ir as gtir
+from gt4py.next.iterator import builtins as itir_builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import infer_domain, prune_casts as ir_prune_casts
+from gt4py.next.iterator.transforms import (
+    infer_domain,
+    inline_lambdas,
+    prune_casts as ir_prune_casts,
+)
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_codegen import (
@@ -293,6 +297,34 @@ def _make_full_array_memlet(name: str, root: tn.ScheduleTreeRoot) -> dace.Memlet
     return dace.Memlet(data=name, subset=dace.subsets.Range.from_array(desc))
 
 
+def _get_scalar_field_dims(
+    data_args: Mapping[str, DataRef], ctx: SubgraphContext
+) -> dict[str, frozenset[gtx_common.Dimension]]:
+    """Compute the scalar (size-one) dimensions of each field in ``data_args``.
+
+    DaCe requires the subscript dimensionality of a tasklet connector to
+    match the number of non-scalar (non-singleton) dimensions of the memlet
+    subset (see ``dace.sdfg.tasklet_validation``), so the code generator
+    squeezes container dimensions whose extent is statically one out of the
+    subscripts it emits (see ``scalar_field_dims`` in
+    ``gtir_to_stree_codegen.CodegenContext``).
+    """
+    result: dict[str, frozenset[gtx_common.Dimension]] = {}
+    for data in data_args.values():
+        if not isinstance(data.gt_type, ts.FieldType) or data.name in result:
+            continue
+        desc = ctx.root.containers.get(data.name, None)
+        if not isinstance(desc, dace.data.Array):
+            continue
+        dims = data.gt_type.dims
+        if len(dims) != len(desc.shape):
+            continue
+        squeezed = frozenset(dim for dim, size in zip(dims, desc.shape) if size == 1)
+        if squeezed:
+            result[data.name] = squeezed
+    return result
+
+
 def translate_as_fieldop(
     node: gtir.Node,
     ctx: SubgraphContext,
@@ -431,6 +463,7 @@ def translate_as_fieldop(
             args_map=args_map,
             local_index=local_var,
             root_symbols=_root_symbol_names(ctx),
+            scalar_field_dims=_get_scalar_field_dims(data_args, ctx),
         )
 
         # Build the full tasklet code: pre-statements + final assignment.
@@ -466,6 +499,7 @@ def translate_as_fieldop(
             offset_provider_type=offset_provider_type,
             args_map=args_map,
             root_symbols=_root_symbol_names(ctx),
+            scalar_field_dims=_get_scalar_field_dims(data_args, ctx),
         )
 
         # Build the full tasklet code: pre-statements + final assignment.
@@ -654,6 +688,7 @@ def translate_map_list(
         else ctx.root._offset_provider_type,
         args_map=args_map,
         root_symbols=_root_symbol_names(ctx),
+        scalar_field_dims=_get_scalar_field_dims(data_args, ctx),
     )
 
     # Build the mapped tasklet expression.  When the connectivity has skip
@@ -872,6 +907,14 @@ def translate_scan(
     field_dims, field_origin, field_shape = get_field_layout(field_domain)
 
     result_names = []
+    # For scalar leaves, the scan carry is stored in a scalar transient container,
+    # written at the end of each scan iteration and read (as a whole scalar) at the
+    # beginning of the next one.  This mirrors the lowering of the legacy
+    # fieldview/iview scan (``gtir_to_sdfg_scan``) and avoids reading the result
+    # array at the previous scan index — such an in-edge would statically extend
+    # one element past the allocated scan domain, producing an out-of-bounds
+    # memlet on the aggregated scope edges once the scan domain is static.
+    carry_container_names: list[str | None] = []
     for _path, leaf_dtype in leaves:
         if isinstance(leaf_dtype, ts.ListType):
             assert isinstance(leaf_dtype.element_type, ts.ScalarType)
@@ -880,6 +923,11 @@ def translate_scan(
             dtype = gtx_dace_args.as_dace_type(leaf_dtype)
         result_name, _result_desc = sdfg_builder.add_temp_array(ctx.root, field_shape, dtype)
         result_names.append(result_name)
+        if isinstance(leaf_dtype, ts.ScalarType):
+            carry_name, _carry_desc = sdfg_builder.add_temp_scalar(ctx.root, dtype)
+            carry_container_names.append(carry_name)
+        else:
+            carry_container_names.append(None)
 
     # Build the MapScope over horizontal dimensions.
     if len(horizontal_dims) == 0:
@@ -995,6 +1043,7 @@ def translate_scan(
             string_args=string_args,
             temp_counter=temp_counter,
             root_symbols=_root_symbol_names(ctx),
+            scalar_field_dims=_get_scalar_field_dims(data_args, ctx),
         )
         expr_codes.append(expr_code)
         pre_statements_body.extend(pre_stmts)
@@ -1003,13 +1052,23 @@ def translate_scan(
 
     # Combine all pre-statements and the final (per-leaf) expressions.
     out_conns = [f"__out_{i}" for i in range(len(leaves))]
+    # For scalar leaves, the scan tasklet additionally writes the computed value
+    # into the carry container, where it is read back by the next scan iteration.
+    carry_write_conns = [
+        f"__carry_w_{i}" if carry_container_names[i] is not None else None
+        for i in range(len(leaves))
+    ]
+    assignment_lines = [
+        f"{out_conn} = {expr_code}"
+        for out_conn, expr_code in zip(out_conns, expr_codes, strict=True)
+    ]
+    assignment_lines += [
+        f"{carry_w_conn} = {expr_code}"
+        for carry_w_conn, expr_code in zip(carry_write_conns, expr_codes, strict=True)
+        if carry_w_conn is not None
+    ]
     tasklet_code = (
-        "\n".join(pre_statements_scan + pre_statements_body)
-        + "\n"
-        + "\n".join(
-            f"{out_conn} = {expr_code}"
-            for out_conn, expr_code in zip(out_conns, expr_codes, strict=True)
-        )
+        "\n".join(pre_statements_scan + pre_statements_body) + "\n" + "\n".join(assignment_lines)
     )
 
     # Connectivity tables referenced by ``neighbors`` in the stencil body must
@@ -1042,7 +1101,8 @@ def translate_scan(
         | {connector: None for connector in field_inputs}
         | {carry_conn: None for carry_conn in carry_conn_of}
         | init_connectors,
-        outputs=set(out_conns),
+        outputs=set(out_conns)
+        | {carry_w_conn for carry_w_conn in carry_write_conns if carry_w_conn is not None},
         code=tasklet_code,
     )
 
@@ -1061,12 +1121,21 @@ def translate_scan(
         in_memlets[connector_mapping[connector]] = dace.Memlet(
             data=field_name, subset=dace_subsets.Range.from_string(subset)
         )
-    for carry_conn, result_name in zip(carry_conn_of, result_names, strict=True):
+    for i, (carry_conn, result_name) in enumerate(zip(carry_conn_of, result_names, strict=True)):
         # NOTE: the subset objects must not be shared across memlets — DaCe
         # validation rejects a subset instance referenced by multiple edges.
-        in_memlets[connector_mapping[carry_conn]] = dace.Memlet(
-            data=result_name, subset=copy.deepcopy(carry_subset)
-        )
+        carry_container_name = carry_container_names[i]
+        if carry_container_name is not None:
+            # Scalar leaf: read the carry from the scalar transient container.
+            in_memlets[connector_mapping[carry_conn]] = dace.Memlet(
+                data=carry_container_name, subset="0"
+            )
+        else:
+            # List leaf: read the carry from the result array at the previous
+            # scan position (see ``carry_subset`` construction above).
+            in_memlets[connector_mapping[carry_conn]] = dace.Memlet(
+                data=result_name, subset=copy.deepcopy(carry_subset)
+            )
     for i, init_data in enumerate(init_leaves_data):
         init_code = init_codes[i]
         if init_code in init_connectors:
@@ -1085,6 +1154,13 @@ def translate_scan(
         )
         for out_conn, result_name in zip(out_conns, result_names, strict=True)
     }
+    # The scan carry output of scalar leaves is written to the scalar transient
+    # container, to be read by the next scan iteration.
+    for i, carry_w_conn in enumerate(carry_write_conns):
+        if carry_w_conn is not None:
+            out_memlets[connector_mapping[carry_w_conn]] = dace.Memlet(
+                data=carry_container_names[i], subset="0"
+            )
 
     tasklet_node = tn.TaskletNode(
         node=tasklet,
@@ -1289,9 +1365,15 @@ def translate_symbol_ref(
 ) -> DataRefTree:
     """Generates the schedule-tree nodes for a ``ir.SymRef`` node."""
 
-    # Check if the symbol is unused (domain is NEVER).
+    # Check if the symbol is unused (domain is NEVER).  Only field-typed
+    # symbols can be pruned this way: scalar arguments of field operators
+    # have no spatial access domain, so domain inference marks them NEVER
+    # even when they are actually used (e.g. scalar let-bound arguments,
+    # like the CollapseTuple ``__ct_el_N`` temporaries).
     node_domain = getattr(node.annex, "domain", infer_domain.DomainAccessDescriptor.UNKNOWN)
-    if node_domain == infer_domain.DomainAccessDescriptor.NEVER:
+    if node_domain == infer_domain.DomainAccessDescriptor.NEVER and not isinstance(
+        node.type, ts.ScalarType
+    ):
         return None
 
     def _translate_symbol_ref_inner(node: gtir.SymRef) -> DataRef:
@@ -1987,6 +2069,20 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         # Write the result to the target using CopyNode(s).
         domain = extract_target_domain(stmt.domain)
 
+        # If the write target is also read by the statement expression (i.e. the
+        #  field is updated "in place"), the write-back copies have to be placed
+        #  in a separate, later state: inside one SDFG state the copy would race
+        #  with the reads of the old value, since the dataflow graph only orders
+        #  read-after-write dependencies (WAR hazards are not tracked).
+        expr_reads = {
+            str(sym.id) for sym in stmt.expr.pre_walk_values().if_isinstance(gtir.SymRef)
+        }
+        target_writes = {
+            str(sym.id) for sym in stmt.target.pre_walk_values().if_isinstance(gtir.SymRef)
+        }
+        if expr_reads & target_writes:
+            ctx.current_scope.add_child(tn.StateBoundaryNode())
+
         def _write_target(
             source: DataRef | None,
             target: DataRef | None,
@@ -2097,6 +2193,70 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+class _InlineSymbolicScalarLetArgs(eve.NodeTranslator):
+    """Inline scalar let-arguments that are pure symbolic expressions.
+
+    A scalar let-argument is *symbolic* when it only depends on scalar
+    program parameters and builtin operators — e.g. ``n_lev - 1`` where
+    ``n_lev`` is an ``int32`` program parameter.  Such expressions are
+    rendered as symbolic expressions (domain bounds, memlet subset sizes)
+    by the schedule-tree lowering, which flattens everything into a single
+    SDFG and therefore cannot bind lambda-local scalar names through
+    nested-SDFG symbol mapping (unlike the SDFG lowering, cf.
+    ``SymbolicData`` in ``lowering.gtir_to_sdfg_types``).  Substituting them
+    removes otherwise dangling symbol names from domain expressions and
+    scalar expressions.
+
+    Unlike the ``InlineScalar`` pass (``iterator.transforms.inline_scalar``),
+    this pass also descends into ``as_fieldop`` expressions, since scalar
+    lets inside field-operator bodies (e.g. created by ``CollapseTuple`` for
+    tuple ``astype`` calls) are subject to the same dangling-symbol problem.
+
+    Like ``_visit_let`` in the SDFG lowering, ``cast_`` expressions are not
+    inlined: they cannot be represented as dace symbolic expressions.
+
+    Note: nodes rebuilt by this pass drop their (stale) domain annexes;
+    domain inference must be re-run afterwards.
+    """
+
+    def __init__(self, scalar_params: set[str]):
+        self._symbol_universe = scalar_params | itir_builtins.BUILTINS
+
+    def _is_symbolic_scalar_arg(self, arg: gtir.Expr) -> bool:
+        if not isinstance(arg.type, ts.ScalarType):
+            return False
+        if any(eve.walk_values(arg).map(lambda n: cpm.is_call_to(n, "cast_"))):
+            return False
+        free_syms = {
+            str(sym.id) for sym in eve.walk_values(arg).if_isinstance(gtir.SymRef).to_set()
+        }
+        return all(s in self._symbol_universe for s in free_syms)
+
+    def visit_FunCall(self, node: gtir.FunCall) -> gtir.Node:
+        node = self.generic_visit(node)
+        if not cpm.is_let(node):
+            return node
+        eligible_params = [self._is_symbolic_scalar_arg(arg) for arg in node.args]
+        if any(eligible_params):
+            return inline_lambdas.inline_lambda(node, eligible_params=eligible_params)
+        return node
+
+
+def inline_symbolic_scalar_let_args(ir: gtir.Program) -> gtir.Program:
+    """Inline symbolic scalar let-arguments (see :class:`_InlineSymbolicScalarLetArgs`).
+
+    Applied to convergence in order to resolve chains of scalar bindings,
+    where the argument of one let refers to the parameter of another one.
+    """
+    scalar_params = {str(p.id) for p in ir.params if isinstance(p.type, ts.ScalarType)}
+    for _ in range(50):
+        inlined = _InlineSymbolicScalarLetArgs(scalar_params).visit(ir)
+        if inlined == ir:
+            return inlined
+        ir = inlined
+    raise RuntimeError("Inlining of symbolic scalar let-arguments did not converge.")
 
 
 def lower_program_to_stree(

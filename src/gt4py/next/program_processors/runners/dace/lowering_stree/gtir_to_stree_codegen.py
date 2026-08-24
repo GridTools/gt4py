@@ -17,12 +17,13 @@ the body of a ``TaskletNode`` inside a ``MapScope``.
 for each dimension, the index is classified as *symbolic* (compile-time
 known — no shift or cartesian shift with literal offset) or *dynamic*
 (runtime value — cartesian shift with dynamic offset).  Symbolic dimensions
-are indexed on the input edge to the tasklet (memlet subset); dynamic
-dimensions are indexed inside the tasklet code.  Because DaCe's
-Python-to-C++ transpiler cannot lower multi-dimensional array access
-(``a[i, j, k]``), the memlet subset encodes all symbolic dimensions as
-exact indices and leaves the dynamic dimensions as full ranges, so the
-tasklet receives a scalar (0 dynamic dims) or a 1D array (1 dynamic dim).
+are indexed on the input edge to the tasklet (memlet subset), so the
+tasklet receives a scalar connector.  When some dimension is *dynamic*,
+the full array is passed to the tasklet and the multi-dimensional access
+is emitted on the tasklet-connector name (see ``_access_name``): DaCe's
+Python-to-C++ transpiler linearizes connector-based multi-dimensional
+access using the container strides, while a multi-dimensional subscript
+on a raw container name would not be translatable.
 """
 
 from __future__ import annotations
@@ -127,6 +128,12 @@ class CodegenContext:
             neighbor.  Such indices classify as dynamic in ``deref`` (they
             read the connectivity table, which is not available on the
             memlet edge).
+        scalar_field_dims: For each field container name, the dimensions
+            whose container extent is statically one (scalar dimensions).
+            Such dimensions are squeezed out of tasklet subscripts: DaCe
+            requires the subscript dimensionality of a tasklet connector
+            to match the number of non-scalar (non-singleton) dimensions
+            of the memlet subset (``ConnectorDimensionalityValidator``).
         _temp_counter: Counter for generating unique temporary names.
     """
 
@@ -143,6 +150,9 @@ class CodegenContext:
     used_connectivities: set[str] = dataclasses.field(default_factory=set)
     string_args: dict[str, str] = dataclasses.field(default_factory=dict)
     field_inputs: dict[str, tuple[str, str]] = dataclasses.field(default_factory=dict)
+    scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] = dataclasses.field(
+        default_factory=dict
+    )
     is_inner_expr: bool = False
     # Shared monotonic counter; an iterator (rather than an ``int``) so that
     # ``child()`` contexts (created via ``dataclasses.replace``, which would
@@ -847,13 +857,16 @@ class StreePythonCodegen(eve.NodeVisitor):
         # This avoids pointer-indexing issues when the inner deref
         # result is used as a dynamic index.
         if ctx.is_inner_expr:
+            squeezed = ctx.scalar_field_dims.get(data.name, frozenset())
             parts = []
             for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
                 if dim not in indices:
                     raise ValueError(f"No map variable for dimension {dim}.")
+                if dim in squeezed:
+                    continue
                 index_expr, _ = indices[dim]
                 parts.append(f"({index_expr} - ({origin}))")
-            return f"{data.name}[{', '.join(parts)}]"
+            return f"{self._access_name(data, ctx)}[{', '.join(parts)}]"
 
         # Fields with a local dimension still need the full array inside
         # the tasklet because the local dimension is indexed by a loop
@@ -861,13 +874,16 @@ class StreePythonCodegen(eve.NodeVisitor):
         # where ``get_memlet_subset`` only handles ``SymbolExpr`` indices.
         # TODO(edopao): handle local dimensions via input edge too.
         if isinstance(data.gt_type.dtype, ts.ListType):
+            squeezed = ctx.scalar_field_dims.get(data.name, frozenset())
             parts = []
             for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
                 if dim not in indices:
                     raise ValueError(f"No map variable for dimension {dim}.")
+                if dim in squeezed:
+                    continue
                 index_expr, _ = indices[dim]
                 parts.append(f"({index_expr} - ({origin}))")
-            return f"{data.name}[{', '.join(parts)}]"
+            return f"{self._access_name(data, ctx)}[{', '.join(parts)}]"
 
         # Build per-dimension index expressions for the field's dimensions
         # and classify each as symbolic (compile-time known) or dynamic
@@ -892,12 +908,23 @@ class StreePythonCodegen(eve.NodeVisitor):
             return connector
 
         # Some indices are dynamic.  As in the SDFG lowering
-        # (``_visit_deref`` in ``gtir_to_sdfg_iterator.py``), the full
-        # array is passed to the tasklet and the dynamic indices are
-        # computed inline.  DaCe's Python-to-C++ transpiler can lower
-        # 1D and 2D array access; higher-dimensional access is a known
-        # limitation (TODO).
-        return f"{data.name}[{', '.join(index_expr for _, index_expr, _ in dim_info)}]"
+        #  (``_visit_deref`` in ``gtir_to_sdfg_iterator.py``), the full
+        #  array is passed to the tasklet and the dynamic indices are
+        #  computed inline.  The multi-dimensional access is emitted on the
+        #  connector-safe name (``_access_name``): ``add_tasklet`` renames
+        #  the field operator argument to the (prefixed) tasklet connector,
+        #  which makes DaCe's Python-to-C++ transpiler linearize the
+        #  access correctly using the array strides.  Referencing the raw
+        #  container name instead would either leave a dangling,
+        #  non-transpilable multi-dimensional subscript on a global array
+        #  pointer or, when the argument name equals the container name,
+        #  produce a subscript whose dimensionality does not match the
+        #  full-array memlet on the connector.  Scalar (size-one) container
+        #  dimensions are squeezed out of the subscript, since DaCe requires
+        #  the subscript dimensionality of the connector to match the number
+        #  of non-scalar dimensions of the memlet subset.
+        squeezed = ctx.scalar_field_dims.get(data.name, frozenset())
+        return f"{self._access_name(data, ctx)}[{', '.join(index_expr for dim, index_expr, _ in dim_info if dim not in squeezed)}]"
 
     def _single_neighbor_access(
         self, node: gtir.FunCall, neighbor_var: str, ctx: CodegenContext
@@ -951,8 +978,11 @@ class StreePythonCodegen(eve.NodeVisitor):
         neighbor_index = connectivity_table_index(
             offset_type.max_neighbors, conn_name, source_index, neighbor_var
         )
+        squeezed = ctx.scalar_field_dims.get(data.name, frozenset())
         index_parts = []
         for dim, origin in zip(data.gt_type.dims, data.origin, strict=True):
+            if dim in squeezed:
+                continue
             if dim == offset_type.codomain:
                 index_parts.append(f"({neighbor_index} - ({origin}))")
             else:
@@ -1164,6 +1194,11 @@ class StreePythonCodegen(eve.NodeVisitor):
         else:
             raise NotImplementedError(f"Unexpected reduce operation: {op_expr}")
         init_val = self.visit(node.fun.args[1], ctx=ctx)
+        # Cast the init value to the reduction dtype: a plain Python literal
+        # (e.g. '0') would be transpiled by DaCe to a C++ 'int' accumulator,
+        # truncating the floating-point element values at every update step.
+        assert isinstance(node.type, ts.ScalarType)
+        init_val = format_builtin(node.type.kind.name.lower(), init_val)
 
         result_var = ctx.fresh_temp()
         ctx.pre_statements.append(f"{result_var} = {init_val}")
@@ -1732,6 +1767,7 @@ def generate_tasklet_code(
     string_args: dict[str, str] | None = None,
     temp_counter: itertools.count[int] | None = None,
     root_symbols: frozenset[str] = frozenset(),
+    scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] | None = None,
 ) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]]]:
     """Generate the Python code for a tasklet body.
 
@@ -1771,6 +1807,7 @@ def generate_tasklet_code(
         map_indices=map_indices,
         offset_provider_type=offset_provider_type,
         root_symbols=root_symbols,
+        scalar_field_dims=scalar_field_dims or {},
     )
     if temp_counter is not None:
         ctx = dataclasses.replace(ctx, _temp_counter=temp_counter)
@@ -1787,6 +1824,7 @@ def generate_list_tasklet_code(
     args_map: dict[str, gtir.Node] | None = None,
     local_index: str,
     root_symbols: frozenset[str] = frozenset(),
+    scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] | None = None,
 ) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]]]:
     """Generate the tasklet code for a single element of a list expression.
 
@@ -1824,6 +1862,7 @@ def generate_list_tasklet_code(
         map_indices=map_indices,
         offset_provider_type=offset_provider_type,
         root_symbols=root_symbols,
+        scalar_field_dims=scalar_field_dims or {},
     )
     element, _local_size = StreePythonCodegen()._single_map_element(expr, local_index, ctx)
     # Per-element statements (e.g. a nested reduce loop) precede the

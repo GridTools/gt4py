@@ -382,47 +382,55 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        if self.disable_itir_transforms:
-            pass
-        elif self.apply_common_transforms:
-            if not self.use_stree_lowering:
-                raise NotImplementedError(
-                    "The ITIR transform pipeline is only supported with the STree lowering."
-                )
+        if not self.disable_itir_transforms:
             symbolic_domain_sizes = _process_symbolic_domains_option(
                 ir, offset_provider, None, self.use_max_domain_range_on_unstructured_shift
             )
-            ir = itir_transforms.apply_common_transforms(
-                ir,
-                offset_provider=offset_provider,
-                extract_temporaries=False,
-                unroll_reduce=False,
-                common_subexpression_elimination=True,
-                force_inline_lambda_args=False,
-                transform_concat_where_to_as_fieldop=False,
-                symbolic_domain_sizes=symbolic_domain_sizes,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-            )
-            # The inlining passes in `apply_common_transforms` (`InlineLambdas`,
-            # `ConstantFolding`, `CollapseTuple`, `FuseAsFieldOp`, ...) run after domain
-            # inference and rebuild IR nodes without preserving the domain annexes
-            # (`node.annex.domain`) that the schedule-tree lowering relies on (e.g. in
-            # `translate_concat_where`, `translate_if`, `translate_index`). Re-run domain
-            # inference to restore them; existing annexes are kept and nodes that cannot be
-            # re-inferred are simply left without an annex rather than raising an error.
-            ir = infer_domain.infer_program(
-                ir,
-                offset_provider=offset_provider,
-                symbolic_domain_sizes=symbolic_domain_sizes,
-                allow_uninferred=True,
-                keep_existing_domains=True,
-            )
-        else:
-            ir = itir_transforms.apply_fieldview_transforms(
-                ir,
-                offset_provider=offset_provider,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-            )
+            if self.apply_common_transforms:
+                if not self.use_stree_lowering:
+                    raise NotImplementedError(
+                        "The ITIR transform pipeline is only supported with the STree lowering."
+                    )
+                ir = itir_transforms.apply_common_transforms(
+                    ir,
+                    offset_provider=offset_provider,
+                    extract_temporaries=False,
+                    unroll_reduce=False,
+                    common_subexpression_elimination=True,
+                    force_inline_lambda_args=False,
+                    transform_concat_where_to_as_fieldop=False,
+                    symbolic_domain_sizes=symbolic_domain_sizes,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                )
+            else:
+                ir = itir_transforms.apply_fieldview_transforms(
+                    ir,
+                    offset_provider=offset_provider,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                )
+            if self.use_stree_lowering:
+                # Inline scalar let-arguments that are pure symbolic expressions of
+                # scalar program parameters (e.g. `n_lev - 1`).  The schedule-tree
+                # lowering cannot bind such lambda-local scalar names through
+                # nested-SDFG symbol mapping, so they would otherwise dangle in
+                # domain expressions and scalar expressions.  Must happen before
+                # the domain-inference re-run below since it renders nodes with
+                # stale domain annexes.
+                ir = gtx_dace_inline_symbolic_scalar_lets(ir)
+                # The inlining passes in `apply_common_transforms` (`InlineLambdas`,
+                # `ConstantFolding`, `CollapseTuple`, `FuseAsFieldOp`, ...) run after domain
+                # inference and rebuild IR nodes without preserving the domain annexes
+                # (`node.annex.domain`) that the schedule-tree lowering relies on (e.g. in
+                # `translate_concat_where`, `translate_if`, `translate_index`). Re-run domain
+                # inference to restore them; existing annexes are kept and nodes that cannot be
+                # re-inferred are simply left without an annex rather than raising an error.
+                ir = infer_domain.infer_program(
+                    ir,
+                    offset_provider=offset_provider,
+                    symbolic_domain_sizes=symbolic_domain_sizes,
+                    allow_uninferred=True,
+                    keep_existing_domains=True,
+                )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 

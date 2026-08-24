@@ -8,10 +8,12 @@
 
 
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree import (
+    inline_symbolic_scalar_let_args,
     lower_program_to_stree,
 )
 
 
 __all__ = [
+    "inline_symbolic_scalar_let_args",
     "lower_program_to_stree",
 ]
