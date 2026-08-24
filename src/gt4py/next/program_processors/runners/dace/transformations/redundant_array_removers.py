@@ -557,6 +557,10 @@ class DoubleWriteRemover(dace_transformation.SingleStateTransformation):
             for inner_node in scope_children[scope_owner]:
                 if isinstance(inner_node, dace_nodes.EntryNode):
                     scopes_to_scan.append(inner_node)
+                elif isinstance(inner_node, dace_nodes.ExitNode):
+                    # The in-edges of an ExitNode are the data written by the
+                    #  scope, not reads.
+                    continue
                 for inner_read_edge in graph.in_edges(inner_node):
                     if not inner_read_edge.data.is_empty():
                         data_read_in_scope.add(inner_read_edge.data.data)
