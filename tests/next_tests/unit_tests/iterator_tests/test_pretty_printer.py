@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator import ir, builtins
+import pytest
+
+from gt4py.next.iterator import builtins, ir, pretty_printer
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.type_system import type_specifications as ts
@@ -317,9 +319,54 @@ def test_temporary():
     testee = ir.Temporary(
         id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
-    expected = "t = temporary(domain=domain, dtype=float64);"
+    expected = "t = temporary(domain=domain, dtype=f64);"
     actual = pformat(testee)
     assert actual == expected
+
+
+def test_scalar_type_names_cover_the_type_builtins():
+    assert set(pretty_printer.SCALAR_TYPE_NAMES) == {
+        getattr(ts.ScalarKind, name.upper()) for name in builtins.TYPE_BUILTINS
+    }
+    assert ts.ScalarKind.STRING not in pretty_printer.SCALAR_TYPE_NAMES
+
+
+def test_format_type():
+    def scalar(kind, shape=None):
+        return pretty_printer.format_type(ts.ScalarType(kind=kind, shape=shape))
+
+    assert scalar(ts.ScalarKind.BOOL) == "i1"
+    assert scalar(ts.ScalarKind.INT16) == "i16"
+    assert scalar(ts.ScalarKind.UINT8) == "u8"
+    assert scalar(ts.ScalarKind.FLOAT32) == "f32"
+    assert scalar(ts.ScalarKind.FLOAT64, [3, 4]) == "f64[3, 4]"
+    assert (
+        pretty_printer.format_type(
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.ScalarType(kind=ts.ScalarKind.INT16),
+                ]
+            )
+        )
+        == "tuple[i1, i16]"
+    )
+    with pytest.raises(NotImplementedError):
+        scalar(ts.ScalarKind.STRING)
+
+
+def test_temporary_compound_dtype():
+    def temp(dtype):
+        return pformat(ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=dtype))
+
+    assert (
+        temp(ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.FLOAT32)]))
+        == "t = temporary(domain=domain, dtype=tuple[f32]);"
+    )
+    assert (
+        temp(ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]))
+        == "t = temporary(domain=domain, dtype=f64[3]);"
+    )
 
 
 def test_set_at():
@@ -356,5 +403,5 @@ def test_program():
         ],
     )
     actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=f64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected

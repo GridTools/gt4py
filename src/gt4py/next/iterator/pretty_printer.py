@@ -14,11 +14,13 @@ Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 # TODO(tehrengruber): add support for printing the types of itir.Sym, itir.Literal nodes
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+import types as _types
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
+from gt4py.next.type_system import type_specifications as ts
 
 
 # replacements for builtin binary operations
@@ -61,6 +63,45 @@ PRECEDENCE: Final = {
     "tuple_get": 8,
     "__call__": 8,
 }
+
+
+#: Surface spelling of the scalar types, LLVM/MLIR style.  Sole definition of the
+#: ITIR type vocabulary: `pretty_parser` inverts this table instead of carrying its
+#: own, so respelling a type means editing here and nowhere else.  Deliberately not
+#: `ts.ScalarType.__str__`, which serves the frontend printer and error messages
+#: and keeps the `ScalarKind` names.  Covers exactly `builtins.TYPE_BUILTINS`;
+#: `ScalarKind.STRING` has no LLVM spelling and is excluded, so printing or parsing
+#: one is an error.
+SCALAR_TYPE_NAMES: Final[Mapping[ts.ScalarKind, str]] = _types.MappingProxyType(
+    {
+        ts.ScalarKind.BOOL: "i1",
+        ts.ScalarKind.INT8: "i8",
+        ts.ScalarKind.UINT8: "u8",
+        ts.ScalarKind.INT16: "i16",
+        ts.ScalarKind.UINT16: "u16",
+        ts.ScalarKind.INT32: "i32",
+        ts.ScalarKind.UINT32: "u32",
+        ts.ScalarKind.INT64: "i64",
+        ts.ScalarKind.UINT64: "u64",
+        ts.ScalarKind.FLOAT32: "f32",
+        ts.ScalarKind.FLOAT64: "f64",
+    }
+)
+
+SCALAR_TYPE_KINDS: Final[Mapping[str, ts.ScalarKind]] = _types.MappingProxyType(
+    {name: kind for kind, name in SCALAR_TYPE_NAMES.items()}
+)
+
+
+def format_type(type_: ts.TypeSpec) -> str:
+    if isinstance(type_, ts.TupleType):
+        return f"tuple[{', '.join(format_type(t) for t in type_.types)}]"
+    if isinstance(type_, ts.ScalarType) and type_.kind in SCALAR_TYPE_NAMES:
+        name = SCALAR_TYPE_NAMES[type_.kind]
+        if type_.shape is None:
+            return name
+        return f"{name}[{', '.join(str(s) for s in type_.shape)}]"
+    raise NotImplementedError(f"No pretty-printed form for type '{type_}'.")
 
 
 DEFAULT_INDENT: Final = 2
@@ -268,7 +309,7 @@ class PrettyPrinter(NodeTranslator):
         if node.domain is not None:
             args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
         if node.dtype is not None:
-            args.append(self._hmerge(["dtype="], [str(node.dtype)]))
+            args.append(self._hmerge(["dtype="], [format_type(node.dtype)]))
         hargs = self._hmerge(*self._hinterleave(args, ", "))
         vargs = self._vmerge(*self._hinterleave(args, ","))
         oargs = self._optimum(hargs, vargs)

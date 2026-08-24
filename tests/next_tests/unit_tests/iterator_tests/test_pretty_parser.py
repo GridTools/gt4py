@@ -256,11 +256,34 @@ def test_function_definition():
 
 
 def test_temporary():
-    testee = "t = temporary(domain=domain, dtype=float64);"
+    testee = "t = temporary(domain=domain, dtype=f64);"
     float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=float64_type)
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_temporary_compound_dtype():
+    assert pparse("t = temporary(domain=domain, dtype=tuple[i1, i16]);") == ir.Temporary(
+        id="t",
+        domain=ir.SymRef(id="domain"),
+        dtype=ts.TupleType(
+            types=[
+                ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                ts.ScalarType(kind=ts.ScalarKind.INT16),
+            ]
+        ),
+    )
+    assert pparse("t = temporary(domain=domain, dtype=f64[3]);") == ir.Temporary(
+        id="t",
+        domain=ir.SymRef(id="domain"),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]),
+    )
+
+
+def test_scalar_kind_names_are_not_accepted():
+    with pytest.raises(ValueError, match="float64"):
+        pparse("t = temporary(domain=domain, dtype=float64);")
 
 
 def test_set_at():
@@ -306,7 +329,7 @@ def test_if_stmt():
 
 
 def test_program():
-    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=f64);\n  y @ cartesian_domain() ← x;\n}"
     expected = ir.Program(
         id="f",
         function_definitions=[
@@ -333,5 +356,5 @@ def test_program():
 
 
 def test_transformer_error_is_not_wrapped():
-    with pytest.raises(NotImplementedError, match="nonesuch"):
+    with pytest.raises(ValueError, match="nonesuch"):
         pparse("t = temporary(domain=cartesian_domain(), dtype=nonesuch);")

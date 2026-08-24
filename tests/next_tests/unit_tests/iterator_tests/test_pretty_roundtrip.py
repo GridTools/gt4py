@@ -227,6 +227,27 @@ ROUNDTRIP_CASES = [
         ),
         id="program",
     ),
+    pytest.param(
+        ir.Temporary(
+            id="t",
+            domain=ir.SymRef(id="domain"),
+            dtype=ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.ScalarType(kind=ts.ScalarKind.INT16),
+                ]
+            ),
+        ),
+        id="temporary_tuple_dtype",
+    ),
+    pytest.param(
+        ir.Temporary(
+            id="t",
+            domain=ir.SymRef(id="domain"),
+            dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]),
+        ),
+        id="temporary_shaped_dtype",
+    ),
     pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive"),
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(

@@ -18,6 +18,7 @@ from lark import (
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -94,10 +95,14 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
+    ?type_expr: TYPE_LITERAL
+        | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type
+        | "tuple" "[" type_expr ("," type_expr)* "]" -> tuple_type
+
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
     cartesian_offset: AXIS_LITERAL "→" AXIS_LITERAL
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" type_expr ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
     program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( stmt )+ "}"
@@ -124,9 +129,17 @@ class ToIrTransformer(lark_visitors.Transformer):
         return im.literal(value.value, "float64")
 
     def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
-        if hasattr(ts.ScalarKind, value.upper()):
-            return ts.ScalarType(kind=getattr(ts.ScalarKind, value.upper()))
-        raise NotImplementedError(f"Type {value} not supported.")
+        if (kind := SCALAR_TYPE_KINDS.get(value.value)) is not None:
+            return ts.ScalarType(kind=kind)
+        raise ValueError(
+            f"Invalid type '{value}'; expected one of {', '.join(sorted(SCALAR_TYPE_KINDS))}."
+        )
+
+    def shaped_scalar_type(self, type_: ts.ScalarType, *shape: ir.Literal) -> ts.ScalarType:
+        return ts.ScalarType(kind=type_.kind, shape=[int(s.value) for s in shape])
+
+    def tuple_type(self, *types: ts.DataType) -> ts.TupleType:
+        return ts.TupleType(types=list(types))
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
