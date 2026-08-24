@@ -390,10 +390,14 @@ def _build_amd_heuristic_gpu_map(
 ) -> tuple[dace.SDFG, dace_nodes.MapEntry]:
     """Builds a 2D GPU map suitable for exercising the AMD block-size heuristic.
 
-    The map iterates `i0` (vertical, size `n_vert`) x `i1` (horizontal, size
-    `n_horiz`). It reads one input that does not depend on `i0` (`indep[i1]`)
-    and `num_dependent_inputs` inputs that do (`dep_k[i0, i1]`), each
-    `float64` (8 bytes), and writes to `out[i0, i1]`.
+    The map iterates `i_gtx_vertical` (vertical, size `n_vert`) x
+    `i_gtx_horizontal` (horizontal, size `n_horiz`) -- named to match GT4Py's
+    `i_<name>_gtx_<kind>` Map-parameter convention, which the heuristic uses
+    to identify the vertical/horizontal axes by name. It reads one input
+    that does not depend on the vertical variable
+    (`indep[i_gtx_horizontal]`) and `num_dependent_inputs` inputs that do
+    (`dep_k[i_gtx_vertical, i_gtx_horizontal]`), each `float64` (8 bytes),
+    and writes to `out[i_gtx_vertical, i_gtx_horizontal]`.
     """
     sdfg = dace.SDFG(util.unique_name("amd_heuristic_gpu_sdfg"))
     state = sdfg.add_state(is_start_block=True)
@@ -406,20 +410,20 @@ def _build_amd_heuristic_gpu_map(
 
     sdfg.add_array("indep", shape=(n_horiz,), dtype=dace.float64, storage=storage)
     sdfg.add_array("out", shape=(n_vert, n_horiz), dtype=dace.float64, storage=storage)
-    inputs = {"__in_indep": dace.Memlet("indep[i1]")}
+    inputs = {"__in_indep": dace.Memlet("indep[i_gtx_horizontal]")}
     code_terms = ["__in_indep"]
     for k in range(num_dependent_inputs):
         name = f"dep_{k}"
         sdfg.add_array(name, shape=(n_vert, n_horiz), dtype=dace.float64, storage=storage)
-        inputs[f"__in_{name}"] = dace.Memlet(f"{name}[i0, i1]")
+        inputs[f"__in_{name}"] = dace.Memlet(f"{name}[i_gtx_vertical, i_gtx_horizontal]")
         code_terms.append(f"__in_{name}")
 
     _, me, _ = state.add_mapped_tasklet(
         "amd_heuristic_tasklet",
-        map_ranges={"i0": f"0:{n_vert}", "i1": f"0:{n_horiz}"},
+        map_ranges={"i_gtx_vertical": f"0:{n_vert}", "i_gtx_horizontal": f"0:{n_horiz}"},
         inputs=inputs,
         code=f"__out = {' + '.join(code_terms)}",
-        outputs={"__out": dace.Memlet("out[i0, i1]")},
+        outputs={"__out": dace.Memlet("out[i_gtx_vertical, i_gtx_horizontal]")},
         external_edges=True,
         schedule=dace.dtypes.ScheduleType.GPU_Device,
     )

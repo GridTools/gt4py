@@ -193,9 +193,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
 
         # If the AMD heuristic is enabled and applies to this (genuinely 2D,
         # non degenerate) Map, it decides both which axis to block and the
-        # blocking factor (vertical is the first Map parameter, horizontal
-        # the second -- see `amd_block_heuristic.py`), taking priority over
-        # `blocking_parameters`/`blocking_size`.
+        # blocking factor -- the vertical/horizontal parameter is identified
+        # by name (see `find_axis_param` in `amd_block_heuristic.py`), taking
+        # priority over `blocking_parameters`/`blocking_size`.
         amd_config = (
             gtx_amd_heuristic.compute_amd_block_config(outer_entry, graph, sdfg)
             if self._amd_heuristic
@@ -203,12 +203,26 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         )
 
         if amd_config is not None:
-            blocking_factor = amd_config.vlb if amd_config.vlb > 0 else amd_config.hlb
-            block_var_idx = 0 if amd_config.vlb > 0 else (1 if amd_config.hlb > 0 else None)
-            if block_var_idx is None or blocking_factor == 0:
+            if amd_config.vlb > 0:
+                blocking_factor = amd_config.vlb
+                matched_blocking_var: str | None = gtx_amd_heuristic.find_axis_param(
+                    map_params, "vertical"
+                )
+            elif amd_config.hlb > 0:
+                blocking_factor = amd_config.hlb
+                matched_blocking_var = gtx_amd_heuristic.find_axis_param(map_params, "horizontal")
+            else:
                 # The heuristic recommends not blocking any axis.
                 return False
-            matched_blocking_var: str | None = map_params[block_var_idx]
+            if matched_blocking_var is None:
+                return False
+            block_var_idx = map_params.index(matched_blocking_var)
+            already_blocked = gtx_amd_heuristic.find_loop_blocking_signature(outer_entry, graph)
+            if already_blocked is not None and already_blocked[0] == block_var_idx:
+                # This axis was already blocked (`compute_amd_block_config` recovered
+                # its original extent, so it will keep recommending the same thing);
+                # nothing more to do here.
+                return False
             self.blocking_size = blocking_factor
         else:
             if not self.blocking_parameters:

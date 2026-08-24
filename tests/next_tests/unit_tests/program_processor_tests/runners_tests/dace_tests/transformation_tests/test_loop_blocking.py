@@ -1895,12 +1895,16 @@ def _get_amd_heuristic_sdfg(
     n_vert: int | str,
     n_horiz: int | str,
 ) -> tuple[dace.SDFG, dace_nodes.MapEntry]:
-    """Builds a 2D map (`i0` vertical x `i1` horizontal) suitable for exercising
-    the AMD loop-blocking heuristic.
+    """Builds a 2D map (`i_gtx_vertical` vertical x `i_gtx_horizontal`
+    horizontal) suitable for exercising the AMD loop-blocking heuristic --
+    named to match GT4Py's `i_<name>_gtx_<kind>` Map-parameter convention,
+    which the heuristic uses to identify the vertical/horizontal axes by
+    name.
 
-    Contains one Tasklet that is independent of `i0` (reads only `indep[i1]`)
-    and one dependent Tasklet (reads the independent Tasklet's output and
-    `dep[i0, i1]`), writing to `out[i0, i1]`.
+    Contains one Tasklet that is independent of the vertical variable (reads
+    only `indep[i_gtx_horizontal]`) and one dependent Tasklet (reads the
+    independent Tasklet's output and `dep[i_gtx_vertical, i_gtx_horizontal]`),
+    writing to `out[i_gtx_vertical, i_gtx_horizontal]`.
     """
     sdfg = dace.SDFG(util.unique_name("amd_heuristic_loop_blocking_sdfg"))
     state = sdfg.add_state("state", is_start_block=True)
@@ -1929,14 +1933,20 @@ def _get_amd_heuristic_sdfg(
         code="__out0 = __in0 + __in1",
     )
 
-    mentry, mexit = state.add_map("map", ndrange={"i0": f"0:{n_vert}", "i1": f"0:{n_horiz}"})
+    mentry, mexit = state.add_map(
+        "map", ndrange={"i_gtx_vertical": f"0:{n_vert}", "i_gtx_horizontal": f"0:{n_horiz}"}
+    )
 
-    state.add_edge(mentry, "OUT_indep", task1, "__in0", dace.Memlet("indep[i1]"))
+    state.add_edge(mentry, "OUT_indep", task1, "__in0", dace.Memlet("indep[i_gtx_horizontal]"))
     state.add_edge(task1, "__out0", tmp, None, dace.Memlet("tmp[0]"))
 
     state.add_edge(tmp, None, task2, "__in0", dace.Memlet("tmp[0]"))
-    state.add_edge(mentry, "OUT_dep", task2, "__in1", dace.Memlet("dep[i0, i1]"))
-    state.add_edge(task2, "__out0", mexit, "IN_out", dace.Memlet("out[i0, i1]"))
+    state.add_edge(
+        mentry, "OUT_dep", task2, "__in1", dace.Memlet("dep[i_gtx_vertical, i_gtx_horizontal]")
+    )
+    state.add_edge(
+        task2, "__out0", mexit, "IN_out", dace.Memlet("out[i_gtx_vertical, i_gtx_horizontal]")
+    )
 
     state.add_edge(indep, None, mentry, "IN_indep", sdfg.make_array_memlet("indep"))
     state.add_edge(dep, None, mentry, "IN_dep", sdfg.make_array_memlet("dep"))
@@ -1972,7 +1982,9 @@ def test_amd_heuristic_loop_blocking_applies_recommended_factor():
     state = sdfg.states()[0]
 
     count = sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True),
+        gtx_transformations.LoopBlocking(
+            blocking_parameters=["i_gtx_vertical"], amd_heuristic=True
+        ),
         validate=True,
         validate_all=True,
     )
@@ -1989,7 +2001,7 @@ def test_amd_heuristic_loop_blocking_priority_over_explicit_blocking_size():
 
     count = sdfg.apply_transformations_once_everywhere(
         gtx_transformations.LoopBlocking(
-            blocking_parameters=["i0"], blocking_size=99, amd_heuristic=True
+            blocking_parameters=["i_gtx_vertical"], blocking_size=99, amd_heuristic=True
         ),
         validate=True,
         validate_all=True,
@@ -2018,7 +2030,7 @@ def test_amd_heuristic_loop_blocking_without_blocking_parameters_or_blocking_siz
     assert inner_map.map.unroll_factor == gtx_amd_block_heuristic.VBLK.vlb
     # `VBLK.vlb > 0`, so the heuristic picked the vertical axis (`i0`, the
     # first Map parameter) as the blocked dimension.
-    assert inner_map.map.params == ["i0"]
+    assert inner_map.map.params == ["i_gtx_vertical"]
 
 
 def test_amd_heuristic_loop_blocking_without_any_config_and_symbolic_range_skips_gracefully():
@@ -2048,7 +2060,9 @@ def test_amd_heuristic_loop_blocking_rejects_zero_recommended_factor():
     assert gtx_amd_block_heuristic.HBLK.vlb == 0
 
     count = sdfg.apply_transformations_once_everywhere(
-        gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True),
+        gtx_transformations.LoopBlocking(
+            blocking_parameters=["i_gtx_vertical"], amd_heuristic=True
+        ),
         validate=True,
         validate_all=True,
     )
@@ -2067,7 +2081,7 @@ def test_amd_heuristic_loop_blocking_symbolic_range_falls_back_to_explicit_block
 
     count = sdfg.apply_transformations_once_everywhere(
         gtx_transformations.LoopBlocking(
-            blocking_parameters=["i0"], blocking_size=4, amd_heuristic=True
+            blocking_parameters=["i_gtx_vertical"], blocking_size=4, amd_heuristic=True
         ),
         validate=True,
         validate_all=True,
@@ -2090,7 +2104,7 @@ def test_loop_blocking_symbolic_range_with_amd_heuristic_disabled():
 
     count = sdfg.apply_transformations_once_everywhere(
         gtx_transformations.LoopBlocking(
-            blocking_parameters=["i0"], blocking_size=4, amd_heuristic=False
+            blocking_parameters=["i_gtx_vertical"], blocking_size=4, amd_heuristic=False
         ),
         validate=True,
         validate_all=True,
@@ -2108,6 +2122,8 @@ def test_amd_heuristic_loop_blocking_symbolic_range_without_fallback_raises():
     """
     sdfg, mentry = _get_amd_heuristic_sdfg(n_vert="N", n_horiz="M")
 
-    xform = gtx_transformations.LoopBlocking(blocking_parameters=["i0"], amd_heuristic=True)
+    xform = gtx_transformations.LoopBlocking(
+        blocking_parameters=["i_gtx_vertical"], amd_heuristic=True
+    )
     with pytest.raises(ValueError, match="The blocking size was not specified."):
         sdfg.apply_transformations_once_everywhere(xform, validate=True, validate_all=True)
