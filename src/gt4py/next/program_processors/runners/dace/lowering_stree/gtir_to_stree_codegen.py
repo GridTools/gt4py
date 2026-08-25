@@ -44,6 +44,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as itir_misc,
 )
+from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import DataRef
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
@@ -380,8 +381,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         # field operator: `deref(↑(λ(a_) → reduce(...))(a))` evaluates the
         # lifted lambda body at the current location.
         if cpm.is_applied_lift(node):
-            lifted_lambda = node.fun.args[0]
-            assert isinstance(lifted_lambda, gtir.Lambda)
+            lifted_lambda = self._resolve_lifted_lambda(node, ctx)
             new_bindings = {
                 p.id: arg for p, arg in zip(lifted_lambda.params, node.args, strict=True)
             }
@@ -566,7 +566,44 @@ class StreePythonCodegen(eve.NodeVisitor):
             else:
                 break
 
+        # Fall back to root-level field containers: a field captured by
+        # reference (a program argument used inside a field operator without
+        # being an explicit lambda parameter, as e.g. produced by the
+        # inlining passes of `apply_common_transforms`) has no entry in
+        # ``data_args``, but its container is declared at the SDFG root;
+        # fabricate the ``DataRef`` for it (mirroring ``make_field``).
+        # The symbol can be iterator-typed (lambda parameter); reconstruct
+        # the field type from the iterator's domain and element type.
+        if symbol in ctx.root_symbols:
+            field_type: ts.FieldType | None = None
+            if isinstance(node.type, ts.FieldType):
+                field_type = node.type
+            elif isinstance(node.type, itir_ts.IteratorType) and node.type.position_dims == "unknown":
+                field_type = ts.FieldType(
+                    dims=node.type.defined_dims, dtype=node.type.element_type
+                )
+            if field_type is not None and isinstance(field_type.dtype, ts.ScalarType):
+                if any(dim.kind == gtx_common.DimensionKind.LOCAL for dim in field_type.dims):
+                    return None
+                origin = tuple(
+                    gtx_dace_args.range_start_symbol(symbol, dim) for dim in field_type.dims
+                )
+                return DataRef(symbol, field_type, origin)
+
         return None
+
+    def _resolve_lifted_lambda(self, applied_lift: gtir.FunCall, ctx: CodegenContext) -> gtir.Lambda:
+        """Return the lambda of an applied lift ``(↑f)(args...)``.
+
+        ``apply_common_transforms`` (common subexpression elimination) may
+        extract the lifted stencil into a let-bound symbol, so the argument
+        of ``lift`` can arrive as a ``SymRef``; resolve it through
+        ``args_map`` (like ``_resolve_args_map_symbol`` for call arguments).
+        """
+        assert isinstance(applied_lift.fun, gtir.FunCall)
+        lifted_lambda = self._resolve_args_map_symbol(applied_lift.fun.args[0], ctx)
+        assert isinstance(lifted_lambda, gtir.Lambda)
+        return lifted_lambda
 
     def _resolve_args_map_symbol(self, arg: gtir.Expr, ctx: CodegenContext) -> gtir.Expr:
         """Resolve a symbol bound by an (inlined) let-lambda to its expression.
@@ -1062,9 +1099,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         )
         neighbor_position = f"{conn_name}[{source_index}, {neighbor_var}]"
 
-        assert isinstance(source.fun, gtir.FunCall)
-        lifted_lambda = source.fun.args[0]
-        assert isinstance(lifted_lambda, gtir.Lambda)
+        lifted_lambda = self._resolve_lifted_lambda(source, ctx)
         new_bindings = {
             param.id: arg for param, arg in zip(lifted_lambda.params, source.args, strict=True)
         }
