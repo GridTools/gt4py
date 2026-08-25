@@ -140,8 +140,9 @@ class ToIrTransformer(lark_visitors.Transformer):
         return value.value
 
     def INFINITY_LITERAL(self, value: lark_lexer.Token) -> ir.InfinityLiteral:
-        if value.value.startswith("-"):
+        if value.value == "-∞":
             return ir.InfinityLiteral.NEGATIVE
+        assert value.value == "∞"
         return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
