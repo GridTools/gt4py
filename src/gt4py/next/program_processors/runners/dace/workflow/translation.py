@@ -30,6 +30,7 @@ from gt4py.next.program_processors.runners.dace import (
 from gt4py.next.program_processors.runners.dace.lowering_stree import (
     inline_symbolic_scalar_let_args as gtx_dace_inline_symbolic_scalar_lets,
     lower_program_to_stree as gtx_dace_lower_stree,
+    scan_carry_scalarization as gtx_dace_scan_carry_scalarization,
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
@@ -441,6 +442,9 @@ class DaCeTranslator(
                 validate=True,
                 skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
             )
+            scalarized = gtx_dace_scan_carry_scalarization.scalarize_scan_carries(sdfg)
+            if scalarized:
+                sdfg.validate()
         else:
             sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
