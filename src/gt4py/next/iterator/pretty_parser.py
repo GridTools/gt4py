@@ -8,7 +8,13 @@
 
 from typing import Union
 
-from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
+from lark import (
+    exceptions as lark_exceptions,
+    lark,
+    lexer as lark_lexer,
+    tree as lark_tree,
+    visitors as lark_visitors,
+)
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -296,4 +302,7 @@ class ToIrTransformer(lark_visitors.Transformer):
 def pparse(pretty_str: str) -> ir.Node:
     parser = lark.Lark(GRAMMAR, parser="earley")
     tree = parser.parse(pretty_str)
-    return ToIrTransformer(visit_tokens=True).transform(tree)
+    try:
+        return ToIrTransformer(visit_tokens=True).transform(tree)
+    except lark_exceptions.VisitError as e:
+        raise e.orig_exc from None

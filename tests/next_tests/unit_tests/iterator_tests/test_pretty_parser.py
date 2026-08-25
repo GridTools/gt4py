@@ -330,3 +330,8 @@ def test_program():
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_transformer_error_is_not_wrapped():
+    with pytest.raises(NotImplementedError, match="nonesuch"):
+        pparse("t = temporary(domain=cartesian_domain(), dtype=nonesuch);")
