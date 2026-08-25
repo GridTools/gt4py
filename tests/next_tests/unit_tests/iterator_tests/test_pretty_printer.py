@@ -14,13 +14,6 @@ from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-def test_none_literal():
-    testee = ir.NoneLiteral()
-    expected = "None"
-    actual = pformat(testee)
-    assert actual == expected
-
-
 def test_hmerge():
     a = ["This is", "block ‘a’. "]
     b = ["This is", "block ‘b’. "]

@@ -128,11 +128,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
         return ir.Sym(id=value.value)
 
-    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal, ir.NoneLiteral]:
+    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
             return _bare_literal(value.value)
-        if value.value == "None":
-            return ir.NoneLiteral()
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
@@ -174,8 +172,9 @@ class ToIrTransformer(lark_visitors.Transformer):
         return value.value
 
     def INFINITY_LITERAL(self, value: lark_lexer.Token) -> ir.InfinityLiteral:
-        if value.value.startswith("-"):
+        if value.value == "-∞":
             return ir.InfinityLiteral.NEGATIVE
+        assert value.value == "∞"
         return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
