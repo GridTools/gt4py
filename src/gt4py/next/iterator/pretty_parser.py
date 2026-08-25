@@ -95,8 +95,6 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
-    // Only a bare scalar name: admitting the shaped form here would make `1:i16[2]`
-    // ambiguous with `tuple_get`, which is also `prec8 "[" prec0 "]"`.
     typed_literal: ( INT_LITERAL | FLOAT_LITERAL | SYM_REF ) ":" TYPE_LITERAL
     ?type_expr: TYPE_LITERAL
         | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type

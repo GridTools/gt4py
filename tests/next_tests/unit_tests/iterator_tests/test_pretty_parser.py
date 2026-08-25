@@ -102,8 +102,7 @@ def test_type_name_lexing_prefers_the_longest_match():
     # so the shorter name must never win.
     assert pparse("1:i1") == im.literal("1", "bool")
     assert pparse("1:i16") == im.literal("1", "int16")
-    # `[2]` here is a tuple index, not a shape: the literal annotation deliberately
-    # takes only a bare scalar name, so this reading is the only one
+    # `[2]` is a tuple index, not a shape
     assert pparse("1:i16[2]") == ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
         args=[im.literal("2", "int32"), im.literal("1", "int16")],
