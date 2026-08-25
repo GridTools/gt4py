@@ -47,7 +47,7 @@ from gt4py.next.program_processors.runners.dace import (
 )
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_python_codegen,
-    gtir_to_sdfg_fieldview,
+    gtir_to_sdfg,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -417,7 +417,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    subgraph_builder: gtir_to_sdfg_fieldview.DataflowBuilder
+    subgraph_builder: gtir_to_sdfg.DataflowBuilder
     input_edges: list[DataflowInputEdge] = dataclasses.field(default_factory=lambda: [])
     symbol_map: dict[
         str,
@@ -1904,7 +1904,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 def translate_lambda_to_dataflow(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    subgraph_builder: gtir_to_sdfg_fieldview.DataflowBuilder,
+    subgraph_builder: gtir_to_sdfg.DataflowBuilder,
     node: gtir.Lambda,
     args: Sequence[MaybeNestedInTuple[IteratorExpr | DataExpr]],
 ) -> tuple[list[DataflowInputEdge], MaybeNestedInTuple[DataflowOutputEdge]]:
