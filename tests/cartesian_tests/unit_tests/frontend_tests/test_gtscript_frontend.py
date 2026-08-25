@@ -2491,12 +2491,20 @@ class TestEllipsisNodeDetection:
         node = ast.parse(source, mode="eval").body
         assert gt_frontend._is_ellipsis_node(node) is expected
 
-    def test_ellipsis_index_parses(self):
+    def test_ellipsis_interval_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b = field_a
+
+        parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_ellipsis_index_does_not_parses(self):
         def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
             with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
                 field_b[...] = field_a
 
-        parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+        with pytest.raises(GTScriptSyntaxError):
+            parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 @gtscript.enum

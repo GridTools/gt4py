@@ -1501,6 +1501,28 @@ def test_coerced_type_alias_field():
     assert Model(value="42").value == 42
 
 
+type SampleAliasNestedTuple[T] = typing.Tuple[T | SampleAliasNestedTuple[T], ...]
+
+
+class SampleAliasSymbol(datamodels.DataModel):
+    name: str
+
+
+def test_type_alias_recursing_through_a_container_field():
+    # An arbitrarily nested tuple of datamodels (e.g. the targets of a tuple
+    # comprehension) can only be annotated with an alias which refers to itself.
+    class Model(datamodels.DataModel):
+        targets: SampleAliasNestedTuple[SampleAliasSymbol]
+
+    model = Model(targets=(SampleAliasSymbol(name="a"), (SampleAliasSymbol(name="b"),), ()))
+    assert model.targets[1][0].name == "b"
+
+    with pytest.raises(TypeError, match="Model.targets"):
+        Model(targets=(SampleAliasSymbol(name="a"), ("b",)))
+    with pytest.raises(TypeError, match="Model.targets"):
+        Model(targets=SampleAliasSymbol(name="a"))
+
+
 def test_type_alias_field_with_undefined_value_is_deferred():
     # The alias value is evaluated lazily, so the class body must not fail even
     # though 'DefinedLater' does not exist yet. Validation happens on the first

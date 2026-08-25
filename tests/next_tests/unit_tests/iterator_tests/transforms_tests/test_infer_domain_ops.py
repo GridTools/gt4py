@@ -51,10 +51,18 @@ def _testcases():
             im.greater_equal(1, im.axis_literal(IDim)),
             im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 2)}),
         ),
+        (im.eq(im.axis_literal(IDim), 1), im.domain(common.GridType.CARTESIAN, {IDim: (1, 2)})),
         (im.eq(1, im.axis_literal(IDim)), im.domain(common.GridType.CARTESIAN, {IDim: (1, 2)})),
         (
+            im.not_eq(im.axis_literal(IDim), 1),
+            im.or_(
+                im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)}),
+                im.domain(common.GridType.CARTESIAN, {IDim: (2, itir.InfinityLiteral.POSITIVE)}),
+            ),
+        ),
+        (
             im.not_eq(1, im.axis_literal(IDim)),
-            im.and_(
+            im.or_(
                 im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)}),
                 im.domain(common.GridType.CARTESIAN, {IDim: (2, itir.InfinityLiteral.POSITIVE)}),
             ),

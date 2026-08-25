@@ -31,13 +31,12 @@ def test_concat_where_simple(cartesian_case, static_domains: bool):
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim > 0, air, ground)
 
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground")()
-    air = cases.allocate(cartesian_case, testee, "air")()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
-    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda ground, air: np.where(k[np.newaxis, np.newaxis, :] == 0, ground, air),
+    )
 
 
 def test_concat_where(cartesian_case, static_domains: bool):
@@ -45,13 +44,12 @@ def test_concat_where(cartesian_case, static_domains: bool):
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground")()
-    air = cases.allocate(cartesian_case, testee, "air")()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
-    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda ground, air: np.where(k[np.newaxis, np.newaxis, :] == 0, ground, air),
+    )
 
 
 def test_concat_where_non_overlapping(cartesian_case, static_domains: bool):
@@ -187,18 +185,14 @@ def test_boundary_single_layer_2d_bc(cartesian_case, static_domains: bool):
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary.asnumpy()[:, :, np.newaxis],
-        interior.asnumpy(),
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where(
+            k[np.newaxis, np.newaxis, :] == 0, boundary[:, :, np.newaxis], interior
+        ),
     )
-
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
 def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case, static_domains: bool):
@@ -221,17 +215,16 @@ def test_dimension_two_nested_conditions(cartesian_case, static_domains: bool):
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where((KDim < 2), boundary, concat_where((KDim >= 5), boundary, interior))
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
-        boundary.asnumpy(),
-        interior.asnumpy(),
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where(
+            (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
+            boundary,
+            interior,
+        ),
     )
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
 def test_dimension_two_conditions_and(cartesian_case, static_domains: bool):
@@ -254,13 +247,78 @@ def test_dimension_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where((KDim == 2), interior, boundary)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k == 2, interior, boundary)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_not_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim != 2), boundary, interior)
 
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k == 2, interior.asnumpy(), boundary.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k != 2, boundary, interior)
+    )
+
+
+def test_dimension_less_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim <= 2), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k <= 2, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 > KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 > k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 >= KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 >= k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 == KDim), interior, boundary)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 == k, interior, boundary)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_reverse_not_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 != KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 != k, boundary, interior)
+    )
 
 
 @pytest.mark.embedded_concat_where_non_contiguous_domain
@@ -269,13 +327,12 @@ def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where(((KDim < 2) | (KDim >= 5)), boundary, interior)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where((k < 2) | (k >= 5), boundary.asnumpy(), interior.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where((k < 2) | (k >= 5), boundary, interior),
+    )
 
 
 def test_lap_like(cartesian_case, static_domains: bool):
@@ -322,34 +379,15 @@ def test_with_tuples(cartesian_case, static_domains: bool):
     ) -> tuple[cases.IJKField, cases.IJKField]:
         return concat_where(KDim == 0, (boundary0, boundary1), (interior0, interior1))
 
-    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
-    boundary0 = cases.allocate(cartesian_case, testee, "boundary0")()
-    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
-    boundary1 = cases.allocate(cartesian_case, testee, "boundary1")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref0 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary0.asnumpy()[:, :, np.newaxis],
-        interior0.asnumpy(),
-    )
-    ref1 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary1.asnumpy()[:, :, np.newaxis],
-        interior1.asnumpy(),
-    )
 
-    cases.verify(
-        cartesian_case,
-        testee,
-        interior0,
-        boundary0,
-        interior1,
-        boundary1,
-        out=out,
-        ref=(ref0, ref1),
-    )
+    def ref(interior0, boundary0, interior1, boundary1):
+        return (
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary0[:, :, np.newaxis], interior0),
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary1[:, :, np.newaxis], interior1),
+        )
+
+    cases.verify_with_default_data(cartesian_case, testee, ref)
 
 
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
@@ -387,31 +425,34 @@ def test_with_tuples_different_domain(cartesian_case, static_domains: bool):
         # the broadcast is only needed since we can not return fields on different domains yet
         return a, broadcast(b, (IDim, JDim, KDim))
 
-    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
-    boundary0 = cases.allocate(cartesian_case, testee, "boundary0")()
-    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
-    boundary1 = cases.allocate(cartesian_case, testee, "boundary1")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref0 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary0.asnumpy(),
-        interior0.asnumpy(),
-    )
-    ref1 = np.where(
-        k == 0,
-        boundary1.asnumpy(),
-        interior1.asnumpy(),
-    )
 
-    cases.verify(
+    def ref(interior0, boundary0, interior1, boundary1):
+        return (
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary0, interior0),
+            np.where(k == 0, boundary1, interior1),
+        )
+
+    cases.verify_with_default_data(cartesian_case, testee, ref)
+
+
+def test_concat_where_field_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
+    """
+    A field branch with fewer dimensions than the expression is implicitly broadcast.
+
+    `b` only has the `K` dimension, but is selected everywhere, so it is broadcast to the
+    three-dimensional result. With `static_domains` this also tests pruning: the domain bounds
+    are statically known, so `prune_empty_concat_where` decides that `a` is never selected and
+    must reintroduce the implicit broadcast of the `concat_where` instead of replacing the
+    three-dimensional expression by a one-dimensional one.
+    """
+
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.IJKField, b: cases.KField) -> cases.IJKField:
+        return concat_where(KDim < 0, a, b)
+
+    cases.verify_with_default_data(
         cartesian_case,
         testee,
-        interior0,
-        boundary0,
-        interior1,
-        boundary1,
-        out=out,
-        ref=(ref0, ref1),
+        lambda a, b: np.broadcast_to(b[np.newaxis, np.newaxis, :], a.shape),
     )
