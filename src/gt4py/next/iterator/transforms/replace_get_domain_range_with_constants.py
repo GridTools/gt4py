@@ -89,8 +89,7 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
         >>> result = ReplaceGetDomainRangeWithConstants.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
-          out @ u⟨ Vertexₕ: [{0:i32, 10:i32}[0:i32], {0:i32, 10:i32}[1:i32][, KDimᵥ: [{0:i32, 20:i32}[0:i32], {0:i32, 20:i32}[1:i32][ ⟩
-               ← (⇑deref)(inp);
+          out @ u⟨ Vertexₕ: [{0, 10}[0], {0, 10}[1][, KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩ ← (⇑deref)(inp);
         }
     """
 

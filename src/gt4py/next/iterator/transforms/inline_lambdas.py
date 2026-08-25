@@ -122,7 +122,7 @@ def rename_symbols(node: T, rename_map: Mapping[str, str | ir.SymRef]) -> T:
     Given a node and a mapping from old symbol names to new symbol names, rename symbols.
 
     >>> str(rename_symbols(im.plus("old_name", 1), {"old_name": "new_name"}))
-    'new_name + 1:i32'
+    'new_name + 1'
     """
     return inline_lambda(im.let(*rename_map.items())(node))
 

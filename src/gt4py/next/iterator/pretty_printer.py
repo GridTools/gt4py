@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import types as _types
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Final
+from typing import Final, Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 # replacements for builtin binary operations
@@ -98,6 +98,31 @@ def format_type(type_: ts.TypeSpec) -> str:
     raise NotImplementedError(f"No pretty-printed form for type '{type_}'.")
 
 
+def implied_literal_type(value: str) -> Optional[ts.ScalarType]:
+    """Type a bare literal lexeme denotes, or `None` if it denotes no type.
+
+    `pretty_parser` assigns exactly this to an unannotated lexeme, so the printer
+    leaves the annotation off when it would agree.  The lexeme is read back to a
+    Python value and typed by `type_translation.from_value`, which is what the
+    frontend applies to a constant (`ffront/foast_passes/type_deduction.py`,
+    `TypeDeducer.visit_Constant`), so the two cannot disagree.
+    """
+    py_value: bool | int | float
+    if value in ("True", "False"):
+        py_value = value == "True"
+    else:
+        try:
+            py_value = int(value)
+        except ValueError:
+            try:
+                py_value = float(value)
+            except ValueError:
+                return None
+    type_ = type_translation.from_value(py_value)
+    assert isinstance(type_, ts.ScalarType)
+    return type_
+
+
 DEFAULT_INDENT: Final = 2
 DEFAULT_WIDTH: Final = 100
 
@@ -170,8 +195,7 @@ class PrettyPrinter(NodeTranslator):
         return [node.id]
 
     def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
-        if node.type.kind == ts.ScalarKind.BOOL:
-            # `True`/`False` can only be `bool`
+        if implied_literal_type(node.value) == node.type:
             return [str(node.value)]
         return [f"{node.value}:{format_type(node.type)}"]
 

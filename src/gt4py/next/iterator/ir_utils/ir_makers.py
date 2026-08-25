@@ -268,7 +268,7 @@ class let:
     >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
     '(λ(a) → a)(b)'
     >>> str(let(("a", 1), ("b", 2))(plus("a", "b")))
-    '(λ(a, b) → a + b)(1:i32, 2:i32)'
+    '(λ(a, b) → a + b)(1, 2)'
     """
 
     @typing.overload
@@ -361,7 +361,7 @@ def literal_from_tuple_value(
     Create a `make_tuple` with literals from a tuple of values.
 
     >>> str(literal_from_tuple_value((1.0, (2.0, 3.0))))
-    '{1.0:f64, {2.0:f64, 3.0:f64}}'
+    '{1.0, {2.0, 3.0}}'
     """
     if isinstance(val, tuple):
         return make_tuple(*(literal_from_tuple_value(v) for v in val))
@@ -459,12 +459,12 @@ def domain(
     >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
     >>> JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
     >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
-    'c⟨ IDimₕ: [0:i32, 10:i32[, JDimₕ: [0:i32, 20:i32[ ⟩'
+    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
-    'u⟨ IDimₕ: [0:i32, 10:i32[, JDimₕ: [0:i32, 20:i32[ ⟩'
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
     >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
-    'u⟨ IDimₕ: [0:i32, 10:i32[, JDimₕ: [0:i32, 20:i32[ ⟩'
+    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(ranges_or_domain, common.Domain):
         domain = ranges_or_domain

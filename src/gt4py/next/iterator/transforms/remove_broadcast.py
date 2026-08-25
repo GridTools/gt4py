@@ -36,7 +36,7 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> expr.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
     >>> transformed = RemoveBroadcast.apply(expr)
     >>> print(transformed)
-    as_fieldop(deref, c⟨ IDimₕ: [0:i32, 10:i32[, JDimₕ: [0:i32, 10:i32[ ⟩)(inp)
+    as_fieldop(deref, c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 10[ ⟩)(inp)
     """
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
