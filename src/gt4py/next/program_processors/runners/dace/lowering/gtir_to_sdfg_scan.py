@@ -644,12 +644,12 @@ def translate_scan(
 
     Implements the `PrimitiveTranslator` protocol.
     """
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
-    assert len(fun_node.args) == 2
+    if len(fun_node.args) != 2:
+        raise ValueError(f"Missing domain on 'as_fieldop' node: '{node}'.")
     scan_expr, scan_domain_expr = fun_node.args
     assert cpm.is_call_to(scan_expr, "scan")
 
@@ -747,6 +747,8 @@ def translate_scan(
 
     # for output connections, we create temporary arrays that contain the computation
     # results of a column slice for each point in the horizontal domain
+    # Domain inference can store a single (union) domain on the 'as_fieldop' node
+    # of a scan with tuple output; in that case, broadcast the domain to all tuple outputs.
     if isinstance(lambda_output, tuple) and not isinstance(node.annex.domain, tuple):
         domain_tree = gtx_utils.tree_map(lambda x: node.annex.domain)(lambda_output)
     else:

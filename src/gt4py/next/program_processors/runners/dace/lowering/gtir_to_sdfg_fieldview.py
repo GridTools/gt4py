@@ -334,8 +334,8 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     ) -> gtir_to_sdfg_types.FieldopData:
         """Retrieve the field descriptor of a data node, including the origin information.
 
-        In case of `ScalarType` data, the `FieldopData` is constructed with `origin=None`.
-        In case of `FieldType` data, the field origin is added to the data descriptor.
+        The field origin is derived from the range-start symbols of the data descriptor,
+        in each dimension of the field domain.
         Besides, if the `FieldType` contains a local dimension, the descriptor is converted
         to a canonical form where the field domain consists of all global dimensions
         (the grid axes) and the field data type is `ListType`, with `offset_type` equal
@@ -1161,7 +1161,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         the nested SDFG by symbol mapping; all other arguments are lowered to
         dataflow that produces a data node.
         """
-        assert isinstance(node.fun, gtir.Lambda)
+        assert cpm.is_let(node)
         # Special handling of scalar arguments of a let-lambda that can be lowered
         # as symbolic expressions: when all the GTIR-symbols the scalar expression
         # depends on are dace symbols, the argument can be passed to the nested
@@ -1200,7 +1200,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ctx: SubgraphContext,
     ) -> gtir_to_sdfg_types.FieldopResult:
         # Pattern-matched builtins (structural, not name-based)
-        if isinstance(node.fun, gtir.Lambda):
+        if cpm.is_let(node):
             return self._visit_let(node, ctx)
         if cpm.is_applied_as_fieldop(node):
             return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
@@ -1364,7 +1364,7 @@ def lower_program_to_sdfg(
     Receives a GTIR program and lowers it to a DaCe SDFG.
 
     The lowering to SDFG requires that the program node is type-annotated, therefore
-    this function runs type ineference as first step.
+    this function runs type inference as first step.
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
