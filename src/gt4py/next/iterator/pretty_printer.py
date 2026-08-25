@@ -218,6 +218,9 @@ class PrettyPrinter(NodeTranslator):
             return [f"{node.value}:{format_type(node.type)}"]
         return [str(node.value)]
 
+    def visit_NoneLiteral(self, node: ir.NoneLiteral, *, prec: int) -> list[str]:
+        return ["None"]
+
     def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, prec: int) -> list[str]:
         if node == ir.InfinityLiteral.POSITIVE:
             return ["∞"]

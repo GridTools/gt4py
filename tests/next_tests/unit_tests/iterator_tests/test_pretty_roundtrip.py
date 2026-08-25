@@ -246,6 +246,7 @@ ROUNDTRIP_CASES = [
         ),
         id="temporary_shaped_dtype",
     ),
+    pytest.param(ir.NoneLiteral(), id="none_literal"),
     pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive"),
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(

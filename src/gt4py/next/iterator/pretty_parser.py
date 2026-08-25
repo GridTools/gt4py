@@ -128,9 +128,11 @@ class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
         return ir.Sym(id=value.value)
 
-    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
+    def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal, ir.NoneLiteral]:
         if value.value in ("True", "False"):
             return _bare_literal(value.value)
+        if value.value == "None":
+            return ir.NoneLiteral()
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
