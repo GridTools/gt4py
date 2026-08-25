@@ -159,6 +159,9 @@ rocm7 = ['cupy-rocm-7-0>=14.0']
 standard = ['clang-format>=18.1', 'scipy>=1.16.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
+[project.scripts]
+gt4py-next-cache = 'gt4py.next.gt_cache_manager:main'
+
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
 Homepage = 'https://gridtools.github.io/'
