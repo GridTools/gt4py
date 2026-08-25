@@ -20,7 +20,7 @@ from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
-from gt4py.next.program_processors.runners.dace.lowering import gtir_dataflow, gtir_domain
+from gt4py.next.program_processors.runners.dace.lowering import gtir_domain, gtir_to_sdfg_iterator
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -54,18 +54,18 @@ class FieldopData:
 
     def get_local_view(
         self, domain: gtir_domain.FieldopDomain, sdfg: dace.SDFG
-    ) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+    ) -> gtir_to_sdfg_iterator.IteratorExpr | gtir_to_sdfg_iterator.MemletExpr:
         """Helper method to access a field in local view, given the compute domain of a field operator."""
         if isinstance(self.gt_type, ts.ScalarType):
             assert isinstance(self.dc_node.desc(sdfg), dace.data.Scalar)
-            return gtir_dataflow.MemletExpr(
+            return gtir_to_sdfg_iterator.MemletExpr(
                 dc_node=self.dc_node,
                 gt_field=ts.FieldType(dims=[], dtype=self.gt_type),
                 subset=dace_subsets.Range.from_string("0"),
             )
 
         if isinstance(self.gt_type, ts.FieldType):
-            it_indices: dict[gtx_common.Dimension, gtir_dataflow.DataExpr]
+            it_indices: dict[gtx_common.Dimension, gtir_to_sdfg_iterator.DataExpr]
             if isinstance(self.dc_node.desc(sdfg), dace.data.Scalar):
                 assert len(self.gt_type.dims) == 0  # zero-dimensional field
                 it_indices = {}
@@ -79,14 +79,11 @@ class FieldopData:
                     domain_dims, origin=None
                 ).min_element()
                 it_indices = {
-                    dim: gtir_dataflow.SymbolExpr(index, INDEX_DTYPE)
+                    dim: gtir_to_sdfg_iterator.SymbolExpr(index, INDEX_DTYPE)
                     for dim, index in zip(domain_dims, domain_indices)
                 }
-            field_origin = [
-                (dim, dace.symbolic.SymExpr(0) if self.origin is None else self.origin[i])
-                for i, dim in enumerate(self.gt_type.dims)
-            ]
-            return gtir_dataflow.IteratorExpr(
+            field_origin = [(dim, self.origin[i]) for i, dim in enumerate(self.gt_type.dims)]
+            return gtir_to_sdfg_iterator.IteratorExpr(
                 self.dc_node, self.gt_type.dtype, field_origin, it_indices
             )
 
