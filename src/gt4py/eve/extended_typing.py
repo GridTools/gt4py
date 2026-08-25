@@ -186,14 +186,15 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
 
 
 _T_co = TypeVar("_T_co", covariant=True)
-NestedSequence = Sequence[Union[_T_co, "NestedSequence[_T_co]"]]
-NestedList = list[Union[_T_co, "NestedList[_T_co]"]]
-NestedTuple = tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
 
-MaybeNested = Union[_T_co, NestedSequence[_T_co]]
-MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
-MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
-MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
+type NestedSequence[_T_co] = Sequence[_T_co | NestedSequence[_T_co]]
+type NestedList[_T_co] = list[_T_co | NestedList[_T_co]]
+type NestedTuple[_T_co] = tuple[_T_co | NestedTuple[_T_co], ...]
+
+type MaybeNested[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInSequence[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInList[_T_co] = _T_co | NestedList[_T_co]
+type MaybeNestedInTuple[_T_co] = _T_co | NestedTuple[_T_co]
 
 
 def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
