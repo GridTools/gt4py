@@ -389,11 +389,14 @@ def check_determinism(
     cache2: Path,
     *,
     folder_pattern: str,
+    build_cache_dir: str,
     runs_healthy: bool | None = None,
     diffs_dir: Path | None = None,
     report_path: Path | None = None,
 ) -> list[ComparisonResult]:
     folder_re = _compile_folder_pattern(folder_pattern)
+    # `cache1`/`cache2` are cache bases; program folders live one level down.
+    cache1, cache2 = cache1 / build_cache_dir, cache2 / build_cache_dir
     bags1, n_folders1 = _scan(cache1, folder_re)
     bags2, n_folders2 = _scan(cache2, folder_re)
     results = compare(bags1, bags2)
@@ -456,44 +459,53 @@ def check_determinism(
 CACHE_SUBDIR = ".gt4py_cache"
 PYTEST_TOLERATED_EXIT_CODES = frozenset({0, 1, 5})  # ok, tests failed, no tests collected
 
-_PATTERN_PROBE_SNIPPET = (
-    "from gt4py.next.otf.compilation import cache; print(cache.CACHE_FOLDER_NAME_PATTERN)"
+_LAYOUT_PROBE_SNIPPET = (
+    "from gt4py.next.otf.compilation import cache;"
+    " print(cache.CACHE_FOLDER_NAME_PATTERN); print(cache.BUILD_CACHE_DIR_NAME)"
 )
 
 
-def fetch_cache_folder_pattern(python: str) -> str:
-    """Read the cache folder-name pattern from a gt4py-capable interpreter.
+def fetch_cache_layout(python: str) -> tuple[str, str]:
+    """Read the build cache layout from a gt4py-capable interpreter.
 
-    The pattern is owned by gt4py (`CACHE_FOLDER_NAME_PATTERN`, defined next to
-    `get_cache_folder` and held in sync with it by a round-trip unit test), so
-    reading it from the interpreter under test keeps this script correct across
-    folder-naming changes without edits here. Raises `CacheFolderPatternError`
-    when the pattern cannot be read (no or too-old gt4py in that interpreter)
-    or is unusable — deliberately no fallback, failing beats guessing.
+    Returns the folder-name pattern and the name of the directory holding the
+    program folders. Both are owned by gt4py (`CACHE_FOLDER_NAME_PATTERN` and
+    `BUILD_CACHE_DIR_NAME`, defined next to `get_cache_folder` and held in sync
+    with it by unit tests), so reading them from the interpreter under test keeps
+    this script correct across layout changes without edits here. Raises
+    `CacheFolderPatternError` when they cannot be read (no or too-old gt4py in
+    that interpreter) or are unusable — deliberately no fallback, failing beats
+    guessing.
     """
     try:
         result = subprocess.run(
-            [python, "-c", _PATTERN_PROBE_SNIPPET], capture_output=True, text=True, timeout=120
+            [python, "-c", _LAYOUT_PROBE_SNIPPET], capture_output=True, text=True, timeout=120
         )
     except (OSError, subprocess.TimeoutExpired) as e:
         raise CacheFolderPatternError(
-            f"could not run `{python}` to read gt4py's cache folder-name pattern: {e}"
+            f"could not run `{python}` to read gt4py's build cache layout: {e}"
         ) from e
     if result.returncode != 0:
         detail = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "no output"
         raise CacheFolderPatternError(
-            f"`{python}` could not provide gt4py's cache folder-name pattern "
+            f"`{python}` could not provide gt4py's build cache layout "
             f"(exit {result.returncode}: {detail}). The interpreter must have a gt4py "
-            f"recent enough to define `CACHE_FOLDER_NAME_PATTERN`."
+            f"recent enough to define `CACHE_FOLDER_NAME_PATTERN` and `BUILD_CACHE_DIR_NAME`."
         )
-    pattern = result.stdout.strip()
+    match result.stdout.split():
+        case [pattern, build_cache_dir]:
+            pass
+        case _:
+            raise CacheFolderPatternError(
+                f"`{python}` reported an unreadable build cache layout: `{result.stdout.strip()}`"
+            )
     try:
         _compile_folder_pattern(pattern)
     except (re.error, ValueError) as e:
         raise CacheFolderPatternError(
             f"`{python}` reported an unusable cache folder-name pattern `{pattern}`: {e}"
         ) from e
-    return pattern
+    return pattern, build_cache_dir
 
 
 def _run_is_healthy(junit_xml: Path) -> bool:
@@ -569,10 +581,10 @@ def run_determinism_check(
     workdir = workdir.expanduser().resolve()
     dacecache = (dacecache or Path.cwd() / ".dacecache").expanduser().resolve()
 
-    # The folder-name pattern comes from the gt4py under test — no fallback —
-    # so a gt4py-side change to the cache folder naming can never silently turn
+    # The cache layout comes from the gt4py under test — no fallback — so a
+    # gt4py-side change to the folder naming or location can never silently turn
     # every run into "no programs observed".
-    folder_pattern = fetch_cache_folder_pattern(python)
+    folder_pattern, build_cache_dir = fetch_cache_layout(python)
 
     # Self-check the comparator first: a broken script aborts here, before the
     # two expensive test-suite runs.
@@ -616,6 +628,7 @@ def run_determinism_check(
             run1_dir / CACHE_SUBDIR,
             run2_dir / CACHE_SUBDIR,
             folder_pattern=folder_pattern,
+            build_cache_dir=build_cache_dir,
             runs_healthy=runs_healthy,
             diffs_dir=workdir / "diffs",
             report_path=workdir / "report.txt",
@@ -681,10 +694,12 @@ def check(
     installed (e.g. run via `uv run python scripts/python/dace_determinism.py`).
     """
     try:
+        folder_pattern, build_cache_dir = fetch_cache_layout(sys.executable)
         results = check_determinism(
             run1.expanduser().resolve(),
             run2.expanduser().resolve(),
-            folder_pattern=fetch_cache_folder_pattern(sys.executable),
+            folder_pattern=folder_pattern,
+            build_cache_dir=build_cache_dir,
             runs_healthy=runs_healthy,
             diffs_dir=diffs_dir.expanduser().resolve() if diffs_dir else None,
             report_path=report.expanduser().resolve() if report else None,
