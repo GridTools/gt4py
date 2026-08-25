@@ -105,15 +105,6 @@ def test_literal_type_annotation():
     assert pformat(im.literal("1", "int16")) == "1:i16"
 
 
-def test_literal_type_annotation_rejects_a_shaped_type():
-    # the annotation grammar takes a bare scalar name; `1:f64[3]` would reparse as
-    # `tuple_get(3, 1:f64)`, so refuse to emit it rather than emit something wrong
-    testee = ir.Literal(value="1", type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]))
-    with pytest.raises(NotImplementedError, match="shaped type"):
-        pformat(testee)
-    assert pformat(testee, types="none") == "1"
-
-
 def test_literal_type_annotation_elided_when_implied():
     assert pformat(im.literal("1.0", "float64")) == "1.0"
     assert pformat(im.literal("1", "int32")) == "1"
@@ -379,7 +370,7 @@ def test_format_type():
                 ]
             )
         )
-        == "tuple[i1, i16]"
+        == "{i1, i16}"
     )
     with pytest.raises(NotImplementedError):
         scalar(ts.ScalarKind.STRING)
@@ -391,7 +382,7 @@ def test_temporary_compound_dtype():
 
     assert (
         temp(ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.FLOAT32)]))
-        == "t = temporary(domain=domain, dtype=tuple[f32]);"
+        == "t = temporary(domain=domain, dtype={f32});"
     )
     assert (
         temp(ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]))

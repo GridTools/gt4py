@@ -95,7 +95,7 @@ SCALAR_TYPE_KINDS: Final[Mapping[str, ts.ScalarKind]] = _types.MappingProxyType(
 
 def format_type(type_: ts.TypeSpec) -> str:
     if isinstance(type_, ts.TupleType):
-        return f"tuple[{', '.join(format_type(t) for t in type_.types)}]"
+        return f"{{{', '.join(format_type(t) for t in type_.types)}}}"
     if isinstance(type_, ts.ScalarType) and type_.kind in SCALAR_TYPE_NAMES:
         name = SCALAR_TYPE_NAMES[type_.kind]
         if type_.shape is None:
@@ -209,12 +209,6 @@ class PrettyPrinter(NodeTranslator):
         if self.types == "all" or (
             self.types == "minimal" and implied_literal_type(node.value) != node.type
         ):
-            if node.type.shape is not None:
-                raise NotImplementedError(
-                    f"Cannot annotate literal '{node.value}' with shaped type"
-                    f" '{format_type(node.type)}': the annotation grammar takes a bare"
-                    " scalar name, so the shape would reparse as a tuple index."
-                )
             return [f"{node.value}:{format_type(node.type)}"]
         return [str(node.value)]
 

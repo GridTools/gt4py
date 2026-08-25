@@ -108,7 +108,7 @@ def test_type_name_lexing_prefers_the_longest_match():
         fun=ir.SymRef(id="tuple_get"),
         args=[im.literal("2", "int32"), im.literal("1", "int16")],
     )
-    assert pparse("t = temporary(domain=domain, dtype=tuple[i1, i16]);") == ir.Temporary(
+    assert pparse("t = temporary(domain=domain, dtype={i1, i16});") == ir.Temporary(
         id="t",
         domain=ir.SymRef(id="domain"),
         dtype=ts.TupleType(
@@ -321,7 +321,7 @@ def test_temporary():
 
 
 def test_temporary_compound_dtype():
-    assert pparse("t = temporary(domain=domain, dtype=tuple[i1, i16]);") == ir.Temporary(
+    assert pparse("t = temporary(domain=domain, dtype={i1, i16});") == ir.Temporary(
         id="t",
         domain=ir.SymRef(id="domain"),
         dtype=ts.TupleType(

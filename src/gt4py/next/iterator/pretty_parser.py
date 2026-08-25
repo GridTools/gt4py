@@ -95,13 +95,12 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
-    // Only a bare scalar name: `Literal.type` is a `ts.ScalarType`, and admitting
-    // the bracketed forms here would make `1:i16[2]` and `1:tuple[f32]` ambiguous
-    // with `tuple_get`, which is also `prec8 "[" prec0 "]"`.
+    // Only a bare scalar name: admitting the shaped form here would make `1:i16[2]`
+    // ambiguous with `tuple_get`, which is also `prec8 "[" prec0 "]"`.
     typed_literal: ( INT_LITERAL | FLOAT_LITERAL | SYM_REF ) ":" TYPE_LITERAL
     ?type_expr: TYPE_LITERAL
         | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type
-        | "tuple" "[" type_expr ("," type_expr)* "]" -> tuple_type
+        | "{" type_expr ("," type_expr)* "}" -> tuple_type
 
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
     cartesian_offset: AXIS_LITERAL "→" AXIS_LITERAL
