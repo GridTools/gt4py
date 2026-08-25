@@ -65,13 +65,7 @@ PRECEDENCE: Final = {
 }
 
 
-#: Surface spelling of the scalar types, LLVM/MLIR style.  Sole definition of the
-#: ITIR type vocabulary: `pretty_parser` inverts this table instead of carrying its
-#: own, so respelling a type means editing here and nowhere else.  Deliberately not
-#: `ts.ScalarType.__str__`, which serves the frontend printer and error messages
-#: and keeps the `ScalarKind` names.  Covers exactly `builtins.TYPE_BUILTINS`;
-#: `ScalarKind.STRING` has no LLVM spelling and is excluded, so printing or parsing
-#: one is an error.
+#: Surface spelling of the scalar types, LLVM/MLIR style.
 SCALAR_TYPE_NAMES: Final[Mapping[ts.ScalarKind, str]] = _types.MappingProxyType(
     {
         ts.ScalarKind.BOOL: "i1",
