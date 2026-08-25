@@ -12,6 +12,7 @@ from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
 from gt4py.next import utils
@@ -123,7 +124,7 @@ class TupleComprehension(Expr):
 # This is essentially a lambda. The difference is that for a lambda we might not know the type of
 # the args; therefore this is named differently at the moment.
 class TupleComprehensionMapper(LocatedNode, SymbolTableTrait):
-    target: Any  # TODO(tehrengruber): should be NestedTuple[DataSymbol], but this breaks in eve
+    target: MaybeNestedInTuple[DataSymbol]
     element_expr: Expr
 
 

@@ -13,7 +13,7 @@ import textwrap
 import typing
 
 import gt4py.eve as eve
-from gt4py.eve.extended_typing import Any, NestedTuple
+from gt4py.eve.extended_typing import Any, MaybeNestedInTuple
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -594,7 +594,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],
                     )
 
-                def parse_target(target: ast.expr) -> NestedTuple[foast.DataSymbol]:
+                def parse_target(target: ast.expr) -> MaybeNestedInTuple[foast.DataSymbol]:
                     if isinstance(target, ast.Tuple):
                         return tuple(parse_target(el) for el in target.elts)
                     assert isinstance(target, ast.Name)
