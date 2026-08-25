@@ -1762,7 +1762,7 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 
 @pytest.mark.requires_jax
 def test_jax_jit_field_arguments():
-    jax = pytest.importorskip("jax")
+    import jax
 
     domain = common.domain({D0: (1, 3), D1: (2, 5)})
     a = common._field(
@@ -1783,7 +1783,7 @@ def test_jax_jit_field_arguments():
 
 @pytest.mark.requires_jax
 def test_jax_pytree_roundtrip():
-    jax = pytest.importorskip("jax")
+    import jax
 
     domain = common.domain({D0: (1, 3), D1: (2, 5)})
     field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)

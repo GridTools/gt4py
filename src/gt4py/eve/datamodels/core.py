@@ -37,18 +37,14 @@ from ..extended_typing import (
     Any,
     Callable,
     ClassVar,
-    Dict,
     Final,
     ForwardRef,
     Generator,
-    List,
     Literal,
     Mapping,
     Optional,
     Protocol,
     Sequence,
-    Tuple,
-    Type,
     TypeAlias,
     TypeAnnotation,
     TypeVar,
@@ -73,7 +69,7 @@ _T = TypeVar("_T")
 
 
 class _AttrsClassTP(Protocol):
-    __attrs_attrs__: ClassVar[Tuple[attr.Attribute, ...]] = ()
+    __attrs_attrs__: ClassVar[tuple[attr.Attribute, ...]] = ()
 
 
 Attribute: TypeAlias = attr.Attribute
@@ -89,7 +85,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
         utils.FrozenNamespace[Attribute], None
     )
     __datamodel_root_validators__: ClassVar[
-        Tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
+        tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
     ] = ()
     # Optional
     __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)
@@ -122,12 +118,12 @@ DataModelT = TypeVar("DataModelT", bound=DataModelTP)
 
 
 class GenericDataModelTP(DataModelTP, Protocol):
-    __args__: ClassVar[Tuple[Union[Type, TypeVar], ...]] = ()
-    __parameters__: ClassVar[Tuple[TypeVar, ...]] = ()
+    __args__: ClassVar[tuple[Union[type[Any], TypeVar], ...]] = ()
+    __parameters__: ClassVar[tuple[TypeVar, ...]] = ()
 
     @classmethod
     def __class_getitem__(
-        cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
+        cls: type[GenericDataModelTP], args: Union[type[Any], tuple[type[Any], ...]]
     ) -> Union[DataModelTP, GenericDataModelTP]: ...
 
 
@@ -139,7 +135,7 @@ AttrsValidator = Callable[[Any, Attribute, _T], Any]
 FieldValidator = Callable[[_DM, Attribute, _T], None]
 BoundFieldValidator = Callable[[Attribute, _T], None]
 
-RootValidator = Callable[[Type[_DM], _DM], None]
+RootValidator = Callable[[type[_DM], _DM], None]
 BoundRootValidator = Callable[[_DM], None]
 
 FieldTypeValidatorFactory = Callable[[TypeAnnotation, str], FieldValidator]
@@ -224,11 +220,17 @@ def field_type_validator_factory(
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
-        else:
+
+        try:
             simple_validator = factory(type_annotation, name, required=True)
-            return ValidatorAdapter(
-                simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
-            )
+        except NameError:
+            # Deferral signal from 'xtyping.eval_type_alias' (see its 'except NameError'
+            # branch); handled like a forward reference.
+            return ForwardRefValidator(factory)
+
+        return ValidatorAdapter(
+            simple_validator, f"{getattr(simple_validator, '__name__', 'TypeValidator')}"
+        )
 
     return _field_type_validator_factory
 
@@ -282,12 +284,12 @@ def datamodel(
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Callable[[Type[_T]], Type[_T]]: ...
+) -> Callable[[type[_T]], type[_T]]: ...
 
 
 @overload
 def datamodel(  # redefinition of unused symbol
-    cls: Type[_T],
+    cls: type[_T],
     /,
     *,
     repr: bool = _REPR_DEFAULT,
@@ -301,12 +303,12 @@ def datamodel(  # redefinition of unused symbol
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Type[_T]: ...
+) -> type[_T]: ...
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
 def datamodel(  # redefinition of unused symbol
-    cls: Optional[Type[_T]] = None,
+    cls: Optional[type[_T]] = None,
     /,
     *,
     repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
@@ -320,7 +322,7 @@ def datamodel(  # redefinition of unused symbol
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]:
+) -> Union[type[_T], Callable[[type[_T]], type[_T]]]:
     """Add generated special methods to classes according to the specified attributes (class decorator).
 
     It converts the class to an `attrs <https://www.attrs.org/>`_ with some extra features.
@@ -351,10 +353,12 @@ def datamodel(  # redefinition of unused symbol
         frozen: If ``True`` (default is ``False``), assigning to fields will generate an exception.
             This emulates read-only frozen instances. The ``__setattr__()`` and
             ``__delattr__()`` methods should not be defined in the class.
+            The special value ``"strict"`` additionally requires every field annotation
+            to stand for strictly immutable values (other ``frozen="strict"`` datamodels
+            or types defining a custom ``__hash__``), raising ``EveTypeError`` otherwise.
         match_args: If ``True`` (default) and ``__match_args__`` is not already defined in the class,
             set ``__match_args__`` on the class to support PEP 634 (Structural Pattern Matching).
-            It is a tuple of all positional-only ``__init__`` parameter names on
-            Python 3.10 and later. Ignored on older Python versions.
+            It is a tuple of all positional-only ``__init__`` parameter names.
         kw_only: If ``True`` (default is ``False``), make all fields keyword-only in the generated
             ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
         slots: slots: If ``True`` (the default is ``False``), ``__slots__`` attribute will be generated
@@ -395,7 +399,7 @@ def datamodel(  # redefinition of unused symbol
 class _DataModelDecoratorTP(Protocol[_T]):
     def __call__(
         self,
-        cls: Optional[Type[_T]] = None,
+        cls: Optional[type[_T]] = None,
         /,
         *,
         repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
@@ -410,7 +414,7 @@ class _DataModelDecoratorTP(Protocol[_T]):
         type_validation_factory: Optional[
             FieldTypeValidatorFactory
         ] = DefaultFieldTypeValidatorFactory,
-    ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]: ...
+    ) -> Union[type[_T], Callable[[type[_T]], type[_T]]]: ...
 
 
 frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
@@ -554,10 +558,9 @@ def field(
 
 
     Examples:
-        >>> from typing import List
         >>> @datamodel
         ... class C:
-        ...     mylist: List[int] = field(default_factory=lambda: [1, 2, 3])
+        ...     mylist: list[int] = field(default_factory=lambda: [1, 2, 3])
         >>> c = C()
         >>> c.mylist
         [1, 2, 3]
@@ -636,25 +639,24 @@ def is_datamodel(obj: Any) -> bool:
     return hasattr(cls, MODEL_FIELD_DEFINITIONS_ATTR)
 
 
-def is_generic_datamodel_class(cls: Type) -> bool:
+def is_generic_datamodel_class(cls: type[Any]) -> bool:
     """Return ``True`` if `obj` is a generic Data Model class with type parameters."""
     assert isinstance(cls, type)
     return is_datamodel(cls) and xtyping.has_type_parameters(cls)
 
 
-def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespace:
+def get_fields(model: Union[DataModel, type[DataModel]]) -> utils.FrozenNamespace:
     """Return the field meta-information of a Data Model.
 
     Arguments:
         model: A Data Model class or instance.
 
     Examples:
-        >>> from typing import List
         >>> @datamodel
         ... class Model:
         ...     name: str
         ...     amount: int = 1
-        ...     numbers: List[float] = field(default_factory=list)
+        ...     numbers: list[float] = field(default_factory=list)
         >>> fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
@@ -675,8 +677,8 @@ fields = get_fields
 def asdict(
     instance: DataModel,
     *,
-    value_serializer: Optional[Callable[[Type[DataModel], Attribute, Any], Any]] = None,
-) -> Dict[str, Any]:
+    value_serializer: Optional[Callable[[type[DataModel], Attribute, Any], Any]] = None,
+) -> dict[str, Any]:
     """Return the contents of a Data Model instance as a new mapping from field names to values.
 
     Arguments:
@@ -699,7 +701,7 @@ def asdict(
     return attrs.asdict(instance, value_serializer=value_serializer)
 
 
-def astuple(instance: DataModel) -> Tuple[Any, ...]:
+def astuple(instance: DataModel) -> tuple[Any, ...]:
     """Return the contents of a Data Model instance as a new tuple of field values.
 
     Arguments:
@@ -729,8 +731,8 @@ _DataModelT = TypeVar("_DataModelT", bound=DataModel)
 
 
 def update_forward_refs(
-    model_cls: Type[_DataModelT], localns: Optional[Dict[str, Any]] = None
-) -> Type[_DataModelT]:
+    model_cls: type[_DataModelT], localns: Optional[dict[str, Any]] = None
+) -> type[_DataModelT]:
     """Update Data Model class meta-information replacing forwarded type annotations with actual types.
 
     Arguments:
@@ -776,14 +778,14 @@ def update_forward_refs(
 
 
 def concretize(
-    datamodel_cls: Type[GenericDataModelT],
+    datamodel_cls: type[GenericDataModelT],
     /,
-    *type_args: Type,
+    *type_args: type[Any],
     class_name: Optional[str] = None,
     module: Optional[str] = None,
     support_pickling: bool = True,
     overwrite_definition: bool = True,
-) -> Type[DataModelT]:
+) -> type[DataModelT]:
     """Generate a new concrete subclass of a generic Data Model.
 
     Arguments:
@@ -803,7 +805,7 @@ def concretize(
             the target module will be overwritten.
 
     """
-    concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
+    concrete_cls: type[DataModelT] = _make_concrete_with_cache(
         datamodel_cls,  # type: ignore[arg-type]
         *type_args,
         class_name=class_name,
@@ -830,7 +832,7 @@ def concretize(
 
 
 # -- Helpers --
-def _collect_field_validators(cls: Type) -> Dict[str, FieldValidator]:
+def _collect_field_validators(cls: type[Any]) -> dict[str, FieldValidator]:
     result = {}
     for member in cls.__dict__.values():
         if hasattr(member, _FIELD_VALIDATOR_TAG):
@@ -841,7 +843,7 @@ def _collect_field_validators(cls: Type) -> Dict[str, FieldValidator]:
     return result
 
 
-def _collect_root_validators(cls: Type) -> List[RootValidator]:
+def _collect_root_validators(cls: type[Any]) -> list[RootValidator]:
     result = []
     for base in reversed(cls.__mro__[1:]):
         for validator in getattr(base, MODEL_ROOT_VALIDATORS_ATTR, []):
@@ -857,7 +859,7 @@ def _collect_root_validators(cls: Type) -> List[RootValidator]:
 
 
 def _get_attribute_from_bases(
-    name: str, mro: Tuple[Type, ...], annotations: Optional[Dict[str, Any]] = None
+    name: str, mro: tuple[type[Any], ...], annotations: Optional[dict[str, Any]] = None
 ) -> Optional[Attribute]:
     for base in mro:
         for base_field_attrib in getattr(base, "__attrs_attrs__", []):
@@ -870,8 +872,8 @@ def _get_attribute_from_bases(
 
 
 def _substitute_typevars(
-    type_hint: Type, type_params_map: Mapping[TypeVar, Union[Type, TypeVar]]
-) -> Tuple[Union[Type, TypeVar], bool]:
+    type_hint: type[Any], type_params_map: Mapping[TypeVar, Union[type[Any], TypeVar]]
+) -> tuple[Union[type[Any], TypeVar], bool]:
     if isinstance(type_hint, typing.TypeVar):
         assert type_hint in type_params_map
         return type_params_map[type_hint], True
@@ -956,22 +958,54 @@ def _make_devtools_pretty() -> Callable[
 
 def _make_data_model_class_getitem() -> classmethod:
     def __class_getitem__(
-        cls: Type[GenericDataModelT], args: Union[Type, Tuple[Type]]
-    ) -> Type[DataModelT] | Type[GenericDataModelT]:
+        cls: type[GenericDataModelT], args: Union[type[Any], tuple[type[Any]]]
+    ) -> type[DataModelT] | type[GenericDataModelT]:
         """Return an instance compatible with aliases created by :class:`typing.Generic` classes.
 
         See :class:`GenericDataModelAlias` for further information.
         """
-        type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
-        concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
+        type_args: tuple[type[Any]] = args if isinstance(args, tuple) else (args,)
+        concrete_cls: type[DataModelT] = concretize(cls, *type_args)
         return concrete_cls
 
     return classmethod(__class_getitem__)
 
 
+@dataclasses.dataclass(**_dataclass_opts)
+class DeferredTypeConverter:
+    """Type converter for annotations which cannot be resolved at class creation time.
+
+    The actual converter is created the first time a value is coerced, mirroring what
+    `ForwardRefValidator` does for validators.
+    """
+
+    type_annotation: TypeAnnotation
+    """Unresolved annotation of the field."""
+
+    name: str
+    """Qualified name of the field, used in error messages."""
+
+    converter: Union[TypeConverter, None] = None
+    """Actual type converter created after resolving the annotation."""
+
+    def __call__(self, value: Any) -> Any:
+        if self.converter is None:
+            self.converter = _make_type_converter(self.type_annotation, self.name)
+        return self.converter(value)
+
+
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
+    try:
+        resolved_annotation = xtyping.eval_type_alias(type_annotation)
+    except NameError:
+        # Deferral signal, as in 'field_type_validator_factory' above.
+        return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
+
+    if resolved_annotation is not type_annotation:
+        return _make_type_converter(resolved_annotation, name)
+
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)
@@ -1018,9 +1052,119 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
+#: Hashable container types folding the hashes of the items they hold into their own.
+#: Used unparametrized they say nothing about those items, so they are only accepted
+#: as the origin of a parametrized alias (``tuple[int, ...]``), never on their own.
+_ITEM_HASHING_CONTAINER_TYPES: Final = (tuple, frozenset)
+
+
+def _is_strictly_immutable_type(
+    type_annotation: TypeAnnotation, *, _as_container_origin: bool = False
+) -> bool:
+    """Check whether an annotation only admits strictly immutable (hashable) values.
+
+    A datamodel qualifies only if it is itself defined with ``frozen="strict"``.
+    Any other plain type is judged by its ``__hash__``, which is the only signal
+    the language gives here: a type that defines its own is claiming its values
+    hash by content, which they can only do if they do not change, while the
+    mutable builtins opt out by setting ``__hash__ = None`` and the inherited
+    ``object.__hash__`` just hashes by identity and says nothing about the value.
+    So neither of those two counts, and everything else does.
+
+    Composite annotations are decomposed and every part is checked with the same
+    rules, so that neither wrapping a type in a union nor hiding it in a generic
+    container (whose hash folds in the hashes of its items) weakens the check.
+    Annotations that cannot be resolved to any concrete type (``Any``, unbound
+    type variables, unresolved forward references) are conservatively rejected.
+
+    Arguments:
+        type_annotation: The annotation to check.
+
+    Keyword Arguments:
+        _as_container_origin: Internal flag set when checking the origin of a
+            parametrized alias, whose type arguments are checked separately.
+
+    Returns:
+        ``True`` if every value admitted by the annotation is strictly immutable.
+    """
+    if xtyping.is_type_alias(type_annotation) or xtyping.get_origin(type_annotation) is not None:
+        # A PEP 695 alias stands for the annotation it resolves to, so check that
+        # instead; an alias whose value cannot be evaluated (undefined name, recursive,
+        # ...) proves nothing and is rejected below like any other unresolved
+        # annotation. Non-aliases are returned unchanged, as the identical object.
+        try:
+            resolved_alias = xtyping.eval_type_alias(type_annotation)
+        except (NameError, TypeError):
+            return False
+        if resolved_alias is not type_annotation:
+            return _is_strictly_immutable_type(
+                resolved_alias, _as_container_origin=_as_container_origin
+            )
+
+    if is_datamodel(type_annotation):
+        return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
+
+    origin_type = xtyping.get_origin(type_annotation)
+    type_args = xtyping.get_args(type_annotation)
+
+    if origin_type is Literal:
+        # 'Literal' arguments are values, not types.
+        return all(xtyping.is_type_with_custom_hash(type(arg)) for arg in type_args)
+
+    if origin_type is Union or origin_type is types.UnionType:
+        # 'Union[A, B]' and 'A | B' are different runtime objects before Python 3.14.
+        # A union is immutable only if every one of its members is.
+        return bool(type_args) and all(map(_is_strictly_immutable_type, type_args))
+
+    if origin_type is not None:
+        if not type_args:
+            # Unparametrized alias ('typing.Tuple', 'typing.List', ...): it says nothing
+            # more than the bare origin type does.
+            return _is_strictly_immutable_type(origin_type)
+
+        # Parametrized generic alias ('tuple[int, ...]', 'list[int]', ...). The alias
+        # itself is a hashable object, so it has to be decomposed: both the container
+        # type and every type argument must be strictly immutable, since the hash of
+        # a container folds in the hashes of the items it holds.
+        return _is_strictly_immutable_type(origin_type, _as_container_origin=True) and all(
+            _is_strictly_immutable_type(arg) for arg in type_args if arg is not Ellipsis
+        )
+
+    if xtyping.is_actual_type(type_annotation):  # plain type, already known not to be a datamodel
+        if not _as_container_origin and issubclass(type_annotation, _ITEM_HASHING_CONTAINER_TYPES):
+            # Unparametrized container ('tuple', 'frozenset', a 'NamedTuple', ...): its
+            # hash folds in the hashes of items which nothing here proves immutable, the
+            # same reason why 'tuple[Any, ...]' is rejected.
+            return False
+        return xtyping.is_type_with_custom_hash(type_annotation)
+
+    if isinstance(type_annotation, TypeVar):
+        # Check the concrete annotations the type variable can stand for. Note that the
+        # bound/constraints are checked as annotations, not flattened to their origins,
+        # so that e.g. a 'tuple[list[int], ...]' bound is still decomposed.
+        if type_annotation.__bound__ is not None:
+            return _is_strictly_immutable_type(type_annotation.__bound__)
+        if type_annotation.__constraints__:
+            return all(map(_is_strictly_immutable_type, type_annotation.__constraints__))
+        if (typevar_default := getattr(type_annotation, "__default__", None)) is not None:
+            return _is_strictly_immutable_type(typevar_default)
+        return False
+
+    if isinstance(type_annotation, (ForwardRef, typing.ForwardRef)):
+        # Forward references that cannot be resolved at this point do not prove
+        # anything, so they are rejected instead of propagating the resolution error.
+        try:
+            resolved_annotation = xtyping.eval_forward_ref(type_annotation)
+        except Exception:
+            return False
+        return _is_strictly_immutable_type(resolved_annotation)
+
+    # Anything else ('Any', special forms, ...) proves nothing.
+    return False
+
 
 def _make_datamodel(
-    cls: Type[_T],
+    cls: type[_T],
     *,
     repr: bool,  # noqa: A002 [builtin-argument-shadowing]
     eq: bool,
@@ -1034,13 +1178,13 @@ def _make_datamodel(
     generic: bool | Literal["True_no_checks"],
     type_validation_factory: Optional[FieldTypeValidatorFactory],
     _stacklevel_offset: int = 0,
-) -> Type[_T]:
+) -> type[_T]:
     """Actual implementation of the Data Model creation.
 
     See :func:`datamodel` for the description of the parameters.
 
     """
-    mro_bases: Tuple[Type, ...] = cls.__mro__[1:]
+    mro_bases: tuple[type[Any], ...] = cls.__mro__[1:]
 
     if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
@@ -1213,18 +1357,16 @@ def _make_datamodel(
 
     # Final checks and postprocessing
     if strict_frozen:
-        unhashable_fields = set()
-        for f_attr in new_cls.__attrs_attrs__:
-            if is_datamodel(f_attr.type):
-                if getattr(f_attr.type, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True:
-                    continue
-            elif xtyping.is_hashable_type(f_attr.type):
-                continue
-            unhashable_fields.add(f_attr.name)
-
-        if unhashable_fields:
+        mutable_fields = [
+            f_attr.name
+            for f_attr in new_cls.__attrs_attrs__
+            if not _is_strictly_immutable_type(f_attr.type)
+        ]
+        if mutable_fields:
+            names = ", ".join(f"'{name}'" for name in mutable_fields)
             raise exceptions.EveTypeError(
-                f"Some fields ({unhashable_fields}) can not be considered strictly immutable."
+                f"Fields ({names}) of datamodel '{new_cls.__name__}' "
+                "can not be considered strictly immutable."
             )
 
     if "__attrs_init__" in new_cls.__dict__:
@@ -1267,11 +1409,11 @@ class _DataModelGenericNameProperty:
 
 @utils.optional_lru_cache(maxsize=None, typed=True)
 def _make_concrete_with_cache(
-    datamodel_cls: Type[GenericDataModelT],
-    *type_args: Type,
+    datamodel_cls: type[GenericDataModelT],
+    *type_args: type[Any],
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-) -> Type[DataModelT]:
+) -> type[DataModelT]:
     if not is_generic_datamodel_class(datamodel_cls):
         raise TypeError(f"'{datamodel_cls.__name__}' is not a generic model class.")
     for t in type_args:
@@ -1375,7 +1517,7 @@ if xtyping.TYPE_CHECKING:
     class GenericDataModel(GenericDataModelTP):
         @classmethod
         def __class_getitem__(
-            cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
+            cls: type[GenericDataModelTP], args: Union[type[Any], tuple[type[Any], ...]]
         ) -> Union[DataModelTP, GenericDataModelTP]: ...
 
 else:

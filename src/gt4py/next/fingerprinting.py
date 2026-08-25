@@ -571,11 +571,10 @@ def catabolize(
 
     The traversal scheme is fixed: an iterative post-order walk over the
     one-level deconstructions produced by `deconstructor`, so the structure
-    depth is bounded neither by the Python recursion limit nor (on Python
-    <= 3.10) by the C stack. The reduction logic is supplied as the
-    `aggregator` (the algebra of the catamorphism): it aggregates an
-    `EmptyDeconstruction` into a result and, for non-terminal objects,
-    a `Deconstruction` whose pieces have been replaced by the
+    depth is bounded neither by the Python recursion limit nor by the C stack.
+    The reduction logic is supplied as the `aggregator` (the algebra of the
+    catamorphism): it aggregates an `EmptyDeconstruction` into a result and,
+    for non-terminal objects, a `Deconstruction` whose pieces have been replaced by the
     already-aggregated results of the original pieces — in piece order, or in
     canonical sorted order for an `OrderInsensitiveDeconstruction`
     (which requires the results to be orderable).

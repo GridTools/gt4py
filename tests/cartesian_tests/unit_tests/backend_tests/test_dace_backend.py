@@ -9,10 +9,6 @@
 import os
 import pytest
 
-# Skip this module when we collecting tests and "dace" is not installed as a dependency.
-pytest.importorskip("dace")
-
-
 from dace import nodes
 from dace.sdfg.state import LoopRegion
 import dace.sdfg.analysis.schedule_tree.treenodes as tn
@@ -23,9 +19,9 @@ from gt4py.cartesian.gtscript import computation, PARALLEL, interval, Field
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.gtc.dace.treeir import Axis
 
-# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `uses_dace`, we still need to add the marker.
 # This global variable adds the marker to all test functions in this module.
-pytestmark = pytest.mark.requires_dace
+pytestmark = pytest.mark.uses_dace
 
 
 class OMPNumThreads:

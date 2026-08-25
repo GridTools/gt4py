@@ -136,6 +136,21 @@ pytest --ff tests/
 pytest -v -l -s tests/
 ```
 
+Tests which need an optional dependency carry a `requires_*` marker
+(`requires_gpu`, `requires_jax`, `requires_atlas`) and are
+skipped automatically when that dependency is unavailable. Use
+`--require-optional-deps` to disable the automatic skipping and see the actual
+error instead:
+
+```bash
+pytest --require-optional-deps tests/
+```
+
+This option is registered by `tests/conftest.py`, so it is only recognised when the
+invocation reaches that directory (a bare `pytest`, any path under `tests/`, or a
+working directory inside it). It is not accepted by, say,
+`pytest --doctest-modules src/gt4py`, which collects no marked tests anyway.
+
 Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
 
 We recommended you to use `nox` for running the test suite in different environments. `nox` runs the package installation script in properly isolated environments to run tests in a reproducible way. A simple way to start with `nox` would be:

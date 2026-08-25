@@ -586,6 +586,19 @@ def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
     return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
+def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
+    """
+    Create a broadcast FunCall of `expr` to `dims`.
+
+    Examples
+    --------
+    >>> IDim = common.Dimension("IDim")
+    >>> str(broadcast("a", (IDim,)))
+    'broadcast(a, {IDimₕ})'
+    """
+    return call("broadcast")(expr, make_tuple(*(axis_literal(dim) for dim in dims)))
+
+
 def cartesian_offset(
     domain: common.Dimension, codomain: Optional[common.Dimension] = None
 ) -> itir.CartesianOffset:

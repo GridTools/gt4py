@@ -22,6 +22,8 @@ import gt4py.next as gtx
 from gt4py.next import backend as next_backend, config
 from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners
 
+from next_tests.fixtures import compilation as fixtures_compilation
+
 
 @pytest.fixture
 def process_runner(tmp_path):
@@ -208,6 +210,60 @@ def test_wait_for_compilation_untracks_successful_futures():
     compiled_program.wait_for_compilation()
 
     assert future not in compiled_program._ongoing_compilations
+
+
+def test_wait_for_compilation_groups_multiple_failures():
+    errors = [ValueError("first boom"), TypeError("second boom")]
+    # The futures have to stay referenced: tracking is weak, so a collected future
+    # is not reported and this would degrade to the single-failure path.
+    futures = [concurrent.futures.Future() for _ in errors]
+    for i, (future, error) in enumerate(zip(futures, errors)):
+        future.set_exception(error)
+        compiled_program._ongoing_compilations[future] = f"testee_{i} (backend)"
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        compiled_program.wait_for_compilation()
+
+    # Every failure keeps its own traceback instead of being flattened into the
+    # message of a single error, and each program is named. It is a plain
+    # 'ExceptionGroup', not just a 'BaseExceptionGroup', so 'except*' on 'Exception'
+    # catches it.
+    assert type(exc_info.value) is ExceptionGroup
+    assert exc_info.value.exceptions == tuple(errors)
+    assert "testee_0 (backend)" in str(exc_info.value)
+    assert "testee_1 (backend)" in str(exc_info.value)
+
+    # each failure is reported only once
+    compiled_program.wait_for_compilation()
+
+
+def test_wait_for_compilation_drains_foreign_entries():
+    """Pin the leak the `isolate_ongoing_compilations` fixture exists to contain.
+
+    The drain is process-global, so it reports entries this test never created.
+    Across tests that is what makes one test fail with another one's error.
+    """
+    # The future has to stay referenced: tracking is weak, so a collected future
+    # is not reported at all.
+    foreign = concurrent.futures.Future()
+    foreign.set_exception(ValueError("foreign boom"))
+    compiled_program._ongoing_compilations[foreign] = "testee (run_gtfn_gpu)"
+
+    # Nothing in this test compiled anything, yet it drains someone else's failure.
+    with pytest.raises(ValueError, match="foreign boom"):
+        compiled_program.wait_for_compilation()
+
+
+def test_reset_ongoing_compilations_untracks_pending_failures():
+    """A reset test must not see a failure a previous one left behind."""
+    foreign = concurrent.futures.Future()
+    foreign.set_exception(ValueError("foreign boom"))
+    compiled_program._ongoing_compilations[foreign] = "testee (run_gtfn_gpu)"
+
+    fixtures_compilation.reset_ongoing_compilations()
+
+    assert foreign not in compiled_program._ongoing_compilations
+    compiled_program.wait_for_compilation()  # must not raise
 
 
 def test_detect_cuda_archs_prefers_cudaarchs_env():

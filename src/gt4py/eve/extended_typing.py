@@ -17,6 +17,7 @@ from __future__ import annotations
 # ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
+import builtins as _builtins
 import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import functools as _functools
@@ -34,53 +35,100 @@ import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
-if _sys.version_info >= (3, 9):
-    # Standard library already supports PEP 585 (Type Hinting Generics In Standard Collections)
-    from builtins import (  # type: ignore[assignment]
-        dict as Dict,
-        frozenset as FrozenSet,
-        list as List,
-        set as Set,
-        tuple as Tuple,
-        type as Type,
-    )
-    from collections import (
-        ChainMap as ChainMap,
-        Counter as Counter,
-        OrderedDict as OrderedDict,
-        defaultdict as defaultdict,
-        deque as deque,
-    )
-    from collections.abc import (
-        AsyncGenerator as AsyncGenerator,
-        AsyncIterable as AsyncIterable,
-        AsyncIterator as AsyncIterator,
-        Awaitable as Awaitable,
-        ByteString as ByteString,
-        Callable as Callable,
-        Collection as Collection,
-        Container as Container,
-        Coroutine as Coroutine,
-        Generator as Generator,
-        ItemsView as ItemsView,
-        Iterable as Iterable,
-        Iterator as Iterator,
-        KeysView as KeysView,
-        Mapping as Mapping,
-        MappingView as MappingView,
-        MutableMapping as MutableMapping,
-        MutableSequence as MutableSequence,
-        MutableSet as MutableSet,
-        Reversible as Reversible,
-        Sequence as Sequence,
-        Set as AbstractSet,
-        ValuesView as ValuesView,
-    )
-    from contextlib import (
-        AbstractAsyncContextManager as AsyncContextManager,
-        AbstractContextManager as ContextManager,
-    )
-    from re import Match as Match, Pattern as Pattern
+# Re-export the standard collection types under the names the star imports above bind to
+# their deprecated 'typing' counterparts, so that e.g. 'Sequence' is
+# 'collections.abc.Sequence' rather than 'typing.Sequence'. This block must stay *below*
+# the star imports, since it deliberately rebinds names those imports also define; the
+# 'isort: split' marker keeps the import sorter from hoisting it. The builtin generics
+# are deliberately not re-exported under their old 'typing' spellings; see
+# '_DEPRECATED_TYPING_ALIASES' below.
+# isort: split
+from collections import (
+    ChainMap as ChainMap,
+    Counter as Counter,
+    OrderedDict as OrderedDict,
+    defaultdict as defaultdict,
+    deque as deque,
+)
+from collections.abc import (
+    AsyncGenerator as AsyncGenerator,
+    AsyncIterable as AsyncIterable,
+    AsyncIterator as AsyncIterator,
+    Awaitable as Awaitable,
+    ByteString as ByteString,
+    Callable as Callable,
+    Collection as Collection,
+    Container as Container,
+    Coroutine as Coroutine,
+    Generator as Generator,
+    ItemsView as ItemsView,
+    Iterable as Iterable,
+    Iterator as Iterator,
+    KeysView as KeysView,
+    Mapping as Mapping,
+    MappingView as MappingView,
+    MutableMapping as MutableMapping,
+    MutableSequence as MutableSequence,
+    MutableSet as MutableSet,
+    Reversible as Reversible,
+    Sequence as Sequence,
+    Set as AbstractSet,
+    ValuesView as ValuesView,
+)
+from contextlib import (
+    AbstractAsyncContextManager as AsyncContextManager,
+    AbstractContextManager as ContextManager,
+)
+from re import Match as Match, Pattern as Pattern
+
+
+# The 'typing' aliases of the builtin generics are deprecated since PEP 585 and are no
+# longer re-exported: use the builtin spelling instead. They are not simply absent from
+# this module -- the star imports above bind them, and '__getattr__' below would happily
+# forward them to 'typing' -- so they are dropped from the namespace here and rejected
+# explicitly. Without this, removing them would silently downgrade every use site from
+# the builtin to the deprecated 'typing' object. Note that this is a runtime guarantee
+# only: a type checker still resolves the names through the star imports.
+_DEPRECATED_TYPING_ALIASES: Final[Mapping[str, str]] = {
+    "Dict": "dict",
+    "FrozenSet": "frozenset",
+    "List": "list",
+    "Set": "set",
+    "Tuple": "tuple",
+    "Type": "type",
+}
+
+for _alias in _DEPRECATED_TYPING_ALIASES:
+    globals().pop(_alias, None)
+del _alias
+
+# The names are still valid in user-written annotations, and resolving a forward
+# reference through this module has always normalized them to the builtin generic
+# ('typing.List[int]' -> 'list[int]'). Keep that mapping available to the forward-ref
+# machinery below, which would otherwise either raise or hand back the deprecated
+# 'typing' object.
+_DEPRECATED_ALIAS_REPLACEMENTS: Final[Mapping[str, Any]] = {
+    name: getattr(_builtins, replacement)
+    for name, replacement in _DEPRECATED_TYPING_ALIASES.items()
+}
+
+
+class _ForwardRefTypingNamespace:
+    """Namespace bound to the name 'typing' while evaluating forward references.
+
+    Annotations resolve through this module, so that 'typing_extensions' definitions
+    take priority and the standard collection types are used. The deprecated builtin
+    aliases are not re-exported here, but they stay valid in user-written annotations,
+    so 'typing.List[int]' resolves to 'list[int]' rather than raising.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        if (replacement := _DEPRECATED_ALIAS_REPLACEMENTS.get(name)) is not None:
+            return replacement
+        return getattr(_sys.modules[__name__], name)
+
+
+_FORWARD_REF_TYPING_NS: Final = _ForwardRefTypingNamespace()
 
 
 # These fallbacks are useful for public symbols not exported by default.
@@ -89,6 +137,12 @@ def __getattr__(name: str) -> Any:
     import sys
 
     import typing_extensions
+
+    if (replacement := _DEPRECATED_TYPING_ALIASES.get(name)) is not None:
+        raise AttributeError(
+            f"'{name}' is a deprecated 'typing' alias (PEP 585) and is not exported by"
+            f" '{__name__}'. Use '{replacement}' instead."
+        )
 
     result = SENTINEL = object()
     if not (name.startswith("__") and name.endswith("__")):
@@ -106,16 +160,16 @@ def __getattr__(name: str) -> Any:
     return result
 
 
-def __dir__() -> List[str]:
+def __dir__() -> list[str]:
     if not hasattr(self_func := (globals()["__dir__"]), "__cached_dir"):
         import typing
 
         import typing_extensions
 
-        orig_dir = typing.__dir__()
-        self_func.__cached_dir = [*orig_dir] + [
-            name for name in typing_extensions.__dir__() if name not in orig_dir
-        ]
+        # Everything reachable through '__getattr__' plus this module's own definitions,
+        # minus the aliases '__getattr__' explicitly rejects.
+        names = {*typing.__dir__(), *typing_extensions.__dir__(), *globals()}
+        self_func.__cached_dir = sorted(names - _DEPRECATED_TYPING_ALIASES.keys())
 
     return self_func.__cached_dir
 
@@ -132,14 +186,15 @@ class ArgsOnlyCallable(Protocol[_A, _R]):
 
 
 _T_co = TypeVar("_T_co", covariant=True)
-NestedSequence = Sequence[Union[_T_co, "NestedSequence[_T_co]"]]
-NestedList = List[Union[_T_co, "NestedList[_T_co]"]]
-NestedTuple = Tuple[Union[_T_co, "NestedTuple[_T_co]"], ...]
 
-MaybeNested = Union[_T_co, NestedSequence[_T_co]]
-MaybeNestedInSequence = Union[_T_co, NestedSequence[_T_co]]
-MaybeNestedInList = Union[_T_co, NestedList[_T_co]]
-MaybeNestedInTuple = Union[_T_co, NestedTuple[_T_co]]
+type NestedSequence[_T_co] = Sequence[_T_co | NestedSequence[_T_co]]
+type NestedList[_T_co] = list[_T_co | NestedList[_T_co]]
+type NestedTuple[_T_co] = tuple[_T_co | NestedTuple[_T_co], ...]
+
+type MaybeNested[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInSequence[_T_co] = _T_co | NestedSequence[_T_co]
+type MaybeNestedInList[_T_co] = _T_co | NestedList[_T_co]
+type MaybeNestedInTuple[_T_co] = _T_co | NestedTuple[_T_co]
 
 
 def is_nested_tuple_of(value: object, type_: type[_T_co]) -> TypeIs[NestedTuple[_T_co]]:
@@ -159,9 +214,12 @@ def is_maybe_nested_in_tuple_of(
 
 # -- Typing annotations --
 SingleTypeAnnotation = Union[
-    Type,
+    type[Any],
     _types.GenericAlias,
     _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+    # Both PEP 695 type alias implementations, for the same reason as in `_TypeAliasTypes`
+    _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
 ]
 
 SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
@@ -169,13 +227,13 @@ SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
 
-StdGenericAliasType: Final[Type] = type(List[int])
+StdGenericAliasType: Final[type[Any]] = type(list[int])
 
 if TYPE_CHECKING:
     StdGenericAlias: TypeAlias = _types.GenericAlias
 
-_TypingSpecialFormType: Final[Type] = _typing._SpecialForm
-_TypingGenericAliasType: Final[Type] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
+_TypingSpecialFormType: Final[type[Any]] = _typing._SpecialForm
+_TypingGenericAliasType: Final[type[Any]] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -191,14 +249,14 @@ class NonDataDescriptor(Protocol[_C, _V]):
 
     @overload
     def __get__(
-        self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
+        self, _instance: Literal[None], _owner_type: Optional[type[_C]] = None
     ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
-    def __get__(self, _instance: _C, _owner_type: Optional[Type[_C]] = None) -> _V: ...
+    def __get__(self, _instance: _C, _owner_type: Optional[type[_C]] = None) -> _V: ...
 
     def __get__(
-        self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
+        self, _instance: Optional[_C], _owner_type: Optional[type[_C]] = None
     ) -> _V | NonDataDescriptor[_C, _V]: ...
 
 
@@ -299,15 +357,15 @@ def supports_array(value: Any) -> TypeGuard[SupportsArray]:
 
 class ArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> Dict[str, Any]: ...
+    def __array_interface__(self) -> dict[str, Any]: ...
 
 
 class ArrayInterfaceTypedDict(TypedDict):
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     typestr: str
-    descr: NotRequired[List[Tuple]]
-    data: NotRequired[Tuple[int, bool]]
-    strides: NotRequired[Optional[Tuple[int, ...]]]
+    descr: NotRequired[list[tuple]]
+    data: NotRequired[tuple[int, bool]]
+    strides: NotRequired[Optional[tuple[int, ...]]]
     mask: NotRequired[Optional["StrictArrayInterface"]]
     offset: NotRequired[int]
     version: int
@@ -324,16 +382,16 @@ def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
 
 class CUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> Dict[str, Any]: ...
+    def __cuda_array_interface__(self) -> dict[str, Any]: ...
 
 
 class CUDAArrayInterfaceTypedDict(TypedDict):
-    shape: Tuple[int, ...]
+    shape: tuple[int, ...]
     typestr: str
-    data: Tuple[int, bool]
+    data: tuple[int, bool]
     version: int
-    strides: NotRequired[Optional[Tuple[int, ...]]]
-    descr: NotRequired[List[Tuple]]
+    strides: NotRequired[Optional[tuple[int, ...]]]
+    descr: NotRequired[list[tuple]]
     mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
     stream: NotRequired[Optional[int]]
 
@@ -348,7 +406,7 @@ def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
     return hasattr(value, "__cuda_array_interface__")
 
 
-DLPackDevice = Tuple[int, int]
+DLPackDevice = tuple[int, int]
 
 
 class MultiStreamDLPackBuffer(Protocol):
@@ -382,20 +440,10 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: tuple[type, ...] = (_types.GenericAlias,)
-
-# `Any` is a class since Python 3.11
-if isinstance(_typing.Any, type):  # Python >= 3.11
-    _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
-
-# `Any` is a class since typing_extensions >= 4.4 and Python 3.11
-if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
-    typing_exts_any, type
-):
-    _ArtefactTypes = (*_ArtefactTypes, typing_exts_any)
+_ArtefactTypes: Final[tuple[type, ...]] = (_types.GenericAlias, _typing.Any)
 
 
-def is_actual_type(obj: Any) -> TypeGuard[Type]:
+def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
     This is needed because since Python 3.9:
@@ -408,25 +456,126 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     )
 
 
-if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
-    # When using Python < 3.11 and typing_extensions >= 4.4 there are
-    # two different implementations of `Any`
+# -- PEP 695 type aliases (``type X = ...``) --
+#
+# Resolved at the annotation-dispatch funnels (`type_validation`,
+# `datamodels.core._make_type_converter`, `get_represented_types` below), not by
+# rewriting stored annotations: that would force `__value__` evaluation at class
+# creation and break aliases defined before their target. Wire any new shape-dispatching
+# consumer in as well; a funnel left out does not raise, it falls through to its
+# no-match branch (``()`` for `get_represented_types`), silently making every
+# `isinstance()` against the result `False`.
+#
+# Not supported: `ClassVar` behind an alias, and aliases used as runtime values (base
+# class, constructor, `isinstance()` argument) -- the reason ruff's `UP040` stays off.
 
-    def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any or obj is _typing_extensions.Any  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
+#: Both PEP 695 alias implementations: they are distinct classes and neither is an
+#: instance of the other, so both have to be checked. ``hasattr(obj, "__value__")`` is
+#: not equivalent -- ``MyGenericAlias[int]`` proxies attribute lookups to its origin and
+#: passes it without being an alias.
+_TypeAliasTypes: Final[tuple[type, ...]] = (
+    _typing.TypeAliasType,
+    _typing_extensions.TypeAliasType,
+)
 
-else:
+#: Upper bound for the number of resolution steps in `eval_type_alias`. True cycles are
+#: detected exactly by the set of visited aliases; this bound is the backstop for the
+#: chains that diverge without ever repeating, like ``type G[T] = G[Tuple[T]]``.
+_MAX_TYPE_ALIAS_DEPTH: Final = 64
 
-    def is_Any(obj: Any) -> bool:
-        return obj is _typing.Any
+
+def is_type_alias(obj: Any) -> TypeGuard[TypeAliasType]:
+    """Check if an object is a PEP 695 type alias (``type X = ...``)."""
+    return isinstance(obj, _TypeAliasTypes)
 
 
-def has_type_parameters(cls: Type) -> bool:
+def eval_type_alias(annotation: Any) -> Any:
+    """Replace a PEP 695 type alias by the annotation it stands for.
+
+    Chained aliases are followed until a non-alias annotation is reached, and
+    parametrized generic aliases (``MyAlias[int]``) get their type parameters
+    substituted. Any other annotation is returned unchanged (as the identical
+    object), so callers can use an identity check to find out whether anything
+    was actually resolved.
+
+    Note that alias values are evaluated lazily by the interpreter, so this is
+    the point where the names used in the alias definition are looked up for
+    the first time.
+
+    Args:
+        annotation: Any type annotation.
+
+    Returns:
+        The annotation the alias stands for, or `annotation` itself.
+
+    Raises:
+        NameError: If the alias value references a name which is not defined yet.
+        TypeError: If the alias is recursive (reported as such), nested too
+            deeply, cannot be parametrized with the given type arguments, or its
+            value fails to evaluate for any other reason.
+
+    Examples:
+        >>> type MyInt = int
+        >>> eval_type_alias(MyInt)
+        <class 'int'>
+
+        >>> eval_type_alias(float)
+        <class 'float'>
+    """
+    original_annotation = annotation
+    # A set of the aliases already walked through detects a true cycle ('type A = A',
+    # or a mutual 'A -> B -> A') exactly and reports it as such. It cannot replace the
+    # depth bound, though: a parametrized alias like 'type G[T] = G[Tuple[T]]' builds a
+    # bigger annotation on every step and so never repeats one. The two are complements.
+    seen: set[TypeAliasType] = set()
+    recursive = False
+    try:
+        for _ in range(_MAX_TYPE_ALIAS_DEPTH):
+            if is_type_alias(annotation):
+                if annotation in seen:
+                    recursive = True
+                    break
+                seen.add(annotation)
+                annotation = annotation.__value__
+            elif is_type_alias(alias := get_origin(annotation)):
+                annotation = alias.__value__[get_args(annotation)]
+            else:
+                return annotation
+    except NameError:
+        # A signal, not an error: an alias may be defined before its target, so a name
+        # missing here may exist by the time the field is used. 'datamodels' catches it
+        # and defers to the first instantiation, as it already does for string forward
+        # references, at the cost of a later error naming the bare field.
+        raise
+    except Exception as error:
+        # An alias value is arbitrary user code, so it can fail in any way (a typo'd
+        # dtype raises 'AttributeError'). Unlike 'NameError', none of those will ever
+        # resolve, so they fail here rather than being deferred. Wrapping them into one
+        # type lets consumers keep a single narrow 'except' and propagate this message
+        # verbatim, as it is the only text naming the actual cause.
+        raise TypeError(
+            f"Type alias '{original_annotation}' cannot be resolved ({error})."
+        ) from error
+
+    raise TypeError(
+        f"Type alias '{original_annotation}' cannot be resolved "
+        f"({'recursive definition' if recursive else 'nested too deeply'})."
+    )
+
+
+def is_Any(obj: Any) -> bool:
+    """Check if an object is the ``Any`` special form."""
+    # 'typing_extensions' re-exports 'typing.Any' on every supported version, so the
+    # two implementations that used to exist below the 3.11 floor are now one object.
+    return obj is _typing.Any
+
+
+def has_type_parameters(cls: type[Any]) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
 
 
-def get_actual_type(obj: _T) -> Type[_T]:
+def get_actual_type(obj: _T) -> type[_T]:
     """Return type of an object (also working for GenericAlias instances which pretend to be an actual type)."""
     return StdGenericAliasType if isinstance(obj, StdGenericAliasType) else type(obj)
 
@@ -434,13 +583,19 @@ def get_actual_type(obj: _T) -> Type[_T]:
 def get_represented_types(
     type_annotation: TypeAnnotation,
     *,
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
 ) -> tuple[type, ...]:
     """Return a tuple with all the actual types contained in a type annotation."""
+    recurse = _functools.partial(get_represented_types, globalns=globalns, localns=localns)
 
     def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
-        return _functools.reduce(lambda acc, c: acc + get_represented_types(c), annotations, ())
+        return _functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
+
+    # PEP 695 aliases are opaque objects which no other branch below matches, so an
+    # unresolved one would silently yield an empty tuple. Nested aliases are covered
+    # for free, since the generic branches recurse through this same function.
+    type_annotation = eval_type_alias(type_annotation)
 
     if type_annotation is Ellipsis:
         return ()
@@ -450,16 +605,14 @@ def get_represented_types(
 
     if isinstance(type_annotation, TypeVar):
         if type_annotation.__bound__:
-            return get_represented_types(type_annotation.__bound__)
+            return recurse(type_annotation.__bound__)
         if type_annotation.__constraints__:
             return recurse_all(type_annotation.__constraints__)
         if typevar_default := getattr(type_annotation, "__default__", None):
-            return get_represented_types(typevar_default)
+            return recurse(typevar_default)
 
     if isinstance(type_annotation, ForwardRef):
-        return get_represented_types(
-            eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
-        )
+        return recurse(eval_forward_ref(type_annotation, globalns=globalns, localns=localns))
 
     # Generic types
     origin_type = get_origin(type_annotation)
@@ -474,7 +627,7 @@ def get_represented_types(
     return ()
 
 
-def is_type_with_custom_hash(type_: Type) -> bool:
+def is_type_with_custom_hash(type_: type[Any]) -> bool:
     return type_.__hash__ not in (None, object.__hash__)
 
 
@@ -625,10 +778,10 @@ def get_partial_type_hints(
         _types.MethodWrapperType,
         _types.MethodDescriptorType,
     ],
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
     include_extras: bool = False,
-) -> Dict[str, Union[Type, ForwardRef]]:
+) -> dict[str, Union[type[Any], ForwardRef]]:
     """Return a dictionary with type hints (using forward refs for undefined names) for a function, method, module or class object.
 
     For each member type hint in the object a :class:`typing.ForwardRef` instance will be
@@ -642,7 +795,7 @@ def get_partial_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=include_extras
         )
 
-    hints: Dict[str, Union[Type, ForwardRef]] = {}
+    hints: dict[str, Union[type[Any], ForwardRef]] = {}
     annotations = getattr(obj, "__annotations__", {})
     for name, hint in annotations.items():
         obj.__annotations__ = {name: hint}
@@ -669,8 +822,8 @@ def get_partial_type_hints(
 
 def eval_forward_ref(
     ref: Union[str, ForwardRef],
-    globalns: Optional[Dict[str, Any]] = None,
-    localns: Optional[Dict[str, Any]] = None,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
     *,
     include_extras: bool = False,
 ) -> SolvedTypeAnnotation:
@@ -684,9 +837,8 @@ def eval_forward_ref(
         include_extras: if ``True``, ``Annotated`` hints will preserve the annotation.
 
     Examples:
-        >>> from typing import Dict, Tuple
-        >>> print("Result:", eval_forward_ref("Dict[str, Tuple[int, float]]"))
-        Result: ...ict[str, ...uple[int, float]]
+        >>> print("Result:", eval_forward_ref("dict[str, tuple[int, float]]"))
+        Result: dict[str, tuple[int, float]]
 
     """
 
@@ -695,8 +847,15 @@ def eval_forward_ref(
     f.__annotations__ = {"return": ForwardRef(ref) if isinstance(ref, str) else ref}
 
     safe_localns = {**localns} if localns else {}
-    safe_localns.setdefault("typing", _sys.modules[__name__])
+    safe_localns.setdefault("typing", _FORWARD_REF_TYPING_NS)
     safe_localns.setdefault("NoneType", type(None))
+
+    if globalns is None:
+        # Without an explicit 'globalns' the reference is resolved in this module's
+        # namespace, which used to spell the deprecated aliases as the builtin generics.
+        # They are no longer defined here, so re-add them for this evaluation only; a
+        # caller-provided 'globalns' is left untouched, exactly as before.
+        globalns = {**globals(), **_DEPRECATED_ALIAS_REPLACEMENTS}
 
     actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
@@ -704,7 +863,7 @@ def eval_forward_ref(
     return actual_type
 
 
-def _collapse_type_args(*args: Any) -> Tuple[bool, Tuple]:
+def _collapse_type_args(*args: Any) -> tuple[bool, tuple]:
     if args and all(args[0] == a for a in args[1:]):
         return (True, args)
     else:
@@ -714,7 +873,7 @@ def _collapse_type_args(*args: Any) -> Tuple[bool, Tuple]:
 @final
 @_dataclasses.dataclass
 class CallableKwargsInfo:
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 
 def infer_type(
@@ -759,7 +918,7 @@ def infer_type(
         >>> print("Result:", infer_type(f))
         Result: ...Callable[..., int]
 
-        >>> print("Result:", infer_type(Dict[int, Union[int, float]]))
+        >>> print("Result:", infer_type(dict[int, Union[int, float]]))
         Result: ...ict[int, ...int...float...]
 
     For advanced cases, using :func:`functools.singledispatch` with custom hooks
@@ -790,7 +949,7 @@ def infer_type(
         return type(None) if none_as_type else None
 
     if isinstance(value, type):
-        return Type[value]
+        return type[value]
 
     if isinstance(value, tuple) and not isinstance(value, TypedNamedTupleABC):
         # Special case for tuples, which can have multiple types.
@@ -803,7 +962,7 @@ def infer_type(
             return StdGenericAliasType(tuple, (Any, ...))
 
     if isinstance(value, (list, set, frozenset)):
-        t: Union[Type[List], Type[Set], Type[FrozenSet]] = type(value)
+        t: Union[type[list], type[set], type[frozenset]] = type(value)
         unique_type, args = _collapse_type_args(*(_infer(item) for item in value))
         return StdGenericAliasType(t, args[0] if unique_type else Any)
 
@@ -820,8 +979,8 @@ def infer_type(
             return_type = annotations.get("return", Any)
 
             sig = _inspect.signature(value)
-            arg_types: List = []
-            kwonly_arg_types: Dict[str, Any] = {}
+            arg_types: list = []
+            kwonly_arg_types: dict[str, Any] = {}
             for p in sig.parameters.values():
                 if p.kind in (
                     _inspect.Parameter.POSITIONAL_ONLY,

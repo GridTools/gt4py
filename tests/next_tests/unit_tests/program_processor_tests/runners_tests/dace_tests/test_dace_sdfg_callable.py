@@ -8,9 +8,9 @@
 
 """Test the SDFG callable interface in dace backend."""
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners.dace import sdfg_callable
 
 

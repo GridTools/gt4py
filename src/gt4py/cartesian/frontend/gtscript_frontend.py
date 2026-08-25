@@ -52,6 +52,11 @@ from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 PYTHON_AST_VERSION: Final = (3, 12)
 
 
+def _is_ellipsis_node(node: ast.AST) -> bool:
+    """Check whether an AST node is the '...' literal."""
+    return isinstance(node, ast.Constant) and node.value is Ellipsis
+
+
 class AssertionChecker(ast.NodeTransformer):
     """Check assertions and remove from the AST for further parsing."""
 
@@ -298,7 +303,7 @@ class HorizontalIntervalParser(IntervalParser):
 class VerticalIntervalParser(IntervalParser):
     """Parse Python AST interval syntax in the form of a Slice.
 
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    Corner cases: an ellipsis (`...`) constant refers to the entire interval, and
     if an `ast.Subscript` is passed, this parses its slice attribute.
     """
 
@@ -344,7 +349,7 @@ class VerticalIntervalParser(IntervalParser):
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
 
-        if isinstance(node, ast.Constant) and node.value is Ellipsis:
+        if _is_ellipsis_node(node):
             interval = nodes.AxisInterval.full_interval()
             interval.loc = loc
             return interval
@@ -1372,7 +1377,7 @@ class IRMaker(ast.NodeVisitor):
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
-        if any(isinstance(cn, types.EllipsisType) for cn in index_nodes):
+        if any(_is_ellipsis_node(cn) for cn in index_nodes):
             return None
 
         # Determine if we are using the new-style axis syntax, or the old style.
