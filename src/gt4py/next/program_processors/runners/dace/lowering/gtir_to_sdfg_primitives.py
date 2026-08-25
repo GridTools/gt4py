@@ -235,7 +235,9 @@ def translate_as_fieldop(
 
     fun_node = node.fun
     if len(fun_node.args) != 2:
-        raise ValueError(f"Missing domain on 'as_fieldop' node: '{node}'.")
+        raise ValueError(
+            f"'as_fieldop' expects exactly 2 arguments (expression, domain): '{node}'."
+        )
     fieldop_expr, fieldop_domain_expr = fun_node.args
 
     if cpm.is_call_to(fieldop_expr, "scan"):

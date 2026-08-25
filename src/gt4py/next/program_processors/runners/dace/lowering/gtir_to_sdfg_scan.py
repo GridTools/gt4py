@@ -649,7 +649,9 @@ def translate_scan(
 
     fun_node = node.fun
     if len(fun_node.args) != 2:
-        raise ValueError(f"Missing domain on 'as_fieldop' node: '{node}'.")
+        raise ValueError(
+            f"'as_fieldop' expects exactly 2 arguments (expression, domain): '{node}'."
+        )
     scan_expr, scan_domain_expr = fun_node.args
     assert cpm.is_call_to(scan_expr, "scan")
 
