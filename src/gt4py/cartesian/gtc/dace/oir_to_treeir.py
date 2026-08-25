@@ -165,7 +165,10 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: tir.Context) -> None:
-        condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
+        if isinstance(node.mask, oir.ScalarAccess) and node.mask.dtype == common.DataType.BOOL:
+            condition_name = str(node.mask.name)
+        else:
+            condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
 
         if_else = tir.IfElse(
             if_condition_code=condition_name, children=[], parent=ctx.current_scope
@@ -218,10 +221,12 @@ class OIRToTreeIR(eve.NodeVisitor):
         return " and ".join(conditions)
 
     def visit_While(self, node: oir.While, ctx: tir.Context) -> None:
-        condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
-
-        # Re-evaluate the condition as last step of the while loop
-        node.body.append(assignment)
+        if isinstance(node.cond, oir.ScalarAccess) and node.cond.dtype == common.DataType.BOOL:
+            condition_name = str(node.cond.name)
+        else:
+            condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
+            # Re-evaluate the condition as last step of the while loop
+            node.body.append(assignment)
 
         # Use the mask created for conditional check
         while_ = tir.While(
