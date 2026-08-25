@@ -9,17 +9,23 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    E2V,
+    Edge,
     IDim,
     IHalfDim,
     JDim,
     KDim,
     KHalfDim,
+    Vertex,
     cartesian_case,
+    unstructured_case,
+    unstructured_case_3d,
 )
-from next_tests.integration_tests.cases_utils import exec_alloc_descriptor
+from next_tests.integration_tests.cases_utils import exec_alloc_descriptor, mesh_descriptor
 
 
 @pytest.mark.uses_cartesian_shift
@@ -140,3 +146,67 @@ def test_cartesian_half_shift_multi_dim(cartesian_case):
     )()
 
     cases.verify(cartesian_case, testee, a, out=out, ref=a, offset_provider={})
+
+
+@pytest.mark.uses_cartesian_shift
+@pytest.mark.uses_dynamic_offsets
+def test_cartesian_half_shift_as_offset(cartesian_case):
+    Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
+    @gtx.field_operator
+    def testee(
+        a: gtx.Field[[IDim, KHalfDim], np.int32], offset_field: cases.IKField
+    ) -> cases.IKField:
+        return a(KDim - 0.5)(as_offset(Koff, offset_field))
+
+    isize = cartesian_case.default_sizes[IDim]
+    ksize = cartesian_case.default_sizes[KDim]
+    a = cases.allocate(cartesian_case, testee, "a", sizes={IDim: isize, KHalfDim: ksize + 1})()
+    offset_field = cases.allocate(
+        cartesian_case,
+        testee,
+        "offset_field",
+        sizes={IDim: isize, KDim: ksize},
+        strategy=cases.ConstInitializer(1),
+    )()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, sizes={IDim: isize, KDim: ksize})()
+
+    cases.verify(
+        cartesian_case, testee, a, offset_field, out=out, ref=a.asnumpy()[:, 1:], offset_provider={}
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_dynamic_offsets
+def test_unstructured_shift_half_shift_as_offset(unstructured_case_3d):
+    Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
+    @gtx.field_operator
+    def testee(
+        a: gtx.Field[[Vertex, KHalfDim], np.int32],
+        offset_field: gtx.Field[[Edge, KDim], np.int32],
+    ) -> gtx.Field[[Edge, KDim], np.int32]:
+        return a(E2V[0])(KDim - 0.5)(as_offset(Koff, offset_field))
+
+    nvertices = unstructured_case_3d.default_sizes[Vertex]
+    ksize = unstructured_case_3d.default_sizes[KDim]
+    a = cases.allocate(
+        unstructured_case_3d,
+        testee,
+        "a",
+        domain={Vertex: (0, nvertices), KHalfDim: (0, ksize + 1)},
+    )()
+    offset_field = cases.allocate(
+        unstructured_case_3d, testee, "offset_field", strategy=cases.ConstInitializer(1)
+    )()
+    out = cases.allocate(unstructured_case_3d, testee, cases.RETURN)()
+
+    e2v_table = unstructured_case_3d.offset_provider["E2V"].asnumpy()
+    cases.verify(
+        unstructured_case_3d,
+        testee,
+        a,
+        offset_field,
+        out=out,
+        ref=a.asnumpy()[e2v_table[:, 0], 1:],
+    )
