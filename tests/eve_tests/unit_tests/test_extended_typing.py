@@ -500,6 +500,7 @@ type SampleRecursiveAlias = SampleRecursiveAlias
 type SampleMutualAliasA = SampleMutualAliasB
 type SampleMutualAliasB = SampleMutualAliasA
 type SampleDivergingGenericAlias[T] = SampleDivergingGenericAlias[tuple[T]]
+type SampleNestedTupleAlias[T] = tuple[T | SampleNestedTupleAlias[T], ...]
 
 
 def test_is_type_alias():
@@ -540,6 +541,21 @@ def test_eval_type_alias_with_undefined_value():
 def test_eval_type_alias_with_recursive_alias():
     with pytest.raises(TypeError, match="recursive definition"):
         xtyping.eval_type_alias(SampleRecursiveAlias)
+
+
+def test_eval_type_alias_with_alias_recursing_through_a_container():
+    # Unlike 'type A = A', an alias recursing through a container is well founded: a
+    # single resolution step already yields an annotation which is not an alias itself,
+    # so it resolves instead of being reported as a cycle. The alias is still present
+    # in the result, so consumers walking it have to break the recursion themselves.
+    assert (
+        xtyping.eval_type_alias(SampleNestedTupleAlias[int])
+        == tuple[int | SampleNestedTupleAlias[int], ...]
+    )
+    assert (
+        xtyping.eval_type_alias(xtyping.NestedTuple[int])
+        == tuple[int | xtyping.NestedTuple[int], ...]
+    )
 
 
 def test_eval_type_alias_with_mutually_recursive_aliases():
@@ -607,6 +623,15 @@ def test_get_represented_types_resolves_type_aliases():
         SampleReprB,
         int,
     )
+
+
+def test_get_represented_types_with_alias_recursing_through_a_container():
+    # The recursion stops at the container, since generic annotations are represented
+    # by their origin and are not walked any further.
+    assert xtyping.get_represented_types(SampleNestedTupleAlias[int]) == (tuple,)
+    assert xtyping.get_represented_types(xtyping.NestedTuple) == (tuple,)
+    assert xtyping.get_represented_types(xtyping.NestedTuple[int]) == (tuple,)
+    assert xtyping.get_represented_types(xtyping.MaybeNestedInTuple[int]) == (int, tuple)
 
 
 def test_get_represented_types_with_alias_nested_in_annotation():

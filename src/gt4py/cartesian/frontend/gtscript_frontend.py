@@ -1378,7 +1378,10 @@ class IRMaker(ast.NodeVisitor):
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
         if any(_is_ellipsis_node(cn) for cn in index_nodes):
-            return None
+            raise GTScriptSyntaxError(
+                "Field access with ellipsis has been replaced with the plain field name."
+                " Hint: Change `field[...]` to just `field`."
+            )
 
         # Determine if we are using the new-style axis syntax, or the old style.
         # If this is parsing a data index, this should be fine and will return False.
