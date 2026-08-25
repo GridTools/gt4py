@@ -119,6 +119,10 @@ def test_shift():
     assert actual == expected
 
 
+def test_none_literal():
+    assert pparse("None") == ir.NoneLiteral()
+
+
 def test_infinity_literal():
     assert pparse("∞") == ir.InfinityLiteral.POSITIVE
     assert pparse("-∞") == ir.InfinityLiteral.NEGATIVE
