@@ -105,21 +105,6 @@ def test_literal_type_annotation():
     assert pformat(im.literal("1", "int16")) == "1:i16"
 
 
-def test_literal_type_annotation_elided_when_implied():
-    assert pformat(im.literal("1.0", "float64")) == "1.0"
-    assert pformat(im.literal("1", "int32")) == "1"
-    assert pformat(im.literal("2147483648", "int64")) == "2147483648"
-    assert pformat(im.literal("True", "bool")) == "True"
-
-
-def test_literal_type_annotation_modes():
-    assert pformat(im.literal("1.0", "float32"), types="none") == "1.0"
-    assert pformat(im.literal("1.0", "float32"), types="all") == "1.0:f32"
-    assert pformat(im.literal("1.0", "float64"), types="none") == "1.0"
-    assert pformat(im.literal("1.0", "float64"), types="all") == "1.0:f64"
-    assert pformat(im.literal("True", "bool"), types="all") == "True:i1"
-
-
 def test_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="divides"),
@@ -234,7 +219,7 @@ def test_tuple_get():
         fun=ir.SymRef(id="tuple_get"),
         args=[im.literal("42", builtins.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
-    expected = "x[42]"
+    expected = "x[42:i32]"
     actual = pformat(testee)
     assert actual == expected
 

@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import types as _types
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Final, Literal, Optional
+from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_specifications as ts
 
 
 # replacements for builtin binary operations
@@ -98,36 +98,8 @@ def format_type(type_: ts.TypeSpec) -> str:
     raise NotImplementedError(f"No pretty-printed form for type '{type_}'.")
 
 
-def implied_literal_type(value: str) -> Optional[ts.ScalarType]:
-    """Type an unannotated literal lexeme denotes, or `None` if it denotes no type.
-
-    `pretty_parser` assigns exactly this to a bare lexeme, which is what lets the
-    printer leave an annotation off when it would agree.  Both directions read
-    this one function so that they cannot drift apart.
-    """
-    if value in ("True", "False"):
-        return ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    try:
-        int_type = type_translation.from_value(int(value))
-    except ValueError:
-        pass
-    else:
-        assert isinstance(int_type, ts.ScalarType)
-        return int_type
-    try:
-        float(value)
-    except ValueError:
-        return None
-    return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-
-
-#: Where `pformat` writes the type a node carries: "minimal" only where it is
-#: needed to reconstruct the node, "none" never, "all" on every `Literal`.
-TypeAnnotations = Literal["minimal", "none", "all"]
-
 DEFAULT_INDENT: Final = 2
 DEFAULT_WIDTH: Final = 100
-DEFAULT_TYPE_ANNOTATIONS: Final[TypeAnnotations] = "minimal"
 
 
 class PrettyPrinter(NodeTranslator):
@@ -135,12 +107,10 @@ class PrettyPrinter(NodeTranslator):
         self,
         indent: int = DEFAULT_INDENT,
         width: int = DEFAULT_WIDTH,
-        types: TypeAnnotations = DEFAULT_TYPE_ANNOTATIONS,
     ) -> None:
         super().__init__()
         self.indent: int = indent
         self.width: int = width
-        self.types: TypeAnnotations = types
 
     @staticmethod
     def _hmerge(*blocks: list[str]) -> list[str]:
@@ -200,11 +170,10 @@ class PrettyPrinter(NodeTranslator):
         return [node.id]
 
     def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
-        if self.types == "all" or (
-            self.types == "minimal" and implied_literal_type(node.value) != node.type
-        ):
-            return [f"{node.value}:{format_type(node.type)}"]
-        return [str(node.value)]
+        if node.type.kind == ts.ScalarKind.BOOL:
+            # `True`/`False` can only be `bool`
+            return [str(node.value)]
+        return [f"{node.value}:{format_type(node.type)}"]
 
     def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, prec: int) -> list[str]:
         if node == ir.InfinityLiteral.POSITIVE:
@@ -403,23 +372,13 @@ class PrettyPrinter(NodeTranslator):
         )
 
     @classmethod
-    def apply(cls, node: ir.Node, indent: int, width: int, types: TypeAnnotations) -> str:
-        return "\n".join(cls(indent=indent, width=width, types=types).visit(node, prec=0))
+    def apply(cls, node: ir.Node, indent: int, width: int) -> str:
+        return "\n".join(cls(indent=indent, width=width).visit(node, prec=0))
 
 
-def pformat(
-    x: ir.Node,
-    indent: int = DEFAULT_INDENT,
-    width: int = DEFAULT_WIDTH,
-    types: TypeAnnotations = DEFAULT_TYPE_ANNOTATIONS,
-) -> str:
-    return PrettyPrinter.apply(x, indent, width, types)
+def pformat(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> str:
+    return PrettyPrinter.apply(x, indent, width)
 
 
-def pprint(
-    x: ir.Node,
-    indent: int = DEFAULT_INDENT,
-    width: int = DEFAULT_WIDTH,
-    types: TypeAnnotations = DEFAULT_TYPE_ANNOTATIONS,
-) -> None:
-    print(pformat(x, indent, width, types))
+def pprint(x: ir.Node, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> None:
+    print(pformat(x, indent, width))

@@ -94,7 +94,7 @@ def test_bc(uids: utils.IDGeneratorPool):
             im.deref("it1"), im.literal_from_value(0.0), im.plus(im.deref("var"), im.deref("var"))
         )
     )
-    expected = """(λ(_icdlv_0) → if ·it1 then 0.0 else (λ(_cs_0) → _cs_0 + _cs_0)(·(↑(λ() → _icdlv_0()))()))(
+    expected = """(λ(_icdlv_0) → if ·it1 then 0.0:f64 else (λ(_cs_0) → _cs_0 + _cs_0)(·(↑(λ() → _icdlv_0()))()))(
   λ() → ·it2
 )"""
 

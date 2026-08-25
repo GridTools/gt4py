@@ -230,12 +230,12 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
 
     expected = textwrap.dedent(
         """
-        a = 1
-        b = 2
+        a = 1:i32
+        b = 2:i32
         c = a + b
-        d = 3
+        d = 3:i32
         _let_result_0 = c + d
-        return _let_result_0 + 4
+        return _let_result_0 + 4:i32
     """
     ).strip()
 

@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Union
+from typing import Optional, Union
 
 from lark import (
     exceptions as lark_exceptions,
@@ -17,8 +17,8 @@ from lark import (
 )
 
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS, implied_literal_type
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 GRAMMAR = """
@@ -115,8 +115,29 @@ GRAMMAR = """
 """  # noqa: RUF001 [ambiguous-unicode-character-string]
 
 
+def implied_literal_type(value: str) -> Optional[ts.ScalarType]:
+    """Type an unannotated literal lexeme denotes, or `None` if it denotes no type.
+
+    `pformat` always annotates, so this only serves hand-written input.
+    """
+    if value in ("True", "False"):
+        return ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    try:
+        int_type = type_translation.from_value(int(value))
+    except ValueError:
+        pass
+    else:
+        assert isinstance(int_type, ts.ScalarType)
+        return int_type
+    try:
+        float(value)
+    except ValueError:
+        return None
+    return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+
 def _bare_literal(value: str) -> ir.Literal:
-    """A literal written without a type annotation; `pretty_printer` elides against this."""
+    """A literal written without a type annotation."""
     type_ = implied_literal_type(value)
     assert type_ is not None, f"'{value}' is not a literal lexeme."
     return ir.Literal(value=value, type=type_)

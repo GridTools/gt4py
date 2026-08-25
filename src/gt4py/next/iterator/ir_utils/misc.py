@@ -128,7 +128,7 @@ def unwrap_scan(
     >>> str(stencil)
     'λ(arg) → state + ·arg'
     >>> str(back_trafo(stencil))
-    'scan(λ(state, arg) → state + ·arg, True, 0.0)'
+    'scan(λ(state, arg) → state + ·arg, True, 0.0:f64)'
 
     In case a regular stencil is given it is returned as-is:
 
