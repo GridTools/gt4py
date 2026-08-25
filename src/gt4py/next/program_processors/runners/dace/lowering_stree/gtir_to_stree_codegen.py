@@ -578,10 +578,10 @@ class StreePythonCodegen(eve.NodeVisitor):
             field_type: ts.FieldType | None = None
             if isinstance(node.type, ts.FieldType):
                 field_type = node.type
-            elif isinstance(node.type, itir_ts.IteratorType) and node.type.position_dims == "unknown":
-                field_type = ts.FieldType(
-                    dims=node.type.defined_dims, dtype=node.type.element_type
-                )
+            elif (
+                isinstance(node.type, itir_ts.IteratorType) and node.type.position_dims == "unknown"
+            ):
+                field_type = ts.FieldType(dims=node.type.defined_dims, dtype=node.type.element_type)
             if field_type is not None and isinstance(field_type.dtype, ts.ScalarType):
                 if any(dim.kind == gtx_common.DimensionKind.LOCAL for dim in field_type.dims):
                     return None
@@ -592,7 +592,9 @@ class StreePythonCodegen(eve.NodeVisitor):
 
         return None
 
-    def _resolve_lifted_lambda(self, applied_lift: gtir.FunCall, ctx: CodegenContext) -> gtir.Lambda:
+    def _resolve_lifted_lambda(
+        self, applied_lift: gtir.FunCall, ctx: CodegenContext
+    ) -> gtir.Lambda:
         """Return the lambda of an applied lift ``(↑f)(args...)``.
 
         ``apply_common_transforms`` (common subexpression elimination) may
