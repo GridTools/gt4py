@@ -23,87 +23,45 @@ from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-_SET_AT = ir.SetAt(
-    expr=ir.SymRef(id="x"),
-    domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-    target=ir.SymRef(id="y"),
+_SET_AT = ir.SetAt(expr=im.ref("x"), domain=im.call("cartesian_domain")(), target=im.ref("y"))
+
+
+_LONG_NAME = (
+    "very_loooooooooooooooooooong_condition_to_force_a_line_break_and_test_alignment_of_branches"
 )
 
 
 ROUNDTRIP_CASES = [
-    pytest.param(ir.SymRef(id="x"), id="symref"),
-    pytest.param(ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")), id="lambda"),
+    pytest.param(im.ref("x"), id="symref"),
+    pytest.param(im.lambda_("x")(im.ref("x")), id="lambda"),
     pytest.param(ir.OffsetLiteral(value="I"), id="offset_literal"),
     pytest.param(ir.OffsetLiteral(value=1), id="offset_literal_int"),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="divides"),
-            args=[
-                ir.FunCall(
-                    fun=ir.SymRef(id="multiplies"),
-                    args=[
-                        ir.FunCall(
-                            fun=ir.SymRef(id="plus"),
-                            args=[im.literal("1", "int64"), im.literal("2", "int64")],
-                        ),
-                        im.literal("3", "int64"),
-                    ],
-                ),
-                im.literal("4", "int64"),
-            ],
+        im.divides_(
+            im.multiplies_(
+                im.plus(im.literal("1", "int64"), im.literal("2", "int64")),
+                im.literal("3", "int64"),
+            ),
+            im.literal("4", "int64"),
         ),
         id="arithmetic",
     ),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="plus"),
-            args=[
-                ir.FunCall(
-                    fun=ir.SymRef(id="plus"),
-                    args=[im.literal("1", "int64"), im.literal("2", "int64")],
-                ),
-                ir.FunCall(
-                    fun=ir.SymRef(id="plus"),
-                    args=[im.literal("3", "int64"), im.literal("4", "int64")],
-                ),
-            ],
+        im.plus(
+            im.plus(im.literal("1", "int64"), im.literal("2", "int64")),
+            im.plus(im.literal("3", "int64"), im.literal("4", "int64")),
         ),
         id="associativity",
     ),
-    pytest.param(ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="x")]), id="deref"),
-    pytest.param(ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")]), id="lift"),
+    pytest.param(im.deref("x"), id="deref"),
+    pytest.param(im.call("lift")("x"), id="lift"),
+    pytest.param(im.call("as_fieldop")("x"), id="as_fieldop"),
     pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")]), id="as_fieldop"
-    ),
-    pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="not_"),
-            args=[
-                ir.FunCall(
-                    fun=ir.SymRef(id="or_"),
-                    args=[
-                        ir.FunCall(fun=ir.SymRef(id="not_"), args=[ir.SymRef(id="a")]),
-                        ir.FunCall(
-                            fun=ir.SymRef(id="and_"),
-                            args=[
-                                ir.SymRef(id="b"),
-                                ir.FunCall(
-                                    fun=ir.SymRef(id="or_"),
-                                    args=[ir.SymRef(id="c"), ir.SymRef(id="d")],
-                                ),
-                            ],
-                        ),
-                    ],
-                )
-            ],
-        ),
+        im.not_(im.or_(im.not_("a"), im.and_("b", im.or_("c", "d")))),
         id="bool_arithmetic",
     ),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="shift"),
-            args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
-        ),
+        im.call("shift")(im.ensure_offset("I"), im.ensure_offset(1)),
         id="shift",
     ),
     pytest.param(
@@ -111,16 +69,9 @@ ROUNDTRIP_CASES = [
         id="cartesian_offset",
     ),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="tuple_get"),
-            args=[im.literal("42", builtins.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
-        ),
-        id="tuple_get",
+        im.tuple_get(im.literal("42", builtins.INTEGER_INDEX_BUILTIN), "x"), id="tuple_get"
     ),
-    pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="make_tuple"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]),
-        id="make_tuple",
-    ),
+    pytest.param(im.make_tuple("x", "y"), id="make_tuple"),
     pytest.param(
         ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL), id="axis_literal_horizontal"
     ),
@@ -128,65 +79,25 @@ ROUNDTRIP_CASES = [
         ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL), id="axis_literal_vertical"
     ),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="named_range"),
-            args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
-        ),
-        id="named_range_horizontal",
+        im.named_range(ir.AxisLiteral(value="IDim"), "x", "y"), id="named_range_horizontal"
     ),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="named_range"),
-            args=[
-                ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL),
-                ir.SymRef(id="x"),
-                ir.SymRef(id="y"),
-            ],
-        ),
+        im.named_range(ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL), "x", "y"),
         id="named_range_vertical",
     ),
+    pytest.param(im.call("cartesian_domain")("x"), id="cartesian_domain"),
+    pytest.param(im.call("unstructured_domain")("x"), id="unstructured_domain"),
+    pytest.param(im.if_("x", "y", "z"), id="if_short"),
+    pytest.param(im.if_(_LONG_NAME, "y", "z"), id="if_long"),
+    pytest.param(im.call("f")("x"), id="fun_call"),
+    pytest.param(im.call(im.lambda_("x")(im.ref("x")))("x"), id="lambda_call"),
     pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[ir.SymRef(id="x")]),
-        id="cartesian_domain",
-    ),
-    pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="unstructured_domain"), args=[ir.SymRef(id="x")]),
-        id="unstructured_domain",
-    ),
-    pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="if_"),
-            args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
-        ),
-        id="if_short",
-    ),
-    pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="if_"),
-            args=[
-                ir.SymRef(
-                    id="very_loooooooooooooooooooong_condition_to_force_a_line_break_and_test_alignment_of_branches"
-                ),
-                ir.SymRef(id="y"),
-                ir.SymRef(id="z"),
-            ],
-        ),
-        id="if_long",
-    ),
-    pytest.param(ir.FunCall(fun=ir.SymRef(id="f"), args=[ir.SymRef(id="x")]), id="fun_call"),
-    pytest.param(
-        ir.FunCall(
-            fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")), args=[ir.SymRef(id="x")]
-        ),
-        id="lambda_call",
-    ),
-    pytest.param(
-        ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")),
+        ir.FunctionDefinition(id="f", params=[im.sym("x")], expr=im.ref("x")),
         id="function_definition",
     ),
     pytest.param(
         ir.Temporary(
-            id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+            id="t", domain=im.ref("domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
         ),
         id="temporary",
     ),
@@ -206,13 +117,13 @@ ROUNDTRIP_CASES = [
         ir.Program(
             id="f",
             function_definitions=[
-                ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+                ir.FunctionDefinition(id="g", params=[im.sym("x")], expr=im.ref("x"))
             ],
-            params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+            params=[im.sym("d"), im.sym("x"), im.sym("y")],
             declarations=[
                 ir.Temporary(
                     id="tmp",
-                    domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                    domain=im.call("cartesian_domain")(),
                     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                 )
             ],
@@ -228,7 +139,7 @@ ROUNDTRIP_CASES = [
     pytest.param(
         ir.Temporary(
             id="t",
-            domain=ir.SymRef(id="domain"),
+            domain=im.ref("domain"),
             dtype=ts.TupleType(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.BOOL),
@@ -241,7 +152,7 @@ ROUNDTRIP_CASES = [
     pytest.param(
         ir.Temporary(
             id="t",
-            domain=ir.SymRef(id="domain"),
+            domain=im.ref("domain"),
             dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]),
         ),
         id="temporary_shaped_dtype",
@@ -249,24 +160,15 @@ ROUNDTRIP_CASES = [
     pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive"),
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(
-        ir.FunCall(
-            fun=ir.SymRef(id="named_range"),
-            args=[
-                ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
-                ir.InfinityLiteral.NEGATIVE,
-                im.literal("5", "int32"),
-            ],
+        im.named_range(
+            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.InfinityLiteral.NEGATIVE,
+            im.literal("5", "int32"),
         ),
         id="named_range_unbounded",
     ),
-    pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[ir.SymRef(id="a"), ir.SymRef(id="b")]),
-        id="less_equal",
-    ),
-    pytest.param(
-        ir.FunCall(fun=ir.SymRef(id="greater_equal"), args=[ir.SymRef(id="a"), ir.SymRef(id="b")]),
-        id="greater_equal",
-    ),
+    pytest.param(im.less_equal("a", "b"), id="less_equal"),
+    pytest.param(im.greater_equal("a", "b"), id="greater_equal"),
 ]
 
 
