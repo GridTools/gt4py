@@ -134,7 +134,7 @@ class OIRToTasklet(eve.NodeVisitor):
                 name_parts.append(f"[{abs_index}]")
         elif isinstance(node.offset, oir.VariableKOffset):
             # Variable K offset subscript
-            symbol = tir.k_symbol(ctx.scope)
+            symbol = tir.Axis.K.iteration_symbol()
             shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
             var_index = f"{symbol} + {shift} + {offset}"
@@ -285,9 +285,6 @@ class OIRToTasklet(eve.NodeVisitor):
         return f"{function_name}({arguments})"
 
     def visit_IteratorAccess(self, node: oir.IteratorAccess, ctx: Context, **kwargs: Any) -> str:
-        if node.name == tir.Axis.K:
-            return tir.k_symbol(ctx.scope)
-
         return tir.Axis(node.name).iteration_symbol()
 
     # Not (yet) supported section
@@ -406,12 +403,7 @@ def _memlet_subset_cartesian(
     # Handle cartesian indices
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if dimensions[index]:
-            iteration_symbol = (
-                utils.get_dace_symbol(tir.k_symbol(ctx.scope))
-                if axis == tir.Axis.K
-                else axis.iteration_dace_symbol()
-            )
-            i = f"({iteration_symbol}) + ({shift[axis]}) + ({offset_dict[axis.lower()]})"
+            i = f"({axis.iteration_dace_symbol()}) + ({shift[axis]}) + ({offset_dict[axis.lower()]})"
             ranges.append((i, i, 1))
 
     # Append data dimensions
