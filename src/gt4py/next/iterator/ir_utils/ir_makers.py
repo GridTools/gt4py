@@ -90,8 +90,6 @@ def ensure_expr(expr_like: ExprLike) -> itir.Expr:
         return ref(expr_like)
     elif core_defs.is_scalar_type(expr_like):
         return literal_from_value(expr_like)
-    elif expr_like is None:
-        return itir.NoneLiteral()
     elif isinstance(expr_like, common.Dimension):
         return axis_literal(expr_like)
     assert isinstance(expr_like, itir.Expr), expr_like
