@@ -597,7 +597,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.literal(str(val), target_type)
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
-        if isinstance(type_, (ts.TupleType, ts.NamedCollectionType)):
+        if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val

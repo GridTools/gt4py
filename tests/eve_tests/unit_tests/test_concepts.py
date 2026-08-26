@@ -107,6 +107,26 @@ class TestNode:
 
         assert set(sample_node.annex.keys()) >= {"an_int", "a_str"}
 
+    def test_nested_tuple_of_nodes_field(self):
+        # A node holding an arbitrarily nested tuple of other nodes (e.g. the targets of
+        # a tuple comprehension) is annotated with the recursive 'NestedTuple' alias.
+        class Target(eve.Node):
+            name: str
+
+        class Parent(eve.Node):
+            targets: eve.extended_typing.NestedTuple[Target]
+
+        node = Parent(targets=(Target(name="a"), (Target(name="b"), (Target(name="c"),))))
+
+        assert [target.name for target in eve.walk_values(node).if_isinstance(Target)] == [
+            "a",
+            "b",
+            "c",
+        ]
+
+        with pytest.raises((TypeError, ValueError)):
+            Parent(targets=(Target(name="a"), ("b",)))
+
     def test_children(self, sample_node):
         children_names = set(name for name, _ in sample_node.iter_children_items())
 

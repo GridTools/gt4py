@@ -292,7 +292,7 @@ def _check_if_map_must_be_handled(
     map_entry: dace_nodes.MapEntry,
     state: dace.SDFGState,
     sdfg: dace.SDFG,
-) -> None | dict[str, tuple[dace_nodes.AccessNode, dace_nodes.AccessNode]]:
+) -> dict[str, tuple[dace_nodes.AccessNode, dace_nodes.AccessNode]] | None:
     """Check if the map should be processed to uphold rule 3.
 
     Essentially the function will check if there is a potential read-write

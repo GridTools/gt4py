@@ -18,6 +18,7 @@ from gt4py.next import errors
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -28,22 +29,24 @@ DialectRootT = TypeVar("DialectRootT")
 #: what to use instead. Constructs not listed here get a generic message naming
 #: the `ast` class. Keep the hints actionable: name the closest supported
 #: alternative, not just the restriction.
-# TODO(havogt): add 'ast.TryStar' ('try*' statement, Python >=3.11) once the
-#  Python floor is >=3.12; referencing it unconditionally breaks import on 3.10.
 _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.For: (
         "'for' loop",
         (
-            "GT4Py functions describe operations on whole fields without explicit loops. "
-            "Use field expressions or built-ins like 'neighbor_sum' instead; for sequential "
-            "dependencies along a dimension, use a 'scan_operator'.",
+            (
+                "GT4Py functions describe operations on whole fields without explicit loops. "
+                "Use field expressions or built-ins like 'neighbor_sum' instead; for sequential "
+                "dependencies along a dimension, use a 'scan_operator'."
+            ),
         ),
     ),
     ast.While: (
         "'while' loop",
         (
-            "GT4Py functions describe operations on whole fields without explicit loops. "
-            "For sequential dependencies along a dimension, use a 'scan_operator'.",
+            (
+                "GT4Py functions describe operations on whole fields without explicit loops. "
+                "For sequential dependencies along a dimension, use a 'scan_operator'."
+            ),
         ),
     ),
     ast.ListComp: (
@@ -57,7 +60,19 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
         "'lambda' expression",
         ("Define a separate function decorated with '@field_operator' instead.",),
     ),
+    # TODO(egparedes): make these two entries reachable for the common 'except <Type>:'
+    # shape. Naming an exception type turns it into a closure variable, and
+    # 'func_to_foast.FieldOperatorParser.visit_FunctionDef' types closure variables
+    # *before* visiting the body, so 'try: ... except ValueError: ...' fails first with
+    # "Unexpected object 'ValueError' of type '<class 'type'>' encountered." Only
+    # 'try/finally' and bare 'try/except:' reach this catalogue; 'try*' never does,
+    # since 'except*' always names a type. Fixing it means running the
+    # unsupported-syntax scan ahead of closure-variable type deduction.
     ast.Try: ("'try' statement", ("Exception handling is not available inside GT4Py functions.",)),
+    ast.TryStar: (
+        "'try*' statement",
+        ("Exception handling is not available inside GT4Py functions.",),
+    ),
     ast.Raise: (
         "'raise' statement",
         ("Exception handling is not available inside GT4Py functions.",),
@@ -68,6 +83,24 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ast.JoinedStr: ("f-string", ("Strings cannot be computed inside GT4Py functions.",)),
     ast.Match: ("'match' statement", ("Use 'if'/'elif' chains or 'where' instead.",)),
 }
+
+#: Same as above, but keyed by node *name*, for constructs introduced after the
+#: supported Python floor: naming e.g. 'ast.TemplateStr' (3.14) directly in the
+#: catalogue above would raise 'AttributeError' on 3.12 and 3.13. Entries whose node
+#: type the running interpreter does not have are skipped, which is harmless: the
+#: construct cannot be parsed there in the first place.
+_NEWER_UNSUPPORTED_FEATURE_HINTS: dict[str, tuple[str, tuple[str, ...]]] = {
+    # PEP 750 t-strings (3.14).
+    "TemplateStr": ("t-string", ("Strings cannot be computed inside GT4Py functions.",))
+}
+
+_UNSUPPORTED_FEATURE_HINTS.update(
+    {
+        node_type: entry
+        for name, entry in _NEWER_UNSUPPORTED_FEATURE_HINTS.items()
+        if (node_type := getattr(ast, name, None)) is not None
+    }
+)
 
 
 def _describe_unsupported_feature(node: ast.AST) -> tuple[str, tuple[str, ...]]:
@@ -98,6 +131,36 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
             ),
         )
         raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__) from err
+
+
+def type_from_annotation(
+    annotation: Any,
+    location: SourceLocation,
+    *,
+    description: str,
+    globalns: dict[str, Any] | None = None,
+) -> ts.TypeSpec:
+    """Translate a Python annotation into a GT4Py type, reporting failures as a diagnostic.
+
+    Args:
+        annotation: The Python type hint written by the user.
+        location: The source span the annotation was written at.
+        description: How to name the annotation in the message, e.g.
+            "type annotation for parameter 'a'".
+        globalns: Globals used to resolve names in the annotation.
+
+    Returns:
+        The GT4Py type specification for the annotation.
+
+    Raises:
+        InvalidAnnotationError: If the annotation is not a valid GT4Py type.
+    """
+    try:
+        return type_translation.from_type_hint(annotation, globalns=globalns)
+    except ValueError as error:
+        raise errors.InvalidAnnotationError(
+            location, annotation, description=description, reason=str(error)
+        ) from error
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -9,11 +9,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
@@ -91,10 +91,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "markers": ["uses_dace"]},
 }
 
 
@@ -164,6 +164,10 @@ def test_cartesian(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -255,10 +259,15 @@ def test_next(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        # No `NO_TESTS_COLLECTED_EXIT_CODE` here: every combination selects tests,
+        # so collecting none means the selection broke.
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
@@ -305,6 +314,10 @@ def test_storage(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -321,11 +334,18 @@ def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
     install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
     session.run(
         "pytest",
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
         "typing_tests",
         *session.posargs,
     )
@@ -400,6 +420,8 @@ def test_next_dace_determinism(
         "auto",
         "--dist",
         "loadgroup",
+        # See the note in 'test_next' above.
+        "--require-optional-deps",
         "-m",
         f"{markers}",
         str(pathlib.Path("tests") / "next_tests"),

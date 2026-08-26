@@ -16,6 +16,7 @@ from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
 
 from gt4py.next import common as gtx_common
+from gt4py.next.program_processors.runners.dace import sdfg_utils as gtx_dace_utils
 
 
 @dace.library.node
@@ -74,7 +75,7 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
         if len(mask_desc.shape) != 2:
             raise ValueError(f"Invalid shape {mask_desc.shape} of mask array, expected 2d array.")
         max_neighbors = mask_desc.shape[1]
-        if not (isinstance(max_neighbors, int) or str(max_neighbors).isdigit()):
+        if not gtx_dace_utils.is_compile_time_size(max_neighbors):
             raise ValueError(
                 f"Invalid shape {mask_desc.shape} of mask array, expected constant neighbors size."
             )
@@ -117,7 +118,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         mask_desc = sdfg.arrays[maskedge.data.data]
         assert len(mask_desc.shape) == 2
         max_neighbors = mask_desc.shape[1]
-        assert isinstance(max_neighbors, int) or str(max_neighbors).isdigit()
+        assert gtx_dace_utils.is_compile_time_size(max_neighbors)
 
         # In validation, we already checked that the input subset collects exactly
         #  `max_neighbors` elements along one dimension.
@@ -141,7 +142,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         init_tasklet = st_init.add_tasklet(
             name="write",
             inputs={},
-            outputs={"__tlet_out"},
+            outputs={"__tlet_out": None},
             code=f"__tlet_out = {input_desc.dtype}({node.init})",
         )
         st_init.add_edge(

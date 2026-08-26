@@ -31,9 +31,35 @@ CACHE_FOLDER_NAME_PATTERN: Final[str] = (
     r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
 )
 
+#: Suffix appended by `get_cache_folder` to the program name when the cached
+#: artifact includes bindings. It is part of the pattern's `name` group, so
+#: recovering the plain program name means stripping this suffix.
+BINDINGS_NAME_SUFFIX: Final[str] = "_pyext"
+
+#: Directory under the cache base holding the translation caches, one
+#: sub-directory per backend. Unlike a build cache folder, which holds the
+#: artifacts of one compiled program variant, these hold the output of the
+#: translation step: an optimized SDFG or generated source per translated
+#: program.
+TRANSLATION_CACHE_DIR_NAME: Final[str] = "translation_cache"
+
+#: Backends that persist the output of their translation step, i.e. those whose
+#: workflow factory enables the `cached_translation` trait.
+TRANSLATION_CACHE_BACKENDS: Final[tuple[str, ...]] = ("dace", "gtfn")
+
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
+
+
+def get_translation_cache_folder(cache_base: pathlib.Path, backend: str) -> pathlib.Path:
+    """Return the folder under `cache_base` where `backend` caches its translations.
+
+    Unlike `get_cache_folder`, this only computes a path. The folder is created by
+    the cache that writes into it, so that asking where a cache would be does not
+    create it — which tools that only inspect a cache rely on.
+    """
+    return cache_base / TRANSLATION_CACHE_DIR_NAME / backend
 
 
 def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
@@ -70,7 +96,7 @@ def get_cache_folder(
     fingerprinter = fingerprinting.strict_fingerprinter
     slug = ext_source.program_source.entry_point.name
     if ext_source.binding_source:
-        slug = f"{slug}_pyext"
+        slug = f"{slug}{BINDINGS_NAME_SUFFIX}"
     folder_name = f"{slug}_{fingerprinter(ext_source)}_{config.BUILD_CACHE_VERSION_ID}"
     if build_context_id:
         folder_name = f"{folder_name}_{build_context_id}"

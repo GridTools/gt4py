@@ -15,6 +15,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 import functools
 from typing import Any, Callable
 
+import dace
 import numpy as np
 import pytest
 
@@ -38,7 +39,6 @@ from next_tests.integration_tests.cases_utils import (
     skip_value_mesh,
 )
 
-dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
 
 

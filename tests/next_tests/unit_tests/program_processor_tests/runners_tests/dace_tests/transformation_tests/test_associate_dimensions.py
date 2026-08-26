@@ -6,13 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import numpy as np
 import pytest
 import copy
 
 from typing import Sequence, overload, Literal
 
-dace = pytest.importorskip("dace")
 from dace import subsets as dace_sbs
 
 from gt4py.next.program_processors.runners.dace import (
