@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, List, TypeAlias
+from typing import Any, List, TypeAlias, TypeGuard
 
 from dace import data, dtypes, symbolic
 
@@ -165,8 +165,14 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: tir.Context) -> None:
-        if isinstance(node.mask, oir.ScalarAccess) and node.mask.dtype == common.DataType.BOOL:
+        if _is_boolean_scalar(node.mask):
             condition_name = str(node.mask.name)
+        elif (
+            isinstance(node.mask, oir.UnaryOp)
+            and node.mask.op == common.UnaryOperator.NOT
+            and _is_boolean_scalar(node.mask.expr)
+        ):
+            condition_name = f"not {node.mask.expr.name}"
         else:
             condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
 
@@ -221,8 +227,14 @@ class OIRToTreeIR(eve.NodeVisitor):
         return " and ".join(conditions)
 
     def visit_While(self, node: oir.While, ctx: tir.Context) -> None:
-        if isinstance(node.cond, oir.ScalarAccess) and node.cond.dtype == common.DataType.BOOL:
+        if _is_boolean_scalar(node.cond):
             condition_name = str(node.cond.name)
+        elif (
+            isinstance(node.cond, oir.UnaryOp)
+            and node.cond.op == common.UnaryOperator.NOT
+            and _is_boolean_scalar(node.cond.expr)
+        ):
+            condition_name = f"not {node.cond.expr.name}"
         else:
             condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
             # Re-evaluate the condition as last step of the while loop
@@ -579,3 +591,7 @@ def get_dace_strides(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list[symb
         symbols[stride] = dtypes.int32
         strides.append(symbol)
     return strides
+
+
+def _is_boolean_scalar(expression: oir.Expr) -> TypeGuard[oir.ScalarAccess]:
+    return isinstance(expression, oir.ScalarAccess) and expression.dtype.isbool()
