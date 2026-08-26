@@ -41,9 +41,6 @@ class Context:
     tree: tir.TreeRoot
     """Schedule tree (root) in which this Tasklet will be inserted."""
 
-    scope: tir.TreeScope
-    """Schedule tree scope in which this Tasklet will be inserted."""
-
 
 class OIRToTasklet(eve.NodeVisitor):
     """
@@ -54,10 +51,10 @@ class OIRToTasklet(eve.NodeVisitor):
     """
 
     def visit_CodeBlock(
-        self, node: oir.CodeBlock, root: tir.TreeRoot, scope: tir.TreeScope
+        self, node: oir.CodeBlock, root: tir.TreeRoot
     ) -> tuple[nodes.Tasklet, dict[str, Memlet], dict[str, Memlet]]:
         """Entry point to gather all code, inputs and outputs."""
-        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root, scope=scope)
+        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
 
         self.visit(node.body, ctx=ctx)
 

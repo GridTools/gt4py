@@ -73,7 +73,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
-            node, root=ctx.root, scope=ctx.current_scope
+            node, root=ctx.root
         )
 
         tasklet = tir.Tasklet(
