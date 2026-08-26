@@ -1928,7 +1928,6 @@ def test_loop_blocking_sdfg_with_everything(
     independent_node_threshold: int,
 ):
     sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything()
-    sdfg.view()
     _check_loop_blocking_sdfg_with_everything(
         sdfg,
         state,
@@ -1938,7 +1937,6 @@ def test_loop_blocking_sdfg_with_everything(
         promote_independent_memlets=promote_independent_memlets,
         independent_node_threshold=independent_node_threshold,
     )
-    sdfg.view()
 
 
 @pytest.mark.parametrize(
@@ -1957,7 +1955,6 @@ def test_loop_blocking_sdfg_with_everything_symbolic(
     expressions and the size of the range, `lev`, is symbolic as well.
     """
     sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything(symbolic=True)
-    sdfg.view()
     _check_loop_blocking_sdfg_with_everything(
         sdfg,
         state,
@@ -1967,4 +1964,3 @@ def test_loop_blocking_sdfg_with_everything_symbolic(
         promote_independent_memlets=promote_independent_memlets,
         independent_node_threshold=independent_node_threshold,
     )
-    sdfg.view()
