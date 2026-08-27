@@ -13,18 +13,7 @@ import inspect
 import itertools
 import types
 from collections.abc import Callable
-from typing import (
-    Any,
-    ClassVar,
-    Final,
-    Optional,
-    ParamSpec,
-    Sequence,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import Any, ClassVar, Final, Optional, ParamSpec, TypeGuard, TypeVar, cast, overload
 
 from gt4py.eve import utils as eve_utils
 
@@ -107,6 +96,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -117,6 +107,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
 ]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
@@ -129,6 +120,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -140,6 +132,8 @@ def tree_map(
         unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
           tuple of result collections instead of result collections of tuples.
         with_path_arg: Pass the path to access the current element to `fun`.
+        broadcast_leaves: If `True`, recurse while any argument is a collection, reusing leaf
+          arguments for every element of the collection arguments.
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
@@ -184,6 +178,12 @@ def tree_map(
         ((2, 3), 4)
         >>> squared
         ((4, 9), 16)
+
+        >>> @tree_map(broadcast_leaves=True)
+        ... def impl(x, y):
+        ...     return x, y
+        >>> impl((1, 5, (7, 8)), ((2, 3), 6, 9))
+        (((1, 2), (1, 3)), (5, 6), ((7, 9), (8, 9)))
     """
 
     if result_collection_constructor is None:
@@ -198,19 +198,43 @@ def tree_map(
 
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
-            if isinstance(args[0], collection_type):
-                first_arg: Any = args[0]
-                non_path_args: Sequence[Any]
-                if with_path_arg:
-                    *non_path_args, path = args
-                    args = (*non_path_args, tuple((*path, i) for i in range(len(first_arg))))
-                else:
-                    non_path_args = args
+            if with_path_arg:
+                *non_path_args_list, path = args
+                non_path_args: tuple[Any, ...] = tuple(non_path_args_list)
+            else:
+                non_path_args = args
 
-                assert all(isinstance(arg, collection_type) for arg in non_path_args)
-                assert all(len(first_arg) == len(arg) for arg in non_path_args)
+            collection_args: list[Any] = [
+                arg for arg in non_path_args if isinstance(arg, collection_type)
+            ]
+            if isinstance(non_path_args[0], collection_type) or (
+                broadcast_leaves and collection_args
+            ):
+                if broadcast_leaves:
+                    first_arg: Any = collection_args[0]
+                    if not all(len(first_arg) == len(arg) for arg in collection_args):
+                        raise ValueError(
+                            "tree_map() expects collection arguments to have the same length."
+                        )
+                    arg_elts = tuple(
+                        arg
+                        if isinstance(arg, collection_type)
+                        else itertools.repeat(arg, len(first_arg))
+                        for arg in non_path_args
+                    )
+                else:
+                    first_arg = non_path_args[0]
+                    assert all(isinstance(arg, collection_type) for arg in non_path_args)
+                    assert all(len(first_arg) == len(arg) for arg in non_path_args)
+                    arg_elts = tuple(non_path_args)
+
                 assert result_collection_constructor is not None
                 ctor = functools.partial(result_collection_constructor, first_arg)
+
+                if with_path_arg:
+                    args = (*arg_elts, tuple((*path, i) for i in range(len(first_arg))))
+                else:
+                    args = arg_elts
 
                 mapped = [impl(*arg) for arg in zip(*args)]
                 if unpack:
@@ -233,6 +257,7 @@ def tree_map(
             result_collection_constructor=result_collection_constructor,
             unpack=unpack,
             with_path_arg=with_path_arg,
+            broadcast_leaves=broadcast_leaves,
         )
 
 

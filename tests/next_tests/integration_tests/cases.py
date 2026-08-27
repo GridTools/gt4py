@@ -608,7 +608,8 @@ def _allocate_from_type(
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
         case ts.TupleType(types=types):
-            return tuple(
+            tuple_constructor = common.XTuple if isinstance(arg_type, ts.XTupleType) else tuple
+            return tuple_constructor(
                 (
                     _allocate_from_type(
                         case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
@@ -617,7 +618,8 @@ def _allocate_from_type(
                 )
             )
         case ts.VarArgType(element_type=element_type):
-            return tuple(
+            tuple_constructor = common.XTuple if isinstance(arg_type, ts.XVarArgType) else tuple
+            return tuple_constructor(
                 (
                     _allocate_from_type(
                         case=case, arg_type=t, domain=domain, dtype=dtype, strategy=strategy
