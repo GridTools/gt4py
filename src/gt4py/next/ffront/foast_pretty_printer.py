@@ -120,6 +120,18 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    def visit_TupleComprehensionMapper(
+        self, node: foast.TupleComprehensionMapper, **kwargs: Any
+    ) -> str:
+        element_expr = self.visit(node.element_expr, **kwargs)
+        target = self.visit(node.target, **kwargs)
+        return f"{element_expr} for {target}"
+
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> str:
+        mapper = self.visit(node.inner, **kwargs)
+        iterable = self.visit(node.iterable, **kwargs)
+        return f"tuple(({mapper} in {iterable}))"
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
