@@ -157,17 +157,12 @@ def test_cartesian_half_shift_as_offset(cartesian_case):
     ) -> cases.IKField:
         return a(KDim - 0.5)(as_offset(Koff, offset_field))
 
-    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    a = cases.allocate(cartesian_case, testee, "a", sizes={IDim: isize, KHalfDim: ksize + 1})()
+    a = cases.allocate(cartesian_case, testee, "a", sizes={KHalfDim: ksize + 1})()
     offset_field = cases.allocate(
-        cartesian_case,
-        testee,
-        "offset_field",
-        sizes={IDim: isize, KDim: ksize},
-        strategy=cases.ConstInitializer(1),
+        cartesian_case, testee, "offset_field", strategy=cases.ConstInitializer(1)
     )()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN, sizes={IDim: isize, KDim: ksize})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(
         cartesian_case, testee, a, offset_field, out=out, ref=a.asnumpy()[:, 1:], offset_provider={}
@@ -186,17 +181,12 @@ def test_cartesian_half_shift_as_offset_of_chained_ops(cartesian_case):
         b = a + 1
         return b(KDim - 0.5)(as_offset(Koff, offset_field))
 
-    isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
-    a = cases.allocate(cartesian_case, testee, "a", sizes={IDim: isize, KHalfDim: ksize + 1})()
+    a = cases.allocate(cartesian_case, testee, "a", sizes={KHalfDim: ksize + 1})()
     offset_field = cases.allocate(
-        cartesian_case,
-        testee,
-        "offset_field",
-        sizes={IDim: isize, KDim: ksize},
-        strategy=cases.ConstInitializer(1),
+        cartesian_case, testee, "offset_field", strategy=cases.ConstInitializer(1)
     )()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN, sizes={IDim: isize, KDim: ksize})()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(
         cartesian_case,
