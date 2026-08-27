@@ -401,8 +401,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
-    def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.Name:
-        return foast.Name(id=node.id, location=self.get_location(node))
+    def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.DataSymbol | foast.Name:
+        loc = self.get_location(node)
+        if isinstance(node.ctx, ast.Store):
+            return foast.DataSymbol(id=node.id, location=loc, type=ts.DeferredType(constraint=None))
+        else:
+            assert isinstance(node.ctx, ast.Load)
+            return foast.Name(id=node.id, location=loc)
 
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
         return foast.UnaryOp(
@@ -543,6 +548,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         assert isinstance(node.func, ast.Name)
+        if len(node.args) != 1:
+            raise errors.DSLError(
+                self.get_location(node),
+                f"'{self._func_name(node)}()' takes exactly one argument, got {len(node.args)}.",
+            )
         (arg,) = node.args
         if not (
             isinstance(arg, ast.Constant)

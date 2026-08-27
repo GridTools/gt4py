@@ -458,6 +458,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
+            case ts.VarArgType(element_type=element_type):
+                try:
+                    # The length of a variable-length tuple is only known when the concrete
+                    # arguments are available, so the index can not be bounds-checked here.
+                    foast_utils.expr_to_index(node.index)
+                except ValueError as ex:
+                    raise errors.DSLError(
+                        node.location,
+                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
+                    ) from ex
+                new_type = element_type
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
@@ -625,6 +636,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         err_msg = f"Unsupported operand type(s) for {node.op}: '{left.type}' and '{right.type}'."
 
+        if isinstance(left.type, (ts.XTupleType, ts.XVarArgType)) or isinstance(
+            right.type, (ts.XTupleType, ts.XVarArgType)
+        ):
+            return self._deduce_elementwise_binop_type(node, left=left, right=right)
+
         if isinstance(left.type, (ts.ScalarType, ts.FieldType)) and isinstance(
             right.type, (ts.ScalarType, ts.FieldType)
         ):
@@ -711,6 +727,108 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
         else:
             raise errors.DSLError(node.location, err_msg)
+
+    def _deduce_elementwise_binop_type(
+        self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr
+    ) -> ts.XTupleType | ts.XVarArgType:
+        def operand_with_type(operand: foast.Expr, type_: ts.TypeSpec) -> foast.Expr:
+            return foast.Constant(value=None, location=operand.location, type=type_)
+
+        def tuple_element_type(
+            type_: ts.TypeSpec,
+        ) -> ts.DataType | ts.DimensionType | ts.DeferredType:
+            if not isinstance(type_, (ts.DataType, ts.DimensionType, ts.DeferredType)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' produced unsupported tuple element type "
+                    f"'{type_}'.",
+                )
+            return type_
+
+        def vararg_element_type(type_: ts.TypeSpec) -> ts.DataType:
+            if not isinstance(type_, ts.DataType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' produced unsupported variadic tuple "
+                    f"element type '{type_}'.",
+                )
+            return type_
+
+        def ensure_elementwise_tuple_type(type_: ts.TypeSpec) -> None:
+            if isinstance(type_, (ts.TupleType, ts.VarArgType)) and not isinstance(
+                type_, (ts.XTupleType, ts.XVarArgType)
+            ):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' requires tuple operands to be 'XTuple', "
+                    f"got '{type_}'.",
+                )
+
+        def deduce_leaf(left_type: ts.TypeSpec, right_type: ts.TypeSpec) -> ts.TypeSpec:
+            ensure_elementwise_tuple_type(left_type)
+            ensure_elementwise_tuple_type(right_type)
+
+            result_type = self._deduce_binop_type(
+                node,
+                left=operand_with_type(left, left_type),
+                right=operand_with_type(right, right_type),
+            )
+            assert result_type is not None
+            return result_type
+
+        def deduce_elementwise(left_type: ts.TypeSpec, right_type: ts.TypeSpec) -> ts.TypeSpec:
+            for type_ in (left_type, right_type):
+                ensure_elementwise_tuple_type(type_)
+
+            # `XVarArgType` has no finite children, so `tree_map` cannot descend into it.
+            if (
+                isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XVarArgType)
+            ) or (isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XTupleType)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' can not be applied between a fixed-length "
+                    f"tuple and a variable-length tuple: '{left.type}' and '{right.type}'.",
+                )
+
+            elif isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XVarArgType):
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' can not be applied between two "
+                    f"variable-length tuples: '{left.type}' and '{right.type}'.",
+                )
+            elif isinstance(left_type, ts.XVarArgType):
+                return ts.XVarArgType(
+                    element_type=vararg_element_type(
+                        deduce_elementwise(left_type.element_type, right_type)
+                    )
+                )
+            elif isinstance(right_type, ts.XVarArgType):
+                return ts.XVarArgType(
+                    element_type=vararg_element_type(
+                        deduce_elementwise(left_type, right_type.element_type)
+                    )
+                )
+
+            # Finite `XTupleType` recursion is handled by `tree_map`; the callback only sees leaves.
+            try:
+                result = tree_map(
+                    lambda l_type, r_type: tuple_element_type(deduce_leaf(l_type, r_type)),
+                    collection_type=ts.XTupleType,
+                    result_collection_constructor=type_info.tree_map_type_constructor,
+                    broadcast_leaves=True,
+                )(left_type, right_type)
+                assert isinstance(result, ts.TypeSpec)
+                return result
+            except ValueError as ex:
+                raise errors.DSLError(
+                    node.location,
+                    f"Element-wise operator '{node.op}' requires tuple operands to have the "
+                    f"same structure, got '{left.type}' and '{right.type}'.",
+                ) from ex
+
+        result = deduce_elementwise(left.type, right.type)
+        assert isinstance(result, (ts.XTupleType, ts.XVarArgType))
+        return result
 
     def _check_operand_dtypes_match(
         self, node: foast.BinOp | foast.Compare, left: foast.Expr, right: foast.Expr
@@ -829,11 +947,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             new_mapper = self._deduce_tuple_comprehension_mapper(
                 node, target, element_types[0], **kwargs
             )
+            tuple_type_cls = (
+                ts.XTupleType if isinstance(iterable.type, ts.XTupleType) else ts.TupleType
+            )
             result = foast.TupleComprehension(
                 inner=new_mapper,
                 iterable=iterable,
                 location=node.location,
-                type=ts.TupleType(types=[new_mapper.element_expr.type for _ in element_types]),
+                type=tuple_type_cls(types=[new_mapper.element_expr.type for _ in element_types]),
             )
             return result
         elif isinstance(iterable.type, ts.VarArgType):
@@ -842,7 +963,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node, target, element_type, **kwargs
             )
             element_expr = new_mapper.element_expr
-            return_type = ts.VarArgType(element_type=element_expr.type)
+            vararg_type_cls = (
+                ts.XVarArgType if isinstance(iterable.type, ts.XVarArgType) else ts.VarArgType
+            )
+            return_type = vararg_type_cls(element_type=element_expr.type)
 
             return foast.TupleComprehension(
                 inner=new_mapper,
@@ -1143,7 +1267,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
                     f"'{f_dtype}'.",
                 )
-            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
+            return_dims = promote_dims(
+                cond_dims, type_info.extract_dims(tb), type_info.extract_dims(fb)
+            )
             return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
             return return_type
 

@@ -633,6 +633,29 @@ def test_tree_map_multi_arg():
     assert testee(((1, 2), 3), ((4, 5), 6)) == ((5, 7), 9)
 
 
+def test_tree_map_broadcast_leaves():
+    @utils.tree_map(broadcast_leaves=True)
+    def testee(x, y):
+        return x, y
+
+    assert testee((1, 5, (7, 8)), ((2, 3), 6, 9)) == (
+        ((1, 2), (1, 3)),
+        (5, 6),
+        ((7, 9), (8, 9)),
+    )
+
+
+def test_tree_map_broadcast_leaves_with_path_arg():
+    @utils.tree_map(broadcast_leaves=True, with_path_arg=True)
+    def testee(x, y, path):
+        return x, y, path
+
+    assert testee((1, (2, 3)), ((4, 5), 6)) == (
+        ((1, 4, (0, 0)), (1, 5, (0, 1))),
+        ((2, 6, (1, 0)), (3, 6, (1, 1))),
+    )
+
+
 def test_tree_map_custom_input_type():
     @utils.tree_map(collection_type=list)
     def testee(x):

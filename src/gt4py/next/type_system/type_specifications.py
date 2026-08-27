@@ -157,6 +157,16 @@ class VarArgType(DataType):
         return f"VarArg[{self.element_type}]"
 
 
+class XTupleType(TupleType):
+    def __str__(self) -> str:
+        return f"XTuple[{', '.join(map(str, self.types))}]"
+
+
+class XVarArgType(VarArgType):
+    def __str__(self) -> str:
+        return f"XVarArgTuple[{self.element_type}]"
+
+
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
 

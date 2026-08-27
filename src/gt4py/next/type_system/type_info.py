@@ -137,18 +137,24 @@ def tree_map_type_constructor(
     value: ts.CollectionTypeSpecT,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
 ) -> ts.CollectionTypeSpecT:
+    # Note: `type(value)(...)` preserves the concrete tuple subclass (e.g. `XTupleType`) so that
+    # element-wise-tuple semantics are not silently dropped when a tuple type is reconstructed.
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
         )
         if isinstance(value, ts.NamedCollectionType)
-        else ts.TupleType(types=list(elems))  # type: ignore[return-value]
+        else type(value)(types=list(elems))  # type: ignore[return-value]
     )
 
 
 @overload
 def tree_map_type(
-    fun: Callable[..., _T], *, with_path_arg: bool = ..., unpack: bool = ...
+    fun: Callable[..., _T],
+    *,
+    with_path_arg: bool = ...,
+    unpack: bool = ...,
+    broadcast_leaves: bool = ...,
 ) -> Callable[..., _T | ts.CollectionTypeSpec]: ...
 
 
@@ -159,6 +165,7 @@ def tree_map_type(
     result_collection_constructor: Callable[..., _C],
     with_path_arg: bool = ...,
     unpack: bool = ...,
+    broadcast_leaves: bool = ...,
 ) -> Callable[..., _T | _C]: ...
 
 
@@ -168,6 +175,7 @@ def tree_map_type(
     result_collection_constructor: Callable[..., Any] = tree_map_type_constructor,
     with_path_arg: bool = False,
     unpack: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[..., Any]:
     return next_utils.tree_map(
         fun,
@@ -175,6 +183,7 @@ def tree_map_type(
         result_collection_constructor=result_collection_constructor,
         with_path_arg=with_path_arg,
         unpack=unpack,
+        broadcast_leaves=broadcast_leaves,
     )
 
 
@@ -467,10 +476,31 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
             is_compatible &= type_a.defined_dims == type_b.defined_dims
         is_compatible &= type_a.element_type == type_b.element_type
     elif isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.TupleType):
+        if type(type_a) is not type(type_b):
+            return False
         if len(type_a.types) != len(type_b.types):
             return False
         for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
             is_compatible &= is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.VarArgType) and isinstance(type_b, ts.VarArgType):
+        if type(type_a) is not type(type_b):
+            return False
+        is_compatible &= is_compatible_type(type_a.element_type, type_b.element_type)
+    elif (isinstance(type_a, ts.VarArgType) and isinstance(type_b, ts.TupleType)) or (
+        isinstance(type_a, ts.TupleType) and isinstance(type_b, ts.VarArgType)
+    ):
+        # A variable-length tuple is compatible with a concrete tuple if all elements of the
+        # latter are compatible with the element type, e.g. when checking the concrete 'out'
+        # argument of a program against a field operator returning 'tuple[..., ...]'.
+        vararg_type, tuple_type = (
+            (type_a, type_b) if isinstance(type_a, ts.VarArgType) else (type_b, type_a)
+        )
+        assert isinstance(vararg_type, ts.VarArgType) and isinstance(tuple_type, ts.TupleType)
+        if isinstance(vararg_type, ts.XVarArgType) != isinstance(tuple_type, ts.XTupleType):
+            return False
+        is_compatible &= all(
+            is_compatible_type(vararg_type.element_type, el_type) for el_type in tuple_type.types
+        )
     elif isinstance(type_a, ts.NamedCollectionType) and isinstance(type_b, ts.NamedCollectionType):
         if type_a.keys != type_b.keys:
             return False
@@ -551,8 +581,12 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     ):
         return True
     if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.VarArgType):
+        if type(symbol_type) is not type(to_type):
+            return False
         return is_concretizable(symbol_type.element_type, to_type.element_type)
     if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.TupleType):
+        if isinstance(symbol_type, ts.XVarArgType) != isinstance(to_type, ts.XTupleType):
+            return False
         if len(to_type.types) == 0 or (
             all(type_ == to_type.types[0] for type_ in to_type.types)
             and is_concretizable(symbol_type.element_type, to_type.types[0])

@@ -142,6 +142,29 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_var_len_tuple_comprehension_explicit_program(cartesian_case):
+    # A hand-written program with concrete tuple annotations wrapping a field operator
+    # declared with variable-length tuples.
+    @gtx.field_operator
+    def scale_tracers(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    @gtx.program
+    def testee(
+        tracers: tuple[cases.IField, cases.IField],
+        factor: int32,
+        out: tuple[cases.IField, cases.IField],
+    ):
+        scale_tracers(tracers, factor, out=out)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
 def test_tuple_comprehension_other_fo(cartesian_case):
     @gtx.field_operator
     def inner(tracer: cases.IField, factor: int32) -> cases.IField:
@@ -198,6 +221,99 @@ def test_multi_target_tuple_comprehension(cartesian_case):
         cartesian_case,
         testee,
         ref=lambda t: tuple(f * el for f, el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_vararg(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IFloatField, ...], factor: float
+    ) -> tuple[cases.IFloatField, cases.IFloatField]:
+        return tracers[0] * factor, tracers[1] * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t[:2]),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_xtuple(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+        b: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+    ) -> gtx.XTuple[cases.IFloatField, cases.IFloatField]:
+        return a * b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b: tuple(x * y for x, y in zip(a, b)),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_nested_xtuple(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
+        b: gtx.XTuple[cases.IFloatField, cases.IFloatField],
+    ) -> gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField]:
+        return a * b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b: ((a[0][0] * b[0], a[0][1] * b[0]), a[1] * b[1]),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_fixed_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, cases.IFloatField], factor: float
+    ) -> gtx.XTuple[cases.IFloatField, cases.IFloatField]:
+        return a * factor + a
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: tuple(el * f + el for el in a),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_var_len_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, ...], factor: float
+    ) -> gtx.XTuple[cases.IFloatField, ...]:
+        return a * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: tuple(el * f for el in a),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_elementwise_binop_nested_xtuple_scalar_broadcast(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField],
+        factor: float,
+    ) -> gtx.XTuple[gtx.XTuple[cases.IFloatField, cases.IFloatField], cases.IFloatField]:
+        return a * factor
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, f: ((a[0][0] * f, a[0][1] * f), a[1] * f),
     )
 
 
