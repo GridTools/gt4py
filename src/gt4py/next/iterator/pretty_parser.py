@@ -151,11 +151,10 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def typed_literal(
         self, value: Union[ir.Literal, ir.SymRef], type_: ts.ScalarType
-    ) -> Union[ir.Literal, ir.SymRef]:
-        if isinstance(value, ir.Literal):
-            return ir.Literal(value=value.value, type=type_)
-        value.type = type_
-        return value
+    ) -> ir.Literal:
+        if not isinstance(value, ir.Literal):
+            raise ValueError(f"Only a literal can carry a type annotation, got '{value.id}'.")
+        return ir.Literal(value=value.value, type=type_)
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]

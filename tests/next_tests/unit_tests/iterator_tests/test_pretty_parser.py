@@ -81,6 +81,11 @@ def test_typed_literal_scalar_kind_names_are_not_accepted():
         pparse("1.0:float32")
 
 
+def test_only_a_literal_can_be_annotated():
+    with pytest.raises(ValueError, match="'x'"):
+        pparse("x:i32")
+
+
 def test_typed_literal_does_not_shadow_named_range():
     assert pparse("c⟨ IDimₕ: [0:i64, 4:i64[ ⟩") == ir.FunCall(
         fun=ir.SymRef(id="cartesian_domain"),
