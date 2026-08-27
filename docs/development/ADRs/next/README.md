@@ -17,8 +17,11 @@ Writing a new ADR is simple:
 ### General architecture #general
 
 - [0005 - Extending Iterator IR](0005-Extending_Iterator_IR.md)
+- [0019 - Connectivities](0019-Connectivities.md)
+- [0020 - Runtime domains](0020-Runtime-domains.md)
+- [0021 - Argument Descriptors](0021-Argument-Descriptors.md)
 - [0023 - Fingerprinting](0023-Fingerprinting.md)
-- [0026 - Staggered Dimensions](0024-Staggered_Dimensions.md)
+- [0026 - Staggered Dimensions](0026-Staggered_Dimensions.md)
 
 ### Frontend and Parsing #frontend
 
@@ -45,6 +48,7 @@ Writing a new ADR is simple:
 - [0006 - C++ Backend](0006-Cpp-Backend.md)
 - [0007 - Fencil Processors](0007-Fencil-Processors.md)
 - [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
+- [0014 - DaCe backend](0014-DaCe_backend.md)
 - [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
 - [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
@@ -53,7 +57,9 @@ Writing a new ADR is simple:
 ### Python Integration
 
 - [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md)
-- [0012 - GridTools C++ OTF](0011-_GridTools_Cpp_OTF.md)
+- [0012 - GridTools C++ OTF Steps](0012-GridTools_Cpp_OTF_Steps.md)
+- [0024 - Compilation Runners](0024-Compilation-Runners.md)
+- [0025 - Crash Consistent Build Caches](0025-Crash_Consistent_Build_Caches.md)
 
 ### Testing
 
