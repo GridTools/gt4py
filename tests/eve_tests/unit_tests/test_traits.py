@@ -8,10 +8,11 @@
 
 from __future__ import annotations
 
+from typing import Any, ClassVar
+
 import pytest
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Any, ClassVar
 
 from .. import definitions
 
