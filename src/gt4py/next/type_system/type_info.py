@@ -9,7 +9,7 @@
 import functools
 import types
 from collections.abc import Callable, Collection, Iterable, Iterator
-from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
+from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, overload
 
 import numpy as np
 
@@ -556,14 +556,19 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
 
 
 def promote(
-    *types: ts.FieldType | ts.ScalarType, always_field: bool = False
-) -> ts.FieldType | ts.ScalarType:
+    *types: ts.FieldType | ts.ScalarType | ts.ListType, always_field: bool = False
+) -> ts.FieldType | ts.ScalarType | ts.ListType:
     """
-    Promote a set of field or scalar types to a common type.
+    Promote a set of field, scalar or list types to a common type.
 
     The resulting type is defined on all dimensions of the arguments, respecting
     the individual order of the dimensions of each argument (see
     :func:`common.promote_dims` for more details).
+
+    A `ListType` is the dtype of a local (neighbor-list) field and only ever reaches this
+    function from the ITIR level. The frontend represents the same concept as a field with
+    a local dimension in `dims` and a scalar dtype, so it never passes a list here. Lists
+    promote exactly like scalars, i.e. only between equal types.
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
@@ -578,18 +583,27 @@ def promote(
     ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
+
+    >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
+    >>> list_dtype = ts.ListType(element_type=dtype, offset_type=V2E)
+    >>> promote(
+    ...     ts.FieldType(dims=[I], dtype=list_dtype),
+    ...     ts.FieldType(dims=[I, J], dtype=list_dtype),
+    ... ) == ts.FieldType(dims=[I, J], dtype=list_dtype)
+    True
     """
-    if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
+    # Lists are only reached from the ITIR level (see above) and behave like scalars here:
+    #  both promote only between equal types.
+    if not always_field and all(isinstance(type_, (ts.ScalarType, ts.ListType)) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
-            raise ValueError("Could not promote scalars of different dtype (not implemented).")
-        if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]
+            raise ValueError("Could not promote dtypes of different type (not implemented).")
+        if isinstance(types[0], ts.ScalarType) and types[0].shape is not None:
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
-        extracted_dtypes = [extract_dtype(type_) for type_ in types]
-        assert all(isinstance(dtype, ts.ScalarType) for dtype in extracted_dtypes)
-        dtype = cast(ts.ScalarType, promote(*extracted_dtypes))  # type: ignore[arg-type] # checked is `ScalarType`
+        dtype = promote(*(extract_dtype(type_) for type_ in types))
+        assert isinstance(dtype, (ts.ScalarType, ts.ListType))
 
         return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a 'FieldType' or 'ScalarType'.")

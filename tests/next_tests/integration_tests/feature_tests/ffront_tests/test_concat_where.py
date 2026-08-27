@@ -8,13 +8,23 @@
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
+from next_tests.integration_tests.cases import (
+    E2V,
+    E2VDim,
+    Edge,
+    IDim,
+    JDim,
+    KDim,
+    cartesian_case,
+    unstructured_case,
+)
 from gt4py import next as gtx
-from gt4py.next import broadcast
+from gt4py.next import broadcast, common, neighbor_sum
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 pytestmark = pytest.mark.uses_concat_where
@@ -388,6 +398,64 @@ def test_with_tuples(cartesian_case, static_domains: bool):
         )
 
     cases.verify_with_default_data(cartesian_case, testee, ref)
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_sparse_fields
+def test_with_local_field(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.VField, b: cases.VField) -> cases.EField:
+        t = concat_where(Edge < 2, a(E2V), b(E2V))
+        return neighbor_sum(t, axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(edge_mask[:, np.newaxis], a[e2v_table], b[e2v_table]),
+            axis=1,
+            initial=0,
+            where=e2v_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_sparse_fields
+def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.VField,
+        b: cases.VField,
+        c: cases.VField,
+        d: cases.VField,
+    ) -> tuple[cases.EField, cases.EField]:
+        t = concat_where(Edge < 2, (a(E2V), b(E2V)), (c(E2V), d(E2V)))
+        return neighbor_sum(t[0], axis=E2VDim), neighbor_sum(t[1], axis=E2VDim)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(edge_mask[:, np.newaxis], a[e2v_table], c[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(edge_mask[:, np.newaxis], b[e2v_table], d[e2v_table]),
+                axis=1,
+                initial=0,
+                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
 
 
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
