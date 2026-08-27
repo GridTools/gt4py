@@ -467,6 +467,11 @@ url = 'https://gridtools.github.io/pypi/'
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
+# `compiler.cuda.chiplet_number`, used to distribute thread-blocks over the chiplets of
+# multi-chiplet AMD GPUs, only exists on this branch and in no released DaCe. The branch
+# reports the same version as the PyPI release, so a version specifier cannot express the
+# requirement. Drop this source once the feature lands in a DaCe release on PyPI.
+dace = {git = "https://github.com/GridTools/dace", branch = "chiplet_old_codegen_updateddace"}
 
 # -- versioningit --
 [tool.versioningit]

@@ -7,7 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import contextlib
+import functools
 import os
+import warnings
 from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
@@ -43,6 +45,72 @@ ExternalWorkspace: TypeAlias = dict[
     as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
     or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
 """
+
+
+_CHIPLET_NUMBER_ENV_VAR: Final[str] = "DACE_compiler_cuda_chiplet_number"
+"""Environment variable used by DaCe to override `compiler.cuda.chiplet_number`."""
+
+
+@functools.cache
+def _query_gpu_chiplet_count() -> Optional[int]:
+    """Number of chiplets (XCDs) of the current AMD GPU, or None if it cannot be determined.
+
+    Cached: the device does not change within a process, and `amdsmi` has to be initialized
+    and shut down around the query, which must happen exactly once. The warning on failure
+    is emitted from here so that it is emitted only once per process, too.
+
+    Note:
+        `amdsmi` is not a GT4Py dependency, it ships with ROCm. Importing it loads
+        `libamd_smi.so` through `ctypes`, which fails on machines without ROCm and not
+        necessarily with an `ImportError`, hence the broad exception handling.
+
+    Note:
+        `amdsmi` ignores `ROCR_VISIBLE_DEVICES` and `HIP_VISIBLE_DEVICES` and enumerates all
+        physical GPUs, so the first processor handle is not necessarily the device that HIP
+        uses. This is only accurate on nodes where all GPUs are of the same model.
+    """
+    try:
+        import amdsmi
+
+        amdsmi.amdsmi_init()
+        try:
+            processor_handles = amdsmi.amdsmi_get_processor_handles()
+            if not processor_handles:
+                raise RuntimeError("`amdsmi` did not report any GPU.")
+            return int(amdsmi.amdsmi_get_gpu_xcd_counter(processor_handles[0]))
+        finally:
+            amdsmi.amdsmi_shut_down()
+    except Exception as e:
+        warnings.warn(
+            UserWarning(
+                f"Could not determine the number of GPU chiplets through `amdsmi`: {e}. "
+                "The distribution of thread-blocks over chiplets is disabled."
+            ),
+            stacklevel=2,
+        )
+        return None
+
+
+def _set_gpu_chiplet_number() -> None:
+    """Configure DaCe to distribute the thread-blocks of a kernel over the GPU chiplets.
+
+    Only meaningful on multi-chiplet AMD GPUs, therefore this must only be called when the
+    DaCe GPU backend is `hip`. Leaves the DaCe configuration untouched when the number of
+    chiplets is unknown, which disables the distribution.
+    """
+    env_value = os.environ.get(_CHIPLET_NUMBER_ENV_VAR, "").strip()
+    if env_value:
+        # `dace.Config.get()` gives precedence to this environment variable on its own, but a
+        #  value that only lives in the environment does not show up in `dace.Config.nondefaults()`
+        #  and would therefore not invalidate the GT4Py build cache, see `compilation.py`.
+        chiplet_count = int(env_value)
+    else:
+        queried_count = _query_gpu_chiplet_count()
+        if queried_count is None:
+            return
+        chiplet_count = queried_count
+
+    dace.Config.set("compiler.cuda.chiplet_number", value=chiplet_count)
 
 
 def set_dace_config(
@@ -149,6 +217,9 @@ def set_dace_config(
     # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")
+        # Distributing the grid over chiplets relies on the round-robin thread-block scheduling
+        #  of multi-chiplet AMD GPUs, so it is only configured for the `hip` backend.
+        _set_gpu_chiplet_number()
     elif device_type == core_defs.DeviceType.CUDA:
         dace.Config.set("compiler.cuda.backend", value="cuda")
 
