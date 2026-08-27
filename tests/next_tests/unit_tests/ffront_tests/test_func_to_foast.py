@@ -269,6 +269,20 @@ def test_scalar_cast_disallow_non_literals():
         _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
 
 
+def test_scalar_cast_wrong_arity():
+    def cast_scalar_two_args():
+        return int32(1, 2)
+
+    with pytest.raises(errors.DSLError, match=r"takes exactly one argument, got 2"):
+        _ = FieldOperatorParser.apply_to_function(cast_scalar_two_args)
+
+    def cast_scalar_no_args():
+        return int32()
+
+    with pytest.raises(errors.DSLError, match=r"takes exactly one argument, got 0"):
+        _ = FieldOperatorParser.apply_to_function(cast_scalar_no_args)
+
+
 def test_conditional_wrong_mask_type():
     def conditional_wrong_mask_type(a: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return where(a, a, a)
