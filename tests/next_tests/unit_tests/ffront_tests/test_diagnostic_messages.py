@@ -356,3 +356,38 @@ def test_broken_type_alias_annotation_is_located():
     assert err.location.line == err.location.end_line
     assert err.location.end_column - err.location.column == len("a: BrokenFieldAlias")
     assert re.search(r"\| +\^{19}(?!\^)", str(err)), str(err)
+
+
+def test_bare_generator_expression_points_to_tuple_constructor():
+    def with_genexp(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b = (x for x in (a, a))  # noqa: F841 [unused-variable]
+        return a
+
+    err = parse_error(with_genexp)
+
+    assert isinstance(err, errors.UnsupportedPythonFeatureError)
+    assert err.message == "Unsupported Python syntax: generator expression."
+    assert any("'tuple(...)'" in hint for hint in err.hints)
+
+
+def test_nested_generator_expression_suggests_single_for_clause():
+    def with_nested_genexp(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b = tuple(x for x in (a, a) for y in (a, a))  # noqa: F841 [unused-variable]
+        return a
+
+    err = parse_error(with_nested_genexp)
+
+    assert err.message == "Nested generator expressions are not supported."
+    assert any("single 'for' clause" in hint for hint in err.hints)
+
+
+def test_conditional_in_generator_expression_explains_static_length():
+    def with_filtered_genexp(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        b = tuple(x for x in (a, a) if True)  # noqa: F841 [unused-variable]
+        return a
+
+    err = parse_error(with_filtered_genexp)
+
+    assert err.message == "Conditionals are not supported in generator expressions."
+    assert any("known at compile time" in note for note in err.notes)
+    assert "if True" in str(err)
