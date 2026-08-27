@@ -871,8 +871,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             try:
-                return_type = type_info.promote(
-                    *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                return_type = cast(
+                    # a `ListType` only occurs at the ITIR level, never in the frontend
+                    ts.FieldType | ts.ScalarType,
+                    type_info.promote(
+                        *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                    ),
                 )
             except ValueError as ex:
                 raise errors.DSLError(node.location, error_msg_preamble) from ex
