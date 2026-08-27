@@ -400,6 +400,51 @@ def test_with_tuples(cartesian_case, static_domains: bool):
     cases.verify_with_default_data(cartesian_case, testee, ref)
 
 
+@pytest.mark.uses_tuple_returns
+def test_with_nested_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        interior0: cases.IJKField,
+        boundary0: cases.IJField,
+        interior1: cases.IJKField,
+        boundary1: cases.IJField,
+        interior2: cases.IJKField,
+        boundary2: cases.IJField,
+    ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
+        return concat_where(
+            KDim == 0,
+            (boundary0, (boundary1, boundary2)),
+            (interior0, (interior1, interior2)),
+        )
+
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(3))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(3))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    refs = tuple(
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 0,
+            boundary.asnumpy()[:, :, np.newaxis],
+            interior.asnumpy(),
+        )
+        for boundary, interior in zip(boundaries, interiors)
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interiors[0],
+        boundaries[0],
+        interiors[1],
+        boundaries[1],
+        interiors[2],
+        boundaries[2],
+        out=out,
+        ref=(refs[0], (refs[1], refs[2])),
+    )
+
+
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_sparse_fields
 def test_with_local_field(unstructured_case, static_domains: bool):
