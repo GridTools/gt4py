@@ -11,9 +11,9 @@ from __future__ import annotations
 import ast
 import textwrap
 import typing
-from typing import Any, Type
 
 import gt4py.eve as eve
+from gt4py.eve.extended_typing import Any, MaybeNestedInTuple
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -324,7 +324,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
         new_value = self.visit(node.value)
-        constraint_type: Type[ts.DataType] = ts.DataType
+        constraint_type: type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
             constraint_type = ts.TupleType
         elif (
@@ -542,24 +542,76 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.CompareOperator.NOTEQ
 
     def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
-        if len(node.args) > 0:
-            arg = node.args[0]
-            if not (
-                isinstance(arg, ast.Constant)
-                or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
-            ):
-                raise errors.DSLError(
-                    self.get_location(node),
-                    f"'{self._func_name(node)}()' only takes literal arguments.",
-                )
+        assert isinstance(node.func, ast.Name)
+        (arg,) = node.args
+        if not (
+            isinstance(arg, ast.Constant)
+            or (isinstance(arg, ast.UnaryOp) and isinstance(arg.operand, ast.Constant))
+            or (node.func.id == "tuple" and isinstance(arg, ast.GeneratorExp))
+        ):
+            allowed = (
+                "literal arguments or a generator expression"
+                if node.func.id == "tuple"
+                else "literal arguments"
+            )
+            raise errors.DSLError(
+                self.get_location(node),
+                f"'{self._func_name(node)}()' only takes {allowed}.",
+            )
 
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
-    def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call:
-        # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
+    def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call | foast.TupleComprehension:
         if isinstance(node.func, ast.Name):
             func_name = self._func_name(node)
+
+            if (
+                func_name == "tuple"
+                and len(node.args) == 1
+                and isinstance(gen_expr := node.args[0], ast.GeneratorExp)
+            ):
+                if len(gen_expr.generators) != 1:
+                    raise errors.DSLError(
+                        self.get_location(gen_expr),
+                        "Nested generator expressions are not supported.",
+                        hints=["Use a single 'for' clause iterating over one tuple."],
+                    )
+                if gen_expr.generators[0].ifs != []:
+                    raise errors.DSLError(
+                        self.get_location(gen_expr.generators[0].ifs[0]),
+                        "Conditionals are not supported in generator expressions.",
+                        notes=[
+                            (
+                                "The length of the resulting tuple must be known at compile time, "
+                                "but an 'if' filter makes it depend on runtime values."
+                            )
+                        ],
+                    )
+
+                def parse_target(target: ast.expr) -> MaybeNestedInTuple[foast.DataSymbol]:
+                    if isinstance(target, ast.Tuple):
+                        return tuple(parse_target(el) for el in target.elts)
+                    assert isinstance(target, ast.Name) and isinstance(target.ctx, ast.Store)
+                    return foast.DataSymbol(
+                        id=target.id,
+                        location=self.get_location(target),
+                        type=ts.DeferredType(constraint=None),
+                    )
+
+                target = parse_target(gen_expr.generators[0].target)
+
+                return foast.TupleComprehension(
+                    inner=foast.TupleComprehensionMapper(
+                        target=target,
+                        element_expr=self.visit(gen_expr.elt, **kwargs),
+                        location=self.get_location(node),
+                    ),
+                    iterable=self.visit(gen_expr.generators[0].iter, **kwargs),
+                    location=self.get_location(node),
+                )
+
+            # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
             if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
                 self._verify_builtin_type_constructor(node)
 

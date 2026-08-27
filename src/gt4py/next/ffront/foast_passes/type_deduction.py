@@ -12,6 +12,7 @@ from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
+from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.next import common, errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (
@@ -24,6 +25,7 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_passes import utils as foast_utils
 from gt4py.next.iterator import builtins
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.utils import tree_map
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -743,6 +745,117 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_type = ts.TupleType(types=[element.type for element in new_elts])
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
+    def _deduce_tuple_comprehension_target_type(
+        self,
+        target: MaybeNestedInTuple[foast.Symbol],
+        element_type: ts.TypeSpec,
+        **kwargs: Any,
+    ) -> MaybeNestedInTuple[foast.Symbol]:
+        """
+        Deduce the types of the loop target, e.g. `(a, b)` in `tuple(a + b for (a, b) in it)`.
+
+        Each target symbol starts out with a deferred type; revisiting it with `refine_type`
+        replaces that by the constituent of `element_type` at the symbol's unpacking position.
+        """
+
+        @tree_map(with_path_arg=True)
+        def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
+            try:
+                type_ = element_type
+                for i in path:
+                    if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
+                        raise IndexError()
+                    type_ = type_.types[i]
+                return self.visit(target_el, refine_type=type_, **kwargs)
+            except IndexError:
+                raise errors.DSLError(
+                    target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                ) from None
+
+        return process_target(target)
+
+    def _deduce_tuple_comprehension_mapper(
+        self,
+        node: foast.TupleComprehension,
+        target: MaybeNestedInTuple[foast.Symbol],
+        element_type: ts.DataType,
+        **kwargs: Any,
+    ) -> foast.TupleComprehensionMapper:
+        """
+        Deduce the per-element part, e.g. `a + b for (a, b)` in `tuple(a + b for (a, b) in it)`.
+
+        Refines the target symbols against `element_type` and then types the element
+        expression with those symbols in scope (a fresh child symbol table).
+        """
+        inner_kwargs = {**kwargs, "symtable": kwargs["symtable"].new_child()}
+        new_target = self._deduce_tuple_comprehension_target_type(
+            target, element_type, **inner_kwargs
+        )
+        return foast.TupleComprehensionMapper(
+            target=new_target,
+            element_expr=self.visit(node.inner.element_expr, **inner_kwargs),
+            location=node.location,
+        )
+
+    def visit_TupleComprehension(
+        self, node: foast.TupleComprehension, **kwargs: Any
+    ) -> foast.TupleComprehension:
+        # The target symbols are visited in `_deduce_tuple_comprehension_target_type`,
+        # where their types are refined against the iterable's element type.
+        target = node.inner.target
+        iterable = self.visit(node.iterable, **kwargs)
+
+        if isinstance(iterable.type, ts.TupleType):
+            if len(iterable.type.types) == 0:
+                raise errors.DSLError(
+                    iterable.location,
+                    "Cannot iterate over an empty tuple in a tuple comprehension.",
+                )
+            if not all(
+                isinstance(element_type, ts.DataType) for element_type in iterable.type.types
+            ):
+                raise errors.DSLError(
+                    iterable.location,
+                    "Tuple comprehension iterable elements must be data types.",
+                )
+
+            element_types = cast(list[ts.DataType], iterable.type.types)
+            # Only homogeneous iterables are supported, see ADR 0028.
+            if not all(element_type == element_types[0] for element_type in element_types):
+                raise NotImplementedError(
+                    "Tuple comprehensions over fixed-length tuples require all iterable "
+                    "elements to have the same type (see ADR 0028)."
+                )
+            new_mapper = self._deduce_tuple_comprehension_mapper(
+                node, target, element_types[0], **kwargs
+            )
+            result = foast.TupleComprehension(
+                inner=new_mapper,
+                iterable=iterable,
+                location=node.location,
+                type=ts.TupleType(types=[new_mapper.element_expr.type for _ in element_types]),
+            )
+            return result
+        elif isinstance(iterable.type, ts.VarArgType):
+            element_type = iterable.type.element_type
+            new_mapper = self._deduce_tuple_comprehension_mapper(
+                node, target, element_type, **kwargs
+            )
+            element_expr = new_mapper.element_expr
+            return_type = ts.VarArgType(element_type=element_expr.type)
+
+            return foast.TupleComprehension(
+                inner=new_mapper,
+                iterable=iterable,
+                location=node.location,
+                type=return_type,
+            )
+        else:
+            raise errors.DSLError(
+                iterable.location,
+                f"Iterable in generator expression must be a tuple, got '{iterable.type}'.",
+            )
+
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         new_func = self.visit(node.func, **kwargs)
         new_args = self.visit(node.args, **kwargs)
@@ -871,8 +984,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             try:
-                return_type = type_info.promote(
-                    *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                return_type = cast(
+                    # a `ListType` only occurs at the ITIR level, never in the frontend
+                    ts.FieldType | ts.ScalarType,
+                    type_info.promote(
+                        *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                    ),
                 )
             except ValueError as ex:
                 raise errors.DSLError(node.location, error_msg_preamble) from ex
