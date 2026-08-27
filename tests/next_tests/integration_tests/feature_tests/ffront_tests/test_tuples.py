@@ -142,6 +142,31 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.xfail(
+    strict=True,
+    reason="The consistency of the lengths of variable-length tuple arguments and the "
+    "'out' argument is not checked anywhere; the mismatch only surfaces as an internal "
+    "error (e.g. a bare 'AssertionError' from 'utils.tree_map') deep in the toolchain.",
+)
+def test_var_len_tuple_length_mismatch_rejected(cartesian_case):
+    # The return length equals the length of `a` or `b` depending on a runtime value, so
+    # with `len(a) != len(b)` no single length can be consistent with `out` — this should
+    # be rejected with a proper diagnostic when the concrete argument types are known.
+    @gtx.field_operator
+    def testee(
+        a: tuple[cases.IField, ...], b: tuple[cases.IField, ...], c: bool
+    ) -> tuple[cases.IField, ...]:
+        return a if c else b
+
+    a = cases.allocate(cartesian_case, testee, "a")()[:2]
+    b = cases.allocate(cartesian_case, testee, "b")()  # allocated length: 3
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()[:2]
+
+    with pytest.raises(errors.DSLError):
+        cases.run(cartesian_case, testee, a, b, False, out=out)
+
+
+@pytest.mark.uses_tuple_args
 def test_tuple_comprehension_other_fo(cartesian_case):
     @gtx.field_operator
     def inner(tracer: cases.IField, factor: int32) -> cases.IField:
