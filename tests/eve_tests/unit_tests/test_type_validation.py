@@ -75,6 +75,9 @@ SAMPLE_TYPE_DEFINITIONS: list[
     (typing.List[int], ([1, 2, 3], []), (1, [1.0]), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
+    (type[SampleEmptyClass], [SampleEmptyClass], [SampleEmptyClass(), int, 3], None, None),
+    (type[SampleDataClass], [SampleDataClass], [SampleDataClass(a=1), str], None, None),
+    (type[Any], [SampleEmptyClass, int, str], [3, "int", SampleEmptyClass()], None, None),
     (
         frozendict[int, str],
         (

@@ -302,6 +302,22 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 )
                 return self.combine_optional(name, validator) if has_none else validator
 
+            if origin_type is type:
+                # `type[X]`. Without this case the annotation falls through to the
+                # generic-collection branch below and degrades to `isinstance(value, type)`,
+                # i.e. "is any class at all".
+                if len(type_args) != 1:
+                    raise exceptions.EveValueError(
+                        f"{type_annotation} type annotation is not supported."
+                    )
+                if xtyping.is_Any(type_args[0]) or isinstance(type_args[0], typing.TypeVar):
+                    return self.make_is_instance_of(name, type)
+                if not xtyping.is_actual_type(type_args[0]):
+                    raise exceptions.EveValueError(
+                        f"{type_annotation} type annotation is not supported."
+                    )
+                return self.make_is_subclass_of(name, type_args[0])
+
             if isinstance(origin_type, type):
                 # Deal with generic collections
                 if issubclass(origin_type, tuple):
@@ -405,6 +421,18 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 )
 
         return _is_instance_of
+
+    @staticmethod
+    def make_is_subclass_of(name: str, type_: type) -> FixedTypeValidator:
+        """Create a ``FixedTypeValidator`` validator for ``type[type_]`` annotations."""
+
+        def _is_subclass_of(value: Any, **kwargs: Any) -> None:
+            if not (isinstance(value, type) and issubclass(value, type_)):
+                raise TypeError(
+                    f"'{name}' must be a subclass of {type_} (got '{value}' which is a {type(value)})."
+                )
+
+        return _is_subclass_of
 
     @staticmethod
     def make_is_instance_of_int(name: str) -> FixedTypeValidator:
