@@ -114,7 +114,7 @@ class TestNode:
             name: str
 
         class Parent(eve.Node):
-            targets: eve.extended_typing.NestedTuple[Target]
+            targets: eve.extra_typing.NestedTuple[Target]
 
         node = Parent(targets=(Target(name="a"), (Target(name="b"), (Target(name="c"),))))
 

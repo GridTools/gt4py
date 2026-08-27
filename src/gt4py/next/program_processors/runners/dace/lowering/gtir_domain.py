@@ -15,7 +15,7 @@ import dace
 from dace import subsets as dace_subsets
 
 from gt4py import eve
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.extra_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils

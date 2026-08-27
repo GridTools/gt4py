@@ -9,7 +9,7 @@
 from __future__ import annotations
 import pytest
 
-from gt4py.eve.extended_typing import NestedTuple
+from gt4py.eve.extra_typing import NestedTuple
 from gt4py.next import common
 from gt4py.next import named_collections
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt

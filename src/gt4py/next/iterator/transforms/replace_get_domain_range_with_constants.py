@@ -10,7 +10,7 @@ import dataclasses
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.extra_typing import MaybeNestedInTuple
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (

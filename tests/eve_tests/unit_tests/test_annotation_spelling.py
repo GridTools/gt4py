@@ -60,12 +60,7 @@ from typing import (  # noqa: UP035 [deprecated-import] deliberately exercising 
 
 import pytest
 
-from gt4py.eve import (
-    datamodels,
-    exceptions,
-    extended_typing as xtyping,
-    type_validation as type_val,
-)
+from gt4py.eve import datamodels, exceptions, extra_typing, type_validation as type_val
 
 # Imported directly on purpose: reaching these two through a datamodel is not enough.
 # 'get_partial_type_hints' strips 'Annotated' before a field annotation gets this far,
@@ -278,7 +273,7 @@ def observe_represented_types(annotation: Any, probes: tuple[Any, ...]) -> Any:
     # Compared as a set: the result is meant to be handed to 'isinstance()', and
     # 'typing' preserves the order the union members were written in, so
     # 'Optional[int]' and 'Union[None, int]' legitimately differ in order alone.
-    outcome = _outcome(lambda: xtyping.get_represented_types(annotation))
+    outcome = _outcome(lambda: extra_typing.get_represented_types(annotation))
     if outcome[0] == "value":
         return ("represented", "value", frozenset(outcome[2]))
     return ("represented", *outcome)
@@ -362,7 +357,7 @@ def test_string_annotation_rows_are_not_silently_vacuous() -> None:
         spelling.id
         for spelling in SPELLINGS
         if all(
-            xtyping.eval_forward_ref(_as_source(annotation), globalns=globals()) is annotation
+            extra_typing.eval_forward_ref(_as_source(annotation), globalns=globals()) is annotation
             for annotation in (spelling.legacy, spelling.modern)
         )
     }
@@ -392,7 +387,7 @@ def test_string_annotations_agree_with_live_objects(spelling: Spelling, funnel: 
         # PEP 563 resolves a string annotation against the *defining module's*
         # globals, so that is what gets passed here -- this module imports 'typing'
         # and 'collections.abc', exactly as a module writing those annotations would.
-        resolved = xtyping.eval_forward_ref(_as_source(annotation), globalns=globals())
+        resolved = extra_typing.eval_forward_ref(_as_source(annotation), globalns=globals())
         assert funnel(resolved, spelling.probes) == funnel(annotation, spelling.probes)
 
 
@@ -482,7 +477,7 @@ def test_get_partial_type_hints_strips_annotated_recursively() -> None:
         nested: list[Annotated[int, "meta"]]
         in_value: dict[str, Annotated[int, "meta"]]
 
-    hints = xtyping.get_partial_type_hints(_Holder)
+    hints = extra_typing.get_partial_type_hints(_Holder)
 
     assert hints["plain"] is int
     assert hints["nested"] == list[int]
@@ -495,15 +490,15 @@ def test_represented_types_of_literal_are_the_types_of_its_values() -> None:
     Recursing into them matches no branch and yields an empty tuple, which callers
     turn into an `isinstance()` argument -- making every check against it `False`.
     """
-    assert xtyping.get_represented_types(Literal[1, 2]) == (int,)
-    assert xtyping.get_represented_types(Literal["a", 1]) == (str, int)
-    assert xtyping.get_represented_types(Union[Literal["a"], int]) == (str, int)
+    assert extra_typing.get_represented_types(Literal[1, 2]) == (int,)
+    assert extra_typing.get_represented_types(Literal["a", 1]) == (str, int)
+    assert extra_typing.get_represented_types(Union[Literal["a"], int]) == (str, int)
 
 
 def test_represented_types_sees_through_annotated() -> None:
     """The metadata of an `Annotated` is not a represented type, and neither is the form."""
-    assert xtyping.get_represented_types(Annotated[int, "meta"]) == (int,)
-    assert xtyping.get_represented_types(Annotated[Optional[int], "meta"]) == (int, type(None))
+    assert extra_typing.get_represented_types(Annotated[int, "meta"]) == (int,)
+    assert extra_typing.get_represented_types(Annotated[Optional[int], "meta"]) == (int, type(None))
 
 
 @pytest.mark.parametrize(
@@ -551,7 +546,7 @@ def test_infer_type_passes_annotations_through_unchanged() -> None:
         Callable[[int], int],
         ModernAlias,
     ):
-        assert xtyping.infer_type(annotation) is annotation
+        assert extra_typing.infer_type(annotation) is annotation
 
 
 def test_infer_type_still_infers_the_type_of_runtime_values() -> None:
@@ -563,12 +558,12 @@ def test_infer_type_still_infers_the_type_of_runtime_values() -> None:
 
     class Generic_(typing.Generic[typing.TypeVar("_T")]): ...
 
-    assert xtyping.infer_type(3) is int
-    assert xtyping.infer_type("x") is str
-    assert xtyping.infer_type(None) is type(None)
-    assert xtyping.infer_type([1, 2]) == list[int]
-    assert xtyping.infer_type({"a": 1}) == dict[str, int]
-    assert xtyping.infer_type(Generic_()) is Generic_
+    assert extra_typing.infer_type(3) is int
+    assert extra_typing.infer_type("x") is str
+    assert extra_typing.infer_type(None) is type(None)
+    assert extra_typing.infer_type([1, 2]) == list[int]
+    assert extra_typing.infer_type({"a": 1}) == dict[str, int]
+    assert extra_typing.infer_type(Generic_()) is Generic_
 
 
 # -- Regressions from unwrapping transparent wrappers --
@@ -599,7 +594,7 @@ type _MutuallyWrappingB = Annotated[_MutuallyWrappingA, "b"]
 @pytest.mark.parametrize(
     "funnel",
     [
-        xtyping.get_represented_types,
+        extra_typing.get_represented_types,
         _is_strictly_immutable_type,
         lambda annotation: _make_type_converter(annotation, "<field>"),
     ],
@@ -637,11 +632,11 @@ def test_normalize_union_returns_identical_objects_for_normalized_input() -> Non
     invites -- would then see a spelling change that did not happen.
     """
     for annotation in (Optional[int], Union[int, str], int, None, list[int]):
-        assert xtyping.normalize_union(annotation) is annotation
+        assert extra_typing.normalize_union(annotation) is annotation
 
     # Genuine PEP 604 unions are rewritten before 3.14, and are already 'typing.Union'
     # from 3.14 on, so this is the one row whose identity legitimately varies.
-    assert xtyping.normalize_union(int | None) == Optional[int]
+    assert extra_typing.normalize_union(int | None) == Optional[int]
 
 
 def test_genuine_recursive_aliases_still_build() -> None:

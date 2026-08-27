@@ -11,7 +11,7 @@
 The internal dependencies between modules are the following (each module depends
 on some of the previous ones):
 
-  0. extended_typing
+  0. extra_typing
   1. exceptions, pattern_matching, type_definitions
   2. utils
   3. type_validation

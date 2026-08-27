@@ -11,7 +11,7 @@ from types import ModuleType
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import NestedTuple
+from gt4py.eve.extra_typing import NestedTuple
 from gt4py.next import common, named_collections, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
 

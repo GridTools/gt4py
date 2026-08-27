@@ -6,10 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
-from typing import Optional, TypeVar
+from typing import Optional, Self, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (

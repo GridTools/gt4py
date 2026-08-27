@@ -16,7 +16,8 @@ import pytest
 import gt4py.next as gtx
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import extra_typing
+from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
@@ -106,7 +107,7 @@ def _make_type_string_for_container(cls: type) -> str:
         ),
         (
             typing.Annotated[
-                typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
+                typing.Callable[["float", int], int], extra_typing.CallableKwargsInfo(data={})
             ],
             ts.FunctionType(
                 pos_only_args=[

@@ -19,7 +19,7 @@ import numpy.typing as npt
 from numpy.typing import DTypeLike
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
+from gt4py.eve.extra_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 
 

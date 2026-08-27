@@ -241,10 +241,6 @@ disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.defir_to_gtir'
 
 [[tool.mypy.overrides]]
-module = 'gt4py.eve.extended_typing'
-warn_unused_ignores = false
-
-[[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
 disallow_untyped_defs = false
 follow_imports = 'silent'
@@ -372,7 +368,6 @@ ignore = [
 ]
 preview = true  # use only with explicit-preview-rules=true
 select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
-typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]

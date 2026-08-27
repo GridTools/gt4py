@@ -15,20 +15,12 @@ from frozendict import frozendict
 
 import pytest
 
-from gt4py.eve import (
-    extended_typing as xtyping,
-    type_validation as type_val,
-)
-from gt4py.eve.extended_typing import (
-    Any,
-    Callable,
-    Final,
-    ForwardRef,
-    Optional,
-    Sequence,
-    SourceTypeAnnotation,
-    Union,
-)
+from collections.abc import Callable, Sequence
+from typing import Any, Final, ForwardRef, Optional, Union
+import typing
+from gt4py.eve.extra_typing import SourceTypeAnnotation
+from gt4py.eve import extra_typing
+from gt4py.eve import type_validation as type_val
 
 
 VALIDATORS: Final[list[Callable]] = [type_val.simple_type_validator]
@@ -235,20 +227,26 @@ SAMPLE_TYPE_DEFINITIONS.extend(
             None,
         ),
         (
-            xtyping.NestedTuple[int],
+            extra_typing.NestedTuple[int],
             ((), (1, 2), (1, (2, (3, 4)), ())),
             (1, [1], (1, "2"), (1, [2])),
             None,
             None,
         ),
         (
-            xtyping.NestedList[int],
+            extra_typing.NestedList[int],
             ([], [1, 2], [1, [2, [3, 4]], []]),
             (1, (1,), [1, "2"], [1, (2,)]),
             None,
             None,
         ),
-        (xtyping.MaybeNestedInTuple[int], (1, (), (1, (2, 3))), ("1", [1], (1, "2")), None, None),
+        (
+            extra_typing.MaybeNestedInTuple[int],
+            (1, (), (1, (2, 3))),
+            ("1", [1], (1, "2")),
+            None,
+            None,
+        ),
     ]
 )
 
@@ -339,7 +337,7 @@ def test_simple_validation_particularities():
     lenient_validator(True)
 
     # not supported annotations
-    InvalidAnnotation = xtyping.TypeGuard[str]
+    InvalidAnnotation = typing.TypeGuard[str]
     assert (
         type_val.simple_type_validator_factory(InvalidAnnotation, "value", required=False) is None
     )

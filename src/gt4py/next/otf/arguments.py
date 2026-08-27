@@ -11,23 +11,13 @@ from __future__ import annotations
 import abc
 import dataclasses
 import enum
+from collections.abc import Callable, Mapping
+from typing import Any, Generic, Hashable, Optional, Self, TypeAlias, TypeVar, cast, final
+
+from typing_extensions import TypeIs
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import (
-    Any,
-    Callable,
-    Generic,
-    Hashable,
-    Mapping,
-    MaybeNestedInTuple,
-    Optional,
-    Self,
-    TypeAlias,
-    TypeIs,
-    TypeVar,
-    cast,
-    final,
-)
+from gt4py.eve.extra_typing import MaybeNestedInTuple
 from gt4py.next import common, errors, named_collections, utils
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 

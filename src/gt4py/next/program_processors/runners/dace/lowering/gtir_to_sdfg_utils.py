@@ -13,7 +13,7 @@ from typing import Dict, Final, Mapping, Optional, TypeVar
 import dace
 
 from gt4py import eve
-from gt4py.eve.extended_typing import NestedTuple
+from gt4py.eve.extra_typing import NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im

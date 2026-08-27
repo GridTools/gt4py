@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from typing import Any, ClassVar, Final, Optional, TypeVar, Union
 
-from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
+from . import datamodels, exceptions, extra_typing, trees, utils
 from .datamodels import validators as _validators
-from .extended_typing import Any, ClassVar, Final, Iterable, Optional, TypeVar, Union
 from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
@@ -105,7 +105,7 @@ class AnnexManager:
     def register_user(
         cls: type[AnnexManager],
         key: str,
-        type_hint: xtyping.TypeAnnotation,
+        type_hint: extra_typing.TypeAnnotation,
         *,
         shared: bool = False,
     ) -> Callable[[_T], _T]:

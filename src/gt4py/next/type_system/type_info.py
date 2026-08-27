@@ -12,9 +12,10 @@ from collections.abc import Callable, Collection, Iterable, Iterator
 from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, cast, overload
 
 import numpy as np
+import typing_extensions
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils
+from gt4py.eve import utils
 from gt4py.next import common, utils as next_utils
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
@@ -936,7 +937,7 @@ def accepts_args(
 
 def needs_value_extraction(
     type_spec: ts.TypeSpec,
-) -> xtyping.TypeIs[ts.NamedCollectionType | ts.TupleType]:
+) -> typing_extensions.TypeIs[ts.NamedCollectionType | ts.TupleType]:
     return isinstance(type_spec, ts.NamedCollectionType) or (
         isinstance(type_spec, ts.TupleType)
         and any(needs_value_extraction(t) for t in type_spec.types)

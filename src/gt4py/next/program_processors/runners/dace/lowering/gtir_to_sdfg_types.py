@@ -16,7 +16,7 @@ from typing import Final, TypeAlias
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.extra_typing import MaybeNestedInTuple
 from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
