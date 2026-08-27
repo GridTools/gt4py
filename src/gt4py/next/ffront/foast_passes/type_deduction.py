@@ -458,6 +458,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
+            case ts.VarArgType(element_type=element_type):
+                new_type = (
+                    element_type  # TODO: we only temporarily allow any index for vararg types
+                )
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
