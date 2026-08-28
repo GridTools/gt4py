@@ -88,7 +88,7 @@ test_cscs_gh200:
   variables:
     TEST_VARIANTS: 'cpu cuda12'
     SLURM_GPUS_PER_NODE: 1
-    SLURM_PARTITION: 'shared'
+    SLURM_PARTITION: 'normal'
     GT4PY_BUILD_JOBS: 8
     # GH200 is sm_90; pinning it skips every CUDA-arch device query.
     CUDAARCHS: '90'
