@@ -49,6 +49,12 @@ class SampleDataClass:
     a: int
 
 
+type SampleTypeAlias = SampleEmptyClass  # PEP 695, nested inside `type[...]`
+
+SampleBoundTypeVar = typing.TypeVar("SampleBoundTypeVar", bound=SampleEmptyClass)
+SampleUnboundTypeVar = typing.TypeVar("SampleUnboundTypeVar")
+
+
 # Each item should be a tuple like:
 #   ( annotation: Any, valid_values: Sequence, wrong_values: Sequence,
 #     globalns: Optional[Dict[str, Any]], localns: Optional[Dict[str, Any]] )
@@ -78,6 +84,22 @@ SAMPLE_TYPE_DEFINITIONS: list[
     (type[SampleEmptyClass], [SampleEmptyClass], [SampleEmptyClass(), int, 3], None, None),
     (type[SampleDataClass], [SampleDataClass], [SampleDataClass(a=1), str], None, None),
     (type[Any], [SampleEmptyClass, int, str], [3, "int", SampleEmptyClass()], None, None),
+    # `type[X]` shapes that are not a plain class must stay *usable*: they validated
+    # loosely before the `type[X]` case existed, so they fall back to "is a class"
+    # rather than being rejected at class-creation time.
+    (type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (typing.Type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (
+        type[SampleEmptyClass | SampleDataClass],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
+    (type[SampleTypeAlias], [SampleEmptyClass], [int, SampleEmptyClass(), 3], None, None),
+    # a bounded TypeVar is honoured, mirroring the plain-TypeVar branch
+    (type[SampleBoundTypeVar], [SampleEmptyClass], [int, SampleEmptyClass()], None, None),
+    (type[SampleUnboundTypeVar], [SampleEmptyClass, int], [3, "int"], None, None),
     (
         frozendict[int, str],
         (

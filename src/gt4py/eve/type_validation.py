@@ -306,17 +306,42 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 # `type[X]`. Without this case the annotation falls through to the
                 # generic-collection branch below and degrades to `isinstance(value, type)`,
                 # i.e. "is any class at all".
+                #
+                # Every shape that is not recognized here falls back to that same loose
+                # check rather than raising: `type[X]` annotations validated (loosely)
+                # before this branch existed, so refusing one now would turn a working
+                # downstream datamodel into an error at class-creation time.
                 if len(type_args) != 1:
-                    raise exceptions.EveValueError(
-                        f"{type_annotation} type annotation is not supported."
-                    )
-                if xtyping.is_Any(type_args[0]) or isinstance(type_args[0], typing.TypeVar):
+                    # bare `type` / `typing.Type`
                     return self.make_is_instance_of(name, type)
-                if not xtyping.is_actual_type(type_args[0]):
-                    raise exceptions.EveValueError(
-                        f"{type_annotation} type annotation is not supported."
-                    )
-                return self.make_is_subclass_of(name, type_args[0])
+
+                # A PEP 695 alias nested inside `type[...]` is not resolved by the
+                # whole-annotation pass at the top of this function, so resolve it here.
+                try:
+                    arg = xtyping.eval_type_alias(type_args[0])
+                except TypeError:
+                    return self.make_is_instance_of(name, type)
+
+                if isinstance(arg, types.UnionType):  # `type[A | B]`
+                    arg = typing.Union[arg.__args__]
+
+                if isinstance(arg, typing.TypeVar):
+                    # Mirror the plain-`TypeVar` branch above, which honours the bound.
+                    if xtyping.is_actual_type(arg.__bound__):
+                        return self.make_is_subclass_of(name, arg.__bound__)
+                    return self.make_is_instance_of(name, type)
+
+                if xtyping.is_actual_type(arg):
+                    return self.make_is_subclass_of(name, arg)
+
+                if xtyping.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
+                    members = xtyping.get_args(arg)
+                    if members and all(xtyping.is_actual_type(m) for m in members):
+                        return self.combine_validators_as_or(
+                            name, *(self.make_is_subclass_of(name, m) for m in members)
+                        )
+
+                return self.make_is_instance_of(name, type)
 
             if isinstance(origin_type, type):
                 # Deal with generic collections
