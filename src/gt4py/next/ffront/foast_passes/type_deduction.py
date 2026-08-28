@@ -776,57 +776,39 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             assert result_type is not None
             return result_type
 
-        def deduce_elementwise(left_type: ts.TypeSpec, right_type: ts.TypeSpec) -> ts.TypeSpec:
-            for type_ in (left_type, right_type):
-                ensure_elementwise_tuple_type(type_)
+        def build_result(value: ts.TypeSpec, elems: Sequence[ts.TypeSpec]) -> ts.DataType:
+            # Rebuild the traversed collection, preserving its kind: an `XVarArgType` maps to a
+            # single representative element (see `XVarArgType.__iter__`), any other tuple keeps
+            # its structure.
+            if isinstance(value, ts.XVarArgType):
+                assert len(elems) == 1
+                return ts.XVarArgType(element_type=vararg_element_type(elems[0]))
+            # `tree_map` only descends into `XTupleType`/`XVarArgType` here, so `value` is an
+            # `XTupleType` (a `TupleType`) at this point.
+            assert isinstance(value, ts.TupleType)
+            return type_info.tree_map_type_constructor(
+                value, [tuple_element_type(el) for el in elems]
+            )
 
-            # `XVarArgType` has no finite children, so `tree_map` cannot descend into it.
-            if (
-                isinstance(left_type, ts.XTupleType) and isinstance(right_type, ts.XVarArgType)
-            ) or (isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XTupleType)):
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' can not be applied between a fixed-length "
-                    f"tuple and a variable-length tuple: '{left.type}' and '{right.type}'.",
-                )
-
-            elif isinstance(left_type, ts.XVarArgType) and isinstance(right_type, ts.XVarArgType):
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' can not be applied between two "
-                    f"variable-length tuples: '{left.type}' and '{right.type}'.",
-                )
-            elif isinstance(left_type, ts.XVarArgType):
-                return ts.XVarArgType(
-                    element_type=vararg_element_type(
-                        deduce_elementwise(left_type.element_type, right_type)
-                    )
-                )
-            elif isinstance(right_type, ts.XVarArgType):
-                return ts.XVarArgType(
-                    element_type=vararg_element_type(
-                        deduce_elementwise(left_type, right_type.element_type)
-                    )
-                )
-
-            # Finite `XTupleType` recursion is handled by `tree_map`; the callback only sees leaves.
-            try:
-                result = tree_map(
-                    lambda l_type, r_type: tuple_element_type(deduce_leaf(l_type, r_type)),
-                    collection_type=ts.XTupleType,
-                    result_collection_constructor=type_info.tree_map_type_constructor,
-                    broadcast_leaves=True,
-                )(left_type, right_type)
-                assert isinstance(result, ts.TypeSpec)
-                return result
-            except ValueError as ex:
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' requires tuple operands to have the "
-                    f"same structure, got '{left.type}' and '{right.type}'.",
-                ) from ex
-
-        result = deduce_elementwise(left.type, right.type)
+        # An `XVarArgType` is traversed as a length-1 collection, so two variable-length tuples
+        # always match structurally and are combined regardless of their actual runtime lengths.
+        # TODO(tehrengruber): The actual runtime lengths of two `XVarArgType` operands are not
+        #   verified here (they are unknown during type deduction); mismatching lengths currently
+        #   fail later, downstream of type deduction. Catch them already here once that
+        #   information is available.
+        try:
+            result = tree_map(
+                deduce_leaf,
+                collection_type=(ts.XTupleType, ts.XVarArgType),
+                result_collection_constructor=build_result,
+                broadcast_leaves=True,
+            )(left.type, right.type)
+        except ValueError as ex:
+            raise errors.DSLError(
+                node.location,
+                f"Element-wise operator '{node.op}' requires tuple operands to have the "
+                f"same structure, got '{left.type}' and '{right.type}'.",
+            ) from ex
         assert isinstance(result, (ts.XTupleType, ts.XVarArgType))
         return result
 

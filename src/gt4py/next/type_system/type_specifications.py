@@ -166,6 +166,16 @@ class XVarArgType(VarArgType):
     def __str__(self) -> str:
         return f"XVarArgTuple[{self.element_type}]"
 
+    def __iter__(self) -> Iterator[DataType]:
+        # Expose the variable-length tuple as a single-element collection (its representative
+        # `element_type`) so that `tree_map` can descend into it uniformly with `XTupleType`
+        # (e.g. for element-wise binary operators). This is a structural view for traversal;
+        # it is deliberately not the actual (runtime) length of the tuple.
+        yield self.element_type
+
+    def __len__(self) -> int:
+        return 1
+
 
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
