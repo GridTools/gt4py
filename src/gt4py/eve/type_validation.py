@@ -302,6 +302,49 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 )
                 return self.combine_optional(name, validator) if has_none else validator
 
+            if origin_type is type:
+                # `type[X]`. Without this case the annotation falls through to the
+                # generic-collection branch below and degrades to `isinstance(value, type)`,
+                # i.e. "is any class at all".
+                if len(type_args) != 1:
+                    # bare `type` / `typing.Type`
+                    return self.make_is_instance_of(name, type)
+
+                # A PEP 695 alias nested inside `type[...]` is not resolved by the
+                # whole-annotation pass at the top of this function, so resolve it here.
+                try:
+                    arg = xtyping.eval_type_alias(type_args[0])
+                except TypeError:
+                    return self.make_is_instance_of(name, type)
+
+                if isinstance(arg, types.UnionType):  # `type[A | B]`
+                    arg = typing.Union[arg.__args__]
+
+                # `issubclass()` is not generally usable with protocol classes: it is
+                # rejected outright unless the protocol is `@runtime_checkable`, and also
+                # for `@runtime_checkable` protocols with non-method members. Protocols
+                # therefore keep the loose check, like any other unsupported shape.
+                def is_strict_arg(a: Any) -> xtyping.TypeGuard[type]:
+                    return xtyping.is_actual_type(a) and not xtyping.is_protocol(a)
+
+                if isinstance(arg, typing.TypeVar):
+                    # Mirror the plain-`TypeVar` branch above, which honours the bound.
+                    if is_strict_arg(arg.__bound__):
+                        return self.make_is_subclass_of(name, arg.__bound__)
+                    return self.make_is_instance_of(name, type)
+
+                if is_strict_arg(arg):
+                    return self.make_is_subclass_of(name, arg)
+
+                if xtyping.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
+                    members = xtyping.get_args(arg)
+                    if members and all(is_strict_arg(m) for m in members):
+                        return self.combine_validators_as_or(
+                            name, *(self.make_is_subclass_of(name, m) for m in members)
+                        )
+
+                return self.make_is_instance_of(name, type)
+
             if isinstance(origin_type, type):
                 # Deal with generic collections
                 if issubclass(origin_type, tuple):
@@ -405,6 +448,18 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 )
 
         return _is_instance_of
+
+    @staticmethod
+    def make_is_subclass_of(name: str, type_: type) -> FixedTypeValidator:
+        """Create a ``FixedTypeValidator`` validator for ``type[type_]`` annotations."""
+
+        def _is_subclass_of(value: Any, **kwargs: Any) -> None:
+            if not (isinstance(value, type) and issubclass(value, type_)):
+                raise TypeError(
+                    f"'{name}' must be a subclass of {type_} (got '{value}' which is a {type(value)})."
+                )
+
+        return _is_subclass_of
 
     @staticmethod
     def make_is_instance_of_int(name: str) -> FixedTypeValidator:
