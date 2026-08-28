@@ -51,8 +51,19 @@ class SampleDataClass:
 
 type SampleTypeAlias = SampleEmptyClass  # PEP 695, nested inside `type[...]`
 
+type SampleRecursiveTypeAlias = SampleRecursiveTypeAlias  # cannot be resolved
+
 SampleBoundTypeVar = typing.TypeVar("SampleBoundTypeVar", bound=SampleEmptyClass)
 SampleUnboundTypeVar = typing.TypeVar("SampleUnboundTypeVar")
+
+
+class SampleProtocol(typing.Protocol):
+    def method(self) -> None: ...
+
+
+@typing.runtime_checkable
+class SampleRuntimeCheckableProtocol(typing.Protocol):
+    attribute: int
 
 
 # Each item should be a tuple like:
@@ -96,7 +107,21 @@ SAMPLE_TYPE_DEFINITIONS: list[
         None,
         None,
     ),
+    (
+        type[typing.Union[SampleEmptyClass, SampleDataClass]],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
     (type[SampleTypeAlias], [SampleEmptyClass], [int, SampleEmptyClass(), 3], None, None),
+    # An alias which cannot be resolved keeps the loose check instead of propagating
+    # the resolution error out of the class definition.
+    (type[SampleRecursiveTypeAlias], [SampleEmptyClass, int], [3, "int"], None, None),
+    # Protocols do not support 'issubclass()' in general, so they keep the loose check
+    # too, independently of whether they are '@runtime_checkable'.
+    (type[SampleProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
+    (type[SampleRuntimeCheckableProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
     # a bounded TypeVar is honoured, mirroring the plain-TypeVar branch
     (type[SampleBoundTypeVar], [SampleEmptyClass], [int, SampleEmptyClass()], None, None),
     (type[SampleUnboundTypeVar], [SampleEmptyClass, int], [3, "int"], None, None),
