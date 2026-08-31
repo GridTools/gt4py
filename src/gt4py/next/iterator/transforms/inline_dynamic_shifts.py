@@ -59,7 +59,7 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     if ref in inline_let_params and is_dynamic_shift_arg:
                         inline_let_params[ref] = True
 
-            if any(inline_let_params):
+            if any(inline_let_params.values()):
                 node = inline_lambdas.inline_lambda(
                     node, eligible_params=list(inline_let_params.values())
                 )
