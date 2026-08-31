@@ -1473,7 +1473,7 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
     `flip_staggered(dim)`).
 
     The half-integer case encodes the convention that a staggered index sits half a cell *below*
-    its base index (see ADR 0024): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
+    its base index (see ADR 0026): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
     shifting out of a non-staggered dimension needs a `+1` index correction that shifting out of a
     staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
     `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.
