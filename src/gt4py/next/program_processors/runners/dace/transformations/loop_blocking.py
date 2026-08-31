@@ -1116,7 +1116,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                         new_out_conn,
                         in_edge.dst,
                         in_edge.dst_conn,
-                        copy.deepcopy(in_edge.data),
+                        dace.Memlet(
+                            data=in_edge.data.data,
+                            subset=in_edge.data.get_src_subset(in_edge, state),
+                        ),
                     )
                     inner_entry.add_in_connector(new_in_conn)
                     inner_entry.add_out_connector(new_out_conn)
@@ -1152,7 +1155,10 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 "OUT_" + edge_conn,
                 outer_exit,
                 in_edge.dst_conn,
-                copy.deepcopy(in_edge.data),
+                dace.Memlet(
+                    data=in_edge.data.data,
+                    subset=in_edge.data.get_dst_subset(in_edge, state),
+                ),
             )
             inner_exit.add_in_connector("IN_" + edge_conn)
             inner_exit.add_out_connector("OUT_" + edge_conn)
