@@ -997,8 +997,12 @@ class DeferredTypeConverter:
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
+    type_annotation = xtyping.normalize_union(type_annotation)
+
     try:
-        resolved_annotation = xtyping.eval_type_alias(type_annotation)
+        # Aliases and 'Annotated' metadata are resolved together: applied in separate
+        # branches they recurse forever on an annotation where each wraps the other.
+        resolved_annotation = xtyping.resolve_annotation(type_annotation)
     except NameError:
         # Deferral signal, as in 'field_type_validator_factory' above.
         return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
@@ -1037,10 +1041,21 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
         and type(None) in (args := xtyping.get_args(type_annotation))
         and len(args) == 2
     ):
-        # Optional type
-        _inner_type_converter: TypeConverter[_T] = _make_type_converter(args[0], name)
+        # Optional type. 'typing' preserves the order the arguments were written in,
+        # so 'Union[None, int]' is as valid a spelling as 'Optional[int]' and the
+        # wrapped type cannot be assumed to be the first one.
+        inner_annotation = next(arg for arg in args if arg is not type(None))
+        _inner_type_converter: TypeConverter[_T] = _make_type_converter(inner_annotation, name)
 
         return cast(TypeConverter[_T], lambda x: x if x is None else _inner_type_converter(x))
+
+    if origin_type is xtyping.Union:
+        # No single type to coerce to. Explicit because on 3.14 'typing.Union' *is*
+        # 'types.UnionType', a real class, which the 'is_actual_type(origin_type)'
+        # fallback below would accept and turn into a 'types.UnionType(value)' call.
+        raise exceptions.EveTypeError(
+            f"Automatic type coercion for {type_annotation} types is not supported."
+        )
 
     if xtyping.is_actual_type(origin_type):
         return _make_type_converter(origin_type, name)
@@ -1088,12 +1103,13 @@ def _is_strictly_immutable_type(
         ``True`` if every value admitted by the annotation is strictly immutable.
     """
     if xtyping.is_type_alias(type_annotation) or xtyping.get_origin(type_annotation) is not None:
-        # A PEP 695 alias stands for the annotation it resolves to, so check that
-        # instead; an alias whose value cannot be evaluated (undefined name, recursive,
-        # ...) proves nothing and is rejected below like any other unresolved
-        # annotation. Non-aliases are returned unchanged, as the identical object.
+        # A PEP 695 alias stands for the annotation it resolves to, and 'Annotated'
+        # metadata is not part of the type, so check what is left once both are gone.
+        # An annotation that cannot be resolved (undefined name, recursive, ...) proves
+        # nothing and is rejected below like any other unresolved one; anything else is
+        # returned unchanged, as the identical object.
         try:
-            resolved_alias = xtyping.eval_type_alias(type_annotation)
+            resolved_alias = xtyping.resolve_annotation(type_annotation)
         except (NameError, TypeError):
             return False
         if resolved_alias is not type_annotation:

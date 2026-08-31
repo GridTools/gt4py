@@ -14,7 +14,6 @@ import abc
 import collections.abc
 import dataclasses
 import functools
-import types
 import typing
 
 from . import exceptions, extended_typing as xtyping, utils
@@ -225,10 +224,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             if type_annotation is None:
                 type_annotation = type(None)
 
-            if isinstance(
-                type_annotation, types.UnionType
-            ):  # see https://github.com/python/cpython/issues/105499
-                type_annotation = typing.Union[type_annotation.__args__]
+            type_annotation = xtyping.normalize_union(type_annotation)
 
             # A 'NameError' is deliberately left to propagate here, so that 'datamodels'
             # can defer; see 'xtyping.eval_type_alias' for both failure modes.
@@ -246,6 +242,15 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                     return deferred
                 _alias_memo[type_annotation] = deferred = _DeferredTypeValidator(name)
                 deferred.validator = validator = make_recursive(resolved_annotation)
+                if validator is deferred:
+                    # 'type R = Annotated[R, ...]' resolves to nothing but itself, so
+                    # the placeholder would become its own validator: it builds cleanly
+                    # and recurses forever on the first value. A real recursive alias
+                    # ('type Tree = list[Tree]') has a container in between and is fine.
+                    raise exceptions.EveValueError(
+                        f"{type_annotation} type annotation is not supported: "
+                        "the alias resolves only to itself."
+                    )
                 return validator
 
             # Non-generic types
@@ -273,6 +278,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             # Generic and parametrized type hints
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
+
+            if (stripped := xtyping.strip_annotated(type_annotation)) is not type_annotation:
+                return make_recursive(stripped)
 
             if origin_type in {typing.Literal, xtyping.Literal}:
                 if len(type_args) == 1:
@@ -310,15 +318,18 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                     # bare `type` / `typing.Type`
                     return self.make_is_instance_of(name, type)
 
-                # A PEP 695 alias nested inside `type[...]` is not resolved by the
-                # whole-annotation pass at the top of this function, so resolve it here.
+                # The pass at the top of this function does not reach inside
+                # `type[...]`, so the alias and the `Annotated` are still here. Either
+                # can wrap the other repeatedly, so both are resolved together; an
+                # annotation that does not resolve keeps the loose check below.
                 try:
-                    arg = xtyping.eval_type_alias(type_args[0])
+                    arg = xtyping.resolve_annotation(type_args[0])
                 except TypeError:
                     return self.make_is_instance_of(name, type)
 
-                if isinstance(arg, types.UnionType):  # `type[A | B]`
-                    arg = typing.Union[arg.__args__]
+                # After the metadata is gone, not before: `type[Annotated[A | B, ...]]`
+                # only reaches the union handling below if it is stripped first.
+                arg = xtyping.normalize_union(arg)  # `type[A | B]`
 
                 # `issubclass()` is not generally usable with protocol classes: it is
                 # rejected outright unless the protocol is `@runtime_checkable`, and also
@@ -375,7 +386,6 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
                 if issubclass(origin_type, (collections.abc.Sequence, collections.abc.Set)):
                     assert len(type_args) == 1
-                    make_recursive(type_args[0])
                     if (member_validator := make_recursive(type_args[0])) is None:
                         raise exceptions.EveValueError(
                             f"{type_args[0]} type annotation is not supported."
