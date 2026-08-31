@@ -65,10 +65,11 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 )
 
         # Fusing one producer can expose another one behind it (e.g. a chain of shifts split
-        # across multiple `as_fieldop`s), so repeat until no dynamically shifted argument is left.
-        # This terminates: `fuse_as_fieldop` replaces every fused argument by the arguments of the
-        # producer it inlines, i.e. by strict subterms of that argument, so the combined size of
-        # the arguments strictly decreases in each iteration.
+        # across multiple `as_fieldop`s), so repeat until no dynamically shifted argument that is
+        # not a `SymRef` is left. A let-bound producer shared between two dynamically shifted
+        # consumers is therefore left behind, see #2839.
+        # This terminates: each iteration either replaces an `as_fieldop` or `if_` argument by
+        # strict subterms of itself, or drops a tuple-of-literals argument entirely.
         expr: itir.Expr = node
         while dynamic_shift_args := _dynamic_shift_args(expr):
             assert isinstance(expr, itir.FunCall) and len(expr.fun.args) in [1, 2]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop in _dynamic_shift_args
