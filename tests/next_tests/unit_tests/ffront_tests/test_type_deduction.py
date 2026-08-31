@@ -120,6 +120,22 @@ def test_binop_fixed_tuple_elementwise_product():
     assert parsed.body.stmts[0].value.type == ts.XTupleType(types=[field_type, field_type])
 
 
+def test_binop_fixed_tuple_elementwise_addition_type_mismatch():
+    def addition(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], int64]],
+        s: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+    ) -> XTuple[Field[[TDim], float64], Field[[TDim], float64]]:
+        return f + s
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape(
+            "Could not promote 'Field[[TDim], int64]' and 'Field[[TDim], float64]' to common type"
+        ),
+    ):
+        _ = FieldOperatorParser.apply_to_function(addition)
+
+
 def test_binop_nested_fixed_tuple_elementwise_product():
     def product(
         f: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],

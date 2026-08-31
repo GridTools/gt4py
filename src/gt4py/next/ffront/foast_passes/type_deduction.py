@@ -734,26 +734,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         def operand_with_type(operand: foast.Expr, type_: ts.TypeSpec) -> foast.Expr:
             return foast.Constant(value=None, location=operand.location, type=type_)
 
-        def tuple_element_type(
-            type_: ts.TypeSpec,
-        ) -> ts.DataType | ts.DimensionType | ts.DeferredType:
-            if not isinstance(type_, (ts.DataType, ts.DimensionType, ts.DeferredType)):
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' produced unsupported tuple element type "
-                    f"'{type_}'.",
-                )
-            return type_
-
-        def vararg_element_type(type_: ts.TypeSpec) -> ts.DataType:
-            if not isinstance(type_, ts.DataType):
-                raise errors.DSLError(
-                    node.location,
-                    f"Element-wise operator '{node.op}' produced unsupported variadic tuple "
-                    f"element type '{type_}'.",
-                )
-            return type_
-
         def ensure_elementwise_tuple_type(type_: ts.TypeSpec) -> None:
             if isinstance(type_, (ts.TupleType, ts.VarArgType)) and not isinstance(
                 type_, (ts.XTupleType, ts.XVarArgType)
@@ -768,6 +748,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ensure_elementwise_tuple_type(left_type)
             ensure_elementwise_tuple_type(right_type)
 
+            # Element-wise semantics are defined by applying the regular binop rules to each
+            # element pair, so type errors (incompatible operands, failed promotion) are also
+            # diagnosed per element: the first offending pair raises, with the message naming
+            # the element types rather than the enclosing tuple types.
             result_type = self._deduce_binop_type(
                 node,
                 left=operand_with_type(left, left_type),
@@ -782,12 +766,26 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # its structure.
             if isinstance(value, ts.XVarArgType):
                 assert len(elems) == 1
-                return ts.XVarArgType(element_type=vararg_element_type(elems[0]))
+                element_type = elems[0]
+                if not isinstance(element_type, ts.DataType):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Element-wise operator '{node.op}' produced unsupported variadic tuple "
+                        f"element type '{element_type}'.",
+                    )
+                return ts.XVarArgType(element_type=element_type)
             # `tree_map` only descends into `XTupleType`/`XVarArgType` here, so `value` is an
             # `XTupleType` (a `TupleType`) at this point.
             assert isinstance(value, ts.TupleType)
+            for el in elems:
+                if not isinstance(el, (ts.DataType, ts.DimensionType, ts.DeferredType)):
+                    raise errors.DSLError(
+                        node.location,
+                        f"Element-wise operator '{node.op}' produced unsupported tuple element "
+                        f"type '{el}'.",
+                    )
             return type_info.tree_map_type_constructor(
-                value, [tuple_element_type(el) for el in elems]
+                value, cast(Sequence[ts.DataType | ts.DimensionType | ts.DeferredType], elems)
             )
 
         # An `XVarArgType` is traversed as a length-1 collection, so two variable-length tuples
