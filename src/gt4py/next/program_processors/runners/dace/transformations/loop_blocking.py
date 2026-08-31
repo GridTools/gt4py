@@ -1118,7 +1118,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                         in_edge.dst_conn,
                         dace.Memlet(
                             data=in_edge.data.data,
-                            subset=in_edge.data.get_src_subset(in_edge, state),
+                            subset=dace_subsets.Range(
+                                in_edge.data.get_src_subset(in_edge, state).ndrange()
+                            ),
                         ),
                     )
                     inner_entry.add_in_connector(new_in_conn)
@@ -1157,7 +1159,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 in_edge.dst_conn,
                 dace.Memlet(
                     data=in_edge.data.data,
-                    subset=in_edge.data.get_dst_subset(in_edge, state),
+                    subset=dace_subsets.Range(
+                        in_edge.data.get_dst_subset(in_edge, state).ndrange()
+                    ),
                 ),
             )
             inner_exit.add_in_connector("IN_" + edge_conn)
