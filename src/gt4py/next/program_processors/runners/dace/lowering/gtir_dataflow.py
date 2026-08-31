@@ -1525,7 +1525,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                     name="dynamic_offset",
                     inputs={"index"},
                     outputs={new_index_connector},
-                    code=f"{new_index_connector} = index + {offset_expr}",
+                    code=f"{new_index_connector} = index + {offset_expr.value}",
                 )
             else:
                 dynamic_offset_tasklet, connector_mapping = self._add_tasklet(
