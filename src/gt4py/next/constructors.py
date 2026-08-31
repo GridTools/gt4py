@@ -25,7 +25,7 @@ from gt4py._core import (
     ndarray_utils as core_ndarray_utils,
     types as core_types,
 )
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extra_typing
 
 
 """
@@ -599,7 +599,7 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
-    if allocator is None and device is None and xtyping.supports_dlpack(data):
+    if allocator is None and device is None and extra_typing.supports_dlpack(data):
         # allocate for the device of the input data if no explicit allocator or device is given
         device = core_defs.Device(*data.__dlpack_device__())
     return _field_constructor(allocator, aligned_index=aligned_index, device=device).as_field(

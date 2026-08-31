@@ -21,7 +21,7 @@ import dace.codegen.compiler as dace_compiler
 import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extra_typing
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
@@ -88,7 +88,9 @@ def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
 
 
 def _validate_external_workspace(
-    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface, storage: dace.StorageType, nbytes: int
+    wsp: extra_typing.ArrayInterface | extra_typing.CUDAArrayInterface,
+    storage: dace.StorageType,
+    nbytes: int,
 ) -> None:
     """Validate that the provided ``wsp`` workspace satisfies the requirements.
 
@@ -105,12 +107,12 @@ def _validate_external_workspace(
             accepted on a trust basis (their size can not be checked here).
     """
     if storage == dace.StorageType.GPU_Global:
-        if not xtyping.supports_cuda_array_interface(wsp):
+        if not extra_typing.supports_cuda_array_interface(wsp):
             raise TypeError(
                 f"External workspace for storage {storage!r} must expose `__cuda_array_interface__` (got {type(wsp).__name__!r})."
             )
     elif storage == dace.StorageType.CPU_Heap:
-        if not xtyping.supports_array_interface(wsp):
+        if not extra_typing.supports_array_interface(wsp):
             raise TypeError(
                 f"External workspace for storage {storage!r} must expose `__array_interface__` (got {type(wsp).__name__!r})."
             )

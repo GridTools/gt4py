@@ -13,10 +13,9 @@ from __future__ import annotations
 import abc
 import re
 from enum import Enum as Enum, IntEnum as IntEnum
+from typing import Any, ClassVar, NoReturn, Optional, TypeVar, final
 
 from boltons.typeutils import classproperty as classproperty
-
-from .extended_typing import Any, ClassVar, NoReturn, Optional, TypeVar, final
 
 
 # -- Frozen collections --

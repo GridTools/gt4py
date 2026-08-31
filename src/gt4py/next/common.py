@@ -16,16 +16,10 @@ import functools
 import math
 import sys
 import types
-from collections.abc import Iterable, Mapping, Sequence
-
-import numpy as np
-
-from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import (
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Final,
     Generic,
@@ -35,7 +29,6 @@ from gt4py.eve.extended_typing import (
     NoReturn,
     Optional,
     ParamSpec,
-    Protocol,
     Self,
     TypeAlias,
     TypeGuard,
@@ -44,8 +37,13 @@ from gt4py.eve.extended_typing import (
     Unpack,
     cast,
     overload,
-    runtime_checkable,
 )
+
+import numpy as np
+from typing_extensions import Protocol, runtime_checkable
+
+from gt4py._core import definitions as core_defs
+from gt4py.eve import extra_typing, utils
 from gt4py.eve.type_definitions import StrEnum
 
 
@@ -882,13 +880,13 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
 #: Type alias for primitive numeric values (i.e. scalars or fields).
 NumericValue: TypeAlias = core_defs.Scalar | Field
 NumericValueT = TypeVar("NumericValueT", bound=NumericValue)
-NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = xtyping.get_represented_types(
+NUMERIC_VALUE_TYPES: Final[tuple[type[NumericValue], ...]] = extra_typing.get_represented_types(
     NumericValue
 )
 
 #: Type alias for any kind primitive value understood by GT4Py DSL.
 PrimitiveValue: TypeAlias = NumericValue  # For now, only numeric values, in the future it could include functions, enums, ...
-PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_represented_types(
+PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = extra_typing.get_represented_types(
     PrimitiveValue
 )
 

@@ -8,13 +8,10 @@
 
 from __future__ import annotations
 
+import typing
 from typing import Final, Iterator, Optional, Sequence, TypeVar
 
-from gt4py.eve import (
-    datamodels as eve_datamodels,
-    extended_typing as xtyping,
-    type_definitions as eve_types,
-)
+from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
 
 
@@ -200,7 +197,7 @@ class NamedCollectionType(DataType):
 
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType
-COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = xtyping.get_args(
+COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = typing.get_args(
     CollectionTypeSpec
 )
 

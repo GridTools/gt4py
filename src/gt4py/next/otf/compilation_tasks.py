@@ -21,13 +21,13 @@ import dataclasses
 import os
 import pathlib
 import tempfile
+import typing
 import weakref
 from typing import Any, Callable
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
 from gt4py.next import backend as gtx_backend, common, constructors
 from gt4py.next.otf import arguments, definitions as otf_definitions, runners, stages
 
@@ -118,7 +118,7 @@ def _offset_provider_with_file_refs(
     return {
         name: value
         if isinstance(value, common.Dimension)
-        else xtyping.cast(common.OffsetProviderElem, _ConnectivityFileRef(value))
+        else typing.cast(common.OffsetProviderElem, _ConnectivityFileRef(value))
         for name, value in offset_provider.items()
     }
 

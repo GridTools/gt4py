@@ -11,7 +11,7 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVa
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import extra_typing
 from gt4py.next import common, errors, field_utils, named_collections, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
@@ -32,9 +32,9 @@ class EmbeddedOperator(Generic[_R, _P]):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT], _P]):
+class ScanOperator(EmbeddedOperator[extra_typing.MaybeNestedInTuple[core_defs.ScalarT], _P]):
     forward: bool
-    init: xtyping.MaybeNestedInTuple[core_defs.ScalarT]
+    init: extra_typing.MaybeNestedInTuple[core_defs.ScalarT]
     axis: common.Dimension
 
     def __call__(  # type: ignore[override]
@@ -65,7 +65,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
-            acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
+            acc: extra_typing.MaybeNestedInTuple[core_defs.ScalarT] = self.init
             for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
                 pos = (*hpos, common.NamedIndex(scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
@@ -74,8 +74,8 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 # convert custom NamedCollections to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
-                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
-                assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+                assert extra_typing.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                assert extra_typing.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
                 _tuple_assign_value(pos, res_extracted, acc_extracted)
 
         if len(non_scan_domain) == 0:
@@ -88,7 +88,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
         return res
 
 
-def _get_out_domain(out: xtyping.MaybeNestedInTuple[common.MutableField]) -> common.Domain:
+def _get_out_domain(out: extra_typing.MaybeNestedInTuple[common.MutableField]) -> common.Domain:
     return embedded_common.domain_intersection(
         *[f.domain for f in utils.flatten_nested_tuple((out,))]
     )
@@ -117,7 +117,10 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
         # without checking if the types are consistent. However, these errors are caught in linting if enabled.
         container_extracted_out = arguments.extract(out)
-        assert xtyping.is_maybe_nested_in_tuple_of(container_extracted_out, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        assert extra_typing.is_maybe_nested_in_tuple_of(
+            container_extracted_out,
+            common.MutableField,  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        )
         out_domain = (
             utils.tree_map(common.domain)(domain)
             if domain is not None
@@ -147,9 +150,9 @@ def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.Nothin
 
 
 def _tuple_assign_field(
-    target: xtyping.MaybeNestedInTuple[common.MutableField],
-    source: xtyping.MaybeNestedInTuple[common.Field],
-    domain: xtyping.MaybeNestedInTuple[common.Domain],
+    target: extra_typing.MaybeNestedInTuple[common.MutableField],
+    source: extra_typing.MaybeNestedInTuple[common.Field],
+    domain: extra_typing.MaybeNestedInTuple[common.Domain],
 ) -> None:
     @named_collections.tree_map_named_collection
     def impl(target: common.MutableField, source: common.Field, domain: common.Domain) -> None:
@@ -165,7 +168,7 @@ def _tuple_assign_field(
 
 
 def _intersect_scan_args(
-    *args: xtyping.MaybeNestedInTuple[core_defs.Scalar | common.Field],
+    *args: extra_typing.MaybeNestedInTuple[core_defs.Scalar | common.Field],
 ) -> common.Domain:
     return embedded_common.domain_intersection(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if isinstance(arg, common.Field)]
@@ -174,8 +177,8 @@ def _intersect_scan_args(
 
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
-    target: xtyping.MaybeNestedInTuple[common.MutableField],
-    source: xtyping.MaybeNestedInTuple[core_defs.Scalar],
+    target: extra_typing.MaybeNestedInTuple[common.MutableField],
+    source: extra_typing.MaybeNestedInTuple[core_defs.Scalar],
 ) -> None:
     @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar) -> None:
@@ -186,7 +189,7 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
+    field: extra_typing.MaybeNestedInTuple[common.Field | core_defs.Scalar],
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @named_collections.tree_map_named_collection
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:

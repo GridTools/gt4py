@@ -24,6 +24,19 @@ import pprint
 import re
 import types
 import typing
+from collections.abc import Callable, Collection, Iterable, Iterator
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Literal,
+    Optional,
+    ParamSpec,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import deepdiff
 import xxhash
@@ -42,24 +55,8 @@ from boltons.strutils import (
     unwrap_text as unwrap_text,
 )
 
-from . import extended_typing as xtyping
-from .extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    ArgsOnlyCallable,
-    Callable,
-    Collection,
-    Generic,
-    Iterable,
-    Iterator,
-    Literal,
-    Optional,
-    ParamSpec,
-    TypeVar,
-    Union,
-    cast,
-    overload,
-)
+from . import extra_typing
+from .extra_typing import ArgsOnlyCallable
 from .type_definitions import NOTHING, NothingType
 
 
@@ -638,7 +635,7 @@ def is_noninstantiable(cls: type[_T]) -> bool:
 
 def singledispatcher(
     default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
-) -> xtyping.SingleDispatchCallable[P, T]:
+) -> extra_typing.SingleDispatchCallable[P, T]:
     """
     Create a single-dispatch callable from a default and a registry of implementations.
 
@@ -682,7 +679,7 @@ def singledispatcher(
 
     assert callable(default)  # for mypy
 
-    if xtyping.is_single_dispatch_callable(default):
+    if extra_typing.is_single_dispatch_callable(default):
         # `default` is itself a single-dispatch callable (e.g. a dispatcher used
         # as the fallback to chain dispatchers). `functools.singledispatch`
         # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
@@ -699,12 +696,12 @@ def singledispatcher(
     result = functools.singledispatch(default)
     for cls, func in implementations.items():
         result.register(cls)(func)
-    return cast(xtyping.SingleDispatchCallable[P, T], result)
+    return cast(extra_typing.SingleDispatchCallable[P, T], result)
 
 
 def merge_dispatchers(
-    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
-) -> xtyping.SingleDispatchCallable[P, T]:
+    *dispatchers: extra_typing.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> extra_typing.SingleDispatchCallable[P, T]:
     """
     Merge multiple single-dispatch callables into one.
 
@@ -719,7 +716,7 @@ def merge_dispatchers(
 
     merged_registry: dict[Any, Any] = {}
     for d in dispatchers:
-        if not xtyping.is_single_dispatch_callable(d):
+        if not extra_typing.is_single_dispatch_callable(d):
             raise TypeError(
                 f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
             )
@@ -739,7 +736,7 @@ _CONTENT_HASH_PICKLE_PROTOCOL: int = 5
 
 def content_hash(
     *args: Any,
-    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
+    hash_algorithm: extra_typing.HashlibAlgorithm | None = None,
     pickler_type: type[pickle.Pickler] = pickle.Pickler,
 ) -> str:
     """Stable content-based hash function using instance serialization data.

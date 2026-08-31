@@ -23,7 +23,7 @@ from collections.abc import Callable, Hashable, Sequence
 from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import extra_typing, utils as eve_utils
 from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
@@ -39,7 +39,7 @@ from gt4py.next.utils import tree_map
 
 T = TypeVar("T")
 
-ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
+ScalarOrTupleOfScalars: TypeAlias = extra_typing.MaybeNestedInTuple[core_defs.Scalar]
 
 #: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, str | None]
@@ -209,7 +209,7 @@ def _make_tuple_expr(el_exprs: list[str]) -> str:
 def _make_param_context_from_func_type(
     func_type: ts.FunctionType,
     type_map: Callable[[ts.TypeSpec], T] = lambda x: x,  # type: ignore[assignment, return-value]  # mypy not smart enough to narrow type for default
-) -> dict[str, xtyping.MaybeNestedInTuple[T]]:
+) -> dict[str, extra_typing.MaybeNestedInTuple[T]]:
     """
     Create a context to evaluate expressions in from a function type.
 

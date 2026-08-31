@@ -16,25 +16,15 @@ import dataclasses
 import itertools
 import math
 import operator
-
-import numpy as np
-import numpy.typing as npt
-
-from gt4py import eve
-from gt4py._core import definitions as core_defs, types as core_types
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
+import typing
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import (
     Any,
-    Callable,
     Generic,
-    Iterable,
     Literal,
-    Mapping,
     NoReturn,
     Optional,
-    Protocol,
     Self,
-    Sequence,
     SupportsFloat,
     SupportsInt,
     TypeAlias,
@@ -43,8 +33,15 @@ from gt4py.eve.extended_typing import (
     Union,
     cast,
     overload,
-    runtime_checkable,
 )
+
+import numpy as np
+import numpy.typing as npt
+from typing_extensions import Protocol, runtime_checkable
+
+from gt4py import eve
+from gt4py._core import definitions as core_defs, types as core_types
+from gt4py.eve import extra_typing
 from gt4py.next import common, field_utils, utils
 from gt4py.next.embedded import (
     context as embedded_context,
@@ -120,7 +117,7 @@ class StridedConnectivityField(common.Connectivity):
         object.__setattr__(self, "_max_neighbors", max_neighbors)
 
     @property
-    def __gt_origin__(self) -> xtyping.Never:
+    def __gt_origin__(self) -> typing.Never:
         raise NotImplementedError
 
     def __gt_type__(self) -> common.NeighborConnectivityType:
@@ -166,7 +163,7 @@ class StridedConnectivityField(common.Connectivity):
         index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator]
         return ConstantField(index)
 
-    def as_scalar(self) -> xtyping.Never:
+    def as_scalar(self) -> typing.Never:
         raise NotImplementedError()
 
     def __call__(
@@ -485,7 +482,7 @@ def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
 
 
 def infer_dtype_like_type(t: Any) -> npt.DTypeLike:
-    res = xtyping.infer_type(t)
+    res = extra_typing.infer_type(t)
     assert is_dtype_like(res), res
     return res
 
@@ -1668,7 +1665,7 @@ def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProvider
 @runtime.set_at.register(EMBEDDED)
 def set_at(
     expr: common.Field,
-    domain_like: xtyping.MaybeNestedInTuple[common.DomainLike],
+    domain_like: extra_typing.MaybeNestedInTuple[common.DomainLike],
     target: common.MutableField,
 ) -> None:
     domain = utils.tree_map(common.domain)(domain_like)

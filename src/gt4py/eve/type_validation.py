@@ -15,22 +15,13 @@ import collections.abc
 import dataclasses
 import functools
 import typing
+from collections.abc import Sequence
+from typing import Any, Final, ForwardRef, Literal, Optional, TypeGuard, Union, cast, overload
 
-from . import exceptions, extended_typing as xtyping, utils
-from .extended_typing import (
-    Any,
-    Final,
-    ForwardRef,
-    Literal,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeAnnotation,
-    Union,
-    cast,
-    overload,
-    runtime_checkable,
-)
+from typing_extensions import Protocol, is_protocol, runtime_checkable
+
+from . import exceptions, extra_typing, utils
+from .extra_typing import TypeAnnotation
 
 
 # Protocols
@@ -224,12 +215,12 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             if type_annotation is None:
                 type_annotation = type(None)
 
-            type_annotation = xtyping.normalize_union(type_annotation)
+            type_annotation = extra_typing.normalize_union(type_annotation)
 
             # A 'NameError' is deliberately left to propagate here, so that 'datamodels'
-            # can defer; see 'xtyping.eval_type_alias' for both failure modes.
+            # can defer; see 'extra_typing.eval_type_alias' for both failure modes.
             try:
-                resolved_annotation = xtyping.eval_type_alias(type_annotation)
+                resolved_annotation = extra_typing.eval_type_alias(type_annotation)
             except TypeError as error:
                 # Keep its message: it names the alias and the cause.
                 raise exceptions.EveValueError(str(error)) from error
@@ -254,8 +245,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 return validator
 
             # Non-generic types
-            if xtyping.is_actual_type(type_annotation):
-                assert not xtyping.get_args(type_annotation)
+            if extra_typing.is_actual_type(type_annotation):
+                assert not typing.get_args(type_annotation)
                 if type_annotation is int and kwargs.get("strict_int", True):
                     return self.make_is_instance_of_int(name)
                 else:
@@ -269,20 +260,22 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
             if isinstance(type_annotation, ForwardRef):
                 return make_recursive(
-                    xtyping.eval_forward_ref(type_annotation, globalns=globalns, localns=localns)
+                    extra_typing.eval_forward_ref(
+                        type_annotation, globalns=globalns, localns=localns
+                    )
                 )
 
-            if xtyping.is_Any(type_annotation):
+            if extra_typing.is_Any(type_annotation):
                 return self._make_is_any(name)
 
             # Generic and parametrized type hints
-            origin_type = xtyping.get_origin(type_annotation)
-            type_args = xtyping.get_args(type_annotation)
+            origin_type = typing.get_origin(type_annotation)
+            type_args = typing.get_args(type_annotation)
 
-            if (stripped := xtyping.strip_annotated(type_annotation)) is not type_annotation:
+            if (stripped := extra_typing.strip_annotated(type_annotation)) is not type_annotation:
                 return make_recursive(stripped)
 
-            if origin_type in {typing.Literal, xtyping.Literal}:
+            if origin_type in {typing.Literal, typing.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -323,20 +316,20 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 # can wrap the other repeatedly, so both are resolved together; an
                 # annotation that does not resolve keeps the loose check below.
                 try:
-                    arg = xtyping.resolve_annotation(type_args[0])
+                    arg = extra_typing.resolve_annotation(type_args[0])
                 except TypeError:
                     return self.make_is_instance_of(name, type)
 
                 # After the metadata is gone, not before: `type[Annotated[A | B, ...]]`
                 # only reaches the union handling below if it is stripped first.
-                arg = xtyping.normalize_union(arg)  # `type[A | B]`
+                arg = extra_typing.normalize_union(arg)  # `type[A | B]`
 
                 # `issubclass()` is not generally usable with protocol classes: it is
                 # rejected outright unless the protocol is `@runtime_checkable`, and also
                 # for `@runtime_checkable` protocols with non-method members. Protocols
                 # therefore keep the loose check, like any other unsupported shape.
-                def is_strict_arg(a: Any) -> xtyping.TypeGuard[type]:
-                    return xtyping.is_actual_type(a) and not xtyping.is_protocol(a)
+                def is_strict_arg(a: Any) -> TypeGuard[type]:
+                    return extra_typing.is_actual_type(a) and not is_protocol(a)
 
                 if isinstance(arg, typing.TypeVar):
                     # Mirror the plain-`TypeVar` branch above, which honours the bound.
@@ -347,8 +340,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 if is_strict_arg(arg):
                     return self.make_is_subclass_of(name, arg)
 
-                if xtyping.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
-                    members = xtyping.get_args(arg)
+                if typing.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
+                    members = typing.get_args(arg)
                     if members and all(is_strict_arg(m) for m in members):
                         return self.combine_validators_as_or(
                             name, *(self.make_is_subclass_of(name, m) for m in members)

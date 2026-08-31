@@ -32,26 +32,26 @@ except ModuleNotFoundError:
     # Fall back to pure Python toolz
     import toolz
 
-from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
-from ..extended_typing import (
+from collections.abc import Callable, Generator, Mapping, Sequence
+from typing import (
     Any,
-    Callable,
     ClassVar,
     Final,
     ForwardRef,
-    Generator,
     Literal,
-    Mapping,
     Optional,
-    Protocol,
-    Sequence,
     TypeAlias,
-    TypeAnnotation,
     TypeVar,
     Union,
     cast,
     overload,
 )
+
+import typing_extensions
+from typing_extensions import Protocol
+
+from .. import exceptions, extra_typing, type_validation as type_val, utils
+from ..extra_typing import TypeAnnotation
 from ..type_definitions import NOTHING, NothingType
 
 
@@ -75,7 +75,7 @@ class _AttrsClassTP(Protocol):
 Attribute: TypeAlias = attr.Attribute
 
 
-class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
+class DataModelTP(_AttrsClassTP, extra_typing.DevToolsPrettyPrintable, Protocol):
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
     __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]] = cast(
@@ -85,7 +85,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
         utils.FrozenNamespace[Attribute], None
     )
     __datamodel_root_validators__: ClassVar[
-        tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
+        tuple[extra_typing.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
     ] = ()
     # Optional
     __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)
@@ -157,11 +157,11 @@ MODEL_PARAM_DEFINITIONS_ATTR: Final = "__datamodel_params__"
 MODEL_ROOT_VALIDATORS_ATTR: Final = "__datamodel_root_validators__"
 
 
-Coerced = xtyping.Annotated[_T, _COERCED_TYPE_TAG]
+Coerced = typing.Annotated[_T, _COERCED_TYPE_TAG]
 """Type hint marker to define fields that should be coerced at initialization."""
 
 
-Unchecked = xtyping.Annotated[_T, _UNCHECKED_TYPE_TAG]
+Unchecked = typing.Annotated[_T, _UNCHECKED_TYPE_TAG]
 """Type hint marker to define fields that should NOT be type-checked at initialization."""
 
 
@@ -224,7 +224,7 @@ def field_type_validator_factory(
         try:
             simple_validator = factory(type_annotation, name, required=True)
         except NameError:
-            # Deferral signal from 'xtyping.eval_type_alias' (see its 'except NameError'
+            # Deferral signal from 'extra_typing.eval_type_alias' (see its 'except NameError'
             # branch); handled like a forward reference.
             return ForwardRefValidator(factory)
 
@@ -424,7 +424,7 @@ frozen_model = frozenmodel
 
 
 # Typing protocols are used instead of the actual classes for type checks
-if xtyping.TYPE_CHECKING:
+if typing.TYPE_CHECKING:
 
     class DataModel(DataModelTP):
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...
@@ -642,7 +642,7 @@ def is_datamodel(obj: Any) -> bool:
 def is_generic_datamodel_class(cls: type[Any]) -> bool:
     """Return ``True`` if `obj` is a generic Data Model class with type parameters."""
     assert isinstance(cls, type)
-    return is_datamodel(cls) and xtyping.has_type_parameters(cls)
+    return is_datamodel(cls) and extra_typing.has_type_parameters(cls)
 
 
 def get_fields(model: Union[DataModel, type[DataModel]]) -> utils.FrozenNamespace:
@@ -759,7 +759,7 @@ def update_forward_refs(
 
             if isinstance(field_attr.type, ForwardRef):
                 try:
-                    actual_type = xtyping.eval_forward_ref(
+                    actual_type = extra_typing.eval_forward_ref(
                         field_attr.type,
                         sys.modules[model_cls.__module__].__dict__,
                         localns,
@@ -997,12 +997,12 @@ class DeferredTypeConverter:
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
     # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
     # as a tree traversal.
-    type_annotation = xtyping.normalize_union(type_annotation)
+    type_annotation = extra_typing.normalize_union(type_annotation)
 
     try:
         # Aliases and 'Annotated' metadata are resolved together: applied in separate
         # branches they recurse forever on an annotation where each wraps the other.
-        resolved_annotation = xtyping.resolve_annotation(type_annotation)
+        resolved_annotation = extra_typing.resolve_annotation(type_annotation)
     except NameError:
         # Deferral signal, as in 'field_type_validator_factory' above.
         return cast(TypeConverter[_T], DeferredTypeConverter(type_annotation, name))
@@ -1010,8 +1010,8 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
     if resolved_annotation is not type_annotation:
         return _make_type_converter(resolved_annotation, name)
 
-    if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
-        assert not xtyping.get_args(type_annotation)
+    if extra_typing.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
+        assert not typing.get_args(type_annotation)
         assert isinstance(type_annotation, type)
 
         def _type_converter(value: Any) -> _T:
@@ -1034,11 +1034,11 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
     if type_annotation is Any:
         return toolz.identity
 
-    origin_type = xtyping.get_origin(type_annotation)
+    origin_type = typing.get_origin(type_annotation)
 
     if (
-        origin_type is xtyping.Union
-        and type(None) in (args := xtyping.get_args(type_annotation))
+        origin_type is typing.Union
+        and type(None) in (args := typing.get_args(type_annotation))
         and len(args) == 2
     ):
         # Optional type. 'typing' preserves the order the arguments were written in,
@@ -1049,7 +1049,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 
         return cast(TypeConverter[_T], lambda x: x if x is None else _inner_type_converter(x))
 
-    if origin_type is xtyping.Union:
+    if origin_type is typing.Union:
         # No single type to coerce to. Explicit because on 3.14 'typing.Union' *is*
         # 'types.UnionType', a real class, which the 'is_actual_type(origin_type)'
         # fallback below would accept and turn into a 'types.UnionType(value)' call.
@@ -1057,7 +1057,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
             f"Automatic type coercion for {type_annotation} types is not supported."
         )
 
-    if xtyping.is_actual_type(origin_type):
+    if extra_typing.is_actual_type(origin_type):
         return _make_type_converter(origin_type, name)
 
     raise exceptions.EveTypeError(
@@ -1102,14 +1102,17 @@ def _is_strictly_immutable_type(
     Returns:
         ``True`` if every value admitted by the annotation is strictly immutable.
     """
-    if xtyping.is_type_alias(type_annotation) or xtyping.get_origin(type_annotation) is not None:
+    if (
+        extra_typing.is_type_alias(type_annotation)
+        or typing.get_origin(type_annotation) is not None
+    ):
         # A PEP 695 alias stands for the annotation it resolves to, and 'Annotated'
         # metadata is not part of the type, so check what is left once both are gone.
         # An annotation that cannot be resolved (undefined name, recursive, ...) proves
         # nothing and is rejected below like any other unresolved one; anything else is
         # returned unchanged, as the identical object.
         try:
-            resolved_alias = xtyping.resolve_annotation(type_annotation)
+            resolved_alias = extra_typing.resolve_annotation(type_annotation)
         except (NameError, TypeError):
             return False
         if resolved_alias is not type_annotation:
@@ -1120,12 +1123,12 @@ def _is_strictly_immutable_type(
     if is_datamodel(type_annotation):
         return getattr(type_annotation, MODEL_PARAM_DEFINITIONS_ATTR).strict_frozen is True
 
-    origin_type = xtyping.get_origin(type_annotation)
-    type_args = xtyping.get_args(type_annotation)
+    origin_type = typing.get_origin(type_annotation)
+    type_args = typing.get_args(type_annotation)
 
     if origin_type is Literal:
         # 'Literal' arguments are values, not types.
-        return all(xtyping.is_type_with_custom_hash(type(arg)) for arg in type_args)
+        return all(extra_typing.is_type_with_custom_hash(type(arg)) for arg in type_args)
 
     if origin_type is Union or origin_type is types.UnionType:
         # 'Union[A, B]' and 'A | B' are different runtime objects before Python 3.14.
@@ -1146,13 +1149,15 @@ def _is_strictly_immutable_type(
             _is_strictly_immutable_type(arg) for arg in type_args if arg is not Ellipsis
         )
 
-    if xtyping.is_actual_type(type_annotation):  # plain type, already known not to be a datamodel
+    if extra_typing.is_actual_type(
+        type_annotation
+    ):  # plain type, already known not to be a datamodel
         if not _as_container_origin and issubclass(type_annotation, _ITEM_HASHING_CONTAINER_TYPES):
             # Unparametrized container ('tuple', 'frozenset', a 'NamedTuple', ...): its
             # hash folds in the hashes of items which nothing here proves immutable, the
             # same reason why 'tuple[Any, ...]' is rejected.
             return False
-        return xtyping.is_type_with_custom_hash(type_annotation)
+        return extra_typing.is_type_with_custom_hash(type_annotation)
 
     if isinstance(type_annotation, TypeVar):
         # Check the concrete annotations the type variable can stand for. Note that the
@@ -1170,7 +1175,7 @@ def _is_strictly_immutable_type(
         # Forward references that cannot be resolved at this point do not prove
         # anything, so they are rejected instead of propagating the resolution error.
         try:
-            resolved_annotation = xtyping.eval_forward_ref(type_annotation)
+            resolved_annotation = extra_typing.eval_forward_ref(type_annotation)
         except Exception:
             return False
         return _is_strictly_immutable_type(resolved_annotation)
@@ -1205,8 +1210,8 @@ def _make_datamodel(
     if "__annotations__" not in cls.__dict__ and "__annotate_func__" not in cls.__dict__:
         cls.__annotations__ = {}
     annotations = cls.__annotations__
-    resolved_annotations = xtyping.get_partial_type_hints(cls)
-    annotations_with_extras = xtyping.get_partial_type_hints(cls, include_extras=True)
+    resolved_annotations = extra_typing.get_partial_type_hints(cls)
+    annotations_with_extras = extra_typing.get_partial_type_hints(cls, include_extras=True)
 
     frozen, strict_frozen = (True, True) if frozen == "strict" else (frozen, False)
 
@@ -1217,11 +1222,11 @@ def _make_datamodel(
         type_hint = annotations[key] = resolved_annotations[key]
 
         # Skip members annotated as class variables
-        if type_hint is ClassVar or xtyping.get_origin(type_hint) is ClassVar:
+        if type_hint is ClassVar or typing.get_origin(type_hint) is ClassVar:
             continue
 
-        if xtyping.get_origin(annotations_with_extras[key]) == xtyping.Annotated:
-            _, *type_extras = xtyping.get_args(annotations_with_extras[key])
+        if typing.get_origin(annotations_with_extras[key]) == typing.Annotated:
+            _, *type_extras = typing.get_args(annotations_with_extras[key])
         else:
             type_extras = []
 
@@ -1293,7 +1298,7 @@ def _make_datamodel(
             num_attrs += 1
             if (
                 key not in annotations
-                and xtyping.get_origin(resolved_annotations.get(key, None)) is not ClassVar
+                and typing.get_origin(resolved_annotations.get(key, None)) is not ClassVar
             ):
                 raise TypeError(f"Missing type annotation in '{key}' field.")
 
@@ -1347,7 +1352,7 @@ def _make_datamodel(
             generic = True
         else:
             # For any other subclass, add the proper __class_getitem__ method
-            if not issubclass(cls, (typing.Generic, xtyping.Generic)):
+            if not issubclass(cls, (typing.Generic, typing.Generic)):
                 raise TypeError(
                     f"'{cls.__name__}' cannot be converted to a GenericDataModel because it is not a generic class."
                 )
@@ -1436,7 +1441,7 @@ def _make_concrete_with_cache(
         _accepted_types: tuple[type, ...] = (
             type,
             type(None),
-            xtyping.StdGenericAliasType,
+            extra_typing.StdGenericAliasType,
             types.UnionType,
         )
         if not (
@@ -1459,7 +1464,7 @@ def _make_concrete_with_cache(
     new_annotations = {}
 
     new_field_c_attrs = {}
-    for field_name, field_type in xtyping.get_type_hints(datamodel_cls).items():
+    for field_name, field_type in typing_extensions.get_type_hints(datamodel_cls).items():
         new_annotation, replaced = _substitute_typevars(field_type, type_params_map)
         if replaced:
             new_annotations[field_name] = new_annotation
@@ -1519,7 +1524,7 @@ def _make_concrete_with_cache(
     return concrete_cls
 
 
-if xtyping.TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     FrozenModel: TypeAlias = DataModel
 
 else:
@@ -1528,7 +1533,7 @@ else:
         __slots__ = ()
 
 
-if xtyping.TYPE_CHECKING:
+if typing.TYPE_CHECKING:
 
     class GenericDataModel(GenericDataModelTP):
         @classmethod

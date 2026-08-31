@@ -13,12 +13,10 @@ import dataclasses
 import functools
 import pathlib
 import typing
-from typing import Any, Callable, Generic, Protocol, TypeVar
-
-from typing_extensions import Self
+from typing import Any, Callable, Generic, Protocol, Self, TypeVar
 
 from gt4py._core import filecache
-from gt4py.eve.extended_typing import OpaqueMutableMapping
+from gt4py.eve.extra_typing import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
 
 

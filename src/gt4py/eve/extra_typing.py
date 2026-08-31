@@ -6,172 +6,260 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-Typing definitions working across different Python versions (via `typing_extensions`).
+"""Typing definitions that `typing` and `typing_extensions` do not provide.
 
-Definitions in 'typing_extensions' take priority over those in 'typing'.
+This module is **not** a replacement for `typing`: it does not re-export it.
+Import the standard names from `typing`, `typing_extensions` or
+`collections.abc` directly, and take only GT4Py's own definitions from here --
+the array and DLPack protocols, the nested-collection aliases, the descriptor
+and dataclass protocols, and the annotation utilities.
+
+Where a name lives, and why:
+
+- `collections.abc` -- the container protocols (`Sequence`, `Mapping`,
+  `Callable`, `Iterable`, `Iterator`, `Collection`, `Generator`, ...). Their
+  `typing` spellings are deprecated by PEP 585.
+- `typing` -- everything the standard library provides on the supported floor,
+  including `TypeVar`, `TypeVarTuple`, `ParamSpec` and `NamedTuple`. The
+  `typing_extensions` versions of those four differ only in PEP 696
+  `default=` support and generic/defaulted named tuples, neither of which this
+  codebase uses.
+- `typing_extensions` -- `TypeIs` and `is_protocol`, which Python 3.12 lacks
+  (both land in `typing` at 3.13, so they move when the floor rises); plus
+  `Protocol`, `runtime_checkable` and `get_type_hints`, whose implementations
+  genuinely differ from the `typing` ones. `eve` runs every annotation through
+  `get_type_hints`, and `gt4py.next` declares `@runtime_checkable` protocols
+  that are checked on hot paths, so those keep the implementation they have
+  always had.
+
+Run `./scripts/run check typing-extensions-usage` after raising the Python
+floor to find the `typing_extensions` imports that can move to `typing`.
 """
 
 from __future__ import annotations
 
-# ruff: noqa: F401, F405
 import abc as _abc
 import array as _array
-import builtins as _builtins
+import collections as _collections
 import collections.abc as _collections_abc
+import contextlib as _contextlib
 import dataclasses as _dataclasses
 import functools as _functools
 import inspect as _inspect
 import mmap as _mmap
 import pickle as _pickle
-import sys as _sys
+import re as _re
 import types as _types
 import typing as _typing
-from typing import *  # noqa: F403 [undefined-local-with-import-star]
-from typing import overload
+from collections.abc import (
+    Buffer,
+    Callable,
+    Generator,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    ClassVar,
+    Final,
+    ForwardRef,
+    Generic,
+    Literal,
+    Never,
+    NotRequired,
+    Optional,
+    ParamSpec,
+    Self,
+    SupportsBytes,
+    TypeAlias,
+    TypeAliasType,
+    TypedDict,
+    TypeGuard,
+    TypeVar,
+    Union,
+    final,
+    get_args,
+    get_origin,
+    overload,
+)
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
+from typing_extensions import Protocol, TypeIs, get_type_hints, runtime_checkable
 
 
-# Re-export the standard collection types under the names the star imports above bind to
-# their deprecated 'typing' counterparts, so that e.g. 'Sequence' is
-# 'collections.abc.Sequence' rather than 'typing.Sequence'. This block must stay *below*
-# the star imports, since it deliberately rebinds names those imports also define; the
-# 'isort: split' marker keeps the import sorter from hoisting it. The builtin generics
-# are deliberately not re-exported under their old 'typing' spellings; see
-# '_DEPRECATED_TYPING_ALIASES' below.
-# isort: split
-from collections import (
-    ChainMap as ChainMap,
-    Counter as Counter,
-    OrderedDict as OrderedDict,
-    defaultdict as defaultdict,
-    deque as deque,
-)
-from collections.abc import (
-    AsyncGenerator as AsyncGenerator,
-    AsyncIterable as AsyncIterable,
-    AsyncIterator as AsyncIterator,
-    Awaitable as Awaitable,
-    ByteString as ByteString,
-    Callable as Callable,
-    Collection as Collection,
-    Container as Container,
-    Coroutine as Coroutine,
-    Generator as Generator,
-    ItemsView as ItemsView,
-    Iterable as Iterable,
-    Iterator as Iterator,
-    KeysView as KeysView,
-    Mapping as Mapping,
-    MappingView as MappingView,
-    MutableMapping as MutableMapping,
-    MutableSequence as MutableSequence,
-    MutableSet as MutableSet,
-    Reversible as Reversible,
-    Sequence as Sequence,
-    Set as AbstractSet,
-    ValuesView as ValuesView,
-)
-from contextlib import (
-    AbstractAsyncContextManager as AsyncContextManager,
-    AbstractContextManager as ContextManager,
-)
-from re import Match as Match, Pattern as Pattern
+#: Only this module's own definitions are exported. The names it imports for its own
+#: use stay reachable as attributes -- that is true of any module -- but they are
+#: deliberately not offered here: import them from 'typing', 'typing_extensions'
+#: or 'collections.abc' at the use site.
+__all__ = [
+    "ArgsOnlyCallable",
+    "ArrayInterface",
+    "ArrayInterfaceTypedDict",
+    "CUDAArrayInterface",
+    "CUDAArrayInterfaceTypedDict",
+    "CallableKwargsInfo",
+    "DLPackBuffer",
+    "DLPackDevice",
+    "DataDescriptor",
+    "DataclassABC",
+    "DevToolsPrettyPrintable",
+    "FrozenDataclass",
+    "HasCustomHash",
+    "HashlibAlgorithm",
+    "MaybeNested",
+    "MaybeNestedInList",
+    "MaybeNestedInSequence",
+    "MaybeNestedInTuple",
+    "MultiStreamDLPackBuffer",
+    "NestedList",
+    "NestedSequence",
+    "NestedTuple",
+    "NoArgsCallable",
+    "NonDataDescriptor",
+    "OpaqueMutableMapping",
+    "ReadOnlyBuffer",
+    "ReadableBuffer",
+    "SingleDispatchCallable",
+    "SingleStreamDLPackBuffer",
+    "SingleTypeAnnotation",
+    "SolvedTypeAnnotation",
+    "SourceTypeAnnotation",
+    "StdGenericAliasType",
+    "StrictArrayInterface",
+    "StrictCUDAArrayInterface",
+    "SupportsArray",
+    "TypeAnnotation",
+    "TypedNamedTupleABC",
+    "WriteableBuffer",
+    "annotations",
+    "eval_forward_ref",
+    "eval_type_alias",
+    "get_actual_type",
+    "get_partial_type_hints",
+    "get_represented_types",
+    "has_type_parameters",
+    "infer_type",
+    "is_Any",
+    "is_actual_type",
+    "is_maybe_nested_in_tuple_of",
+    "is_nested_tuple_of",
+    "is_single_dispatch_callable",
+    "is_type_alias",
+    "is_type_with_custom_hash",
+    "normalize_union",
+    "resolve_annotation",
+    "strip_annotated",
+    "supports_array",
+    "supports_array_interface",
+    "supports_cuda_array_interface",
+    "supports_dlpack",
+]
 
 
-# The 'typing' aliases of the builtin generics are deprecated since PEP 585 and are no
-# longer re-exported: use the builtin spelling instead. They are not simply absent from
-# this module -- the star imports above bind them, and '__getattr__' below would happily
-# forward them to 'typing' -- so they are dropped from the namespace here and rejected
-# explicitly. Without this, removing them would silently downgrade every use site from
-# the builtin to the deprecated 'typing' object. Note that this is a runtime guarantee
-# only: a type checker still resolves the names through the star imports.
-_DEPRECATED_TYPING_ALIASES: Final[Mapping[str, str]] = {
-    "Dict": "dict",
-    "FrozenSet": "frozenset",
-    "List": "list",
-    "Set": "set",
-    "Tuple": "tuple",
-    "Type": "type",
-}
+# -- Forward-reference resolution --
+#
+# A forward reference is a string, so resolving it needs a namespace to evaluate it
+# in. This module used to be that namespace: it star-imported 'typing' and
+# 'typing_extensions', so 'globals()' happened to contain every typing name and
+# 'eval_forward_ref' could fall back to it. Nothing re-exports anything now, so the
+# namespace is built explicitly below -- which is also what it always meant.
 
-for _alias in _DEPRECATED_TYPING_ALIASES:
-    globals().pop(_alias, None)
-del _alias
-
-# The names are still valid in user-written annotations, and resolving a forward
-# reference through this module has always normalized them to the builtin generic
-# ('typing.List[int]' -> 'list[int]'). Keep that mapping available to the forward-ref
-# machinery below, which would otherwise either raise or hand back the deprecated
-# 'typing' object.
+#: The 'typing' aliases of the builtin generics are deprecated by PEP 585, but they
+#: stay valid in user-written annotations, and resolving one through this module has
+#: always normalized it to the builtin generic ('typing.List[int]' -> 'list[int]').
 _DEPRECATED_ALIAS_REPLACEMENTS: Final[Mapping[str, Any]] = {
-    name: getattr(_builtins, replacement)
-    for name, replacement in _DEPRECATED_TYPING_ALIASES.items()
+    "Dict": dict,
+    "FrozenSet": frozenset,
+    "List": list,
+    "Set": set,
+    "Tuple": tuple,
+    "Type": type,
 }
+
+#: Names that a forward reference may use and that must resolve to the
+#: 'collections.abc' / 'collections' / 'contextlib' / 're' object rather than to the
+#: deprecated 'typing' alias of the same name.
+_NON_TYPING_ALIASES: Final[Mapping[str, Any]] = {
+    **{
+        name: getattr(_collections_abc, name)
+        for name in (
+            "AsyncGenerator",
+            "AsyncIterable",
+            "AsyncIterator",
+            "Awaitable",
+            "Callable",
+            "Collection",
+            "Container",
+            "Coroutine",
+            "Generator",
+            "ItemsView",
+            "Iterable",
+            "Iterator",
+            "KeysView",
+            "Mapping",
+            "MappingView",
+            "MutableMapping",
+            "MutableSequence",
+            "MutableSet",
+            "Reversible",
+            "Sequence",
+            "ValuesView",
+        )
+    },
+    "AbstractSet": _collections_abc.Set,
+    "ChainMap": _collections.ChainMap,
+    "Counter": _collections.Counter,
+    "OrderedDict": _collections.OrderedDict,
+    "defaultdict": _collections.defaultdict,
+    "deque": _collections.deque,
+    "AsyncContextManager": _contextlib.AbstractAsyncContextManager,
+    "ContextManager": _contextlib.AbstractContextManager,
+    "Match": _re.Match,
+    "Pattern": _re.Pattern,
+}
+
+
+@_functools.cache
+def _forward_ref_namespace() -> dict[str, Any]:
+    """Namespace used to resolve a forward reference when the caller provides none.
+
+    Later entries win, so the precedence is: 'typing', then 'typing_extensions',
+    then the non-'typing' spellings of the container protocols, then this module's
+    own definitions, then the builtin generics standing in for the deprecated
+    'typing' aliases.
+    """
+    namespace: dict[str, Any] = {}
+    namespace.update(vars(_typing))
+    namespace.update(vars(_typing_extensions))
+    namespace.update(_NON_TYPING_ALIASES)
+    namespace.update(globals())
+    namespace.update(_DEPRECATED_ALIAS_REPLACEMENTS)
+    return namespace
 
 
 class _ForwardRefTypingNamespace:
     """Namespace bound to the name 'typing' while evaluating forward references.
 
-    Annotations resolve through this module, so that 'typing_extensions' definitions
-    take priority and the standard collection types are used. The deprecated builtin
-    aliases are not re-exported here, but they stay valid in user-written annotations,
-    so 'typing.List[int]' resolves to 'list[int]' rather than raising.
+    A reference spelled 'typing.Sequence[int]' resolves through this object, so that
+    'typing_extensions' definitions take priority, the container protocols come from
+    'collections.abc', and the deprecated builtin aliases give back the builtin
+    generic instead of the deprecated 'typing' object.
     """
 
     def __getattr__(self, name: str) -> Any:
-        if (replacement := _DEPRECATED_ALIAS_REPLACEMENTS.get(name)) is not None:
-            return replacement
-        return getattr(_sys.modules[__name__], name)
+        namespace = _forward_ref_namespace()
+        if name in namespace:
+            return namespace[name]
+        raise AttributeError(f"Module 'typing' has no attribute '{name}'.")
 
 
 _FORWARD_REF_TYPING_NS: Final = _ForwardRefTypingNamespace()
-
-
-# These fallbacks are useful for public symbols not exported by default.
-# Again, definitions in 'typing_extensions' take priority over those in 'typing'
-def __getattr__(name: str) -> Any:
-    import sys
-
-    import typing_extensions
-
-    if (replacement := _DEPRECATED_TYPING_ALIASES.get(name)) is not None:
-        raise AttributeError(
-            f"'{name}' is a deprecated 'typing' alias (PEP 585) and is not exported by"
-            f" '{__name__}'. Use '{replacement}' instead."
-        )
-
-    result = SENTINEL = object()
-    if not (name.startswith("__") and name.endswith("__")):
-        result = getattr(typing_extensions, name, SENTINEL)
-        if result is SENTINEL:
-            import typing
-
-            result = getattr(typing, name, SENTINEL)
-
-    if result is SENTINEL:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-    setattr(sys.modules[__name__], name, result)  # cache result
-
-    return result
-
-
-def __dir__() -> list[str]:
-    if not hasattr(self_func := (globals()["__dir__"]), "__cached_dir"):
-        import typing
-
-        import typing_extensions
-
-        # Everything reachable through '__getattr__' plus this module's own definitions,
-        # minus the aliases '__getattr__' explicitly rejects.
-        names = {*typing.__dir__(), *typing_extensions.__dir__(), *globals()}
-        self_func.__cached_dir = sorted(names - _DEPRECATED_TYPING_ALIASES.keys())
-
-    return self_func.__cached_dir
 
 
 # -- Common type aliases --
@@ -684,7 +772,7 @@ def is_Any(obj: Any) -> bool:
 
 def has_type_parameters(cls: type[Any]) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
-    return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+    return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0
 
 
 def get_actual_type(obj: _T) -> type[_T]:
@@ -881,9 +969,6 @@ class OpaqueMutableMapping(Protocol[_KT, _VT]):
     def __delitem__(self, key: _KT) -> None: ...
 
 
-is_protocol = _typing_extensions.is_protocol
-
-
 def get_partial_type_hints(
     obj: Union[
         object,
@@ -969,11 +1054,11 @@ def eval_forward_ref(
     safe_localns.setdefault("NoneType", type(None))
 
     if globalns is None:
-        # Without an explicit 'globalns' the reference is resolved in this module's
-        # namespace, which used to spell the deprecated aliases as the builtin generics.
-        # They are no longer defined here, so re-add them for this evaluation only; a
-        # caller-provided 'globalns' is left untouched, exactly as before.
-        globalns = {**globals(), **_DEPRECATED_ALIAS_REPLACEMENTS}
+        # No caller-provided namespace: resolve against the explicit one, which spells
+        # the container protocols as their 'collections.abc' objects and the deprecated
+        # 'typing' aliases as the builtin generics. A caller-provided 'globalns' is left
+        # untouched.
+        globalns = _forward_ref_namespace()
 
     actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)

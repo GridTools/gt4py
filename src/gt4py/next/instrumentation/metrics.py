@@ -24,12 +24,11 @@ import time
 import types
 import typing
 from collections.abc import Callable, Mapping
-from typing import ClassVar, TypeAlias
+from typing import Any, ClassVar, Final, TypeAlias
 
 import numpy as np
 
-from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import Any, Final
+from gt4py.eve import extra_typing, utils
 from gt4py.next import config
 from gt4py.next.otf import arguments
 
@@ -428,7 +427,7 @@ def dumps_json(metric_sources: Mapping[str, Source] | None = None) -> str:
                 }
             case arguments.StaticArg() as arg:
                 return arg.value
-            case xtyping.DataclassABC():
+            case extra_typing.DataclassABC():
                 return dataclasses.asdict(obj)
             case numbers.Integral() as i:
                 return int(i)

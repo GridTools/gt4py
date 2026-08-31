@@ -25,7 +25,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import extra_typing, utils as eve_utils
 from gt4py.next import common, named_collections
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -80,7 +80,7 @@ def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
             pos_or_kw_args = {k: t for k, t in zip(type_spec.keys, type_spec.types)}
             kw_only_args = (
                 {f.name: pos_or_kw_args.pop(f.name) for f in dataclasses.fields(type_) if f.kw_only}
-                if issubclass(type_, xtyping.DataclassABC)
+                if issubclass(type_, extra_typing.DataclassABC)
                 else {}
             )
 
@@ -103,7 +103,7 @@ def make_type(type_: type) -> ts.TypeSpec:
         return ts.ScalarType(kind=get_scalar_kind(type_))
 
     if issubclass(type_, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
-        if issubclass(type_, xtyping.DataclassABC) and not issubclass(
+        if issubclass(type_, extra_typing.DataclassABC) and not issubclass(
             type_, named_collections.CustomDataclassNamedCollectionABC
         ):
             raise ValueError(
@@ -130,7 +130,7 @@ def make_type(type_: type) -> ts.TypeSpec:
 def _resolve_type_alias(type_hint: Any) -> Any:
     """Resolve a PEP 695 type alias, reporting its failures the way annotations do."""
     try:
-        return xtyping.eval_type_alias(type_hint)
+        return extra_typing.eval_type_alias(type_hint)
     except NameError as error:
         raise ValueError(
             f"Type annotation '{type_hint}' has undefined forward references."
@@ -156,7 +156,7 @@ def canonicalize_type_hint(
         type_hint = ForwardRef(type_hint)
     if isinstance(type_hint, ForwardRef):
         try:
-            type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
+            type_hint = extra_typing.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
         except Exception as error:
             raise ValueError(
                 f"Type annotation '{type_hint}' has undefined forward references."
@@ -173,7 +173,7 @@ def canonicalize_type_hint(
             type_hint,
             collections.abc.Callable,  # type:ignore[arg-type] # see https://github.com/python/mypy/issues/14928
         ):
-            type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
+            type_hint = extra_typing.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
         # An 'Annotated' annotation may in turn wrap a type alias
         type_hint = _resolve_type_alias(type_hint)
 
@@ -246,7 +246,9 @@ def from_type_hint(
             except Exception as error:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.") from error
 
-            kwargs_info = [arg for arg in extra_args if isinstance(arg, xtyping.CallableKwargsInfo)]
+            kwargs_info = [
+                arg for arg in extra_args if isinstance(arg, extra_typing.CallableKwargsInfo)
+            ]
             if len(kwargs_info) != 1:
                 raise ValueError(f"Invalid callable annotations in '{type_hint}'.")
             kwargs = {
@@ -349,7 +351,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         dtype = from_type_hint(value.dtype.scalar_type)
         assert isinstance(dtype, ts.ScalarType)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
-    elif isinstance(value, tuple) and not isinstance(value, xtyping.TypedNamedTupleABC):
+    elif isinstance(value, tuple) and not isinstance(value, extra_typing.TypedNamedTupleABC):
         # Since the elements of the tuple might be one of the special cases
         # above, we can not resort to generic `infer_type` but need to do it
         # manually here. If we get rid of all the special cases this is
@@ -362,7 +364,7 @@ def from_value(value: Any) -> ts.TypeSpec:
     elif isinstance(value, PythonNamespaceObject):
         return NamespaceProxy(value)
     else:
-        type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
+        type_ = extra_typing.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
 
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
@@ -413,8 +415,8 @@ def from_dtype(dtype: core_defs.DType) -> ts.ScalarType:
 
 # TODO(havogt): Could be extended to also accept `core_defs.DType`s as `type_`
 def unsafe_cast_to(
-    value: xtyping.MaybeNestedInTuple[core_defs.Scalar], type_: ts.TupleType | ts.ScalarType
-) -> xtyping.MaybeNestedInTuple[core_defs.Scalar]:
+    value: extra_typing.MaybeNestedInTuple[core_defs.Scalar], type_: ts.TupleType | ts.ScalarType
+) -> extra_typing.MaybeNestedInTuple[core_defs.Scalar]:
     """
     Converts `value` to the type specified by `type_`.
 

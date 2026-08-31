@@ -13,10 +13,9 @@ from __future__ import annotations
 import collections.abc
 import copy
 import enum
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from . import concepts, trees
-from .extended_typing import Any
 from .type_definitions import NOTHING
 
 

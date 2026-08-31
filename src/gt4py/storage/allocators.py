@@ -15,25 +15,15 @@ import functools
 import math
 import operator
 import types
+from collections.abc import Buffer, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic, NewType, Optional, TypeAlias, TypeGuard, Union
 
 import numpy as np
 import numpy.typing as npt
+from typing_extensions import Protocol
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    NewType,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeAlias,
-    TypeGuard,
-    Union,
-)
+from gt4py.eve import extra_typing
 
 
 try:
@@ -43,8 +33,10 @@ except ImportError:
 
 
 _NDBuffer: TypeAlias = Union[
-    # TODO: add `xtyping.Buffer` once we update typing_extensions
-    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    Buffer,
+    extra_typing.ArrayInterface,
+    extra_typing.CUDAArrayInterface,
+    extra_typing.DLPackBuffer,
 ]
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that
@@ -107,21 +99,21 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
         return len(self.shape)
 
     def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> np.ndarray:
-        if not xtyping.supports_array(self.ndarray):
+        if not extra_typing.supports_array(self.ndarray):
             raise TypeError("Cannot export tensor buffer as NumPy array.")
 
         return self.ndarray.__array__(dtype)
 
     @property
     def __array_interface__(self) -> dict[str, Any]:
-        if not xtyping.supports_array_interface(self.ndarray):
+        if not extra_typing.supports_array_interface(self.ndarray):
             raise TypeError("Cannot export tensor buffer to NumPy array interface.")
 
         return self.ndarray.__array_interface__
 
     @property
     def __cuda_array_interface__(self) -> dict[str, Any]:
-        if not xtyping.supports_cuda_array_interface(self.ndarray):
+        if not extra_typing.supports_cuda_array_interface(self.ndarray):
             raise TypeError("Cannot export tensor buffer to CUDA array interface.")
 
         return self.ndarray.__cuda_array_interface__
@@ -131,7 +123,7 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
             raise TypeError("Cannot export tensor buffer to DLPack.")
         return self.ndarray.__dlpack__(stream=stream)  # type: ignore[call-arg,arg-type]  # stream is not always supported
 
-    def __dlpack_device__(self) -> xtyping.DLPackDevice:
+    def __dlpack_device__(self) -> extra_typing.DLPackDevice:
         if not hasattr(self.ndarray, "__dlpack_device__"):
             raise TypeError("Cannot extract DLPack device from tensor buffer.")
         return self.ndarray.__dlpack_device__()
@@ -139,9 +131,9 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
 
 if TYPE_CHECKING:
     # TensorBuffer should be compatible with all the expected buffer interfaces
-    __TensorBufferAsArrayInterfaceT: type[xtyping.ArrayInterface] = TensorBuffer
-    __TensorBufferAsCUDAArrayInterfaceT: type[xtyping.CUDAArrayInterface] = TensorBuffer
-    __TensorBufferAsDLPackBufferT: type[xtyping.DLPackBuffer] = TensorBuffer
+    __TensorBufferAsArrayInterfaceT: type[extra_typing.ArrayInterface] = TensorBuffer
+    __TensorBufferAsCUDAArrayInterfaceT: type[extra_typing.CUDAArrayInterface] = TensorBuffer
+    __TensorBufferAsDLPackBufferT: type[extra_typing.DLPackBuffer] = TensorBuffer
 
 
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
