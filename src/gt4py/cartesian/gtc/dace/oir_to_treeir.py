@@ -73,7 +73,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
-            node, root=ctx.root, scope=ctx.current_scope
+            node, root=ctx.root
         )
 
         tasklet = tir.Tasklet(
@@ -439,12 +439,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         for index, axis in enumerate(tir.Axis.dims_3d()):
             if ctx.root.dimensions[field.name][index]:
                 shift_str = f" + {shift[axis]}" if shift[axis] != 0 else ""
-                iteration_symbol = (
-                    tir.k_symbol(ctx.current_scope)
-                    if axis == tir.Axis.K
-                    else axis.iteration_symbol()
+                indices.append(
+                    f"{axis.iteration_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
                 )
-                indices.append(f"{iteration_symbol}{shift_str} + {offset_dict[axis.lower()]}")
 
         return ", ".join(indices)
 
@@ -459,7 +456,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (
             f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
             f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
-            f"{tir.k_symbol(ctx.current_scope)}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
+            f"{tir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
     def visit_AbsoluteKIndex(
@@ -529,9 +526,6 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_IteratorAccess(
         self, node: oir.IteratorAccess, ctx: tir.Context, **kwargs: Any
     ) -> str:
-        if node.name == tir.Axis.K:
-            return tir.k_symbol(ctx.current_scope)
-
         return tir.Axis(node.name).iteration_symbol()
 
     # visitors that should _not_ be called
