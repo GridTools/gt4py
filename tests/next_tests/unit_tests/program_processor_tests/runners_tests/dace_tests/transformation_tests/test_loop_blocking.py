@@ -1922,39 +1922,22 @@ def _check_loop_blocking_sdfg_with_everything(
     "require_independent_nodes,promote_independent_memlets,independent_node_threshold",
     _LOOP_BLOCKING_EVERYTHING_PARAMS,
 )
+@pytest.mark.parametrize("symbolic", [False, True], ids=["literal_ranges", "symbolic_ranges"])
 def test_loop_blocking_sdfg_with_everything(
     require_independent_nodes: bool,
     promote_independent_memlets: bool,
     independent_node_threshold: int,
+    symbolic: bool,
 ):
-    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything()
-    _check_loop_blocking_sdfg_with_everything(
-        sdfg,
-        state,
-        me,
-        ime,
-        require_independent_nodes=require_independent_nodes,
-        promote_independent_memlets=promote_independent_memlets,
-        independent_node_threshold=independent_node_threshold,
-    )
+    """Applies `LoopBlocking` to `_make_loop_blocking_sdfg_with_everything()` and checks it.
 
-
-@pytest.mark.parametrize(
-    "require_independent_nodes,promote_independent_memlets,independent_node_threshold",
-    _LOOP_BLOCKING_EVERYTHING_PARAMS,
-)
-def test_loop_blocking_sdfg_with_everything_symbolic(
-    require_independent_nodes: bool,
-    promote_independent_memlets: bool,
-    independent_node_threshold: int,
-):
-    """Same as `test_loop_blocking_sdfg_with_everything()` but with symbolic ranges.
-
-    The blocking parameter of the outer Map, `__i1`, runs over
-    `(vertical_end - lev):vertical_end`, i.e. both bounds are symbolic
-    expressions and the size of the range, `lev`, is symbolic as well.
+    If `symbolic` is `True` then the blocking parameter of the outer Map, `__i1`,
+    runs over `(vertical_end - lev):vertical_end`, i.e. both bounds are symbolic
+    expressions and the size of the range, `lev`, is symbolic as well. The outcome
+    of the transformation must not depend on whether the ranges of the Map are
+    constants or symbolic expressions.
     """
-    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything(symbolic=True)
+    sdfg, state, me, ime = _make_loop_blocking_sdfg_with_everything(symbolic=symbolic)
     _check_loop_blocking_sdfg_with_everything(
         sdfg,
         state,
