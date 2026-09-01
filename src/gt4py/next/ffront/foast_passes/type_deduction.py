@@ -760,17 +760,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
         @tree_map(with_path_arg=True)
         def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
-            try:
-                type_ = element_type
-                for i in path:
-                    if not isinstance(type_, ts.TupleType) or len(type_.types) <= i:
-                        raise IndexError()
-                    type_ = type_.types[i]
-                return self.visit(target_el, refine_type=type_, **kwargs)
-            except IndexError:
-                raise errors.DSLError(
-                    target_el.location, f"Cannot unpack non-iterable '{type_}' object."
-                ) from None
+            type_ = element_type
+            for i in path:
+                if not isinstance(type_, ts.TupleType):
+                    raise errors.DSLError(
+                        target_el.location, f"Cannot unpack non-iterable '{type_}' object."
+                    )
+                if len(type_.types) <= i:
+                    raise errors.DSLError(
+                        target_el.location,
+                        f"Not enough values to unpack (expected at least {i + 1}, "
+                        f"got {len(type_.types)}).",
+                    )
+                type_ = type_.types[i]
+            return self.visit(target_el, refine_type=type_, **kwargs)
 
         return process_target(target)
 
@@ -822,9 +825,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             element_types = cast(list[ts.DataType], iterable.type.types)
             # Only homogeneous iterables are supported, see ADR 0028.
             if not all(element_type == element_types[0] for element_type in element_types):
-                raise NotImplementedError(
-                    "Tuple comprehensions over fixed-length tuples require all iterable "
-                    "elements to have the same type (see ADR 0028)."
+                raise errors.DSLError(
+                    iterable.location,
+                    "Tuple comprehensions over fixed-length tuples with differently typed "
+                    "iterable elements are not implemented (see ADR 0028).",
                 )
             new_mapper = self._deduce_tuple_comprehension_mapper(
                 node, target, element_types[0], **kwargs
