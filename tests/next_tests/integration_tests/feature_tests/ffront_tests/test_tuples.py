@@ -158,6 +158,27 @@ def test_var_len_tuple_comprehension_empty(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_var_len_tuple_comprehension_different_lengths(cartesian_case):
+    # An operator with variable-length tuple parameters is generic: every call must be
+    # specialized (and compiled) for the concrete tuple length of its arguments.
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    for length in (3, 2):
+        tracers = cases.allocate(cartesian_case, testee, "tracers")()[:length]
+        out = cases.allocate(cartesian_case, testee, cases.RETURN)()[:length]
+        cases.verify(
+            cartesian_case,
+            testee,
+            tracers,
+            42,
+            out=out,
+            ref=tuple(t.asnumpy() * 42 for t in tracers),
+        )
+
+
+@pytest.mark.uses_tuple_args
 @pytest.mark.xfail(
     strict=True,
     reason="The consistency of the lengths of variable-length tuple arguments and the "
