@@ -456,6 +456,63 @@ def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
     )
 
 
+# -- PEP 604 unions (``X | Y``) --
+
+
+def normalize_union(annotation: Any) -> Any:
+    """Rewrite a PEP 604 union (``X | Y``) as the equivalent ``typing.Union[X, Y]``.
+
+    Before 3.14 the two are different runtime objects: ``get_origin(int | None)`` is
+    ``types.UnionType``, ``get_origin(Optional[int])`` is ``typing.Union``. A site
+    comparing against only one does not raise on the other, it falls through to a
+    no-match branch -- so call this at the head of any funnel dispatching on
+    union-ness. Anything already normalized, and anything that is not a union at all,
+    is returned as the identical object.
+
+    See https://github.com/python/cpython/issues/105499.
+
+    Examples:
+        >>> normalize_union(int | None) == Optional[int]
+        True
+
+        >>> normalize_union(int) is int
+        True
+    """
+    if isinstance(annotation, _types.UnionType) and get_origin(annotation) is not _typing.Union:
+        # The second test matters only on 3.14, where 'typing.Union' *is*
+        # 'types.UnionType': every union passes the 'isinstance' there, so without it
+        # an already-normalized annotation would be rebuilt into an equal but not
+        # identical object, breaking the ``is`` check this function promises.
+        return _typing.Union[annotation.__args__]
+    return annotation
+
+
+def strip_annotated(annotation: Any) -> Any:
+    """Return the type wrapped by ``Annotated[X, ...]``, or ``annotation`` unchanged.
+
+    ``Annotated`` metadata is not part of the type, so every funnel dispatching on an
+    annotation has to see through it -- and none of them fails loudly otherwise. On
+    3.12 ``typing.Annotated`` is a class, so a funnel testing "is this a class" claims
+    it and builds nonsense: a ``typing.Annotated(value)`` call, an ``isinstance``
+    check nothing satisfies, a mutability verdict read off the metadata. From 3.13 it
+    is a special form again and falls through to a no-match branch instead.
+
+    ``typing`` flattens nested ``Annotated``, so one step is enough. Anything else is
+    returned as the identical object, so callers can detect the no-op with ``is``.
+
+    Examples:
+        >>> strip_annotated(Annotated[int, "meta"]) is int
+        True
+
+        >>> strip_annotated(Annotated[Optional[int], "meta"]) == Optional[int]
+        True
+
+        >>> strip_annotated(int) is int
+        True
+    """
+    return get_args(annotation)[0] if get_origin(annotation) is Annotated else annotation
+
+
 # -- PEP 695 type aliases (``type X = ...``) --
 #
 # Resolved at the annotation-dispatch funnels (`type_validation`,
@@ -466,8 +523,11 @@ def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
 # no-match branch (``()`` for `get_represented_types`), silently making every
 # `isinstance()` against the result `False`.
 #
-# Not supported: `ClassVar` behind an alias, and aliases used as runtime values (base
-# class, constructor, `isinstance()` argument) -- the reason ruff's `UP040` stays off.
+# Not supported: `ClassVar` behind an alias, aliases used as runtime values (base
+# class, constructor, `isinstance()` argument) -- the reason ruff's `UP040` stays off --
+# and the `Coerced`/`Unchecked` tag lookup in `datamodels.core`, which reads the
+# `Annotated` metadata off the raw annotation: `type MyCoerced = Coerced[int]` loses
+# the tag rather than raising.
 
 #: Both PEP 695 alias implementations: they are distinct classes and neither is an
 #: instance of the other, so both have to be checked. ``hasattr(obj, "__value__")`` is
@@ -563,6 +623,58 @@ def eval_type_alias(annotation: Any) -> Any:
     )
 
 
+def resolve_annotation(annotation: Any) -> Any:
+    """Resolve PEP 695 aliases and strip ``Annotated`` metadata until neither applies.
+
+    The two wrappers nest into each other any number of times
+    (``type A = Annotated[B, ...]``, ``type B = Annotated[int, ...]``), so neither
+    `eval_type_alias` nor `strip_annotated` alone reaches the underlying type -- and a
+    funnel applying them in separate branches recurses forever when the two wrap each
+    other in a cycle. Anything else is returned as the identical object, so callers
+    can detect the no-op with ``is``.
+
+    Args:
+        annotation: Any type annotation.
+
+    Returns:
+        The annotation left once every alias and ``Annotated`` layer is gone, or
+        `annotation` itself.
+
+    Raises:
+        NameError: As `eval_type_alias`, so that consumers can still defer.
+        TypeError: If the layers cycle (``type R = Annotated[R, ...]``) or nest too
+            deeply, plus everything `eval_type_alias` reports.
+
+    Examples:
+        >>> type MyInt = Annotated[int, "meta"]
+        >>> resolve_annotation(MyInt)
+        <class 'int'>
+
+        >>> resolve_annotation(float) is float
+        True
+    """
+    original_annotation = annotation
+    # Identity, not equality: '__eq__' on arbitrary annotation objects is not
+    # guaranteed to be usable here.
+    seen: list[Any] = []
+    for _ in range(_MAX_TYPE_ALIAS_DEPTH):
+        unaliased = eval_type_alias(annotation)
+        stripped = strip_annotated(unaliased)
+        if unaliased is annotation and stripped is annotation:
+            return annotation
+        if any(stripped is s for s in seen):
+            raise TypeError(
+                f"Type annotation '{original_annotation}' cannot be resolved "
+                "(recursive definition)."
+            )
+        seen.append(annotation)
+        annotation = stripped
+
+    raise TypeError(
+        f"Type annotation '{original_annotation}' cannot be resolved (nested too deeply)."
+    )
+
+
 def is_Any(obj: Any) -> bool:
     """Check if an object is the ``Any`` special form."""
     # 'typing_extensions' re-exports 'typing.Any' on every supported version, so the
@@ -593,9 +705,10 @@ def get_represented_types(
         return _functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
 
     # PEP 695 aliases are opaque objects which no other branch below matches, so an
-    # unresolved one would silently yield an empty tuple. Nested aliases are covered
+    # unresolved one would silently yield an empty tuple, and the 'Annotated' special
+    # form is not a represented type either. Nested occurrences of both are covered
     # for free, since the generic branches recurse through this same function.
-    type_annotation = eval_type_alias(type_annotation)
+    type_annotation = resolve_annotation(type_annotation)
 
     if type_annotation is Ellipsis:
         return ()
@@ -618,7 +731,12 @@ def get_represented_types(
     origin_type = get_origin(type_annotation)
     type_args = get_args(type_annotation)
 
-    if origin_type in [Literal, Union, _types.UnionType]:
+    if origin_type is Literal:
+        # 'Literal' arguments are values, not types, so they cannot be recursed
+        # into: the type each one represents is its own type.
+        return tuple(dict.fromkeys(type(arg) for arg in type_args))
+
+    if origin_type in [Union, _types.UnionType]:
         return recurse_all(t for t in type_args)
 
     if origin_type is not None:
@@ -940,7 +1058,15 @@ def infer_type(
     """
     _infer = _functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
 
-    if isinstance(value, (StdGenericAliasType, _TypingSpecialFormType)):
+    # Annotations are returned unchanged rather than described: PEP 585 generics,
+    # bare special forms, parametrized 'typing' aliases ('Optional[int]'), PEP 604
+    # unions and PEP 695 aliases. Otherwise the 'type(value)' fallback below reports
+    # the CPython-internal class implementing them ('typing._GenericAlias', ...).
+    if (
+        isinstance(value, (StdGenericAliasType, _TypingSpecialFormType))
+        or is_type_alias(value)
+        or get_origin(value) is not None
+    ):
         return value
 
     # note: identity check instead of `in`, which would use `__eq__` and fail

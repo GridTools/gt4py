@@ -1890,3 +1890,20 @@ def test_enum_runtime(backend):
     assert out_arr[0, 0, 0] == MyEnum.A.value
     assert out_arr[0, 0, 1] == MyEnum.B.value
     assert (out_arr[0, 0, 2:] == MyEnum.C.value).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_enum_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], done: bool):  # type: ignore
+        with computation(PARALLEL), interval(...):
+            if not done:
+                out_field = 1
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, done=False)
+
+    assert (out_arr[:] == 1).all()

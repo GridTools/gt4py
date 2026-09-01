@@ -1503,7 +1503,7 @@ def _make_loop_blocking_output_access_node(
     state.add_edge(me, "OUT_A", tlet, "__in", dace.Memlet("A[__i0]"))
     me.add_scope_connectors("A")
     state.add_edge(tlet, "__out", t, None, dace.Memlet("t[0]"))
-    state.add_edge(t, None, mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
+    state.add_edge(t, None, mx, "IN_B", dace.Memlet("B[__i0, __i1]", other_subset="0"))
     state.add_edge(mx, "OUT_B", B, None, dace.Memlet("B[0:40, 0:10]"))
     mx.add_scope_connectors("B")
 
