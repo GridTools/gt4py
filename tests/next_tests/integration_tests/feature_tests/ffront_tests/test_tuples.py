@@ -142,6 +142,22 @@ def test_var_len_tuple_comprehension(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+def test_var_len_tuple_comprehension_empty(cartesian_case):
+    # The empty tuple is a valid concretization of a variable-length tuple; the program
+    # then has nothing to write and must simply run without error.
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    if cartesian_case.backend is not None:
+        pytest.xfail(
+            "The compiled toolchain cannot execute a program with an empty tuple output: "
+            "a 'SetAt' for an empty 'out' has no target and no domain to derive."
+        )
+    cases.run(cartesian_case, testee, (), 42, out=())
+
+
+@pytest.mark.uses_tuple_args
 @pytest.mark.xfail(
     strict=True,
     reason="The consistency of the lengths of variable-length tuple arguments and the "
