@@ -64,7 +64,7 @@ def test_with_bound_args_order_args(cartesian_case):
 
 
 @pytest.fixture
-def bound_args_testee():
+def bound_args_program():
     @field_operator
     def fieldop_bound_args() -> cases.IField:
         return broadcast(0, (IDim,))
@@ -77,16 +77,16 @@ def bound_args_testee():
     return program_bound_args
 
 
-def test_bind_invalid_arg(cartesian_case, bound_args_testee):
+def test_bind_invalid_arg(cartesian_case, bound_args_program):
     with pytest.raises(
         TypeError, match="Keyword argument 'inexistent_arg' is not a valid program parameter."
     ):
-        bound_args_testee.with_bound_args(inexistent_arg=1)
+        bound_args_program.with_bound_args(inexistent_arg=1)
 
 
-def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
-    program_with_bound_arg = bound_args_testee.with_bound_args(arg1=True)
-    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
+def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_program):
+    program_with_bound_arg = bound_args_program.with_bound_args(arg1=True)
+    out = cases.allocate(cartesian_case, bound_args_program, "out")()
 
     with pytest.raises(TypeError) as exc_info:
         program_with_bound_arg.with_backend(cartesian_case.backend)(out, offset_provider={})
@@ -100,9 +100,9 @@ def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
     )
 
 
-def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_testee):
-    program_with_bound_arg = bound_args_testee.with_bound_args(arg2=True)
-    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
+def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_program):
+    program_with_bound_arg = bound_args_program.with_bound_args(arg2=True)
+    out = cases.allocate(cartesian_case, bound_args_program, "out")()
 
     with pytest.raises(TypeError) as exc_info:
         program_with_bound_arg.with_backend(cartesian_case.backend)(
