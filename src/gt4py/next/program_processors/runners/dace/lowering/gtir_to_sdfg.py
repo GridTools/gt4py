@@ -16,7 +16,19 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Dict,
+    Final,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
@@ -36,6 +48,7 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
+    gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -43,8 +56,24 @@ from gt4py.next.program_processors.runners.dace.lowering import (
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
+_BUILTIN_TRANSLATORS: Final[dict[str, gtir_to_sdfg_primitives.PrimitiveTranslator]] = {
+    "concat_where": gtir_to_sdfg_concat_where.translate_concat_where,
+    "if_": gtir_to_sdfg_primitives.translate_if,
+    "index": gtir_to_sdfg_primitives.translate_index,
+    "make_tuple": gtir_to_sdfg_primitives.translate_make_tuple,
+    "tuple_get": gtir_to_sdfg_primitives.translate_tuple_get,
+}
+"""Runtime dispatch from GTIR builtin name to its translator.
+
+Only the builtins that `GTIRToSDFG.visit_FunCall` dispatches by name are listed
+here. Translators reached structurally or by node type (`translate_as_fieldop`,
+`translate_scalar_expr`, `translate_literal`, `translate_symbol_ref`) are
+intentionally absent.
+"""
+
+
 def _replace_connectors_in_code_string(
-    code: str, language: dace.dtypes.Language, connector_mapping: Mapping[str, str]
+    code: str, language: dace.dtypes.Language, connector_mapping: Dict[str, str]
 ) -> str:
     """Helper function to replace connector names in the code of a Python tasklet."""
     code_block = dace.properties.CodeBlock(code, language)
@@ -1207,7 +1236,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # Name-matched builtins
         if isinstance(node.fun, gtir.SymRef):
             name = str(node.fun.id)
-            if translator := gtir_to_sdfg_primitives.BUILTIN_TRANSLATORS.get(name):
+            if translator := _BUILTIN_TRANSLATORS.get(name):
                 return translator(node, ctx, self)
         # Fallback: scalar-valued expressions (e.g. math builtins like plus, cast_)
         if isinstance(node.type, ts.ScalarType):
