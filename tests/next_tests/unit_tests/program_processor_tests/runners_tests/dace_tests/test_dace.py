@@ -139,7 +139,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
     @gtx.field_operator
-    def testee(
+    def dace_fastcall_op(
         a: cases.IField,
         a_idx: cases.IField,
         unused_field: cases.IField,
@@ -159,17 +159,17 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
         a[2] + a2,
         *a[3:],
     ]
-    prog = testee.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.backend)
+    prog = dace_fastcall_op.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.backend)
 
-    a = cases.allocate(cartesian_case, testee, "a")()
-    a_index = cases.allocate(cartesian_case, testee, "a_idx", strategy=cases.IndexInitializer())()
+    a = cases.allocate(cartesian_case, dace_fastcall_op, "a")()
+    a_index = cases.allocate(cartesian_case, dace_fastcall_op, "a_idx", strategy=cases.IndexInitializer())()
     a_offset = np.random.randint(1, 100, size=4, dtype=np.int32)
-    unused_field = cases.allocate(cartesian_case, testee, "unused_field")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    unused_field = cases.allocate(cartesian_case, dace_fastcall_op, "unused_field")()
+    out = cases.allocate(cartesian_case, dace_fastcall_op, cases.RETURN)()
 
     mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
-    def verify_testee():
+    def verify_op():
         run_and_verify_fastcall(
             mock_fast_call,
             mock_construct_arguments,
@@ -184,24 +184,24 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
         )
 
     # On first run, the SDFG arguments will have to be constructed
-    verify_testee()
+    verify_op()
     mock_construct_arguments.assert_called_once()
 
     # Now modify the scalar arguments, used and unused ones: reuse previous SDFG arguments
     for i in range(4):
         a_offset[i] += 1
-        verify_testee()
+        verify_op()
         mock_construct_arguments.assert_not_called()
 
     # Modify content of current buffer: reuse previous SDFG arguments
     for buff in (a, unused_field):
         buff[0] += 1
-        verify_testee()
+        verify_op()
         mock_construct_arguments.assert_not_called()
 
     # Pass a new buffer, fastcall API should still be used
-    a = cases.allocate(cartesian_case, testee, "a")()
-    verify_testee()
+    a = cases.allocate(cartesian_case, dace_fastcall_op, "a")()
+    verify_op()
     mock_construct_arguments.assert_not_called()
 
 
@@ -211,19 +211,19 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     connectivity_E2V = unstructured_case.offset_provider["E2V"].asnumpy()
 
     @gtx.field_operator
-    def testee(a: cases.VField) -> cases.EField:
+    def dace_fastcall_with_connectivity_op(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
     numpy_ref = lambda a: a[connectivity_E2V[:, 0]]
-    prog = testee.with_grid_type(unstructured_case.grid_type).with_backend(
+    prog = dace_fastcall_with_connectivity_op.with_grid_type(unstructured_case.grid_type).with_backend(
         unstructured_case.backend
     )
 
-    (a,), kwfields = cases.get_default_data(unstructured_case, testee)
+    (a,), kwfields = cases.get_default_data(unstructured_case, dace_fastcall_with_connectivity_op)
 
     mock_fast_call, mock_construct_arguments = make_mocks(monkeypatch)
 
-    def verify_testee():
+    def verify_op():
         run_and_verify_fastcall(
             mock_fast_call,
             mock_construct_arguments,
@@ -234,7 +234,7 @@ def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
             offset_provider=unstructured_case.offset_provider,
         )
 
-    verify_testee()
+    verify_op()
     mock_construct_arguments.assert_called_once()
-    verify_testee()
+    verify_op()
     mock_construct_arguments.assert_not_called()

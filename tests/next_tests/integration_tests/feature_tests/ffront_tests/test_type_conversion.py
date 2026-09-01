@@ -32,13 +32,13 @@ from next_tests.integration_tests.cases_utils import (
 
 def test_astype_int(cartesian_case):
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
+    def astype_int_op(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
         b = astype(a, int64)
         return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        testee,
+        astype_int_op,
         ref=lambda a: a.astype(int64),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -47,7 +47,7 @@ def test_astype_int(cartesian_case):
 @pytest.mark.uses_unstructured_shift
 def test_astype_int_local_field(unstructured_case):
     @gtx.field_operator
-    def testee(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
+    def astype_int_local_field_op(a: gtx.Field[[Vertex], np.float64]) -> gtx.Field[[Edge], int64]:
         tmp = astype(a(E2V), int64)
         return neighbor_sum(tmp, axis=E2VDim)
 
@@ -55,7 +55,7 @@ def test_astype_int_local_field(unstructured_case):
 
     cases.verify_with_default_data(
         unstructured_case,
-        testee,
+        astype_int_local_field_op,
         ref=lambda a: np.sum(a.astype(int64)[e2v_table], axis=1, initial=0),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -123,35 +123,35 @@ def test_astype_on_tuples(cartesian_case):
 
 def test_astype_bool_field(cartesian_case):
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
+    def astype_bool_field_op(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
         return b
 
     cases.verify_with_default_data(
-        cartesian_case, testee, ref=lambda a: a.astype(bool), comparison=lambda a, b: np.all(a == b)
+        cartesian_case, astype_bool_field_op, ref=lambda a: a.astype(bool), comparison=lambda a, b: np.all(a == b)
     )
 
 
 @pytest.mark.parametrize("inp", [0.0, 2.0])
 def test_astype_bool_scalar(cartesian_case, inp):
     @gtx.field_operator
-    def testee(inp: float) -> gtx.Field[[IDim], bool]:
+    def astype_bool_scalar_op(inp: float) -> gtx.Field[[IDim], bool]:
         return broadcast(astype(inp, bool), (IDim,))
 
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    out = cases.allocate(cartesian_case, astype_bool_scalar_op, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, inp, out=out, ref=bool(inp))
+    cases.verify(cartesian_case, astype_bool_scalar_op, inp, out=out, ref=bool(inp))
 
 
 def test_astype_float(cartesian_case):
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], np.float32]:
+    def astype_float_op(a: cases.IFloatField) -> gtx.Field[[IDim], np.float32]:
         b = astype(a, float32)
         return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        testee,
+        astype_float_op,
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -162,13 +162,13 @@ int_alias: TypeAlias = int64
 
 def test_astype_alias(cartesian_case):
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int_alias]:
+    def astype_alias_op(a: cases.IFloatField) -> gtx.Field[[IDim], int_alias]:
         b = astype(a, int_alias)
         return b
 
     cases.verify_with_default_data(
         cartesian_case,
-        testee,
+        astype_alias_op,
         ref=lambda a: a.astype(int_alias),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -176,15 +176,15 @@ def test_astype_alias(cartesian_case):
 
 def test_type_constructor_alias(cartesian_case):
     @gtx.field_operator
-    def testee() -> gtx.Field[[IDim], int_alias]:
+    def type_constructor_alias_op() -> gtx.Field[[IDim], int_alias]:
         return broadcast(int_alias(42), (IDim,))
 
     ref = cases.allocate(
-        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
+        cartesian_case, type_constructor_alias_op, cases.RETURN, strategy=cases.ConstInitializer(42)
     )()
 
     cases.verify_with_default_data(
         cartesian_case,
-        testee,
+        type_constructor_alias_op,
         ref=lambda: ref,
     )

@@ -59,19 +59,19 @@ def test_halo_exchange_helper_attrs(unstructured):
     local_int = gtx.int
 
     @gtx.field_operator(backend=unstructured.backend)
-    def testee_op(
+    def halo_exchange_helper_attrs_op(
         a: gtx.Field[[Vertex, KDim], gtx.int],
     ) -> gtx.Field[[Vertex, KDim], gtx.int]:
         return a + local_int(10)
 
     @gtx.program(backend=unstructured.backend)
-    def testee_prog(
+    def halo_exchange_helper_attrs_prog(
         a: gtx.Field[[Vertex, KDim], gtx.int],
         b: gtx.Field[[Vertex, KDim], gtx.int],
         c: gtx.Field[[Vertex, KDim], gtx.int],
     ):
-        testee_op(b, out=c)
-        testee_op(a, out=b)
+        halo_exchange_helper_attrs_op(b, out=c)
+        halo_exchange_helper_attrs_op(a, out=b)
 
     dace_storage_type = (
         dace.StorageType.GPU_Global
@@ -83,20 +83,20 @@ def test_halo_exchange_helper_attrs(unstructured):
     cols = dace.symbol("cols")
 
     @dace.program
-    def testee_dace(
+    def halo_exchange_helper_attrs_dace(
         a: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
         b: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
         c: dace.data.Array(dtype=dace.int64, shape=(rows, cols), storage=dace_storage_type),
     ):
-        testee_prog(a, b, c)
+        halo_exchange_helper_attrs_prog(a, b, c)
 
     # if simplify=True, DaCe might inline the nested SDFG coming from Program.__sdfg__,
     # effectively erasing the attributes we want to test for here
-    sdfg = testee_dace.to_sdfg(simplify=False)
+    sdfg = halo_exchange_helper_attrs_dace.to_sdfg(simplify=False)
 
-    testee = next(
-        subgraph for subgraph in sdfg.all_sdfgs_recursive() if subgraph.name == "testee_prog"
+    found_subgraph = next(
+        subgraph for subgraph in sdfg.all_sdfgs_recursive() if subgraph.name == "halo_exchange_helper_attrs_prog"
     )
 
-    assert testee.gt4py_program_input_fields == {"a": Vertex, "b": Vertex}
-    assert testee.gt4py_program_output_fields == {"b": Vertex, "c": Vertex}
+    assert found_subgraph.gt4py_program_input_fields == {"a": Vertex, "b": Vertex}
+    assert found_subgraph.gt4py_program_output_fields == {"b": Vertex, "c": Vertex}

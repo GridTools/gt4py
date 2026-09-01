@@ -51,12 +51,12 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     on_gpu = device_type == core_defs.CUPY_DEVICE_TYPE
 
     @gtx.field_operator
-    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+    def make_backend_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
     @gtx.program
-    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
-        testee_op(a, b, out=out)
+    def make_backend_prog(a: cases.IField, b: cases.IField, out: cases.IField):
+        make_backend_op(a, b, out=out)
 
     mock_top_level_dataflow_hook1 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
     mock_top_level_dataflow_hook2 = mock.create_autospec(gtx_transformations.GT4PyAutoOptHookStage)
@@ -112,7 +112,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     # The monkeypatched transformation functions exist only in this process, so
     # compilation must not be offloaded to a worker.
     with mock.patch.object(runners, "get_default_runner", return_value=runners.SerialRunner()):
-        testee.with_backend(custom_backend).compile(offset_provider={})
+        make_backend_prog.with_backend(custom_backend).compile(offset_provider={})
         gtx.wait_for_compilation()
 
     # check call to `gt_gpu_transformation()`
@@ -300,22 +300,22 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     )
 
     @gtx.field_operator
-    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+    def transient_memory_mode_op(a: cases.IField, b: cases.IField) -> cases.IField:
         tmp = a + b
         return tmp + 1
 
     @gtx.program
-    def testee(a: cases.IField, b: cases.IField, out: cases.IField):
-        testee_op(a, b, out=out)
+    def transient_memory_mode_prog(a: cases.IField, b: cases.IField, out: cases.IField):
+        transient_memory_mode_op(a, b, out=out)
 
     test_case = cases.Case.from_cartesian_grid_descriptor(
         cases_utils.simple_cartesian_grid(),
         backend=custom_backend,
         allocator=custom_backend,
     )
-    a = cases.allocate(test_case, testee, "a", strategy=cases.UniqueInitializer())()
-    b = cases.allocate(test_case, testee, "b", strategy=cases.UniqueInitializer())()
-    out = cases.allocate(test_case, testee, "out")()
+    a = cases.allocate(test_case, transient_memory_mode_prog, "a", strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, transient_memory_mode_prog, "b", strategy=cases.UniqueInitializer())()
+    out = cases.allocate(test_case, transient_memory_mode_prog, "out")()
 
     captured_sdfg: dace.SDFG | None = None
     translation_step = custom_backend.executor.translation.step
@@ -346,7 +346,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     # The workspace buffer (if any) lives in the main process, so compilation
     # is forced in-process so the patched translator is observed.
     with mock.patch.object(config, "BUILD_JOBS_MODE", config.BuildJobsMode.SERIAL):
-        prog = testee.with_backend(custom_backend).compile(offset_provider={})
+        prog = transient_memory_mode_prog.with_backend(custom_backend).compile(offset_provider={})
 
     prog(a, b, out=out)
     assert len(prog._compiled_programs.compiled_programs) == 1

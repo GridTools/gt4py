@@ -69,13 +69,13 @@ def test_sdfgConvertible_laplap(cartesian_case):  # noqa: F811
 
 
 @gtx.field_operator
-def _testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
+def _connectivities_op(a: gtx.Field[gtx.Dims[Vertex], gtx.float64]):
     return a(E2V[0])
 
 
 @gtx.program
-def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Edge], gtx.float64]):
-    _testee(a, out=b)
+def connectivities_prog(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Edge], gtx.float64]):
+    _connectivities_op(a, out=b)
 
 
 @pytest.mark.uses_unstructured_shift
@@ -108,7 +108,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
 
-    testee2 = testee.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
+    connectivities_prog2 = connectivities_prog.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
 
     @dace.program
     def sdfg(
@@ -117,7 +117,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         offset_provider: OffsetProvider_t,
         connectivities: dace.compiletime,
     ):
-        testee2.with_compilation_options(connectivities=connectivities)(
+        connectivities_prog2.with_compilation_options(connectivities=connectivities)(
             a, out, offset_provider=offset_provider
         )
         return out

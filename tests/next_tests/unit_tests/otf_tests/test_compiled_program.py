@@ -66,7 +66,7 @@ TDim = gtx.Dimension("TDim")
 
 
 @pytest.fixture
-def testee_prog():
+def scalar_inlining_program():
     @gtx.field_operator
     def fop(cond: bool):
         return broadcast(cond, (TDim,))
@@ -89,11 +89,11 @@ def _verify_program_has_expected_true_value(program: itir.Program):
     assert program.body[0].expr.args[0].value  # is True
 
 
-def test_inlining_of_scalars_works(testee_prog):
+def test_inlining_of_scalars_works(scalar_inlining_program):
     input_pair = toolchain.ConcreteArtifact(
-        data=testee_prog.definition_stage,
+        data=scalar_inlining_program.definition_stage,
         args=arguments.CompileTimeArgs(
-            args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            args=list(scalar_inlining_program.past_stage.past_node.type.definition.pos_or_kw_args.values()),
             kwargs={},
             offset_provider={},
             column_axis=None,
@@ -107,7 +107,7 @@ def test_inlining_of_scalars_works(testee_prog):
     _verify_program_has_expected_true_value(transformed)
 
 
-def test_inlining_of_scalar_works_integration(testee_prog):
+def test_inlining_of_scalar_works_integration(scalar_inlining_program):
     """
     Test that `.compile` replaces the scalar arg in the program.
     Unlike the previous test, this test uses a full backend and makes sure the replacement step is there.
@@ -132,8 +132,8 @@ def test_inlining_of_scalar_works_integration(testee_prog):
 
     hacked_gtfn_backend = gtfn.GTFNBackendFactory(name_postfix="_custom", executor=pirate)
 
-    testee = testee_prog.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
-    testee(
+    compiled_program = scalar_inlining_program.with_backend(hacked_gtfn_backend).compile(cond=[True], offset_provider={})
+    compiled_program(
         cond=True,
         out=gtx.zeros(domain={TDim: 1}, dtype=bool),
         offset_provider={},
@@ -142,9 +142,9 @@ def test_inlining_of_scalar_works_integration(testee_prog):
     _verify_program_has_expected_true_value(hijacked_program.data)
 
 
-def test_different_static_args_work_after_backend_change(testee_prog):
-    prg1 = testee_prog.with_backend(gtfn.run_gtfn)
-    prg2 = testee_prog.with_backend(gtfn.run_gtfn)
+def test_different_static_args_work_after_backend_change(scalar_inlining_program):
+    prg1 = scalar_inlining_program.with_backend(gtfn.run_gtfn)
+    prg2 = scalar_inlining_program.with_backend(gtfn.run_gtfn)
 
     # compile with static args
     prg1.compile(cond=[True], offset_provider={})
@@ -153,18 +153,18 @@ def test_different_static_args_work_after_backend_change(testee_prog):
     prg2.compile(offset_provider={})
 
 
-def test_different_static_args_work_after_static_params_change(testee_prog):
-    testee_prog2 = testee_prog.with_compilation_options(static_params=["cond"])
+def test_different_static_args_work_after_static_params_change(scalar_inlining_program):
+    compiled_program = scalar_inlining_program.with_compilation_options(static_params=["cond"])
 
     # compile without static args
-    testee_prog.compile(offset_provider={})
+    scalar_inlining_program.compile(offset_provider={})
 
     # compile with static args
-    testee_prog2.compile(cond=[True], offset_provider={})
+    compiled_program.compile(cond=[True], offset_provider={})
 
 
-def test_different_static_args_break_same_prg_after_static_params_change(testee_prog):
-    prg = testee_prog.with_compilation_options(static_params=[])
+def test_different_static_args_break_same_prg_after_static_params_change(scalar_inlining_program):
+    prg = scalar_inlining_program.with_compilation_options(static_params=[])
 
     # compile without static args
     prg.compile(offset_provider={})
@@ -225,65 +225,65 @@ def _formatted_traceback(error: BaseException) -> str:
     return "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
 
-def test_dispatch_miss_reports_load_error_as_cause(testee_prog, deferred_runner):
+def test_dispatch_miss_reports_load_error_as_cause(scalar_inlining_program, deferred_runner):
     class _StaleArtifact:
         def load(self):
             raise OSError(116, "Stale file handle")
 
-    testee = testee_prog.compile(cond=[True], offset_provider={})
+    compiled_program = scalar_inlining_program.compile(cond=[True], offset_provider={})
     (future,) = deferred_runner.futures
     future.set_result(_StaleArtifact())
 
     with pytest.raises(
         RuntimeError, match="Failed to load the compiled program 'prog'"
     ) as exc_info:
-        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+        compiled_program(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
     assert isinstance(exc_info.value.__cause__, OSError)
     assert "KeyError" not in _formatted_traceback(exc_info.value)
 
 
-def test_dispatch_miss_propagates_compilation_error(testee_prog, deferred_runner):
+def test_dispatch_miss_propagates_compilation_error(scalar_inlining_program, deferred_runner):
     class _WorkerError(Exception):
         pass
 
-    testee = testee_prog.compile(cond=[True], offset_provider={})
+    compiled_program = scalar_inlining_program.compile(cond=[True], offset_provider={})
     (future,) = deferred_runner.futures
     future.set_exception(_WorkerError("compilation failed in the worker"))
 
     with pytest.raises(_WorkerError) as exc_info:
-        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+        compiled_program(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
     assert exc_info.value.__context__ is None
     assert "KeyError" not in _formatted_traceback(exc_info.value)
 
 
-def test_dispatch_miss_without_jit_names_static_args(testee_prog, deferred_runner):
-    testee = testee_prog.with_compilation_options(enable_jit=False).compile(
+def test_dispatch_miss_without_jit_names_static_args(scalar_inlining_program, deferred_runner):
+    compiled_program = scalar_inlining_program.with_compilation_options(enable_jit=False).compile(
         cond=[True], offset_provider={}
     )
 
     with pytest.raises(RuntimeError, match=r"No program compiled.*'prog': cond=False") as exc_info:
-        testee(cond=False, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+        compiled_program(cond=False, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
     assert "KeyError" not in _formatted_traceback(exc_info.value)
 
 
-def test_dispatch_miss_without_jit_names_static_domain(testee_prog, noop_runner):
-    testee = testee_prog.with_compilation_options(static_domains=True, enable_jit=True)
-    testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+def test_dispatch_miss_without_jit_names_static_domain(scalar_inlining_program, noop_runner):
+    compiled_program = scalar_inlining_program.with_compilation_options(static_domains=True, enable_jit=True)
+    compiled_program(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
-    object.__setattr__(testee.compilation_options, "enable_jit", False)
+    object.__setattr__(compiled_program.compilation_options, "enable_jit", False)
 
     with pytest.raises(RuntimeError, match=r"'prog': \(out\)\.domain=Domain"):
-        testee(cond=True, out=gtx.zeros(domain={TDim: 2}, dtype=bool), offset_provider={})
+        compiled_program(cond=True, out=gtx.zeros(domain={TDim: 2}, dtype=bool), offset_provider={})
 
 
-def test_dispatch_miss_without_argument_descriptors(testee_prog):
-    testee = testee_prog.with_compilation_options(enable_jit=False)
+def test_dispatch_miss_without_argument_descriptors(scalar_inlining_program):
+    compiled_program = scalar_inlining_program.with_compilation_options(enable_jit=False)
 
     with pytest.raises(RuntimeError, match=r"arguments of 'prog'\. Note that"):
-        testee(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+        compiled_program(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
 
 
 def _verify_program_has_expected_domain(
@@ -296,12 +296,12 @@ def _verify_program_has_expected_domain(
     assert domain == im.domain(common.GridType.CARTESIAN, expected_domain)
 
 
-def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPool):
+def test_inlining_of_static_domain_works(scalar_inlining_program, uids: utils.IDGeneratorPool):
     domain = gtx.Domain(dims=(TDim,), ranges=(gtx.UnitRange(0, 1),))
     input_pair = toolchain.ConcreteArtifact(
-        data=testee_prog.definition_stage,
+        data=scalar_inlining_program.definition_stage,
         args=arguments.CompileTimeArgs(
-            args=list(testee_prog.past_stage.past_node.type.definition.pos_or_kw_args.values()),
+            args=list(scalar_inlining_program.past_stage.past_node.type.definition.pos_or_kw_args.values()),
             kwargs={},
             offset_provider={},
             column_axis=None,

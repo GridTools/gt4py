@@ -42,7 +42,7 @@ pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator
-def testee_no_tuple(a: IField, b: JField) -> IField:
+def fop_no_tuple(a: IField, b: JField) -> IField:
     return a
 
 
@@ -53,7 +53,7 @@ def prog_no_tuple(
     out_a: IField,
     i_size: gtx.int32,
 ):
-    testee_no_tuple(a, b, out=out_a, domain={IDim: (0, i_size)})
+    fop_no_tuple(a, b, out=out_a, domain={IDim: (0, i_size)})
 
 
 def test_program_no_tuple(cartesian_case):

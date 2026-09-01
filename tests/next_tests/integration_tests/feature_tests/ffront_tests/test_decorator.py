@@ -24,15 +24,15 @@ from next_tests.integration_tests.cases_utils import (
 
 def test_program_gtir_regression(cartesian_case):
     @gtx.field_operator(backend=None)
-    def testee_op(a: cases.IField) -> cases.IField:
+    def program_gtir_regression_op(a: cases.IField) -> cases.IField:
         return a
 
     @gtx.program(backend=None)
-    def testee(a: cases.IField, out: cases.IField):
-        testee_op(a, out=out)
+    def program_gtir_regression_prog(a: cases.IField, out: cases.IField):
+        program_gtir_regression_op(a, out=out)
 
-    assert isinstance(testee.gtir, itir.Program)
-    assert isinstance(testee.with_backend(cartesian_case.backend).gtir, itir.Program)
+    assert isinstance(program_gtir_regression_prog.gtir, itir.Program)
+    assert isinstance(program_gtir_regression_prog.with_backend(cartesian_case.backend).gtir, itir.Program)
 
 
 @pytest.mark.parametrize(
@@ -50,12 +50,12 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
         pytest.skip("Precompiled program with embedded execution is not possible.")
 
     @gtx.field_operator
-    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+    def collect_metrics_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
     @gtx.program(backend=None)
-    def testee(a: cases.IField, out: cases.IField):
-        testee_op(a, a, out=out)
+    def collect_metrics_prog(a: cases.IField, out: cases.IField):
+        collect_metrics_op(a, a, out=out)
 
     with (
         mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
@@ -63,11 +63,11 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
             "gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)
         ),
     ):
-        testee = testee.with_backend(cartesian_case.backend).with_grid_type(
+        collect_metrics_prog = collect_metrics_prog.with_backend(cartesian_case.backend).with_grid_type(
             cartesian_case.grid_type
         )
-        args, kwargs = cases.get_default_data(cartesian_case, testee)
-        testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+        args, kwargs = cases.get_default_data(cartesian_case, collect_metrics_prog)
+        collect_metrics_prog(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
 
         if metrics_level == metrics.DISABLED:
             assert len(metrics.sources) == 0
