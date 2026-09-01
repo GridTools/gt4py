@@ -210,6 +210,23 @@ def test_make_symbol_type_from_typing(value, expected):
     assert type_translation.from_type_hint(value) == expected
 
 
+def test_generic_tuple_constructor_type():
+    # The type of the `tuple` builtin itself: `type[tuple]` (e.g. the symbol `tuple`
+    # referenced inside a field operator) maps to a constructor for a generic tuple.
+    expected = ts.ConstructorType(
+        definition=ts.FunctionType(
+            pos_only_args=[ts.DeferredType(constraint=None)],
+            pos_or_kw_args={},
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=ts.VarArgType),
+        )
+    )
+    assert (
+        type_translation.make_constructor_type(ts.DeferredType(constraint=ts.TupleType)) == expected
+    )
+    assert type_translation.from_type_hint(type[tuple]) == expected
+
+
 def test_invalid_symbol_types():
     # Forward references
     with pytest.raises(ValueError, match="undefined forward references"):
