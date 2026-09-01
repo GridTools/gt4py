@@ -448,26 +448,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_index = self.visit(node.index, **kwargs)
         new_type: Optional[ts.TypeSpec] = None
 
+        def literal_tuple_index() -> int:
+            try:
+                return foast_utils.expr_to_index(node.index)
+            except ValueError as ex:
+                raise errors.DSLError(
+                    node.location,
+                    f"Tuples need to be indexed with literal integers, got '{node.index}'.",
+                ) from ex
+
         match new_value.type:
             case ts.TupleType(types=types):
-                try:
-                    index = foast_utils.expr_to_index(node.index)
-                except ValueError as ex:
-                    raise errors.DSLError(
-                        node.location,
-                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
-                    ) from ex
-                new_type = types[index]
+                new_type = types[literal_tuple_index()]
             case ts.VarArgType(element_type=element_type):
-                try:
-                    # The length of a variable-length tuple is only known when the concrete
-                    # arguments are available, so the index can not be bounds-checked here.
-                    foast_utils.expr_to_index(node.index)
-                except ValueError as ex:
-                    raise errors.DSLError(
-                        node.location,
-                        f"Tuples need to be indexed with literal integers, got '{node.index}'.",
-                    ) from ex
+                # The length of a variable-length tuple is only known when the concrete
+                # arguments are available, so the index can not be bounds-checked here.
+                literal_tuple_index()
                 new_type = element_type
             case ts.OffsetType(source=source, target=(target1, target2)):
                 if not target2.kind == DimensionKind.LOCAL:
@@ -748,6 +744,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ensure_elementwise_tuple_type(left_type)
             ensure_elementwise_tuple_type(right_type)
 
+            if isinstance(left_type, ts.DimensionType):
+                # Dimension offset expressions (e.g. `IDim + 1`) require a literal right-hand
+                # side, which can not be represented by the synthetic operands used below.
+                raise errors.DSLError(
+                    node.location,
+                    f"Dimension offset expressions are not supported in element-wise "
+                    f"operator '{node.op}'.",
+                )
+
             # Element-wise semantics are defined by applying the regular binop rules to each
             # element pair, so type errors (incompatible operands, failed promotion) are also
             # diagnosed per element: the first offending pair raises, with the message naming
@@ -789,11 +794,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         # An `XVarArgType` is traversed as a length-1 collection, so two variable-length tuples
-        # always match structurally and are combined regardless of their actual runtime lengths.
-        # TODO(tehrengruber): The actual runtime lengths of two `XVarArgType` operands are not
-        #   verified here (they are unknown during type deduction); mismatching lengths currently
-        #   fail later, downstream of type deduction. Catch them already here once that
-        #   information is available.
+        # match structurally and are combined element-wise (their actual runtime lengths are not
+        # known during type deduction; the lowering currently rejects this combination).
+        # `tree_map` raises a `ValueError` on collections of mismatching kind or length, which
+        # in particular rejects combining a fixed-length with a variable-length tuple.
         try:
             result = tree_map(
                 deduce_leaf,
@@ -805,7 +809,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise errors.DSLError(
                 node.location,
                 f"Element-wise operator '{node.op}' requires tuple operands to have the "
-                f"same structure, got '{left.type}' and '{right.type}'.",
+                f"same structure (matching lengths and fixed-/variable-length kinds), "
+                f"got '{left.type}' and '{right.type}'.",
             ) from ex
         assert isinstance(result, (ts.XTupleType, ts.XVarArgType))
         return result

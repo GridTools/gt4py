@@ -657,8 +657,15 @@ def _map_elementwise(
         ]
         return im.let(*bindings)(im.make_tuple(*elements))
 
-    # Exactly one variable-length tuple argument (ensured by type deduction).
-    (vararg_index,) = (i for i, t in enumerate(original_arg_types) if isinstance(t, ts.XVarArgType))
+    vararg_indices = [i for i, t in enumerate(original_arg_types) if isinstance(t, ts.XVarArgType)]
+    if len(vararg_indices) > 1:
+        # Type deduction accepts this combination (the runtime lengths are unknown there and
+        # embedded execution supports it), but `map_tuple` maps over a single tuple only.
+        # TODO(tehrengruber): Support this.
+        raise FieldOperatorLoweringError(
+            "Element-wise operations between multiple variable-length tuples are not supported."
+        )
+    (vararg_index,) = vararg_indices
     vararg_type = original_arg_types[vararg_index]
     assert isinstance(vararg_type, ts.XVarArgType)
     param = next(uids["__elementwise"])

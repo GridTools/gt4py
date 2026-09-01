@@ -645,6 +645,17 @@ def test_tree_map_broadcast_leaves():
     )
 
 
+def test_tree_map_broadcast_leaves_mismatching_collection_types():
+    class OtherTuple(tuple): ...
+
+    @utils.tree_map(broadcast_leaves=True)
+    def testee(x, y):
+        return x + y
+
+    with pytest.raises(ValueError, match="same type"):
+        testee((1, 2), OtherTuple((3, 4)))
+
+
 def test_tree_map_broadcast_leaves_with_path_arg():
     @utils.tree_map(broadcast_leaves=True, with_path_arg=True)
     def testee(x, y, path):

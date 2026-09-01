@@ -35,7 +35,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
-from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
+from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering, FieldOperatorLoweringError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -621,6 +621,21 @@ def test_elementwise_binop_nested_xtuple_scalar_broadcast():
     reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
 
     assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_two_var_len_xtuples_unsupported():
+    # Type deduction accepts this combination (embedded execution supports it), but the
+    # lowering can only map over a single variable-length tuple.
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+        b: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+    ):
+        return a * b
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    with pytest.raises(FieldOperatorLoweringError, match="variable-length tuples"):
+        FieldOperatorLowering.apply(parsed)
 
 
 def test_elementwise_binop_var_len_xtuple_scalar_broadcast():

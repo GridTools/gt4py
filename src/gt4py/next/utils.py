@@ -133,7 +133,8 @@ def tree_map(
           tuple of result collections instead of result collections of tuples.
         with_path_arg: Pass the path to access the current element to `fun`.
         broadcast_leaves: If `True`, recurse while any argument is a collection, reusing leaf
-          arguments for every element of the collection arguments.
+          arguments for every element of the collection arguments. All collection arguments
+          appearing at the same position must be of the same type and length.
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
@@ -212,6 +213,14 @@ def tree_map(
             ):
                 if broadcast_leaves:
                     first_arg: Any = collection_args[0]
+                    if not all(type(arg) is type(first_arg) for arg in collection_args):
+                        # Zipping collections of different kinds (e.g. a fixed-length with a
+                        # variable-length tuple type) is almost certainly an error, and the
+                        # result collection is constructed from the first collection argument
+                        # only, so its kind would silently win.
+                        raise ValueError(
+                            "tree_map() expects collection arguments to be of the same type."
+                        )
                     if not all(len(first_arg) == len(arg) for arg in collection_args):
                         raise ValueError(
                             "tree_map() expects collection arguments to have the same length."
