@@ -531,8 +531,8 @@ def test_fixed_len_tuple_comprehension_mixed_local_field():
         return tuple(2.0 * el for el in (a(V2E), b))
 
     with pytest.raises(
-        NotImplementedError,
-        match="fixed-length tuples require all iterable elements to have the same type",
+        errors.DSLError,
+        match="fixed-length tuples with differently typed iterable elements are not implemented",
     ):
         FieldOperatorParser.apply_to_function(foo)
 
@@ -542,8 +542,8 @@ def test_fixed_len_tuple_comprehension_mixed_field_domains():
         return tuple(2.0 * el for el in (a, b))
 
     with pytest.raises(
-        NotImplementedError,
-        match="fixed-length tuples require all iterable elements to have the same type",
+        errors.DSLError,
+        match="fixed-length tuples with differently typed iterable elements are not implemented",
     ):
         FieldOperatorParser.apply_to_function(foo)
 
@@ -553,8 +553,8 @@ def test_fixed_len_tuple_comprehension_tuple_target_mixed_element_types():
         return tuple(2.0 * left + right for left, right in ((a(V2E), b), (b, b)))
 
     with pytest.raises(
-        NotImplementedError,
-        match="fixed-length tuples require all iterable elements to have the same type",
+        errors.DSLError,
+        match="fixed-length tuples with differently typed iterable elements are not implemented",
     ):
         FieldOperatorParser.apply_to_function(foo)
 

@@ -220,6 +220,12 @@ def test_invalid_symbol_types():
     assert type_translation.from_type_hint(typing.Tuple) == ts.DeferredType(constraint=ts.TupleType)
     assert type_translation.from_type_hint(tuple) == ts.DeferredType(constraint=ts.TupleType)
 
+    # The empty-tuple annotation is not a valid type annotation.
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(tuple[()])
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(typing.Tuple[()])
+
     # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarArgType.
     assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarArgType(
         element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)

@@ -188,8 +188,14 @@ def canonicalize_type_hint(
         type_hint = _resolve_type_alias(type_hint)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
-    # In order to distinguish `tuple` from `tuple[()]`, the former returns None here.
-    args = typing.get_args(type_hint) if typing.get_origin(type_hint) else None
+    # `None` (rather than `()`) marks an unparametrized annotation, distinguishing bare
+    # `tuple` / `typing.Tuple` from the empty-tuple annotation `tuple[()]`. Unsubscripted
+    # `typing` aliases have a truthy origin but no `__args__` attribute.
+    args = (
+        typing.get_args(type_hint)
+        if typing.get_origin(type_hint) and hasattr(type_hint, "__args__")
+        else None
+    )
 
     return canonical_type, args, tuple(extra_args)
 
@@ -222,8 +228,9 @@ def from_type_hint(
             # Variable-length tuple, e.g. `tuple[int32, ...]`
             elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
                 return ts.VarArgType(element_type=from_type_hint_same_ns(args[0]))
-            # Unparametrized annotation, i.e. `tuple` or `tuple[()]`
-            elif args is None or (isinstance(args, tuple) and len(args) == 0):
+            # Unparametrized annotation, i.e. bare `tuple` / `typing.Tuple` (the
+            # empty-tuple annotation `tuple[()]` has `args == ()` and is rejected below)
+            elif args is None:
                 # TODO(tehrengruber): We use `DeferredType` until we have an actual representation
                 #  for a generic type.
                 return ts.DeferredType(constraint=ts.TupleType)
