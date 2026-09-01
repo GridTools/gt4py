@@ -22,28 +22,28 @@ from next_tests.integration_tests.cases_utils import (
 
 def test_copy(cartesian_case):
     @gtx.field_operator
-    def copy_op(a: cases.IJKField) -> cases.IJKField:
+    def testee(a: cases.IJKField) -> cases.IJKField:
         field_tuple = (a, a)
         field_0 = field_tuple[0]
         field_1 = field_tuple[1]
         return field_0
 
-    cases.verify_with_default_data(cartesian_case, copy_op, ref=lambda a: a)
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
 def test_infinity(cartesian_case):
     # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
     #  also not raise a ZeroDivisionError error in embedded and roundtrip.
     @gtx.field_operator
-    def infinity_op() -> cases.IFloatField:
+    def testee() -> cases.IFloatField:
         return broadcast(1.0 / 0.0, (IDim,))
 
-    out = cases.allocate(cartesian_case, infinity_op, cases.RETURN)()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     try:
         cases.verify(
             cartesian_case,
-            infinity_op,
+            testee,
             out=out,
             comparison=np.array_equal,
             ref=np.full(out.ndarray.shape, math.inf),
@@ -56,15 +56,15 @@ def test_nan(cartesian_case):
     # TODO(tehrengruber): We actually want a GTIR test with a `nan` literal. This would then
     #  also not raise a ZeroDivisionError error in embedded and roundtrip.
     @gtx.field_operator
-    def nan_op() -> cases.IFloatField:
+    def testee() -> cases.IFloatField:
         return broadcast(0.0 / 0.0, (IDim,))
 
-    out = cases.allocate(cartesian_case, nan_op, cases.RETURN)()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     try:
         cases.verify(
             cartesian_case,
-            nan_op,
+            testee,
             out=out,
             comparison=functools.partial(np.array_equal, equal_nan=True),
             ref=np.full(out.ndarray.shape, math.nan),

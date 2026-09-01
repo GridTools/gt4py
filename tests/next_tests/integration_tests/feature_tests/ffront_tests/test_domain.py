@@ -25,35 +25,35 @@ from next_tests.integration_tests.cases_utils import (
 @pytest.mark.uses_scalar_in_domain_and_fo
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
     @gtx.field_operator
-    def scalar_in_domain_spec_and_fo_call_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
+    def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
 
     @gtx.program
-    def scalar_in_domain_spec_and_fo_call_prog(size: gtx.IndexType, out: gtx.Field[[IDim], gtx.IndexType]):
-        scalar_in_domain_spec_and_fo_call_op(size, out=out, domain={IDim: (0, size)})
+    def testee(size: gtx.IndexType, out: gtx.Field[[IDim], gtx.IndexType]):
+        testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
-    out = cases.allocate(cartesian_case, scalar_in_domain_spec_and_fo_call_prog, "out").zeros()()
+    out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, scalar_in_domain_spec_and_fo_call_prog, size, out=out, ref=np.full_like(out, size, dtype=gtx.IndexType)
+        cartesian_case, testee, size, out=out, ref=np.full_like(out, size, dtype=gtx.IndexType)
     )
 
 
 @pytest.mark.uses_program_with_sliced_out_arguments
 def test_single_value_field(cartesian_case):
     @gtx.field_operator
-    def single_value_field_fo(a: cases.IKField) -> cases.IKField:
+    def testee_fo(a: cases.IKField) -> cases.IKField:
         return a
 
     @gtx.program
-    def single_value_field_prog(a: cases.IKField):
-        single_value_field_fo(a, out=a[1:2, 3:4])
+    def testee_prog(a: cases.IKField):
+        testee_fo(a, out=a[1:2, 3:4])
 
-    a = cases.allocate(cartesian_case, single_value_field_prog, "a")()
+    a = cases.allocate(cartesian_case, testee_prog, "a")()
     ref = a[1, 3]
 
-    cases.verify(cartesian_case, single_value_field_prog, a, inout=a[1, 3], ref=ref)
+    cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
 
 
 def test_domain(cartesian_case):

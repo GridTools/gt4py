@@ -26,23 +26,23 @@ def test_scan_init_duplicated(cartesian_case):
     """
 
     @gtx.scan_operator(axis=KDim, forward=True, init=((1.0,), (1.0,)))
-    def scan_init_duplicated_scan(
+    def testee_scan(
         state: tuple[tuple[float], tuple[float]], inp: float
     ) -> tuple[tuple[float], tuple[float]]:
         return (state[0][0] + inp,), (state[1][0] + inp,)
 
     @gtx.field_operator
-    def scan_init_duplicated_op(
+    def testee(
         inp: gtx.Field[[KDim], float],
     ) -> tuple[tuple[gtx.Field[[KDim], float]], tuple[gtx.Field[[KDim], float]]]:
-        return scan_init_duplicated_scan(inp)
+        return testee_scan(inp)
 
-    inp = cases.allocate(cartesian_case, scan_init_duplicated_op, "inp")()
-    out = cases.allocate(cartesian_case, scan_init_duplicated_op, cases.RETURN).zeros()()
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
 
     cases.verify(
         cartesian_case,
-        scan_init_duplicated_op,
+        testee,
         inp,
         out=out,
         ref=(

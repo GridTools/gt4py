@@ -676,7 +676,7 @@ def test_tuples_and_named_collections():
     NamedTupleNamedCollection = cnc.NamedTupleNamedCollection
     DataclassNamedCollection = cnc.DataclassNamedCollection
 
-    def tuples_and_named_collections_op(data: DeeplyNestedNamedCollection) -> DeeplyNestedNamedCollection:
+    def testee(data: DeeplyNestedNamedCollection) -> DeeplyNestedNamedCollection:
         return DeeplyNestedNamedCollection(
             a=(data.a[0], data.a[1]),
             b=ScalarsNamedCollection(
@@ -692,7 +692,7 @@ def test_tuples_and_named_collections():
             ),
         )
 
-    parsed = FieldOperatorParser.apply_to_function(tuples_and_named_collections_op)
+    parsed = FieldOperatorParser.apply_to_function(testee)
     expected = ts.NamedCollectionType(
         types=[
             ts.TupleType(
@@ -771,7 +771,7 @@ def test_tuples_and_named_collections():
 
 
 def test_concat_where_wrong_structure():
-    def concat_where_wrong_structure_op(
+    def testee(
         interior: cnc.NamedTupleNamedCollection,
         boundary: cnc.DataclassNamedCollection,
     ) -> tuple[cnc.NamedTupleNamedCollection, cnc.NamedTupleNamedCollection]:
@@ -781,11 +781,11 @@ def test_concat_where_wrong_structure():
         errors.DSLError,
         match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
     ):
-        parsed = FieldOperatorParser.apply_to_function(concat_where_wrong_structure_op)
+        parsed = FieldOperatorParser.apply_to_function(testee)
 
 
 def test_concat_where_wrong_structure_nested():
-    def concat_where_wrong_structure_nested_op(
+    def testee(
         interior0: cnc.NamedTupleNamedCollection,
         interior1: cnc.NamedTupleNamedCollection,
         boundary0: cnc.DataclassNamedCollection,
@@ -797,4 +797,4 @@ def test_concat_where_wrong_structure_nested():
         errors.DSLError,
         match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
     ):
-        parsed = FieldOperatorParser.apply_to_function(concat_where_wrong_structure_nested_op)
+        parsed = FieldOperatorParser.apply_to_function(testee)

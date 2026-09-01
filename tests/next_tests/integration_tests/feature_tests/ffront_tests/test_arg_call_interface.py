@@ -41,18 +41,18 @@ def _generate_arg_permutations(
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "c")))
 def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[str], tuple[str]]):
     @field_operator
-    def call_field_operator_from_python_op(a: IField, b: IField, c: IField) -> IField:
+    def testee(a: IField, b: IField, c: IField) -> IField:
         return a * 2 * b - c
 
-    args = {name: cases.allocate(cartesian_case, call_field_operator_from_python_op, name)() for name in ("a", "b", "c")}
-    out = cases.allocate(cartesian_case, call_field_operator_from_python_op, cases.RETURN)()
+    args = {name: cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", "c")}
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     # split into arguments we want to pass as positional and keyword
     arg_names, kwarg_names = arg_spec
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    call_field_operator_from_python_op.with_backend(cartesian_case.backend)(*pos_args, **kw_args, out=out)
+    testee.with_backend(cartesian_case.backend)(*pos_args, **kw_args, out=out)
 
     expected = args["a"] * 2 * args["b"] - args["c"]
 
@@ -66,17 +66,17 @@ def test_call_program_from_python(cartesian_case, arg_spec):
         return a + 2 * b
 
     @program
-    def call_program_from_python_prog(a: IField, b: IField, out: IField):
+    def testee(a: IField, b: IField, out: IField):
         foo(a, b, out=out)
 
-    args = {name: cases.allocate(cartesian_case, call_program_from_python_prog, name)() for name in ("a", "b", "out")}
+    args = {name: cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", "out")}
 
     # split into arguments we want to pass as positional and keyword
     arg_names, kwarg_names = arg_spec
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    call_program_from_python_prog.with_backend(cartesian_case.backend)(*pos_args, **kw_args)
+    testee.with_backend(cartesian_case.backend)(*pos_args, **kw_args)
 
     expected = args["a"] + 2 * args["b"]
 
@@ -89,13 +89,13 @@ def test_call_field_operator_from_field_operator(cartesian_case):
         return x + 2 * y + 3 * z
 
     @field_operator
-    def call_field_operator_from_field_operator_op(a: IField, b: IField, c: IField) -> IField:
+    def testee(a: IField, b: IField, c: IField) -> IField:
         return foo(a, b, c) + 5 * foo(a, y=b, z=c) + 7 * foo(a, z=c, y=b) + 11 * foo(a, b, z=c)
 
     def foo_np(x, y, z):
         return x + 2 * y + 3 * z
 
-    def call_field_operator_from_field_operator_np(a, b, c):
+    def testee_np(a, b, c):
         return (
             foo_np(a, b, c)
             + 5 * foo_np(a, y=b, z=c)
@@ -103,7 +103,7 @@ def test_call_field_operator_from_field_operator(cartesian_case):
             + 11 * foo_np(a, b, z=c)
         )
 
-    cases.verify_with_default_data(cartesian_case, call_field_operator_from_field_operator_op, ref=call_field_operator_from_field_operator_np)
+    cases.verify_with_default_data(cartesian_case, testee, ref=testee_np)
 
 
 def test_call_field_operator_from_program(cartesian_case):
@@ -112,7 +112,7 @@ def test_call_field_operator_from_program(cartesian_case):
         return x + 2 * y + 3 * z
 
     @program
-    def call_field_operator_from_program_prog(
+    def testee(
         a: IField, b: IField, c: IField, out1: IField, out2: IField, out3: IField, out4: IField
     ):
         foo(a, b, c, out=out1)
@@ -120,9 +120,9 @@ def test_call_field_operator_from_program(cartesian_case):
         foo(a, z=c, y=b, out=out3)
         foo(a, b, z=c, out=out4)
 
-    a, b, c = (cases.allocate(cartesian_case, call_field_operator_from_program_prog, name)() for name in ("a", "b", "c"))
+    a, b, c = (cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", "c"))
     out = (
-        cases.allocate(cartesian_case, call_field_operator_from_program_prog, name, strategy=cases.ZeroInitializer())()
+        cases.allocate(cartesian_case, testee, name, strategy=cases.ZeroInitializer())()
         for name in ("out1", "out2", "out3", "out4")
     )
 
@@ -130,7 +130,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
     cases.verify(
         cartesian_case,
-        call_field_operator_from_program_prog,
+        testee,
         a,
         b,
         c,
@@ -145,34 +145,34 @@ def test_call_field_operator_from_program(cartesian_case):
 @pytest.mark.uses_scan_in_field_operator
 def test_call_scan_operator_from_field_operator(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
-    def call_scan_operator_from_field_operator_scan(state: float, x: float, y: float) -> float:
+    def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y
 
     @field_operator
-    def call_scan_operator_from_field_operator_op(a: IJKFloatField, b: IJKFloatField) -> IJKFloatField:
+    def testee(a: IJKFloatField, b: IJKFloatField) -> IJKFloatField:
         return (
-            call_scan_operator_from_field_operator_scan(a, b)
-            + 3.0 * call_scan_operator_from_field_operator_scan(a, y=b)
-            + 5.0 * call_scan_operator_from_field_operator_scan(x=a, y=b)
-            + 7.0 * call_scan_operator_from_field_operator_scan(y=b, x=a)
+            testee_scan(a, b)
+            + 3.0 * testee_scan(a, y=b)
+            + 5.0 * testee_scan(x=a, y=b)
+            + 7.0 * testee_scan(y=b, x=a)
         )
 
     a, b, out = (
-        cases.allocate(cartesian_case, call_scan_operator_from_field_operator_op, name)() for name in ("a", "b", cases.RETURN)
+        cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", cases.RETURN)
     )
     expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(a.asnumpy() + 2.0 * b.asnumpy(), axis=2)
 
-    cases.verify(cartesian_case, call_scan_operator_from_field_operator_op, a, b, out=out, ref=expected)
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=expected)
 
 
 @pytest.mark.uses_scan
 def test_call_scan_operator_from_program(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
-    def call_scan_operator_from_program_scan(state: float, x: float, y: float) -> float:
+    def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y
 
     @program
-    def call_scan_operator_from_program_prog(
+    def testee(
         a: IJKFloatField,
         b: IJKFloatField,
         out1: IJKFloatField,
@@ -180,14 +180,14 @@ def test_call_scan_operator_from_program(cartesian_case):
         out3: IJKFloatField,
         out4: IJKFloatField,
     ):
-        call_scan_operator_from_program_scan(a, b, out=out1)
-        call_scan_operator_from_program_scan(a, y=b, out=out2)
-        call_scan_operator_from_program_scan(x=a, y=b, out=out3)
-        call_scan_operator_from_program_scan(y=b, x=a, out=out4)
+        testee_scan(a, b, out=out1)
+        testee_scan(a, y=b, out=out2)
+        testee_scan(x=a, y=b, out=out3)
+        testee_scan(y=b, x=a, out=out4)
 
-    a, b = (cases.allocate(cartesian_case, call_scan_operator_from_program_prog, name)() for name in ("a", "b"))
+    a, b = (cases.allocate(cartesian_case, testee, name)() for name in ("a", "b"))
     out = (
-        cases.allocate(cartesian_case, call_scan_operator_from_program_prog, name, strategy=cases.ZeroInitializer())()
+        cases.allocate(cartesian_case, testee, name, strategy=cases.ZeroInitializer())()
         for name in ("out1", "out2", "out3", "out4")
     )
 
@@ -195,7 +195,7 @@ def test_call_scan_operator_from_program(cartesian_case):
 
     cases.verify(
         cartesian_case,
-        call_scan_operator_from_program_prog,
+        testee,
         a,
         b,
         *out,
@@ -208,38 +208,38 @@ def test_call_scan_operator_from_program(cartesian_case):
 @pytest.mark.uses_origin
 def test_direct_fo_call_with_domain_arg(cartesian_case):
     @field_operator
-    def direct_fo_call_with_domain_arg_op(inp: IField) -> IField:
+    def testee(inp: IField) -> IField:
         return inp
 
     size = cartesian_case.default_sizes[IDim]
-    inp = cases.allocate(cartesian_case, direct_fo_call_with_domain_arg_op, "inp").unique()()
+    inp = cases.allocate(cartesian_case, testee, "inp").unique()()
     out = cases.allocate(
-        cartesian_case, direct_fo_call_with_domain_arg_op, cases.RETURN, strategy=cases.ConstInitializer(42)
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
     )()
     ref = np.zeros(size)
     ref[0] = ref[-1] = 42
     ref[1:-1] = inp.asnumpy()[1:-1]
 
-    cases.verify(cartesian_case, direct_fo_call_with_domain_arg_op, inp, out=out, domain={IDim: (1, size - 1)}, ref=ref)
+    cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=ref)
 
 
 @pytest.mark.uses_origin
 @pytest.mark.uses_tuple_returns
 def test_direct_fo_call_with_domain_arg_tuple_return(cartesian_case):
     @field_operator
-    def direct_fo_call_with_domain_arg_tuple_return_op(inp: IField) -> tuple[IField, IField]:
+    def testee(inp: IField) -> tuple[IField, IField]:
         return (inp, inp)
 
     size = cartesian_case.default_sizes[IDim]
-    inp = cases.allocate(cartesian_case, direct_fo_call_with_domain_arg_tuple_return_op, "inp").unique()()
+    inp = cases.allocate(cartesian_case, testee, "inp").unique()()
     out = cases.allocate(
-        cartesian_case, direct_fo_call_with_domain_arg_tuple_return_op, cases.RETURN, strategy=cases.ConstInitializer(42)
+        cartesian_case, testee, cases.RETURN, strategy=cases.ConstInitializer(42)
     )()
     ref = np.zeros(size)
     ref[0] = ref[-1] = 42
     ref[1:-1] = inp.asnumpy()[1:-1]
 
-    cases.verify(cartesian_case, direct_fo_call_with_domain_arg_tuple_return_op, inp, out=out, domain={IDim: (1, size - 1)}, ref=(ref, ref))
+    cases.verify(cartesian_case, testee, inp, out=out, domain={IDim: (1, size - 1)}, ref=(ref, ref))
 
 
 def test_missing_arg_field_operator(cartesian_case):

@@ -53,27 +53,27 @@ def test_where_k_offset(cartesian_case):
 def test_same_size_fields(cartesian_case):
     # Note boundaries can only be implemented with `where` if both fields have the same size, see `concat_where`
     @gtx.field_operator
-    def same_size_fields_op(
+    def testee(
         k: cases.KField, interior: cases.IJKField, boundary: cases.IJKField
     ) -> cases.IJKField:
         return where(k == 0, boundary, interior)
 
-    k = cases.allocate(cartesian_case, same_size_fields_op, "k", strategy=cases.IndexInitializer())()
-    interior = cases.allocate(cartesian_case, same_size_fields_op, "interior")()
-    boundary = cases.allocate(cartesian_case, same_size_fields_op, "boundary")()
-    out = cases.allocate(cartesian_case, same_size_fields_op, cases.RETURN)()
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     ref = np.where(
         k.asnumpy()[np.newaxis, np.newaxis, :] == 0, boundary.asnumpy(), interior.asnumpy()
     )
 
-    cases.verify(cartesian_case, same_size_fields_op, k, interior, boundary, out=out, ref=ref)
+    cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
 
 
 @pytest.mark.uses_tuple_returns
 def test_with_tuples(cartesian_case):
     @gtx.field_operator
-    def where_with_tuples_op(
+    def testee(
         k: cases.KField,
         interior0: cases.IJKField,
         interior1: cases.IJKField,
@@ -88,10 +88,10 @@ def test_with_tuples(cartesian_case):
             (interior0, (interior1, interior2)),
         )
 
-    k = cases.allocate(cartesian_case, where_with_tuples_op, "k", strategy=cases.IndexInitializer())()
-    interiors = tuple(cases.allocate(cartesian_case, where_with_tuples_op, f"interior{i}")() for i in range(3))
-    boundaries = tuple(cases.allocate(cartesian_case, where_with_tuples_op, f"boundary{i}")() for i in range(3))
-    out = cases.allocate(cartesian_case, where_with_tuples_op, cases.RETURN)()
+    k = cases.allocate(cartesian_case, testee, "k", strategy=cases.IndexInitializer())()
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(3))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(3))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     refs = tuple(
         np.where(
@@ -104,7 +104,7 @@ def test_with_tuples(cartesian_case):
 
     cases.verify(
         cartesian_case,
-        where_with_tuples_op,
+        testee,
         k,
         *interiors,
         *boundaries,

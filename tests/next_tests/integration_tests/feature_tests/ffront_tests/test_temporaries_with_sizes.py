@@ -48,9 +48,9 @@ def exec_alloc_descriptor():
 
 
 @pytest.fixture
-def temporaries_program():
+def testee():
     @gtx.field_operator
-    def temporaries_op(a: cases.VField) -> cases.EField:
+    def testee_op(a: cases.VField) -> cases.EField:
         amul = a * 2
         return amul(E2V[0]) + amul(E2V[1])
 
@@ -58,14 +58,14 @@ def temporaries_program():
     def prog(
         a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int32, num_cells: int32
     ):
-        temporaries_op(a, out=out)
+        testee_op(a, out=out)
 
     return prog
 
 
 # @pytest.mark.parametrize("exec_alloc_descriptor", [run_gtfn_with_temporaries_and_symbolic_sizes])
 @pytest.mark.uses_unstructured_shift
-def test_verification(temporaries_program, exec_alloc_descriptor, mesh_descriptor):
+def test_verification(testee, exec_alloc_descriptor, mesh_descriptor):
     unstructured_case = Case(
         exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
@@ -79,15 +79,15 @@ def test_verification(temporaries_program, exec_alloc_descriptor, mesh_descripto
         allocator=exec_alloc_descriptor.allocator,
     )
 
-    a = cases.allocate(unstructured_case, temporaries_program, "a")()
-    out = cases.allocate(unstructured_case, temporaries_program, "out")()
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, "out")()
 
     first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].asnumpy()[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(
         unstructured_case,
-        temporaries_program,
+        testee,
         a,
         out,
         mesh_descriptor.num_vertices,
@@ -98,9 +98,9 @@ def test_verification(temporaries_program, exec_alloc_descriptor, mesh_descripto
     )
 
 
-def test_temporary_symbols(temporaries_program, mesh_descriptor):
+def test_temporary_symbols(testee, mesh_descriptor):
     gtir_with_tmp = apply_common_transforms(
-        temporaries_program.gtir,
+        testee.gtir,
         extract_temporaries=True,
         offset_provider=mesh_descriptor.offset_provider,
     )

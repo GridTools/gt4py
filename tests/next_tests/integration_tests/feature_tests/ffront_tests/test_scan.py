@@ -29,21 +29,21 @@ from next_tests.integration_tests.cases_utils import (
 @pytest.mark.uses_scan
 def test_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
-    def scalar_scan_scan(state: float, qc_in: float, scalar: float) -> float:
+    def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
         return qc
 
     @gtx.program
-    def scalar_scan_prog(qc: cases.IKFloatField, scalar: float):
-        scalar_scan_scan(qc, scalar, out=qc)
+    def testee(qc: cases.IKFloatField, scalar: float):
+        testee_scan(qc, scalar, out=qc)
 
-    qc = cases.allocate(cartesian_case, scalar_scan_prog, "qc").zeros()()
+    qc = cases.allocate(cartesian_case, testee, "qc").zeros()()
     scalar = 1.0
     isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((isize, ksize), np.arange(start=1, stop=ksize + 1, step=1).astype(float64))
 
-    cases.verify(cartesian_case, scalar_scan_prog, qc, scalar, inout=qc, ref=expected)
+    cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
 @pytest.mark.uses_scan
@@ -51,23 +51,23 @@ def test_scalar_scan(cartesian_case):
 @pytest.mark.uses_tuple_args
 def test_tuple_scalar_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
-    def tuple_scalar_scan_scan(
+    def testee_scan(
         state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
     ) -> float:
         return (qc_in + state + tuple_scalar[1][0] + tuple_scalar[1][1]) / tuple_scalar[0]
 
     @gtx.field_operator
-    def tuple_scalar_scan_op(
+    def testee_op(
         qc: cases.IKFloatField, tuple_scalar: tuple[float, tuple[float, float]]
     ) -> cases.IKFloatField:
-        return tuple_scalar_scan_scan(qc, tuple_scalar)
+        return testee_scan(qc, tuple_scalar)
 
-    qc = cases.allocate(cartesian_case, tuple_scalar_scan_op, "qc").zeros()()
+    qc = cases.allocate(cartesian_case, testee_op, "qc").zeros()()
     tuple_scalar = (1.0, (1.0, 0.0))
     isize = cartesian_case.default_sizes[IDim]
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((isize, ksize), np.arange(start=1.0, stop=ksize + 1), dtype=float)
-    cases.verify(cartesian_case, tuple_scalar_scan_op, qc, tuple_scalar, out=qc, ref=expected)
+    cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
 @pytest.mark.uses_cartesian_shift
@@ -75,47 +75,47 @@ def test_tuple_scalar_scan(cartesian_case):
 @pytest.mark.uses_scan_in_field_operator
 def test_scalar_scan_vertical_offset(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
-    def scalar_scan_vertical_offset_scan(state: float, inp: float) -> float:
+    def testee_scan(state: float, inp: float) -> float:
         return inp
 
     @gtx.field_operator
-    def scalar_scan_vertical_offset_op(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
-        return scalar_scan_vertical_offset_scan(inp(KDim + 1))
+    def testee(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
+        return testee_scan(inp(KDim + 1))
 
     inp = cases.allocate(
         cartesian_case,
-        scalar_scan_vertical_offset_op,
+        testee,
         "inp",
         extend={KDim: (0, 1)},
         strategy=cases.UniqueInitializer(start=2),
     )()
-    out = cases.allocate(cartesian_case, scalar_scan_vertical_offset_op, "inp").zeros()()
+    out = cases.allocate(cartesian_case, testee, "inp").zeros()()
     ksize = cartesian_case.default_sizes[KDim]
     expected = np.full((ksize), np.arange(start=3, stop=ksize + 3, step=1).astype(float64))
 
-    cases.verify(cartesian_case, scalar_scan_vertical_offset_op, inp, out=out, ref=expected)
+    cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
 def test_scan_unused_parameter(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
-    def scan_unused_parameter_scan(state: float, inp: float, unused: float) -> float:
+    def testee_scan(state: float, inp: float, unused: float) -> float:
         return state + inp
 
     @gtx.field_operator
-    def scan_unused_parameter_op(
+    def testee(
         inp: gtx.Field[[KDim], float], unused: gtx.Field[[KDim], float]
     ) -> gtx.Field[[KDim], float]:
-        return scan_unused_parameter_scan(inp, unused)
+        return testee_scan(inp, unused)
 
-    inp = cases.allocate(cartesian_case, scan_unused_parameter_op, "inp")()
-    unused = cases.allocate(cartesian_case, scan_unused_parameter_op, "unused")()
-    out = cases.allocate(cartesian_case, scan_unused_parameter_op, cases.RETURN).zeros()()
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    unused = cases.allocate(cartesian_case, testee, "unused")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
 
     cases.verify(
         cartesian_case,
-        scan_unused_parameter_op,
+        testee,
         inp,
         unused,
         out=out,
@@ -227,12 +227,12 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
     @gtx.program
-    def scan_nested_tuple_output_prog(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
+    def testee(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
         simple_scan_operator(out=out)
 
     cases.verify_with_default_data(
         cartesian_case,
-        scan_nested_tuple_output_prog,
+        testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
         comparison=lambda ref, out: (
             np.all(out[0] == ref[0])
@@ -350,17 +350,17 @@ def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument 'state' to scan operator 'scan_wrong_return_type_scan' must have same type as its return"
+            r"Argument 'state' to scan operator 'testee_scan' must have same type as its return"
         ),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def scan_wrong_return_type_scan(state: int32) -> float:
+        def testee_scan(state: int32) -> float:
             return 1.0
 
         @program
-        def scan_wrong_return_type_prog(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
-            scan_wrong_return_type_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
 @pytest.mark.uses_scan
@@ -368,26 +368,26 @@ def test_scan_wrong_init_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument 'init' to scan operator 'scan_wrong_init_type_scan' must have same type as 'state' argument"
+            r"Argument 'init' to scan operator 'testee_scan' must have same type as 'state' argument"
         ),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def scan_wrong_init_type_scan(state: float) -> float:
+        def testee_scan(state: float) -> float:
             return 1.0
 
         @program
-        def scan_wrong_init_type_prog(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
-            scan_wrong_init_type_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
 @pytest.mark.uses_scan
 def test_scan_without_carry(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=r"Scan operator 'scan_without_carry_scan' must have at least one argument",
+        match=r"Scan operator 'testee_scan' must have at least one argument",
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def scan_without_carry_scan() -> float:
+        def testee_scan() -> float:
             return 1.0

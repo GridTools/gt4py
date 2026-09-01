@@ -356,23 +356,23 @@ def test_if_inconsistent_types():
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
     @gtx.field_operator
-    def ternary_operator_op(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
+    def testee(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
         return a if left < right else b
 
-    a = cases.allocate(cartesian_case, ternary_operator_op, "a")()
-    b = cases.allocate(cartesian_case, ternary_operator_op, "b")()
-    out = cases.allocate(cartesian_case, ternary_operator_op, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, ternary_operator_op, a, b, left, right, out=out, ref=(a if left < right else b))
+    cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
 
     @gtx.field_operator
-    def ternary_operator_broadcast_op(left: int32, right: int32) -> cases.IField:
+    def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
     e = a if left < right else b
     cases.verify(
         cartesian_case,
-        ternary_operator_broadcast_op,
+        testee,
         left,
         right,
         out=out,
@@ -384,15 +384,15 @@ def test_ternary_operator(cartesian_case, left, right):
 @pytest.mark.uses_tuple_returns
 def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
-    def ternary_operator_tuple_op(
+    def testee(
         a: cases.IField, b: cases.IField, left: int32, right: int32
     ) -> tuple[cases.IField, cases.IField]:
         return (a, b) if left < right else (b, a)
 
-    a = cases.allocate(cartesian_case, ternary_operator_tuple_op, "a")()
-    b = cases.allocate(cartesian_case, ternary_operator_tuple_op, "b")()
-    out = cases.allocate(cartesian_case, ternary_operator_tuple_op, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "a")()
+    b = cases.allocate(cartesian_case, testee, "b")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     cases.verify(
-        cartesian_case, ternary_operator_tuple_op, a, b, left, right, out=out, ref=((a, b) if left < right else (b, a))
+        cartesian_case, testee, a, b, left, right, out=out, ref=((a, b) if left < right else (b, a))
     )

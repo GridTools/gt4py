@@ -232,7 +232,7 @@ def test_compile_variant_hook(backend: gtx_typing.Backend):
 
     callback_results.clear()
     hooks.compile_variant_hook.register(custom_compile_variant_hook)
-    compiled_program = prog.with_backend(backend).compile(cond=[True], offset_provider={})
+    testee = prog.with_backend(backend).compile(cond=[True], offset_provider={})
     hooks.compile_variant_hook.remove(custom_compile_variant_hook)
 
     assert len(callback_results) == 1, f"{callback_results=}"

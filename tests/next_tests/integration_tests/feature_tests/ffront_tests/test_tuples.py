@@ -37,33 +37,33 @@ from next_tests.integration_tests.cases_utils import (
 @pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):
     @gtx.field_operator
-    def multicopy_op(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
+    def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return a, b
 
-    cases.verify_with_default_data(cartesian_case, multicopy_op, ref=lambda a, b: (a, b))
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
 def test_tuples(cartesian_case):
     @gtx.field_operator
-    def tuples_op(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
+    def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
         scalars = 1.3, float64(5.0), float64("3.4")
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
     cases.verify_with_default_data(
-        cartesian_case, tuples_op, ref=lambda a, b: (a * 1.3 + b * 5.0) * 3.4
+        cartesian_case, testee, ref=lambda a, b: (a * 1.3 + b * 5.0) * 3.4
     )
 
 
 @pytest.mark.uses_tuple_args
 def test_scalar_tuple_arg(unstructured_case):
     @gtx.field_operator
-    def scalar_tuple_arg_op(a: tuple[int32, tuple[int32, int32]]) -> cases.VField:
+    def testee(a: tuple[int32, tuple[int32, int32]]) -> cases.VField:
         return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
 
     cases.verify_with_default_data(
         unstructured_case,
-        scalar_tuple_arg_op,
+        testee,
         ref=lambda a: np.full(
             [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
         ),
@@ -74,7 +74,7 @@ def test_scalar_tuple_arg(unstructured_case):
 @pytest.mark.uses_zero_dimensional_fields
 def test_zero_dim_tuple_arg(unstructured_case):
     @gtx.field_operator
-    def zero_dim_tuple_arg_op(
+    def testee(
         a: tuple[gtx.Field[[], int32], tuple[gtx.Field[[], int32], gtx.Field[[], int32]]],
     ) -> cases.VField:
         return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
@@ -85,18 +85,18 @@ def test_zero_dim_tuple_arg(unstructured_case):
             [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
         )
 
-    cases.verify_with_default_data(unstructured_case, zero_dim_tuple_arg_op, ref=ref)
+    cases.verify_with_default_data(unstructured_case, testee, ref=ref)
 
 
 @pytest.mark.uses_tuple_args
 def test_mixed_field_scalar_tuple_arg(cartesian_case):
     @gtx.field_operator
-    def mixed_field_scalar_tuple_arg_op(a: tuple[int32, tuple[int32, cases.IField, int32]]) -> cases.IField:
+    def testee(a: tuple[int32, tuple[int32, cases.IField, int32]]) -> cases.IField:
         return a[0] + 2 * a[1][0] + 3 * a[1][1] + 5 * a[1][2]
 
     cases.verify_with_default_data(
         cartesian_case,
-        mixed_field_scalar_tuple_arg_op,
+        testee,
         ref=lambda a: (
             np.full(
                 [cartesian_case.default_sizes[IDim]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
@@ -110,12 +110,12 @@ def test_mixed_field_scalar_tuple_arg(cartesian_case):
 @pytest.mark.uses_tuple_args_with_different_but_promotable_dims
 def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
     @gtx.field_operator
-    def tuple_arg_with_different_but_promotable_dims_op(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
+    def testee(a: tuple[cases.IField, cases.IJField]) -> cases.IJField:
         return a[0] + 2 * a[1]
 
     cases.verify_with_default_data(
         cartesian_case,
-        tuple_arg_with_different_but_promotable_dims_op,
+        testee,
         ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
     )
 
@@ -125,12 +125,12 @@ def test_tuple_arg_with_different_but_promotable_dims(cartesian_case):
 @pytest.mark.xfail(reason="Iterator of tuple approach in lowering does not allow this.")
 def test_tuple_arg_with_unpromotable_dims(unstructured_case):
     @gtx.field_operator
-    def tuple_arg_with_unpromotable_dims_op(a: tuple[cases.VField, cases.EField]) -> cases.VField:
+    def testee(a: tuple[cases.VField, cases.EField]) -> cases.VField:
         return a[0] + 2 * a[1](V2E[0])
 
     cases.verify_with_default_data(
         unstructured_case,
-        tuple_arg_with_unpromotable_dims_op,
+        testee,
         ref=lambda a: a[0][:, np.newaxis] + 2 * a[1],
     )
 
@@ -155,14 +155,14 @@ def test_nested_tuple_return(cartesian_case):
 @pytest.mark.uses_tuple_returns
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
-    def tuple_return_2_op(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
+    def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
         tmp_2 = neighbor_sum(b(V2E), axis=V2EDim)
         return tmp, tmp_2
 
     cases.verify_with_default_data(
         unstructured_case,
-        tuple_return_2_op,
+        testee,
         ref=lambda a, b: [
             np.sum(a[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
             np.sum(b[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
@@ -174,11 +174,11 @@ def test_tuple_return_2(unstructured_case):
 @pytest.mark.uses_tuple_args
 def test_tuple_arg(cartesian_case):
     @gtx.field_operator
-    def tuple_arg_op(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
+    def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
         return 3 * a[0][0] + a[0][1] + a[1]
 
     cases.verify_with_default_data(
-        cartesian_case, tuple_arg_op, ref=lambda a: 3 * a[0][0] + a[0][1] + a[1]
+        cartesian_case, testee, ref=lambda a: 3 * a[0][0] + a[0][1] + a[1]
     )
 
 

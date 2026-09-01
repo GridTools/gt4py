@@ -45,12 +45,12 @@ from next_tests.integration_tests.cases_utils import (
 )
 def test_maxover_execution_(unstructured_case, strategy):
     @gtx.field_operator
-    def maxover_execution_op(edge_f: cases.EField) -> cases.VField:
+    def testee(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    inp = cases.allocate(unstructured_case, maxover_execution_op, "edge_f", strategy=strategy)()
-    out = cases.allocate(unstructured_case, maxover_execution_op, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "edge_f", strategy=strategy)()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     ref = np.max(
@@ -59,7 +59,7 @@ def test_maxover_execution_(unstructured_case, strategy):
         initial=np.min(inp.asnumpy()),
         where=v2e_table != common._DEFAULT_SKIP_VALUE,
     )
-    cases.verify(unstructured_case, maxover_execution_op, inp, ref=ref, out=out)
+    cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
 @pytest.mark.uses_unstructured_shift
@@ -203,13 +203,13 @@ def test_reduction_expression_in_call(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_reduction_with_common_expression(unstructured_case):
     @gtx.field_operator
-    def reduction_with_common_expression_op(flux: cases.EField) -> cases.VField:
+    def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
-        reduction_with_common_expression_op,
+        testee,
         ref=lambda flux: np.sum(
             flux[v2e_table] * 2, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
         ),
@@ -219,7 +219,7 @@ def test_reduction_with_common_expression(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_reduction_expression_with_where(unstructured_case):
     @gtx.field_operator
-    def reduction_expression_with_where_op(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, inp(V2E), inp(V2E)), axis=V2EDim)
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
@@ -227,12 +227,12 @@ def test_reduction_expression_with_where(unstructured_case):
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
     )
-    inp = cases.allocate(unstructured_case, reduction_expression_with_where_op, "inp")()
-    out = cases.allocate(unstructured_case, reduction_expression_with_where_op, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     cases.verify(
         unstructured_case,
-        reduction_expression_with_where_op,
+        testee,
         mask,
         inp,
         out=out,
@@ -248,7 +248,7 @@ def test_reduction_expression_with_where(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_reduction_expression_with_where_and_tuples(unstructured_case):
     @gtx.field_operator
-    def reduction_expression_with_where_and_tuples_op(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, (inp(V2E), inp(V2E)), (inp(V2E), inp(V2E)))[1], axis=V2EDim)
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
@@ -256,12 +256,12 @@ def test_reduction_expression_with_where_and_tuples(unstructured_case):
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
     )
-    inp = cases.allocate(unstructured_case, reduction_expression_with_where_and_tuples_op, "inp")()
-    out = cases.allocate(unstructured_case, reduction_expression_with_where_and_tuples_op, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     cases.verify(
         unstructured_case,
-        reduction_expression_with_where_and_tuples_op,
+        testee,
         mask,
         inp,
         out=out,
@@ -277,7 +277,7 @@ def test_reduction_expression_with_where_and_tuples(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_reduction_expression_with_where_and_scalar(unstructured_case):
     @gtx.field_operator
-    def reduction_expression_with_where_and_scalar_op(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
+    def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(inp(V2E) + where(mask, inp(V2E), 1), axis=V2EDim)
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
@@ -285,12 +285,12 @@ def test_reduction_expression_with_where_and_scalar(unstructured_case):
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
     )
-    inp = cases.allocate(unstructured_case, reduction_expression_with_where_and_scalar_op, "inp")()
-    out = cases.allocate(unstructured_case, reduction_expression_with_where_and_scalar_op, cases.RETURN)()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     cases.verify(
         unstructured_case,
-        reduction_expression_with_where_and_scalar_op,
+        testee,
         mask,
         inp,
         out=out,
@@ -319,12 +319,12 @@ def test_promotion(unstructured_case_3d):
 @pytest.mark.uses_unstructured_shift
 def test_unstructured_shift(unstructured_case):
     @gtx.field_operator
-    def unstructured_shift_op(a: cases.VField) -> cases.EField:
+    def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
     cases.verify_with_default_data(
         unstructured_case,
-        unstructured_shift_op,
+        testee,
         ref=lambda a: a[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
     )
 
@@ -339,11 +339,11 @@ def test_unstructured_shift_with_non_zero_origin(unstructured_case):
         pytest.xfail("Embedded backend only supports contiguous field domains.")
 
     @gtx.field_operator
-    def unstructured_shift_with_non_zero_origin_op(a: cases.VField) -> cases.EField:
+    def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
 
-    a = cases.allocate(unstructured_case, unstructured_shift_with_non_zero_origin_op, "a")()
-    out = cases.allocate(unstructured_case, unstructured_shift_with_non_zero_origin_op, cases.RETURN)()
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
     e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
@@ -352,19 +352,19 @@ def test_unstructured_shift_with_non_zero_origin(unstructured_case):
     edge_stop = next(i for i, v in neighbor_0_iter if v < ORIGIN)
 
     ref = a.ndarray[e2v_table[edge_start:edge_stop, 0]]
-    cases.verify(unstructured_case, unstructured_shift_with_non_zero_origin_op, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
 
 
 def test_horizontal_only_with_3d_mesh(unstructured_case_3d):
     # test field operator operating only on horizontal fields while using an offset provider
     # including a vertical dimension.
     @gtx.field_operator
-    def horizontal_only_with_3d_mesh_op(a: cases.VField) -> cases.VField:
+    def testee(a: cases.VField) -> cases.VField:
         return a
 
     cases.verify_with_default_data(
         unstructured_case_3d,
-        horizontal_only_with_3d_mesh_op,
+        testee,
         ref=lambda a: a,
     )
 
@@ -424,11 +424,11 @@ def test_neighbor_sum_with_non_zero_origin(unstructured_case):
         pytest.xfail("Embedded backend only supports contiguous field domains.")
 
     @gtx.field_operator
-    def neighbor_sum_with_non_zero_origin_op(a: cases.VField) -> cases.EField:
+    def testee(a: cases.VField) -> cases.EField:
         return neighbor_sum(a(E2V), axis=E2VDim)
 
-    a = cases.allocate(unstructured_case, neighbor_sum_with_non_zero_origin_op, "a")()
-    out = cases.allocate(unstructured_case, neighbor_sum_with_non_zero_origin_op, cases.RETURN)()
+    a = cases.allocate(unstructured_case, testee, "a")()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
     e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
@@ -437,20 +437,20 @@ def test_neighbor_sum_with_non_zero_origin(unstructured_case):
     edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
 
     ref = np.sum(a.ndarray[e2v_table[edge_start:edge_stop,]], axis=1)
-    cases.verify(unstructured_case, neighbor_sum_with_non_zero_origin_op, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
+    cases.verify(unstructured_case, testee, a[ORIGIN:], out=out[edge_start:edge_stop], ref=ref)
 
 
 @pytest.mark.uses_unstructured_shift
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
-    def nested_reduction_op(a: cases.VField) -> cases.VField:
+    def testee(a: cases.VField) -> cases.VField:
         tmp = neighbor_sum(a(E2V), axis=E2VDim)
         tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
     cases.verify_with_default_data(
         unstructured_case,
-        nested_reduction_op,
+        testee,
         ref=lambda a: np.sum(
             np.sum(a[unstructured_case.offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
                 unstructured_case.offset_provider["V2E"].asnumpy()
@@ -468,14 +468,14 @@ def test_nested_reduction(unstructured_case):
 )
 def test_nested_reduction_shift_first(unstructured_case):
     @gtx.field_operator
-    def nested_reduction_shift_first_op(inp: cases.EField) -> cases.EField:
+    def testee(inp: cases.EField) -> cases.EField:
         tmp = inp(V2E)
         tmp2 = tmp(E2V)
         return neighbor_sum(neighbor_sum(tmp2, axis=V2EDim), axis=E2VDim)
 
     cases.verify_with_default_data(
         unstructured_case,
-        nested_reduction_shift_first_op,
+        testee,
         ref=lambda inp: np.sum(
             np.sum(inp[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1)[
                 unstructured_case.offset_provider["E2V"].asnumpy()
@@ -512,14 +512,14 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
-    def ternary_builtin_neighbor_sum_op(a: cases.EField, b: cases.EField) -> cases.VField:
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
-        ternary_builtin_neighbor_sum_op,
+        testee,
         ref=lambda a, b: np.sum(
             b[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
         ),
@@ -532,17 +532,17 @@ def test_local_index_premapped_field(request, unstructured_case):
         pytest.skip("This test only works with non-skip value meshes.")
 
     @gtx.field_operator
-    def local_index_premapped_field_op(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex], int32]:
         shifted = inp(V2E)
         return shifted[V2EDim(0)] + shifted[V2EDim(1)] + shifted[V2EDim(2)] + shifted[V2EDim(3)]
 
-    inp = cases.allocate(unstructured_case, local_index_premapped_field_op, "inp")()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify(
         unstructured_case,
-        local_index_premapped_field_op,
+        testee,
         inp,
-        out=cases.allocate(unstructured_case, local_index_premapped_field_op, cases.RETURN)(),
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(inp.asnumpy()[v2e_table], axis=1),
     )

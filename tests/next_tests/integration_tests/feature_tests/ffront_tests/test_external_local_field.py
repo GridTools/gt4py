@@ -23,7 +23,7 @@ from next_tests.integration_tests.cases_utils import (
 @pytest.mark.uses_unstructured_shift
 def test_external_local_field(unstructured_case):
     @gtx.field_operator
-    def external_local_field_op(
+    def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
     ) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(
@@ -33,15 +33,15 @@ def test_external_local_field(unstructured_case):
     inp = unstructured_case.as_field(
         [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].asnumpy()
     )
-    ones = cases.allocate(unstructured_case, external_local_field_op, "ones").strategy(cases.ConstInitializer(1))()
+    ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
     v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
     cases.verify(
         unstructured_case,
-        external_local_field_op,
+        testee,
         inp,
         ones,
-        out=cases.allocate(unstructured_case, external_local_field_op, cases.RETURN)(),
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(v2e_table, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE),
     )
 
@@ -51,7 +51,7 @@ def test_index_external_local_field(request, unstructured_case):
         pytest.skip("This test only works with non-skip value meshes.")
 
     @gtx.field_operator
-    def index_external_local_field_op(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return inp[V2EDim(0)] + inp[V2EDim(1)] + inp[V2EDim(2)] + inp[V2EDim(3)]
 
     inp = unstructured_case.as_field(
@@ -60,9 +60,9 @@ def test_index_external_local_field(request, unstructured_case):
 
     cases.verify(
         unstructured_case,
-        index_external_local_field_op,
+        testee,
         inp,
-        out=cases.allocate(unstructured_case, index_external_local_field_op, cases.RETURN)(),
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(inp.asnumpy(), axis=1),
     )
 
@@ -72,7 +72,7 @@ def test_index_external_local_field_with_cast(request, unstructured_case):
         pytest.skip("This test only works with non-skip value meshes.")
 
     @gtx.field_operator
-    def index_external_local_field_with_cast_op(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int64]:
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int64]:
         inp_64 = astype(inp, int64)
         return inp_64[V2EDim(0)] + inp_64[V2EDim(1)] + inp_64[V2EDim(2)] + inp_64[V2EDim(3)]
 
@@ -82,9 +82,9 @@ def test_index_external_local_field_with_cast(request, unstructured_case):
 
     cases.verify(
         unstructured_case,
-        index_external_local_field_with_cast_op,
+        testee,
         inp,
-        out=cases.allocate(unstructured_case, index_external_local_field_with_cast_op, cases.RETURN)(),
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(inp.asnumpy(), axis=1),
     )
 
@@ -95,7 +95,7 @@ def test_index_external_local_field_with_cast(request, unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_external_local_field_only(unstructured_case):
     @gtx.field_operator
-    def external_local_field_only_op(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(inp, axis=V2EDim)
 
     inp = unstructured_case.as_field(
@@ -104,9 +104,9 @@ def test_external_local_field_only(unstructured_case):
 
     cases.verify(
         unstructured_case,
-        external_local_field_only_op,
+        testee,
         inp,
-        out=cases.allocate(unstructured_case, external_local_field_only_op, cases.RETURN)(),
+        out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(unstructured_case.offset_provider["V2E"].asnumpy(), axis=1),
     )
 
@@ -115,16 +115,16 @@ def test_external_local_field_only(unstructured_case):
 @pytest.mark.uses_unstructured_shift
 def test_write_local_field(unstructured_case):
     @gtx.field_operator
-    def write_local_field_op(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
         return inp(V2E)
 
     out = unstructured_case.as_field(
         [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].asnumpy())
     )
-    inp = cases.allocate(unstructured_case, write_local_field_op, "inp")()
+    inp = cases.allocate(unstructured_case, testee, "inp")()
     cases.verify(
         unstructured_case,
-        write_local_field_op,
+        testee,
         inp,
         out=out,
         ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].asnumpy()],

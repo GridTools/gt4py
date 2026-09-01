@@ -276,7 +276,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     M, N, K = (30, 20, 10)
 
     @gtx.field_operator
-    def cartesian_bind_sdfg_op(
+    def testee_op(
         a: tuple[int32, tuple[int32, cases.IJKField, int32]], b: tuple[tuple[cases.IJKField], int32]
     ) -> cases.IJKField:
         return (
@@ -284,7 +284,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         )  # skip 'a[1][2]' on purpose to cover unused scalar args
 
     @gtx.program(enable_jit=False)
-    def cartesian_bind_sdfg_prog(
+    def testee(
         a: tuple[int32, tuple[int32, cases.IJKField, int32]],
         b: tuple[tuple[cases.IJKField], int32],  # use 'b_0' to test tuple with single element
         M: int32,
@@ -292,7 +292,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         K: int32,
         out: cases.IJKField,
     ):
-        cartesian_bind_sdfg_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
+        testee_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
@@ -314,9 +314,9 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     )
 
     sizes = {IDim: M, JDim: N, KDim: K}
-    a = cases.allocate(test_case, cartesian_bind_sdfg_prog, "a", sizes=sizes, strategy=cases.UniqueInitializer())()
-    b = cases.allocate(test_case, cartesian_bind_sdfg_prog, "b", sizes=sizes, strategy=cases.UniqueInitializer())()
-    c = cases.allocate(test_case, cartesian_bind_sdfg_prog, "out", sizes=sizes, strategy=cases.UniqueInitializer())()
+    a = cases.allocate(test_case, testee, "a", sizes=sizes, strategy=cases.UniqueInitializer())()
+    b = cases.allocate(test_case, testee, "b", sizes=sizes, strategy=cases.UniqueInitializer())()
+    c = cases.allocate(test_case, testee, "out", sizes=sizes, strategy=cases.UniqueInitializer())()
 
     ref = c.asnumpy().copy()
     ref[1 : M - 1, 2 : N - 2, 3 : K - 3] = (
@@ -325,7 +325,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     static_args = {"M": [M], "N": [N], "K": [K]}
     program = (
-        cartesian_bind_sdfg_prog.with_grid_type(gtx_common.GridType.CARTESIAN)
+        testee.with_grid_type(gtx_common.GridType.CARTESIAN)
         .with_backend(backend)
         .compile(offset_provider={}, **static_args)
     )
@@ -339,14 +339,14 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 )
 def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     @gtx.field_operator
-    def unstructured_bind_sdfg_op(a: cases.VField) -> cases.VField:
+    def testee_op(a: cases.VField) -> cases.VField:
         tmp = neighbor_sum(a(E2V), axis=E2VDim)
         tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
     @gtx.program(enable_jit=False)
-    def unstructured_bind_sdfg_prog(a: cases.VField, b: cases.VField):
-        unstructured_bind_sdfg_op(a, out=b)
+    def testee(a: cases.VField, b: cases.VField):
+        testee_op(a, out=b)
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
@@ -368,8 +368,8 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     test_case = cases.Case.from_mesh_descriptor(SIMPLE_MESH, backend=backend, allocator=backend)
 
-    a = cases.allocate(test_case, unstructured_bind_sdfg_prog, "a")()
-    b = cases.allocate(test_case, unstructured_bind_sdfg_prog, "b")()
+    a = cases.allocate(test_case, testee, "a")()
+    b = cases.allocate(test_case, testee, "b")()
 
     ref = np.sum(
         np.sum(a.asnumpy()[offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
@@ -380,7 +380,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     static_args = {}
     program = (
-        unstructured_bind_sdfg_prog.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
+        testee.with_grid_type(gtx_common.GridType.UNSTRUCTURED)
         .with_backend(backend)
         .compile(offset_provider=offset_provider, **static_args)
     )
