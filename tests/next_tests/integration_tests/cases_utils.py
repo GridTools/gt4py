@@ -184,6 +184,9 @@ JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = common.flip_staggered(KDim)
 
+Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
 Cell = gtx.Dimension("Cell")

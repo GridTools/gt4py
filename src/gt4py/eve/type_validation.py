@@ -14,7 +14,6 @@ import abc
 import collections.abc
 import dataclasses
 import functools
-import types
 import typing
 
 from . import exceptions, extended_typing as xtyping, utils
@@ -225,10 +224,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             if type_annotation is None:
                 type_annotation = type(None)
 
-            if isinstance(
-                type_annotation, types.UnionType
-            ):  # see https://github.com/python/cpython/issues/105499
-                type_annotation = typing.Union[type_annotation.__args__]
+            type_annotation = xtyping.normalize_union(type_annotation)
 
             # A 'NameError' is deliberately left to propagate here, so that 'datamodels'
             # can defer; see 'xtyping.eval_type_alias' for both failure modes.
@@ -246,6 +242,15 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                     return deferred
                 _alias_memo[type_annotation] = deferred = _DeferredTypeValidator(name)
                 deferred.validator = validator = make_recursive(resolved_annotation)
+                if validator is deferred:
+                    # 'type R = Annotated[R, ...]' resolves to nothing but itself, so
+                    # the placeholder would become its own validator: it builds cleanly
+                    # and recurses forever on the first value. A real recursive alias
+                    # ('type Tree = list[Tree]') has a container in between and is fine.
+                    raise exceptions.EveValueError(
+                        f"{type_annotation} type annotation is not supported: "
+                        "the alias resolves only to itself."
+                    )
                 return validator
 
             # Non-generic types
@@ -274,6 +279,9 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
             origin_type = xtyping.get_origin(type_annotation)
             type_args = xtyping.get_args(type_annotation)
 
+            if (stripped := xtyping.strip_annotated(type_annotation)) is not type_annotation:
+                return make_recursive(stripped)
+
             if origin_type in {typing.Literal, xtyping.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
@@ -301,6 +309,52 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                     else validators[0]
                 )
                 return self.combine_optional(name, validator) if has_none else validator
+
+            if origin_type is type:
+                # `type[X]`. Without this case the annotation falls through to the
+                # generic-collection branch below and degrades to `isinstance(value, type)`,
+                # i.e. "is any class at all".
+                if len(type_args) != 1:
+                    # bare `type` / `typing.Type`
+                    return self.make_is_instance_of(name, type)
+
+                # The pass at the top of this function does not reach inside
+                # `type[...]`, so the alias and the `Annotated` are still here. Either
+                # can wrap the other repeatedly, so both are resolved together; an
+                # annotation that does not resolve keeps the loose check below.
+                try:
+                    arg = xtyping.resolve_annotation(type_args[0])
+                except TypeError:
+                    return self.make_is_instance_of(name, type)
+
+                # After the metadata is gone, not before: `type[Annotated[A | B, ...]]`
+                # only reaches the union handling below if it is stripped first.
+                arg = xtyping.normalize_union(arg)  # `type[A | B]`
+
+                # `issubclass()` is not generally usable with protocol classes: it is
+                # rejected outright unless the protocol is `@runtime_checkable`, and also
+                # for `@runtime_checkable` protocols with non-method members. Protocols
+                # therefore keep the loose check, like any other unsupported shape.
+                def is_strict_arg(a: Any) -> xtyping.TypeGuard[type]:
+                    return xtyping.is_actual_type(a) and not xtyping.is_protocol(a)
+
+                if isinstance(arg, typing.TypeVar):
+                    # Mirror the plain-`TypeVar` branch above, which honours the bound.
+                    if is_strict_arg(arg.__bound__):
+                        return self.make_is_subclass_of(name, arg.__bound__)
+                    return self.make_is_instance_of(name, type)
+
+                if is_strict_arg(arg):
+                    return self.make_is_subclass_of(name, arg)
+
+                if xtyping.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
+                    members = xtyping.get_args(arg)
+                    if members and all(is_strict_arg(m) for m in members):
+                        return self.combine_validators_as_or(
+                            name, *(self.make_is_subclass_of(name, m) for m in members)
+                        )
+
+                return self.make_is_instance_of(name, type)
 
             if isinstance(origin_type, type):
                 # Deal with generic collections
@@ -332,7 +386,6 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
                 if issubclass(origin_type, (collections.abc.Sequence, collections.abc.Set)):
                     assert len(type_args) == 1
-                    make_recursive(type_args[0])
                     if (member_validator := make_recursive(type_args[0])) is None:
                         raise exceptions.EveValueError(
                             f"{type_args[0]} type annotation is not supported."
@@ -405,6 +458,18 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 )
 
         return _is_instance_of
+
+    @staticmethod
+    def make_is_subclass_of(name: str, type_: type) -> FixedTypeValidator:
+        """Create a ``FixedTypeValidator`` validator for ``type[type_]`` annotations."""
+
+        def _is_subclass_of(value: Any, **kwargs: Any) -> None:
+            if not (isinstance(value, type) and issubclass(value, type_)):
+                raise TypeError(
+                    f"'{name}' must be a subclass of {type_} (got '{value}' which is a {type(value)})."
+                )
+
+        return _is_subclass_of
 
     @staticmethod
     def make_is_instance_of_int(name: str) -> FixedTypeValidator:

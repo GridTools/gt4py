@@ -1,7 +1,0 @@
-{
-  "metadataGeneration": {
-    "pullRequest": {
-      "instructions": "Open PRs towards main branch on https://github.com/GridTools/gt4py"
-    }
-  }
-}

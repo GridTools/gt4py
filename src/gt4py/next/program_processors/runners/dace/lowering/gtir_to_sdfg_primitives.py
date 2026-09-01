@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Final, Iterable, Optional, Protocol
+from typing import TYPE_CHECKING, Iterable, Optional, Protocol
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
@@ -747,19 +747,3 @@ if TYPE_CHECKING:
         translate_scan,
         translate_symbol_ref,
     ]
-
-
-BUILTIN_TRANSLATORS: Final[dict[str, PrimitiveTranslator]] = {
-    "concat_where": translate_concat_where,
-    "if_": translate_if,
-    "index": translate_index,
-    "make_tuple": translate_make_tuple,
-    "tuple_get": translate_tuple_get,
-}
-"""Runtime dispatch from GTIR builtin name to its translator.
-
-Only the builtins that `GTIRToSDFG.visit_FunCall` dispatches by name are listed
-here. Translators reached structurally or by node type (`translate_as_fieldop`,
-`translate_scalar_expr`, `translate_literal`, `translate_symbol_ref`,
-`translate_scan`) are intentionally absent.
-"""
