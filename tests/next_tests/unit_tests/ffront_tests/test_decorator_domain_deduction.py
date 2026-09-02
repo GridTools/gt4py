@@ -12,8 +12,11 @@ import gt4py.next as gtx
 from gt4py.next.ffront.transform_utils import _deduce_grid_type
 
 
-Dim = gtx.dimension("Dim")
-LocalDim = gtx.dimension("LocalDim", kind=gtx.DimensionKind.LOCAL)
+class Dim(gtx.DimensionIndex): ...
+
+
+class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
 
 CartesianOffset = gtx.FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
 UnstructuredOffset = gtx.FieldOffset("UnstructuredOffset", source=Dim, target=(Dim, LocalDim))

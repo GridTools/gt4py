@@ -67,7 +67,7 @@ def array_maker(*lists):
     return res
 
 
-IDim = gtx.dimension("IDim")
+class IDim(gtx.DimensionIndex): ...
 
 
 def field_maker(*arrays):

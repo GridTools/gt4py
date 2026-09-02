@@ -14,7 +14,10 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import dead_code_elimination
 
-TDim = common.dimension("TDim")
+
+class TDim(common.DimensionIndex): ...
+
+
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 field_type = ts.FieldType(dims=[TDim], dtype=int_type)
 

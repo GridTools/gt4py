@@ -41,8 +41,10 @@ if TYPE_CHECKING:
     from pytest_benchmark import fixture as ptb_fixture
 
 
-Cell = gtx.dimension("Cell")
-IDim = gtx.dimension("IDim")
+class Cell(gtx.DimensionIndex): ...
+
+
+class IDim(gtx.DimensionIndex): ...
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)

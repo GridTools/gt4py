@@ -18,10 +18,19 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-Vertex = common.dimension("Vertex", kind=common.DimensionKind.HORIZONTAL)
-Edge = common.dimension("Edge", kind=common.DimensionKind.HORIZONTAL)
-V2EDim = common.dimension("V2E", kind=common.DimensionKind.LOCAL)
-K = common.dimension("K", kind=common.DimensionKind.VERTICAL)
+
+class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class V2EDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL):
+    tag = "V2E"
+
+
+class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+
 
 float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 vertex_k_field = ts.FieldType(dims=[Vertex, K], dtype=float64)

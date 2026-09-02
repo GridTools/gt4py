@@ -12,13 +12,30 @@ import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 
 
-Vertex = gtx.dimension("Vertex")
-Edge = gtx.dimension("Edge")
-Cell = gtx.dimension("Cell")
-V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-V2VDim = gtx.dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+class Vertex(gtx.DimensionIndex): ...
+
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class Cell(gtx.DimensionIndex): ...
+
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "V2E"
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "E2V"
+
+
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "C2E"
+
+
+class V2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "V2V"
+
 
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))

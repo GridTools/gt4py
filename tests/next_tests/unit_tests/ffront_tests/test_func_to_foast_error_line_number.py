@@ -19,7 +19,8 @@ from gt4py.next.ffront.foast_passes import type_deduction
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
 
-TDim = gtx.dimension("TDim")  # Meaningless dimension, used for tests.
+
+class TDim(gtx.DimensionIndex): ...  # Meaningless dimension, used for tests.
 
 
 def test_invalid_syntax_error_empty_return():

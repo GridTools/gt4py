@@ -23,9 +23,16 @@ from gt4py.next.iterator.builtins import (
 )
 
 
-E = gtx.dimension("E")
-V = gtx.dimension("V")
-E2VDim = gtx.dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+class E(gtx.DimensionIndex): ...
+
+
+class V(gtx.DimensionIndex): ...
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "E2V"
+
+
 E2V = gtx.FieldOffset("E2V", source=V, target=(E, E2VDim))
 
 
