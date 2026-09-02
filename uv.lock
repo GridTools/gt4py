@@ -1538,7 +1538,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = ">=2.0.0a7" },
+    { name = "dace", specifier = ">=2.0.0a7,<2.0.0a8" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
