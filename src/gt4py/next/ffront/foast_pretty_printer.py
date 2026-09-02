@@ -237,8 +237,8 @@ def pretty_format(node: foast.LocatedNode) -> str:
     """
     Pretty print (to string) an `foast.LocatedNode`.
 
-    >>> from gt4py.next import Field, Dimension, field_operator, float64
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next import Field, Dimension, dimension, field_operator, float64
+    >>> IDim = dimension("IDim")
     >>> @field_operator
     ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
     ...     return a + 1.0

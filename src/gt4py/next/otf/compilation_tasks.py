@@ -117,7 +117,7 @@ def _offset_provider_with_file_refs(
 ) -> common.OffsetProvider:
     return {
         name: value
-        if isinstance(value, common.Dimension)
+        if isinstance(value, common.DimensionMeta)
         else xtyping.cast(common.OffsetProviderElem, _ConnectivityFileRef(value))
         for name, value in offset_provider.items()
     }

@@ -85,7 +85,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before to prune them.
 
     >>> from gt4py.next import common
-    >>> IDim = common.Dimension("IDim")
+    >>> IDim = common.dimension("IDim")
     >>> field_t = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> expr = im.concat_where(
     ...     im.domain(common.GridType.CARTESIAN, {IDim: (10, itir.InfinityLiteral.POSITIVE)}),

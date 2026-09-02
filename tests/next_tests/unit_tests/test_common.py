@@ -7,12 +7,14 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import operator
+import pickle
 from typing import Optional, Pattern
 
 import pytest
 import re
 
 from gt4py import next as gtx
+from gt4py.eve import utils as eve_utils
 from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
 from gt4py.next.common import (
@@ -26,17 +28,18 @@ from gt4py.next.common import (
     NamedRange,
     promote_dims,
     unit_range,
+    dimension,
 )
 
-C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
-V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
-E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
-E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
-ECDim = Dimension("ECDim")
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+C2E = dimension("C2E", kind=DimensionKind.LOCAL)
+V2E = dimension("V2E", kind=DimensionKind.LOCAL)
+E2V = dimension("E2V", kind=DimensionKind.LOCAL)
+E2C = dimension("E2C", kind=DimensionKind.LOCAL)
+E2C2V = dimension("E2C2V", kind=DimensionKind.LOCAL)
+ECDim = dimension("ECDim")
+IDim = dimension("IDim")
+JDim = dimension("JDim")
+KDim = dimension("KDim", kind=DimensionKind.VERTICAL)
 IHalfDim = common.flip_staggered(IDim)
 
 
@@ -393,7 +396,7 @@ def test_domain_dims_ranges_length_mismatch():
         ValueError,
         match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)",
     ):
-        dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+        dims = [dimension("X"), dimension("Y"), dimension("Z")]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
 
@@ -434,25 +437,25 @@ def test_domain_slice_at():
 
 
 def test_domain_dim_index():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [dimension("X"), dimension("Y"), dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.dim_index(Dimension("Y")) == 1
+    assert domain.dim_index(dimension("Y")) == 1
 
-    domain.dim_index(Dimension("Foo")) == None
+    assert domain.dim_index(dimension("Foo")) is None
 
 
 def test_domain_pop():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [dimension("X"), dimension("Y"), dimension("Z")]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.pop(Dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
+    assert domain.pop(dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
 
-    domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
+    assert domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
 
-    domain.pop(-1) == Domain(dims=dims[:-1], ranges=ranges[:-1])
+    assert domain.pop(-1) == Domain(dims=dims[:-1], ranges=ranges[:-1])
 
 
 @pytest.mark.parametrize(
@@ -461,92 +464,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("X"), UnitRange(100, 110)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("X"), UnitRange(100, 110)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("X"), UnitRange(100, 110)),
             ),
         ),
         (
-            Dimension("J"),
+            dimension("J"),
             [
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                NamedRange(dimension("X"), UnitRange(100, 110)),
+                NamedRange(dimension("Z"), UnitRange(100, 110)),
             ],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("X"), UnitRange(100, 110)),
+                NamedRange(dimension("Z"), UnitRange(100, 110)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
-            Dimension("Foo"),
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            dimension("Foo"),
+            [NamedRange(dimension("X"), UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(dimension("I"), UnitRange(0, 10)),
+                NamedRange(dimension("J"), UnitRange(0, 10)),
+                NamedRange(dimension("K"), UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -666,7 +669,7 @@ class TestBufferInfo:
 class TestCartesianConnectivity:
     def test_for_translation(self):
         offset = 5
-        I = common.Dimension("I")
+        I = common.dimension("I")
 
         result = common.CartesianConnectivity.for_translation(I, offset)
         assert isinstance(result, common.CartesianConnectivity)
@@ -675,8 +678,8 @@ class TestCartesianConnectivity:
         assert result.offset == offset
 
     def test_for_relocation(self):
-        I = common.Dimension("I")
-        I_half = common.Dimension("I_half")
+        I = common.dimension("I")
+        I_half = common.dimension("I_half")
 
         result = common.CartesianConnectivity.for_relocation(I, I_half)
         assert isinstance(result, common.CartesianConnectivity)
@@ -793,3 +796,144 @@ class TestDomainOrOperator:
         d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
         with pytest.raises(NotImplementedError, match="different dimensions"):
             d1 | d2
+
+
+# -- Class-style dimensions (ADR 0028) ----------------------------------------
+
+
+class _ClassStyleI(common.DimensionIndex):
+    tag = "I"
+
+
+class _ClassStyleK(common.DimensionIndex, kind=common.DimensionKind.VERTICAL):
+    tag = "K"
+
+
+def test_class_style_dimension_defaults_value_to_class_name():
+    class JDim(common.DimensionIndex): ...
+
+    assert JDim.tag == "JDim"
+    assert JDim.kind == common.DimensionKind.HORIZONTAL
+
+
+def test_class_style_dimension_kind_keyword():
+    assert _ClassStyleK.kind == common.DimensionKind.VERTICAL
+
+
+def test_class_style_dimension_repr_matches_legacy_str():
+    assert repr(_ClassStyleI) == "I[horizontal]"
+    assert str(_ClassStyleI) == "I[horizontal]"
+    assert repr(_ClassStyleK) == "K[vertical]"
+
+
+def test_dimension_equality_covers_value_and_kind():
+    assert common.dimension("X") == common.dimension("X")
+    assert common.dimension("X") != common.dimension("Y")
+    assert common.dimension("X") != common.dimension("X", common.DimensionKind.VERTICAL)
+    assert hash(common.dimension("X")) == hash(common.dimension("X"))
+    assert hash(common.dimension("X")) != hash(common.dimension("X", common.DimensionKind.VERTICAL))
+
+
+def test_factory_is_interned():
+    assert common.dimension("SomeUniquelyNamedDim") is common.dimension("SomeUniquelyNamedDim")
+
+
+def test_factory_finds_the_first_declared_class_of_that_name():
+    class OnlyDeclaredHere(common.DimensionIndex): ...
+
+    assert common.dimension("OnlyDeclaredHere") is OnlyDeclaredHere
+
+
+def test_factory_identity_is_not_guaranteed_for_a_re_used_name():
+    # "First declaration wins": several modules in this tree declare a dimension named "I",
+    # so the registry holds whichever was imported first. Only *equality* is guaranteed --
+    # see ADR 0028 on identity semantics.
+    assert common.dimension("I") == _ClassStyleI
+    assert hash(common.dimension("I")) == hash(_ClassStyleI)
+
+
+def test_dimension_call_builds_named_index():
+    idx = _ClassStyleI(3)
+    assert isinstance(idx, common.DimensionIndex)
+    assert idx.dim is _ClassStyleI
+    assert idx.value == 3
+
+
+def test_dimension_class_is_not_the_string_factory():
+    # A dimension class builds an *index*; `common.dimension` is what builds a dimension from
+    # a tag. The two used to share `Dimension.__new__`, dispatching on `str` versus `int`.
+    # NOTE: equality, not identity: `_ClassStyleI` pins `tag = "I"`, and many modules declare
+    # a dimension tagged "I", so the interning registry may already hold another one.
+    assert common.dimension("I") == _ClassStyleI
+    assert _ClassStyleI(0).dim is _ClassStyleI
+
+
+def test_dimension_comparison_operators_build_domains():
+    assert (_ClassStyleI > 3) == common.Domain(
+        dims=(_ClassStyleI,), ranges=(common.UnitRange(4, common.Infinity.POSITIVE),)
+    )
+    assert (_ClassStyleI == 3) == common.Domain(
+        dims=(_ClassStyleI,), ranges=(common.UnitRange(3, 4),)
+    )
+    with pytest.raises(NotImplementedError, match="two disjoint domains"):
+        _ClassStyleI != 3
+
+
+def test_dimension_shift_builds_connectivity():
+    conn = _ClassStyleI + 1
+    assert conn.domain_dim is _ClassStyleI
+    assert conn.codomain is _ClassStyleI
+    assert conn.offset == 1
+
+
+def test_dimension_classes_work_as_dict_keys_and_set_members():
+    declared = {_ClassStyleI: "i", _ClassStyleK: "k"}
+    assert declared[common.dimension("I")] == "i"
+    assert declared[common.dimension("K", common.DimensionKind.VERTICAL)] == "k"
+    # a same-value dimension of a *different* kind is a different key
+    assert common.dimension("I", common.DimensionKind.VERTICAL) not in declared
+    assert len({_ClassStyleI, common.dimension("I"), _ClassStyleK}) == 2
+
+
+def test_is_a_dimension_via_metaclass():
+    assert isinstance(_ClassStyleI, common.DimensionMeta)
+    assert isinstance(common.dimension("X"), common.DimensionMeta)
+    assert not isinstance(3, common.DimensionMeta)
+
+
+# -- Pickling and fingerprint stability (ADR 0028) ----------------------------
+
+
+class _PickleProbeDim(common.DimensionIndex):
+    tag = "PickleProbe"
+
+
+def test_declared_dimension_pickles_and_keeps_identity():
+    assert pickle.loads(pickle.dumps(_PickleProbeDim)) is _PickleProbeDim
+
+
+def test_factory_dimension_is_picklable():
+    dim = common.dimension("DynamicallyMade")
+    assert pickle.loads(pickle.dumps(dim)) is dim
+
+
+def test_content_hash_is_value_based_not_module_based():
+    # A declared class and the factory spelling of the same dimension must fingerprint
+    # identically, otherwise build-cache keys would depend on which module declared the
+    # dimension. See ADR 0023.
+    assert eve_utils.content_hash(_PickleProbeDim) == eve_utils.content_hash(
+        common.dimension("PickleProbe")
+    )
+
+
+def test_content_hash_distinguishes_kind():
+    assert eve_utils.content_hash(common.dimension("Q")) != eve_utils.content_hash(
+        common.dimension("Q", common.DimensionKind.VERTICAL)
+    )
+
+
+def test_dimension_survives_a_spawn_style_round_trip_inside_a_container():
+    payload = {"dims": (_PickleProbeDim, common.dimension("Other")), "n": 3}
+    restored = pickle.loads(pickle.dumps(payload))
+    assert restored["dims"] == payload["dims"]
+    assert restored["dims"][0] is _PickleProbeDim

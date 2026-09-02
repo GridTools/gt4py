@@ -43,14 +43,14 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
 
 
-Edge = gtx.Dimension("Edge")
-Vertex = gtx.Dimension("Vertex")
-V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
+Edge = gtx.dimension("Edge")
+Vertex = gtx.dimension("Vertex")
+V2EDim = gtx.dimension("V2E", gtx.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
-TDim = gtx.Dimension("TDim")
+TDim = gtx.dimension("TDim")
 TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
-UDim = gtx.Dimension("UDim")
+UDim = gtx.dimension("UDim")
 
 
 def test_return():
@@ -938,7 +938,7 @@ def test_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         im.ref("inp"),
-        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (TDim, UDim))),
     )
 
 
@@ -952,7 +952,7 @@ def test_scalar_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         1,
-        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (TDim, UDim))),
     )
 
 

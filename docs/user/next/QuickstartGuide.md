@@ -54,9 +54,10 @@ from gt4py.next import float64, neighbor_sum, where, Dims
 Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _Cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-KDim = gtx.Dimension("K")
-
+class CellDim(gtx.DimensionIndex):
+    tag = "Cell"
+class KDim(gtx.DimensionIndex):
+    tag = "K"
 num_cells = 5
 num_layers = 6
 grid_shape = (num_cells, num_layers)
@@ -70,9 +71,8 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-I = gtx.Dimension("I")
-J = gtx.Dimension("J")
-
+class I(gtx.DimensionIndex): ...
+class J(gtx.DimensionIndex): ...
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
@@ -168,8 +168,10 @@ The examples related to unstructured meshes use the mesh below. The edges (in bl
 The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. The corresponding named dimensions are thus the following:
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-EdgeDim = gtx.Dimension("Edge")
+class CellDim(gtx.DimensionIndex):
+    tag = "Cell"
+class EdgeDim(gtx.DimensionIndex):
+    tag = "Edge"
 ```
 
 You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge #6 connects to cells #0 and #5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
@@ -228,7 +230,8 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
+class E2CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "E2C"
 E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 ```
 
@@ -380,7 +383,8 @@ print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnu
 As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "C2E"
 C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
 C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)

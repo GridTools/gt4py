@@ -25,7 +25,7 @@ class DummyAllocator(next_allocators.FieldBufferAllocatorProtocol):
         domain: common.Domain,
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+        aligned_index: Optional[Sequence[common.DimensionIndex]] = None,
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         pass
 
@@ -98,35 +98,35 @@ def test_horizontal_first_layout_mapper():
 
     # Test with only horizontal dimensions
     dims = [
-        common.Dimension("D0", common.DimensionKind.HORIZONTAL),
-        common.Dimension("D1", common.DimensionKind.HORIZONTAL),
-        common.Dimension("D2", common.DimensionKind.HORIZONTAL),
+        common.dimension("D0", common.DimensionKind.HORIZONTAL),
+        common.dimension("D1", common.DimensionKind.HORIZONTAL),
+        common.dimension("D2", common.DimensionKind.HORIZONTAL),
     ]
     expected_layout_map = core_allocators.BufferLayoutMap((2, 1, 0))
     assert horizontal_first_layout_mapper(dims) == expected_layout_map
 
     # Test with no horizontal dimensions
     dims = [
-        common.Dimension("D0", common.DimensionKind.VERTICAL),
-        common.Dimension("D1", common.DimensionKind.LOCAL),
-        common.Dimension("D2", common.DimensionKind.VERTICAL),
+        common.dimension("D0", common.DimensionKind.VERTICAL),
+        common.dimension("D1", common.DimensionKind.LOCAL),
+        common.dimension("D2", common.DimensionKind.VERTICAL),
     ]
     expected_layout_map = core_allocators.BufferLayoutMap((2, 0, 1))
     assert horizontal_first_layout_mapper(dims) == expected_layout_map
 
     # Test with a mix of dimensions
     dims = [
-        common.Dimension("D2", common.DimensionKind.LOCAL),
-        common.Dimension("D0", common.DimensionKind.HORIZONTAL),
-        common.Dimension("D1", common.DimensionKind.VERTICAL),
+        common.dimension("D2", common.DimensionKind.LOCAL),
+        common.dimension("D0", common.DimensionKind.HORIZONTAL),
+        common.dimension("D1", common.DimensionKind.VERTICAL),
     ]
     expected_layout_map = core_allocators.BufferLayoutMap((0, 2, 1))
     assert horizontal_first_layout_mapper(dims) == expected_layout_map
 
 
-Cell = common.Dimension("Cell", common.DimensionKind.HORIZONTAL)
-Edge = common.Dimension("Edge", common.DimensionKind.HORIZONTAL)
-K = common.Dimension("K", common.DimensionKind.VERTICAL)
+Cell = common.dimension("Cell", common.DimensionKind.HORIZONTAL)
+Edge = common.dimension("Edge", common.DimensionKind.HORIZONTAL)
+K = common.dimension("K", common.DimensionKind.VERTICAL)
 
 
 class TestBaseFieldBufferAllocatorAlignedIndex:
@@ -151,7 +151,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         domain = common.Domain(
             dims=(Cell, K), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 5))
         )
-        aligned = [common.NamedIndex(Cell, 3)]
+        aligned = [Cell(3)]
         result = allocator.__gt_allocate__(domain, core_defs.dtype(float), aligned_index=aligned)
         assert result.shape == (10, 5)
         assert result.aligned_index == (3, 0)
@@ -162,7 +162,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         domain = common.Domain(
             dims=(Cell, K), ranges=(common.UnitRange(100, 110), common.UnitRange(0, 5))
         )
-        aligned = [common.NamedIndex(Cell, 103)]
+        aligned = [Cell(103)]
         result = allocator.__gt_allocate__(domain, core_defs.dtype(float), aligned_index=aligned)
         assert result.shape == (10, 5)
         assert result.aligned_index == (3, 0)
@@ -173,7 +173,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         domain = common.Domain(
             dims=(Edge, K), ranges=(common.UnitRange(200, 212), common.UnitRange(0, 5))
         )
-        aligned = [common.NamedIndex(Edge, 207)]
+        aligned = [Edge(207)]
         result = allocator.__gt_allocate__(domain, core_defs.dtype(float), aligned_index=aligned)
         assert result.shape == (12, 5)
         assert result.aligned_index == (7, 0)
@@ -184,7 +184,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         domain = common.Domain(
             dims=(Cell, K), ranges=(common.UnitRange(50, 60), common.UnitRange(10, 15))
         )
-        aligned = [common.NamedIndex(Cell, 53), common.NamedIndex(K, 12)]
+        aligned = [Cell(53), K(12)]
         result = allocator.__gt_allocate__(domain, core_defs.dtype(float), aligned_index=aligned)
         assert result.shape == (10, 5)
         assert result.aligned_index == (3, 2)
@@ -195,7 +195,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         domain = common.Domain(
             dims=(Cell, K), ranges=(common.UnitRange(100, 110), common.UnitRange(20, 25))
         )
-        aligned = [common.NamedIndex(Cell, 100), common.NamedIndex(K, 20)]
+        aligned = [Cell(100), K(20)]
         result = allocator.__gt_allocate__(domain, core_defs.dtype(float), aligned_index=aligned)
         assert result.shape == (10, 5)
         assert result.aligned_index == (0, 0)
@@ -204,7 +204,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
         """Same aligned_index with both Cell and Edge can be used to allocate
         both a Cell-field and an Edge-field; the irrelevant dimension is ignored."""
         allocator = self._make_allocator()
-        aligned = [common.NamedIndex(Cell, 103), common.NamedIndex(Edge, 207)]
+        aligned = [Cell(103), Edge(207)]
 
         cell_domain = common.Domain(
             dims=(Cell, K), ranges=(common.UnitRange(100, 110), common.UnitRange(0, 5))
@@ -236,7 +236,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
             allocator.__gt_allocate__(
                 domain,
                 core_defs.dtype(float),
-                aligned_index=[common.NamedIndex(Cell, 50)],
+                aligned_index=[Cell(50)],
             )
 
         # After domain end
@@ -244,7 +244,7 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
             allocator.__gt_allocate__(
                 domain,
                 core_defs.dtype(float),
-                aligned_index=[common.NamedIndex(Cell, 120)],
+                aligned_index=[Cell(120)],
             )
 
         # Exactly at domain end (exclusive upper bound)
@@ -252,5 +252,5 @@ class TestBaseFieldBufferAllocatorAlignedIndex:
             allocator.__gt_allocate__(
                 domain,
                 core_defs.dtype(float),
-                aligned_index=[common.NamedIndex(Cell, 110)],
+                aligned_index=[Cell(110)],
             )

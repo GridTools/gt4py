@@ -44,7 +44,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     ...     params=[im.sym("a")],
     ...     expr=im.deref("a"),
     ... )
-    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> IDim = common.dimension("IDim", kind=common.DimensionKind.HORIZONTAL)
     >>> program = itir.Program(
     ...     id="testee",
     ...     function_definitions=[fun1, fun2],

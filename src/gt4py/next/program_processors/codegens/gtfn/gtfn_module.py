@@ -91,7 +91,7 @@ class GTFNTranslationStep(
                         or dim.kind is common.DimensionKind.LOCAL
                     ):
                         # translate sparse dimensions to tuple dtype
-                        dim_name = dim.value
+                        dim_name = dim.tag
                         connectivity = common.get_offset_type(offset_provider_type, dim_name)
                         assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
@@ -126,8 +126,8 @@ class GTFNTranslationStep(
                 # connectivity argument expression
                 nbtbl = (
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity_type.domain[0].value}_t, "
-                    f"generated::{connectivity_type.domain[1].value}_t, "
+                    f"generated::{connectivity_type.domain[0].tag}_t, "
+                    f"generated::{connectivity_type.domain[1].tag}_t, "
                     f"{connectivity_type.max_neighbors}"
                     f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
                 )

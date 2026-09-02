@@ -17,8 +17,8 @@ from gt4py.next.iterator.transforms import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-IDim = common.Dimension("IDim")
-JDim = common.Dimension("JDim")
+IDim = common.dimension("IDim")
+JDim = common.dimension("JDim")
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 IOff = im.cartesian_offset(IDim, IDim)
 
@@ -356,7 +356,7 @@ def test_inline_as_fieldop_with_list_dtype(uids: utils.IDGeneratorPool):
         dims=[IDim],
         dtype=ts.ListType(
             element_type=ts.ScalarType(kind=ts.ScalarKind.INT32),
-            offset_type=common.Dimension("Neighbor", kind=common.DimensionKind.LOCAL),
+            offset_type=common.dimension("Neighbor", kind=common.DimensionKind.LOCAL),
         ),
     )
     d = im.domain("cartesian_domain", {IDim: (0, 1)})

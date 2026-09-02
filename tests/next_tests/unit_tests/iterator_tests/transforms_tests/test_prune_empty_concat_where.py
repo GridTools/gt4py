@@ -18,10 +18,10 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
-Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
-V2EDim = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
-K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
+Vertex = common.dimension("Vertex", kind=common.DimensionKind.HORIZONTAL)
+Edge = common.dimension("Edge", kind=common.DimensionKind.HORIZONTAL)
+V2EDim = common.dimension("V2E", kind=common.DimensionKind.LOCAL)
+K = common.dimension("K", kind=common.DimensionKind.VERTICAL)
 
 float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 vertex_k_field = ts.FieldType(dims=[Vertex, K], dtype=float64)
@@ -32,7 +32,7 @@ edge_field = ts.FieldType(dims=[Edge], dtype=float64)
 
 def _infer(
     testee: itir.Expr,
-    accessed_domain: dict[common.Dimension, tuple],
+    accessed_domain: dict[common.DimensionIndex, tuple],
     offset_provider: common.OffsetProvider | None = None,
 ) -> itir.Expr:
     testee = canonicalize_domain_argument(testee)

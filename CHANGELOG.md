@@ -2,6 +2,16 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Next
+
+- **Dimensions are types.** Declare a dimension as a class — `class IDim(gtx.DimensionIndex): ...` — instead of `IDim = gtx.Dimension("IDim")`. `gtx.Field[gtx.Dims[IDim], gtx.float64]` is now a valid annotation for any type checker, including pyright, with no gt4py mypy plugin. See ADR 0028.
+- **Breaking:** `gtx.Dimension` is now annotation-only (a PEP 695 alias for `type[gtx.DimensionIndex]`), so `gtx.Dimension("IDim")` raises `TypeError`. Use the class statement above, or `gtx.dimension("IDim")` where a dimension has to be built programmatically from a tag.
+- **Breaking:** the dimension's name moved from `dim.value` to `dim.tag`; `common.NamedIndex` is removed — an index along `IDim` is now `IDim(0)`, with the same `.dim` / `.value` accessors.
+- `repr()` of a dimension is now `IDim[horizontal]`, matching what `str()` already produced. Error messages are unchanged.
+- The dimension hooks are removed from `gt4py.next.type_system.mypy_plugin`; only scalar-precision blurring remains. Downstream projects that migrate to class-style dimensions no longer need the plugin for dimensions.
+
 ## [1.2.2] - 2026-08-31
 
 ### General
