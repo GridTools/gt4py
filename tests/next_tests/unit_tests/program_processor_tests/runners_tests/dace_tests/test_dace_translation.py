@@ -475,7 +475,7 @@ def test_translation_source_code_invariant_under_guid_change():
 
     `DaCeTranslator.__call__` serializes the SDFG via `serialize_sdfg_as_json`,
     which drops `guid` values, before storing the SDFG JSON in
-    mocks `build_sdfg_from_gtir` so that the second lowering returns the same
+    mocks `lower_program_to_sdfg` so that the second lowering returns the same
     SDFG with all `guid` values incremented by one, and verifies that the
     resulting `source_code` strings are identical.
     """
@@ -492,11 +492,11 @@ def test_translation_source_code_invariant_under_guid_change():
 
     # Keep a reference to the real implementation so the mock can return the base
     # SDFG from the real implementation on the first call, then a guid-shifted clone.
-    real_build_sdfg = dace_wf_translation.gtx_dace_lowering.build_sdfg_from_gtir
+    real_build_sdfg = dace_wf_translation.gtx_dace_lowering.lower_program_to_sdfg
     base_sdfg: dace.SDFG | None = None
     call_count = 0
 
-    def _build_sdfg_from_gtir_with_guid_change(*args: object, **kwargs: object) -> dace.SDFG:
+    def _lower_program_to_sdfg_with_guid_change(*args: object, **kwargs: object) -> dace.SDFG:
         nonlocal base_sdfg, call_count
         call_count += 1
         if call_count == 1:
@@ -510,8 +510,8 @@ def test_translation_source_code_invariant_under_guid_change():
 
     with mock.patch.object(
         dace_wf_translation.gtx_dace_lowering,
-        "build_sdfg_from_gtir",
-        side_effect=_build_sdfg_from_gtir_with_guid_change,
+        "lower_program_to_sdfg",
+        side_effect=_lower_program_to_sdfg_with_guid_change,
     ):
         first_source = translator(compilable_program)
         second_source = translator(compilable_program)

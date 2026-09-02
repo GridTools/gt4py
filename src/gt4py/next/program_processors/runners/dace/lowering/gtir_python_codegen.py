@@ -138,7 +138,7 @@ class PythonCodegen(codegen.TemplatedGenerator):
         return node.value
 
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
-        if isinstance(node.fun, gtir.Lambda):
+        if cpm.is_let(node):
             # update the mapping from lambda parameters to corresponding argument expressions
             lambda_args_map = args_map | {
                 p.id: arg for p, arg in zip(node.fun.params, node.args, strict=True)

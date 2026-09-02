@@ -13,6 +13,7 @@ import copy
 import dataclasses
 from typing import (
     Any,
+    Callable,
     Dict,
     Final,
     Iterable,
@@ -190,6 +191,10 @@ class IteratorExpr:
         )
 
 
+VisitResult: TypeAlias = MaybeNestedInTuple[IteratorExpr | DataExpr]
+"""Result of visiting an expression in a lambda body (i.e. in the iterator view of GTIR)."""
+
+
 class DataflowInputEdge(Protocol):
     """
     This protocol describes how to concretize a data edge to read data from a source node
@@ -354,10 +359,10 @@ DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
 
 
 def get_reduce_params(node: gtir.FunCall) -> tuple[str, SymbolExpr, SymbolExpr]:
+    assert cpm.is_applied_reduce(node)
     assert isinstance(node.type, ts.ScalarType)
     dc_dtype = gtx_dace_args.as_dace_type(node.type)
 
-    assert isinstance(node.fun, gtir.FunCall)
     assert len(node.fun.args) == 2
     assert isinstance(node.fun.args[0], gtir.SymRef)
     op_name = str(node.fun.args[0])
@@ -418,6 +423,37 @@ class LambdaToDataflow(eve.NodeVisitor):
         str,
         MaybeNestedInTuple[IteratorExpr | DataExpr],
     ] = dataclasses.field(default_factory=dict)
+    # Dispatch tables for `FunCall`, built in `__post_init__` so the handlers can
+    # be referenced as bound methods (instead of a table of method names resolved
+    # through `getattr`, which is opaque to type checkers).
+    _builtin_dispatch: dict[str, Callable[[gtir.FunCall], VisitResult]] = dataclasses.field(
+        init=False, repr=False, compare=False
+    )
+    _pattern_dispatch: list[
+        tuple[Callable[[gtir.FunCall], bool], Callable[[gtir.FunCall], VisitResult]]
+    ] = dataclasses.field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        builtin_dispatch: dict[str, Callable[[gtir.FunCall], VisitResult]] = {
+            "deref": self._visit_deref,
+            "if_": self._visit_if,
+            "neighbors": self._visit_neighbors,
+            "list_get": self._visit_list_get,
+            "make_tuple": self._visit_make_tuple,
+            "tuple_get": self._visit_tuple_get,
+        }
+        # Structural patterns are checked before the name-based dispatch above,
+        # in this order.
+        pattern_dispatch: list[
+            tuple[Callable[[gtir.FunCall], bool], Callable[[gtir.FunCall], VisitResult]]
+        ] = [
+            (cpm.is_applied_map, self._visit_map),
+            (cpm.is_applied_reduce, self._visit_reduce),
+            (cpm.is_applied_shift, self._visit_shift),
+            (cpm.is_let, self._visit_let),
+        ]
+        object.__setattr__(self, "_builtin_dispatch", builtin_dispatch)
+        object.__setattr__(self, "_pattern_dispatch", pattern_dispatch)
 
     def _add_input_data_edge(
         self,
@@ -1254,8 +1290,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         In above example, the result would be an array with size V2E.max_neighbors,
         containing the V2E neighbor values incremented by 1.0.
         """
+        assert cpm.is_applied_map(node)
         assert isinstance(node.type, ts.ListType)
-        assert isinstance(node.fun, gtir.FunCall)
         assert len(node.fun.args) == 1  # the operation to be mapped on the arguments
 
         assert isinstance(node.type.element_type, ts.ScalarType)
@@ -1659,7 +1695,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         return IteratorExpr(it.field, it.gt_dtype, it.field_domain, shifted_indices)
 
     def _visit_shift(self, node: gtir.FunCall) -> IteratorExpr:
-        assert isinstance(node.fun, gtir.FunCall)
+        assert cpm.is_applied_shift(node)
         # the iterator to be shifted is the node argument, while the shift arguments
         # are provided by the nested function call; the shift arguments consist of
         # the offset provider and the offset value in each dimension to be shifted
@@ -1787,46 +1823,26 @@ class LambdaToDataflow(eve.NodeVisitor):
         tuple_fields = self.visit(node.args[1])
         return tuple_fields[index]
 
-    def visit_FunCall(self, node: gtir.FunCall) -> MaybeNestedInTuple[IteratorExpr | DataExpr]:
-        if cpm.is_call_to(node, "deref"):
-            return self._visit_deref(node)
+    def _visit_let(self, node: gtir.FunCall) -> VisitResult:
+        assert cpm.is_let(node)
+        let_node = node.fun
+        let_args = [self.visit(arg) for arg in node.args]
+        for p, arg in zip(let_node.params, let_args, strict=True):
+            self.symbol_map[str(p.id)] = arg
+        return self.visit(let_node.expr)
 
-        elif cpm.is_call_to(node, "if_"):
-            return self._visit_if(node)
-
-        elif cpm.is_call_to(node, "neighbors"):
-            return self._visit_neighbors(node)
-
-        elif cpm.is_call_to(node, "list_get"):
-            return self._visit_list_get(node)
-
-        elif cpm.is_call_to(node, "make_tuple"):
-            return self._visit_make_tuple(node)
-
-        elif cpm.is_call_to(node, "tuple_get"):
-            return self._visit_tuple_get(node)
-
-        elif cpm.is_applied_map(node):
-            return self._visit_map(node)
-
-        elif cpm.is_applied_reduce(node):
-            return self._visit_reduce(node)
-
-        elif cpm.is_applied_shift(node):
-            return self._visit_shift(node)
-
-        elif cpm.is_let(node):
-            let_node = node.fun
-            let_args = [self.visit(arg) for arg in node.args]
-            for p, arg in zip(node.fun.params, let_args, strict=True):
-                self.symbol_map[str(p.id)] = arg
-            return self.visit(let_node.expr)
-
-        elif isinstance(node.fun, gtir.SymRef):
+    def visit_FunCall(self, node: gtir.FunCall) -> VisitResult:
+        # Pattern-matched builtins (structural, not name-based on node.fun)
+        for matcher, handler in self._pattern_dispatch:
+            if matcher(node):
+                return handler(node)
+        # Name-matched builtins (node.fun is a SymRef)
+        if isinstance(node.fun, gtir.SymRef):
+            name = str(node.fun.id)
+            if (builtin_handler := self._builtin_dispatch.get(name)) is not None:
+                return builtin_handler(node)
             return self._visit_generic_builtin(node)
-
-        else:
-            raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
+        raise NotImplementedError(f"Invalid 'FunCall' node: {node}.")
 
     def visit_Lambda(self, node: gtir.Lambda) -> MaybeNestedInTuple[DataflowOutputEdge]:
         def _visit_Lambda_impl(
@@ -1888,7 +1904,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 def translate_lambda_to_dataflow(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    sdfg_builder: gtir_to_sdfg.DataflowBuilder,
+    subgraph_builder: gtir_to_sdfg.DataflowBuilder,
     node: gtir.Lambda,
     args: Sequence[MaybeNestedInTuple[IteratorExpr | DataExpr]],
 ) -> tuple[list[DataflowInputEdge], MaybeNestedInTuple[DataflowOutputEdge]]:
@@ -1903,7 +1919,7 @@ def translate_lambda_to_dataflow(
     Args:
         sdfg: The SDFG where the dataflow graph will be instantiated.
         state: The SDFG state where the dataflow graph will be instantiated.
-        sdfg_builder: Helper class to build the dataflow inside the given SDFG.
+        subgraph_builder: Helper class to build the dataflow inside the given SDFG.
         node: Lambda node to visit.
         args: Arguments passed to lambda node.
 
@@ -1912,7 +1928,7 @@ def translate_lambda_to_dataflow(
         - List of connections for data inputs to the dataflow.
         - Tree representation of output data connections.
     """
-    taskgen = LambdaToDataflow(sdfg, state, sdfg_builder)
+    taskgen = LambdaToDataflow(sdfg, state, subgraph_builder)
     for p, arg in zip(node.params, args, strict=True):
         taskgen.symbol_map[str(p.id)] = arg
 
