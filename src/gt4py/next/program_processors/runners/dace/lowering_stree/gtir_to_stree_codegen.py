@@ -736,11 +736,20 @@ class StreePythonCodegen(eve.NodeVisitor):
         }
         pending_shift_replacements = list(shift_replacements)
         while pending_shift_replacements:
+            # A staggered dimension shares its index space with the base
+            # dimension (ADR 0026): a half-shift may already have replaced
+            # ``KDim`` with ``_StaggeredKDim`` in ``indices`` by the time a
+            # later identity shift (e.g. a dynamic ``as_offset``) that still
+            # references ``KDim`` is consumed.  Match shifts against the
+            # non-staggered dimension so the two are interchangeable.
             next_i = next(
                 (
                     i
                     for i, (old_dim, _) in enumerate(pending_shift_replacements)
-                    if old_dim in indices
+                    if any(
+                        gtx_common.as_non_staggered(old_dim) == gtx_common.as_non_staggered(k)
+                        for k in indices
+                    )
                 ),
                 None,
             )
@@ -752,10 +761,19 @@ class StreePythonCodegen(eve.NodeVisitor):
                     f" indexed dimensions: {[dim.value for dim in indices]}."
                 )
             old_dim, repl = pending_shift_replacements.pop(next_i)
-            old_index, _ = indices[old_dim]
+            indexed_dim = next(
+                k
+                for k in indices
+                if gtx_common.as_non_staggered(old_dim) == gtx_common.as_non_staggered(k)
+            )
+            old_index, _ = indices[indexed_dim]
             new_index = repl.apply(old_index)
-            del indices[old_dim]
-            indices[repl.new_dim] = (new_index, not repl.is_symbolic)
+            del indices[indexed_dim]
+            # An identity shift (same dimension in and out) only adjusts the
+            # position along the axis; keep the existing — possibly staggered
+            # — key so that it still matches the field's dimension.
+            new_dim = indexed_dim if repl.new_dim == old_dim else repl.new_dim
+            indices[new_dim] = (new_index, not repl.is_symbolic)
 
         return arg, data, indices, used_connectivities_in_shift
 
