@@ -48,7 +48,7 @@ from gt4py.next.iterator.type_system import type_specifications as itir_ts
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_types import DataRef
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
-    _CONST_DIM,
+    CONST_DIM,
     format_builtin,
     make_symbol_tree,
 )
@@ -1455,7 +1455,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             arg_type = arg_node.type
             if isinstance(arg_type, ts.ListType) and arg_type.offset_type is not None:
                 offset_type = arg_type.offset_type
-                if offset_type == _CONST_DIM:
+                if offset_type == CONST_DIM:
                     continue
                 offset_provider_t = ctx.offset_provider_type[offset_type.value]
                 assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
@@ -1608,7 +1608,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                 local_offset_dim = None
                 if isinstance(data.gt_type.dtype, ts.ListType):
                     list_dtype = data.gt_type.dtype
-                    if list_dtype.offset_type is None or list_dtype.offset_type == _CONST_DIM:
+                    if list_dtype.offset_type is None or list_dtype.offset_type == CONST_DIM:
                         # Broadcast (const) list: all list elements are
                         # equal, so the field is stored without the local
                         # dimension and the same scalar value is read at

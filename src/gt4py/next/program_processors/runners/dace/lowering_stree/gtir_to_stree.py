@@ -74,7 +74,7 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_typ
     SubgraphContext,
 )
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_utils import (
-    _CONST_DIM,
+    CONST_DIM,
     FieldopDomain,
     extract_target_domain,
     flatten_tuple_fields,
@@ -428,7 +428,7 @@ def translate_as_fieldop(
 
     if isinstance(node.type.dtype, ts.ListType) and node.type.dtype.offset_type not in (
         None,
-        _CONST_DIM,
+        CONST_DIM,
     ):
         # Field operator computing a field with a local (neighbor) dimension,
         # e.g. ``as_fieldop(λ(it) → neighbors(V2E, it), V_domain)(edge_f)``.
@@ -646,7 +646,7 @@ def translate_map_list(
         arg_type = arg.type
         if isinstance(arg_type, ts.ListType) and arg_type.offset_type is not None:
             offset_type = arg_type.offset_type
-            if offset_type == _CONST_DIM:
+            if offset_type == CONST_DIM:
                 continue
             offset_provider_t = sdfg_builder.get_offset_provider_type.__self__.offset_provider_type[  # type: ignore[attr-defined]
                 offset_type.value
