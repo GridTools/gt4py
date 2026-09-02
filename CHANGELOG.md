@@ -2,6 +2,24 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-08-31
+
+### General
+
+- Update DaCe to 2.0.0a7.
+- Fix `eve` annotation dispatch for modern typing spellings.
+- Validate `type[X]` annotations by subclass in `eve`.
+- Support recursive type aliases through containers in `eve`.
+- Make DaCe node connector ordering deterministic.
+
+### Cartesian
+
+- Remove support for `field[...]` assignment syntax.
+
+### Next
+
+See commit history.
+
 ## [1.2.1] - 2026-08-17
 
 ### General
