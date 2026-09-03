@@ -458,7 +458,13 @@ def translate_as_fieldop(
 
         # Generate the elementwise tasklet code: one element of the local
         # dimension, with the skip-value guard.
-        expr_code, pre_statements, used_connectivities, field_inputs = generate_list_tasklet_code(
+        (
+            expr_code,
+            pre_statements,
+            used_connectivities,
+            field_inputs,
+            referenced_data,
+        ) = generate_list_tasklet_code(
             stencil_expr.expr,
             data_args=data_args,
             map_indices=map_indices,
@@ -495,7 +501,13 @@ def translate_as_fieldop(
         map_entry, _map_exit = sdfg_builder.add_map("fieldop", map_range)
 
         # Generate the tasklet code using StreePythonCodegen.
-        expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+        (
+            expr_code,
+            pre_statements,
+            used_connectivities,
+            field_inputs,
+            referenced_data,
+        ) = generate_tasklet_code(
             stencil_expr.expr,
             data_args=data_args,
             map_indices=map_indices,
@@ -552,18 +564,16 @@ def translate_as_fieldop(
         if field_inputs
         else set()
     )
-    # Only add a full-array connector if the field name appears in the
-    # tasklet code (i.e. the field is accessed directly, not through
-    # ``field_inputs``).
-    import re
-
+    # Only add a full-array connector if the code generator recorded a direct
+    # reference to the field (i.e. it is accessed in the tasklet code rather
+    # than through ``field_inputs``).
     _full_array_param_names = {
         param_name
         for param_name, data in data_args.items()
         if not field_inputs
         or data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
-        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
+        or data.name in referenced_data
+        or param_name in referenced_data
     }
 
     # Create the Tasklet and TaskletNode.
@@ -682,7 +692,13 @@ def translate_map_list(
     # Generate the tasklet code.  The map variable acts as the loop variable
     # for element access (neighbors indexing, local field indexing, etc.).
     map_indices = {local_offset_type: map_var}
-    expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+    (
+        expr_code,
+        pre_statements,
+        used_connectivities,
+        field_inputs,
+        referenced_data,
+    ) = generate_tasklet_code(
         map_expr,
         data_args=data_args,
         map_indices=map_indices,
@@ -730,8 +746,6 @@ def translate_map_list(
 
     # Determine which field args need a full-array memlet (vs. scalar memlet
     # through ``field_inputs``).
-    import re
-
     _field_names_in_inputs = (
         {fname for fname, _ in field_inputs.items() if isinstance(fname, str)}
         if field_inputs
@@ -742,8 +756,8 @@ def translate_map_list(
         for param_name, data in data_args.items()
         if not field_inputs
         or data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
-        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
+        or data.name in referenced_data
+        or param_name in referenced_data
     }
 
     # Create the Tasklet and TaskletNode.
@@ -1137,8 +1151,15 @@ def translate_scan(
     pre_statements_body: list[str] = []
     used_connectivities: set[str] = set()
     field_inputs: dict[str, tuple[str, str]] = {}
+    referenced_data: set[str] = set()
     for path, _leaf_dtype in leaves:
-        expr_code, pre_stmts, used_conns, tasklet_field_inputs = generate_tasklet_code(
+        (
+            expr_code,
+            pre_stmts,
+            used_conns,
+            tasklet_field_inputs,
+            leaf_referenced_data,
+        ) = generate_tasklet_code(
             _index_path(stencil_expr.expr, path),
             data_args=data_args,
             map_indices=map_indices,
@@ -1155,6 +1176,7 @@ def translate_scan(
         pre_statements_body.extend(pre_stmts)
         used_connectivities |= set(used_conns)
         field_inputs |= tasklet_field_inputs
+        referenced_data |= set(leaf_referenced_data)
 
     # Combine all pre-statements and the final (per-leaf) expressions.
     out_conns = [f"__out_{i}" for i in range(len(leaves))]
@@ -1185,8 +1207,6 @@ def translate_scan(
     # Skip the full-array memlet for fields that are only accessed through
     # scalar memlets on the input edge (``field_inputs``), see the comment in
     # ``translate_as_fieldop`` for details.
-    import re
-
     _field_names_in_inputs = (
         {fname for fname, _ in field_inputs.values()} if field_inputs else set()
     )
@@ -1195,8 +1215,8 @@ def translate_scan(
         for param_name, data in data_args.items()
         if not field_inputs
         or data.name not in _field_names_in_inputs
-        or re.search(r"\b" + re.escape(data.name) + r"\b", tasklet_code)
-        or re.search(r"\b" + re.escape(param_name) + r"\b", tasklet_code)
+        or data.name in referenced_data
+        or param_name in referenced_data
     }
 
     # Init connectors for list-leaf inits only — scalar-leaf inits are now
@@ -1562,7 +1582,13 @@ def translate_scalar_expr(
     string_args = {sym: sym for sym in free_syms if sym in ctx.root.symbols}
 
     # Generate the Python code for the scalar expression.
-    expr_code, pre_statements, used_connectivities, field_inputs = generate_tasklet_code(
+    (
+        expr_code,
+        pre_statements,
+        used_connectivities,
+        field_inputs,
+        _referenced_data,
+    ) = generate_tasklet_code(
         node,
         data_args=data_args,
         map_indices={},
@@ -2414,16 +2440,7 @@ def lower_program_to_stree(
     ir = replace_invalid_symbols(ir)
 
     visitor = GTIRToScheduleTree(offset_provider_type, column_axis)
-    import os
-
-    if os.environ.get("GT4PY_STREE_IR_DUMP"):
-        with open(f"/tmp/stree_ir_{ir.id}.txt", "w") as _f:
-            _f.write(str(ir))
     stree = visitor.visit(ir)
     assert isinstance(stree, tn.ScheduleTreeRoot)
-
-    if os.environ.get("GT4PY_STREE_IR_DUMP"):
-        with open(f"/tmp/stree_tree_{ir.id}.txt", "w") as _f:
-            _f.write(str(stree))
 
     return stree

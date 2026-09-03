@@ -113,6 +113,15 @@ class CodegenContext:
             during the visit so the caller can add them as tasklet inputs;
             otherwise the connectivity arrays would be dangling references
             inside the tasklet code.
+        referenced_data: Names of ``data_args`` entries that the generated
+            code actually mentions -- recorded as the code is emitted, so
+            the caller knows exactly which arguments need a full-array
+            memlet instead of having to search the generated source text.
+            Both the access name (the lambda parameter name, which
+            ``add_tasklet`` rewrites into the connector) and the underlying
+            container name are recorded, since callers key on either.
+            Like ``used_connectivities`` this set is shared with child
+            contexts, so nested visits accumulate into the same set.
         field_inputs: Maps connector names to ``(field_name, subset)``
             pairs for scalar field accesses that should be materialised on
             the input edge (memlet) rather than inside the tasklet code.
@@ -149,6 +158,7 @@ class CodegenContext:
     root_symbols: frozenset[str] = frozenset()
     pre_statements: list[str] = dataclasses.field(default_factory=list)
     used_connectivities: set[str] = dataclasses.field(default_factory=set)
+    referenced_data: set[str] = dataclasses.field(default_factory=set)
     string_args: dict[str, str] = dataclasses.field(default_factory=dict)
     field_inputs: dict[str, tuple[str, str]] = dataclasses.field(default_factory=dict)
     scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] = dataclasses.field(
@@ -384,13 +394,15 @@ class StreePythonCodegen(eve.NodeVisitor):
         (it refers to an SDFG symbol or a data container).
         """
         symid = str(node.id)
-        if symid in ctx.data_args:
-            return symid
-        elif symid in ctx.string_args:
+        if symid in ctx.string_args:
             return ctx.string_args[symid]
         elif symid in ctx.args_map:
             return self.visit(ctx.args_map[symid], ctx=ctx)
         elif symid in itir_builtins.TYPE_BUILTINS:
+            return symid
+        elif symid in ctx.data_args:
+            ctx.referenced_data.add(symid)
+            ctx.referenced_data.add(ctx.data_args[symid].name)
             return symid
         elif symid in ctx.root_symbols:
             # SDFG symbol or data container: emitted literally (free symbol
@@ -1546,8 +1558,12 @@ class StreePythonCodegen(eve.NodeVisitor):
         stride symbols).  Raw container names are only safe for
         one-dimensional access to non-transient SDFG arguments.
         """
+        # Record the reference so the caller knows this argument is accessed
+        # directly in the code (and therefore needs a full-array memlet).
+        ctx.referenced_data.add(data.name)
         for param_name, other in ctx.data_args.items():
             if other is data:
+                ctx.referenced_data.add(param_name)
                 return param_name
         return data.name
 
@@ -1857,7 +1873,7 @@ def generate_tasklet_code(
     temp_counter: itertools.count[int] | None = None,
     root_symbols: frozenset[str] = frozenset(),
     scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] | None = None,
-) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]]]:
+) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]], set[str]]:
     """Generate the Python code for a tasklet body.
 
     Args:
@@ -1879,7 +1895,7 @@ def generate_tasklet_code(
 
     Returns:
         A tuple ``(expr_code, pre_statements, used_connectivities,
-        field_inputs)`` where ``expr_code`` is the final Python expression,
+        field_inputs, referenced_data)`` where ``expr_code`` is the final Python expression,
         ``pre_statements`` is a list of Python statements that must appear
         before the final expression (join them as: ``"\\n".join(pre_statements)
         + f"\\n__out = {expr_code}"``), ``used_connectivities`` is the set of
@@ -1887,7 +1903,9 @@ def generate_tasklet_code(
         the stencil body, and ``field_inputs`` maps connector names to
         ``(field_name, subset)`` pairs for scalar field accesses that should
         be materialised on the input edge (memlet) rather than inside the
-        tasklet code.
+        tasklet code.  ``referenced_data`` is the set of ``data_args`` names
+        (both parameter and container names) that the generated code
+        actually mentions.
     """
     ctx = CodegenContext(
         args_map=args_map or {},
@@ -1901,7 +1919,13 @@ def generate_tasklet_code(
     if temp_counter is not None:
         ctx = dataclasses.replace(ctx, _temp_counter=temp_counter)
     expr_code = StreePythonCodegen().visit(expr, ctx=ctx)
-    return expr_code, ctx.pre_statements, ctx.used_connectivities, ctx.field_inputs
+    return (
+        expr_code,
+        ctx.pre_statements,
+        ctx.used_connectivities,
+        ctx.field_inputs,
+        ctx.referenced_data,
+    )
 
 
 def generate_list_tasklet_code(
@@ -1914,7 +1938,7 @@ def generate_list_tasklet_code(
     local_index: str,
     root_symbols: frozenset[str] = frozenset(),
     scalar_field_dims: dict[str, frozenset[gtx_common.Dimension]] | None = None,
-) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]]]:
+) -> tuple[str, list[str], set[str], dict[str, tuple[str, str]], set[str]]:
     """Generate the tasklet code for a single element of a list expression.
 
     Used to lower ``as_fieldop`` field operators computing a field with
@@ -1942,7 +1966,8 @@ def generate_list_tasklet_code(
 
     Returns:
         Same tuple as ``generate_tasklet_code``: ``(expr_code,
-        pre_statements, used_connectivities, field_inputs)``.
+        pre_statements, used_connectivities, field_inputs,
+        referenced_data)``.
     """
     assert isinstance(expr.type, ts.ListType)
     ctx = CodegenContext(
@@ -1980,4 +2005,10 @@ def generate_list_tasklet_code(
                 else str(dace.dtypes.max_value(dc_element_type))
             )
         expr_code = f"({expr_code}) if {element.mask} else {dummy}"
-    return expr_code, ctx.pre_statements, ctx.used_connectivities, ctx.field_inputs
+    return (
+        expr_code,
+        ctx.pre_statements,
+        ctx.used_connectivities,
+        ctx.field_inputs,
+        ctx.referenced_data,
+    )
