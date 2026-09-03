@@ -766,14 +766,19 @@ class StreePythonCodegen(eve.NodeVisitor):
                 for k in indices
                 if gtx_common.as_non_staggered(old_dim) == gtx_common.as_non_staggered(k)
             )
-            old_index, _ = indices[indexed_dim]
+            old_index, old_is_dynamic = indices[indexed_dim]
             new_index = repl.apply(old_index)
             del indices[indexed_dim]
             # An identity shift (same dimension in and out) only adjusts the
             # position along the axis; keep the existing — possibly staggered
             # — key so that it still matches the field's dimension.
             new_dim = indexed_dim if repl.new_dim == old_dim else repl.new_dim
-            indices[new_dim] = (new_index, not repl.is_symbolic)
+            # Dynamicity is monotonic along the shift chain: once the index
+            # expression contains a runtime value (e.g. a dynamic
+            # ``as_offset``), composing a symbolic shift on top of it (e.g. a
+            # half-shift on a staggered dimension) keeps it dynamic — the
+            # expression cannot be encoded in a memlet subset.
+            indices[new_dim] = (new_index, old_is_dynamic or not repl.is_symbolic)
 
         return arg, data, indices, used_connectivities_in_shift
 
