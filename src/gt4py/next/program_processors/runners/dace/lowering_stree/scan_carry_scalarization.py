@@ -24,11 +24,19 @@ scalar, rewriting all its memlet subsets accordingly.  The match is purely
 structural (no name coupling): any 1-D transient container that
 
 - lives inside a nested SDFG placed directly inside a ``MapScope``,
-- never escapes through the nested SDFG's connectors, and
-- is accessed only through scalar-point memlets whose free symbols are a
-  subset of the enclosing map's parameter symbols,
+- never escapes through the nested SDFG's connectors,
+- is accessed only through scalar-point memlets that all use the very same
+  subset expression,
+- whose subset mentions at least one of the enclosing map's parameters, and
+- whose subset does not mention any symbol that changes during a single
+  invocation of the nested SDFG (loop variables, interstate assignments),
 
-is shrunk to a scalar.  Beside reducing memory traffic per map invocation
+is shrunk to a scalar.  The last two conditions together are what makes the
+rewrite sound: every access within one invocation resolves to the same
+element.  Note that the subset also mentions the field origin (a free SDFG
+symbol such as ``__out_IDim_range_0``), which is *not* a map parameter —
+requiring the subset symbols to be a subset of the map parameters would
+reject every real scan carry.  Beside reducing memory traffic per map invocation
 (a variable-length heap-allocated array becomes register/stack storage), the
 scalar form makes it impossible for horizontal map points to share carry
 storage.
@@ -68,6 +76,23 @@ def _scalar_point_accesses(nsdfg: dace.SDFG, name: str) -> list | None:
     return memlets
 
 
+def _symbols_varying_inside(nsdfg: dace.SDFG) -> set[str]:
+    """Return the symbols whose value can change within one invocation of ``nsdfg``.
+
+    These are the loop variables of the contained loop regions (in particular
+    the scan column index) plus anything assigned on an interstate edge.  A
+    container indexed by such a symbol addresses different elements over the
+    invocation and must not be scalarized.
+    """
+    varying = set()
+    for cfg in nsdfg.all_control_flow_regions(recursive=True):
+        if isinstance(cfg, dace.sdfg.state.LoopRegion) and cfg.loop_variable:
+            varying.add(str(cfg.loop_variable))
+    for edge in nsdfg.all_interstate_edges(recursive=True):
+        varying |= set(edge.data.assignments.keys())
+    return varying
+
+
 def find_carry_candidates(top_sdfg: dace.SDFG) -> list[_CarryCandidate]:
     candidates = []
     for state in top_sdfg.all_states():
@@ -89,11 +114,16 @@ def find_carry_candidates(top_sdfg: dace.SDFG) -> list[_CarryCandidate]:
                 accesses = _scalar_point_accesses(nsdfg, name)
                 if not accesses:
                     continue
+                if len({str(memlet.subset) for memlet in accesses}) != 1:
+                    continue  # accesses do not all address the same element
                 syms = set()
                 for memlet in accesses:
                     syms |= {str(s) for s in memlet.subset.free_symbols}
-                if syms and syms.issubset(map_symbols):
-                    candidates.append(_CarryCandidate(nsdfg=nsdfg, name=name))
+                if not (syms & map_symbols):
+                    continue  # not a per-map-point slot
+                if syms & _symbols_varying_inside(nsdfg):
+                    continue  # index varies within one invocation
+                candidates.append(_CarryCandidate(nsdfg=nsdfg, name=name))
     return candidates
 
 
