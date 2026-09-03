@@ -260,6 +260,47 @@ class UnstructuredShiftReplacement(ShiftReplacement):
         )
 
 
+def _find_shift_source(
+    old_dim: gtx_common.Dimension,
+    repl: ShiftReplacement,
+    indices: Mapping[gtx_common.Dimension, tuple[str, bool]],
+) -> gtx_common.Dimension | None:
+    """Find the ``indices`` key that a shift out of ``old_dim`` consumes.
+
+    An identity shift (``repl.new_dim == old_dim``, e.g. an integer
+    cartesian offset or a dynamic ``as_offset``) only adjusts the position
+    along the axis, so it applies to the base and the staggered dimension
+    alike: a half-shift may already have replaced ``KDim`` with
+    ``_StaggeredKDim`` by the time a later ``as_offset`` declared on
+    ``KDim`` is consumed, and the two share an index space (ADR 0026).
+
+    A shift that changes the dimension — a half-shift, or an unstructured
+    hop through a connectivity — moves between index spaces and must match
+    its source exactly.  Matching those loosely would silently accept an
+    ill-formed chain (e.g. two half-shifts on the same axis) and emit wrong
+    indices instead of raising.
+
+    Args:
+        old_dim: The source dimension of the shift (``offset.domain``).
+        repl: The replacement the shift applies.
+        indices: The dimensions currently indexed, keyed by dimension.
+
+    Returns:
+        The matching key of ``indices``, or ``None`` if the shift does not
+        apply to any currently indexed dimension.
+    """
+    if repl.new_dim != old_dim:
+        return old_dim if old_dim in indices else None
+    base_dim = gtx_common.as_non_staggered(old_dim)
+    matches = [k for k in indices if gtx_common.as_non_staggered(k) == base_dim]
+    # A single axis has at most one entry in ``indices``: the base and the
+    # staggered dimension are alternative spellings of the same axis.
+    assert len(matches) <= 1, (
+        f"Ambiguous source '{old_dim.value}' for shift: matches {[dim.value for dim in matches]}."
+    )
+    return matches[0] if matches else None
+
+
 def _sym_tree_to_make_tuple(tree: object) -> gtir.Expr:
     """Convert a nested tree of ``gtir.Sym`` (from ``make_symbol_tree``) into
     a nested ``make_tuple`` GTIR expression of ``SymRef`` leaves."""
@@ -736,36 +777,24 @@ class StreePythonCodegen(eve.NodeVisitor):
         }
         pending_shift_replacements = list(shift_replacements)
         while pending_shift_replacements:
-            # A staggered dimension shares its index space with the base
-            # dimension (ADR 0026): a half-shift may already have replaced
-            # ``KDim`` with ``_StaggeredKDim`` in ``indices`` by the time a
-            # later identity shift (e.g. a dynamic ``as_offset``) that still
-            # references ``KDim`` is consumed.  Match shifts against the
-            # non-staggered dimension so the two are interchangeable.
-            next_i = next(
-                (
-                    i
-                    for i, (old_dim, _) in enumerate(pending_shift_replacements)
-                    if any(
-                        gtx_common.as_non_staggered(old_dim) == gtx_common.as_non_staggered(k)
-                        for k in indices
-                    )
-                ),
-                None,
-            )
-            if next_i is None:
+            # Pick the first pending shift whose source is currently indexed
+            # (see ``_find_shift_source`` for how a staggered dimension is
+            # matched), and remember which key it consumes.
+            next_i: int | None = None
+            indexed_dim: gtx_common.Dimension | None = None
+            for i, (pending_dim, pending_repl) in enumerate(pending_shift_replacements):
+                indexed_dim = _find_shift_source(pending_dim, pending_repl, indices)
+                if indexed_dim is not None:
+                    next_i = i
+                    break
+            if next_i is None or indexed_dim is None:
                 raise ValueError(
                     "Unable to compose shifts from the map variables: no pending"
-                    " shift consumers an indexed dimension; missing sources:"
+                    " shift consumes an indexed dimension; missing sources:"
                     f" {[dim.value for dim, _ in pending_shift_replacements]};"
                     f" indexed dimensions: {[dim.value for dim in indices]}."
                 )
             old_dim, repl = pending_shift_replacements.pop(next_i)
-            indexed_dim = next(
-                k
-                for k in indices
-                if gtx_common.as_non_staggered(old_dim) == gtx_common.as_non_staggered(k)
-            )
             old_index, old_is_dynamic = indices[indexed_dim]
             new_index = repl.apply(old_index)
             del indices[indexed_dim]
