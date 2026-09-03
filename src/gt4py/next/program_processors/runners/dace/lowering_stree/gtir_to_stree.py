@@ -933,17 +933,27 @@ def translate_scan(
     # inside a horizontal ``MapScope`` every column must keep its own carry;
     # a single shared scalar (as used previously) races across columns and
     # produces nondeterministic results.  For 1D scans (no horizontal map)
-    # ``horizontal_carry_shape`` is empty and the carry stays a scalar.
+    # ``horizontal_carry_shape`` is empty and the carry is a single-element array.
     horizontal_carry_shape = [field_shape[i] for i, dim in enumerate(field_dims) if dim != scan_dim]
 
     result_names = []
-    # For scalar leaves, the scan carry is stored in a scalar transient container,
-    # written at the end of each scan iteration and read (as a whole scalar) at
+    # For scalar leaves, the scan carry is stored in a transient array container,
+    # written at the end of each scan iteration and read (as a single element) at
     # the beginning of the next one.  This mirrors the lowering of the legacy
     # fieldview/iview scan (``gtir_to_sdfg_scan``) and avoids reading the result
     # array at the previous scan index — such an in-edge would statically extend
     # one element past the allocated scan domain, producing an out-of-bounds
     # memlet on the aggregated scope edges once the scan domain is static.
+    # NOTE: the carry must be an ``Array`` (a single-element one for 1D scans),
+    # never a ``Scalar``.  DaCe's ``GPUTransformSDFG`` keeps top-level transient
+    # scalars in host memory, but still wraps the scan tasklet in a GPU map
+    # (because it writes the result array, which does become GPU-resident).  A
+    # host scalar is passed *by value* to the kernel, so the carry write is
+    # dropped and every scan iteration reads the init value.  A single-element
+    # array is moved to GPU global memory and passed by pointer, so the carry
+    # survives across iterations.  In the presence of a horizontal ``MapScope``
+    # the carry array ends up inside the GPU kernel, where
+    # ``scan_carry_scalarization`` shrinks it back to a register scalar.
     carry_container_names: list[str | None] = []
     for _path, leaf_dtype in leaves:
         if isinstance(leaf_dtype, ts.ListType):
@@ -954,12 +964,9 @@ def translate_scan(
         result_name, _result_desc = sdfg_builder.add_temp_array(ctx.root, field_shape, dtype)
         result_names.append(result_name)
         if isinstance(leaf_dtype, ts.ScalarType):
-            if horizontal_carry_shape:
-                carry_name, _carry_desc = sdfg_builder.add_temp_array(
-                    ctx.root, horizontal_carry_shape, dtype
-                )
-            else:
-                carry_name, _carry_desc = sdfg_builder.add_temp_scalar(ctx.root, dtype)
+            carry_name, _carry_desc = sdfg_builder.add_temp_array(
+                ctx.root, horizontal_carry_shape or [1], dtype
+            )
             carry_container_names.append(carry_name)
         else:
             carry_container_names.append(None)
