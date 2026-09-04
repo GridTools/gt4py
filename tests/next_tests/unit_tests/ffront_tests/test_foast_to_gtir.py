@@ -43,14 +43,26 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
 
 
-Edge = gtx.dimension("Edge")
-Vertex = gtx.dimension("Vertex")
-V2EDim = gtx.dimension("V2E", gtx.DimensionKind.LOCAL)
+class Edge(gtx.DimensionIndex): ...
+
+
+class Vertex(gtx.DimensionIndex): ...
+
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "V2E"
+
+
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 
-TDim = gtx.dimension("TDim")
+
+class TDim(gtx.DimensionIndex): ...
+
+
 TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
-UDim = gtx.dimension("UDim")
+
+
+class UDim(gtx.DimensionIndex): ...
 
 
 def test_return():

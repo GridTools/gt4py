@@ -10,8 +10,11 @@ import pickle
 
 from gt4py.next import common
 
-I = common.dimension("I")
-J = common.dimension("J")
+
+class I(common.DimensionIndex): ...
+
+
+class J(common.DimensionIndex): ...
 
 
 def test_domain_pickle_after_slice():

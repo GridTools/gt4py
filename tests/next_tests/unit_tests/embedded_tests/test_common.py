@@ -37,9 +37,13 @@ def test_slice_range(rng, slce, expected):
     assert result == expected
 
 
-I = common.dimension("I")
-J = common.dimension("J")
-K = common.dimension("K")
+class I(common.DimensionIndex): ...
+
+
+class J(common.DimensionIndex): ...
+
+
+class K(common.DimensionIndex): ...
 
 
 @pytest.mark.parametrize(

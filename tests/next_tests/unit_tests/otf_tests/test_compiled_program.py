@@ -62,7 +62,7 @@ def test_sanitize_static_args_wrong_type():
         static_arg.validate("foo", ts.ScalarType(kind=ts.ScalarKind.INT32))
 
 
-TDim = gtx.dimension("TDim")
+class TDim(gtx.DimensionIndex): ...
 
 
 @pytest.fixture

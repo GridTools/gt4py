@@ -16,9 +16,15 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests import cases_utils
 
 
-V = gtx.dimension("V")
-E = gtx.dimension("E")
-Neigh = gtx.dimension("Neigh", kind=common.DimensionKind.LOCAL)
+class V(gtx.DimensionIndex): ...
+
+
+class E(gtx.DimensionIndex): ...
+
+
+class Neigh(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
 Off = gtx.FieldOffset("Off", source=E, target=(V, Neigh))
 
 

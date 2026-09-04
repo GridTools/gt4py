@@ -14,15 +14,37 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
 
-I = common.dimension("I")
+
+class I(common.DimensionIndex): ...
+
+
 IHalf = common.flip_staggered(I)
-J = common.dimension("J")
-K = common.dimension("J", kind=common.DimensionKind.VERTICAL)
-Vertex = common.dimension("Vertex")
-Edge = common.dimension("Edge")
-V2EDim = common.dimension("V2E", kind=common.DimensionKind.LOCAL)
-E2VDim = common.dimension("E2V", kind=common.DimensionKind.LOCAL)
-V2VDim = common.dimension("V2V", kind=common.DimensionKind.LOCAL)
+
+
+class J(common.DimensionIndex): ...
+
+
+class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL):
+    tag = "J"
+
+
+class Vertex(common.DimensionIndex): ...
+
+
+class Edge(common.DimensionIndex): ...
+
+
+class V2EDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL):
+    tag = "V2E"
+
+
+class E2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL):
+    tag = "E2V"
+
+
+class V2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL):
+    tag = "V2V"
+
 
 a_range = domain_utils.SymbolicRange(0, 10)
 another_range = domain_utils.SymbolicRange(5, 15)

@@ -30,10 +30,12 @@ class CustomInt32DType:
         return np.dtype(np.int32)
 
 
-IDim = gtx.dimension("IDim")
-JDim = gtx.dimension("JDim")
+class IDim(gtx.DimensionIndex): ...
 
-# -- PEP 695 type aliases --
+
+class JDim(gtx.DimensionIndex): ...  # -- PEP 695 type aliases --
+
+
 type IFloatFieldAlias = gtx.Field[gtx.Dims[IDim], float]
 type ChainedFieldAlias = IFloatFieldAlias
 type GenericFieldAlias[T] = gtx.Field[gtx.Dims[IDim], T]

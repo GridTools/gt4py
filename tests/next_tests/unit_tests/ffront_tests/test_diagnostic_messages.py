@@ -27,9 +27,11 @@ from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
-IDim = gtx.dimension("IDim")
+class IDim(
+    gtx.DimensionIndex
+): ...  # A PEP 695 alias whose value raises when it is evaluated, standing in for the
 
-# A PEP 695 alias whose value raises when it is evaluated, standing in for the
+
 # common case of a typo'd dtype ('np.foat64') inside an alias definition.
 _empty_module = types.ModuleType("_empty_module")
 type BrokenFieldAlias = gtx.Field[gtx.Dims[IDim], _empty_module.foat64]

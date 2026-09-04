@@ -30,8 +30,10 @@ pytestmark = [
 ]
 
 
-Cell = gtx.dimension("Cell")
-KDim = gtx.dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+class Cell(gtx.DimensionIndex): ...
+
+
+class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
 class State(NamedTuple):

@@ -17,8 +17,12 @@ from gt4py.next.iterator.transforms import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-IDim = common.dimension("IDim")
-JDim = common.dimension("JDim")
+class IDim(common.DimensionIndex): ...
+
+
+class JDim(common.DimensionIndex): ...
+
+
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
 IOff = im.cartesian_offset(IDim, IDim)
 

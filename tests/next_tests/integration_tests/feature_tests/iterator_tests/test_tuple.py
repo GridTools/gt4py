@@ -16,11 +16,17 @@ from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-IDim = gtx.dimension("IDim")
-JDim = gtx.dimension("JDim")
-KDim = gtx.dimension("KDim")
+class IDim(gtx.DimensionIndex): ...
 
-# semantics of stencil return that is called from the fencil (after `:` the structure of the output)
+
+class JDim(gtx.DimensionIndex): ...
+
+
+class KDim(
+    gtx.DimensionIndex
+): ...  # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
+
+
 # `return a` -> a: field
 # `return make_tuple(a)` -> (a,): [field] or (field)
 # `return a,b` -> (a,b): [field, field] or (field, field)

@@ -24,8 +24,11 @@ from gt4py.next.iterator.runtime import fendef, fundef, set_at, temporary
 from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
 
 
-IDim = gtx.dimension("IDim")
-JDim = gtx.dimension("JDim")
+class IDim(gtx.DimensionIndex): ...
+
+
+class JDim(gtx.DimensionIndex): ...
+
 
 i = gtx.CartesianConnectivity(IDim)
 j = gtx.CartesianConnectivity(JDim)

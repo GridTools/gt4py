@@ -26,9 +26,15 @@ from gt4py.next.iterator.ir_utils import (
 )
 
 
-IDim = common.dimension("IDim")
-JDim = common.dimension("JDim")
-KDim = common.dimension("KDim", kind=common.DimensionKind.VERTICAL)
+class IDim(common.DimensionIndex): ...
+
+
+class JDim(common.DimensionIndex): ...
+
+
+class KDim(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+
+
 index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
