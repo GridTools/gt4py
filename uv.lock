@@ -992,7 +992,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a8"
-source = { git = "https://github.com/SPCL/dace.git?branch=main#624018249bac3932ebb262cfcf022bbf027771cf" }
+source = { git = "https://github.com/romanc/dace?branch=romanc%2Fstree-sdfg-nested-sdfg-connectors#00c61216762a0a2ce4bb6d725bdc7b1a5400be9a" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1538,7 +1538,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/SPCL/dace.git?branch=main" },
+    { name = "dace", git = "https://github.com/romanc/dace?branch=romanc%2Fstree-sdfg-nested-sdfg-connectors" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
