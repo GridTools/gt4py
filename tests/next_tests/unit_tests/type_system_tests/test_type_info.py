@@ -462,3 +462,15 @@ def test_return_type(
 )
 def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
     assert type_info.needs_value_extraction(type_spec) is expected
+
+
+def test_is_concretizable_vararg_to_tuple():
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    vararg = ts.VarArgType(element_type=float_type)
+
+    assert type_info.is_concretizable(vararg, ts.TupleType(types=[float_type, float_type]))
+    assert not type_info.is_concretizable(vararg, ts.TupleType(types=[int_type]))
+    # The empty tuple is a valid concretization of any variable-length tuple: there are
+    # no elements whose type could conflict with the element type.
+    assert type_info.is_concretizable(vararg, ts.TupleType(types=[]))
