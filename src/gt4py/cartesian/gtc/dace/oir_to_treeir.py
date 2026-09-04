@@ -345,9 +345,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             ignore_horizontal_mask=True,
         )
 
-        missing_api_parameters: list[str] = [p.name for p in self._api_signature]
         for param in node.params:
-            missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
                     dtype=utils.data_type_to_dace_typeclass(param.dtype),
