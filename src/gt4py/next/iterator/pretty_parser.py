@@ -114,9 +114,7 @@ GRAMMAR = """
 
 def _bare_literal(value: str) -> ir.Literal:
     """A literal written without a type annotation."""
-    type_ = pretty_printer.implied_literal_type(value)
-    assert type_ is not None, f"'{value}' is not a literal lexeme."
-    return ir.Literal(value=value, type=type_)
+    return ir.Literal(value=value, type=pretty_printer.implied_literal_type(value))
 
 
 @lark_visitors.v_args(inline=True)

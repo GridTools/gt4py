@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import types as _types
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Final, Optional
+from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
@@ -98,14 +98,18 @@ def format_type(type_: ts.TypeSpec) -> str:
     raise NotImplementedError(f"No pretty-printed form for type '{type_}'.")
 
 
-def implied_literal_type(value: str) -> Optional[ts.ScalarType]:
-    """Type a bare literal lexeme denotes, or `None` if it denotes no type.
+def implied_literal_type(value: str) -> ts.ScalarType:
+    """Type the bare, unannotated lexeme `value` denotes.
 
     `pretty_parser` assigns exactly this to an unannotated lexeme, so the printer
     leaves the annotation off when it would agree.  The lexeme is read back to a
     Python value and typed by `type_translation.from_value`, which is what the
     frontend applies to a constant (`ffront/foast_passes/type_deduction.py`,
     `TypeDeducer.visit_Constant`), so the two cannot disagree.
+
+    Raises:
+        ValueError: If `value` is not a literal lexeme; neither a bare nor an
+            annotated spelling of it parses back.
     """
     py_value: bool | int | float
     if value in ("True", "False"):
@@ -117,7 +121,10 @@ def implied_literal_type(value: str) -> Optional[ts.ScalarType]:
             try:
                 py_value = float(value)
             except ValueError:
-                return None
+                raise ValueError(
+                    f"Invalid literal value '{value}'; expected a boolean, an integer or a"
+                    " floating point lexeme."
+                ) from None
     type_ = type_translation.from_value(py_value)
     assert isinstance(type_, ts.ScalarType)
     return type_
@@ -195,10 +202,11 @@ class PrettyPrinter(NodeTranslator):
         return [node.id]
 
     def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
+        # Unconditional, as it also rejects a value that is no literal lexeme: printing such a
+        # value, annotated or not, yields text that does not parse back.
+        implied_type = implied_literal_type(node.value)
         return [
-            node.value
-            if implied_literal_type(node.value) == node.type
-            else f"{node.value}:{format_type(node.type)}"
+            node.value if implied_type == node.type else f"{node.value}:{format_type(node.type)}"
         ]
 
     def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, prec: int) -> list[str]:

@@ -113,6 +113,26 @@ def test_literal_type_annotation_elided_when_implied():
     assert pformat(im.literal("2147483648", "int64")) == "2147483648"
 
 
+def test_literal_value_that_is_no_lexeme_is_rejected():
+    # A value with no literal spelling would be printed into text that does not parse back
+    # (`hello:i32`, `0x10:i32`, `:i32`), so it is rejected instead.
+    for value in ("hello", "0x10", ""):
+        with pytest.raises(ValueError, match="Invalid literal value"):
+            pformat(im.literal(value, "int32"))
+        with pytest.raises(ValueError, match="Invalid literal value"):
+            pretty_printer.implied_literal_type(value)
+
+
+def test_implied_literal_type():
+    def implied(value):
+        return pretty_printer.implied_literal_type(value)
+
+    assert implied("True") == ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    assert implied("1") == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert implied("2147483648") == ts.ScalarType(kind=ts.ScalarKind.INT64)
+    assert implied("1.0") == ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+
 def test_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="divides"),
