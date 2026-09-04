@@ -221,11 +221,56 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         ):
             return False
 
-        # NOTE: In case the node we keep is a non-transient we do not have to
-        #   check if it is read or written to somewhere else in this state.
-        #   The reason is that ADR18 guarantees that every access is point-wise,
-        #   therefore the temporary we remove is never used as double buffer.
+        # If the container we keep is a global that is also read somewhere else in
+        #  this state, then the temporary we remove *is* used as a double buffer:
+        #  it holds the new value while the old one is still being read.  Merging
+        #  it away moves the write back to where the temporary was produced, which
+        #  is no longer ordered after those reads, so the readers would observe the
+        #  new value.  This is the situation of a field that a `field_operator` call
+        #  takes as an input and also produces as an output.
+        # NOTE: Transients are written only once (ADR-18), so they cannot be
+        #   affected; only globals need this check.
+        if self._creates_write_after_read_hazard(sdfg, graph):
+            return False
+
         return True
+
+    def _creates_write_after_read_hazard(
+        self,
+        sdfg: dace.SDFG,
+        graph: dace.SDFGState,
+    ) -> bool:
+        """Checks if removing the copy chain would let a write overtake a read.
+
+        The surviving container takes over the writes of the removed temporary,
+        which moves them to where that temporary was produced.  If the surviving
+        container is a global that another AccessNode of this state reads, that
+        read is no longer guaranteed to happen before the write.
+
+        Args:
+            sdfg: The SDFG on which the transformation is applied.
+            graph: The state on which the transformation is applied.
+
+        Returns:
+            `True` if the merge would create a write-after-read hazard.
+        """
+        copy_chain_mode = self._get_copy_chain_mode(sdfg, graph)
+        if copy_chain_mode == CopyChainRemoverMode.PULL:
+            surviving_node = self.node_a2
+        elif copy_chain_mode == CopyChainRemoverMode.PUSH:
+            surviving_node = self.node_a1
+        else:
+            return True
+
+        if surviving_node.desc(sdfg).transient:
+            return False
+
+        return any(
+            dnode is not surviving_node
+            and dnode.data == surviving_node.data
+            and graph.out_degree(dnode) != 0
+            for dnode in graph.data_nodes()
+        )
 
     def is_single_use_data(
         self,
