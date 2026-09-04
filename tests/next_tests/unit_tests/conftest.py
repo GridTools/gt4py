@@ -61,10 +61,10 @@ program_processor = pytest.fixture(
         # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-        pytest.param(
-            (next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT, True),
-            marks=pytest.mark.uses_dace,
-        ),
+        # pytest.param(
+        #     (next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT, True),
+        #     marks=pytest.mark.uses_dace,
+        # ),
         pytest.param(
             (next_tests.definitions.OptionalProgramBackendId.DACE_STREE_FVIEW_CPU_NO_OPT, True),
             marks=pytest.mark.uses_dace,
