@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator import ir, builtins
+import pytest
+
+from gt4py.next.iterator import builtins, ir, pretty_printer
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
 from gt4py.next.type_system import type_specifications as ts
@@ -97,6 +99,40 @@ def test_offset_literal():
     assert actual == expected
 
 
+def test_literal_type_annotation():
+    assert pformat(im.literal("1.0", "float32")) == "1.0:f32"
+    assert pformat(im.literal("1", "int64")) == "1:i64"
+    assert pformat(im.literal("1", "int16")) == "1:i16"
+    assert pformat(im.literal("2147483648", "int32")) == "2147483648:i32"
+
+
+def test_literal_type_annotation_elided_when_implied():
+    assert pformat(im.literal("1", "int32")) == "1"
+    assert pformat(im.literal("1.0", "float64")) == "1.0"
+    assert pformat(im.literal("True", "bool")) == "True"
+    assert pformat(im.literal("2147483648", "int64")) == "2147483648"
+
+
+def test_literal_value_that_is_no_lexeme_is_rejected():
+    # A value with no literal spelling would be printed into text that does not parse back
+    # (`hello:i32`, `0x10:i32`, `:i32`), so it is rejected instead.
+    for value in ("hello", "0x10", ""):
+        with pytest.raises(ValueError, match="Invalid literal value"):
+            pformat(im.literal(value, "int32"))
+        with pytest.raises(ValueError, match="Invalid literal value"):
+            pretty_printer.implied_literal_type(value)
+
+
+def test_implied_literal_type():
+    def implied(value):
+        return pretty_printer.implied_literal_type(value)
+
+    assert implied("True") == ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    assert implied("1") == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert implied("2147483648") == ts.ScalarType(kind=ts.ScalarKind.INT64)
+    assert implied("1.0") == ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+
 def test_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="divides"),
@@ -117,7 +153,7 @@ def test_arithmetic():
             im.literal("4", "int64"),
         ],
     )
-    expected = "(1 + 2) × 3 / 4"
+    expected = "(1:i64 + 2:i64) × 3:i64 / 4:i64"
     actual = pformat(testee)
     assert actual == expected
 
@@ -136,7 +172,7 @@ def test_associativity():
             ),
         ],
     )
-    expected = "1 + 2 + (3 + 4)"
+    expected = "1:i64 + 2:i64 + (3:i64 + 4:i64)"
     actual = pformat(testee)
     assert actual == expected
 
@@ -317,9 +353,54 @@ def test_temporary():
     testee = ir.Temporary(
         id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
-    expected = "t = temporary(domain=domain, dtype=float64);"
+    expected = "t = temporary(domain=domain, dtype=f64);"
     actual = pformat(testee)
     assert actual == expected
+
+
+def test_scalar_type_names_cover_the_type_builtins():
+    assert set(pretty_printer.SCALAR_TYPE_NAMES) == {
+        getattr(ts.ScalarKind, name.upper()) for name in builtins.TYPE_BUILTINS
+    }
+    assert ts.ScalarKind.STRING not in pretty_printer.SCALAR_TYPE_NAMES
+
+
+def test_format_type():
+    def scalar(kind, shape=None):
+        return pretty_printer.format_type(ts.ScalarType(kind=kind, shape=shape))
+
+    assert scalar(ts.ScalarKind.BOOL) == "i1"
+    assert scalar(ts.ScalarKind.INT16) == "i16"
+    assert scalar(ts.ScalarKind.UINT8) == "u8"
+    assert scalar(ts.ScalarKind.FLOAT32) == "f32"
+    assert scalar(ts.ScalarKind.FLOAT64, [3, 4]) == "f64[3, 4]"
+    assert (
+        pretty_printer.format_type(
+            ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.ScalarType(kind=ts.ScalarKind.INT16),
+                ]
+            )
+        )
+        == "{i1, i16}"
+    )
+    with pytest.raises(NotImplementedError):
+        scalar(ts.ScalarKind.STRING)
+
+
+def test_temporary_compound_dtype():
+    def temp(dtype):
+        return pformat(ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=dtype))
+
+    assert (
+        temp(ts.TupleType(types=[ts.ScalarType(kind=ts.ScalarKind.FLOAT32)]))
+        == "t = temporary(domain=domain, dtype={f32});"
+    )
+    assert (
+        temp(ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]))
+        == "t = temporary(domain=domain, dtype=f64[3]);"
+    )
 
 
 def test_set_at():
@@ -356,5 +437,5 @@ def test_program():
         ],
     )
     actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=f64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected
