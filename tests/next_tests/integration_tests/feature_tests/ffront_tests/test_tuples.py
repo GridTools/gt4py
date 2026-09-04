@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, errors, float64, int32, neighbor_sum, utils as gt_utils
+from gt4py.next import broadcast, common, errors, float64, int32, neighbor_sum, utils as gt_utils
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -196,6 +196,63 @@ def test_tuple_comprehension_other_fo(cartesian_case):
         cartesian_case,
         testee,
         ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+# Defined at module level, unlike `inner` in 'test_tuple_comprehension_other_fo' above.
+# That difference alone decides whether the comprehension below can see it.
+@gtx.field_operator
+def _module_level_inner(tracer: cases.IField, factor: int32) -> cases.IField:
+    return tracer * factor
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_comprehension_module_level_fo(cartesian_case):
+    # Identical to 'test_tuple_comprehension_other_fo', except that the called operator is
+    # a module-level global rather than a local of the test function.
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(_module_level_inner(tracer, factor) for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, f: tuple(el * f for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_unstructured_shift
+def test_tuple_comprehension_module_level_builtin(unstructured_case):
+    # Same cause, but for an imported builtin -- the shape every real stencil has.
+    @gtx.field_operator
+    def testee(tracers: tuple[cases.EField, ...]) -> tuple[cases.VField, ...]:
+        return tuple(neighbor_sum(tracer(V2E), axis=V2EDim) for tracer in tracers)
+
+    v2e = unstructured_case.offset_provider["V2E"].asnumpy()
+    valid = v2e != common._DEFAULT_SKIP_VALUE
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda t: tuple(np.sum(el[v2e], axis=1, where=valid) for el in t),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_tuple_comprehension_module_level_fo_used_outside_too(cartesian_case):
+    # The workaround, and why this is easy to miss: the comprehension body is unchanged;
+    # only the unrelated statement above it makes '_module_level_inner' collectable.
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IField, ...], a: cases.IField, factor: int32
+    ) -> tuple[cases.IField, ...]:
+        unrelated = _module_level_inner(a, factor)
+        return tuple(_module_level_inner(tracer, factor) for tracer in tracers)
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda t, a, f: tuple(el * f for el in t),
     )
 
 
