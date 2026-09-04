@@ -8,11 +8,14 @@
 
 from __future__ import annotations
 
+import builtins as _builtins
+import dis
 import functools
 import inspect
 import pathlib
 import symtable
 import textwrap
+import types
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast
@@ -21,11 +24,55 @@ from typing import Any, cast
 MISSING_FILENAME = "<string>"
 
 
+def _iter_nested_code_objects(code: types.CodeType) -> Iterator[types.CodeType]:
+    """Yield every code object nested in `code`, recursively, excluding `code` itself."""
+    for const in code.co_consts:
+        if isinstance(const, types.CodeType):
+            yield const
+            yield from _iter_nested_code_objects(const)
+
+
+def _global_vars_from_nested_code(function: Callable) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Resolve the global and builtin names referenced by `function`'s nested code objects.
+
+    A comprehension or lambda in the body compiles to its own code object, so the names it
+    references appear in that object's `co_names` rather than the function's, and
+    `inspect.getclosurevars` (which reads only the function's own) never sees them. Free
+    variables need no such treatment: closing over one forces a cell, whose name is recorded
+    on the enclosing code object as `co_freevars`.
+    """
+    global_ns = function.__globals__
+    builtin_ns = global_ns.get("__builtins__", _builtins.__dict__)
+    if inspect.ismodule(builtin_ns):
+        builtin_ns = builtin_ns.__dict__
+
+    global_vars: dict[str, Any] = {}
+    builtin_vars: dict[str, Any] = {}
+    for code in _iter_nested_code_objects(function.__code__):
+        # Only `LOAD_GLOBAL` names, mirroring `inspect.getclosurevars`: `co_names` also
+        # holds attribute names, which are not references to the enclosing namespace.
+        for name in (
+            instruction.argval
+            for instruction in dis.get_instructions(code)
+            if instruction.opname == "LOAD_GLOBAL"
+        ):
+            if name in global_ns:
+                global_vars[name] = global_ns[name]
+            elif name in builtin_ns:
+                builtin_vars[name] = builtin_ns[name]
+
+    return global_vars, builtin_vars
+
+
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     (nonlocals, globals, builtins, _unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
+    nested_globals, nested_builtins = _global_vars_from_nested_code(function)
 
     # nonlocals override globals, sorted for deterministic results
-    return dict(sorted({**builtins, **globals, **nonlocals}.items()))
+    return dict(
+        sorted({**nested_builtins, **builtins, **nested_globals, **globals, **nonlocals}.items())
+    )
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
