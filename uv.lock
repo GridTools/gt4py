@@ -991,10 +991,11 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a7"
-source = { registry = "https://pypi.org/simple" }
+version = "2.0.0a8"
+source = { git = "https://github.com/SPCL/dace.git?branch=main#624018249bac3932ebb262cfcf022bbf027771cf" }
 dependencies = [
     { name = "astunparse" },
+    { name = "click" },
     { name = "cmake" },
     { name = "dill" },
     { name = "fparser" },
@@ -1011,7 +1012,6 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/df/e0/2c45877476eb300fc8211fb2a46b3e3203468cd2bd3e0ecb4a7f5a7a4694/dace-2.0.0a7.tar.gz", hash = "sha256:ab15a73ce4c2cacaf9244832f84ea56328e181b21956a6d0c529782201609095", size = 6827344, upload-time = "2026-08-28T14:11:38.633Z" }
 
 [[package]]
 name = "debugpy"
@@ -1538,7 +1538,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = ">=2.0.0a7,<2.0.0a8" },
+    { name = "dace", git = "https://github.com/SPCL/dace.git?branch=main" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
