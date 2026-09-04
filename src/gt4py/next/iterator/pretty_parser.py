@@ -16,8 +16,7 @@ from lark import (
     visitors as lark_visitors,
 )
 
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.pretty_printer import SCALAR_TYPE_KINDS, implied_literal_type
+from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -115,7 +114,7 @@ GRAMMAR = """
 
 def _bare_literal(value: str) -> ir.Literal:
     """A literal written without a type annotation."""
-    type_ = implied_literal_type(value)
+    type_ = pretty_printer.implied_literal_type(value)
     assert type_ is not None, f"'{value}' is not a literal lexeme."
     return ir.Literal(value=value, type=type_)
 
@@ -137,11 +136,12 @@ class ToIrTransformer(lark_visitors.Transformer):
         return _bare_literal(value.value)
 
     def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.ScalarType:
-        if (kind := SCALAR_TYPE_KINDS.get(value.value)) is not None:
-            return ts.ScalarType(kind=kind)
-        raise ValueError(
-            f"Invalid type '{value}'; expected one of {', '.join(sorted(SCALAR_TYPE_KINDS))}."
-        )
+        if (kind := pretty_printer.SCALAR_TYPE_KINDS.get(value.value)) is None:
+            raise ValueError(
+                f"Invalid type '{value}'; expected one of "
+                f"{', '.join(sorted(pretty_printer.SCALAR_TYPE_KINDS))}."
+            )
+        return ts.ScalarType(kind=kind)
 
     def shaped_scalar_type(self, type_: ts.ScalarType, *shape: ir.Literal) -> ts.ScalarType:
         return ts.ScalarType(kind=type_.kind, shape=[int(s.value) for s in shape])
