@@ -155,8 +155,8 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, itir.AxisLiteral)
 
-            ranges[common.Dimension(value=axis_literal.value, kind=axis_literal.kind)] = (
-                SymbolicRange(lower_bound, upper_bound)
+            ranges[common.dimension(axis_literal.value, kind=axis_literal.kind)] = SymbolicRange(
+                lower_bound, upper_bound
             )
         return cls(_GRID_TYPE_MAPPING[node.fun.id], ranges)
 
@@ -222,10 +222,10 @@ class SymbolicDomain:
                     new_dim = connectivity.codomain
 
                 assert new_dim not in new_ranges or old_dim == new_dim
-                if symbolic_domain_sizes is not None and new_dim.value in symbolic_domain_sizes:
+                if symbolic_domain_sizes is not None and new_dim.tag in symbolic_domain_sizes:
                     new_range = SymbolicRange(
                         im.literal(str(0), builtins.INTEGER_INDEX_BUILTIN),
-                        im.ensure_expr(symbolic_domain_sizes[new_dim.value]),
+                        im.ensure_expr(symbolic_domain_sizes[new_dim.tag]),
                     )
                 else:
                     assert common.is_neighbor_table(connectivity)

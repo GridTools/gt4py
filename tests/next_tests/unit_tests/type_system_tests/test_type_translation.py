@@ -30,8 +30,8 @@ class CustomInt32DType:
         return np.dtype(np.int32)
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+IDim = gtx.dimension("IDim")
+JDim = gtx.dimension("JDim")
 
 # -- PEP 695 type aliases --
 type IFloatFieldAlias = gtx.Field[gtx.Dims[IDim], float]
@@ -100,7 +100,7 @@ def _make_type_string_for_container(cls: type) -> str:
         (
             gtx.Field[[IDim, JDim], float],
             ts.FieldType(
-                dims=[gtx.Dimension("IDim"), gtx.Dimension("JDim")],
+                dims=[gtx.dimension("IDim"), gtx.dimension("JDim")],
                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ),

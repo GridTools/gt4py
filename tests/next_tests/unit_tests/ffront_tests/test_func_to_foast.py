@@ -71,7 +71,7 @@ OR = itir.SymRef(id=itb.or_.fun.__name__)
 XOR = itir.SymRef(id=itb.xor_.fun.__name__)
 LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
-TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = gtx.dimension("TDim")  # Meaningless dimension, used for tests.
 
 # PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
 type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]
@@ -423,8 +423,8 @@ def test_closure_symbols():
 
 
 def test_wrong_return_type_annotation():
-    ADim = gtx.Dimension("ADim")
-    BDim = gtx.Dimension("BDim")
+    ADim = gtx.dimension("ADim")
+    BDim = gtx.dimension("BDim")
 
     def wrong_return_type_annotation(a: gtx.Field[[ADim], float64]) -> gtx.Field[[BDim], float64]:
         return a
@@ -446,7 +446,7 @@ def test_empty_dims_type():
 
 
 def test_zero_dims_ternary():
-    ADim = gtx.Dimension("ADim")
+    ADim = gtx.dimension("ADim")
 
     def zero_dims_ternary(
         cond: gtx.Field[[], float64], a: gtx.Field[[ADim], float64], b: gtx.Field[[ADim], float64]

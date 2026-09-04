@@ -178,7 +178,7 @@ class NdArrayField(
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
-        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert all(isinstance(d, common.DimensionMeta) for d in domain.dims), domain
         assert len(domain) == array.ndim
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
@@ -542,11 +542,11 @@ class NdArrayConnectivityField(
 
         assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
 
-        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert all(isinstance(d, common.DimensionMeta) for d in domain.dims), domain
         assert len(domain) == array.ndim
         assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
-        assert isinstance(codomain, common.Dimension)
+        assert isinstance(codomain, common.DimensionMeta)
 
         return cls(domain, array, codomain, _skip_value=skip_value)
 
@@ -894,7 +894,9 @@ def _invert_domain(domain: common.Domain) -> tuple[common.Domain, ...]:
 
 
 def _size0_field(
-    nd_array_class: type[NdArrayField], dims: tuple[common.Dimension, ...], dtype: core_defs.DType
+    nd_array_class: type[NdArrayField],
+    dims: tuple[common.Dimension, ...],
+    dtype: core_defs.DType,
 ) -> NdArrayField:
     return nd_array_class.from_array(
         nd_array_class.array_ns.empty((0,) * len(dims), dtype=dtype.scalar_type),
@@ -943,11 +945,11 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
     if not fbuiltins.is_cartesian_offset(offset):
-        target_dims = ", ".join(d.value for d in offset.target)
+        target_dims = ", ".join(d.tag for d in offset.target)
         raise ValueError(
             f"'as_offset' is only supported for Cartesian offsets "
             f"(single target dimension equal to source dimension); "
-            f"got source '{offset.source.value}' and target ({target_dims})."
+            f"got source '{offset.source.tag}' and target ({target_dims})."
         )
     source_dim = offset.source
     coords = _identity_index_array(
@@ -981,7 +983,7 @@ def _make_reduction(
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
-            current_offset_provider, axis.value
+            current_offset_provider, axis.tag
         )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
@@ -1144,7 +1146,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[ar
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex],
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.DimensionIndex],
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -1164,7 +1166,8 @@ def _get_slices_from_domain_slice(
 
     for pos_old, (dim, _) in enumerate(domain):
         if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
-            _, index_or_range = domain_slice[pos]
+            elem = domain_slice[pos]
+            index_or_range = elem.unit_range if isinstance(elem, common.NamedRange) else elem.value
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))

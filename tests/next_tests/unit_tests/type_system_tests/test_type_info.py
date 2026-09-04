@@ -13,12 +13,13 @@ import pytest
 from gt4py.next import (
     Dimension,
     DimensionKind,
+    dimension,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.iterator.type_system import type_specifications as ts_it
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = dimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
@@ -61,14 +62,14 @@ def callable_type_info_cases():
         if not isinstance(symbol_type, ts.CallableType)
     ]
 
-    IDim = Dimension("I")
-    JDim = Dimension("J")
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
+    IDim = dimension("I")
+    JDim = dimension("J")
+    KDim = dimension("K", kind=DimensionKind.VERTICAL)
 
     bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    field_type = ts.FieldType(dims=[Dimension("I")], dtype=float_type)
+    field_type = ts.FieldType(dims=[dimension("I")], dtype=float_type)
     tuple_type = ts.TupleType(types=[bool_type, field_type])
     nullary_func_type = ts.FunctionType(
         pos_only_args=[], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
@@ -412,7 +413,7 @@ def test_return_type(
     [
         (ts.ScalarType(kind=ts.ScalarKind.INT64), False),
         (
-            ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            ts.FieldType(dims=[dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
             False,
         ),
         (
@@ -420,7 +421,7 @@ def test_return_type(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.FieldType(
-                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+                        dims=[dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
                     ),
                 ]
             ),
@@ -431,7 +432,7 @@ def test_return_type(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.FieldType(
-                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+                        dims=[dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
                     ),
                 ],
                 keys=["a", "b"],
@@ -447,7 +448,7 @@ def test_return_type(
                         types=[
                             ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.FieldType(
-                                dims=[Dimension("I")],
+                                dims=[dimension("I")],
                                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                             ),
                         ],

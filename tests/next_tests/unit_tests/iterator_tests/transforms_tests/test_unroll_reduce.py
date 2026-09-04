@@ -17,8 +17,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
     return common.NeighborConnectivityType(
-        domain=[common.Dimension("dummy_origin"), common.Dimension("dummy_neighbor")],
-        codomain=common.Dimension("dummy_codomain"),
+        domain=[common.dimension("dummy_origin"), common.dimension("dummy_neighbor")],
+        codomain=common.dimension("dummy_codomain"),
         skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
         dtype=None,
         max_neighbors=max_neighbors,
@@ -28,7 +28,7 @@ def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
 def _list_type(dim: str) -> ts.ListType:
     return ts.ListType(
         element_type=ts.DataType(),
-        offset_type=common.Dimension(value=dim, kind=common.DimensionKind.LOCAL),
+        offset_type=common.dimension(dim, kind=common.DimensionKind.LOCAL),
     )
 
 

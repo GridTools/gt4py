@@ -14,8 +14,8 @@ from gt4py.next.iterator.transforms.concat_where.transform_to_as_fieldop import 
 from gt4py.next.type_system import type_specifications as ts
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
+IDim = common.dimension("IDim", kind=common.DimensionKind.HORIZONTAL)
+JDim = common.dimension("JDim", kind=common.DimensionKind.HORIZONTAL)
 
 
 def test_in_helper():

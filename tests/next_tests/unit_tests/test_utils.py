@@ -427,7 +427,7 @@ class TestStrictFingerprinter:
 
         # `Dimension`s (and other dataclasses without `__lt__`) occur as dict keys
         # e.g. in user closure variables.
-        i, j = common.Dimension("I"), common.Dimension("J")
+        i, j = common.dimension("I"), common.dimension("J")
         assert fingerprinting.strict_fingerprinter(
             {i: 1, j: 2}
         ) == fingerprinting.strict_fingerprinter({j: 2, i: 1})

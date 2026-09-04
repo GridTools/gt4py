@@ -22,9 +22,9 @@ from gt4py.next import (
 )
 
 
-I = gtx.Dimension("I")
-J = gtx.Dimension("J")
-K = gtx.Dimension("K")
+I = gtx.dimension("I")
+J = gtx.dimension("J")
+K = gtx.dimension("K")
 
 sizes = {I: 10, J: 10, K: 10}
 
@@ -254,7 +254,7 @@ class TestFieldConstructorInit:
 
     def test_array_namespace_allocator_aligned_index_warns(self):
         """allocator=numpy with aligned_index → warns and ignores aligned_index."""
-        aligned_index = [common.NamedIndex(I, 0)]
+        aligned_index = [I(0)]
         with pytest.warns(UserWarning, match="aligned_index"):
             fc = constructors.FieldConstructor(allocator=np, aligned_index=aligned_index)
         field = fc.zeros(self._domain)
@@ -272,7 +272,7 @@ class TestFieldConstructorInit:
     def test_field_buffer_allocator_with_aligned_index(self):
         """allocator=FieldBufferAllocator + aligned_index → accepted without error."""
         allocator = next_allocators.StandardCPUFieldBufferAllocator()
-        aligned_index = [common.NamedIndex(I, 0)]
+        aligned_index = [I(0)]
         fc = constructors.FieldConstructor(allocator=allocator, aligned_index=aligned_index)
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)

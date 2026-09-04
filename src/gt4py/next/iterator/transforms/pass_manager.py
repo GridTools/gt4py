@@ -55,8 +55,8 @@ def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str,
     sizes: dict[str, int] = {}
     for provider in offset_provider.values():
         if common.is_neighbor_table(provider):
-            src_dim = provider.__gt_type__().source_dim.value
-            codomain_dim = provider.__gt_type__().codomain.value
+            src_dim = provider.__gt_type__().source_dim.tag
+            codomain_dim = provider.__gt_type__().codomain.tag
             sizes[src_dim] = max(sizes.get(src_dim, 0), provider.ndarray.shape[0])
             sizes[codomain_dim] = max(
                 sizes.get(codomain_dim, 0),

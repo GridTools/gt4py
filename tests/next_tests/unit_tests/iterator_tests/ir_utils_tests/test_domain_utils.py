@@ -14,15 +14,15 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
 
-I = common.Dimension("I")
+I = common.dimension("I")
 IHalf = common.flip_staggered(I)
-J = common.Dimension("J")
-K = common.Dimension("J", kind=common.DimensionKind.VERTICAL)
-Vertex = common.Dimension("Vertex")
-Edge = common.Dimension("Edge")
-V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
-E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
-V2VDim = common.Dimension("V2V", kind=common.DimensionKind.LOCAL)
+J = common.dimension("J")
+K = common.dimension("J", kind=common.DimensionKind.VERTICAL)
+Vertex = common.dimension("Vertex")
+Edge = common.dimension("Edge")
+V2EDim = common.dimension("V2E", kind=common.DimensionKind.LOCAL)
+E2VDim = common.dimension("E2V", kind=common.DimensionKind.LOCAL)
+V2VDim = common.dimension("V2V", kind=common.DimensionKind.LOCAL)
 
 a_range = domain_utils.SymbolicRange(0, 10)
 another_range = domain_utils.SymbolicRange(5, 15)
@@ -34,7 +34,7 @@ right_infinity_range = domain_utils.SymbolicRange(0, itir.InfinityLiteral.POSITI
 left_infinity_range = domain_utils.SymbolicRange(itir.InfinityLiteral.NEGATIVE, 0)
 
 
-def _make_domain(ranges: dict[common.Dimension, tuple[int, int]]):
+def _make_domain(ranges: dict[common.DimensionIndex, tuple[int, int]]):
     return domain_utils.SymbolicDomain(
         grid_type=common.GridType.CARTESIAN,
         ranges={

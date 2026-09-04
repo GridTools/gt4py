@@ -145,7 +145,7 @@ def _collect_dimensions_from_params(
         for type_ in type_info.primitive_constituents(param.type):
             if isinstance(type_, ts.FieldType):
                 for dim in type_.dims:
-                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                    offset_definitions[dim.tag] = TagDefinition(name=Sym(id=dim.tag))
     return offset_definitions
 
 
@@ -167,31 +167,31 @@ def _collect_offset_definitions(
         ]
         for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                offset_definitions[dim.tag] = TagDefinition(name=Sym(id=dim.tag))
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if dim.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_vertical_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=dim.tag), alias=_vertical_dimension
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
-            if offset_name != connectivity_type.neighbor_dim.value:
-                offset_definitions[connectivity_type.neighbor_dim.value] = TagDefinition(
-                    name=Sym(id=connectivity_type.neighbor_dim.value)
+            if offset_name != connectivity_type.neighbor_dim.tag:
+                offset_definitions[connectivity_type.neighbor_dim.tag] = TagDefinition(
+                    name=Sym(id=connectivity_type.neighbor_dim.tag)
                 )
 
             for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_horizontal_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=dim.tag), alias=_horizontal_dimension
                 )
         else:
             raise AssertionError(
@@ -207,8 +207,8 @@ def _add_staggered_aliases(
     result: dict[str, TagDefinition] = {}
     aliases: dict[str, TagDefinition] = {}
     for name, tag_def in offset_definitions.items():
-        if tag_def.alias is None and common.is_staggered(common.Dimension(value=name)):
-            base_name = common.as_non_staggered(common.Dimension(value=name)).value
+        if tag_def.alias is None and common.is_staggered(common.dimension(name)):
+            base_name = common.as_non_staggered(common.dimension(name)).tag
             # ensure the base tag exists (as alias target and loop dimension) in this position
             result.setdefault(base_name, TagDefinition(name=Sym(id=base_name)))
             aliases[name] = TagDefinition(name=Sym(id=name), alias=SymRef(id=base_name))
@@ -403,7 +403,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         assert isinstance(node.type, ts.DimensionType)
-        return Literal(value=node.type.dim.value, type="axis_literal")
+        return Literal(value=node.type.dim.tag, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
@@ -670,12 +670,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 init=self.visit(stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
-            assert isinstance(column_axis, common.Dimension)
+            assert isinstance(column_axis, common.DimensionMeta)
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
-                axis=SymRef(id=column_axis.value),
+                axis=SymRef(id=column_axis.tag),
             )
         assert projector is None  # only scans have projectors
         return StencilExecution(

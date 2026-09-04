@@ -21,6 +21,7 @@ Writing a new ADR is simple:
 - [0020 - Runtime domains](0020-Runtime-domains.md)
 - [0021 - Argument Descriptors](0021-Argument-Descriptors.md)
 - [0023 - Fingerprinting](0023-Fingerprinting.md)
+- [0028 - Dimensions as Types](0028-Dimensions_As_Types.md)
 - [0026 - Staggered Dimensions](0026-Staggered_Dimensions.md)
 
 ### Frontend and Parsing #frontend

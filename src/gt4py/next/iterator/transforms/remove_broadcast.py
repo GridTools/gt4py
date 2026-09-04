@@ -23,14 +23,14 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     and the respective domain from node.annex.
 
     Example:
-    >>> from gt4py.next import Dimension, common
-    >>> IDim = Dimension("IDim")
-    >>> JDim = Dimension("JDim")
+    >>> from gt4py.next import Dimension, dimension, common
+    >>> IDim = dimension("IDim")
+    >>> JDim = dimension("JDim")
     >>> domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 10)})
     >>> expr = im.call("broadcast")(
     ...     im.ref("inp"),
     ...     im.make_tuple(
-    ...         *(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (IDim, JDim))
+    ...         *(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (IDim, JDim))
     ...     ),
     ... )
     >>> expr.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)

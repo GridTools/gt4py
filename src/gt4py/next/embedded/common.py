@@ -70,7 +70,13 @@ def _absolute_sub_domain(
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
-            _, idx = named_idx
+            # NOTE: `NamedRange` is a namedtuple but an index is a `DimensionIndex`
+            # instance, so the payload has to be selected rather than unpacked.
+            idx = (
+                named_idx.unit_range
+                if isinstance(named_idx, common.NamedRange)
+                else named_idx.value
+            )
             if isinstance(idx, common.UnitRange):
                 if not idx <= rng:
                     raise embedded_exceptions.IndexOutOfBounds(
@@ -97,11 +103,11 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
     Return the intersection of the given domains.
 
     Example:
-        >>> I = common.Dimension("I")
+        >>> I = common.dimension("I")
         >>> domain_intersection(
         ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
         ... )  # doctest: +ELLIPSIS
-        Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
+        Domain(dims=(I[horizontal],), ranges=(UnitRange(1, 3),))
     """
     return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
 
@@ -114,8 +120,8 @@ def restrict_to_intersection(
     Return the with each other intersected domains, ignoring 'ignore_dims' dimensions for the intersection.
 
     Example:
-        >>> I = common.Dimension("I")
-        >>> J = common.Dimension("J")
+        >>> I = common.dimension("I")
+        >>> J = common.dimension("J")
         >>> res = restrict_to_intersection(
         ...     common.domain({I: (0, 5), J: (1, 2)}),
         ...     common.domain({I: (1, 3), J: (0, 3)}),
@@ -144,9 +150,9 @@ def restrict_to_intersection(
     )
 
 
-def iterate_domain(domain: common.Domain) -> Iterator[tuple[common.NamedIndex]]:
+def iterate_domain(domain: common.Domain) -> Iterator[tuple[common.DimensionIndex]]:
     for idx in itertools.product(*(list(r) for r in domain.ranges)):
-        yield tuple(common.NamedIndex(d, i) for d, i in zip(domain.dims, idx))  # type: ignore[misc] # trust me, `idx` is `tuple[int, ...]`
+        yield tuple(d(i) for d, i in zip(domain.dims, idx))  # type: ignore[misc] # trust me, `idx` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(
@@ -179,10 +185,10 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
 
 def _find_index_of_dim(
     dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.DimensionIndex | Any],
 ) -> Optional[int]:
-    for i, (d, _) in enumerate(domain_slice):
-        if dim == d:
+    for i, elem in enumerate(domain_slice):
+        if dim == elem.dim:
             return i
     return None
 
@@ -198,16 +204,18 @@ def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyInd
 def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
-        start_dim, start_value = idx.start
-        stop_dim, stop_value = idx.stop
+        # NOTE: an index is a `DimensionIndex` instance, not a 2-tuple, so its parts are
+        # read rather than unpacked.
+        start_dim, start_value = idx.start.dim, idx.start.value
+        stop_dim, stop_value = idx.stop.dim, idx.stop.value
         if start_dim != stop_dim:
             raise IndexError(
-                f"Dimensions slicing mismatch between '{start_dim.value}' and '{stop_dim.value}'."
+                f"Dimensions slicing mismatch between '{start_dim.tag}' and '{stop_dim.tag}'."
             )
         assert isinstance(start_value, int) and isinstance(stop_value, int)
         return common.NamedRange(start_dim, common.UnitRange(start_value, stop_value))
-    if isinstance(idx.start, common.NamedIndex) and idx.stop is None:
+    if isinstance(idx.start, common.DimensionIndex) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
-    if isinstance(idx.stop, common.NamedIndex) and idx.start is None:
+    if isinstance(idx.stop, common.DimensionIndex) and idx.start is None:
         raise IndexError(f"Lower bound needs to be specified for {idx}.")
     return idx

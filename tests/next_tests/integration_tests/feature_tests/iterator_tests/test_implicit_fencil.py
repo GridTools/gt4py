@@ -16,7 +16,7 @@ from gt4py.next.iterator.runtime import fundef
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = gtx.Dimension("I")
+I = gtx.dimension("I")
 
 _isize = 10
 

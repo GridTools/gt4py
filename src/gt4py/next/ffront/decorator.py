@@ -847,7 +847,7 @@ def scan_operator(
         >>> import gt4py.next as gtx
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> KDim = gtx.dimension("K", kind=gtx.DimensionKind.VERTICAL)
         >>> inp = gtx.as_field([KDim], np.ones((10,)))
         >>> out = gtx.as_field([KDim], np.zeros((10,)))
         >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.0)

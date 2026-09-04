@@ -232,7 +232,7 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
 
 
 def dim_from_axis_literal(axis_literal: itir.AxisLiteral) -> common.Dimension:
-    return common.Dimension(value=axis_literal.value, kind=axis_literal.kind)
+    return common.dimension(axis_literal.value, kind=axis_literal.kind)
 
 
 def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:

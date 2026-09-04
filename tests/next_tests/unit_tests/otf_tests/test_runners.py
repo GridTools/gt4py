@@ -147,9 +147,9 @@ def test_make_compilation_task_is_opaque_for_customized_compile():
 
 
 def test_offloaded_task_ships_connectivities_as_file_refs():
-    Vertex = gtx.Dimension("Vertex")
-    Edge = gtx.Dimension("Edge")
-    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    Vertex = gtx.dimension("Vertex")
+    Edge = gtx.dimension("Edge")
+    V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
     compile_time_args = dataclasses.replace(
         arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
@@ -188,9 +188,9 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
 
 
 def test_connectivity_file_registry_prunes_on_gc():
-    Vertex = gtx.Dimension("Vertex")
-    Edge = gtx.Dimension("Edge")
-    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    Vertex = gtx.dimension("Vertex")
+    Edge = gtx.dimension("Edge")
+    V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
 
     compilation_tasks._dump_connectivity(conn)
