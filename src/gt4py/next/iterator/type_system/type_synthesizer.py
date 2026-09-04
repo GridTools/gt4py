@@ -155,7 +155,7 @@ def synthesize_binary_math_comparison_builtins(
         return ts.DomainType(dims=[rhs.dim])
     if isinstance(lhs, ts.DimensionType) and isinstance(rhs, ts.ScalarType):
         return ts.DomainType(dims=[lhs.dim])
-    assert all(isinstance(lhs, (ts.ScalarType, ts.DeferredType)) for arg in (lhs, rhs))
+    assert all(isinstance(arg, (ts.ScalarType, ts.DeferredType)) for arg in (lhs, rhs))
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 

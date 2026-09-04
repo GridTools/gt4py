@@ -22,15 +22,11 @@ from gt4py.eve import (
 from gt4py.eve.extended_typing import (
     Any,
     Callable,
-    Dict,
     Final,
     ForwardRef,
-    List,
     Optional,
     Sequence,
-    Set,
     SourceTypeAnnotation,
-    Tuple,
     Union,
 )
 
@@ -53,11 +49,28 @@ class SampleDataClass:
     a: int
 
 
+type SampleTypeAlias = SampleEmptyClass  # PEP 695, nested inside `type[...]`
+
+type SampleRecursiveTypeAlias = SampleRecursiveTypeAlias  # cannot be resolved
+
+SampleBoundTypeVar = typing.TypeVar("SampleBoundTypeVar", bound=SampleEmptyClass)
+SampleUnboundTypeVar = typing.TypeVar("SampleUnboundTypeVar")
+
+
+class SampleProtocol(typing.Protocol):
+    def method(self) -> None: ...
+
+
+@typing.runtime_checkable
+class SampleRuntimeCheckableProtocol(typing.Protocol):
+    attribute: int
+
+
 # Each item should be a tuple like:
 #   ( annotation: Any, valid_values: Sequence, wrong_values: Sequence,
 #     globalns: Optional[Dict[str, Any]], localns: Optional[Dict[str, Any]] )
-SAMPLE_TYPE_DEFINITIONS: List[
-    Tuple[Any, Sequence, Sequence, Optional[Dict[str, Any]], Optional[Dict[str, Any]]]
+SAMPLE_TYPE_DEFINITIONS: list[
+    tuple[Any, Sequence, Sequence, Optional[dict[str, Any]], Optional[dict[str, Any]]]
 ] = [
     (bool, [True, False], [1, "True"], None, None),
     (int, [1, -1], [1.0, "1"], None, None),
@@ -79,6 +92,39 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.List[int], ([1, 2, 3], []), (1, [1.0]), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
+    (type[SampleEmptyClass], [SampleEmptyClass], [SampleEmptyClass(), int, 3], None, None),
+    (type[SampleDataClass], [SampleDataClass], [SampleDataClass(a=1), str], None, None),
+    (type[Any], [SampleEmptyClass, int, str], [3, "int", SampleEmptyClass()], None, None),
+    # `type[X]` shapes that are not a plain class must stay *usable*: they validated
+    # loosely before the `type[X]` case existed, so they fall back to "is a class"
+    # rather than being rejected at class-creation time.
+    (type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (typing.Type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (
+        type[SampleEmptyClass | SampleDataClass],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
+    (
+        type[typing.Union[SampleEmptyClass, SampleDataClass]],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
+    (type[SampleTypeAlias], [SampleEmptyClass], [int, SampleEmptyClass(), 3], None, None),
+    # An alias which cannot be resolved keeps the loose check instead of propagating
+    # the resolution error out of the class definition.
+    (type[SampleRecursiveTypeAlias], [SampleEmptyClass, int], [3, "int"], None, None),
+    # Protocols do not support 'issubclass()' in general, so they keep the loose check
+    # too, independently of whether they are '@runtime_checkable'.
+    (type[SampleProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
+    (type[SampleRuntimeCheckableProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
+    # a bounded TypeVar is honoured, mirroring the plain-TypeVar branch
+    (type[SampleBoundTypeVar], [SampleEmptyClass], [int, SampleEmptyClass()], None, None),
+    (type[SampleUnboundTypeVar], [SampleEmptyClass, int], [3, "int"], None, None),
     (
         frozendict[int, str],
         (
@@ -96,7 +142,7 @@ SAMPLE_TYPE_DEFINITIONS: List[
     (typing.Union[int, float, str], [1, 3.0, "one"], [[1], [], 1j], None, None),
     (typing.Optional[int], [1, None], [[1], [], 1j], None, None),
     (
-        typing.Dict[Union[int, float, str], Union[Tuple[int, Optional[float]], Set[int]]],
+        typing.Dict[Union[int, float, str], Union[tuple[int, Optional[float]], set[int]]],
         [{1: (2, 3.0)}, {1.0: (2, None)}, {"1": {1, 2}}],
         [{(1, 1.0, "1"): set()}, {1: [1]}, {"1": (1,)}],
         None,
@@ -157,6 +203,56 @@ SAMPLE_TYPE_DEFINITIONS.append(
 )
 
 
+# -- PEP 695 type aliases --
+type SampleIntAlias = int
+type SampleChainedAlias = SampleIntAlias
+type SampleListAlias = list[SampleIntAlias]
+type SamplePairAlias[T] = tuple[T, T]
+type SampleNestedTupleAlias[T] = tuple[T | SampleNestedTupleAlias[T], ...]
+
+
+SAMPLE_TYPE_DEFINITIONS.extend(
+    [
+        (SampleIntAlias, [1, -1], [1.0, "1"], None, None),
+        (SampleChainedAlias, [1, -1], [1.0, "1"], None, None),
+        (SampleListAlias, ([1, 2, 3], []), (1, [1.0]), None, None),
+        (list[SampleIntAlias], ([1, 2, 3], []), (1, [1.0]), None, None),
+        (Optional[SampleIntAlias], [1, None], ["1"], None, None),
+        (SamplePairAlias[int], [(1, 2)], [(1, "2"), (1,)], None, None),
+        # Aliases recursing through a container
+        (
+            SampleNestedTupleAlias[int],
+            ((), (1, 2), (1, (2, (3, 4)), ())),
+            (1, [1], (1, "2"), (1, [2])),
+            None,
+            None,
+        ),
+        (
+            SampleNestedTupleAlias[SampleDataClass],
+            ((), (SampleDataClass(1),), (SampleDataClass(1), ((SampleDataClass(2),), ()))),
+            (SampleDataClass(1), [SampleDataClass(1)], (1,), (SampleDataClass(1), (1,))),
+            None,
+            None,
+        ),
+        (
+            xtyping.NestedTuple[int],
+            ((), (1, 2), (1, (2, (3, 4)), ())),
+            (1, [1], (1, "2"), (1, [2])),
+            None,
+            None,
+        ),
+        (
+            xtyping.NestedList[int],
+            ([], [1, 2], [1, [2, [3, 4]], []]),
+            (1, (1,), [1, "2"], [1, (2,)]),
+            None,
+            None,
+        ),
+        (xtyping.MaybeNestedInTuple[int], (1, (), (1, (2, 3))), ("1", [1], (1, "2")), None, None),
+    ]
+)
+
+
 @pytest.mark.parametrize("validator", VALIDATORS)
 @pytest.mark.parametrize(
     ["type_hint", "valid_values", "wrong_values", "globalns", "localns"], SAMPLE_TYPE_DEFINITIONS
@@ -166,8 +262,8 @@ def test_validators(
     type_hint: SourceTypeAnnotation,
     valid_values: Sequence,
     wrong_values: Sequence,
-    globalns: Optional[Dict[str, Any]],
-    localns: Optional[Dict[str, Any]],
+    globalns: Optional[dict[str, Any]],
+    localns: Optional[dict[str, Any]],
 ):
     for value in valid_values:
         validator(value, type_hint, "<value>", globalns=globalns, localns=localns)
@@ -186,8 +282,8 @@ def test_validator_factories(
     type_hint: SourceTypeAnnotation,
     valid_values: Sequence,
     wrong_values: Sequence,
-    globalns: Optional[Dict[str, Any]],
-    localns: Optional[Dict[str, Any]],
+    globalns: Optional[dict[str, Any]],
+    localns: Optional[dict[str, Any]],
 ):
     validator = factory(type_hint, name="<value>", globalns=globalns, localns=localns)
     for value in valid_values:
@@ -215,8 +311,8 @@ def test_validator_factories_with_invalid_hints(
         SampleEmptyClass,
         SampleDataClass,
         SampleEnum,
-        List[int],
-        Dict[Tuple[int, ...], List[Set[complex]]],
+        list[int],
+        dict[tuple[int, ...], list[set[complex]]],
     ],
 )
 def test_simple_validation_cache(type_hint):
@@ -225,7 +321,7 @@ def test_simple_validation_cache(type_hint):
 
     assert type_val.simple_type_validator_factory(type_hint, "value_2") is not validator
     assert type_val.simple_type_validator_factory(Optional[float], "value") is not validator
-    assert type_val.simple_type_validator_factory(List[float], "value") is not validator
+    assert type_val.simple_type_validator_factory(list[float], "value") is not validator
 
     opt_validator = type_val.simple_type_validator_factory(type_hint, "value", required=False)
     assert opt_validator not in (validator, None)
@@ -253,3 +349,33 @@ def test_simple_validation_particularities():
 
     with pytest.raises(ValueError, match="annotation is not supported"):
         type_val.simple_type_validator_factory(InvalidAnnotation, "value")
+
+
+def test_cyclic_type_alias_is_not_supported():
+    # An alias standing for itself directly never reaches an actual annotation, unlike
+    # one recursing through a container (see the samples above).
+    type RecursiveAlias = RecursiveAlias
+
+    # The reason the alias could not be resolved is kept instead of the generic
+    # 'not supported' message, since it is the only thing pointing at the cause.
+    with pytest.raises(ValueError, match="'RecursiveAlias' cannot be resolved"):
+        type_val.simple_type_validator_factory(RecursiveAlias, "value")
+
+    assert type_val.simple_type_validator_factory(RecursiveAlias, "value", required=False) is None
+
+
+def test_type_alias_with_undefined_value_propagates_name_error():
+    # Alias values are evaluated lazily, so the missing name only shows up here.
+    # The error must not be swallowed: 'datamodels' relies on it to defer the
+    # creation of the validator.
+    type LazyAlias = _defined_later  # noqa: F821 [undefined-name]  # defined below
+
+    with pytest.raises(NameError):
+        type_val.simple_type_validator_factory(LazyAlias, "value")
+
+    _defined_later = int
+
+    validator = type_val.simple_type_validator_factory(LazyAlias, "value")
+    validator(1)
+    with pytest.raises(TypeError):
+        validator("1")

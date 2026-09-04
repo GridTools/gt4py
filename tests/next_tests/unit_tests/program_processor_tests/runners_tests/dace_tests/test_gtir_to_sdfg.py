@@ -15,6 +15,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 import functools
 from typing import Any, Callable
 
+import dace
 import numpy as np
 import pytest
 
@@ -38,7 +39,6 @@ from next_tests.integration_tests.cases_utils import (
     skip_value_mesh,
 )
 
-dace = pytest.importorskip("dace")
 from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
 
 
@@ -122,9 +122,9 @@ def build_dace_sdfg(
     offset_provider: gtx_common.OffsetProvider,
     skip_domain_inference: bool = False,
 ) -> Callable[..., Any]:
-    """Wrapper of `dace_lowering.build_sdfg_from_gtir()` to run domain inference.
+    """Wrapper of `dace_lowering.lower_program_to_sdfg()` to run domain inference.
 
-    Before calling `dace_lowering.build_sdfg_from_gtir()`, it will infer the domain
+    Before calling `dace_lowering.lower_program_to_sdfg()`, it will infer the domain
     of the given `ir`, unless called with `skip_domain_inference=True`.
     """
     if not skip_domain_inference:
@@ -135,7 +135,7 @@ def build_dace_sdfg(
             symbolic_domain_sizes=pass_manager._max_domain_range_sizes(offset_provider),
         )
     offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    return dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis=KDim)
+    return dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis=KDim)
 
 
 def apply_margin_on_field_domain(

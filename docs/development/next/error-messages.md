@@ -119,11 +119,13 @@ except errors.DSLError as err:
     raise
 ```
 
-`DSLError.add_note` overrides `BaseException.add_note` to route the note into
-the structured `notes` field instead of `__notes__`: the traceback machinery
-(and therefore pytest and IPython/Jupyter) prints the exception via
-`str(err)`, which already renders the structured notes, so writing `__notes__`
-as well would duplicate them. The seam is wired at `func_to_foast`
+`add_note` puts the breadcrumb in `__notes__`, which is *not* the structured
+`notes` field: `notes` is reserved for content authored at the raise site. The
+two are rendered by different code, so do not expect one to show the other —
+`DSLError.__str__` emits only the structured parts, while `__notes__` is
+printed by the traceback machinery (and therefore by pytest and
+IPython/Jupyter). `errors/excepthook.py` replaces that machinery, so it
+appends `__notes__` itself. The seam is wired at `func_to_foast`
 (`ffront/func_to_foast.py`); add it at later stages as they gain useful
 context.
 
@@ -201,14 +203,8 @@ Unsupported operand type(s) for +: 'Field[[IDim], float64]' and 'Field[[IDim], b
 
 ## Python-version caveat
 
-The supported floor is Python 3.10, so the diagnostics code carries a few
-forward-compat shims; respect them:
-
-- Import `Self` from `gt4py.eve.extended_typing`, not `typing` (3.11+ only).
-- `DSLError.add_note` works on every Python because `DSLError` defines it;
-  don't rely on `add_note` for *other* `GT4PyError`s — it is a builtin only on
-  3.11+.
-- The catalogue must not reference `ast` nodes added after 3.10 (e.g.
-  `ast.TryStar`) unconditionally — that breaks import on 3.10.
-
-These spots are flagged with `TODO(havogt)`.
+`ast` nodes introduced *after* the supported floor cannot be named directly in
+the catalogue — `ast.TemplateStr` (PEP 750 t-strings, 3.14) does not exist on
+3.12, so the module would fail to import there. Register those by name in
+`_NEWER_UNSUPPORTED_FEATURE_HINTS` instead; entries the running interpreter
+does not have are skipped.

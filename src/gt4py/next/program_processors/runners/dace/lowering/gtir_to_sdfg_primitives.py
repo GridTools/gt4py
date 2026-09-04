@@ -24,10 +24,10 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
-    gtir_dataflow,
     gtir_domain,
     gtir_python_codegen,
     gtir_to_sdfg,
+    gtir_to_sdfg_lambda,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -36,10 +36,6 @@ from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_concat_whe
 )
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import translate_scan
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
-
-
-if TYPE_CHECKING:
-    from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg
 
 
 class PrimitiveTranslator(Protocol):
@@ -73,7 +69,7 @@ def _parse_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     domain: gtir_domain.FieldopDomain,
-) -> gtir_dataflow.IteratorExpr | gtir_dataflow.MemletExpr:
+) -> gtir_to_sdfg_lambda.IteratorExpr | gtir_to_sdfg_lambda.MemletExpr:
     """
     Helper method to visit an expression passed as argument to a field operator
     and create the local view for the field argument.
@@ -89,7 +85,7 @@ def _create_field_operator_impl(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
-    output_edge: gtir_dataflow.DataflowOutputEdge,
+    output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit,
 ) -> gtir_to_sdfg_types.FieldopData:
@@ -139,11 +135,10 @@ def _create_field_operator_impl(
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
         assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
-        local_dim: gtx_common.Dimension = output_edge.result.gt_dtype.offset_type  # type: ignore[assignment]  # checked in ValueExpr.__post_init__
+        assert output_edge.result.gt_dtype.offset_type is not None
+        local_dim = output_edge.result.gt_dtype.offset_type
         # construct the full subset according to the canonical field domain
-        extended_dims = gtx_common.order_dimensions(
-            [*field_dims, output_edge.result.gt_dtype.offset_type]  # type: ignore[list-item]  # checked in ValueExpr.__post_init__
-        )
+        extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
         local_idx = extended_dims.index(local_dim)
 
         field_shape.insert(local_idx, dataflow_output_desc.shape[0])
@@ -176,8 +171,8 @@ def _create_field_operator(
     domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output_edge: gtir_dataflow.DataflowOutputEdge,
+    input_edges: Iterable[gtir_to_sdfg_lambda.DataflowInputEdge],
+    output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
     Helper method to build the output of a field operator.
@@ -235,12 +230,14 @@ def translate_as_fieldop(
     The stencil dataflow is instantiated inside a map scope, which applies the stencil
     over the field domain.
     """
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
-    assert len(fun_node.args) == 2
+    if len(fun_node.args) != 2:
+        raise ValueError(
+            f"'as_fieldop' expects exactly 2 arguments (expression, domain): '{node}'."
+        )
     fieldop_expr, fieldop_domain_expr = fun_node.args
 
     if cpm.is_call_to(fieldop_expr, "scan"):
@@ -282,10 +279,10 @@ def translate_as_fieldop(
     fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edge = gtir_dataflow.translate_lambda_to_dataflow(
+    input_edges, output_edge = gtir_to_sdfg_lambda.translate_lambda_to_dataflow(
         ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
     )
-    assert isinstance(output_edge, gtir_dataflow.DataflowOutputEdge)
+    assert isinstance(output_edge, gtir_to_sdfg_lambda.DataflowOutputEdge)
 
     return _create_field_operator(
         ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
@@ -476,7 +473,7 @@ def translate_index(
 
     index_data, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, gtir_to_sdfg_types.INDEX_DTYPE)
     index_node = ctx.state.add_access(index_data)
-    index_value = gtir_dataflow.ValueExpr(
+    index_value = gtir_to_sdfg_lambda.ValueExpr(
         dc_node=index_node,
         gt_dtype=gtx_dace_args.as_itir_type(gtir_to_sdfg_types.INDEX_DTYPE),
     )
@@ -497,9 +494,9 @@ def translate_index(
     )
 
     input_edges = [
-        gtir_dataflow.EmptyInputEdge(ctx.state, index_write_tasklet),
+        gtir_to_sdfg_lambda.EmptyInputEdge(ctx.state, index_write_tasklet),
     ]
-    output_edge = gtir_dataflow.DataflowOutputEdge(ctx.state, index_value)
+    output_edge = gtir_to_sdfg_lambda.DataflowOutputEdge(ctx.state, index_value)
     return _create_field_operator(
         ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
     )

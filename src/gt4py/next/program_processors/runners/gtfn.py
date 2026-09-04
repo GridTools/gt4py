@@ -150,7 +150,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
                     o.bare_translation,
                     input_fingerprinter=stages.compilable_program_fingerprinter,
                     cache=filecache.FileCache(
-                        str(cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME) / "gtfn_cache")
+                        cache.get_translation_cache_folder(
+                            cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "gtfn"
+                        )
                     ),
                 )
             ),
@@ -190,7 +192,6 @@ class GTFNBackendFactory(factory.Factory):
             name_device="gpu",
         )
         device_type = core_defs.DeviceType.CPU
-        key_function = stages.fast_compilable_program_fingerprinter
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory,
             cached_translation=True,
