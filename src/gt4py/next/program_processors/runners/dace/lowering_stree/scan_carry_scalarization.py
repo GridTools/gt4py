@@ -21,12 +21,13 @@ array.
 This module implements an SDFG transformation, intended to run right after
 ``stree.as_sdfg()``, that replaces such a transient array by a transient
 scalar, rewriting all its memlet subsets accordingly.  The match is purely
-structural (no name coupling): any 1-D transient container that
+structural (no name coupling): any transient container that
 
 - lives inside a nested SDFG placed directly inside a ``MapScope``,
 - never escapes through the nested SDFG's connectors,
 - is accessed only through scalar-point memlets that all use the very same
-  subset expression,
+  subset expression (the container may have any rank — a scan over two
+  horizontal dimensions carries a 2D container),
 - whose subset mentions at least one of the enclosing map's parameters, and
 - whose subset does not mention any symbol that changes during a single
   invocation of the nested SDFG (loop variables, interstate assignments),
@@ -61,18 +62,32 @@ class _CarryCandidate:
 
 
 def _scalar_point_accesses(nsdfg: dace.SDFG, name: str) -> list | None:
-    """Return all memlets accessing ``name`` inside ``nsdfg``, or ``None`` if
-    any access is not a single scalar point."""
+    """Return all memlets addressing ``name`` inside ``nsdfg``.
+
+    Every edge is inspected, not just the ones adjacent to an ``AccessNode``:
+    the memlets on the scope edges of the surrounding map carry the same
+    subset and have to be rewritten along with them.
+
+    Returns ``None`` when the container cannot be scalarized, that is when an
+    access is not a single point, or when it is a copy edge (the subset alone
+    does not describe it).
+    """
     memlets = []
     for state in nsdfg.all_states():
+        for edge in state.edges():
+            if edge.data.data != name:
+                continue
+            if edge.data.other_subset is not None:
+                return None
+            if edge.data.subset is None or any(s != 1 for s in edge.data.subset.size()):
+                return None
+            memlets.append(edge.data)
         for node in state.nodes():
             if isinstance(node, dace_nodes.AccessNode) and node.data == name:
-                for edge in state.all_edges(node):
-                    if edge.data.data != name:
-                        continue
-                    if any(s != 1 for s in edge.data.subset.size()):
-                        return None
-                    memlets.append(edge.data)
+                if any(edge.data.data != name for edge in state.all_edges(node)):
+                    # The memlet is expressed in terms of the other container of
+                    # a copy edge, which this pass does not know how to rewrite.
+                    return None
     return memlets
 
 
@@ -109,8 +124,6 @@ def find_carry_candidates(top_sdfg: dace.SDFG) -> list[_CarryCandidate]:
             for name, arr in nsdfg.arrays.items():
                 if not arr.transient or name in escaped:
                     continue  # must be internal storage of the nested SDFG
-                if len(arr.shape) != 1:
-                    continue
                 accesses = _scalar_point_accesses(nsdfg, name)
                 if not accesses:
                     continue
@@ -136,14 +149,13 @@ def scalarize_scan_carries(top_sdfg: dace.SDFG) -> set[str]:
     for cand in find_carry_candidates(top_sdfg):
         nsdfg, name = cand.nsdfg, cand.name
         for state in nsdfg.all_states():
-            for node in state.nodes():
-                if isinstance(node, dace_nodes.AccessNode) and node.data == name:
-                    for edge in state.all_edges(node):
-                        if edge.data.data != name:
-                            continue
-                        edge.data.subset = dace_subsets.Range.from_string(
-                            ",".join("0" for _ in edge.data.subset.ranges)
-                        )
+            for edge in state.edges():
+                if edge.data.data != name:
+                    continue
+                # A ``Scalar`` has a single dimension, so the subset collapses
+                # to one "0" whatever the rank of the array was (a scan over
+                # two horizontal dimensions carries a 2D container).
+                edge.data.subset = dace_subsets.Range.from_string("0")
         scalar = dace.data.Scalar(nsdfg.arrays[name].dtype, transient=True)
         nsdfg.remove_data(name, validate=False)
         nsdfg.add_datadesc(name, copy.deepcopy(scalar), find_new_name=False)
