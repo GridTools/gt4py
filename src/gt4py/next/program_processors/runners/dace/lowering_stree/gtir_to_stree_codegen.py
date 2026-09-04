@@ -669,10 +669,18 @@ class StreePythonCodegen(eve.NodeVisitor):
         already-lowered field handle and are never resolved away; the
         identity check stops self-referential mappings
         (e.g. ``args_map={'in_field': SymRef('in_field')}``).
+
+        Symbols in ``string_args`` are stopped at for the same reason: they
+        have already been resolved to a code string by ``_bind_inlined_args``,
+        which also drops them from ``data_args``.  Their ``args_map`` entry is
+        stale from that point on and following it would resolve to whatever
+        the parameter was bound to in the enclosing scope — possibly a symbol
+        that has no meaning inside the tasklet, such as a field bound by a
+        ``let`` outside the stencil expression.
         """
         while isinstance(arg, gtir.SymRef):
             symbol = str(arg.id)
-            if symbol in ctx.data_args or symbol not in ctx.args_map:
+            if symbol in ctx.string_args or symbol in ctx.data_args or symbol not in ctx.args_map:
                 break
             mapped = ctx.args_map[symbol]
             if mapped == arg or not isinstance(mapped, gtir.Expr):
