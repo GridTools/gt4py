@@ -438,10 +438,7 @@ class DaCeTranslator(
 
         if self.use_stree_lowering:
             stree = gtx_dace_lower_stree(ir, offset_provider_type, column_axis)
-            sdfg = stree.as_sdfg(
-                validate=True,
-                skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
-            )
+            sdfg = stree.as_sdfg(validate=True)
             scalarized = gtx_dace_scan_carry_scalarization.scalarize_scan_carries(sdfg)
             if scalarized:
                 sdfg.validate()
