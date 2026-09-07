@@ -32,9 +32,6 @@ import dataclasses
 import itertools
 from typing import Any, Mapping
 
-import dace
-import numpy as np
-
 from gt4py import eve
 from gt4py.eve import codegen
 from gt4py.next import common as gtx_common
@@ -70,10 +67,9 @@ class ListElementAccess:
             composed); list materializations embed it in a conditional
             expression.
         dummy: Replacement value for skipped elements when the neighbor
-            values are materialized into a list — ``math.nan`` for
-            floating-point, the dtype's max value for integers (matching
-            the SDFG lowering, where the dummy is masked out by any
-            skip-aware consumer).
+            values are materialized into a list — the dtype's max value
+            (see ``skip_value_replacement``), matching the SDFG lowering,
+            where the dummy is masked out by any skip-aware consumer.
         body: Statements evaluating ``expr`` — non-empty only for
             ``neighbors(offset, (↑stencil)(...))`` sources, where the
             stencil body (e.g. containing a nested ``reduce``) is evaluated
@@ -1114,11 +1110,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             assert isinstance(field_dtype, ts.ListType)
             assert isinstance(field_dtype.element_type, ts.ScalarType)
             dc_dtype = gtx_dace_args.as_dace_type(field_dtype.element_type)
-        # Use NaN for floating point, max value for integers
-        if np.issubdtype(dc_dtype.as_numpy_dtype(), np.floating):
-            dummy = "math.nan"
-        else:
-            dummy = str(dace.dtypes.max_value(dc_dtype))
+        dummy = gtx_dace_args.skip_value_replacement(dc_dtype)
 
         return ListElementAccess(expr=access_expr, mask=mask, dummy=dummy)
 
@@ -1199,11 +1191,7 @@ class StreePythonCodegen(eve.NodeVisitor):
         element_type = node.type.element_type
         assert isinstance(element_type, ts.ScalarType)
         dc_element_type = gtx_dace_args.as_dace_type(element_type)
-        dummy = (
-            "math.nan"
-            if np.issubdtype(dc_element_type.as_numpy_dtype(), np.floating)
-            else str(dace.dtypes.max_value(dc_element_type))
-        )
+        dummy = gtx_dace_args.skip_value_replacement(dc_element_type)
 
         return ListElementAccess(
             expr=element_expr, mask=mask, dummy=dummy, body=tuple(child_ctx.pre_statements)
@@ -1752,11 +1740,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                         )
                         assert isinstance(element_type, ts.ScalarType)
                         dc_element_type = gtx_dace_args.as_dace_type(element_type)
-                        dummy = (
-                            "math.nan"
-                            if np.issubdtype(dc_element_type.as_numpy_dtype(), np.floating)
-                            else str(dace.dtypes.max_value(dc_element_type))
-                        )
+                        dummy = gtx_dace_args.skip_value_replacement(dc_element_type)
                     # Pass the field through a 1-D slice connector on the
                     # input edge: the memlet subset fixes the global
                     # dimensions at their exact indices and ranges over
@@ -1957,8 +1941,8 @@ def generate_list_tasklet_code(
     declared by the caller for the local dimension).
 
     Skipped neighbors (connectivity tables with skip values) write the
-    dummy value (``math.nan`` or the dtype's max value), matching the
-    materialization in ``_visit_neighbors`` of the SDFG lowering.
+    dummy value (the dtype's max value, see ``skip_value_replacement``),
+    matching the materialization in ``_visit_neighbors`` of the SDFG lowering.
 
     Args:
         expr: The GTIR expression (stencil body) to lower; must be typed
@@ -2001,17 +1985,12 @@ def generate_list_tasklet_code(
     if element.mask is not None:
         dummy = element.dummy
         if not dummy:
-            # Skipped list positions are filled with a dummy value (nan for
-            # floating point, the dtype's max value for integers), matching
-            # ``_visit_map`` in the SDFG lowering.
+            # Skipped list positions are filled with a dummy value (the dtype's
+            # max value), matching ``_visit_map`` in the SDFG lowering.
             element_type = expr.type.element_type
             assert isinstance(element_type, ts.ScalarType)
             dc_element_type = gtx_dace_args.as_dace_type(element_type)
-            dummy = (
-                "math.nan"
-                if np.issubdtype(dc_element_type.as_numpy_dtype(), np.floating)
-                else str(dace.dtypes.max_value(dc_element_type))
-            )
+            dummy = gtx_dace_args.skip_value_replacement(dc_element_type)
         expr_code = f"({expr_code}) if {element.mask} else {dummy}"
     return (
         expr_code,

@@ -719,11 +719,7 @@ def translate_map_list(
         used_connectivities.add(conn_name)
         element_type = node.type.element_type
         assert isinstance(element_type, ts.ScalarType)
-        skip_value = (
-            "math.nan"
-            if ti.is_floating_point(element_type)
-            else str(dace.dtypes.max_value(gtx_dace_args.as_dace_type(element_type)))
-        )
+        skip_value = gtx_dace_args.skip_value_replacement(gtx_dace_args.as_dace_type(element_type))
         expr_code = (
             f"({expr_code}) if {map_var} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
         )
