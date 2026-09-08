@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import builtins
 import functools
 import inspect
 import pathlib
@@ -21,11 +22,48 @@ from typing import Any, cast
 MISSING_FILENAME = "<string>"
 
 
+def _global_names_from_source(source: str) -> set[str]:
+    """
+    Names referenced as globals in the function defined by `source`, including its nested scopes.
+
+    The compiler's own scope analysis decides what is a global, so locals shadowing a
+    global name and comprehension targets are never reported.
+    """
+
+    def walk(table: symtable.SymbolTable) -> Iterator[str]:
+        if isinstance(table, symtable.Function):
+            yield from table.get_globals()
+        for child in table.get_children():
+            yield from walk(child)
+
+    # Analyzed as if under PEP 563 so that annotations contribute no names: Python evaluates
+    # parameter and return annotations in the enclosing scope and never evaluates local
+    # variable annotations, but only Python 3.14's symtable stops reporting the latter.
+    source = "from __future__ import annotations\n" + source
+    return set(walk(symtable.symtable(source, MISSING_FILENAME, "exec")))
+
+
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
-    (nonlocals, globals, builtins, _unbound) = inspect.getclosurevars(function)  # noqa: A001 [builtin-variable-shadowing]
+    # `inspect.getclosurevars` only sees the names of the function's own code object, which
+    # misses names referenced only inside a nested scope such as a generator expression.
+    # Free variables are unaffected (they are cells of the function itself), so only the
+    # global names are taken from the source instead.
+    nonlocals = inspect.getclosurevars(function).nonlocals
+    global_ns = function.__globals__
+    builtin_ns = global_ns.get("__builtins__", builtins.__dict__)
+    if inspect.ismodule(builtin_ns):
+        builtin_ns = builtin_ns.__dict__
+
+    source = make_source_definition_from_function(function).source
+    closure_vars: dict[str, Any] = {}
+    for name in _global_names_from_source(source):
+        if name in global_ns:
+            closure_vars[name] = global_ns[name]
+        elif name in builtin_ns:
+            closure_vars[name] = builtin_ns[name]
 
     # nonlocals override globals, sorted for deterministic results
-    return dict(sorted({**builtins, **globals, **nonlocals}.items()))
+    return dict(sorted({**closure_vars, **nonlocals}.items()))
 
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
