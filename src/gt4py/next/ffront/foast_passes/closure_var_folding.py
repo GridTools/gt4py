@@ -8,12 +8,36 @@
 
 import dataclasses
 import enum
+import re
+import types
 from typing import Any
 
 import gt4py.next.ffront.field_operator_ast as foast
-from gt4py.eve import NodeTranslator, traits
+from gt4py._core import definitions as core_defs
+from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next import errors
+from gt4py.next.ffront import dialect_ast_enums, experimental, fbuiltins, gtcallable
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.type_system import type_translation
+
+
+_BUILTINS_BY_NAME: dict[str, Any] = {
+    **fbuiltins.BUILTINS,
+    **{name: getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES},
+}
+_BUILTIN_NAME_BY_ID: dict[int, str] = {id(value): name for name, value in _BUILTINS_BY_NAME.items()}
+
+
+def _canonical_name(value: Any) -> str | None:
+    """Name under which `value` is known to the later passes, or `None` if it has none."""
+    name = _BUILTIN_NAME_BY_ID.get(id(value))
+    if name is not None and _BUILTINS_BY_NAME[name] is value:
+        return name
+    if isinstance(value, gtcallable.GTCallable) and (
+        definition := getattr(value, "definition", None)
+    ):
+        return re.sub(r"\W", "_", f"{definition.__module__}.{definition.__qualname__}")
+    return None
 
 
 @dataclasses.dataclass
@@ -22,11 +46,18 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     Replace references to closure variables or their attributes with constants.
 
     `Name` nodes that refer to closure variables are replaced by `Constant`
-     nodes. `Attribute` nodes that refer to attributes of closure variables
-     are recursively replaced by `Constant` nodes.
+    nodes. `Attribute` nodes that refer to attributes of closure variables
+    are recursively replaced by `Constant` nodes.
+
+    References that reach a value through a module (`np.pi`, `gtx.where`,
+    `helpers.helper`) or refer to a builtin under another name are resolved by
+    value: scalars become `Constant`s, builtins and `GTCallable`s become a
+    `Name` of a canonical, value-derived symbol that is added to `closure_vars`
+    and to the function's closure variable symbols.
     """
 
     closure_vars: dict[str, Any]
+    _added_closure_vars: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def apply(
@@ -34,25 +65,48 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     ) -> foast.FunctionDefinition:
         return cls(closure_vars=closure_vars).visit(node)
 
+    def _closure_value(
+        self,
+        node: foast.Expr,
+        current_closure_vars: list[foast.Symbol],
+        symtable: dict[str, foast.Symbol],
+    ) -> Any:
+        """Python value of a closure variable reference, resolved through module attributes."""
+        if isinstance(node, foast.Name):
+            if node.id in symtable and symtable[node.id] in current_closure_vars:
+                return self.closure_vars[node.id]
+        elif isinstance(node, foast.Attribute):
+            base = self._closure_value(node.value, current_closure_vars, symtable)
+            if isinstance(base, types.ModuleType):
+                if not hasattr(base, node.attr):
+                    raise errors.MissingAttributeError(node.location, node.attr)
+                return getattr(base, node.attr)
+        return _MISSING
+
     def visit_Name(
         self,
         node: foast.Name,
-        current_closure_vars: dict[str, Any],
+        current_closure_vars: list[foast.Symbol],
         symtable: dict[str, foast.Symbol],
         **kwargs: Any,
     ) -> foast.Name | foast.Constant:
-        if node.id in symtable:
-            definition = symtable[node.id]
-            if definition in current_closure_vars:
-                value = self.closure_vars[node.id]
-                if isinstance(value, type_translation.ConstantPythonNamespaceObject):
-                    return foast.Constant(value=value, location=node.location)
+        value = self._closure_value(node, current_closure_vars, symtable)
+        if isinstance(value, type_translation.ConstantPythonNamespaceObject):
+            return foast.Constant(value=value, location=node.location)
+        if (name := _canonical_name(value)) is not None and name != node.id:
+            return self._reference(name, value, node.location, symtable)
         return node
 
     def visit_Attribute(
-        self, node: foast.Attribute, **kwargs: Any
-    ) -> foast.Constant | foast.Attribute:
-        value = self.visit(node.value, **kwargs)
+        self,
+        node: foast.Attribute,
+        current_closure_vars: list[foast.Symbol],
+        symtable: dict[str, foast.Symbol],
+        **kwargs: Any,
+    ) -> foast.Constant | foast.Attribute | foast.Name:
+        value = self.visit(
+            node.value, current_closure_vars=current_closure_vars, symtable=symtable, **kwargs
+        )
         if isinstance(value, foast.Constant):
             if hasattr(value.value, node.attr):
                 const_value = getattr(value.value, node.attr)
@@ -60,9 +114,64 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     const_value = const_value.value
                 return foast.Constant(value=const_value, location=node.location)
             raise errors.MissingAttributeError(node.location, node.attr)
+        if isinstance(node.value, (foast.Name, foast.Attribute)):
+            leaf = self._closure_value(node, current_closure_vars, symtable)
+            if (name := _canonical_name(leaf)) is not None:
+                return self._reference(name, leaf, node.location, symtable)
+            if core_defs.is_scalar_type(leaf):
+                return foast.Constant(value=leaf, location=node.location)
         return node
+
+    def _reference(
+        self,
+        name: str,
+        value: Any,
+        location: concepts.SourceLocation,
+        symtable: dict[str, foast.Symbol],
+    ) -> foast.Name:
+        if name in self.closure_vars:
+            if self.closure_vars[name] is not value:
+                raise errors.DSLError(
+                    location,
+                    f"Reference resolves to '{name}', which is bound to a different value in the "
+                    "closure of this function.",
+                )
+        elif any(ssa.original_name(symbol) == name for symbol in symtable):
+            raise errors.DSLError(
+                location,
+                f"Reference resolves to '{name}', which is shadowed by a local variable or "
+                "parameter of the same name.",
+            )
+        else:
+            self.closure_vars[name] = value
+            self._added_closure_vars[name] = value
+        return foast.Name(id=name, location=location)
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
-        return self.generic_visit(node, current_closure_vars=node.closure_vars, **kwargs)
+        new_node: foast.FunctionDefinition = self.generic_visit(
+            node, current_closure_vars=node.closure_vars, **kwargs
+        )
+        if not self._added_closure_vars:
+            return new_node
+        new_symbols: list[foast.Symbol] = [
+            foast.Symbol(
+                id=name,
+                type=type_translation.from_value(value),
+                namespace=dialect_ast_enums.Namespace.CLOSURE,
+                location=new_node.location,
+            )
+            for name, value in self._added_closure_vars.items()
+        ]
+        return foast.FunctionDefinition(
+            id=new_node.id,
+            params=new_node.params,
+            body=new_node.body,
+            closure_vars=[*new_node.closure_vars, *new_symbols],
+            type=new_node.type,
+            location=new_node.location,
+        )
+
+
+_MISSING = object()

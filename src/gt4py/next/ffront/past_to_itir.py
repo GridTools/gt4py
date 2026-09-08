@@ -82,7 +82,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
 
     gt_callables = transform_utils._filter_closure_vars_by_type(
         all_closure_vars, gtcallable.GTCallable
-    ).values()
+    )
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
     # TODO(ricoh): The following calls to .__gt_itir__, which will use whatever
@@ -90,8 +90,14 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
     #  we should use the current toolchain to lower these to ITIR. This will require
     #  making this step aware of the toolchain it is called by (it can be part of multiple).
     lowered_funcs = []
-    for gt_callable in gt_callables:
-        lowered_funcs.append(gt_callable.__gt_gtir__())
+    for name, gt_callable in gt_callables.items():
+        lowered_func = gt_callable.__gt_gtir__()
+        if lowered_func.id != name:
+            # a callable is registered under each name it is referenced by, e.g. an alias
+            lowered_func = itir.FunctionDefinition(
+                id=name, params=lowered_func.params, expr=lowered_func.expr
+            )
+        lowered_funcs.append(lowered_func)
 
     itir_program = ProgramLowering.apply(
         inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
