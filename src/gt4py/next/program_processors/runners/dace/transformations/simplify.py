@@ -655,6 +655,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                     continue
                 if state.out_degree(temp_storage) != 1:
                     continue
+                # The write-back node must not be written to in this state (see
+                #  the class description), which excludes transients receiving
+                #  partial writes from multiple states, e.g. `concat_where`.
+                if state.in_degree(temp_storage) != 0:
+                    continue
                 dst_candidate: dace_nodes.AccessNode = next(
                     iter(edge.dst for edge in state.out_edges(temp_storage))
                 )
