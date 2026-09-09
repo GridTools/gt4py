@@ -8,7 +8,7 @@
 
 import dataclasses
 import enum
-import re
+import hashlib
 import types
 from typing import Any
 
@@ -21,16 +21,14 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.type_system import type_translation
 
 
-_BUILTINS_BY_NAME: dict[str, Any] = {
+_BUILTINS: dict[str, Any] = {
     **fbuiltins.BUILTINS,
     **{name: getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES},
 }
-_BUILTIN_NAME_BY_ID: dict[int, str] = {id(value): name for name, value in _BUILTINS_BY_NAME.items()}
 
 
 def _builtin_name(value: Any) -> str | None:
-    name = _BUILTIN_NAME_BY_ID.get(id(value))
-    return name if name is not None and _BUILTINS_BY_NAME[name] is value else None
+    return next((name for name, builtin in _BUILTINS.items() if builtin is value), None)
 
 
 def _operator_name(value: Any) -> str | None:
@@ -38,7 +36,8 @@ def _operator_name(value: Any) -> str | None:
     if isinstance(value, gtcallable.GTCallable) and (
         definition := getattr(value, "definition", None)
     ):
-        return re.sub(r"\W", "_", f"{definition.__module__}.{definition.__qualname__}")
+        key = f"{definition.__code__.co_filename}:{definition.__qualname__}".encode()
+        return f"{definition.__name__}_{hashlib.sha256(key).hexdigest()[:8]}"
     return None
 
 
@@ -147,8 +146,8 @@ class ClosureVarFolding(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         elif self.closure_vars[name] is not value:
             raise errors.DSLError(
                 location,
-                f"Reference resolves to '{name}', which is bound to a different value in the "
-                "closure of this function.",
+                f"Reference resolves to '{name}', but '{name}' already refers to a different "
+                "value in this function.",
             )
         return foast.Name(id=name, location=location)
 
