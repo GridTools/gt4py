@@ -20,6 +20,7 @@ them.
 
 import gt4py.next as gtx
 from gt4py.next import Dims, Dimension, float64, neighbor_sum
+from gt4py.next.ffront import source_utils
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
 
 
@@ -84,3 +85,26 @@ def test_local_name_shadowing_a_global_is_not_collected_as_global():
         return t
 
     assert "scale" not in get_closure_vars_from_function(shadows)
+
+
+def test_source_is_analyzed_once_per_code_object(monkeypatch):
+    calls = []
+    read_source = source_utils.make_source_definition_from_function
+    monkeypatch.setattr(
+        source_utils,
+        "make_source_definition_from_function",
+        lambda f: calls.append(f) or read_source(f),
+    )
+    source_utils._global_names_of_code.cache_clear()
+
+    get_closure_vars_from_function(_module_level_operator)
+    get_closure_vars_from_function(_module_level_operator)
+
+    assert calls == [_module_level_operator.__code__]
+
+
+def test_values_are_looked_up_on_every_call(monkeypatch):
+    """Only the names are cached, so rebinding a global is seen by the next collection."""
+    assert get_closure_vars_from_function(_module_level_operator)["scale"] is scale
+    monkeypatch.setitem(globals(), "scale", 42)
+    assert get_closure_vars_from_function(_module_level_operator)["scale"] == 42

@@ -14,6 +14,7 @@ import inspect
 import pathlib
 import symtable
 import textwrap
+import types
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast
@@ -43,6 +44,11 @@ def _global_names_from_source(source: str) -> set[str]:
     return set(walk(symtable.symtable(source, MISSING_FILENAME, "exec")))
 
 
+@functools.cache
+def _global_names_of_code(code: types.CodeType) -> frozenset[str]:
+    return frozenset(_global_names_from_source(make_source_definition_from_function(code).source))
+
+
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     # `inspect.getclosurevars` only sees the names of the function's own code object, which
     # misses names referenced only inside a nested scope such as a generator expression.
@@ -54,9 +60,8 @@ def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     if inspect.ismodule(builtin_ns):
         builtin_ns = builtin_ns.__dict__
 
-    source = make_source_definition_from_function(function).source
     closure_vars: dict[str, Any] = {}
-    for name in _global_names_from_source(source):
+    for name in _global_names_of_code(function.__code__):
         if name in global_ns:
             closure_vars[name] = global_ns[name]
         elif name in builtin_ns:
@@ -66,7 +71,7 @@ def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     return dict(sorted({**closure_vars, **nonlocals}.items()))
 
 
-def make_source_definition_from_function(func: Callable) -> SourceDefinition:
+def make_source_definition_from_function(func: Callable | types.CodeType) -> SourceDefinition:
     try:
         filename = str(pathlib.Path(inspect.getabsfile(func)).resolve())
         if not filename:
