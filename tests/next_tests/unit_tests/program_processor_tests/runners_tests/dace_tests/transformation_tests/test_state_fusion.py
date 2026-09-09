@@ -172,6 +172,68 @@ def _make_global_both_state_write() -> tuple[dace.SDFG, dace.SDFGState, dace.SDF
     return sdfg, state1, state2
 
 
+def _make_transient_both_states_write() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
+    """In both states the same transient is written and it is read in the second one.
+
+    The two states write disjoint subsets of the transient `t` and the second
+    state also fully reads it. This is, in essence, the pattern that is emitted
+    by the stree lowering of `concat_where`.
+
+    Note that the fusion is not allowed, because after it the write to `t` in
+    the first state would no longer be connected to the read in the second
+    state (ADR-018 requires that a transient is written within a single state).
+    """
+    sdfg = dace.SDFG(util.unique_name("transient_write_in_both_states"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["a", "b", "o"]:
+        sdfg.add_array(
+            name,
+            shape=(20,),
+            dtype=dace.float64,
+            transient=False,
+        )
+    sdfg.add_array(
+        "t",
+        shape=(20,),
+        dtype=dace.float64,
+        transient=True,
+    )
+
+    state1.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in1": dace.Memlet("a[__i]")},
+        code="__out = __in1 + 10.",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        external_edges=True,
+    )
+
+    t2 = state2.add_access("t")
+    state2.add_mapped_tasklet(
+        "comp2_1",
+        map_ranges={"__i": "10:20"},
+        inputs={"__in1": dace.Memlet("b[__i]")},
+        code="__out = __in1 + 12.",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        external_edges=True,
+        output_nodes={t2},
+    )
+    state2.add_mapped_tasklet(
+        "comp2_2",
+        map_ranges={"__i": "0:20"},
+        inputs={"__in1": dace.Memlet("t[__i]")},
+        code="__out = __in1 * 2.",
+        outputs={"__out": dace.Memlet("o[__i]")},
+        external_edges=True,
+        input_nodes={t2},
+    )
+    sdfg.validate()
+
+    return sdfg, state1, state2
+
+
 def _make_empty_state(
     first_state_empty: bool,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
@@ -587,6 +649,22 @@ def test_global_in_both_states_write():
         for ac in ac_nodes
         if ac.data != "a"
     )
+
+
+def test_transient_in_both_states_write():
+    sdfg, state1, state2 = _make_transient_both_states_write()
+
+    # The transient is written in both states and read in the second one. Fusing
+    #  the states would disconnect the write to `t` in the first state from the
+    #  read in the second state, so the transformation must not apply.
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    assert nb_applied == 0
+    assert sdfg.start_block is state1
+    assert sdfg.number_of_nodes() == 2
+    assert util.count_nodes(state1, dace_nodes.AccessNode) == 2
+    assert util.count_nodes(state2, dace_nodes.AccessNode) == 3
 
 
 def test_empty_first_state():
