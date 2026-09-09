@@ -94,6 +94,21 @@ def test_module_prefixed_operator_gets_a_synthesized_name():
         assert name in _closure_symbol_ids(node)
 
 
+def test_synthesized_operator_name_does_not_depend_on_the_source_path():
+    definition = helper.definition
+    moved = types.FunctionType(
+        definition.__code__.replace(co_filename="/elsewhere/checkout/helpers.py"),
+        definition.__globals__,
+    )
+    assert (moved.__module__, moved.__qualname__) == (
+        definition.__module__,
+        definition.__qualname__,
+    )
+    assert closure_var_folding._operator_name_from_definition(
+        moved
+    ) == closure_var_folding._operator_name(helper)
+
+
 def test_module_scalar_attribute_is_folded():
     def testee(a: IField) -> IField:
         return a * np.pi

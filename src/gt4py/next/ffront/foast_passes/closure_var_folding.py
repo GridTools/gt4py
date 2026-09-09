@@ -36,9 +36,15 @@ def _operator_name(value: Any) -> str | None:
     if isinstance(value, gtcallable.GTCallable) and (
         definition := getattr(value, "definition", None)
     ):
-        key = f"{definition.__code__.co_filename}:{definition.__qualname__}".encode()
-        return f"{definition.__name__}_{hashlib.sha256(key).hexdigest()[:8]}"
+        return _operator_name_from_definition(definition)
     return None
+
+
+def _operator_name_from_definition(definition: types.FunctionType) -> str:
+    # derived from the import path, not the file path, so the symbol (and with it the IR and
+    # the on-disk cache keys) is the same for every checkout of the same code
+    key = f"{definition.__module__}.{definition.__qualname__}".encode()
+    return f"{definition.__name__}_{hashlib.sha256(key).hexdigest()[:8]}"
 
 
 @dataclasses.dataclass
