@@ -25,7 +25,7 @@ GTEntryPoint: TypeAlias = Annotated[decorator.GTEntryPoint, _ONLY_FOR_TYPING]
 
 CompiledProgramsKey: TypeAlias = Annotated[compiled_program.CompiledProgramsKey, _ONLY_FOR_TYPING]
 
-Backend: TypeAlias = Annotated[backend.Backend, _ONLY_FOR_TYPING]
+Toolchain: TypeAlias = Annotated[backend.Toolchain, _ONLY_FOR_TYPING]
 
 Allocator: TypeAlias = Annotated[constructors.Allocator, _ONLY_FOR_TYPING]
 
@@ -34,10 +34,9 @@ OffsetProvider: TypeAlias = Annotated[common.OffsetProvider, _ONLY_FOR_TYPING]
 
 __all__ = [
     "Allocator",
-    "Backend",
     "FieldOperator",
     "OffsetProvider",
     "Program",
-    # from _core.definitions for convenience
-    "Scalar",
+    "Scalar",  # from _core.definitions for convenience
+    "Toolchain",
 ]

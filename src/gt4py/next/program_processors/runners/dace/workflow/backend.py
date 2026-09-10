@@ -14,7 +14,7 @@ from typing import Any, Final
 
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config
+from gt4py.next import backend as next_backend, common, config
 from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -25,15 +25,20 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeBackend(backend.Backend[Any]):
-    """DaCe backend with support for injecting an external workspace at load time."""
+class DaCeLoadingStep:
+    """
+    Loading step that injects an external workspace into the loaded program.
+
+    The workspace is owned by the caller, not by the toolchain; it is installed
+    onto the program wrapper before its first call, so that it is used when the
+    SDFG argument vector is constructed.
+    """
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
 
-    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
-        program = super().load_artifact(artifact)
+    def __call__(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
+        program = artifacts.load_artifact(artifact)
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
-        # Inject the backend-level workspace so it is used when arguments are constructed.
         program.set_external_workspace(self.external_workspace or {})
         return program
 
@@ -48,7 +53,7 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+) -> next_backend.Toolchain:
     """Customize the dace backend with the given configuration parameters.
 
     Args:
@@ -137,14 +142,14 @@ def make_dace_backend(
         use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
-    return DaCeBackend(
+    return next_backend.Toolchain(
         name=f"run_dace_{name_device}{'_opt' if auto_optimize else ''}",
-        executor=gtx_wfdfactory.make_dace_compile_workflow(
+        backend=gtx_wfdfactory.make_dace_compile_workflow(
             device_type=device_type, cached_translation=True, translation=translation
         ),
         allocator=allocator,
-        transforms=backend.DEFAULT_TRANSFORMS,
-        external_workspace=external_workspace,
+        frontend=next_backend.DEFAULT_TRANSFORMS,
+        loading=DaCeLoadingStep(external_workspace),
     )
 
 

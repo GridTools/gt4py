@@ -15,7 +15,7 @@ import numpy as np
 import gt4py._core.definitions as core_defs
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils, fingerprinting
+from gt4py.next import backend as next_backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.otf import artifacts, recipes, stages, workflow
@@ -174,7 +174,7 @@ def make_gtfn_compile_workflow(
     translation_step: stages.TranslationStep
     if cached_translation:
         translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
+            stages.CompilableProgram, artifacts.ProgramSource, str
         ].persistent(
             bare_translation,
             input_fingerprinter=fingerprinting.strict_fingerprinter,
@@ -209,21 +209,21 @@ def make_gtfn_backend(
     gpu: bool = False,
     name_postfix: str = "",
     translation: gtfn_module.GTFNTranslationStep | None = None,
-    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    backend: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
     | None = None,
-) -> backend.Backend:
+) -> next_backend.Toolchain:
     """
-    Build a GTFN backend for the given device.
+    Build a GTFN toolchain for the given device.
 
     Args:
         gpu: Target the GPU instead of the CPU.
         name_postfix: Appended to the backend name, which must stay unique.
         translation: A pre-built translation step, forwarded to
             `make_gtfn_compile_workflow`.
-        executor: A pre-built compile workflow, replacing the default one.
+        backend: A pre-built compile pipeline, replacing the default one.
 
     Returns:
-        The configured backend.
+        The configured toolchain.
     """
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device_type: core_defs.DeviceType
@@ -236,16 +236,16 @@ def make_gtfn_backend(
         device_type = core_defs.DeviceType.CPU
         name_device = "cpu"
 
-    if executor is None:
-        executor = make_gtfn_compile_workflow(
+    if backend is None:
+        backend = make_gtfn_compile_workflow(
             device_type=device_type, cached_translation=True, translation=translation
         )
 
-    return backend.Backend(
+    return next_backend.Toolchain(
         name=f"run_gtfn_{name_device}{name_postfix}",
-        executor=executor,
+        backend=backend,
         allocator=allocator,
-        transforms=backend.DEFAULT_TRANSFORMS,
+        frontend=next_backend.DEFAULT_TRANSFORMS,
     )
 
 

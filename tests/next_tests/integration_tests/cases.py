@@ -546,7 +546,7 @@ def cartesian_case_no_backend():
 
 @pytest.fixture
 def cartesian_case(
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Toolchain,
 ):
     return Case.from_cartesian_grid_descriptor(
         simple_cartesian_grid(),
@@ -567,7 +567,7 @@ def unstructured_case_no_backend(mesh_descriptor: MeshDescriptor):
 @pytest.fixture
 def unstructured_case(
     mesh_descriptor: MeshDescriptor,
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Toolchain,
 ):
     return Case.from_mesh_descriptor(
         mesh_descriptor,
@@ -713,7 +713,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    backend: Optional[next_backend.Backend]
+    backend: Optional[next_backend.Toolchain]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
@@ -727,7 +727,7 @@ class Case:
     def from_cartesian_grid_descriptor(
         cls,
         grid_descriptor: CartesianGridDescriptor,
-        backend: Optional[next_backend.Backend] = None,
+        backend: Optional[next_backend.Toolchain] = None,
         allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
     ) -> Case:
         return cls(
@@ -749,7 +749,7 @@ class Case:
     def from_mesh_descriptor(
         cls,
         mesh_descriptor: MeshDescriptor,
-        backend: Optional[next_backend.Backend] = None,
+        backend: Optional[next_backend.Toolchain] = None,
         allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
     ) -> Case:
         return cls(

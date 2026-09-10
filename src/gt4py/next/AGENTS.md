@@ -31,6 +31,9 @@ field operators / programs (ffront)
   Distinct from `iterator/embedded.py`, which runs one level lower.
 - `otf/` — on-the-fly compilation toolchain (workflow steps, caching,
   argument descriptors).
+- `backend.py` — the toolchain root object `Toolchain` (formerly `Backend`):
+  `frontend` (definition transforms) + `backend` (compile pipeline) +
+  allocator.
 - `program_processors/runners/` — the backends: `gtfn` (GridTools C++),
   `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
 - `type_system/` — `next` type specifications and the type inference the

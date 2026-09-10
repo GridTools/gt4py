@@ -33,23 +33,23 @@ class ItirShim:
     lowering has access to the relevant information.
     """
 
-    definition: ConcreteFOASTOperatorDef
+    operator_def: ConcreteFOASTOperatorDef
     foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
-        return self.definition.data.closure_vars
+        return self.operator_def.definition.closure_vars
 
     def __gt_type__(self) -> ts.CallableType:
-        assert isinstance(self.definition.data.foast_node.type, ts.CallableType)
-        return self.definition.data.foast_node.type
+        assert isinstance(self.operator_def.definition.foast_node.type, ts.CallableType)
+        return self.operator_def.definition.foast_node.type
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return self.foast_to_itir(self.definition)
+        return self.foast_to_itir(self.operator_def)
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
     def __gt_gtir__(self) -> itir.FunctionDefinition:
         # backend should have self.foast_to_itir set to foast_to_gtir
-        return self.foast_to_itir(self.definition)
+        return self.foast_to_itir(self.operator_def)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -82,14 +82,15 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ...     argument_descriptor_contexts={},
         ... )
 
-        >>> copy_program = op_to_prog(
-        ...     workflow.ConcreteArtifact(copy.foast_stage, compile_time_args)
-        ... )
+        >>> copy_program = op_to_prog(workflow.ProgramWithArgs(copy.foast_stage, compile_time_args))
 
-        >>> print(copy_program.data.past_node.id)
+        >>> print(copy_program.definition.past_node.id)
         __field_operator_copy
 
-        >>> assert copy_program.data.closure_vars["copy"].definition.data is copy.foast_stage
+        >>> assert (
+        ...     copy_program.definition.closure_vars["copy"].operator_def.definition
+        ...     is copy.foast_stage
+        ... )
     """
 
     foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
@@ -102,10 +103,12 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         arg_types, kwarg_types = inp.args.args, inp.args.kwargs
         assert not kwarg_types
 
-        type_ = inp.data.foast_node.type
-        loc = inp.data.foast_node.location
-        assert isinstance(inp.data.foast_node.type, ts.CallableType)
-        partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
+        type_ = inp.definition.foast_node.type
+        loc = inp.definition.foast_node.location
+        assert isinstance(inp.definition.foast_node.type, ts.CallableType)
+        partial_program_type = ffront_type_info.type_in_program_context(
+            inp.definition.foast_node.type
+        )
         assert isinstance(partial_program_type, ts_ffront.ProgramType)
         args_names = [
             *partial_program_type.definition.pos_only_args,
@@ -134,27 +137,29 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl[:-1]]
         out_ref = past.Name(id="out", location=loc)
 
-        if inp.data.foast_node.id in inp.data.closure_vars:
+        if inp.definition.foast_node.id in inp.definition.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
 
         closure_symbols: list[past.Symbol] = [
             past.Symbol(
-                id=inp.data.foast_node.id,
+                id=inp.definition.foast_node.id,
                 type=ts.DeferredType(constraint=None),
                 namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=loc,
             ),
         ]
 
-        fieldop_itir_closure_vars = {inp.data.foast_node.id: ItirShim(inp, self.foast_to_itir)}
+        fieldop_itir_closure_vars = {
+            inp.definition.foast_node.id: ItirShim(inp, self.foast_to_itir)
+        }
 
         untyped_past_node = past.Program(
-            id=f"__field_operator_{inp.data.foast_node.id}",
+            id=f"__field_operator_{inp.definition.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=params_decl,
             body=[
                 past.Call(
-                    func=past.Name(id=inp.data.foast_node.id, location=loc),
+                    func=past.Name(id=inp.definition.foast_node.id, location=loc),
                     args=params_ref,
                     kwargs={"out": out_ref},
                     location=loc,
@@ -169,11 +174,11 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return workflow.ConcreteArtifact(
-            data=ffront_stages.PASTProgramDef(
+        return workflow.ProgramWithArgs(
+            definition=ffront_stages.PASTProgramDef(
                 past_node=past_node,
                 closure_vars=fieldop_itir_closure_vars,  # type: ignore[arg-type]
-                grid_type=inp.data.grid_type,
+                grid_type=inp.definition.grid_type,
             ),
             args=inp.args,
         )

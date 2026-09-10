@@ -43,9 +43,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
-        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
-            workflow.ConcreteArtifact(
-                data=self.past_stage,
+        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.frontend).past_to_itir(
+            workflow.ProgramWithArgs(
+                definition=self.past_stage,
                 args=arguments.CompileTimeArgs(
                     args=tuple(p.type for p in self.past_stage.past_node.params),
                     kwargs={},
@@ -55,13 +55,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 ),
             )
         )
-        program = gtir_stage.data
+        program = gtir_stage.definition
         program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
             program, offset_provider=offset_provider
         )
         object.__setattr__(
             gtir_stage,
-            "data",
+            "definition",
             program,
         )
         object.__setattr__(
@@ -76,7 +76,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        otf_workflow = self.backend.executor
+        otf_workflow = self.backend.backend
         assert hasattr(otf_workflow, "translation")
         otf_workflow_translation = (
             otf_workflow.translation.step
