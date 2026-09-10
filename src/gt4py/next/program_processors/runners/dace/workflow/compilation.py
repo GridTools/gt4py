@@ -18,7 +18,6 @@ from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
-import factory
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import extended_typing as xtyping
@@ -353,8 +352,3 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-
-
-class DaCeCompilationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeCompiler
