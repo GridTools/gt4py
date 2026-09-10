@@ -685,11 +685,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             # e.g. `IDim+1` or `IDim+0.5`
             if not isinstance(right, foast.Constant):
-                raise errors.DSLError(
-                    right.location,
-                    "Cartesian offsets are only supported with a literal right-hand side, "
-                    "e.g. 'IDim + 1', but not 'IDim + expr'.",
-                )
+                # e.g. `IDim+offset` with a runtime `offset`; a non-literal offset can not be
+                # resolved to a staggered dimension, hence only integral offsets are allowed.
+                if not type_info.is_integral(right.type):
+                    raise errors.DSLError(
+                        right.location,
+                        "Cartesian offsets with a non-literal right-hand side must be integral, "
+                        f"but '{right.type}' is not.",
+                        hints=[
+                            "Use a literal such as 'IDim + 0.5' to shift to the staggered dimension."
+                        ],
+                    )
+                return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
             offset_index = right.value
             if node.op == dialect_ast_enums.BinaryOperator.SUB:
                 offset_index *= -1
