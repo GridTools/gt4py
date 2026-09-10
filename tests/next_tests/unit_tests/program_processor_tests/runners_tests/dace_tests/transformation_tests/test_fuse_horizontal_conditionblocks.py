@@ -6,10 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 import sympy
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import utils as gtx_utils

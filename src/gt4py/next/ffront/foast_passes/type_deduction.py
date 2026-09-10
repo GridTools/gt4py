@@ -155,8 +155,10 @@ def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> d
         ],
         "notes": ["GT4Py does not implicitly convert between datatypes."],
         "hints": [
-            "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
-            "or make the datatypes of the inputs match."
+            (
+                "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
+                "or make the datatypes of the inputs match."
+            )
         ],
     }
 
@@ -351,8 +353,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
-                    assert isinstance(new_type, ts.DataType)
+                    element_type = values.type.types[index]
+                    assert isinstance(element_type, ts.DataType)
+                    new_type = element_type
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )
@@ -632,9 +635,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     hints = []
                     if node.op not in logical_ops and type_info.is_logical(arg.type):
                         hints = [
-                            "To select values based on a boolean mask, use 'where(mask, a, b)'. "
-                            "To compute with a boolean field, convert it explicitly, "
-                            "e.g. 'astype(mask, int32)'."
+                            (
+                                "To select values based on a boolean mask, use 'where(mask, a, b)'. "
+                                "To compute with a boolean field, convert it explicitly, "
+                                "e.g. 'astype(mask, int32)'."
+                            )
                         ]
                     raise errors.DSLError(
                         arg.location,
@@ -694,8 +699,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
                     f"'{left.type.dim.value}'.",
                     hints=[
-                        "Use an integer offset to shift within the dimension, or a half-integer "
-                        "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                        (
+                            "Use an integer offset to shift within the dimension, or a half-integer "
+                            "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                        )
                     ],
                 )
             conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)

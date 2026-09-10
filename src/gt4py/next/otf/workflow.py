@@ -341,19 +341,3 @@ class CachedStep(
 
     def cache_key(self, inp: StartT) -> str:
         return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
-
-
-@dataclasses.dataclass(frozen=True)
-class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
-):
-    step: Workflow[StartT, EndT]
-
-    def __call__(self, inp: StartT) -> EndT:
-        if not self.skip_condition(inp):
-            return self.step(inp)
-        return inp  # type: ignore[return-value]  # up to the implementer to make sure StartT == EndT
-
-    def skip_condition(self, inp: StartT) -> bool:
-        raise NotImplementedError()

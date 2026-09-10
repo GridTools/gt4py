@@ -201,7 +201,7 @@ def extract(
     return them as-is if `pass_through_values` is `True`, otherwise raise a `TypeError`.
     """
     if isinstance(value, common.PRIMITIVE_VALUE_TYPES):
-        return cast(common.PrimitiveValue, value)
+        return value
     if isinstance(value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
         return named_collections.make_named_collection_extractor(cast(Hashable, type(value)))(value)
     if isinstance(value, tuple):

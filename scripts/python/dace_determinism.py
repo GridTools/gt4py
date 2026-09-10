@@ -327,8 +327,10 @@ def render_report(results: list[ComparisonResult], *, runs_healthy: bool | None 
 
     skip_label = "count-mismatch" if skips_fail else "skipped"
     lines = [
-        f"Programs: {n_total}    comparable: {n_comparable}    matches: {n_match}    "
-        f"differs: {n_differ}    {skip_label}: {n_skipped}",
+        (
+            f"Programs: {n_total}    comparable: {n_comparable}    matches: {n_match}    "
+            f"differs: {n_differ}    {skip_label}: {n_skipped}"
+        ),
         "",
     ]
     for r in results:

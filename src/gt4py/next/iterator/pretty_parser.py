@@ -8,7 +8,13 @@
 
 from typing import Union
 
-from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
+from lark import (
+    exceptions as lark_exceptions,
+    lark,
+    lexer as lark_lexer,
+    tree as lark_tree,
+    visitors as lark_visitors,
+)
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -32,7 +38,8 @@ GRAMMAR = """
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
-    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL
+    INFINITY_LITERAL: "∞" | "-∞"
+    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
 
     ?prec0: prec1
@@ -51,6 +58,8 @@ GRAMMAR = """
         | prec4 "==" prec5 -> eq
         | prec4 "<" prec5 -> less
         | prec4 ">" prec5 -> greater
+        | prec4 "<=" prec5 -> less_equal
+        | prec4 ">=" prec5 -> greater_equal
 
     ?prec5: prec6
         | prec5 "+" prec6 -> plus
@@ -130,6 +139,12 @@ class ToIrTransformer(lark_visitors.Transformer):
     def ID_NAME(self, value: lark_lexer.Token) -> str:
         return value.value
 
+    def INFINITY_LITERAL(self, value: lark_lexer.Token) -> ir.InfinityLiteral:
+        if value.value == "-∞":
+            return ir.InfinityLiteral.NEGATIVE
+        assert value.value == "∞"
+        return ir.InfinityLiteral.POSITIVE
+
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
         name = value.value[:-1]
         kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
@@ -177,6 +192,12 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def less(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="less"), args=[lhs, rhs])
+
+    def less_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[lhs, rhs])
+
+    def greater_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="greater_equal"), args=[lhs, rhs])
 
     def deref(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="deref"), args=[arg])
@@ -282,4 +303,7 @@ class ToIrTransformer(lark_visitors.Transformer):
 def pparse(pretty_str: str) -> ir.Node:
     parser = lark.Lark(GRAMMAR, parser="earley")
     tree = parser.parse(pretty_str)
-    return ToIrTransformer(visit_tokens=True).transform(tree)
+    try:
+        return ToIrTransformer(visit_tokens=True).transform(tree)
+    except lark_exceptions.VisitError as e:
+        raise e.orig_exc from None

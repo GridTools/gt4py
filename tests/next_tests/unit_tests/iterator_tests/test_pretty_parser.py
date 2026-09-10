@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator import ir, builtins
+import pytest
+
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.type_system import type_specifications as ts
@@ -49,6 +51,16 @@ def test_arithmetic():
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_comparison():
+    def cmp(builtin):
+        return ir.FunCall(fun=ir.SymRef(id=builtin), args=[ir.SymRef(id="a"), ir.SymRef(id="b")])
+
+    assert pparse("a < b") == cmp("less")
+    assert pparse("a > b") == cmp("greater")
+    assert pparse("a <= b") == cmp("less_equal")
+    assert pparse("a >= b") == cmp("greater_equal")
 
 
 def test_deref():
@@ -103,6 +115,40 @@ def test_shift():
     expected = ir.FunCall(
         fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)]
     )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_infinity_literal():
+    assert pparse("∞") == ir.InfinityLiteral.POSITIVE
+    assert pparse("-∞") == ir.InfinityLiteral.NEGATIVE
+
+
+def test_named_range_unbounded():
+    testee = "KDimᵥ: [-∞, ∞["
+    expected = ir.FunCall(
+        fun=ir.SymRef(id="named_range"),
+        args=[
+            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.InfinityLiteral.NEGATIVE,
+            ir.InfinityLiteral.POSITIVE,
+        ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "testee, rhs",
+    [
+        ("a - ∞", ir.InfinityLiteral.POSITIVE),
+        ("a -∞", ir.InfinityLiteral.POSITIVE),
+        ("a-∞", ir.InfinityLiteral.POSITIVE),
+        ("a - -∞", ir.InfinityLiteral.NEGATIVE),
+    ],
+)
+def test_subtraction_of_infinity_is_not_a_negative_literal(testee, rhs):
+    expected = ir.FunCall(fun=ir.SymRef(id="minus"), args=[ir.SymRef(id="a"), rhs])
     actual = pparse(testee)
     assert actual == expected
 
@@ -284,3 +330,8 @@ def test_program():
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_transformer_error_is_not_wrapped():
+    with pytest.raises(NotImplementedError, match="nonesuch"):
+        pparse("t = temporary(domain=cartesian_domain(), dtype=nonesuch);")

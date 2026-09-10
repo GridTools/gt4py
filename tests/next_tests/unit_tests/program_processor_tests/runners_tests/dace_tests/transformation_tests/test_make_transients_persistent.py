@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -67,8 +67,8 @@ def test_make_transients_persistent_inner_access():
 
     # Because `b`, the only transient, is used inside a map scope, it is not selected,
     #  although in this situation it would be possible.
-    change_report: dict[int, set[str]] = gtx_transformations.gt_make_transients_persistent(
-        sdfg, device=dace.DeviceType.CPU
+    change_report: dict[int, set[str]] = gtx_transformations.gt_configure_transient_lifetime(
+        sdfg, lifetime=dace.AllocationLifetime.Persistent
     )
     assert len(change_report) == 1
     assert change_report[sdfg.cfg_id] == set()

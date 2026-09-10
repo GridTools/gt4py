@@ -20,7 +20,15 @@ from typing import Any, Callable, ClassVar, Literal, Union, cast
 import numpy as np
 
 from gt4py.cartesian import backend as gt_backend
-from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
+from gt4py.cartesian.definitions import (
+    LITERAL_INT_PRECISION,
+    AccessKind,
+    DomainInfo,
+    FieldInfo,
+    ParameterInfo,
+    get_integer_type,
+)
+from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtc import utils as gtc_utils
 from gt4py.cartesian.gtc.definitions import Index, Shape
 from gt4py.storage.cartesian import utils as storage_utils
@@ -563,8 +571,18 @@ class StencilObject(abc.ABC):
             exec_info["call_run_start_time"] = time.perf_counter()
         backend_cls = gt_backend.from_name(self.backend)
         device = backend_cls.storage_info["device"]
-        array_infos = _extract_array_infos(field_args, device)
 
+        # Normalize `gtscript.enum` to integers
+        literal_int_precision = (
+            self.options["literal_int_precision"]
+            if "literal_int_precision" in self.options
+            else LITERAL_INT_PRECISION
+        )
+        for name, value in parameter_args.items():
+            if type(value) in gtscript_frontend._ENUM_REGISTER.values():
+                parameter_args[name] = get_integer_type(literal_int_precision)(value.value)
+
+        array_infos = _extract_array_infos(field_args, device)
         cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(array_infos, self.field_info, origin)

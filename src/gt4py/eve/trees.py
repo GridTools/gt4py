@@ -20,11 +20,8 @@ from .extended_typing import (
     Any,
     Callable,
     Iterable,
-    List,
     Optional,
     Protocol,
-    Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -50,7 +47,7 @@ class Tree(Protocol):
     def iter_children_values(self) -> Iterable: ...
 
     @abc.abstractmethod
-    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]: ...
+    def iter_children_items(self) -> Iterable[tuple[TreeKey, Any]]: ...
 
 
 TreeLike.register(Tree)
@@ -65,15 +62,15 @@ def iter_children_values(node: TreeLike) -> Iterable:
 
 
 @functools.singledispatch
-def iter_children_items(node: TreeLike) -> Iterable[Tuple[TreeKey, Any]]:
+def iter_children_items(node: TreeLike) -> Iterable[tuple[TreeKey, Any]]:
     """Create an iterator to traverse values as Eve tree nodes."""
     return node.iter_children_items() if hasattr(node, "iter_children_items") else iter(())
 
 
 def register_tree_like(
-    *types: Type[_T],
+    *types: type[_T],
     iter_values_fn: Callable[[_T], Iterable],
-    iter_items_fn: Callable[[_T], Iterable[Tuple[TreeKey, Any]]],
+    iter_items_fn: Callable[[_T], Iterable[tuple[TreeKey, Any]]],
 ) -> None:
     for t in types:
         TreeLike.register(t)
@@ -109,7 +106,7 @@ class TraversalOrder(Enum):
 
 def _pre_walk_items(
     node: TreeLike, *, __key__: Optional[TreeKey] = None
-) -> Iterable[Tuple[Optional[TreeKey], Any]]:
+) -> Iterable[tuple[Optional[TreeKey], Any]]:
     """Create a pre-order tree traversal iterator of (key, value) pairs."""
     yield __key__, node
     for key, child in iter_children_items(node):
@@ -129,7 +126,7 @@ pre_walk_values = utils.as_xiter(_pre_walk_values)
 
 def _post_walk_items(
     node: TreeLike, *, __key__: Optional[TreeKey] = None
-) -> Iterable[Tuple[Optional[TreeKey], Any]]:
+) -> Iterable[tuple[Optional[TreeKey], Any]]:
     """Create a post-order tree traversal iterator of (key, value) pairs."""
     for key, child in iter_children_items(node):
         yield from _post_walk_items(child, __key__=key)
@@ -149,8 +146,8 @@ post_walk_values = utils.as_xiter(_post_walk_values)
 
 
 def _bfs_walk_items(
-    node: TreeLike, *, __key__: Optional[TreeKey] = None, __queue__: Optional[List] = None
-) -> Iterable[Tuple[Optional[TreeKey], Any]]:
+    node: TreeLike, *, __key__: Optional[TreeKey] = None, __queue__: Optional[list] = None
+) -> Iterable[tuple[Optional[TreeKey], Any]]:
     """Create a tree traversal iterator of (key, value) pairs by tree levels (Breadth-First Search)."""
     __queue__ = __queue__ or []
     yield __key__, node
@@ -161,8 +158,8 @@ def _bfs_walk_items(
 
 
 def _bfs_walk_values(
-    node: TreeLike, *, __queue__: Optional[List] = None
-) -> Iterable[Tuple[TreeKey, Any]]:
+    node: TreeLike, *, __queue__: Optional[list] = None
+) -> Iterable[tuple[TreeKey, Any]]:
     """Create a tree traversal iterator of values by tree levels (Breadth-First Search)."""
     __queue__ = __queue__ or []
     yield node
@@ -179,7 +176,7 @@ bfs_walk_values = utils.as_xiter(_bfs_walk_values)
 
 def walk_items(
     node: TreeLike, traversal_order: TraversalOrder = TraversalOrder.PRE_ORDER
-) -> utils.XIterable[Tuple[Optional[TreeKey], Any]]:
+) -> utils.XIterable[tuple[Optional[TreeKey], Any]]:
     """Create a tree traversal iterator of (key, value) pairs."""
     if traversal_order is traversal_order.PRE_ORDER:
         return pre_walk_items(node=node)

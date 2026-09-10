@@ -9,11 +9,10 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import functools
+import dace
 import numpy as np
 import pytest
 from gt4py.eve import codegen
-
-dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py.next import common as gtx_common, int32

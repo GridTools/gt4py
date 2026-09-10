@@ -193,10 +193,6 @@ gtx.backend.DEFAULT_PROG_TRANSFORMS.past_lint??
 
 Though we execute the workflow three times we only get the debug print once, it worked! Btw, hashing is rarely that easy in the wild...
 
-#### Conditionally skipping steps
-
-The `SkippableStep` pattern can be used to skip a step under a given condition. A main use case is when you might want to run a workflow either from the start or from further along (with the same interface).
-
 Let's say we want to make our calculation workflow compatible with string input. We can add a conversion step (which only works with strings).
 
 <!-- #endregion -->
@@ -214,74 +210,6 @@ to_int_step = gtx.otf.workflow.make_step(to_int)
 str_calc = to_int_step.chain(add_3_times_2)
 
 str_calc("1")
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-Now we can start from a string that contains an int. But if we already have an int, it will fail.
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-try:
-    str_calc(1)
-except AssertionError as err:
-    print(err)
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
-
-What to do? What we want is a to conditionally skip the first step, so we replace it with a `SkippableStep`:
-
-```python
-class OptionalStrToInt(SkippableStep[str | int, int]):
-    step: Workflow[str, int]
-
-    def skip_condition(
-        self, inp: str | int
-    ) -> (
-        bool
-    ): ...  # return True to skip (if we get an int) or False to run the conversion (str case)
-```
-
-```mermaid
-graph LR
-
-int(A: int = 1) --> calc{{"add_3_times_2(1)"}} --> result(8)
-int --> ski{{"skip_condition(1)"}} -->|True| calc
-str("B: str = '1'") --> sks{{"skip_condition('1')"}} -->|False| conv{{to_int}} --> b2("int(B) = 1") --> calc
-```
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-@dataclasses.dataclass(frozen=True)
-class OptionalStrToInt(gtx.otf.workflow.SkippableStep[str | int, int]):
-    step: gtx.otf.workflow.Workflow[str, int] = to_int
-
-    def skip_condition(self, inp: str | int) -> bool:
-        match inp:
-            case int():
-                return True
-            case str():
-                return False
-            case _:
-                # optionally raise an error with good advice
-                return False
-
-
-strint_calc = OptionalStrToInt().chain(add_3_times_2)
-strint_calc(1) == strint_calc("1")
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-### Example in the Wild
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
@@ -307,26 +235,20 @@ class StrToIntFactory(factory.Factory):
 
     class Params:
         default_step = to_int
-        optional: bool = False
-        optional_or_not = factory.LazyAttribute(
-            lambda o: OptionalStrToInt(step=o.default_step) if o.optional else o.default_step
-        )
         cached = factory.Trait(
             inner_step=factory.LazyAttribute(
                 lambda o: gtx.otf.workflow.CachedStep.in_memory(
-                    step=o.optional_or_not, input_fingerprinter=str
+                    step=o.default_step, input_fingerprinter=str
                 )
             )
         )
 
-    inner_step = factory.LazyAttribute(lambda o: o.optional_or_not)
+    inner_step = factory.LazyAttribute(lambda o: o.default_step)
 
 
 cached = StrToIntFactory(cached=True)
-optional = StrToIntFactory(optional=True)
-both = StrToIntFactory(cached=True, optional=True)
-neither = StrToIntFactory()
-neither.inner_step
+uncached = StrToIntFactory()
+uncached.inner_step
 ```
 
 ### Example in the Wild

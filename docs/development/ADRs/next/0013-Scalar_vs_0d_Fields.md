@@ -49,6 +49,7 @@ In the following call an implicit broadcast to Field is performed in the decorat
 def foo(scalar: Field[[], float]) -> Field[[], float]:
     return scalar
 
+
 foo(1.0)
 ```
 
@@ -58,6 +59,7 @@ Note that the following is also valid as no broadcasting to `Field` is applied.
 @field_operator
 def foo(scalar: float) -> float:
     return scalar
+
 
 foo(1.0)
 ```

@@ -23,6 +23,7 @@ In NDSL, this allows us to default to `gtscript.lazy_functions(before_annotation
 ```py
 class DeferredType:
     """This is a mockup type - to be resolved to a "real type" later."""
+
     pass
 
 

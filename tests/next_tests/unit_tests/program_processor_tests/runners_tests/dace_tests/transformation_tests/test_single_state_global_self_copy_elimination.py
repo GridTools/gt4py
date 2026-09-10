@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 import numpy as np
@@ -16,7 +16,6 @@ import numpy as np
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
-
 
 from . import util
 

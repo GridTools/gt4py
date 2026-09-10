@@ -6,13 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import numpy as np
 import pytest
 import copy
 
 from typing import Optional
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from dace import data as dace_data
 from dace.transformation import dataflow as dace_dataflow

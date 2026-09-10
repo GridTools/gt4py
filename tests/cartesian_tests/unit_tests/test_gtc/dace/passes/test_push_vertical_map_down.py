@@ -15,9 +15,9 @@ from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
 from gt4py.cartesian.gtc.dace.passes import PushVerticalMapDown
 
-# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `uses_dace`, we still need to add the marker.
 # This global variable adds the marker to all test functions in this module.
-pytestmark = pytest.mark.requires_dace
+pytestmark = pytest.mark.uses_dace
 
 
 def test_push_vertical_map_down():

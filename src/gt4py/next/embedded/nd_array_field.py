@@ -1089,6 +1089,26 @@ if jnp:
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
     common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
+    # jax >= 0.11: 'Tracer' is no longer a subclass of 'jax.Array' (only 'isinstance' says so, via
+    # 'ArrayMeta.__instancecheck__'), and 'singledispatch' resolves on the class hierarchy.
+    common._field.register(jax.core.Tracer, JaxArrayField.from_array)
+    common._connectivity.register(jax.core.Tracer, JaxArrayConnectivityField.from_array)
+
+    def _flatten_jax_field(
+        field: JaxArrayField,
+    ) -> tuple[tuple[core_defs.NDArrayObject], common.Domain]:
+        return (field.ndarray,), field.domain
+
+    def _unflatten_jax_field(
+        domain: common.Domain, children: tuple[core_defs.NDArrayObject]
+    ) -> JaxArrayField:
+        return JaxArrayField(domain, children[0])  # type: ignore[abstract] # mypy does not see '__gt_builtin_func__' as implemented by 'FieldBuiltinFuncRegistry'
+
+    jax.tree_util.register_pytree_node(
+        JaxArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_jax_field'
+        _flatten_jax_field,
+        _unflatten_jax_field,
+    )
 
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:

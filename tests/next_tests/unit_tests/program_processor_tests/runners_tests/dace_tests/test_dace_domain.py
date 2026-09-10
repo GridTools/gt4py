@@ -8,9 +8,8 @@
 
 """Test domain-related helper functions of the dace backend module."""
 
+import dace
 import pytest
-
-dace = pytest.importorskip("dace")
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace.lowering import (

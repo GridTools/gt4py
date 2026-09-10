@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import enum
+import numbers
 from typing import Any, List, Tuple, Union
 
 from gt4py import eve
@@ -204,7 +205,7 @@ class ApiParamDecl(LocNode):
 
 class FieldDecl(ApiParamDecl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: Tuple[numbers.Integral, ...] = eve.field(default_factory=tuple)
 
 
 class GlobalParamDecl(ApiParamDecl):

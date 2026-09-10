@@ -30,8 +30,6 @@ from gt4py.eve.extended_typing import (
     Protocol,
     Self,
     Sequence,
-    Tuple,
-    Type,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -62,8 +60,8 @@ CUPY_DEVICE_TYPE: Literal[None, DeviceType.CUDA, DeviceType.ROCM]
 
 BoolScalar: TypeAlias = Union[core_types.bool, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
-BOOL_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...],
+BOOL_TYPES: Final[tuple[type, ...]] = cast(
+    tuple[type, ...],
     BoolScalar.__args__,  # type: ignore[attr-defined]
 )
 
@@ -72,8 +70,8 @@ IntScalar: TypeAlias = Union[
     core_types.int8, core_types.int16, core_types.int32, core_types.int64, int
 ]
 IntT = TypeVar("IntT", bound=IntScalar)
-INT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...],
+INT_TYPES: Final[tuple[type, ...]] = cast(
+    tuple[type, ...],
     IntScalar.__args__,  # type: ignore[attr-defined]
 )
 
@@ -82,21 +80,21 @@ UnsignedIntScalar: TypeAlias = Union[
     core_types.uint8, core_types.uint16, core_types.uint32, core_types.uint64
 ]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
-UINT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...],
+UINT_TYPES: Final[tuple[type, ...]] = cast(
+    tuple[type, ...],
     UnsignedIntScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
 IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
 IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
-INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
+INTEGRAL_TYPES: Final[tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
 FloatingScalar: TypeAlias = Union[core_types.float32, core_types.float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
-FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...],
+FLOAT_TYPES: Final[tuple[type, ...]] = cast(
+    tuple[type, ...],
     FloatingScalar.__args__,  # type: ignore[attr-defined]
 )
 
@@ -123,11 +121,11 @@ class PositiveIntegral(numbers.Integral):
     ...
 
 
-def is_boolean_integral_type(integral_type: type) -> TypeGuard[Type[BooleanIntegral]]:
+def is_boolean_integral_type(integral_type: type) -> TypeGuard[type[BooleanIntegral]]:
     return issubclass(integral_type, BOOL_TYPES)
 
 
-def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveIntegral]]:
+def is_positive_integral_type(integral_type: type) -> TypeGuard[type[PositiveIntegral]]:
     return issubclass(integral_type, UINT_TYPES)
 
 
@@ -161,23 +159,23 @@ class DTypeKind(eve.StrEnum):
 
 @overload
 def dtype_kind(
-    sc_type: Type[IntT] | Type[BoolT],  # mypy doesn't distinguish IntT and BoolT
+    sc_type: type[IntT] | type[BoolT],  # mypy doesn't distinguish IntT and BoolT
 ) -> Literal[DTypeKind.INT, DTypeKind.BOOL]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...  # type: ignore[overload-cannot-match] # precision blurring from mypy plugin seems to interfere
+def dtype_kind(sc_type: type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...  # type: ignore[overload-cannot-match] # precision blurring from mypy plugin seems to interfere
 
 
 @overload
-def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]: ...
+def dtype_kind(sc_type: type[FloatingT]) -> Literal[DTypeKind.FLOAT]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind: ...
+def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind: ...
 
 
-def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
+def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
     """Return the data type kind of the given scalar type."""
     if issubclass(sc_type, numbers.Integral):
         if is_boolean_integral_type(sc_type):
@@ -209,7 +207,7 @@ class DType(Generic[ScalarT]):
     `dtype`s definitions due to the `.dtype` attribute.
     """
 
-    scalar_type: Type[ScalarT]
+    scalar_type: type[ScalarT]
     tensor_shape: TensorShape = dataclasses.field(default=())
 
     def __post_init__(self) -> None:
@@ -266,28 +264,28 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 @dataclasses.dataclass(frozen=True)
 class UInt8DType(UnsignedIntDType[core_types.uint8]):
-    scalar_type: Final[Type[core_types.uint8]] = dataclasses.field(
+    scalar_type: Final[type[core_types.uint8]] = dataclasses.field(
         default=core_types.uint8, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt16DType(UnsignedIntDType[core_types.uint16]):
-    scalar_type: Final[Type[core_types.uint16]] = dataclasses.field(
+    scalar_type: Final[type[core_types.uint16]] = dataclasses.field(
         default=core_types.uint16, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt32DType(UnsignedIntDType[core_types.uint32]):
-    scalar_type: Final[Type[core_types.uint32]] = dataclasses.field(
+    scalar_type: Final[type[core_types.uint32]] = dataclasses.field(
         default=core_types.uint32, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt64DType(UnsignedIntDType[core_types.uint64]):
-    scalar_type: Final[Type[core_types.uint64]] = dataclasses.field(
+    scalar_type: Final[type[core_types.uint64]] = dataclasses.field(
         default=core_types.uint64, init=False
     )
 
@@ -299,28 +297,28 @@ class SignedIntDType(DType[IntT]):
 
 @dataclasses.dataclass(frozen=True)
 class Int8DType(SignedIntDType[core_types.int8]):
-    scalar_type: Final[Type[core_types.int8]] = dataclasses.field(
+    scalar_type: Final[type[core_types.int8]] = dataclasses.field(
         default=core_types.int8, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class Int16DType(SignedIntDType[core_types.int16]):
-    scalar_type: Final[Type[core_types.int16]] = dataclasses.field(
+    scalar_type: Final[type[core_types.int16]] = dataclasses.field(
         default=core_types.int16, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class Int32DType(SignedIntDType[core_types.int32]):
-    scalar_type: Final[Type[core_types.int32]] = dataclasses.field(
+    scalar_type: Final[type[core_types.int32]] = dataclasses.field(
         default=core_types.int32, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class Int64DType(SignedIntDType[core_types.int64]):
-    scalar_type: Final[Type[core_types.int64]] = dataclasses.field(
+    scalar_type: Final[type[core_types.int64]] = dataclasses.field(
         default=core_types.int64, init=False
     )
 
@@ -332,21 +330,21 @@ class FloatingDType(DType[FloatingT]):
 
 @dataclasses.dataclass(frozen=True)
 class Float32DType(FloatingDType[core_types.float32]):
-    scalar_type: Final[Type[core_types.float32]] = dataclasses.field(
+    scalar_type: Final[type[core_types.float32]] = dataclasses.field(
         default=core_types.float32, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class Float64DType(FloatingDType[core_types.float64]):
-    scalar_type: Final[Type[core_types.float64]] = dataclasses.field(
+    scalar_type: Final[type[core_types.float64]] = dataclasses.field(
         default=core_types.float64, init=False
     )
 
 
 @dataclasses.dataclass(frozen=True)
 class BoolDType(DType[core_types.bool]):
-    scalar_type: Final[Type[core_types.bool]] = dataclasses.field(
+    scalar_type: Final[type[core_types.bool]] = dataclasses.field(
         default=core_types.bool, init=False
     )
 
@@ -370,7 +368,7 @@ class GTDimsInterface(Protocol):
     """
 
     @property
-    def __gt_dims__(self) -> Tuple[str, ...]: ...
+    def __gt_dims__(self) -> tuple[str, ...]: ...
 
 
 class GTOriginInterface(Protocol):
@@ -381,7 +379,7 @@ class GTOriginInterface(Protocol):
     """
 
     @property
-    def __gt_origin__(self) -> Tuple[int, ...]: ...
+    def __gt_origin__(self) -> tuple[int, ...]: ...
 
 
 # -- Device representation --
@@ -422,6 +420,30 @@ CUPY_DEVICE_TYPE = (
 )
 
 
+def gpu_device_count() -> int:
+    """Return how many GPU devices are usable, or 0 if there are none.
+
+    A `cupy` install alone does not imply a usable GPU: the wheels install
+    cleanly on machines with no driver and no visible device.
+
+    Returns:
+        The number of visible GPU devices, or 0 when `cupy` is missing or the
+        driver cannot be queried.
+
+    Note:
+        Enumerating is what makes the "installed but no visible device" case
+        answerable at all: it reports 0. A `cupy.cuda.Device()` probe only
+        resolves the *current* device and says nothing about how many exist.
+    """
+    if cp is None:
+        return 0
+    try:
+        return cp.cuda.runtime.getDeviceCount()
+    except Exception:
+        # A broken driver or runtime raises rather than reporting zero devices.
+        return 0
+
+
 @dataclasses.dataclass(frozen=True)
 class Device(Generic[DeviceTypeT]):
     """
@@ -447,7 +469,7 @@ class Device(Generic[DeviceTypeT]):
 
 
 # -- NDArrays and slices --
-SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
+SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
 
 
 class NDArrayObject(Protocol):
@@ -506,17 +528,13 @@ class NDArrayObject(Protocol):
     def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
 
-    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
-        ...
+    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
-        ...
+    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
-        ...
+    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
-        ...
+    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
     def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 

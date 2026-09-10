@@ -148,7 +148,6 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "gtfn_gpu",
     "itir_python",
     # from fbuiltins
-    "FieldOffset",
     "IndexType",
     "abs",
     "arccos",

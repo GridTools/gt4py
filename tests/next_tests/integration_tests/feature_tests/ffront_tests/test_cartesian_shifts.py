@@ -19,6 +19,8 @@ from next_tests.integration_tests.cases import (
     cartesian_case,
 )
 from next_tests.integration_tests.cases_utils import (
+    Ioff,
+    Koff,
     exec_alloc_descriptor,
 )
 
@@ -54,9 +56,6 @@ def test_fold_shifts(cartesian_case):
 @pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field(cartesian_case):
-    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-    Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
-
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -87,4 +86,30 @@ def test_offset_field(cartesian_case):
         out=out,
         ref=ref,
         comparison=lambda out, ref: np.all(out == ref),
+    )
+
+
+@pytest.mark.uses_dynamic_offsets
+def test_offset_field_of_chained_ops(cartesian_case):
+    """A dynamic offset on top of a chain of operations must be fused past all of them."""
+
+    @gtx.field_operator
+    def testee(a: cases.IKField, offset_field: cases.IKField) -> cases.IKField:
+        b = a + 1
+        c = b * 2
+        return c(as_offset(Koff, offset_field))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    a = cases.allocate(cartesian_case, testee, "a").extend({KDim: (0, 1)})()
+    offset_field = cases.allocate(
+        cartesian_case, testee, "offset_field", strategy=cases.ConstInitializer(1)
+    )()
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        offset_field,
+        out=out,
+        ref=(a.asnumpy()[:, 1:] + 1) * 2,
     )

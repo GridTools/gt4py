@@ -157,6 +157,14 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         artifact = self.executor(
             self.transforms(definitions.ConcreteProgramDef(data=program, args=compile_time_args))
         )
+        return self.load_artifact(artifact)
+
+    def load_artifact(self, artifact: stages.CompilationArtifact) -> stages.ExecutableProgram:
+        """Load an artifact into an executable program.
+
+        Backends may override this method to inject backend-specific runtime data
+        into the loaded program.
+        """
         return artifact.load()
 
     @property

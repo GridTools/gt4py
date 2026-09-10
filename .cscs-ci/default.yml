@@ -9,9 +9,9 @@
 #
 
 include:
-  - local: 'ci/cscs-ci-base.yml'
+  - local: '.cscs-ci/base.yml'
 
-.test_python_versions: &test_python_versions ['3.10', '3.14']
+.test_python_versions: &test_python_versions ['3.12', '3.14']
 
 # -- Build stage --
 build_cscs_gh200:
@@ -88,7 +88,7 @@ test_cscs_gh200:
   variables:
     TEST_VARIANTS: 'cpu cuda12'
     SLURM_GPUS_PER_NODE: 1
-    SLURM_PARTITION: 'shared'
+    SLURM_PARTITION: 'normal'
     GT4PY_BUILD_JOBS: 8
     # GH200 is sm_90; pinning it skips every CUDA-arch device query.
     CUDAARCHS: '90'

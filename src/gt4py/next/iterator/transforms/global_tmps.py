@@ -195,7 +195,7 @@ def _transform_by_pattern(
                 # Create the tuple structure with that domain.
                 domain = list(
                     set(next_utils.flatten_nested_tuple((tmp_domains,)))
-                    - {infer_domain.DomainAccessDescriptor.NEVER}  # type: ignore[arg-type] # type should always be `SymbolicDomain`
+                    - {infer_domain.DomainAccessDescriptor.NEVER}
                 )
                 assert len(domain) == 1
                 # this is the domain used as initial value in the tuple construction below

@@ -199,19 +199,18 @@ def tree_map(
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
+                first_arg: Any = args[0]
                 non_path_args: Sequence[Any]
                 if with_path_arg:
                     *non_path_args, path = args
-                    args = (*non_path_args, tuple((*path, i) for i in range(len(args[0]))))
+                    args = (*non_path_args, tuple((*path, i) for i in range(len(first_arg))))
                 else:
                     non_path_args = args
 
-                assert all(
-                    isinstance(arg, collection_type) and len(args[0]) == len(arg)
-                    for arg in non_path_args
-                )
+                assert all(isinstance(arg, collection_type) for arg in non_path_args)
+                assert all(len(first_arg) == len(arg) for arg in non_path_args)
                 assert result_collection_constructor is not None
-                ctor = functools.partial(result_collection_constructor, args[0])
+                ctor = functools.partial(result_collection_constructor, first_arg)
 
                 mapped = [impl(*arg) for arg in zip(*args)]
                 if unpack:

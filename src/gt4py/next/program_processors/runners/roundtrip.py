@@ -60,7 +60,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
                 return f"np.{dtype}(np.nan)"
         return node.value
 
-    NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
 

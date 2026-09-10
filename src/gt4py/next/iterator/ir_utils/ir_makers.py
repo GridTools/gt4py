@@ -90,8 +90,6 @@ def ensure_expr(expr_like: ExprLike) -> itir.Expr:
         return ref(expr_like)
     elif core_defs.is_scalar_type(expr_like):
         return literal_from_value(expr_like)
-    elif expr_like is None:
-        return itir.NoneLiteral()
     elif isinstance(expr_like, common.Dimension):
         return axis_literal(expr_like)
     assert isinstance(expr_like, itir.Expr), expr_like
@@ -586,6 +584,19 @@ def op_as_fieldop(
 
 def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
     return itir.AxisLiteral(value=dim.value, kind=dim.kind)
+
+
+def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
+    """
+    Create a broadcast FunCall of `expr` to `dims`.
+
+    Examples
+    --------
+    >>> IDim = common.Dimension("IDim")
+    >>> str(broadcast("a", (IDim,)))
+    'broadcast(a, {IDimₕ})'
+    """
+    return call("broadcast")(expr, make_tuple(*(axis_literal(dim) for dim in dims)))
 
 
 def cartesian_offset(

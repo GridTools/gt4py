@@ -144,6 +144,9 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # safe to add. Because `xfail_strict` is enabled, adding a consequential marker to a test that
 # currently PASSES on a listed backend turns it into an unexpected pass (xpass) and FAILS -- so add
 # a consequential marker only once the test genuinely fails on that backend, and validate per-backend.
+# `uses_dace` is the one exception to "index-only is safe to add": it selects the nox test matrix
+# (`-m "uses_dace"` vs `-m "not uses_dace"` in `noxfile.py`), so tagging a test with it *removes*
+# that test from every `internal` session, and untagging removes it from the `dace` ones.
 
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
