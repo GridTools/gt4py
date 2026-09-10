@@ -20,7 +20,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments as otf_arguments, toolchain as otf_toolchain
+from gt4py.next.otf import arguments as otf_arguments, workflow as otf_workflow
 from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
 from gt4py.next.program_processors.runners.dace.workflow import (
     translation as dace_wf_translation,
@@ -425,7 +425,7 @@ def test_generate_sdfg_async_call_multi_state(
         assert not _are_streams_synchronized(sdfg)
 
 
-def _make_simple_field_operator_compilable_program() -> otf_toolchain.ConcreteArtifact:
+def _make_simple_field_operator_compilable_program() -> otf_workflow.ConcreteArtifact:
     """Return a compilable program wrapping a minimal GTIR field operator."""
     ir = itir.Program(
         id="simple_field_operator",
@@ -443,7 +443,7 @@ def _make_simple_field_operator_compilable_program() -> otf_toolchain.ConcreteAr
             ),
         ],
     )
-    return otf_toolchain.ConcreteArtifact(
+    return otf_workflow.ConcreteArtifact(
         data=ir,
         args=otf_arguments.CompileTimeArgs(
             args=tuple(param.type for param in ir.params),

@@ -23,7 +23,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 
@@ -36,7 +36,9 @@ def _compiler() -> compiler.CPPCompiler:
     )
 
 
-def _src_dir(comp: compiler.CPPCompiler, extension_source: stages.ExtensionSource) -> pathlib.Path:
+def _src_dir(
+    comp: compiler.CPPCompiler, extension_source: artifacts.ExtensionSource
+) -> pathlib.Path:
     return cache.get_cache_folder(
         extension_source,
         config.BuildCacheLifetime.SESSION,

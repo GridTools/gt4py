@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
@@ -39,15 +39,15 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
-        definitions.CompilableProgramDef,
-        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec],
     ],
     workflow.ChainableWorkflowMixin[
-        definitions.CompilableProgramDef,
-        stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec],
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec],
     ],
 ):
-    code_spec: Optional[code_specs.HeaderAndSourceCodeSpec] = None
+    code_spec: Optional[artifacts.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
@@ -55,14 +55,14 @@ class GTFNTranslationStep(
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
-    def _default_code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
+    def _default_code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
         match self.device_type:
             case core_defs.DeviceType.CUDA:
-                return code_specs.CUDACodeSpec()
+                return artifacts.CUDACodeSpec()
             case core_defs.DeviceType.ROCM:
-                return code_specs.HIPCodeSpec()
+                return artifacts.HIPCodeSpec()
             case core_defs.DeviceType.CPU:
-                return code_specs.CPPCodeSpec()
+                return artifacts.CPPCodeSpec()
             case _:
                 raise self._not_implemented_for_device_type()
 
@@ -196,8 +196,8 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec]:
+        self, inp: stages.CompilableProgramDef
+    ) -> artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -230,7 +230,7 @@ class GTFNTranslationStep(
             inp.args.offset_provider,
             inp.args.column_axis,
         )
-        source_code = interface.format_source(
+        source_code = artifacts.format_source(
             self._code_spec(),
             f"""
                     #include <{self._backend_header()}>
@@ -240,11 +240,13 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module: stages.ProgramSource[code_specs.HeaderAndSourceCodeSpec] = stages.ProgramSource(
-            entry_point=function,
-            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
-            source_code=source_code,
-            code_spec=self._code_spec(),
+        module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
+            artifacts.ProgramSource(
+                entry_point=function,
+                library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
+                source_code=source_code,
+                code_spec=self._code_spec(),
+            )
         )
         return module
 
@@ -266,7 +268,7 @@ class GTFNTranslationStep(
             case _:
                 raise self._not_implemented_for_device_type()
 
-    def _code_spec(self) -> code_specs.HeaderAndSourceCodeSpec:
+    def _code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
         return self.code_spec if self.code_spec is not None else self._default_code_spec()
 
     def _library_name(self) -> str:
@@ -289,8 +291,8 @@ class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
         model = GTFNTranslationStep
 
 
-translate_program_cpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
 
-translate_program_gpu: Final[definitions.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
     device_type=core_defs.DeviceType.CUDA
 )

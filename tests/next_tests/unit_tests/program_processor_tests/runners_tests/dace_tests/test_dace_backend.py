@@ -20,7 +20,7 @@ import pytest
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import definitions, runners
+from gt4py.next.otf import runners, stages
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
@@ -320,7 +320,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     captured_sdfg: dace.SDFG | None = None
     translation_step = custom_backend.executor.translation.step
 
-    def mocked_translator(inp: definitions.CompilableProgramDef) -> dace.SDFG:
+    def mocked_translator(inp: stages.CompilableProgramDef) -> dace.SDFG:
         nonlocal captured_sdfg
         result = translation_step(inp)
         captured_sdfg = dace.SDFG.from_json(result.source_code)

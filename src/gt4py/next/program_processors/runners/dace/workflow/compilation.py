@@ -23,7 +23,7 @@ import factory
 from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -34,8 +34,8 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
-SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
-    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+SDFGExtensionSource: TypeAlias = artifacts.ExtensionSource[
+    artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec
 ]
 
 
@@ -257,7 +257,7 @@ class DaCeCompilationArtifact:
     bind_func_name: str
     device_type: core_defs.DeviceType
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
@@ -270,14 +270,13 @@ class DaCeCompilationArtifact:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
-    definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
     """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
