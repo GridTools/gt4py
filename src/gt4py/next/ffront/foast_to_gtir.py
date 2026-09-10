@@ -24,11 +24,11 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes import utils as foast_utils
-from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, FOASTOperatorDef
+from gt4py.next.ffront.stages import FOASTOperatorDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import constant_folding
-from gt4py.next.otf import arguments, toolchain, workflow
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 
@@ -43,21 +43,13 @@ def foast_to_gtir(inp: ffront_stages.FOASTOperatorDef) -> itir.FunctionDefinitio
 
 def foast_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[FOASTOperatorDef, itir.FunctionDefinition]:
-    """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
-    wf = foast_to_gtir
+) -> workflow.Step[FOASTOperatorDef, itir.FunctionDefinition]:
+    """Return the `foast_to_gtir` step, in-memory cached unless `cached` is unset."""
     if cached:
-        wf = workflow.CachedStep.in_memory(
-            step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        return workflow.CachedStep.in_memory(
+            step=foast_to_gtir, input_fingerprinter=ffront_stages.semantic_fingerprinter
         )
-    return wf
-
-
-def adapted_foast_to_gtir_factory(
-    **kwargs: Any,
-) -> workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]:
-    """Wrap the `foast_to_gtir` workflow step into an adapter to fit into backend transform workflows."""
-    return toolchain.StripArgsAdapter(foast_to_gtir_factory(**kwargs))
+    return foast_to_gtir
 
 
 def promote_to_list(node_type: ts.TypeSpec) -> Callable[[itir.Expr], itir.Expr]:
