@@ -16,3 +16,4 @@ from gt4py.next.otf.compiled_program import (
     compile_variant_hook as compile_variant_hook,
     compiled_program_call_context as compiled_program_call_context,
 )
+from gt4py.next.otf.workflow import stage_hook as stage_hook
