@@ -537,6 +537,40 @@ def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
     )
 
 
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_concat_where_with_list_output
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_tuples_of_local_and_nonlocal_leaves(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.EField, b: cases.EField, c: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), c), (3, b(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], c[:, np.newaxis], b[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:

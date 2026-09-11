@@ -444,11 +444,24 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
         true_type, false_type = node.args[1].type, node.args[2].type
-        if not isinstance(node.type, ts.TupleType) and any(
-            type_info.contains_local_field(t) for t in (true_type, false_type)
-        ):
-            true_branch = promote_to_list(true_type)(true_branch)
-            false_branch = promote_to_list(false_type)(false_branch)
+
+        def promote_leaf(expr: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]) -> itir.Expr:
+            own_type, other_type = arg_types
+            if type_info.contains_local_field(other_type):
+                return promote_to_list(own_type)(expr)
+            return expr
+
+        if type_info.contains_local_field(node.type):
+            if isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
+                true_branch = lowering_utils.process_elements(
+                    promote_leaf, true_branch, node.type, arg_types=(true_type, false_type)
+                )
+                false_branch = lowering_utils.process_elements(
+                    promote_leaf, false_branch, node.type, arg_types=(false_type, true_type)
+                )
+            else:
+                true_branch = promote_leaf(true_branch, (true_type, false_type))
+                false_branch = promote_leaf(false_branch, (false_type, true_type))
         return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
