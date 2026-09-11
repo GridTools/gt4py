@@ -431,31 +431,42 @@ def test_locally_defined_named_collection(cartesian_case):
     )
 
 
+@gtx.field_operator
+def where_named_tuple(
+    i: cases.IField, interior: NamedTupleNamedCollection, boundary: NamedTupleNamedCollection
+) -> NamedTupleNamedCollection:
+    return where(i == 0, boundary, interior)
+
+
+@gtx.field_operator
+def where_dataclass(
+    i: cases.IField, interior: DataclassNamedCollection, boundary: DataclassNamedCollection
+) -> DataclassNamedCollection:
+    return where(i == 0, boundary, interior)
+
+
+@pytest.mark.parametrize("testee", [where_named_tuple, where_dataclass])
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_tuple_args
-def test_where(cartesian_case):
-    @gtx.field_operator
-    def testee(
-        i: cases.IField,
-        interior: NamedTupleNamedCollection,
-        boundary: NamedTupleNamedCollection,
-    ) -> NamedTupleNamedCollection:
-        return where(i == 0, boundary, interior)
-
+def test_where(cartesian_case, testee):
     i = cases.allocate(cartesian_case, testee, "i", strategy=cases.IndexInitializer())()
     interior = cases.allocate(cartesian_case, testee, "interior")()
     boundary = cases.allocate(cartesian_case, testee, "boundary")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    ref = tuple(
-        np.where(
-            i.asnumpy()[:, np.newaxis] == 0,
-            tuple(vel.asnumpy() for vel in (boundary.u, boundary.v)),
-            tuple(vel.asnumpy() for vel in (interior.u, interior.v)),
-        )
+    is_boundary = i.asnumpy()[:, np.newaxis] == 0
+    cases.verify(
+        cartesian_case,
+        testee,
+        i,
+        interior,
+        boundary,
+        out=out,
+        ref=out.__class__(
+            u=np.where(is_boundary, boundary.u.asnumpy(), interior.u.asnumpy()),
+            v=np.where(is_boundary, boundary.v.asnumpy(), interior.v.asnumpy()),
+        ),
     )
-
-    cases.verify(cartesian_case, testee, i, interior, boundary, out=out, ref=ref)
 
 
 @pytest.mark.uses_tuple_returns
