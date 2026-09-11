@@ -85,6 +85,8 @@ def _translate_concat_where_branch(
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
     ```
+    A field of constant lists, as produced by `make_const_list`, is broadcast in the
+    same way to the neighbor-list type of the result field.
 
     Args:
         ctx: The SDFG context in which to lower the `concat_where` branch expression.
@@ -103,9 +105,7 @@ def _translate_concat_where_branch(
     assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
     source_domain = source_expr.annex.domain
-    if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
-        output_type.dims
-    ):
+    if source_expr.type != output_type:
         # We promote the input expression to a field defined on the output domain,
         # refer to the function documentation for examples of such field operators.
         if concat_dim not in source_domain.ranges:

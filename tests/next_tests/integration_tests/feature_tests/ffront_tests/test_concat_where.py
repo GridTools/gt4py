@@ -491,6 +491,26 @@ def test_with_local_field_3d(unstructured_case_3d, static_domains: bool):
     )
 
 
+@pytest.mark.uses_unstructured_shift
+def test_with_local_and_nonlocal_field(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField, b: cases.VField) -> cases.VField:
+        return neighbor_sum(concat_where(Vertex < 2, a(V2E), b), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[:, np.newaxis]),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
 def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
