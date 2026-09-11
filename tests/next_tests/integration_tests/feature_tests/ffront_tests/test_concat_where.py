@@ -446,7 +446,7 @@ def test_with_nested_tuples(cartesian_case, static_domains: bool):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_sparse_fields
+@pytest.mark.uses_concat_where_with_list_output
 def test_with_local_field(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.VField, b: cases.VField) -> cases.EField:
@@ -469,7 +469,7 @@ def test_with_local_field(unstructured_case, static_domains: bool):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_sparse_fields
+@pytest.mark.uses_concat_where_with_list_output
 def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(
@@ -505,7 +505,7 @@ def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_sparse_fields
+@pytest.mark.uses_concat_where_with_list_output
 @pytest.mark.embedded_concat_where_infinite_domain
 def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)

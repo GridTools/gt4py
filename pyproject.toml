@@ -310,6 +310,7 @@ markers = [
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'uses_concat_where: tests that use the concat_where builtin',
+  'uses_concat_where_with_list_output: tests that use concat_where with a neighbor-list result',
   'embedded_concat_where_infinite_domain: tests with concat_where resulting in an infinite domain',
   'embedded_concat_where_non_contiguous_domain: tests with concat_where on non-contiguous domains',
   'uses_program_metrics: tests that require backend support for program metrics',
