@@ -443,6 +443,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
         #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
+        true_type, false_type = node.args[1].type, node.args[2].type
+        if not isinstance(node.type, ts.TupleType) and any(
+            type_info.contains_local_field(t) for t in (true_type, false_type)
+        ):
+            true_branch = promote_to_list(true_type)(true_branch)
+            false_branch = promote_to_list(false_type)(false_branch)
         return im.concat_where(domain, true_branch, false_branch)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:

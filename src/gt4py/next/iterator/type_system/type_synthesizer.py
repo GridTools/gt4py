@@ -216,6 +216,8 @@ def if_(
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
 
+    if isinstance(true_branch, ts.ListType) and isinstance(false_branch, ts.ListType):
+        return type_info.promote(true_branch, false_branch)
     return true_branch
 
 

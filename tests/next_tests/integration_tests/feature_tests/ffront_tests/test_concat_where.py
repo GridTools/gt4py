@@ -503,6 +503,30 @@ def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
     )
 
 
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_sparse_fields
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.VField) -> tuple[cases.EField, cases.EField]:
+        return (
+            neighbor_sum(concat_where(Edge < 2, a(E2V), 3), axis=E2VDim),
+            neighbor_sum(concat_where(Edge < 2, 3, a(E2V)), axis=E2VDim),
+        )
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: (
+            np.sum(np.where(edge_mask[:, np.newaxis], a[e2v_table], 3), axis=1),
+            np.sum(np.where(edge_mask[:, np.newaxis], 3, a[e2v_table]), axis=1),
+        ),
+    )
+
+
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
