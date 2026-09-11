@@ -1172,11 +1172,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         if conn_type.has_skip_values:
             # in case of skip value we can write any dummy value
-            skip_value = (
-                "math.nan"
-                if ti.is_floating_point(node.type.element_type)
-                else str(dace.dtypes.max_value(field_desc.dtype))
-            )
+            skip_value = gtx_dace_args.skip_value_replacement(field_desc.dtype)
             tasklet_expression += (
                 f" if {index_connector} != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )
@@ -1398,11 +1394,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             input_nodes[conn_slice.dc_node.data] = conn_slice.dc_node
 
             # in case of skip value we can write any dummy value
-            skip_value = (
-                "math.nan"
-                if ti.is_floating_point(node.type.element_type)
-                else str(dace.dtypes.max_value(dc_dtype))
-            )
+            skip_value = gtx_dace_args.skip_value_replacement(dc_dtype)
             tasklet_expression += (
                 f" if __neighbor_idx != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}"
             )

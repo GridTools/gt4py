@@ -98,7 +98,7 @@ dependencies = [
   'click>=8.0.0',
   'cmake>=3.22',
   'cytoolz>=1.0.1',
-  'dace>=2.0.0a7,<2.0.0a8',
+  'dace>=2.0.0a7',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
   'factory-boy>=3.3.3',
@@ -467,6 +467,7 @@ url = 'https://gridtools.github.io/pypi/'
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
+dace = {git = "https://github.com/romanc/dace", branch = "romanc/stree-sdfg-nested-sdfg-connectors"}
 
 # -- versioningit --
 [tool.versioningit]

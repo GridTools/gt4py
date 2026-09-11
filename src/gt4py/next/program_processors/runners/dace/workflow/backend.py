@@ -87,6 +87,9 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
+    use_stree_lowering: bool = False,
+    apply_common_transforms: bool = False,
+    name_postfix: str | None = None,
 ) -> backend.Backend:
     """Customize the dace backend with the given configuration parameters.
 
@@ -106,6 +109,13 @@ def make_dace_backend(
         use_zero_origin: Can be set to `True` when all fields passed as program
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
+        use_stree_lowering: Lower the GTIR program to SDFG through the schedule-tree
+            intermediate representation; otherwise use the direct lowering.
+        apply_common_transforms: Run the ITIR common-transforms pipeline (inlining,
+            constant folding, CSE, ...) before lowering. Only supported with
+            `use_stree_lowering=True`; otherwise the fieldview transforms are applied.
+        name_postfix: Optional postfix for the backend name, appended to the name
+            derived from the other configuration parameters.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
     cannot be overriden, and therefore cannot appear here. Thus, this function will
@@ -154,7 +164,7 @@ def make_dace_backend(
             gtx_transformations.TransientMemoryMode.EXTERNAL
         )
 
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
+    factory_kwargs: dict[str, Any] = dict(
         gpu=gpu,
         auto_optimize=auto_optimize,
         external_workspace=external_workspace,
@@ -164,9 +174,19 @@ def make_dace_backend(
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
         otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+        otf_workflow__bare_translation__use_stree_lowering=use_stree_lowering,
+        otf_workflow__bare_translation__apply_common_transforms=apply_common_transforms,
+    )
+    if name_postfix is not None:
+        factory_kwargs["name_postfix"] = name_postfix
+
+    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
+        **factory_kwargs,
     )
 
 
+# Legacy backends: direct GTIR-to-SDFG lowering, without the ITIR
+#  common-transforms pipeline.
 run_dace_cpu = make_dace_backend(
     gpu=False,
     auto_optimize=True,
@@ -187,4 +207,54 @@ run_dace_gpu_noopt = make_dace_backend(
     gpu=True,
     auto_optimize=False,
     async_sdfg_call=True,
+)
+
+# Schedule-tree lowering, without the ITIR common-transforms pipeline.
+run_dace_stree_fview_cpu = make_dace_backend(
+    gpu=False,
+    auto_optimize=True,
+    async_sdfg_call=False,
+    use_stree_lowering=True,
+    name_postfix="_stree_fview",
+)
+run_dace_stree_fview_cpu_noopt = make_dace_backend(
+    gpu=False,
+    auto_optimize=False,
+    async_sdfg_call=False,
+    use_stree_lowering=True,
+    name_postfix="_stree_fview_noopt",
+)
+run_dace_stree_fview_gpu = make_dace_backend(
+    gpu=True,
+    auto_optimize=True,
+    async_sdfg_call=True,
+    use_stree_lowering=True,
+    name_postfix="_stree_fview",
+)
+
+# Schedule-tree lowering, with the ITIR common-transforms pipeline (which also
+#  performs operator fusion).
+run_dace_stree_iview_cpu = make_dace_backend(
+    gpu=False,
+    auto_optimize=True,
+    async_sdfg_call=False,
+    use_stree_lowering=True,
+    apply_common_transforms=True,
+    name_postfix="_stree_iview",
+)
+run_dace_stree_iview_cpu_noopt = make_dace_backend(
+    gpu=False,
+    auto_optimize=False,
+    async_sdfg_call=False,
+    use_stree_lowering=True,
+    apply_common_transforms=True,
+    name_postfix="_stree_iview_noopt",
+)
+run_dace_stree_iview_gpu = make_dace_backend(
+    gpu=True,
+    auto_optimize=True,
+    async_sdfg_call=True,
+    use_stree_lowering=True,
+    apply_common_transforms=True,
+    name_postfix="_stree_iview",
 )
