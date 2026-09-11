@@ -9,12 +9,12 @@
 import numpy as np
 import pytest
 from next_tests.integration_tests.cases import (
-    E2V,
-    E2VDim,
-    Edge,
     IDim,
     JDim,
     KDim,
+    V2E,
+    V2EDim,
+    Vertex,
     cartesian_case,
     unstructured_case,
 )
@@ -449,20 +449,20 @@ def test_with_nested_tuples(cartesian_case, static_domains: bool):
 @pytest.mark.uses_concat_where_with_list_output
 def test_with_local_field(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
-    def testee(a: cases.VField, b: cases.VField) -> cases.EField:
-        t = concat_where(Edge < 2, a(E2V), b(E2V))
-        return neighbor_sum(t, axis=E2VDim)
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
+        t = concat_where(Vertex < 2, a(V2E), b(V2E))
+        return neighbor_sum(t, axis=V2EDim)
 
-    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
-    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b: np.sum(
-            np.where(edge_mask[:, np.newaxis], a[e2v_table], b[e2v_table]),
+            np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[v2e_table]),
             axis=1,
             initial=0,
-            where=e2v_table != common._DEFAULT_SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -473,31 +473,31 @@ def test_with_local_field(unstructured_case, static_domains: bool):
 def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(
-        a: cases.VField,
-        b: cases.VField,
-        c: cases.VField,
-        d: cases.VField,
-    ) -> tuple[cases.EField, cases.EField]:
-        t = concat_where(Edge < 2, (a(E2V), b(E2V)), (c(E2V), d(E2V)))
-        return neighbor_sum(t[0], axis=E2VDim), neighbor_sum(t[1], axis=E2VDim)
+        a: cases.EField,
+        b: cases.EField,
+        c: cases.EField,
+        d: cases.EField,
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), b(V2E)), (c(V2E), d(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
 
-    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
-    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b, c, d: (
             np.sum(
-                np.where(edge_mask[:, np.newaxis], a[e2v_table], c[e2v_table]),
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], c[v2e_table]),
                 axis=1,
                 initial=0,
-                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
             ),
             np.sum(
-                np.where(edge_mask[:, np.newaxis], b[e2v_table], d[e2v_table]),
+                np.where(vertex_mask[:, np.newaxis], b[v2e_table], d[v2e_table]),
                 axis=1,
                 initial=0,
-                where=e2v_table != common._DEFAULT_SKIP_VALUE,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
             ),
         ),
     )
@@ -509,20 +509,30 @@ def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
 @pytest.mark.embedded_concat_where_infinite_domain
 def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
-    def testee(a: cases.VField) -> tuple[cases.EField, cases.EField]:
+    def testee(a: cases.EField) -> tuple[cases.VField, cases.VField]:
         return (
-            neighbor_sum(concat_where(Edge < 2, a(E2V), 3), axis=E2VDim),
-            neighbor_sum(concat_where(Edge < 2, 3, a(E2V)), axis=E2VDim),
+            neighbor_sum(concat_where(Vertex < 2, a(V2E), 3), axis=V2EDim),
+            neighbor_sum(concat_where(Vertex < 2, 3, a(V2E)), axis=V2EDim),
         )
 
-    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
-    edge_mask = np.arange(unstructured_case.default_sizes[Edge]) < 2
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a: (
-            np.sum(np.where(edge_mask[:, np.newaxis], a[e2v_table], 3), axis=1),
-            np.sum(np.where(edge_mask[:, np.newaxis], 3, a[e2v_table]), axis=1),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], 3, a[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
         ),
     )
 
