@@ -462,3 +462,17 @@ def test_return_type(
 )
 def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
     assert type_info.needs_value_extraction(type_spec) is expected
+
+
+def test_promote_lists():
+    float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
+    C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
+    const_list = ts.ListType(element_type=float64, offset_type=None)
+    v2e_list = ts.ListType(element_type=float64, offset_type=V2EDim)
+
+    assert type_info.promote(const_list, v2e_list) == v2e_list
+    with pytest.raises(ValueError, match="different offsets"):
+        type_info.promote(v2e_list, ts.ListType(element_type=float64, offset_type=C2EDim))
+    with pytest.raises(ValueError, match="non-lists"):
+        type_info.promote(v2e_list, float64)

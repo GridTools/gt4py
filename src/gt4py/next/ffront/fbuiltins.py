@@ -243,6 +243,10 @@ class WhereBuiltinFunction(
     ) -> Tuple: ...
 
     def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
+        if isinstance(true_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
+            return named_collections.tree_map_named_collection(lambda t, f: self(cond, t, f))(  # type: ignore[return-value] # `NamedCollection` is not `_R`
+                true_field, false_field
+            )
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(

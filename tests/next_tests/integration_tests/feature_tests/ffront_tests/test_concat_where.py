@@ -8,13 +8,23 @@
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
+from next_tests.integration_tests.cases import (
+    IDim,
+    JDim,
+    KDim,
+    V2E,
+    V2EDim,
+    Vertex,
+    cartesian_case,
+    unstructured_case,
+)
 from gt4py import next as gtx
-from gt4py.next import broadcast
+from gt4py.next import broadcast, common, neighbor_sum
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 pytestmark = pytest.mark.uses_concat_where
@@ -388,6 +398,177 @@ def test_with_tuples(cartesian_case, static_domains: bool):
         )
 
     cases.verify_with_default_data(cartesian_case, testee, ref)
+
+
+@pytest.mark.uses_tuple_returns
+def test_with_nested_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        interior0: cases.IJKField,
+        boundary0: cases.IJField,
+        interior1: cases.IJKField,
+        boundary1: cases.IJField,
+        interior2: cases.IJKField,
+        boundary2: cases.IJField,
+    ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
+        return concat_where(
+            KDim == 0,
+            (boundary0, (boundary1, boundary2)),
+            (interior0, (interior1, interior2)),
+        )
+
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(3))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(3))
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    refs = tuple(
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 0,
+            boundary.asnumpy()[:, :, np.newaxis],
+            interior.asnumpy(),
+        )
+        for boundary, interior in zip(boundaries, interiors)
+    )
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        interiors[0],
+        boundaries[0],
+        interiors[1],
+        boundaries[1],
+        interiors[2],
+        boundaries[2],
+        out=out,
+        ref=(refs[0], (refs[1], refs[2])),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_concat_where_with_list_output
+def test_with_local_field(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
+        t = concat_where(Vertex < 2, a(V2E), b(V2E))
+        return neighbor_sum(t, axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[v2e_table]),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_concat_where_with_list_output
+def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.EField,
+        b: cases.EField,
+        c: cases.EField,
+        d: cases.EField,
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), b(V2E)), (c(V2E), d(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], c[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], b[v2e_table], d[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_concat_where_with_list_output
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField) -> tuple[cases.VField, cases.VField]:
+        return (
+            neighbor_sum(concat_where(Vertex < 2, a(V2E), 3), axis=V2EDim),
+            neighbor_sum(concat_where(Vertex < 2, 3, a(V2E)), axis=V2EDim),
+        )
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], 3, a[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_concat_where_with_list_output
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_tuples_of_local_and_nonlocal_leaves(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.EField, b: cases.EField, c: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), c), (3, b(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], c[:, np.newaxis], b[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
 
 
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):

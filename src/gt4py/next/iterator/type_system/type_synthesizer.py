@@ -216,6 +216,8 @@ def if_(
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
 
+    if isinstance(true_branch, ts.ListType) and isinstance(false_branch, ts.ListType):
+        return type_info.promote(true_branch, false_branch)
     return true_branch
 
 
@@ -279,18 +281,11 @@ def concat_where(
         if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
             return ts.DeferredType(constraint=ts.FieldType)
 
-        tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
-
-        assert tb_dtype == fb_dtype, (
-            f"Field arguments to 'concat_where' must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        promoted = type_info.promote(tb, fb)
+        return ts.FieldType(
+            dims=common.promote_dims(domain.dims, type_info.extract_dims(promoted)),
+            dtype=type_info.extract_dtype(promoted),
         )
-        dtype = tb_dtype
-
-        return_dims = common.promote_dims(
-            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
-        )
-        return_type = ts.FieldType(dims=return_dims, dtype=dtype)
-        return return_type
 
     return deduce_return_type(true_field, false_field)
 
