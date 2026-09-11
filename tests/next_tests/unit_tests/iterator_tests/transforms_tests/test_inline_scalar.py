@@ -13,7 +13,10 @@ from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.transforms import inline_scalar
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
-TDim = common.dimension("TDim")
+
+class TDim(common.DimensionIndex): ...
+
+
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
 
 

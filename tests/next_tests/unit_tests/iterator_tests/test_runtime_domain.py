@@ -27,7 +27,8 @@ connectivity = common.ConnectivityType(
     dtype=None,
 )
 
-I = gtx.dimension("I")
+
+class I(gtx.DimensionIndex): ...
 
 
 def test_deduce_domain():

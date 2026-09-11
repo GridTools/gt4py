@@ -22,9 +22,14 @@ from gt4py.next import (
 )
 
 
-I = gtx.dimension("I")
-J = gtx.dimension("J")
-K = gtx.dimension("K")
+class I(gtx.DimensionIndex): ...
+
+
+class J(gtx.DimensionIndex): ...
+
+
+class K(gtx.DimensionIndex): ...
+
 
 sizes = {I: 10, J: 10, K: 10}
 

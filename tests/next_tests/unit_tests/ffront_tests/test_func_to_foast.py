@@ -71,7 +71,9 @@ OR = itir.SymRef(id=itb.or_.fun.__name__)
 XOR = itir.SymRef(id=itb.xor_.fun.__name__)
 LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
-TDim = gtx.dimension("TDim")  # Meaningless dimension, used for tests.
+
+class TDim(gtx.DimensionIndex): ...  # Meaningless dimension, used for tests.
+
 
 # PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
 type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]

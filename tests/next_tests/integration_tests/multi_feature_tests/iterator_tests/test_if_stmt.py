@@ -22,7 +22,7 @@ def multiply(alpha, inp):
     return deref(alpha) * deref(inp)
 
 
-IDim = gtx.dimension("IDim")
+class IDim(gtx.DimensionIndex): ...
 
 
 @pytest.mark.uses_ir_if_stmts

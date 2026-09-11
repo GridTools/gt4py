@@ -37,9 +37,15 @@ from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-Vertex = gtx.dimension("Vertex")
-Edge = gtx.dimension("Edge")
-V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+class Vertex(gtx.DimensionIndex): ...
+
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "V2E"
+
 
 V2E = offset("V2E")
 E2V = offset("E2V")

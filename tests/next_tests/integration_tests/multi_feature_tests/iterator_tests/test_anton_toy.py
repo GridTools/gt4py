@@ -24,12 +24,15 @@ from gt4py.next.program_processors.runners import gtfn
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-IDim = gtx.dimension("IDim")
-JDim = gtx.dimension("JDim")
-KDim = gtx.dimension("KDim")
+class IDim(gtx.DimensionIndex): ...
 
 
-# cross-reference why new type inference does not support this
+class JDim(gtx.DimensionIndex): ...
+
+
+class KDim(gtx.DimensionIndex): ...  # cross-reference why new type inference does not support this
+
+
 @fundef
 def ldif(d):
     return lambda inp: deref(shift(d, -1)(inp)) - deref(inp)

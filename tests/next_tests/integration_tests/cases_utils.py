@@ -153,25 +153,56 @@ def debug_itir(tree):
 DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
-IDim = gtx.dimension("IDim")
+
+class IDim(gtx.DimensionIndex): ...
+
+
 IHalfDim = common.flip_staggered(IDim)
-JDim = gtx.dimension("JDim")
+
+
+class JDim(gtx.DimensionIndex): ...
+
+
 JHalfDim = common.flip_staggered(JDim)
-KDim = gtx.dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+
+class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
 KHalfDim = common.flip_staggered(KDim)
 
 Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
-Vertex = gtx.dimension("Vertex")
-Edge = gtx.dimension("Edge")
-Cell = gtx.dimension("Cell")
+
+class Vertex(gtx.DimensionIndex): ...
+
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class Cell(gtx.DimensionIndex): ...
+
+
 EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
-V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-C2VDim = gtx.dimension("C2V", kind=gtx.DimensionKind.LOCAL)
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "V2E"
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "E2V"
+
+
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "C2E"
+
+
+class C2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL):
+    tag = "C2V"
+
+
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))

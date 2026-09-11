@@ -68,6 +68,7 @@ typing_exports = [
   {include-group = "typing"},
   'types-six>=1.17.0.20251009',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
   'pytest-mypy-plugins>=4.0.0',  # pytest plugin for running mypy on code snippets
+  'pyright>=1.1.411',  # dimension annotations must work without a gt4py plugin, see ADR 0028
   "xarray>=2024.1.0"  # one of the regression tests requires xarray
 ]
 

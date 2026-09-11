@@ -26,7 +26,7 @@ except ImportError:
     BACKENDS = [None, gtfn_cpu]
 
 
-IDim = gtx.dimension("IDim")
+class IDim(gtx.DimensionIndex): ...
 
 
 @gtx.field_operator

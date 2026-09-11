@@ -14,11 +14,14 @@ import gt4py.next as gtx
 from gt4py.next import float64
 
 
-IDim = gtx.dimension("IDim")
-JDim = gtx.dimension("JDim")
+class IDim(gtx.DimensionIndex): ...
 
 
-# TODO(tehrengruber): Improve test structure. Identity needs to be decorated
+class JDim(
+    gtx.DimensionIndex
+): ...  # TODO(tehrengruber): Improve test structure. Identity needs to be decorated
+
+
 #  in order to be used inside a program. This is unfortunate as a bug inside
 #  the decorator may result in failing tests before the actual test is run.
 #  A better way would be to first test everything field operator related,

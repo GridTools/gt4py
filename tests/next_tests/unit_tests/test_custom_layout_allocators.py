@@ -124,9 +124,13 @@ def test_horizontal_first_layout_mapper():
     assert horizontal_first_layout_mapper(dims) == expected_layout_map
 
 
-Cell = common.dimension("Cell", common.DimensionKind.HORIZONTAL)
-Edge = common.dimension("Edge", common.DimensionKind.HORIZONTAL)
-K = common.dimension("K", common.DimensionKind.VERTICAL)
+class Cell(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
 
 
 class TestBaseFieldBufferAllocatorAlignedIndex:

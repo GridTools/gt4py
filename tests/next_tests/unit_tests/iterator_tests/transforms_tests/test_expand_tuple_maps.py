@@ -16,7 +16,9 @@ from gt4py.next.iterator.transforms.expand_tuple_maps import ExpandTupleMaps
 from gt4py.next.type_system import type_specifications as ts
 
 
-IDim = common.dimension("IDim")
+class IDim(common.DimensionIndex): ...
+
+
 T = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 i_field = ts.FieldType(dims=[IDim], dtype=T)
 i_tuple_field = ts.TupleType(types=[i_field, i_field])

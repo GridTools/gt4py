@@ -1513,6 +1513,7 @@ typing = [
 ]
 typing-exports = [
     { name = "mypy", extra = ["faster-cache"] },
+    { name = "pyright" },
     { name = "pytest-mypy-plugins" },
     { name = "types-decorator" },
     { name = "types-docutils" },
@@ -1672,6 +1673,7 @@ typing = [
 ]
 typing-exports = [
     { name = "mypy", extras = ["faster-cache"], specifier = ">=1.13.0" },
+    { name = "pyright", specifier = ">=1.1.411" },
     { name = "pytest-mypy-plugins", specifier = ">=4.0.0" },
     { name = "types-decorator", specifier = ">=5.1.8" },
     { name = "types-docutils", specifier = ">=0.21.0" },
@@ -3199,6 +3201,19 @@ name = "pyreadline"
 version = "2.1"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/bc/7c/d724ef1ec3ab2125f38a1d53285745445ec4a8f19b9bb0761b4064316679/pyreadline-2.1.zip", hash = "sha256:4530592fc2e85b25b1a9f79664433da09237c1a270e4d78ea5aa3a2c7229e2d1", size = 109189, upload-time = "2015-09-16T08:24:48.745Z" }
+
+[[package]]
+name = "pyright"
+version = "1.1.411"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nodeenv" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7e/ab/265f7dc69d28113ebba19092e57b075f41543b2ed048429c5f56e2b88eac/pyright-1.1.411.tar.gz", hash = "sha256:d885a0551f2e763b089a02702174e7f4ba77548cddabc972ab86d1f7f1b0f998", size = 4112861, upload-time = "2026-06-25T02:14:06.37Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0a/49/385be530a6a5b78d1cbcd5c2e38debc8959a2fc6bdb716f4e581002979fc/pyright-1.1.411-py3-none-any.whl", hash = "sha256:dc7c72a8e2700c55baa127554040e067041ea53ccfd50bf96308cc4291c7d5d9", size = 6181526, upload-time = "2026-06-25T02:14:04.691Z" },
+]
 
 [[package]]
 name = "pytest"

@@ -275,3 +275,105 @@
     main: |
       import xarray
       a: xarray.NamedArray
+
+  - case: class_style_dimension_in_field_annotation
+    main: |
+      from gt4py import next as gtx
+
+      class IDim(gtx.DimensionIndex): ...
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+      a: gtx.Field[gtx.Dims[IDim, KDim], gtx.float64]
+      reveal_type(a)
+    out: |
+      main:7:13: note: Revealed type is "gt4py.next.common.Field[tuple[main.IDim, main.KDim, fallback=gt4py.next.common.Dims[main.IDim, main.KDim]], float]"
+
+  - case: class_style_dimension_mismatch_is_an_error
+    main: |
+      from gt4py import next as gtx
+
+      class IDim(gtx.DimensionIndex): ...
+      class JDim(gtx.DimensionIndex): ...
+
+      def takes_i(f: gtx.Field[gtx.Dims[IDim], gtx.float64]) -> None: ...
+      def pass_j(g: gtx.Field[gtx.Dims[JDim], gtx.float64]) -> None:
+          takes_i(g)
+    out: |
+      main:8:13: error: Argument 1 to "takes_i" has incompatible type "Field[Dims[JDim], float]"; expected "Field[Dims[IDim], float]"  [arg-type]
+      main:8:13: note: "Field[Dims[IDim], float].__call__" has type "def __call__(self, index_field: Connectivity[Any, Any] | FieldOffset, *args: Connectivity[Any, Any] | FieldOffset) -> Field[Any, Any]"
+
+  - case: dimension_typevar_bound
+    main: |
+      from typing import TypeVar
+      from gt4py import next as gtx
+
+      D = TypeVar("D", bound=gtx.DimensionIndex)
+
+      class IDim(gtx.DimensionIndex): ...
+
+      def name_of(d: type[D]) -> str:
+          return d.tag
+
+      reveal_type(name_of(IDim))
+    out: |
+      main:11:13: note: Revealed type is "str"
+
+  - case: index_is_an_instance_of_its_dimension
+    main: |
+      from gt4py import next as gtx
+
+      class IDim(gtx.DimensionIndex): ...
+
+      # no expected output: `IDim(0)` is an ordinary instance of `IDim`, and its position is
+      # `.value`; the dimension's name is `IDim.tag`.
+      idx: IDim = IDim(0)
+      pos: int = IDim(0).value
+      dim: gtx.Dimension = IDim(0).dim
+      name: str = IDim.tag
+
+  - case: index_of_the_wrong_dimension_is_an_error
+    main: |
+      from gt4py import next as gtx
+
+      class IDim(gtx.DimensionIndex): ...
+      class JDim(gtx.DimensionIndex): ...
+
+      def takes_i(i: IDim) -> None: ...
+
+      takes_i(JDim(0))
+    out: |
+      main:8:9: error: Argument 1 to "takes_i" has incompatible type "JDim"; expected "IDim"  [arg-type]
+
+  - case: unparameterized_dims_still_accepts_any_rank
+    main: |
+      from gt4py import next as gtx
+
+      def anything(f: gtx.Field[gtx.Dims, gtx.float64]) -> None: ...
+
+      class IDim(gtx.DimensionIndex): ...
+      class JDim(gtx.DimensionIndex): ...
+
+      a: gtx.Field[gtx.Dims[IDim], gtx.float64]
+      b: gtx.Field[gtx.Dims[IDim, JDim], gtx.float64]
+      anything(a)
+      anything(b)
+
+  - case: programmatic_constructor_returns_a_dimension
+    main: |
+      from gt4py import next as gtx
+
+      IDim = gtx.dimension("IDim")
+      reveal_type(IDim)
+    out: |
+      main:4:13: note: Revealed type is "type[gt4py.next.common.DimensionIndex]"
+
+  - case: dimension_alias_annotates_the_class_not_an_index
+    main: |
+      from gt4py import next as gtx
+
+      class IDim(gtx.DimensionIndex): ...
+
+      ok: gtx.Dimension = IDim
+      bad: gtx.Dimension = IDim(0)
+    out: |
+      main:6:22: error: Incompatible types in assignment (expression has type "IDim", variable has type "type[DimensionIndex]")  [assignment]
