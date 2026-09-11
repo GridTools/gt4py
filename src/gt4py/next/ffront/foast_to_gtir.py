@@ -8,6 +8,7 @@
 
 
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 from gt4py import eve
@@ -258,6 +259,75 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
+
+    def _bind_tuple_comprehension_target(
+        self,
+        comprehension_target: itir.Sym | tuple,
+        element_expr: itir.Expr,
+        iterable_element: itir.Expr | str,
+    ) -> itir.Expr:
+        """
+        Wrap `element_expr` in a `let` binding the `comprehension_target` to `iterable_element`.
+
+        For `2.0 * a + b for (a, b) in iterable`:
+        - `comprehension_target`: `(a, b)`
+        - `element_expr`: `2.0 * a + b`
+        - `iterable_element`: the current element of `iterable`
+
+        returns
+        `let a = iterable_element[0], b = iterable_element[1] in element_expr`.
+        """
+        if isinstance(comprehension_target, itir.Sym):
+            return im.let(comprehension_target, iterable_element)(element_expr)
+
+        flat_targets = utils.flatten_nested_tuple(comprehension_target)
+        nested_target_values = utils.tree_map(
+            lambda _, path: functools.reduce(
+                lambda element, index: im.tuple_get(index, element), path, iterable_element
+            ),
+            with_path_arg=True,
+        )(comprehension_target)
+
+        flat_target_values = utils.flatten_nested_tuple(nested_target_values)  # type: ignore[arg-type]
+
+        target_bindings = tuple(zip(flat_targets, flat_target_values, strict=True))
+        return im.let(*target_bindings)(element_expr)  # type: ignore[arg-type]
+
+    def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> itir.Expr:
+        # Only homogeneous iterables — all elements of the same type — are supported;
+        # heterogeneous ones are rejected in the type deduction (see ADR 0028).
+        comprehension_target = self.visit(node.inner.target, **kwargs)
+        element_expr = self.visit(node.inner.element_expr, **kwargs)
+        iterable_expr = self.visit(node.iterable, **kwargs)
+        iterable_type = node.iterable.type
+
+        lower_body_for_iterable_element = functools.partial(
+            self._bind_tuple_comprehension_target, comprehension_target, element_expr
+        )
+
+        if isinstance(iterable_type, ts.TupleType):
+            assert isinstance(node.type, ts.TupleType)
+            iterable_value_name = next(self.uid_generator["__tuple_comprh"])
+
+            fixed_tuple_elements = [
+                lower_body_for_iterable_element(im.tuple_get(element_index, iterable_value_name))
+                for element_index in range(len(iterable_type.types))
+            ]
+
+            result_tuple = im.make_tuple(*fixed_tuple_elements)
+            return im.let(iterable_value_name, iterable_expr)(result_tuple)
+
+        assert isinstance(iterable_type, ts.VarArgType)
+        assert isinstance(node.type, ts.VarArgType)
+        if isinstance(comprehension_target, itir.Sym):
+            map_tuple_lambda = im.lambda_(comprehension_target)(element_expr)
+        else:
+            iterable_element_param = next(self.uid_generator["__tuple_comprh"])
+            map_tuple_lambda = im.lambda_(iterable_element_param)(
+                lower_body_for_iterable_element(iterable_element_param)
+            )
+
+        return im.call(im.call("map_tuple")(map_tuple_lambda))(iterable_expr)
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators

@@ -55,7 +55,10 @@ _UNSUPPORTED_FEATURE_HINTS: dict[type[ast.AST], tuple[str, tuple[str, ...]]] = {
     ),
     ast.SetComp: ("set comprehension", ()),
     ast.DictComp: ("dictionary comprehension", ()),
-    ast.GeneratorExp: ("generator expression", ()),
+    ast.GeneratorExp: (
+        "generator expression",
+        ("Generator expressions are only supported as the argument of 'tuple(...)'.",),
+    ),
     ast.Lambda: (
         "'lambda' expression",
         ("Define a separate function decorated with '@field_operator' instead.",),

@@ -74,6 +74,24 @@ def test_assign_tuple():
     )
 
 
+def test_tuple_comprehension_unpack_non_tuple():
+    def foo(it: tuple[Field[[TDim], float64], ...]):
+        return tuple(a + b for a, b in it)
+
+    with pytest.raises(errors.DSLError, match=r"Cannot unpack non-iterable"):
+        _ = FieldOperatorParser.apply_to_function(foo)
+
+
+def test_tuple_comprehension_unpack_too_short_tuple():
+    def foo(it: tuple[tuple[Field[[TDim], float64], Field[[TDim], float64]], ...]):
+        return tuple(a + b + c for a, b, c in it)
+
+    with pytest.raises(
+        errors.DSLError, match=r"Not enough values to unpack \(expected at least 3, got 2\)"
+    ):
+        _ = FieldOperatorParser.apply_to_function(foo)
+
+
 def test_adding_bool():
     """Expect an error when using arithmetic on bools."""
 
