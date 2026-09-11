@@ -1024,15 +1024,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
-            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+            try:
+                promoted = type_info.promote(tb, fb)
+            except ValueError as ex:
                 raise errors.DSLError(
                     location,
-                    f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
-                    f"'{f_dtype}'.",
-                )
-            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
-            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
-            return return_type
+                    f"Could not promote '{tb}' and '{fb}' to common type in call to '{func_name}'.",
+                ) from ex
+            return ts.FieldType(
+                dims=promote_dims(cond_dims, type_info.extract_dims(promoted)),
+                dtype=type_info.extract_dtype(promoted),
+            )
 
         return deduce_return_type(true_branch, false_branch)
 

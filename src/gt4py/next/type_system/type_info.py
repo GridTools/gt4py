@@ -565,10 +565,8 @@ def promote(
     the individual order of the dimensions of each argument (see
     :func:`common.promote_dims` for more details).
 
-    A `ListType` is the dtype of a local (neighbor-list) field and only ever reaches this
-    function from the ITIR level. The frontend represents the same concept as a field with
-    a local dimension in `dims` and a scalar dtype, so it never passes a list here. Lists
-    promote exactly like scalars, i.e. only between equal types.
+    `ListType`s promote only with each other: their element types must be equal, and an
+    `offset_type` of `None` (a list from `make_const_list`) is compatible with any other.
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
@@ -591,15 +589,33 @@ def promote(
     ...     ts.FieldType(dims=[I, J], dtype=list_dtype),
     ... ) == ts.FieldType(dims=[I, J], dtype=list_dtype)
     True
+
+    >>> const_list_dtype = ts.ListType(element_type=dtype, offset_type=None)
+    >>> promote(
+    ...     ts.FieldType(dims=[I], dtype=const_list_dtype),
+    ...     ts.FieldType(dims=[I], dtype=list_dtype),
+    ... ) == ts.FieldType(dims=[I], dtype=list_dtype)
+    True
     """
-    # Lists are only reached from the ITIR level (see above) and behave like scalars here:
-    #  both promote only between equal types.
-    if not always_field and all(isinstance(type_, (ts.ScalarType, ts.ListType)) for type_ in types):
+    if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
-            raise ValueError("Could not promote dtypes of different type (not implemented).")
+            raise ValueError("Could not promote scalars of different dtype (not implemented).")
         if isinstance(types[0], ts.ScalarType) and types[0].shape is not None:
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
+    elif not always_field and any(isinstance(type_, ts.ListType) for type_ in types):
+        lists = [type_ for type_ in types if isinstance(type_, ts.ListType)]
+        if len(lists) != len(types):
+            raise ValueError("Could not promote lists together with non-lists.")
+        if not all(list_.element_type == lists[0].element_type for list_ in lists):
+            raise ValueError("Could not promote lists of different element type (not implemented).")
+        offset_types = [list_.offset_type for list_ in lists if list_.offset_type is not None]
+        if not all(offset_type == offset_types[0] for offset_type in offset_types):
+            raise ValueError("Could not promote lists over different offsets.")
+        return ts.ListType(
+            element_type=lists[0].element_type,
+            offset_type=offset_types[0] if offset_types else None,
+        )
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
         dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
         dtype = promote(*(extract_dtype(type_) for type_ in types))
