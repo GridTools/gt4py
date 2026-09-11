@@ -1893,7 +1893,7 @@ def test_enum_runtime(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_enum_runtime(backend):
+def test_bool_runtime(backend):
 
     @gtscript.stencil(backend=backend)
     def the_stencil(out_field: Field[int], done: bool):  # type: ignore
