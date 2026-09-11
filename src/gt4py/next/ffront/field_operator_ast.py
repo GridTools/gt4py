@@ -68,8 +68,8 @@ TupleSymbol = DataSymbol[TupleTypeT]
 NamedCollectionTypeT = TypeVar("NamedCollectionTypeT", bound=ts.NamedCollectionType)
 NamedCollectionSymbol = DataSymbol[NamedCollectionTypeT]
 
-DimensionTypeT = TypeVar("DimensionTypeT", bound=ts.DimensionType)
-DimensionSymbol = DataSymbol[DimensionTypeT]
+DimensionT = TypeVar("DimensionT", bound=ts.DimensionType)
+DimensionSymbol = DataSymbol[DimensionT]
 
 
 class Expr(LocatedNode):

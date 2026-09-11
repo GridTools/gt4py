@@ -174,7 +174,7 @@ def _generate_source(
 
     offset_literals_src = "\n".join(f'{o} = offset("{o}")' for o in offset_literals)
     axis_literals_src = "\n".join(
-        f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
+        f'{o.value} = gtx.dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
         for o in axis_literals_set
     )
     source_code = f"{header}{offset_literals_src}\n{axis_literals_src}\n{program}"

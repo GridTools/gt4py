@@ -251,7 +251,7 @@ class FuseAsFieldOp(
     >>> from gt4py import next as gtx
     >>> from gt4py.next import utils
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-    >>> IDim = gtx.Dimension("IDim")
+    >>> IDim = gtx.dimension("IDim")
     >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
     >>> d = im.domain("cartesian_domain", {IDim: (0, 1)})
     >>> nested_as_fieldop = im.op_as_fieldop("plus", d)(

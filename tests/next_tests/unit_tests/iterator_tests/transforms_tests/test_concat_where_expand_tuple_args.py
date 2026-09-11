@@ -17,7 +17,7 @@ from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+IDim = common.dimension("IDim", kind=common.DimensionKind.HORIZONTAL)
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)
 
 

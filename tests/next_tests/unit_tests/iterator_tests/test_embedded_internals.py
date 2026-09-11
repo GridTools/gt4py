@@ -45,7 +45,7 @@ def test_column_ufunc():
         with embedded_context.update(
             offset_provider={},
             closure_column_range=common.NamedRange(
-                common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
+                common.dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
             ),
         ):
             test_func(2, 3)
@@ -148,6 +148,6 @@ def test_column_array_function_wrong_shape():
 
 
 def test_lift_accepts_cartesian_dimension_offset():
-    K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
+    K = common.dimension("K", kind=common.DimensionKind.VERTICAL)
     lifted = embedded.lift(lambda *args: 0)()
     lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise

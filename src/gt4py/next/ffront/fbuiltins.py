@@ -33,8 +33,9 @@ import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, named_collections
-from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
+from gt4py.next.common import DimensionIndex, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -98,7 +99,9 @@ PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
 TYPE_BUILTINS = [
     common.Field,
-    common.Dimension,
+    # NOTE: the *class*, not the `common.Dimension` alias: `BUILTIN_NAMES` derives DSL names
+    # from `__name__`, and an alias's is `"type"`.
+    common.DimensionIndex,
     int8,
     uint8,
     int16,
@@ -125,9 +128,18 @@ _R = TypeVar("_R")
 
 
 def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSpec], ...]:
+    # NOTE: dispatch below is on the annotation's shape, so a type alias has to be resolved
+    # first: `get_origin()` of a PEP 695 alias is `None`, not the aliased origin.
+    t = xtyping.resolve_annotation(t)
     if t is common.Field:
         return ts.FieldType
-    elif t is common.Dimension:
+    elif t is common.DimensionIndex or (
+        get_origin(t) is type
+        and (args := get_args(t))
+        and isinstance(args[0], type)
+        and issubclass(args[0], common.DimensionIndex)
+    ):
+        # `common.Dimension` resolves to `type[DimensionIndex]`; a bare `type` is handled below.
         return ts.DimensionType
     elif t is FieldOffset:
         return ts.OffsetType
@@ -454,7 +466,7 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"}
+should_export = (set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"DimensionIndex", "Field"}
 actual_export = set(__all__)
 assert (diff := should_export - actual_export) == set(), (
     f"Missing symbol(s) in 'fbuiltins.__all__': {diff}"
@@ -494,7 +506,7 @@ class FieldOffset(runtime.Offset):
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
         assert common.is_neighbor_table(offset_definition)
-        named_index = common.NamedIndex(self.target[-1], offset)
+        named_index = self.target[-1](offset)
         connectivity = offset_definition[named_index]
 
         return connectivity

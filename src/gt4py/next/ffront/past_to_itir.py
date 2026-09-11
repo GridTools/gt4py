@@ -42,7 +42,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
     Example:
         >>> from gt4py import next as gtx
         >>> from gt4py.next.otf import arguments, toolchain
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
 
         >>> @gtx.field_operator
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
@@ -74,7 +74,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> definitions.CompilableProgramDe
     """
     all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
     offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-        all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+        all_closure_vars, fbuiltins.FieldOffset, common.DimensionMeta
     )
     grid_type = transform_utils._deduce_grid_type(
         inp.data.grid_type, offsets_and_dimensions.values()
@@ -174,7 +174,7 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
 
     if len(scanops_per_axis.values()) != 1:
         scanops_per_axis_str = "\n".join(
-            f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
+            f"- {dim.tag}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
         )
 
         raise TypeError(
@@ -243,10 +243,10 @@ class ProgramLowering(
     --------
     >>> from gt4py.next.ffront.func_to_past import ProgramParser
     >>> from gt4py.next.iterator import ir
-    >>> from gt4py.next import Dimension, Field
+    >>> from gt4py.next import Dimension, dimension, Field
     >>>
     >>> float64 = float
-    >>> IDim = Dimension("IDim")
+    >>> IDim = dimension("IDim")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
@@ -382,7 +382,7 @@ class ProgramLowering(
         for dim_i, dim in enumerate(out_type.dims):
             # an expression for the range of a dimension
             dim_range = im.call("get_domain_range")(
-                out_expr, itir.AxisLiteral(value=dim.value, kind=dim.kind)
+                out_expr, itir.AxisLiteral(value=dim.tag, kind=dim.kind)
             )
 
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
@@ -407,11 +407,11 @@ class ProgramLowering(
                 )
 
             if dim.kind == common.DimensionKind.LOCAL:
-                raise ValueError(f"common.Dimension '{dim.value}' must not be local.")
+                raise ValueError(f"common.Dimension '{dim.tag}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
+                    args=[itir.AxisLiteral(value=dim.tag, kind=dim.kind), lower, upper],
                 )
             )
 

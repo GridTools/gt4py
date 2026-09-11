@@ -461,7 +461,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 assert target_type.dtype == expr_type.dtype
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
-        return ts.DimensionType(dim=common.Dimension(value=node.value, kind=node.kind))
+        return ts.DimensionType(dim=common.dimension(node.value, kind=node.kind))
 
     # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
     #  the frontend.

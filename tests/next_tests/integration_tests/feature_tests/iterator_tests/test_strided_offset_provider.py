@@ -17,13 +17,13 @@ from next_tests.unit_tests.conftest import program_processor, run_processor
 from gt4py.next.iterator.embedded import StridedConnectivityField
 
 
-LocA = gtx.Dimension("LocA")
-LocAB = gtx.Dimension("LocAB")
-LocB = gtx.Dimension("LocB")  # unused
+LocA = gtx.dimension("LocA")
+LocAB = gtx.dimension("LocAB")
+LocB = gtx.dimension("LocB")  # unused
 
 LocA2LocAB = offset("O")
 LocA2LocAB_offset_provider = StridedConnectivityField(
-    domain_dims=(LocA, gtx.Dimension("Dummy", kind=gtx.DimensionKind.LOCAL)),
+    domain_dims=(LocA, gtx.dimension("Dummy", kind=gtx.DimensionKind.LOCAL)),
     codomain_dim=LocAB,
     max_neighbors=2,
 )

@@ -36,10 +36,10 @@ from gt4py import next as gtx
 from gt4py.next.iterator import atlas_utils
 
 
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+Vertex = gtx.dimension("Vertex")
+Edge = gtx.dimension("Edge")
+V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.dimension("E2V", kind=gtx.DimensionKind.LOCAL)
 
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))

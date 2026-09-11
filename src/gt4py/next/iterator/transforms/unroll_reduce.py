@@ -44,7 +44,7 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
     assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
 
     return [
-        arg.type.offset_type.value  # type: ignore[union-attr] # checked in previous lines
+        arg.type.offset_type.tag  # type: ignore[union-attr] # checked in previous lines
         for arg in reduce_args
         if arg.type.offset_type is not None  # type: ignore[union-attr] # checked in previous lines
     ]

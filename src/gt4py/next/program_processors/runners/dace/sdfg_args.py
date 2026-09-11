@@ -77,7 +77,7 @@ def _field_symbol(
     offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
-        name = f"__{field_name}_{dim.value}_{sym}"
+        name = f"__{field_name}_{dim.tag}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
         assert m[1] in offset_provider_type
@@ -111,20 +111,20 @@ def field_stride_symbol(
 
 def _range_symbol_name(field_name: str, axis: str) -> str:
     """Common part of the name for the range start/stop symbols."""
-    dim = gtx_common.Dimension(axis)
+    dim = gtx_common.dimension(axis)
     field_range = im.call("get_domain_range")(field_name, dim)
     return gtir_python_codegen.get_source(field_range)
 
 
 def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the start symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_0"
+    name = f"{_range_symbol_name(field_name, dim.tag)}_0"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
 def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the stop symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_1"
+    name = f"{_range_symbol_name(field_name, dim.tag)}_1"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 

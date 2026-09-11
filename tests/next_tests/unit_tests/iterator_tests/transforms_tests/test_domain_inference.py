@@ -28,12 +28,12 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
-KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
-Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
-Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
-E2VDim = common.Dimension(value="E2V", kind=common.DimensionKind.LOCAL)
+IDim = common.dimension("IDim", kind=common.DimensionKind.HORIZONTAL)
+JDim = common.dimension("JDim", kind=common.DimensionKind.HORIZONTAL)
+KDim = common.dimension("KDim", kind=common.DimensionKind.VERTICAL)
+Vertex = common.dimension("Vertex", kind=common.DimensionKind.HORIZONTAL)
+Edge = common.dimension("Edge", kind=common.DimensionKind.HORIZONTAL)
+E2VDim = common.dimension("E2V", kind=common.DimensionKind.LOCAL)
 float_i_field = ts.FieldType(dims=[IDim], dtype=float_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float_type)
 tuple_float_i_field = ts.TupleType(

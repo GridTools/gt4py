@@ -26,7 +26,7 @@ def make_program_source(name: str) -> stages.ProgramSource:
             interface.Parameter(
                 name="buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                    dims=[gtx.dimension("I"), gtx.dimension("J")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                 ),
             ),
@@ -35,11 +35,11 @@ def make_program_source(name: str) -> stages.ProgramSource:
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                            dims=[gtx.dimension("I"), gtx.dimension("J")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                         ts.FieldType(
-                            dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                            dims=[gtx.dimension("I"), gtx.dimension("J")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                     ]

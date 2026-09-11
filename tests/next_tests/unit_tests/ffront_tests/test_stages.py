@@ -12,7 +12,7 @@ import gt4py.next as gtx
 from gt4py.next.ffront import stages
 
 
-IDim = gtx.Dimension("I")
+IDim = gtx.dimension("I")
 
 
 def _make_field_operator_definition(offset: int):

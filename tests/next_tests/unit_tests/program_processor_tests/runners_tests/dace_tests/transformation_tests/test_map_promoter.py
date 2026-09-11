@@ -312,9 +312,9 @@ def _make_horizontal_promoter_sdfg(
     sdfg = dace.SDFG(util.unique_name("serial_map_promoter_tester"))
     state = sdfg.add_state(is_start_block=True)
 
-    h_idx = gtx_dace_lowering.get_map_variable(gtx_common.Dimension("boden"))
+    h_idx = gtx_dace_lowering.get_map_variable(gtx_common.dimension("boden"))
     v_idx = gtx_dace_lowering.get_map_variable(
-        gtx_common.Dimension("K", gtx_common.DimensionKind.VERTICAL)
+        gtx_common.dimension("K", gtx_common.DimensionKind.VERTICAL)
     )
 
     if d1_map_is_vertical:

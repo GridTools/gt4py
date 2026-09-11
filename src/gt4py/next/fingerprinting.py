@@ -55,7 +55,7 @@ from unittest import mock
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
-from gt4py.next import utils as next_utils
+from gt4py.next import common, utils as next_utils
 
 
 _T = TypeVar("_T")
@@ -221,6 +221,14 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     enum.EnumMeta: lambda obj: Deconstruction.from_pieces(
         *((member.name, member.value) for member in obj),
         state=b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+    ),
+    # A dimension is a *class*, so it would otherwise dispatch to the `type` deconstructor
+    # and be fingerprinted by fully qualified name -- which fails outright for classes built
+    # by the `Dimension(...)` factory, and would make an otherwise identical program
+    # fingerprint differently depending on which module declared its dimensions.
+    # Keyed on `(value, kind)` to match `common._reduce_dimension`. See ADR 0028.
+    common.DimensionMeta: lambda obj: Deconstruction.from_pieces(
+        obj.tag, obj.kind, state=b"dimension"
     ),
     type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
     bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),

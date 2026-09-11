@@ -64,10 +64,10 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
         assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
-        def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
+        def scan_loop(hpos: Sequence[common.DimensionIndex]) -> None:
             acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
             for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
-                pos = (*hpos, common.NamedIndex(scan_axis, k))
+                pos = (*hpos, scan_axis(k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
                 acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
@@ -173,7 +173,7 @@ def _intersect_scan_args(
 
 
 def _tuple_assign_value(
-    pos: Sequence[common.NamedIndex],
+    pos: Sequence[common.DimensionIndex],
     target: xtyping.MaybeNestedInTuple[common.MutableField],
     source: xtyping.MaybeNestedInTuple[core_defs.Scalar],
 ) -> None:
@@ -185,7 +185,7 @@ def _tuple_assign_value(
 
 
 def _tuple_at(
-    pos: Sequence[common.NamedIndex],
+    pos: Sequence[common.DimensionIndex],
     field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @named_collections.tree_map_named_collection

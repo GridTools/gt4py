@@ -72,7 +72,7 @@ class FieldConstructor:
     def __init__(
         self,
         allocator: Allocator | None = None,
-        aligned_index: Sequence[common.NamedIndex] | None = None,
+        aligned_index: Sequence[common.DimensionIndex] | None = None,
         device: core_defs.Device | None = None,
     ):
         if allocator is None:
@@ -178,7 +178,7 @@ class FieldConstructor:
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` from an array-like object. See :func:`as_field` for details."""
         if isinstance(domain, Sequence) and all(
-            isinstance(dim, common.Dimension) for dim in domain
+            isinstance(dim, common.DimensionMeta) for dim in domain
         ):
             domain = cast(Sequence[common.Dimension], domain)
             if len(domain) != data.ndim:
@@ -335,7 +335,7 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
 class _CustomLayoutConstructor(_FieldArrayConstructor):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
-    aligned_index: Sequence[common.NamedIndex] | None = None
+    aligned_index: Sequence[common.DimensionIndex] | None = None
 
     @functools.cached_property
     def device_id(self) -> int:
@@ -384,7 +384,7 @@ class _CustomLayoutConstructor(_FieldArrayConstructor):
 @eve.utils.optional_lru_cache
 def _field_constructor(
     allocator: Allocator | None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     device: core_defs.Device | None = None,
 ) -> FieldConstructor:
     return FieldConstructor(allocator, aligned_index=aligned_index, device=device)
@@ -395,7 +395,7 @@ def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -431,7 +431,7 @@ def empty(
         Initialize a field in one dimension with a backend and a range domain:
 
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
         >>> a.shape
         (7,)
@@ -440,7 +440,7 @@ def empty(
 
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=np)
         >>> a.shape
         (7,)
@@ -448,7 +448,7 @@ def empty(
         Initialize with a device and an integer domain. It works like a shape with named dimensions:
 
         >>> from gt4py._core import definitions as core_defs
-        >>> JDim = gtx.Dimension("J")
+        >>> JDim = gtx.dimension("J")
         >>> b = gtx.empty(
         ...     {IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0)
         ... )
@@ -465,7 +465,7 @@ def zeros(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -476,7 +476,7 @@ def zeros(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
@@ -490,7 +490,7 @@ def ones(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -501,7 +501,7 @@ def ones(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
@@ -516,7 +516,7 @@ def full(
     fill_value: core_defs.Scalar,
     dtype: core_defs.DTypeLike | None = None,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -532,7 +532,7 @@ def full(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
@@ -548,7 +548,7 @@ def as_field(
     dtype: core_defs.DTypeLike | None = None,
     *,
     origin: Mapping[common.Dimension, int] | None = None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -577,7 +577,7 @@ def as_field(
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
         >>> xdata = np.array([1, 2, 3])
 
         Automatic domain from just dimensions:
@@ -615,7 +615,7 @@ def as_connectivity(
     dtype: core_defs.DTypeLike | None = None,
     *,
     origin: Mapping[common.Dimension, int] | None = None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,
@@ -651,9 +651,9 @@ def as_connectivity(
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> Vertex = gtx.Dimension("Vertex")
-        >>> Edge = gtx.Dimension("Edge")
-        >>> V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+        >>> Vertex = gtx.dimension("Vertex")
+        >>> Edge = gtx.dimension("Edge")
+        >>> V2EDim = gtx.dimension("V2E", kind=gtx.DimensionKind.LOCAL)
         >>> data = np.array([[0, 1], [1, 2], [2, 0]])
         >>> conn = gtx.as_connectivity([Vertex, V2EDim], Edge, data)
         >>> conn.ndarray
@@ -661,7 +661,7 @@ def as_connectivity(
                [1, 2],
                [2, 0]])
         >>> conn.domain
-        Domain(dims=(Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
+        Domain(dims=(Vertex[horizontal], V2E[local]), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
     """
     if skip_value is eve.NOTHING:
         skip_value = (

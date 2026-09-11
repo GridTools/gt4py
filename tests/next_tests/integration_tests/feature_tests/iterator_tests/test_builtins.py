@@ -67,7 +67,7 @@ def array_maker(*lists):
     return res
 
 
-IDim = gtx.Dimension("IDim")
+IDim = gtx.dimension("IDim")
 
 
 def field_maker(*arrays):
@@ -245,8 +245,8 @@ def _can_deref_lifted(inp):
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
-    Node = gtx.Dimension("Node")
-    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
+    Node = gtx.dimension("Node")
+    NeighDim = gtx.dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))

@@ -11,7 +11,7 @@ import numpy as np
 import gt4py.next as gtx
 
 
-IDim = gtx.Dimension("IDim")
+IDim = gtx.dimension("IDim")
 
 
 @gtx.field_operator

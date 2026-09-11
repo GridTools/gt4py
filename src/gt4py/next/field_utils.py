@@ -37,7 +37,7 @@ def field_from_typespec(
     which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
 
     >>> field_from_typespec(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.dimension("I"): 1}), np
     ... )  # doctest: +ELLIPSIS
     NumPyArrayField(... dtype=int32...)
     >>> field_from_typespec(
@@ -47,7 +47,7 @@ def field_from_typespec(
     ...             ts.ScalarType(kind=ts.ScalarKind.FLOAT32),
     ...         ]
     ...     ),
-    ...     common.domain({common.Dimension("I"): 1}),
+    ...     common.domain({common.dimension("I"): 1}),
     ...     np,
     ... )  # doctest: +ELLIPSIS
     (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))

@@ -21,9 +21,10 @@ from gt4py.next.common import (
     DimensionKind,
     Domain,
     Field,
-    NamedIndex,
+    DimensionIndex,
     NamedRange,
     UnitRange,
+    dimension,
 )
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
@@ -33,9 +34,9 @@ from gt4py.next.ffront.experimental import as_offset
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 
-D0 = Dimension("D0")
-D1 = Dimension("D1")
-D2 = Dimension("D2")
+D0 = dimension("D0")
+D1 = dimension("D1")
+D2 = dimension("D2")
 
 
 @pytest.fixture(
@@ -69,7 +70,7 @@ def unary_logical_op(request):
 
 def _make_default_domain(shape: tuple[int, ...]) -> Domain:
     return common.Domain(
-        dims=tuple(Dimension(f"D{i}") for i in range(len(shape))),
+        dims=tuple(dimension(f"D{i}") for i in range(len(shape))),
         ranges=tuple(UnitRange(0, s) for s in shape),
     )
 
@@ -348,8 +349,8 @@ def test_non_dispatched_function():
 
 def test_domain_premap():
     # Translation case
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
 
     N = 10
     data_field = common._field(
@@ -373,7 +374,7 @@ def test_domain_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
     # Relocation case
-    I_half = Dimension("I_half")
+    I_half = dimension("I_half")
 
     conn = common.CartesianConnectivity.for_relocation(I, I_half)
 
@@ -394,8 +395,8 @@ def test_domain_premap():
 
 
 def test_reshuffling_premap():
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
 
     ij_field = common._field(
         np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]]),
@@ -422,8 +423,8 @@ def test_reshuffling_premap():
 
 
 def test_remapping_premap():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
@@ -448,9 +449,9 @@ def test_remapping_premap():
 
 
 def test_remapping_premap_multineighbor():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    V = dimension("V")
+    E = dimension("E")
+    E2V = dimension("E2V", kind=DimensionKind.LOCAL)
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -475,7 +476,7 @@ def test_remapping_premap_multineighbor():
 
 
 def test_remapping_premap_same_dim():
-    V = Dimension("V")
+    V = dimension("V")
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -500,8 +501,8 @@ def test_remapping_premap_same_dim():
 
 def test_remapping_premap_same_dim_multineighbor():
     # Regression for #1583: source dim == target dim with a LOCAL neighbor dim (C2E2CO shape).
-    V = Dimension("V")
-    V2V = Dimension("V2V", kind=DimensionKind.LOCAL)
+    V = dimension("V")
+    V2V = dimension("V2V", kind=DimensionKind.LOCAL)
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -535,9 +536,9 @@ def test_remapping_premap_same_dim_multineighbor():
 
 def test_premap_same_dim_multineighbor_with_extra_dim():
     # The actual #1583 bug shape: C2E2CO on a field with an extra (kept) dimension.
-    C = Dimension("C")
-    K = Dimension("K")
-    C2E2CO = Dimension("C2E2CO", kind=DimensionKind.LOCAL)
+    C = dimension("C")
+    K = dimension("K")
+    C2E2CO = dimension("C2E2CO", kind=DimensionKind.LOCAL)
 
     NC, NK, NN = 5, 3, 4
     c_field = common._field(
@@ -561,10 +562,10 @@ def test_premap_same_dim_multineighbor_with_extra_dim():
 
 def test_gather_premap_multiple_connectivities():
     # Multiple gather connectivities introducing new dims in a single premap (was unsupported).
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
-    Y = Dimension("Y")
+    A = dimension("A")
+    B = dimension("B")
+    X = dimension("X")
+    Y = dimension("Y")
 
     NA, NB = 3, 4
     f = common._field(
@@ -589,8 +590,8 @@ def test_gather_premap_multiple_connectivities():
 def test_gather_premap_reshuffle_multiple_connectivities():
     # Simultaneous multi-axis reshuffle (the multi-axis `as_offset` shape): codomains stay in their
     # own domains, so out[i, j] = f[ci[i, j], cj[i, j]] (not a sequential composition).
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
 
     NI, NJ = 3, 4
     f = common._field(
@@ -611,9 +612,9 @@ def test_gather_premap_reshuffle_multiple_connectivities():
 
 def test_gather_premap_two_connectivities_same_new_dim():
     # Two connectivities introducing the *same* new dim -> diagonal gather out[x] = f[ca[x], cb[x]].
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
+    A = dimension("A")
+    B = dimension("B")
+    X = dimension("X")
 
     NA, NB = 3, 4
     f = common._field(
@@ -637,9 +638,9 @@ def test_gather_premap_two_connectivities_same_new_dim():
 
 def test_gather_premap_reads_non_codomain_field_dim():
     # A connectivity that reads a field dim (B) other than its codomain (A): B is shared/narrowed.
-    A = Dimension("A")
-    B = Dimension("B")
-    L = Dimension("L", kind=DimensionKind.LOCAL)
+    A = dimension("A")
+    B = dimension("B")
+    L = dimension("L", kind=DimensionKind.LOCAL)
 
     NA, NB = 3, 4
     f = common._field(
@@ -662,11 +663,11 @@ def test_gather_premap_reads_non_codomain_field_dim():
 
 def test_gather_premap_shared_domain_dim():
     # Two connectivities sharing a non-codomain domain dim (S): S is intersected and kept once.
-    A = Dimension("A")
-    B = Dimension("B")
-    S = Dimension("S")
-    T = Dimension("T")
-    U = Dimension("U")
+    A = dimension("A")
+    B = dimension("B")
+    S = dimension("S")
+    T = dimension("T")
+    U = dimension("U")
 
     NA, NB = 3, 4
     f = common._field(
@@ -693,9 +694,9 @@ def test_gather_premap_shared_domain_dim():
 
 def test_gather_premap_mix_introducing_and_preserving():
     # One connectivity introduces a dim (X), another reshuffles a dim in place (B): allowed together.
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
+    A = dimension("A")
+    B = dimension("B")
+    X = dimension("X")
 
     NA, NB = 3, 4
     f = common._field(
@@ -720,10 +721,10 @@ def test_gather_premap_mix_introducing_and_preserving():
 
 def test_premap_chained_connectivities_raises():
     # One connectivity reads a dim (B) that another remaps -> unsupported chained composition.
-    A = Dimension("A")
-    B = Dimension("B")
-    L = Dimension("L", kind=DimensionKind.LOCAL)
-    M = Dimension("M")
+    A = dimension("A")
+    B = dimension("B")
+    L = dimension("L", kind=DimensionKind.LOCAL)
+    M = dimension("M")
 
     f = common._field(
         np.arange(12).reshape(3, 4).astype(float),
@@ -746,8 +747,8 @@ def test_premap_chained_connectivities_raises():
 
 def test_premap_non_contiguous_inverse_image_raises():
     # A connectivity whose in-range indices are not a contiguous block cannot yield a contiguous domain.
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     f = common._field(
         np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
@@ -763,8 +764,8 @@ def test_premap_non_contiguous_inverse_image_raises():
 
 
 def test_premap_disjoint_inverse_image_raises():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     f = common._field(
         np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
@@ -781,7 +782,7 @@ def test_premap_disjoint_inverse_image_raises():
 
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
-    I = Dimension("I")
+    I = dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -798,7 +799,7 @@ def test_as_offset_1d():
 
 def test_as_offset_narrow_offset_dtype_no_wrap():
     # An int8 offset field over a domain larger than 128 must not wrap into the index table.
-    I = Dimension("I")
+    I = dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     N = 200
@@ -816,8 +817,8 @@ def test_as_offset_narrow_offset_dtype_no_wrap():
 
 def test_as_offset_2d_shift_one_keep_other():
     # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     NI, NJ = 4, 3
@@ -836,7 +837,7 @@ def test_as_offset_2d_shift_one_keep_other():
 
 def test_as_offset_boundary_narrows_domain():
     # A uniform out-of-bounds shift narrows the result to the contiguous in-range sub-domain.
-    I = Dimension("I")
+    I = dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -854,7 +855,7 @@ def test_as_offset_boundary_narrows_domain():
 
 def test_as_offset_scattered_oob_raises():
     # An out-of-bounds shift in the interior cannot yield a contiguous domain.
-    I = Dimension("I")
+    I = dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -871,8 +872,8 @@ def test_as_offset_scattered_oob_raises():
 
 def test_as_offset_introduces_dimension():
     # `off` carries a dim the field lacks: the result gains it, out[i, j] == f[i + off[i, j]].
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -891,7 +892,7 @@ def test_as_offset_introduces_dimension():
 
 def test_as_offset_nonzero_origin():
     # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
-    I = Dimension("I")
+    I = dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
@@ -907,8 +908,8 @@ def test_as_offset_nonzero_origin():
 
 def test_as_offset_2d_shift_second_axis():
     # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
-    I = Dimension("I")
-    J = Dimension("J")
+    I = dimension("I")
+    J = dimension("J")
     Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
 
     NI, NJ = 3, 4
@@ -927,11 +928,11 @@ def test_as_offset_2d_shift_second_axis():
 
 def test_as_offset_non_cartesian_offset_raises():
     # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
-    I = Dimension("I")
-    J = Dimension("J")
-    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
-    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
-    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
+    I = dimension("I")
+    J = dimension("J")
+    Vertex = dimension("Vertex", kind=DimensionKind.HORIZONTAL)
+    Edge = dimension("Edge", kind=DimensionKind.HORIZONTAL)
+    V2EDim = dimension("V2EDim", kind=DimensionKind.LOCAL)
 
     off_I = common._field(
         np.zeros(3, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 3),))
@@ -1016,7 +1017,7 @@ def test_get_slices_with_named_index():
     field_domain = common.Domain(
         dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = (NamedRange(D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
+    named_index = (NamedRange(D0, UnitRange(0, 10)), D1(2), D2(3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
@@ -1025,7 +1026,9 @@ def test_get_slices_invalid_type():
     field_domain = common.Domain(
         dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    new_domain = ((D0, "1"),)
+    # NOTE: a domain slice element is a `NamedRange` or a `DimensionIndex`; a `str` payload
+    # reaches `_compute_slice`, which rejects it.
+    new_domain = (NamedRange(D0, "1"),)
     with pytest.raises(ValueError):
         _get_slices_from_domain_slice(field_domain, new_domain)
 
@@ -1044,11 +1047,11 @@ def test_get_slices_invalid_type():
             (2, 10, 8),
         ),
         (common.Domain(dims=(D0,), ranges=(UnitRange(7, 9),)), (D0, D1, D2), (2, 10, 15)),
-        ((NamedIndex(D0, 8),), (D1, D2), (10, 15)),
-        ((NamedIndex(D1, 9),), (D0, D2), (5, 15)),
-        ((NamedIndex(D2, 11),), (D0, D1), (5, 10)),
-        ((NamedIndex(D0, 8), NamedRange(D1, UnitRange(8, 10))), (D1, D2), (2, 15)),
-        (NamedIndex(D0, 5), (D1, D2), (10, 15)),
+        ((D0(8),), (D1, D2), (10, 15)),
+        ((D1(9),), (D0, D2), (5, 15)),
+        ((D2(11),), (D0, D1), (5, 10)),
+        ((D0(8), NamedRange(D1, UnitRange(8, 10))), (D1, D2), (2, 15)),
+        (D0(5), (D1, D2), (10, 15)),
         (NamedRange(D0, UnitRange(5, 7)), (D0, D1, D2), (2, 10, 15)),
     ],
 )
@@ -1085,7 +1088,7 @@ def test_absolute_indexing_dim_sliced_single_slice():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D2(11)]
-    indexed_field_2 = field[NamedIndex(D2, 11)]
+    indexed_field_2 = field[D2(11)]
 
     assert isinstance(indexed_field_1, common.Field)
     assert are_equal_fields(indexed_field_1, indexed_field_2)
@@ -1114,7 +1117,7 @@ def test_absolute_indexing_value_return():
     domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
-    named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
+    named_index = (D0(12), D1(6))
     assert isinstance(field, common.Field)
     value = field[named_index]
 
@@ -1316,8 +1319,8 @@ def test_nd_array_field_pickle_roundtrip():
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     import dataclasses
 
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
@@ -1334,8 +1337,8 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
 
 
 def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     e2v_conn = common._connectivity(
         np.asarray([2, 3, 4, 5]),
@@ -1357,8 +1360,8 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
 
 
 def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     original = common._connectivity(
         np.asarray([2, 3, 4, 5]),
@@ -1382,8 +1385,8 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
 
 
 def test_connectivity_field_inverse_image():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
@@ -1396,9 +1399,9 @@ def test_connectivity_field_inverse_image():
 
 
 def test_connectivity_field_inverse_image_2d_domain():
-    V = Dimension("V")
-    C = Dimension("C")
-    C2V = Dimension("C2V")
+    V = dimension("V")
+    C = dimension("C")
+    C2V = dimension("C2V")
 
     V_START, V_STOP = 0, 3
     C_START, C_STOP = 0, 3
@@ -1454,8 +1457,8 @@ def test_connectivity_field_inverse_image_2d_domain():
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
-    V = Dimension("V")
-    E = Dimension("E")
+    V = dimension("V")
+    E = dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
@@ -1477,9 +1480,9 @@ def test_connectivity_field_inverse_image_non_contiguous():
 
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
-    V = Dimension("V")
-    C = Dimension("C")
-    C2V = Dimension("C2V")
+    V = dimension("V")
+    C = dimension("C")
+    C2V = dimension("C2V")
 
     V_START, V_STOP = 0, 3
     C_START, C_STOP = 0, 4

@@ -54,8 +54,8 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
 
     Example:
         >>> from gt4py import next as gtx
-        >>> KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
-        >>> Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
+        >>> KDim = common.dimension("KDim", kind=common.DimensionKind.VERTICAL)
+        >>> Vertex = common.dimension("Vertex", kind=common.DimensionKind.HORIZONTAL)
 
         >>> sizes = {
         ...     "out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)}),
@@ -114,7 +114,7 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
                 f"'{field}'."
             )
 
-        index = next((i for i, d in enumerate(domain.dims) if d.value == dim.value), None)
+        index = next((i for i, d in enumerate(domain.dims) if d.tag == dim.value), None)
         assert index is not None, f"Dimension {dim.value} not found in {domain.dims}"
 
         return im.make_tuple(domain.ranges[index].start, domain.ranges[index].stop)

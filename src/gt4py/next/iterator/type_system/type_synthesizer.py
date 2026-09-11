@@ -412,13 +412,13 @@ def _canonicalize_nb_fields(
     Examples:
     >>> input_field = ts.FieldType(
     ...     dims=[
-    ...         common.Dimension(value="Vertex"),
-    ...         common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL),
+    ...         common.dimension("Vertex"),
+    ...         common.dimension("V2E", kind=common.DimensionKind.LOCAL),
     ...     ],
     ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
     ... )
     >>> _canonicalize_nb_fields(input_field)
-    FieldType(dims=[Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)))
+    FieldType(dims=[Vertex[horizontal]], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=V2E[local]))
     """
     match input_:
         case tuple() | ts.TupleType():
@@ -479,12 +479,12 @@ def _resolve_dimensions(
         tells you the dimensions of the field returned by the `as_fieldop`, in this case
         `[Vertex, K]`.
 
-        >>> Edge = common.Dimension(value="Edge")
-        >>> Vertex = common.Dimension(value="Vertex")
-        >>> Cell = common.Dimension(value="Cell")
-        >>> K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
-        >>> V2E = common.Dimension(value="V2E")
-        >>> C2V = common.Dimension(value="C2V")
+        >>> Edge = common.dimension("Edge")
+        >>> Vertex = common.dimension("Vertex")
+        >>> Cell = common.dimension("Cell")
+        >>> K = common.dimension("K", kind=common.DimensionKind.VERTICAL)
+        >>> V2E = common.dimension("V2E")
+        >>> C2V = common.dimension("C2V")
         >>> input_dims = [Edge, K]
         >>> shift_tuple = (
         ...     itir.OffsetLiteral(value="C2V"),
@@ -509,11 +509,11 @@ def _resolve_dimensions(
         ...     ),
         ... }
         >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
-        [Dimension(value='Cell', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
+        [Cell[horizontal], K[vertical]]
         >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-        >>> IDim = common.Dimension(value="IDim")
+        >>> IDim = common.dimension("IDim")
         >>> IHalfDim = common.flip_staggered(IDim)
-        >>> JDim = common.Dimension(value="JDim")
+        >>> JDim = common.dimension("JDim")
         >>> JHalfDim = common.flip_staggered(JDim)
         >>> input_dims = [IDim, JDim]
         >>> shift_tuple = (
@@ -529,7 +529,7 @@ def _resolve_dimensions(
         ...     itir.OffsetLiteral(value=0),
         ... )
         >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
-        [Dimension(value='JDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='IDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+        [JDim[horizontal], IDim[horizontal]]
 
     """
     resolved_dims = []
@@ -599,7 +599,7 @@ def as_fieldop(
                                 ),
                             )
 
-                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                        assert all(isinstance(dim, common.DimensionMeta) for dim in output_dims)
                         deduced_domain = ts.DomainType(dims=output_dims)
 
             if deduced_domain:

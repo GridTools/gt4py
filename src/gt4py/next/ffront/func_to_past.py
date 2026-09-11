@@ -44,7 +44,7 @@ def func_to_past(inp: DSLProgramDef) -> PASTProgramDef:
     Examples:
 
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> IDim = gtx.dimension("I")
 
         >>> @gtx.field_operator
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:

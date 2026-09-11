@@ -21,13 +21,13 @@ def foo(inp):
 
 
 connectivity = common.ConnectivityType(
-    domain=[gtx.Dimension("dummy_origin"), gtx.Dimension("dummy_neighbor")],
-    codomain=gtx.Dimension("dummy_codomain"),
+    domain=[gtx.dimension("dummy_origin"), gtx.dimension("dummy_neighbor")],
+    codomain=gtx.dimension("dummy_codomain"),
     skip_value=common._DEFAULT_SKIP_VALUE,
     dtype=None,
 )
 
-I = gtx.Dimension("I")
+I = gtx.dimension("I")
 
 
 def test_deduce_domain():

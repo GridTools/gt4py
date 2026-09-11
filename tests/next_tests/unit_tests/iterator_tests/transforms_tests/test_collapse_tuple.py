@@ -15,7 +15,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
+Vertex = common.dimension("Vertex", kind=common.DimensionKind.HORIZONTAL)
 
 
 def test_simple_make_tuple_tuple_get(uids: utils.IDGeneratorPool):

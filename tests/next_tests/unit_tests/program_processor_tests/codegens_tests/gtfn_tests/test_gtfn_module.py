@@ -32,7 +32,7 @@ from next_tests.integration_tests.cases_utils import (
 
 @pytest.fixture
 def program_example():
-    IDim = gtx.Dimension("I")
+    IDim = gtx.dimension("I")
     params = [gtx.as_field([IDim], np.empty((1,), dtype=np.float32)), np.float32(3.14)]
     param_types = [type_translation.from_value(param) for param in params]
 

@@ -178,10 +178,10 @@ def _scan_param_promotion(
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
     ...     ts.FieldType(
-    ...         dims=[common.Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ...         dims=[common.dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     ...     ),
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
+    FieldType(dims=[I[horizontal]], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
@@ -198,7 +198,7 @@ def _scan_param_promotion(
             # argument type differ. As such we can not extract the dimensions
             # and just return a generic field shown in the error later on.
             # TODO: we want some generic field type here, but our type system does not support it yet.
-            return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
+            return ts.FieldType(dims=[common.dimension("...")], dtype=dtype)
 
     # Note: In the promotion of the scalar type to field type we drop the information about
     # the original python type in NamedCollections as we want to be able to express compatibility

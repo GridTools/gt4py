@@ -16,9 +16,9 @@ from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-KDim = gtx.Dimension("KDim")
+IDim = gtx.dimension("IDim")
+JDim = gtx.dimension("JDim")
+KDim = gtx.dimension("KDim")
 
 # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
 # `return a` -> a: field

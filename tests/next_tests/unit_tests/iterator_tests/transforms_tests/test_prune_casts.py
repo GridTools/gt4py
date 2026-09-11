@@ -25,7 +25,7 @@ def test_prune_casts_simple():
 
 
 def test_prune_casts_fieldop():
-    IDim = gtx.Dimension("IDim")
+    IDim = gtx.dimension("IDim")
     x_ref = im.ref("x", ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     y_ref = im.ref("y", ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)))
     testee = im.op_as_fieldop("plus")(

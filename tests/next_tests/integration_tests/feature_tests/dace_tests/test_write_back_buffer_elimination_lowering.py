@@ -30,12 +30,12 @@ from gt4py.next.program_processors.runners import dace as gtx_dace
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-IDim = gtx.Dimension("I")
+IDim = gtx.dimension("I")
 I_SIZE = 8
 
-Cell = gtx.Dimension("Cell")
-Edge = gtx.Dimension("Edge")
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+Cell = gtx.dimension("Cell")
+Edge = gtx.dimension("Edge")
+C2EDim = gtx.dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 C2E_TABLE = np.array(

@@ -125,7 +125,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         if unit_strides_dims is not None and unit_strides_kind is not None:
             raise ValueError("Specified both 'unit_strides_dims' and 'unit_strides_kind'.")
         elif unit_strides_dims is not None:
-            if isinstance(unit_strides_dims, (gtx_common.Dimension, str)):
+            if isinstance(unit_strides_dims, (gtx_common.DimensionMeta, str)):
                 unit_strides_dims = [unit_strides_dims]
             self.unit_strides_dims = [
                 unit_strides_dim
