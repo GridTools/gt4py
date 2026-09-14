@@ -252,7 +252,6 @@ GTFN_BUILTINS = [
     "unstructured_domain",
     "get_domain_range",
     "named_range",
-    "reduce",
     "index",
 ]
 ARITHMETIC_BUILTINS = builtins.ARITHMETIC_BUILTINS
