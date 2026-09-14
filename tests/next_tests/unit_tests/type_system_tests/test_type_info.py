@@ -466,6 +466,7 @@ def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
 
 def test_promote_lists():
     float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    int32 = ts.ScalarType(kind=ts.ScalarKind.INT32)
     V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
     C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
     const_list = ts.ListType(element_type=float64, offset_type=None)
@@ -474,5 +475,7 @@ def test_promote_lists():
     assert type_info.promote(const_list, v2e_list) == v2e_list
     with pytest.raises(ValueError, match="different offsets"):
         type_info.promote(v2e_list, ts.ListType(element_type=float64, offset_type=C2EDim))
+    with pytest.raises(ValueError, match="different element type"):
+        type_info.promote(v2e_list, ts.ListType(element_type=int32, offset_type=V2EDim))
     with pytest.raises(ValueError, match="non-lists"):
         type_info.promote(v2e_list, float64)
