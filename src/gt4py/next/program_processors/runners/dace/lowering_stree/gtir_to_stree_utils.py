@@ -341,7 +341,7 @@ def _builtin_get_domain_range(field: str, axis: str) -> str:
 
 
 def _builtin_if(cond: str, true_val: str, false_val: str) -> str:
-    return f"(({true_val}) if ({cond}) else ({false_val}))"
+    return f"(({true_val}) if {cond} else ({false_val}))"
 
 
 def _builtin_tuple_get(index: str, tuple_name: str) -> str:

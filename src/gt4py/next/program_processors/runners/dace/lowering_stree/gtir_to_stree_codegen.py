@@ -1638,7 +1638,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             masks = [e.mask for e in (true_element, false_element) if e.mask is not None]
             mask = " and ".join(masks) if masks else None
             dummy = true_element.dummy or false_element.dummy
-            expr = f"(({true_element.expr}) if ({cond}) else ({false_element.expr}))"
+            expr = f"(({true_element.expr}) if {cond} else ({false_element.expr}))"
             return (
                 ListElementAccess(expr=expr, mask=mask, dummy=dummy),
                 true_size if true_size is not None else false_size,
@@ -1807,7 +1807,7 @@ class StreePythonCodegen(eve.NodeVisitor):
                 else:
                     ctx.pre_statements.extend(element.body)
                 indexed_args.append(
-                    f"({element.expr}) if {element.mask} else {element.dummy}"
+                    f"(({element.expr}) if {element.mask} else ({element.dummy}))"
                     if element.mask is not None
                     else element.expr
                 )
@@ -1828,7 +1828,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             else:
                 ctx.pre_statements.extend(access.body)
             return (
-                f"({access.expr}) if {access.mask} else {access.dummy}"
+                f"(({access.expr}) if {access.mask} else ({access.dummy}))"
                 if access.mask is not None
                 else access.expr
             )
@@ -1991,7 +1991,7 @@ def generate_list_tasklet_code(
             assert isinstance(element_type, ts.ScalarType)
             dc_element_type = gtx_dace_args.as_dace_type(element_type)
             dummy = gtx_dace_args.skip_value_replacement(dc_element_type)
-        expr_code = f"({expr_code}) if {element.mask} else {dummy}"
+        expr_code = f"(({expr_code}) if {element.mask} else ({dummy}))"
     return (
         expr_code,
         ctx.pre_statements,
