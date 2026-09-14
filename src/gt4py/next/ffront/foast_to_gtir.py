@@ -415,8 +415,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
         #  instead of emitting `tree_map_tuple` so mixed field types are supported,
         #  e.g. (local field, regular field).
+        # to keep the IR simpler
         if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
-            return self._lower_and_map("if_", *node.args)  # to keep the IR simpler
+            return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
         cond_symref_name = f"__cond_{itir.lenient_ir_fingerprinter(cond_)}"
@@ -452,8 +453,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             return im.concat_where(domain, true_, false_)
 
         branch_types = (node.args[1].type, node.args[2].type)
+        # to keep the IR simpler
         if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
-            return create_concat_where(true_branch, false_branch, branch_types)  # to keep the IR simpler
+            return create_concat_where(true_branch, false_branch, branch_types)
         return lowering_utils.process_elements(
             create_concat_where, (true_branch, false_branch), node.type, arg_types=branch_types
         )
