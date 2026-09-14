@@ -415,7 +415,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
         #  instead of emitting `tree_map_tuple` so mixed field types are supported,
         #  e.g. (local field, regular field).
-        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+        # to keep the IR simpler
+        if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
@@ -443,7 +444,21 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
         #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
-        return im.concat_where(domain, true_branch, false_branch)
+
+        def create_concat_where(
+            true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
+        ) -> itir.FunCall:
+            if any(type_info.contains_local_field(t) for t in arg_types):
+                true_, false_ = (promote_to_list(t)(e) for t, e in zip(arg_types, (true_, false_)))
+            return im.concat_where(domain, true_, false_)
+
+        branch_types = (node.args[1].type, node.args[2].type)
+        # to keep the IR simpler
+        if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
+            return create_concat_where(true_branch, false_branch, branch_types)
+        return lowering_utils.process_elements(
+            create_concat_where, (true_branch, false_branch), node.type, arg_types=branch_types
+        )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return im.call("broadcast")(*self.visit(node.args, **kwargs))
