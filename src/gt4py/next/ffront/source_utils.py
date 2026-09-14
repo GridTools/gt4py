@@ -49,12 +49,23 @@ def _global_names_of_code(code: types.CodeType) -> frozenset[str]:
     return frozenset(_global_names_from_source(make_source_definition_from_function(code).source))
 
 
+def _free_variables_from_closure_cells(function: Callable) -> dict[str, Any]:
+    # What `inspect.getclosurevars(function).nonlocals` returns, without the disassembly of the
+    # whole function that `getclosurevars` does to also find the global names.
+    return dict(
+        zip(
+            function.__code__.co_freevars,
+            (cell.cell_contents for cell in function.__closure__ or ()),
+        )
+    )
+
+
 def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
     # `inspect.getclosurevars` only sees the names of the function's own code object, which
     # misses names referenced only inside a nested scope such as a generator expression.
     # Free variables are unaffected (they are cells of the function itself), so only the
     # global names are taken from the source instead.
-    nonlocals = inspect.getclosurevars(function).nonlocals
+    nonlocals = _free_variables_from_closure_cells(function)
     global_ns = function.__globals__
     builtin_ns = global_ns.get("__builtins__", builtins.__dict__)
     if inspect.ismodule(builtin_ns):

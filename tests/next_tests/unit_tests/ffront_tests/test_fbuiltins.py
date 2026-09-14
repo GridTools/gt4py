@@ -6,18 +6,33 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import typing
 
 import numpy as np
 import pytest
 
-from gt4py.next import common
+from gt4py.next import common, constructors
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.type_system import type_specifications as ts
 
 
 # values inside the domain of every unary math builtin (0.5 is invalid for `arccosh`)
 _SAFE_INPUT = {"arccosh": 2.0}
+
+IDim = common.Dimension("IDim")
+
+
+@dataclasses.dataclass
+class _Pair:
+    a: common.Field[[IDim], np.float64]
+    b: common.Field[[IDim], np.float64]
+
+
+@dataclasses.dataclass
+class _OtherPair:
+    a: common.Field[[IDim], np.float64]
+    b: common.Field[[IDim], np.float64]
 
 
 @pytest.mark.parametrize("tuple_spelling", [typing.Tuple, tuple, typing.Tuple[int], tuple[int]])
@@ -50,3 +65,17 @@ def test_unary_math_builtin_scalar_preserves_dtype(name, dtype):
 @pytest.mark.parametrize("name", fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES)
 def test_unary_math_predicate_builtin_scalar_returns_bool(name, dtype):
     assert isinstance(getattr(fbuiltins, name)(dtype(0.5)), (bool, np.bool_))
+
+
+@pytest.mark.parametrize(
+    "true_type, false_type", [(float, _Pair), (_Pair, float), (_Pair, _OtherPair)]
+)
+def test_where_rejects_mismatched_named_collections(true_type, false_type):
+    def make(type_):
+        if type_ is float:
+            return 1.0
+        return type_(*(constructors.as_field([IDim], np.arange(3.0)) for _ in range(2)))
+
+    mask = constructors.as_field([IDim], np.array([True, False, True]))
+    with pytest.raises(ValueError, match="named collection of the same type"):
+        fbuiltins.where(mask, make(true_type), make(false_type))

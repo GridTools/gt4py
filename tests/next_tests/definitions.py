@@ -125,6 +125,7 @@ USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
 USES_CONCAT_WHERE = "uses_concat_where"
+USES_CONCAT_WHERE_WITH_LIST_OUTPUT = "uses_concat_where_with_list_output"
 EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN = "embedded_concat_where_infinite_domain"
 EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN = "embedded_concat_where_non_contiguous_domain"
 USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
@@ -166,6 +167,7 @@ DACE_SKIP_TEST_LIST = (
     + [
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_CONCAT_WHERE_WITH_LIST_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
