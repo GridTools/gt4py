@@ -20,7 +20,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
 from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -62,7 +62,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
 
     Example:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.otf import arguments, toolchain
+        >>> from gt4py.next.otf import arguments, workflow
         >>> IDim = gtx.Dimension("I")
 
         >>> @gtx.field_operator
@@ -83,7 +83,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ... )
 
         >>> copy_program = op_to_prog(
-        ...     toolchain.ConcreteArtifact(copy.foast_stage, compile_time_args)
+        ...     workflow.ConcreteArtifact(copy.foast_stage, compile_time_args)
         ... )
 
         >>> print(copy_program.data.past_node.id)
@@ -169,7 +169,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         )
         past_node = type_deduction.ProgramTypeDeduction.apply(untyped_past_node)
 
-        return toolchain.ConcreteArtifact(
+        return workflow.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=past_node,
                 closure_vars=fieldop_itir_closure_vars,  # type: ignore[arg-type]
