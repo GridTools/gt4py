@@ -378,7 +378,10 @@ def translate_as_fieldop(
     if cpm.is_ref_to(fieldop_expr, "deref"):
         arg_type = node.args[0].type
         assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
-        if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
+        if arg_type != node.type:
+            # Special usage of 'deref' as argument to fieldop expression, to broadcast
+            # the input value (a scalar, a field slice or a field of constant lists)
+            # on the output field type.
             stencil_expr = im.lambda_("a")(im.deref("a"))
             stencil_expr.expr.type = node.type.dtype
         else:
@@ -1769,13 +1772,17 @@ def _translate_concat_where_branch(
                 source_domain.ranges.keys(),
             ),
         )
-    if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
-        output_type.dims
-    ):
+    source_matches_output = (
+        isinstance(source_expr.type, ts.FieldType)
+        and source_expr.type.dims == output_type.dims
+        and source_expr.type.dtype == output_type.dtype
+    )
+    if not source_matches_output:
         # We promote the input expression to a field defined on the output domain:
-        # either a scalar value, broadcast on all dimensions, or a field defined
+        # either a scalar value, broadcast on all dimensions, a field defined
         # on a slice of the output domain (e.g. a 2D boundary field broadcast on
-        # all levels of a 3D 'concat_where' result).
+        # all levels of a 3D 'concat_where' result), or a non-local field that
+        # needs to be broadcast to a local dimension.
         if concat_dim not in source_domain.ranges:
             source_domain.ranges[concat_dim] = (
                 domain_utils.SymbolicRange(
@@ -1806,16 +1813,27 @@ def _translate_concat_where_branch(
     source_range_1 = get_symbolic(im.maximum(source_domain_range.start, source_domain_range.stop))
     source_range_size = source_range_1 - source_range_0
 
-    assert isinstance(output_type.dtype, ts.ScalarType)
-    all_dims = gtx_common.order_dimensions(output_type.dims)
+    if isinstance(output_type.dtype, ts.ScalarType):
+        all_dims = gtx_common.order_dimensions(output_type.dims)
+        extended_src_origin = source.origin
+        extended_dst_origin = output_origin
+    else:
+        assert output_type.dtype.offset_type is not None
+        local_dim = output_type.dtype.offset_type
+        all_dims = gtx_common.order_dimensions([*output_type.dims, local_dim])
+        local_dim_index = all_dims.index(local_dim)
+        extended_src_origin = list(source.origin)
+        extended_src_origin.insert(local_dim_index, 0)
+        extended_dst_origin = list(output_origin)
+        extended_dst_origin.insert(local_dim_index, 0)
 
     source_subset = []
     output_subset = []
     for dim, size, src_origin, dst_origin in zip(
         all_dims,
         output_desc.shape,
-        source.origin,
-        output_origin,
+        extended_src_origin,
+        extended_dst_origin,
         strict=True,
     ):
         if dim == concat_dim:
@@ -1894,15 +1912,26 @@ def translate_concat_where(
     else:
         raise ValueError(f"Unexpected concat mask {mask_domain} with finite domain.")
 
-    if not isinstance(node.type.dtype, ts.ScalarType):
-        # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
-        raise NotImplementedError("'concat_where' with list output is not supported")
-
     # Allocate the output field.
     output_domain = get_field_domain(node.annex.domain)
     output_dims, output_origin, output_shape = get_field_layout(output_domain)
     assert output_dims == node.type.dims
-    dtype = gtx_dace_args.as_dace_type(node.type.dtype)
+
+    if isinstance(node.type.dtype, ts.ScalarType):
+        dtype = gtx_dace_args.as_dace_type(node.type.dtype)
+    else:
+        assert isinstance(node.type.dtype, ts.ListType)
+        assert node.type.dtype.offset_type is not None
+        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
+        dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
+        offset_provider_type = sdfg_builder.get_offset_provider_type(
+            node.type.dtype.offset_type.value
+        )
+        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        local_dim = node.type.dtype.offset_type
+        extended_dims = gtx_common.order_dimensions([*output_dims, local_dim])
+        output_shape.insert(extended_dims.index(local_dim), offset_provider_type.max_neighbors)
+
     output_name, output_desc = sdfg_builder.add_temp_array(ctx.root, output_shape, dtype)
 
     # Translate the input expression on the lower domain.
