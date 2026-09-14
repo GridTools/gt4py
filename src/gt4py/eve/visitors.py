@@ -13,11 +13,25 @@ from __future__ import annotations
 import collections.abc
 import copy
 import enum
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from . import concepts, trees
 from .extended_typing import Any
 from .type_definitions import NOTHING
+
+
+_IMMUTABLE_LEAF_TYPES: Final = (
+    type(None),
+    bool,
+    int,
+    float,
+    complex,
+    str,
+    bytes,
+    enum.Enum,
+    concepts.SourceLocation,
+    concepts.SourceLocationGroup,
+)
 
 
 class NodeVisitor:
@@ -188,6 +202,11 @@ class NodeTranslator(NodeVisitor):
                 self._preserve_annex(node, new_node)
 
             return new_node
+
+        if isinstance(node, _IMMUTABLE_LEAF_TYPES):
+            # A `deepcopy` of these would only produce an equal object, at a high cost for
+            # `str` subclasses like `SymbolRef`.
+            return node
 
         if (isinstance(node, (list, set, collections.abc.Set))) or (
             isinstance(node, collections.abc.Sequence)
