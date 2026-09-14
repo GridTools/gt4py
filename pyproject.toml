@@ -192,7 +192,7 @@ source_pkgs = ['gt4py']
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = ['^setup\.py$', 'build/.*$', '.cscs-ci/*.$', 'docs/.*$', 'tests/.*$']
+exclude = ['build/.*$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
@@ -317,7 +317,7 @@ markers = [
   'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
-norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
+norecursedirs = ['dist', 'build', '_local/*', '.*']
 python_files = ['test_*.py', '*_test.py', 'benchmark_*.py']
 python_functions = ['test_*', 'benchmark_*']
 testpaths = 'tests'
@@ -325,7 +325,7 @@ xfail_strict = true
 
 # -- ruff --
 [tool.ruff]
-line-length = 100  # It should be the same as in `tool.black.line-length` above
+line-length = 100
 respect-gitignore = true
 show-fixes = true
 # show-source = true
@@ -466,6 +466,7 @@ name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
+# dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
 
