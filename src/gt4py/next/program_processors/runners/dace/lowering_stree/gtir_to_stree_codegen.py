@@ -1638,7 +1638,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             masks = [e.mask for e in (true_element, false_element) if e.mask is not None]
             mask = " and ".join(masks) if masks else None
             dummy = true_element.dummy or false_element.dummy
-            expr = f"({true_element.expr}) if {cond} else ({false_element.expr})"
+            expr = f"(({true_element.expr}) if ({cond}) else ({false_element.expr}))"
             return (
                 ListElementAccess(expr=expr, mask=mask, dummy=dummy),
                 true_size if true_size is not None else false_size,
