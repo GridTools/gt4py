@@ -1815,8 +1815,8 @@ def _translate_concat_where_branch(
 
     if isinstance(output_type.dtype, ts.ScalarType):
         all_dims = gtx_common.order_dimensions(output_type.dims)
-        extended_src_origin = source.origin
-        extended_dst_origin = output_origin
+        extended_src_origin = list(source.origin)
+        extended_dst_origin = list(output_origin)
     else:
         assert output_type.dtype.offset_type is not None
         local_dim = output_type.dtype.offset_type
