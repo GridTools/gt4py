@@ -14,7 +14,6 @@ from gt4py.eve import Coerced, SymbolName, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator import builtins
-from gt4py.next.program_processors.codegens.gtfn.gtfn_im_ir import ImperativeFunctionDefinition
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
@@ -254,9 +253,7 @@ class TagDefinition(Node):
 class Program(Node, ValidatedSymbolTableTrait):
     id: SymbolName
     params: list[Sym]
-    function_definitions: list[
-        Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]
-    ]
+    function_definitions: list[Union[FunctionDefinition, ScanPassDefinition]]
     executions: list[Stmt]
     offset_definitions: list[TagDefinition]
     grid_type: common.GridType

@@ -206,11 +206,6 @@ class GTFNBackendFactory(factory.Factory):
 
 run_gtfn = GTFNBackendFactory()
 
-run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative",
-    otf_workflow__translation__use_imperative_backend=True,
-)
-
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_no_transforms = GTFNBackendFactory(
