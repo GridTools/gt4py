@@ -10,11 +10,23 @@ from __future__ import annotations
 
 from typing import Callable, ClassVar, Optional, Union
 
-from gt4py.eve import Coerced, SymbolName, datamodels
+import gt4py.eve as eve
+from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.next import common
 from gt4py.next.iterator import builtins
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
+
+
+@eve.utils.noninstantiable
+class Node(eve.Node):
+    pass
+
+
+class Sym(Node):  # helper
+    id: Coerced[SymbolName]
+
+
+class Expr(Node): ...
 
 
 class UnaryExpr(Expr):
@@ -50,6 +62,10 @@ class IntegralConstant(Expr):
 
 class OffsetLiteral(Expr):
     value: Union[int, str]
+
+
+class SymRef(Expr):
+    id: Coerced[SymbolRef]
 
 
 class Lambda(Expr, SymbolTableTrait):

@@ -12,7 +12,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
 from gt4py.next.otf import cpp_utils
-from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, gtfn_ir_common
+from gt4py.next.program_processors.codegens.gtfn import gtfn_ir
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -81,7 +81,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> str:
+    def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
         if node.id in self._builtins_mapping:
@@ -155,8 +155,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def is_functor_call(self, node: gtfn_ir.FunCall) -> bool:
         return (
-            isinstance(node.fun, gtfn_ir_common.SymRef)
-            and node.fun.id in self.user_defined_function_ids
+            isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self.user_defined_function_ids
         )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
