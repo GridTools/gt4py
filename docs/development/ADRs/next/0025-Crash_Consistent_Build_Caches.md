@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-06-22
-- **Updated**: 2026-07-03
+- **Updated**: 2026-09-15
 
 In the context of the `gt4py.next` OTF build caches, facing user reports that
 an interrupted pipeline (Ctrl-C, `SIGKILL`/OOM, full disk) can leave a cache
@@ -72,11 +72,16 @@ Per layer:
   library survives until `DaCeCompilationArtifact.load()` — which has neither
   the build lock nor the dace config context to recompile. Instead, the locked
   compile step writes a `.gt4py_compile_complete` marker **after** each
-  completed compile (and removes it before compiling); if the marker is absent,
-  the previous build was interrupted and the stale `lib<name>.*` /
-  `libdacestub_<name>.*` files are deleted so dace rebuilds them. A *missing*
-  library needs no handling: `SDFG.regenerate_code` defaults to `True`, so dace
-  regenerates it anyway.
+  completed compile, and removes it before a compile that will write, i.e.
+  unless dace's cache holds the library: removing it around a cache hit would
+  let an interruption there discard a complete library that other processes
+  may be loading. If the marker is absent, the previous build was interrupted
+  and the stale `lib<name>.*` / `libdacestub_<name>.*` files are deleted so dace
+  rebuilds them, together with `FOLDER_MODE`, which dace creates before writing
+  the mode into it and refuses when empty. A *missing* library needs no
+  handling: `SDFG.regenerate_code` defaults to `True`, so dace regenerates it
+  anyway. dace probes `FOLDER_MODE` before its config to find the library, so
+  the compile step reads the build folder only while holding the lock.
 
 ## Alternatives considered
 
