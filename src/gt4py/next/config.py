@@ -207,6 +207,14 @@ if _dump_metrics_at_exit_env is not None:
         DUMP_METRICS_AT_EXIT = _dump_metrics_at_exit_env
 
 
+_dump_stages_env = os.environ.get("GT4PY_DUMP_STAGES", None)
+
+#: Directory where the toolchain dumps the intermediate artifact produced by
+#: every pipeline stage, one subdirectory per program definition. Opt-in
+#: debugging feature: disabled when unset (the default).
+DUMP_STAGES: pathlib.Path | None = pathlib.Path(_dump_stages_env) if _dump_stages_env else None
+
+
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
 ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
