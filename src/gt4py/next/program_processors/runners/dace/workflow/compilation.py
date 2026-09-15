@@ -322,13 +322,14 @@ class DaCeCompiler(
             # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
 
-            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
-            # path here so ``get_binary_name`` sees the same mode dace built under.
-            library_path = dace_compiler.get_binary_name(
-                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
-            )
-
             with locking.lock(sdfg_build_folder):
+                # `get_binary_name` reads the folder mode from the build folder before it
+                # falls back to the dace config, and a concurrent build may have created
+                # but not yet written the mode file: only probe the folder under the lock.
+                library_path = dace_compiler.get_binary_name(
+                    object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+                )
+
                 # With `compiler.use_cache=True` dace reuses a cached library on mere
                 # *existence*, without validating it; an interrupted build can leave a
                 # truncated, unloadable library behind. The marker is written only

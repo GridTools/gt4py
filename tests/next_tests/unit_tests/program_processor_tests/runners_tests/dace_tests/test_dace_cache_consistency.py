@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Crash-consistency of the dace build-folder cache.
+"""Crash- and concurrency-consistency of the dace build-folder cache.
 
 With ``compiler.use_cache=True`` (set by the dace workflow) dace reuses a build
 folder whenever the compiled library merely *exists* and never validates it. An
@@ -17,8 +17,12 @@ folder whenever the compiled library merely *exists* and never validates it. An
 The compile step therefore records a completion marker after each successful
 compile; a library without the marker is treated as stale and dropped, forcing
 a rebuild.
+
+Concurrent compiles of one program serialize on a lock over the build folder,
+and the compile step does not read the folder before it holds that lock.
 """
 
+import contextlib
 import ctypes
 import pathlib
 import shutil
@@ -26,7 +30,7 @@ import shutil
 import dace
 import pytest
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
@@ -121,3 +125,32 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
     recovered = comp(inp)
 
     ctypes.CDLL(str(recovered.library_path))  # raises OSError if still truncated
+
+
+def test_dace_build_folder_is_probed_under_lock(clean_build_folder, monkeypatch):
+    """dace creates ``FOLDER_MODE`` before it writes the mode into it, and reads an
+    empty marker as the unknown mode ``''`` rather than as an absent one. A process
+    that probes the build folder while another one holds the lock can therefore see
+    the marker half-written and fail, so the compile step must not look into the
+    folder before it holds the lock."""
+    inp = _make_input("probed_under_lock")
+    comp = _compiler()
+    build_folder = clean_build_folder(comp, inp)
+    build_folder.mkdir(parents=True)
+    folder_mode = build_folder / "FOLDER_MODE"
+    folder_mode.write_text("")
+
+    real_lock = locking.lock
+
+    @contextlib.contextmanager
+    def lock_held_by_writer(directory):
+        # The concurrent writer completes the marker before it releases the lock.
+        folder_mode.write_text("production")
+        with real_lock(directory):
+            yield
+
+    monkeypatch.setattr(dace_wf_compilation.locking, "lock", lock_held_by_writer)
+
+    artifact = comp(inp)
+
+    ctypes.CDLL(str(artifact.library_path))
