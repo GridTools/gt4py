@@ -403,6 +403,7 @@ class DaCeTranslator(
                     unroll_reduce=False,
                     common_subexpression_elimination=True,
                     force_inline_lambda_args=False,
+                    transform_concat_where_to_as_fieldop=False,
                     symbolic_domain_sizes=symbolic_domain_sizes,
                     use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 )
@@ -433,7 +434,7 @@ class DaCeTranslator(
                     offset_provider=offset_provider,
                     symbolic_domain_sizes=symbolic_domain_sizes,
                     allow_uninferred=True,
-                    keep_existing_domains=False,
+                    keep_existing_domains=True,
                 )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
