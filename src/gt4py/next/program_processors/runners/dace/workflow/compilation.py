@@ -323,6 +323,17 @@ class DaCeCompiler(
             sdfg.build_folder = sdfg_build_folder
 
             with locking.lock(sdfg_build_folder):
+                # With `compiler.use_cache=True` dace reuses a cached library on mere
+                # *existence*, without validating it; an interrupted build can leave a
+                # truncated, unloadable library behind, or a `FOLDER_MODE` file that was
+                # created but never written, which dace refuses as an unknown mode. The
+                # marker is written only after a completed compile: no marker -> drop
+                # both so dace rebuilds instead of handing out or choking on them.
+                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
+                build_complete = marker.exists()
+                if not build_complete:
+                    (sdfg_build_folder / "FOLDER_MODE").unlink(missing_ok=True)
+
                 # `get_binary_name` reads the folder mode from the build folder before it
                 # falls back to the dace config, and a concurrent build may have created
                 # but not yet written the mode file: only probe the folder under the lock.
@@ -330,13 +341,7 @@ class DaCeCompiler(
                     object_folder=sdfg_build_folder, sdfg_name=sdfg.name
                 )
 
-                # With `compiler.use_cache=True` dace reuses a cached library on mere
-                # *existence*, without validating it; an interrupted build can leave a
-                # truncated, unloadable library behind. The marker is written only
-                # after a completed compile: no marker -> drop the stale library so
-                # dace rebuilds it instead of handing it out.
-                marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
-                if not marker.exists():
+                if not build_complete:
                     for stale in (
                         library_path,
                         *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),

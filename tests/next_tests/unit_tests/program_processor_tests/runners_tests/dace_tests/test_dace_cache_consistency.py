@@ -127,6 +127,25 @@ def test_dace_recovers_from_truncated_library(clean_build_folder):
     ctypes.CDLL(str(recovered.library_path))  # raises OSError if still truncated
 
 
+def test_dace_recovers_from_empty_folder_mode(clean_build_folder):
+    """dace creates ``FOLDER_MODE`` before it writes the mode into it, so a build
+    killed in between leaves an empty marker, which dace reads as the unknown mode
+    ``''`` and refuses. The compile step must detect the incomplete build (missing
+    completion marker) and rebuild instead of failing on that folder for good."""
+    inp = _make_input("empty_folder_mode")
+    comp = _compiler()
+    build_folder = clean_build_folder(comp, inp)
+
+    comp(inp)
+
+    (build_folder / "FOLDER_MODE").write_text("")
+    (build_folder / dace_wf_compilation._COMPILE_COMPLETE_MARKER).unlink()
+
+    recovered = comp(inp)
+
+    ctypes.CDLL(str(recovered.library_path))
+
+
 def test_dace_build_folder_is_probed_under_lock(clean_build_folder, monkeypatch):
     """dace creates ``FOLDER_MODE`` before it writes the mode into it, and reads an
     empty marker as the unknown mode ``''`` rather than as an absent one. A process
