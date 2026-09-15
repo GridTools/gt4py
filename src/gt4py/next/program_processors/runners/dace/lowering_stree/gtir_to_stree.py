@@ -355,11 +355,9 @@ def translate_as_fieldop(
             raise NotImplementedError(
                 "'as_fieldop' with tuple output and non-lambda stencil expression."
             )
-        if any(isinstance(el_type, ts.TupleType) for el_type in node.type.types):
-            raise NotImplementedError("Nested tuple output of 'as_fieldop' not supported.")
         # Lower each tuple element independently: extract the element from
         # the lambda body with `tuple_get` and translate it as a separate
-        # single-output field operator.
+        # field operator (recursing again for nested tuple elements).
         results = []
         for index, element_type in enumerate(node.type.types):
             element_expr = im.tuple_get(index, fieldop_expr.expr)

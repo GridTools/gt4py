@@ -1318,7 +1318,13 @@ class StreePythonCodegen(eve.NodeVisitor):
         # calls must be over the same connectivity; other arguments are
         # `make_const_list` broadcasts, local fields, or nested `map_list`
         # expressions (handled by `_single_map_element`).
-        if any(cpm.is_call_to(arg, "neighbors") for arg in node.args):
+        # A list-typed `if_` (e.g. from `concat_where` lowered to `as_fieldop`)
+        # selects between lists elementwise, so it is fused the same way.
+        if any(
+            cpm.is_call_to(arg, "neighbors")
+            or (cpm.is_call_to(arg, "if_") and isinstance(arg.type, ts.ListType))
+            for arg in node.args
+        ):
             arguments = list(node.args)
 
             def _nbr_offset(arg: gtir.FunCall) -> str:
@@ -1331,7 +1337,7 @@ class StreePythonCodegen(eve.NodeVisitor):
             nbr_offsets = {
                 _nbr_offset(arg) for arg in arguments if cpm.is_call_to(arg, "neighbors")
             }
-            if len(nbr_offsets) != 1:
+            if len(nbr_offsets) > 1:
                 raise NotImplementedError(
                     "Reduce over neighbor lists of different offsets: " + str(list(nbr_offsets))
                 )

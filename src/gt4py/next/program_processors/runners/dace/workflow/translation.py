@@ -403,7 +403,6 @@ class DaCeTranslator(
                     unroll_reduce=False,
                     common_subexpression_elimination=True,
                     force_inline_lambda_args=False,
-                    transform_concat_where_to_as_fieldop=False,
                     symbolic_domain_sizes=symbolic_domain_sizes,
                     use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 )
