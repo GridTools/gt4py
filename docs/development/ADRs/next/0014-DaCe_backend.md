@@ -1,5 +1,8 @@
 # DaCe backend
 
+> [!NOTE]
+> The "The ITIR to DaCe translation prototype" section below records the state of the 2023 prototype (#1245). The DaCe backend has since been reimplemented on GTIR (`src/gt4py/next/program_processors/runners/dace/lowering/`), so the limitations and open items listed in that section describe the prototype, not the current backend. The decision this ADR records — targeting the IR rather than the field view ASTs — still holds.
+
 ## Motivation
 
 The DaCe framework uses a graph representation for computer programs. The graphs can natively express parallel workloads in the form of so-called _maps_. A DaCe map consists of a parallel execution domain, similar to a CUDA grid, and a tasklet, similar to a CUDA kernel body. As such, DaCe maps are also very similar to gt4py's stencil closures at the iterator IR level, as well as to gt4py's field view constructs such as adding two fields.
