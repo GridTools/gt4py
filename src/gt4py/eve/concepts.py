@@ -141,7 +141,22 @@ class AnnexManager:
 register_annex_user = AnnexManager.register_user
 
 
-class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
+if xtyping.TYPE_CHECKING:
+    _TreeMeta = type
+else:
+    _TreeMeta = type(trees.Tree)
+
+
+class _NodeMeta(_TreeMeta):
+    # `trees.Tree` is a `Protocol`, whose metaclass implements `isinstance()` and
+    # `issubclass()` in Python, about 10x slower than `type`. Node classes are concrete
+    # and never registered as virtual subclasses, so the nominal check of `type` gives
+    # the same answer, and tree traversals perform these checks on every node.
+    __instancecheck__ = type.__instancecheck__
+    __subclasscheck__ = type.__subclasscheck__
+
+
+class Node(datamodels.DataModel, trees.Tree, metaclass=_NodeMeta, kw_only=True):
     """Base class representing a node in a syntax tree.
 
     Implemented as a :class:`eve.datamodels.DataModel` with some extra features.
@@ -210,9 +225,8 @@ CollectionNode = Union[list[LeafNode], dict[Any, LeafNode], set[LeafNode]]
 RootNode = Union[NodeT, CollectionNode]
 
 
-class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from DataModel
-    ...
+class FrozenNode(Node, frozen=True): ...
 
 
-class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):
     pass
