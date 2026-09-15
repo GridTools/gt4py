@@ -433,7 +433,7 @@ class DaCeTranslator(
                     offset_provider=offset_provider,
                     symbolic_domain_sizes=symbolic_domain_sizes,
                     allow_uninferred=True,
-                    keep_existing_domains=True,
+                    keep_existing_domains=False,
                 )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
