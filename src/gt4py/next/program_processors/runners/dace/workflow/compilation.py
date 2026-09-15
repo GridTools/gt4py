@@ -347,7 +347,11 @@ class DaCeCompiler(
                         *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
                     ):
                         stale.unlink(missing_ok=True)
-                marker.unlink(missing_ok=True)
+                # On a cache hit `sdfg.compile` writes nothing: keep the marker, or an
+                # interruption would make the next compile delete a complete library that
+                # other processes may be loading.
+                if not (dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()):
+                    marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
                 marker.touch()
 

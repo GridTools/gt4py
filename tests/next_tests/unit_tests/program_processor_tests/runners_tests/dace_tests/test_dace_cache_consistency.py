@@ -146,6 +146,32 @@ def test_dace_recovers_from_empty_folder_mode(clean_build_folder):
     ctypes.CDLL(str(recovered.library_path))
 
 
+def test_dace_interrupted_cache_hit_keeps_library(clean_build_folder, monkeypatch):
+    """A compile step interrupted while dace reuses the complete library must leave the
+    build marked complete. Otherwise the next compile step deletes and rebuilds a library
+    that other processes may be loading at that moment."""
+    inp = _make_input("interrupted_cache_hit")
+    comp = _compiler()
+    build_folder = clean_build_folder(comp, inp)
+
+    library_path = comp(inp).library_path
+    # A hard link keeps the inode allocated, so a rebuilt library cannot reuse its number.
+    pinned_library = build_folder / "pinned_library"
+    pinned_library.hardlink_to(library_path)
+
+    def interrupted_compile(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as m:
+        m.setattr(dace.SDFG, "compile", interrupted_compile)
+        with pytest.raises(KeyboardInterrupt):
+            comp(inp)
+
+    comp(inp)
+
+    assert library_path.samefile(pinned_library)
+
+
 def test_dace_build_folder_is_probed_under_lock(clean_build_folder, monkeypatch):
     """dace creates ``FOLDER_MODE`` before it writes the mode into it, and reads an
     empty marker as the unknown mode ``''`` rather than as an absent one. A process
