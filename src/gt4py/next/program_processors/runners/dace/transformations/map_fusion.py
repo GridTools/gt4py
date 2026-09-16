@@ -142,7 +142,13 @@ class MapFusionHorizontal(dace_dftrans.MapFusionHorizontal):
                 return False
 
         # The pattern matches every pair of Maps in the state. The base class performs these
-        #  checks too, but only after `is_parallel()`, which traverses the state twice.
+        #  checks too, but only after `is_parallel()`, which traverses the state twice. It also
+        #  rejects a contradictory scope selection, which has to keep happening.
+        if self.only_inner_maps and self.only_toplevel_maps:
+            raise ValueError(
+                "Only one of `only_inner_maps` and `only_toplevel_maps` is allowed per"
+                f" `{type(self).__name__}` instance."
+            )
         scope_dict = graph.scope_dict()
         map_scope = scope_dict[first_map_entry]
         if scope_dict[second_map_entry] != map_scope:
