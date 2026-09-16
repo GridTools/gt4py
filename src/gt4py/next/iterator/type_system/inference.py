@@ -221,6 +221,19 @@ def _type_synthesizer_from_function_type(fun_type: ts.FunctionType):
 class SanitizeTypes(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
+    def __init__(self, annex_memo: Optional[dict[int, Any]] = None) -> None:
+        #: If given, preserved annex values are deep-copied with this memo instead of being
+        #: shared with the input tree.
+        self.annex_memo = annex_memo
+
+    def _preserve_annex(self, node: concepts.Node, new_node: concepts.Node) -> None:
+        if self.annex_memo is None:
+            return super()._preserve_annex(node, new_node)
+        new_annex_dict = new_node.annex.__dict__
+        old_annex_dict = node.annex.__dict__
+        for key in (old_annex_dict.keys() & self.PRESERVED_ANNEX_ATTRS) - new_annex_dict.keys():
+            new_annex_dict[key] = copy.deepcopy(old_annex_dict[key], self.annex_memo)
+
     def visit_Node(self, node: itir.Node, *, symtable: dict[str, itir.Node]) -> itir.Node:
         node = self.generic_visit(node)
         # We only want to sanitize types that have been inferred previously such that we don't run
@@ -331,7 +344,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         #  becomes invalid (e.g. the shift part of ``shift(...)(it)`` has a different type when used
         #  on a different iterator). For now we just delete all types in case we are working an
         #   parts of a program.
-        node = SanitizeTypes().visit(node)
+        # `SanitizeTypes` rebuilds every node, so with copied annex values the result is
+        # independent of the input and no further copy is needed when not `inplace`.
+        node = SanitizeTypes(annex_memo=None if inplace else {}).visit(node)
 
         if isinstance(node, itir.Program):
             assert all(isinstance(param.type, ts.DataType) for param in node.params), (
@@ -344,8 +359,6 @@ class ITIRTypeInference(eve.NodeTranslator):
             allow_undeclared_symbols=allow_undeclared_symbols,
             reinfer=False,
         )
-        if not inplace:
-            node = copy.deepcopy(node)
         instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
 
