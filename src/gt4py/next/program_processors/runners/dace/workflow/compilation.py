@@ -349,7 +349,9 @@ class DaCeCompiler(
                         stale.unlink(missing_ok=True)
                 # On a cache hit `sdfg.compile` writes nothing: keep the marker, or an
                 # interruption would make the next compile delete a complete library that
-                # other processes may be loading.
+                # other processes may be loading. `use_cache` is not implied by
+                # `dace_context`: a `DACE_compiler_use_cache` env var overrides the value
+                # set there, and with it off dace rebuilds over the existing library.
                 if not (dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()):
                     marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
