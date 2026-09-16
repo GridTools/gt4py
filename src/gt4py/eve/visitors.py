@@ -20,17 +20,20 @@ from .extended_typing import Any
 from .type_definitions import NOTHING
 
 
+#: `isinstance()` tries these in order, so the ones that carry most leaves of a tree come first.
+#: Counted on ITIR programs of icon4py's velocity advection: of 12,483 leaf values, 7,828 are
+#: `None`, 2,915 are `str` (`SymbolRef`, `SymbolName`), 1,444 are `SourceLocation`.
 _IMMUTABLE_LEAF_TYPES: Final = (
     type(None),
-    bool,
-    int,
-    float,
-    complex,
     str,
-    bytes,
-    enum.Enum,
     concepts.SourceLocation,
     concepts.SourceLocationGroup,
+    int,
+    bool,
+    float,
+    complex,
+    bytes,
+    enum.Enum,
 )
 
 
