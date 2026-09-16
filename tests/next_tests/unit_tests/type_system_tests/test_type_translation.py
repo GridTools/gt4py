@@ -210,21 +210,46 @@ def test_make_symbol_type_from_typing(value, expected):
     assert type_translation.from_type_hint(value) == expected
 
 
+def test_generic_tuple_constructor_type():
+    # The type of the `tuple` builtin itself: `type[tuple]` (e.g. the symbol `tuple`
+    # referenced inside a field operator) maps to a constructor for a generic tuple.
+    expected = ts.ConstructorType(
+        definition=ts.FunctionType(
+            pos_only_args=[ts.DeferredType(constraint=None)],
+            pos_or_kw_args={},
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=ts.VarArgType),
+        )
+    )
+    assert (
+        type_translation.make_constructor_type(ts.DeferredType(constraint=ts.TupleType)) == expected
+    )
+    assert type_translation.from_type_hint(type[tuple]) == expected
+
+
 def test_invalid_symbol_types():
     # Forward references
     with pytest.raises(ValueError, match="undefined forward references"):
         type_translation.from_type_hint("foo")
 
     # Tuples
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(typing.Tuple)
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(tuple)
+    # Bare `tuple` and `typing.Tuple` (unparameterized) both return a DeferredType.
+    assert type_translation.from_type_hint(typing.Tuple) == ts.DeferredType(constraint=ts.TupleType)
+    assert type_translation.from_type_hint(tuple) == ts.DeferredType(constraint=ts.TupleType)
 
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(tuple[int, ...])
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(typing.Tuple["float", ...])
+    # The empty-tuple annotation is not a valid type annotation.
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(tuple[()])
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(typing.Tuple[()])
+
+    # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarArgType.
+    assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+    assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarArgType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
     # Fields
     with pytest.raises(ValueError, match="Field type requires two arguments"):

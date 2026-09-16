@@ -20,6 +20,7 @@ def process_elements(
     objs: itir.Expr | Iterable[itir.Expr],
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]] = None,
+    with_path_arg: bool = False,
 ) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple or
@@ -34,6 +35,7 @@ def process_elements(
         arg_types: If provided, a tuple of the type of each argument is passed to `process_func` as last argument.
             Note, that `arg_types` might coincide with `(current_el_type,)*len(objs)`, but not necessarily,
             in case of implicit broadcasts.
+        with_path_arg: If true, the index path to the current leaf is passed as last argument.
     """
     if isinstance(objs, itir.Expr):
         objs = (objs,)
@@ -47,6 +49,8 @@ def process_elements(
         tuple(im.ref(var_name) for var_name in var_names),
         current_el_type,
         arg_types=arg_types,
+        path=(),
+        with_path_arg=with_path_arg,
     )
 
     return im.let(*bound_vars.items())(body)
@@ -60,6 +64,8 @@ def _process_elements_impl(
     _current_el_exprs: Iterable[T],
     current_el_type: ts.TypeSpec,
     arg_types: Optional[Iterable[ts.TypeSpec]],
+    path: tuple[int, ...],
+    with_path_arg: bool,
 ) -> itir.Expr:
     if isinstance(current_el_type, (ts.TupleType, ts.NamedCollectionType)):
         result = im.make_tuple(
@@ -70,17 +76,23 @@ def _process_elements_impl(
                         im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs
                     ),
                     current_el_type.types[i],
-                    arg_types=tuple(arg_t.types[i] for arg_t in arg_types)  # type: ignore[attr-defined] # guaranteed by the requirement that `current_el_type` and each element of `arg_types` have the same tuple structure
-                    if arg_types is not None
-                    else None,
+                    arg_types=(
+                        tuple(arg_t.types[i] for arg_t in arg_types)  # type: ignore[attr-defined] # guaranteed by the requirement that `current_el_type` and each element of `arg_types` have the same tuple structure
+                        if arg_types is not None
+                        else None
+                    ),
+                    path=(*path, i),
+                    with_path_arg=with_path_arg,
                 )
                 for i in range(len(current_el_type.types))
             )
         )
     else:
         if arg_types is not None:
-            result = process_func(*_current_el_exprs, arg_types)
+            result = process_func(
+                *_current_el_exprs, arg_types, *((path,) if with_path_arg else ())
+            )
         else:
-            result = process_func(*_current_el_exprs)
+            result = process_func(*_current_el_exprs, *((path,) if with_path_arg else ()))
 
     return result
