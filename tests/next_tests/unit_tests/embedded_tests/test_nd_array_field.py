@@ -2060,19 +2060,16 @@ def test_jax_jit_premap_non_contiguous_inverse_image_raises():
         jax.jit(lambda field, conn: field.premap(conn))(field, conn)
 
 
-def test_inverse_image_after_in_place_write():
+def test_connectivity_field_setitem_raises():
     conn = common._connectivity(
         np.asarray([[0, 1], [-1, -1]]),
         codomain=D0,
         domain=common.domain({D1: (0, 2), D2: (0, 2)}),
         skip_value=-1,
     )
-    assert conn.inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 1), D2: (0, 2)})
 
-    conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
-
-    assert conn.inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 2), D2: (0, 2)})
-    assert conn.inverse_image(UnitRange(0, 5)) == common.domain({D1: (0, 2), D2: (0, 2)})
+    with pytest.raises(TypeError, match="item assignment"):
+        conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
 
 
 def test_inverse_image_empty_table_raises():

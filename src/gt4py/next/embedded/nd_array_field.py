@@ -598,10 +598,8 @@ class NdArrayConnectivityField(
         self,
         index: common.AnyIndexSpec,
         value: common.Field | core_defs.NDArrayObject | core_defs.IntegralScalar,
-    ) -> None:
-        super().__setitem__(index, value)
-        self._cache.clear()
-        self.__dict__.pop("_image_bounds", None)
+    ) -> Never:
+        raise TypeError("'Connectivity' does not support item assignment.")
 
     @functools.cached_property
     def _image_bounds(self) -> Optional[tuple[int, int, tuple[slice, ...]]]:
