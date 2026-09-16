@@ -594,18 +594,36 @@ class NdArrayConnectivityField(
     def _index_table(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
+    def __setitem__(
+        self,
+        index: common.AnyIndexSpec,
+        value: common.Field | core_defs.NDArrayObject | core_defs.IntegralScalar,
+    ) -> None:
+        super().__setitem__(index, value)
+        self._cache.clear()
+        self.__dict__.pop("_image_bounds", None)
+
     @functools.cached_property
     def _image_bounds(self) -> Optional[tuple[int, int, tuple[slice, ...]]]:
         """Smallest value, largest value and bounding hyperslice of the non-skip entries."""
         xp = self.array_ns
         table = self._index_table
+        if math.prod(table.shape) == 0:
+            return None
         if self.skip_value is None:
             return int(xp.min(table)), int(xp.max(table)), tuple(slice(0, n) for n in table.shape)
         valid = table != self.skip_value
         if not xp.any(valid):
             return None
-        support = tuple(slice(int(xp.min(i)), int(xp.max(i)) + 1) for i in xp.nonzero(valid))
-        return int(xp.min(table[valid])), int(xp.max(table[valid])), support
+        support = []
+        for axis in range(table.ndim):
+            other_axes = tuple(a for a in range(table.ndim) if a != axis)
+            (nonzero,) = xp.nonzero(xp.any(valid, axis=other_axes))
+            support.append(slice(int(nonzero[0]), int(nonzero[-1]) + 1))
+        info = xp.iinfo(table.dtype)
+        value_min = int(xp.min(xp.where(valid, table, info.max)))
+        value_max = int(xp.max(xp.where(valid, table, info.min)))
+        return value_min, value_max, tuple(support)
 
     def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
         if (bounds := self._image_bounds) is not None:
@@ -624,14 +642,18 @@ class NdArrayConnectivityField(
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
-            cls = self.__class__
-            xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
-            new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain, self.skip_value)
+            restricted_connectivity = self._restrict_buffer(new_domain, buffer_slice)
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
+
+    def _restrict_buffer(
+        self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence
+    ) -> NdArrayConnectivityField:
+        cls = self.__class__
+        new_buffer = cls.array_ns.asarray(self.ndarray[buffer_slice])
+        return cls(new_domain, new_buffer, self.codomain, self.skip_value)
 
     __getitem__ = restrict
 
@@ -697,25 +719,28 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         start = data.domain[dim].unit_range.start
         if (conn := conn_by_codomain.get(dim)) is None:
             return _identity_index_array(new_domain, dim, xp) - start
-        indices = _connectivity_index_array(conn, new_domain, xp)
-        if conn.skip_value is not None:
-            # a wrapped-around skip index is harmless for the primal, but under autodiff its
-            # cotangent would flow into whichever element it happens to hit
-            indices = xp.where(indices == conn.skip_value, start, indices)
-        return indices - start
+        # skip entries read the domain start instead of wrapping around to an arbitrary element;
+        # what is gathered there, and its cotangent, is left to the reduction mask to discard
+        return _connectivity_index_array(conn, new_domain, xp, skip_value_replacement=start) - start
 
     new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
 def _connectivity_index_array(
-    connectivity: common.GatherConnectivity, domain: common.Domain, xp: ModuleType
+    connectivity: common.GatherConnectivity,
+    domain: common.Domain,
+    xp: ModuleType,
+    *,
+    skip_value_replacement: Optional[core_defs.IntegralScalar] = None,
 ) -> core_defs.NDArrayObject:
     """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
     # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     arr = xp.asarray(conn.ndarray)
+    if skip_value_replacement is not None and conn.skip_value is not None:
+        arr = xp.where(arr == conn.skip_value, skip_value_replacement, arr)
     # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
     fresh_axis = {
@@ -1015,20 +1040,10 @@ def _make_reduction(
         if offset_definition.skip_value is None:
             values = field.ndarray
         else:
-            table_domain = common.Domain(*(field.domain[d] for d in offset_definition.domain.dims))
-            table = (
-                offset_definition
-                if table_domain == offset_definition.domain
-                else offset_definition.restrict(table_domain)
-            ).ndarray
-            broadcast_slice = tuple(
-                slice(None) if d in offset_definition.domain.dims else xp.newaxis
-                for d in field.domain.dims
-            )
+            assert isinstance(offset_definition, common.GatherConnectivity)
+            table = _connectivity_index_array(offset_definition, field.domain, xp)
             values = xp.where(
-                xp.asarray(table[broadcast_slice]) != offset_definition.skip_value,
-                field.ndarray,
-                initial_value_op(field),
+                table != offset_definition.skip_value, field.ndarray, initial_value_op(field)
             )
 
         return field.__class__.from_array(
@@ -1150,6 +1165,21 @@ if jnp:
         def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
             with jax.ensure_compile_time_eval():
                 return super()._image_slices(image_range)
+
+        def _restrict_buffer(
+            self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence
+        ) -> JaxArrayConnectivityField:
+            handle = None
+            if self._table_handle is not None and isinstance(self._ndarray, jax.core.Tracer):
+                with jax.ensure_compile_time_eval():
+                    handle = _TableHandle(self._table_handle.table[buffer_slice])
+            return JaxArrayConnectivityField(
+                new_domain,
+                jnp.asarray(self._ndarray[buffer_slice]),
+                self.codomain,
+                self.skip_value,
+                handle,
+            )
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
     common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)

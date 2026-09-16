@@ -2058,3 +2058,83 @@ def test_jax_jit_premap_non_contiguous_inverse_image_raises():
 
     with pytest.raises(ValueError, match="non-contiguous"):
         jax.jit(lambda field, conn: field.premap(conn))(field, conn)
+
+
+def test_inverse_image_after_in_place_write():
+    conn = common._connectivity(
+        np.asarray([[0, 1], [-1, -1]]),
+        codomain=D0,
+        domain=common.domain({D1: (0, 2), D2: (0, 2)}),
+        skip_value=-1,
+    )
+    assert conn.inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 1), D2: (0, 2)})
+
+    conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+    assert conn.inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 2), D2: (0, 2)})
+    assert conn.inverse_image(UnitRange(0, 5)) == common.domain({D1: (0, 2), D2: (0, 2)})
+
+
+def test_inverse_image_empty_table_raises():
+    conn = common._connectivity(
+        np.zeros((0, 2), dtype=np.int32),
+        codomain=D0,
+        domain=common.domain({D1: (0, 0), D2: (0, 2)}),
+    )
+
+    with pytest.raises(ValueError, match="non-contiguous or empty"):
+        conn.inverse_image(UnitRange(0, 4))
+
+
+def test_neighbor_sum_with_transposed_table_dims():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [2, -1], [1, 3]])
+    e2v = common._connectivity(
+        table, codomain=V, domain=common.domain({E: (0, 3), E2VDim: (0, 2)}), skip_value=-1
+    )
+    data = np.arange(12, dtype=np.float64).reshape(4, 3)
+    ve_field = common._field(data, domain=common.domain({V: (0, 4), E: (0, 3)}))
+
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        premapped = ve_field.premap(e2v)
+        result = fbuiltins.neighbor_sum(premapped, axis=E2VDim)
+
+    assert premapped.domain == common.domain({E2VDim: (0, 2), E: (0, 3)})
+    expected = np.zeros(3)
+    for e in range(3):
+        for n in range(2):
+            if table[e, n] != -1:
+                expected[e] += data[table[e, n], e]
+    assert result.domain == common.domain({E: (0, 3)})
+    np.testing.assert_allclose(result.asnumpy(), expected)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_restricted_connectivity_argument():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = _skip_value_e2v_table(8)
+    conn_domain = common.domain({E: (0, table.shape[0]), E2VDim: (0, 2)})
+    field_domain = common.domain({V: (0, 4)})
+
+    def premap_first_neighbor(field, conn):
+        return field.premap(conn[NamedIndex(E2VDim, 0)])
+
+    expected = premap_first_neighbor(
+        common._field(np.arange(4, dtype=np.float64), domain=field_domain),
+        common._connectivity(table, codomain=V, domain=conn_domain, skip_value=-1),
+    )
+    result = jax.jit(premap_first_neighbor)(
+        common._field(jax.numpy.arange(4, dtype=np.float64), domain=field_domain),
+        common._connectivity(
+            jax.numpy.asarray(table), codomain=V, domain=conn_domain, skip_value=-1
+        ),
+    )
+
+    assert result.domain == expected.domain
+    np.testing.assert_allclose(result.asnumpy(), expected.asnumpy())
