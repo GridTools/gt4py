@@ -149,6 +149,8 @@ class MapFusionHorizontal(dace_dftrans.MapFusionHorizontal):
                 "Only one of `only_inner_maps` and `only_toplevel_maps` is allowed per"
                 f" `{type(self).__name__}` instance."
             )
+        if first_map_entry.map.schedule != second_map_entry.map.schedule:
+            return False
         scope_dict = graph.scope_dict()
         map_scope = scope_dict[first_map_entry]
         if scope_dict[second_map_entry] != map_scope:
@@ -156,8 +158,6 @@ class MapFusionHorizontal(dace_dftrans.MapFusionHorizontal):
         if self.only_toplevel_maps and map_scope is not None:
             return False
         if self.only_inner_maps and map_scope is None:
-            return False
-        if first_map_entry.map.schedule != second_map_entry.map.schedule:
             return False
         if (
             dace_mfhelper.find_parameter_remapping(
