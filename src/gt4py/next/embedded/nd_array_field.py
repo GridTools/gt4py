@@ -592,6 +592,8 @@ class NdArrayConnectivityField(
 
     @property
     def _index_table(self) -> core_defs.NDArrayObject:
+        # domain inference needs concrete contents, which a traced `_ndarray` does not have;
+        # the jax subclass answers with the concrete table behind the tracer
         return self._ndarray
 
     def __setitem__(
