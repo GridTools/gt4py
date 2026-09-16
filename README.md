@@ -117,4 +117,4 @@ make html  # run 'make help' for a list of targets
 
 ## ⚖️ License
 
-GT4Py is licensed under the terms of the [BSD-3-Clause](https://github.com/GridTools/gt4py/blob/main/LICENSE.txt).
+GT4Py is licensed under the terms of the [BSD-3-Clause](https://github.com/GridTools/gt4py/blob/main/LICENSE).

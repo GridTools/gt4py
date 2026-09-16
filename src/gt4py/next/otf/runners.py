@@ -24,7 +24,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import cache as _cache, common as compilation_common
 
 
@@ -42,11 +42,11 @@ class CompilationTask:
     construct_compilable: Callable[[bool], Any]
     #: The artifact-producing step. A runner may execute it anywhere, including
     #: another process; its picklability is the runner's concern.
-    executor: Callable[[Any], stages.CompilationArtifact]
+    executor: Callable[[Any], artifacts.CompilationArtifact]
     #: Reason this task is known not to be shippable to another process, if any.
     no_offload_reason: str | None = None
 
-    def compile(self, with_refs: bool = False) -> stages.CompilationArtifact:
+    def compile(self, with_refs: bool = False) -> artifacts.CompilationArtifact:
         return self.executor(self.construct_compilable(with_refs))
 
 
@@ -54,7 +54,7 @@ class CompilationTask:
 class Runner(Protocol):
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         """Schedule `task`.
 
         Returns:
@@ -69,8 +69,8 @@ class Runner(Protocol):
 
 def _run_in_calling_thread(
     task: CompilationTask,
-) -> concurrent.futures.Future[stages.CompilationArtifact]:
-    future: concurrent.futures.Future[stages.CompilationArtifact] = concurrent.futures.Future()
+) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
+    future: concurrent.futures.Future[artifacts.CompilationArtifact] = concurrent.futures.Future()
     try:
         future.set_result(task.compile())
     except BaseException as exception:  # re-raised via the future
@@ -83,7 +83,7 @@ class SerialRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return _run_in_calling_thread(task)
 
     def shutdown(self, wait: bool = True) -> None:
@@ -98,7 +98,7 @@ class ThreadRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return self._pool.submit(task.compile)
 
     def shutdown(self, wait: bool = True) -> None:
@@ -169,7 +169,7 @@ def _run_compilation_task_in_worker(
     compilable: Any,
     config_overrides: dict[str, Any],
     recursion_limit: int,
-) -> stages.CompilationArtifact:
+) -> artifacts.CompilationArtifact:
     """Worker entry point: deserialize the executor and run it."""
     # `sys.setrecursionlimit` is per-process: a limit the parent raised for
     # deeply nested IR would silently reset to the interpreter default in a
@@ -210,7 +210,7 @@ class ProcessRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         reason = task.no_offload_reason
         executor_blob: bytes | None = None
         if reason is None:
