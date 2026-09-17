@@ -1372,9 +1372,7 @@ def test_if_mover_no_ops():
     for name in ("a", "b", "c"):
         me.add_in_connector(f"IN_{name}")
         me.add_out_connector(f"OUT_{name}")
-        state.add_edge(
-            state.add_access(name), None, me, f"IN_{name}", dace.Memlet(f"{name}[0:10]")
-        )
+        state.add_edge(state.add_access(name), None, me, f"IN_{name}", dace.Memlet(f"{name}[0:10]"))
 
     if_block = _make_if_block(state, sdfg)
 
