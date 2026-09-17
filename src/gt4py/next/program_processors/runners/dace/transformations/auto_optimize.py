@@ -610,7 +610,7 @@ def _gt_auto_process_top_level_maps(
             # TODO(phimuell): Implement a data cleaner.
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
-            sdfg.apply_transformations_repeated(
+            nb_applied_splits = sdfg.apply_transformations_repeated(
                 [
                     gtx_transformations.MapSplitter(
                         single_use_data=single_use_data,
@@ -623,8 +623,11 @@ def _gt_auto_process_top_level_maps(
             )
             # TODO(phimuell): Find out how to skip the propagation and integrating it
             #   into the split transformation.
-            dace_sdutils.canonicalize_memlet_trees(sdfg)
-            dace_propagation.propagate_memlets_sdfg(sdfg)
+            if nb_applied_splits != 0:
+                # Without an applied split the SDFG is the one the canonicalization and the
+                #  propagation above already ran on, and both are idempotent.
+                dace_sdutils.canonicalize_memlet_trees(sdfg)
+                dace_propagation.propagate_memlets_sdfg(sdfg)
 
             # Split the top level AccessNodes.
             # NOTE: This function will also update `single_use_data`.
