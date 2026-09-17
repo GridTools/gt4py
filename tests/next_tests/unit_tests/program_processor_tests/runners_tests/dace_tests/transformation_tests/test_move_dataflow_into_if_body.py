@@ -1368,19 +1368,13 @@ def test_if_mover_no_ops():
     sdfg.add_scalar("c1", dtype=dace.bool_, transient=True)
     c1 = state.add_access("c1")
 
-    tlet_to_delete, me, mx = state.add_mapped_tasklet(
-        "comp",
-        map_ranges={"__i": "0:10"},
-        inputs={
-            "__arg1": dace.Memlet("a[__i]"),
-            "__arg2": dace.Memlet("b[__i]"),
-            "__cond": dace.Memlet("c[__i]"),
-        },
-        code="",  # Tasklet will be replaced with the `if`.
-        outputs={"__output": dace.Memlet("d[__i]")},
-        external_edges=True,
-    )
-    state.remove_node(tlet_to_delete)
+    me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
+    for name in ("a", "b", "c"):
+        me.add_in_connector(f"IN_{name}")
+        me.add_out_connector(f"OUT_{name}")
+        state.add_edge(
+            state.add_access(name), None, me, f"IN_{name}", dace.Memlet(f"{name}[0:10]")
+        )
 
     if_block = _make_if_block(state, sdfg)
 
@@ -1396,7 +1390,10 @@ def test_if_mover_no_ops():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # The output.
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
     state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
     sdfg.validate()
 
     # This might change if we will move the read fully inside the branches.
@@ -2046,11 +2043,6 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
             )
             me.add_scope_connectors(name)
 
-        state.add_edge(
-            mx, "OUT_d", state.add_access("d"), None, dace.Memlet(data="d", subset="0:10")
-        )
-        mx.add_scope_connectors("d")
-
         # First branch.
         tasklet_a1 = state.add_tasklet(
             "tasklet_a1",
@@ -2098,7 +2090,11 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
         else:
             state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
 
+        mx.add_scope_connectors("d")
         state.add_edge(nsdfg, "out", mx, "IN_d", dace.Memlet(f"d[{iter_name}]"))
+        state.add_edge(
+            mx, "OUT_d", state.add_access("d"), None, dace.Memlet(data="d", subset="0:10")
+        )
 
         sdfg.validate()
         return sdfg, state, nsdfg
@@ -2315,11 +2311,6 @@ def test_if_mover_two_accessnodes_same_outer_data():
 
     me, mx = state.add_map("comp", ndrange={"__i": "0:10"})
 
-    # Output
-    mx.add_in_connector("IN_d")
-    mx.add_out_connector("OUT_d")
-    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
-
     # "a" fed into the map via *two separate* outer AccessNode objects, each
     # with its own MapEntry connector pair — the key requirement for the bug.
     outer_a1 = state.add_access("a")
@@ -2378,7 +2369,11 @@ def test_if_mover_two_accessnodes_same_outer_data():
     state.add_edge(a_out_an, None, if_block, "arg_true", dace.Memlet("a_out[0]"))
     state.add_edge(b_out_an, None, if_block, "arg_false", dace.Memlet("b_out[0]"))
     state.add_edge(cond_an, None, if_block, "__cond", dace.Memlet("cond_val[0]"))
+
+    mx.add_in_connector("IN_d")
+    mx.add_out_connector("OUT_d")
     state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     sdfg.validate()
 

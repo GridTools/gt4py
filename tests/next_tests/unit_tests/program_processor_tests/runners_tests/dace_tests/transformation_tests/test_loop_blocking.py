@@ -630,10 +630,6 @@ def _make_loop_blocking_sdfg_with_inner_map(
         sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
         sdfg.add_scalar("tmp2", dtype=dace.float64, transient=True)
         tmp, C = (state.add_access(name) for name in ("tmp", "C"))
-        state.add_edge(tmp, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
-        mx_out.add_in_connector("IN_tmp")
-        state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
-        mx_out.add_out_connector("OUT_tmp")
         match add_independent_part:
             case IndependentPart.TASKLET:
                 tskli = state.add_tasklet(
@@ -659,6 +655,11 @@ def _make_loop_blocking_sdfg_with_inner_map(
                 state.add_edge(nsdfg_node, nsdfg_out, tmp, None, dace.Memlet("tmp[0]"))
             case _:
                 raise NotImplementedError()
+
+        state.add_edge(tmp, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
+        mx_out.add_in_connector("IN_tmp")
+        state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
+        mx_out.add_out_connector("OUT_tmp")
 
     sdfg.validate()
     return sdfg, state, me_out, me_in
