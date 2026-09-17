@@ -29,7 +29,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import backend as gtx_backend, common, constructors
-from gt4py.next.otf import arguments, definitions as otf_definitions, runners, stages
+from gt4py.next.otf import arguments, artifacts, runners, stages
 
 
 def _connectivity_from_file(
@@ -127,9 +127,9 @@ def _offset_provider_with_file_refs(
 class _PreloadedArtifact:
     """Wraps the already-loaded program of a backend with a customized ``compile``."""
 
-    program: stages.ExecutableProgram
+    program: artifacts.ExecutableProgram
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         return self.program
 
 
@@ -158,10 +158,10 @@ def make_compilation_task(
     # function module attribute, so the raw `types.FunctionType` must not cross
     # a process boundary; the lowered `CompilableProgramDef` is pickle-safe.
     compilable = backend.transforms(
-        otf_definitions.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
+        stages.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
     )
 
-    def construct_compilable(with_refs: bool) -> otf_definitions.CompilableProgramDef:
+    def construct_compilable(with_refs: bool) -> stages.CompilableProgramDef:
         if not with_refs or not compilable.args.offset_provider:
             return compilable
         # The shipped copy must not carry the connectivity buffers: they may

@@ -41,7 +41,6 @@ class _PythonObjectIdMixin:
 
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
-    GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
     GTFN_CPU_NO_TRANSFORMS = "gt4py.next.program_processors.runners.gtfn.run_gtfn_no_transforms"
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
@@ -106,7 +105,6 @@ USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
-USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -216,8 +214,6 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
-    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],

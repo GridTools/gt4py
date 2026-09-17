@@ -57,7 +57,7 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
 - User-facing docs: [`docs/user/cartesian/`](docs/user/cartesian/) and
   [`docs/user/next/`](docs/user/next/).
 - Subpackage dependency DAG (enforced in CI): [`tach.toml`](tach.toml).
-- Project metadata, dependency groups, ruff / mypy / coverage / pytest
+- Project metadata, dependency groups, ruff / mypy / pytest
   config: [`pyproject.toml`](pyproject.toml).
 - License header to prepend to new source files: [`HEADER.txt`](HEADER.txt)
   (pre-commit inserts it automatically).
@@ -78,7 +78,7 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
 - For a non-trivial architectural choice (new dependency, IR change,
   backend interface, public-API shape), add an ADR under the appropriate
   `docs/development/ADRs/<subsystem>/` directory. ADRs are append-only;
-  supersede with a new file.
+  except for minor fixes not affecting the main architectural decisions.
 - Respect `tach.toml` — don't introduce subpackage imports that violate the
   declared DAG. If you genuinely need a new edge, edit `tach.toml`
   explicitly and explain why in the PR.
