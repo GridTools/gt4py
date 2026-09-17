@@ -211,11 +211,9 @@ class NodeTranslator(NodeVisitor):
             # `str` subclasses like `SymbolRef`.
             return node
 
-        if (isinstance(node, (list, set, collections.abc.Set))) or (
-            isinstance(node, collections.abc.Sequence)
-            and not isinstance(node, (str, bytes, enum.Enum))
-        ):
-            # Sequence or set: create a new container instance with the new values
+        if isinstance(node, (list, set, collections.abc.Set, collections.abc.Sequence)):
+            # Sequence or set: create a new container instance with the new values.
+            #  `str`, `bytes` and `Enum` are sequences too, but the branch above returned them.
             return node.__class__(  # type: ignore
                 new_child
                 for child in trees.iter_children_values(node)

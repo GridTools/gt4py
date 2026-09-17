@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
-from .extended_typing import Any, ClassVar, Final, Iterable, Optional, TypeVar, Union
+from .extended_typing import TYPE_CHECKING, Any, ClassVar, Final, Iterable, Optional, TypeVar, Union
 from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
@@ -141,22 +141,10 @@ class AnnexManager:
 register_annex_user = AnnexManager.register_user
 
 
-if xtyping.TYPE_CHECKING:
-    _TreeMeta = type
-else:
-    _TreeMeta = type(trees.Tree)
+_NodeParamsT = TypeVar("_NodeParamsT")
 
 
-class _NodeMeta(_TreeMeta):
-    # `trees.Tree` is a `Protocol`, whose metaclass implements `isinstance()` and
-    # `issubclass()` in Python, about 10x slower than `type`. Node classes are concrete
-    # and never registered as virtual subclasses, so the nominal check of `type` gives
-    # the same answer, and tree traversals perform these checks on every node.
-    __instancecheck__ = type.__instancecheck__
-    __subclasscheck__ = type.__subclasscheck__
-
-
-class Node(datamodels.DataModel, trees.Tree, metaclass=_NodeMeta, kw_only=True):
+class Node(datamodels.DataModel, xtyping.Generic[_NodeParamsT], kw_only=True):  # type: ignore[call-arg]
     """Base class representing a node in a syntax tree.
 
     Implemented as a :class:`eve.datamodels.DataModel` with some extra features.
@@ -183,7 +171,7 @@ class Node(datamodels.DataModel, trees.Tree, metaclass=_NodeMeta, kw_only=True):
     :class:`NodeTranslator` class..
     """
 
-    __slots__ = ()
+    __slots__ = ("__node_annex__",)
 
     @property
     def annex(self) -> utils.Namespace:
@@ -218,6 +206,10 @@ class Node(datamodels.DataModel, trees.Tree, metaclass=_NodeMeta, kw_only=True):
         return new_node
 
 
+if TYPE_CHECKING:
+    _node_implements_tree: type[trees.Tree] = Node
+
+
 NodeT = TypeVar("NodeT", bound="Node")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
 LeafNode = Union[NodeT, ValueNode]
@@ -225,8 +217,8 @@ CollectionNode = Union[list[LeafNode], dict[Any, LeafNode], set[LeafNode]]
 RootNode = Union[NodeT, CollectionNode]
 
 
-class FrozenNode(Node, frozen=True): ...
+class FrozenNode(Node, frozen=True): ...  # type: ignore[call-arg]
 
 
-class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]
     pass

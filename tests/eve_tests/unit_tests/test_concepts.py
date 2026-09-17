@@ -169,14 +169,11 @@ class TestNodeInstanceChecks:
         assert not isinstance(StructuralTree(), eve.Node)
         assert not issubclass(StructuralTree, eve.Node)
 
-    def test_virtual_subclasses_are_not_recognized(self):
-        class Unrelated:
-            pass
-
-        eve.Node.register(Unrelated)
-
-        assert not isinstance(Unrelated(), eve.Node)
-        assert not issubclass(Unrelated, eve.Node)
+    def test_node_is_not_an_abc(self):
+        # Nothing can be made a `Node` after the fact: the class is not an ABC, so there is no
+        #  `register()` and `isinstance()` answers the nominal question, at `type`'s speed.
+        assert not hasattr(eve.Node, "register")
+        assert type(eve.Node).__instancecheck__ is type.__instancecheck__
 
     def test_nodes_are_still_trees(self, sample_node: eve.Node):
         from gt4py.eve import trees
