@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-06-09
-- **Updated**: 2026-09-15
+- **Updated**: 2026-06-15
 
 In the context of identifying GT4Py objects (frontend stages, IR nodes, OTF
 workflow steps, ...) for caching and content-based comparison, facing a
@@ -21,20 +21,6 @@ keeping the bespoke `fingerprint()` methods and the
 pickle byte stream produced by custom picklers, and accept that objects fed to
 a fingerprinter must either match a deconstructor, be a dataclass/datamodel, or
 support the standard `__reduce_ex__` protocol.
-
-> [!NOTE]
-> The strict/lenient assignment described in *Strict vs. lenient: the tolerance
-> axis* and in *Consequences* does not match the code. The gtfn and dace
-> persistent translation caches pass
-> `input_fingerprinter=fingerprinting.strict_fingerprinter`, and
-> `CachedStep.persistent` pairs the step half with `lenient_fingerprinter` — the
-> reverse of the split described below. The `compilable_program_fingerprinter`
-> alias named below was deleted in #2737, which also recorded this drift as
-> pre-existing. Reconciling the two needs a decision by the ADR author
-> (`CachedStep`'s own class docstring still states that a persistent cache
-> requires `strict_fingerprinter`). The mechanism described here —
-> deconstructors, `catabolize`, the digest aggregator, the field-metadata
-> opt-out — is unchanged.
 
 ## Context
 
