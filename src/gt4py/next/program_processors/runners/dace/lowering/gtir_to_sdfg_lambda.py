@@ -59,7 +59,10 @@ from gt4py.next.type_system import (
 
 
 # Magic local dimension used for list of values with length known at compile-time.
-_CONST_DIM: Final = gtx_common.Dimension(value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL)
+# NOTE: the canonical class from `common`, not a local declaration: under nominal identity a
+# second declaration would be a *different* dimension and the `== _CONST_DIM` checks below
+# would stop matching `ListType`s built by embedded execution.
+_CONST_DIM: Final = gtx_common.ConstListDim
 
 
 @dataclasses.dataclass(frozen=True)
