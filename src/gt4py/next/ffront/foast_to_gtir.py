@@ -66,26 +66,6 @@ def promote_to_list(node_type: ts.TypeSpec) -> Callable[[itir.Expr], itir.Expr]:
     return lambda x: x
 
 
-def _offset_tag(offset_type: ts.OffsetType) -> str:
-    """
-    Return the tag to emit for a `FieldOffset`-based shift, i.e. its offset-provider key.
-
-    Covers both the unstructured form and a Cartesian `FieldOffset` subscript
-    (`a(Koff[1])`), which reaches the same branch.
-
-    This used to be the name of the Python variable the `FieldOffset` was bound to, which
-    is not the offset's identity: a declaration `Off = FieldOffset("Tag", ...)` made
-    compiled backends look up `'Off'` while embedded execution looked up `'Tag'`, so the
-    same program needed a different offset provider depending on how it was run.
-    """
-    assert offset_type.tag is not None, (
-        f"Offset '{offset_type}' has no tag. Only a Cartesian shift written as"
-        " 'Dim + offset' is untagged, and that lowers to a 'CartesianOffset' carrying both"
-        " dimensions, without reaching this function."
-    )
-    return offset_type.tag
-
-
 @dataclasses.dataclass
 class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
@@ -315,16 +295,22 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                case foast.Subscript(value=foast.Name() as offset_name, index=index):
+                # NOTE: matched on the type rather than on the node shape, so that a
+                # module-qualified offset (`field(mod.Off[idx])`) is lowered as well. The
+                # emitted shift is the offset's tag, i.e. its offset-provider key, and not the
+                # name of the Python variable the `FieldOffset` happens to be bound to. This
+                # also covers a Cartesian `FieldOffset` (`field(Koff[idx])`); only the
+                # untagged `Dim + idx` offsets fall through, to the error below.
+                case foast.Subscript(
+                    value=foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag)),
+                    index=index,
+                ):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
                     # which can be generated as compile-time value backend code.
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
-                    assert isinstance(offset_name.type, ts.OffsetType)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(
-                            im.deref(im.shift(_offset_tag(offset_name.type), new_index)("__it"))
-                        )
+                        im.lambda_("__it")(im.deref(im.shift(offset_tag, new_index)("__it")))
                     )(current_expr)
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
@@ -344,15 +330,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             )
                         )
                     )(current_expr)
-                # `field(Off)`
-                case foast.Name():
-                    # only a single unstructured shift is supported so returning here is fine even though we
-                    # are in a loop.
-                    assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
-                    assert isinstance(arg.type, ts.OffsetType)
-                    return im.as_fieldop_neighbors(
-                        _offset_tag(arg.type), self.visit(node.func, **kwargs)
-                    )
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
@@ -367,6 +344,14 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                             )
                         )
                     )(current_expr, offset_field)
+                # `field(Off)`
+                # NOTE: matched on the type, like `field(Off[idx])` above, and placed after
+                # `as_offset(...)`, whose type is the `OffsetType` of its first argument.
+                case foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag, target=(_, _))):
+                    # only a single unstructured shift is supported so returning here is fine even though we
+                    # are in a loop.
+                    assert len(node.args) == 1
+                    return im.as_fieldop_neighbors(offset_tag, self.visit(node.func, **kwargs))
                 case _:
                     raise FieldOperatorLoweringError("Unexpected shift arguments!")
 

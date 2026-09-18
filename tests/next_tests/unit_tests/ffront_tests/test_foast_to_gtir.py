@@ -35,7 +35,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
-from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
+from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering, FieldOperatorLoweringError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -812,6 +812,30 @@ def test_unstructured_neighbors_lowering_emits_offset_tag_not_variable_name():
     reference = im.as_fieldop_neighbors("RenamedTag", "edge_f")
 
     assert lowered.expr == reference
+
+
+def test_subscripted_untagged_offset_is_a_lowering_error():
+    """Only a tagged offset lowers as `Off[idx]`; the untagged `Dim + idx` one has no key."""
+
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp((TDim + 1)[0])
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    with pytest.raises(FieldOperatorLoweringError, match="Unexpected shift arguments"):
+        FieldOperatorLowering.apply(parsed)
+
+
+def test_bare_cartesian_offset_is_a_lowering_error():
+    """Only an offset with a local dimension lowers as `field(Off)`, i.e. to `neighbors`."""
+
+    def foo(inp: gtx.Field[[TDim], float64]):
+        return inp(TOff)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    with pytest.raises(FieldOperatorLoweringError, match="Unexpected shift arguments"):
+        FieldOperatorLowering.apply(parsed)
 
 
 def test_reduction_lowering_neighbor_sum():
