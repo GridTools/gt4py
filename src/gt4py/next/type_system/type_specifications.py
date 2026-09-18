@@ -74,9 +74,20 @@ class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
+    #: The offset's own tag, i.e. the key its connectivity has in the offset provider.
+    #:
+    #: `None` for a Cartesian shift built from `Dim + offset`, which has no tag and needs
+    #: none: it lowers to a `CartesianOffset` carrying the two dimensions, with no lookup.
+    #: Set for every offset that comes from a `FieldOffset` declaration, so that lowering
+    #: does not have to fall back to the name of the Python variable the declaration
+    #: happens to be bound to.
+    tag: Optional[common.Tag] = None
 
     def __str__(self) -> str:
-        return f"Offset[{self.source}, {self.target}]"
+        # NOTE: the tag is part of the identity, so two offsets over the same dimensions
+        # must not render identically in diagnostics.
+        tag = "" if self.tag is None else f"{self.tag}: "
+        return f"Offset[{tag}{self.source}, {self.target}]"
 
 
 class ScalarKind(eve_types.IntEnum):

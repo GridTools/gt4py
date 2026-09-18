@@ -480,6 +480,10 @@ assert (diff := actual_export - should_export) == set(), (
 #  guidelines for decision.
 @dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
+    #: Narrows `runtime.Offset.value`, which is `int | str`. A `FieldOffset`'s value is its
+    #: tag: the key its connectivity has in the offset provider, and what lowering emits as
+    #: the shift. An integer tag has no meaning here, and every consumer treats it as a name.
+    value: str
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
 
@@ -492,7 +496,7 @@ class FieldOffset(runtime.Offset):
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self) -> ts.OffsetType:
-        return ts.OffsetType(source=self.source, target=self.target)
+        return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
 
     def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
