@@ -599,26 +599,21 @@ def _make_loop_blocking_sdfg_with_inner_map(
     )
 
     # construct the inner map of the map.
+    me_out.add_scope_connectors("A")
+    me_in.add_scope_connectors("A")
+    me_in.add_scope_connectors("A1")
+    mx_in.add_scope_connectors("B")
+    mx_out.add_scope_connectors("B")
     state.add_edge(A, None, me_out, "IN_A", dace.Memlet("A[0:10, 0:10]"))
-    me_out.add_in_connector("IN_A")
     state.add_edge(me_out, "OUT_A", me_in, "IN_A", dace.Memlet("A[__i0, 0:10]"))
-    me_out.add_out_connector("OUT_A")
-    me_in.add_in_connector("IN_A")
     state.add_edge(me_in, "OUT_A", tskl, "__in1", dace.Memlet("A[__i0, __i1]"))
-    me_in.add_out_connector("OUT_A")
 
     state.add_edge(me_out, "OUT_A", me_in, "IN_A1", dace.Memlet("A[__i0, 0:10]"))
-    me_in.add_in_connector("IN_A1")
     state.add_edge(me_in, "OUT_A1", tskl, "__in2", dace.Memlet("A[__i0, 9 - __i1]"))
-    me_in.add_out_connector("OUT_A1")
 
     state.add_edge(tskl, "__out", mx_in, "IN_B", dace.Memlet("B[__i0, __i1]"))
-    mx_in.add_in_connector("IN_B")
     state.add_edge(mx_in, "OUT_B", mx_out, "IN_B", dace.Memlet("B[__i0, 0:10]"))
-    mx_in.add_out_connector("OUT_B")
-    mx_out.add_in_connector("IN_B")
     state.add_edge(mx_out, "OUT_B", B, None, dace.Memlet("B[0:10, 0:10]"))
-    mx_out.add_out_connector("OUT_B")
 
     # If requested add a part that is independent, i.e. is before the inner loop
     if add_independent_part != IndependentPart.NONE:
@@ -652,10 +647,9 @@ def _make_loop_blocking_sdfg_with_inner_map(
             case _:
                 raise NotImplementedError()
 
+        mx_out.add_scope_connectors("tmp")
         state.add_edge(tmp, None, mx_out, "IN_tmp", dace.Memlet("C[__i0]"))
-        mx_out.add_in_connector("IN_tmp")
         state.add_edge(mx_out, "OUT_tmp", C, None, dace.Memlet("C[0:10]"))
-        mx_out.add_out_connector("OUT_tmp")
 
     sdfg.validate()
     return sdfg, state, me_out, me_in
@@ -762,23 +756,20 @@ def _make_loop_blocking_sdfg_with_independent_inner_map() -> tuple[
     me, mx = state.add_map("main_comp", ndrange={"__i0": "0:40", "__i1": "0:8"})
     ac_A, ac_B, ac_C, ac_t = (state.add_access(name) for name in "ABCt")
 
+    me.add_scope_connectors("A")
     state.add_edge(ac_A, None, me, "IN_A", dace.Memlet("A[0:40, 1]"))
-    me.add_in_connector("IN_A")
 
     # Now the inner map, that is independent. Note that the computation is stupid.
     inner_tlet = state.add_tasklet(
         "independent_tasklet", inputs={"__in"}, code="__out = __in + 3.4", outputs={"__out"}
     )
     inner_me, inner_mx = state.add_map("independent_map", ndrange={"__in_inner": "1"})
+    inner_me.add_scope_connectors("A")
+    inner_mx.add_scope_connectors("t")
     state.add_edge(me, "OUT_A", inner_me, "IN_A", dace.Memlet("A[0:40, 1]"))
-    me.add_out_connector("OUT_A")
-    inner_me.add_in_connector("IN_A")
     state.add_edge(inner_me, "OUT_A", inner_tlet, "__in", dace.Memlet("A[__i0, __i_inner]"))
-    inner_me.add_out_connector("OUT_A")
     state.add_edge(inner_tlet, "__out", inner_mx, "IN_t", dace.Memlet("t[0]"))
-    inner_mx.add_in_connector("IN_t")
     state.add_edge(inner_mx, "OUT_t", ac_t, None, dace.Memlet("t[0]"))
-    inner_mx.add_out_connector("OUT_t")
 
     # Create the dependent tasklet.
     dep_tlet = state.add_tasklet(
@@ -787,16 +778,14 @@ def _make_loop_blocking_sdfg_with_independent_inner_map() -> tuple[
         code="__out = __in1 * __in2",
         outputs={"__out"},
     )
+    me.add_scope_connectors("B")
     state.add_edge(ac_B, None, me, "IN_B", dace.Memlet("B[0:40, 0:8]"))
-    me.add_in_connector("IN_B")
     state.add_edge(me, "OUT_B", dep_tlet, "__in1", dace.Memlet("B[__i0, __i1]"))
-    me.add_out_connector("OUT_B")
     state.add_edge(ac_t, None, dep_tlet, "__in2", dace.Memlet("t[0]"))
 
+    mx.add_scope_connectors("C")
     state.add_edge(dep_tlet, "__out", mx, "IN_C", dace.Memlet("C[__i0, __i1]"))
-    mx.add_in_connector("IN_C")
     state.add_edge(mx, "OUT_C", ac_C, None, dace.Memlet("C[0:40, 0:8]"))
-    mx.add_out_connector("OUT_C")
     sdfg.validate()
 
     return sdfg, state, me, inner_me
@@ -848,6 +837,7 @@ def _make_loop_blocking_with_reduction(
     red = state.add_reduce(wcr="lambda a, b: a + b", axes=[len(sdfg.arrays["A"].shape)])
     tlet = state.add_tasklet("comp", inputs={"__in"}, code="__out = __in + 10.0", outputs={"__out"})
 
+    me.add_scope_connectors("A")
     state.add_edge(
         ac_A,
         None,
@@ -855,7 +845,6 @@ def _make_loop_blocking_with_reduction(
         "IN_A",
         dace.Memlet("A[0:40, 0:10, 0:4]" if reduction_is_dependent else "A[0:40, 0:4]"),
     )
-    me.add_in_connector("IN_A")
     state.add_edge(
         me,
         "OUT_A",
@@ -863,14 +852,12 @@ def _make_loop_blocking_with_reduction(
         None,
         dace.Memlet("A[__i0, __i1, 0:4]" if reduction_is_dependent else "A[__i0, 0:4]"),
     )
-    me.add_out_connector("OUT_A")
 
     state.add_edge(red, None, ac_t, None, dace.Memlet("t[0]"))
     state.add_edge(ac_t, None, tlet, "__in", dace.Memlet("t[0]"))
+    mx.add_scope_connectors("B")
     state.add_edge(tlet, "__out", mx, "IN_B", dace.Memlet("B[__i0, __i1]"))
-    mx.add_in_connector("IN_B")
     state.add_edge(mx, "OUT_B", ac_B, None, dace.Memlet("B[0:40, 0:10]"))
-    mx.add_out_connector("OUT_B")
     sdfg.validate()
 
     return sdfg, state, me, red
@@ -988,16 +975,14 @@ def _make_mixed_memlet_sdfg(
         code="__out = __in1 + __in2",
     )
 
+    me.add_scope_connectors("A")
     state.add_edge(A, None, me, "IN_A", dace.Memlet("A[0:10]"))
-    me.add_in_connector("IN_A")
     state.add_edge(me, "OUT_A", tskl1, "__in1", dace.Memlet("A[i]"))
-    me.add_out_connector("OUT_A")
     state.add_edge(tskl1, "__out", tmp1, None, dace.Memlet("tmp1[0]"))
 
+    me.add_scope_connectors("B")
     state.add_edge(B, None, me, "IN_B", dace.Memlet("B[0:10, 0:10]"))
-    me.add_in_connector("IN_B")
     state.add_edge(me, "OUT_B", tskl2, "__in1", dace.Memlet("B[i, j]"))
-    me.add_out_connector("OUT_B")
     state.add_edge(tskl2, "__out", tmp2, None, dace.Memlet("tmp2[0]"))
 
     # Add the empty Memlet that sequences `tskl1` before `tskl2`.
@@ -1005,10 +990,9 @@ def _make_mixed_memlet_sdfg(
 
     state.add_edge(tmp1, None, tskl3, "__in1", dace.Memlet("tmp1[0]"))
     state.add_edge(tmp2, None, tskl3, "__in2", dace.Memlet("tmp2[0]"))
+    mx.add_scope_connectors("C")
     state.add_edge(tskl3, "__out", mx, "IN_C", dace.Memlet("C[i, j]"))
-    mx.add_in_connector("IN_C")
     state.add_edge(mx, "OUT_C", C, None, dace.Memlet("C[0:10, 0:10]"))
-    mx.add_out_connector("OUT_C")
     sdfg.validate()
 
     return (sdfg, state, me, tskl1, tskl2)
