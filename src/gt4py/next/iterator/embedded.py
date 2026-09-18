@@ -217,7 +217,7 @@ NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 # Magic local dimension for the result of a `make_const_list`.
 # A clean implementation will probably involve to tag the `make_const_list`
 # with the neighborhood it is meant to be used with.
-_CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCAL)
+_CONST_DIM = common.ConstListDim
 
 
 @runtime_checkable
