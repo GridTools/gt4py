@@ -29,7 +29,7 @@ except ImportError:
 
 
 #: The step names the standard pipelines announce for a DSL program definition,
-#: in pipeline order (`Transforms.step_order`, then the `OTFCompileWorkflow` fields).
+#: in pipeline order (`Transforms.__call__`, then the `CompilePipeline` fields).
 EXPECTED_STAGES = [
     "func_to_past",
     "past_lint",

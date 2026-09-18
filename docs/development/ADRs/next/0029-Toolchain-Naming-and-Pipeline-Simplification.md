@@ -109,7 +109,7 @@ Named pipelines become frozen dataclasses with an explicit, fully typed
 customization stays composition-time via `dataclasses.replace`. The
 combinator framework (both mixins, `NamedStepSequence`, `MultiWorkflow`,
 `StepSequence`, `make_step`, `.chain`, the three adapters) is deleted;
-`CachedStep` is kept unchanged.
+`CachedStep` is kept, minus the mixin-provided `.replace` / `.chain`.
 
 What ADR 0011's decisions become:
 
@@ -135,16 +135,16 @@ needing a variant step builds a variant pipeline with `dataclasses.replace`.
 
 ### Phasing
 
-The decisions in this ADR land as a stack of PRs. The naming decisions above
-land first, except the `OTFCompileWorkflow` → `CompilePipeline` rename, which
-lands with the pipeline PR; the "Pipeline, not combinators" and "Stage
-observability" decisions are implemented in follow-up PRs of the same stack.
+The decisions in this ADR landed as a stack of PRs: the naming decisions first
+(#2741), then stage observability (#2742), then the pipeline simplification
+together with the deferred `OTFCompileWorkflow` → `CompilePipeline` rename
+(this stack's final PR).
 
 ## Consequences
 
 - The dace `__sdfg__` reach-in (duck-typing through `executor.translation`
-  and mutating frozen stages) will be replaced by a dace-owned translate-only
-  step built with `dataclasses.replace`.
+  and mutating frozen stages) was replaced by a dace-owned translate-only
+  toolchain built with `dataclasses.replace`.
 - Downstream code subclassing the deleted combinators or overriding
   `Transforms.step_order` must migrate to explicit `__call__` composition.
 - Downstream code must migrate to the new names in the same release: the old
