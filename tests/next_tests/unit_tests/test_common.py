@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import itertools
 import operator
 from typing import Optional, Pattern
 
@@ -793,3 +794,51 @@ class TestDomainOrOperator:
         d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
         with pytest.raises(NotImplementedError, match="different dimensions"):
             d1 | d2
+
+
+class TestCodegenName:
+    """`codegen_name` must be injective: a collision means two dimensions sharing a symbol."""
+
+    @pytest.mark.parametrize(
+        "tag, expected",
+        [
+            ("IDim", "IDim"),
+            ("mod.V2E.Local", "mod_dV2E_dLocal"),
+            ("a.b_c", "a_db_uc"),
+            ("a_b.c", "a_ub_dc"),
+            ("my__mod.X", "my_u_umod_dX"),
+            ("_CONST_DIM", "_uCONST_uDIM"),
+        ],
+    )
+    def test_known_values(self, tag, expected):
+        assert common.codegen_name(tag) == expected
+        assert common.from_codegen_name(expected) == tag
+
+    @pytest.mark.parametrize("tag", ["_u", "_d", "a_ud.b", "_ud_du", "..", "__"])
+    def test_roundtrip_adversarial(self, tag):
+        """Tags that look like the escape sequences themselves must still round-trip."""
+        assert common.from_codegen_name(common.codegen_name(tag)) == tag
+
+    def test_output_is_a_valid_identifier(self):
+        for tag in ["mod.V2E.Local", "a.b_c", "_CONST_DIM", "pkg.sub.Dim"]:
+            assert re.fullmatch(r"[A-Za-z_]\w*", common.codegen_name(tag)), tag
+
+    def test_injective_and_reversible_exhaustively(self):
+        """
+        Exhaustive over the characters that can actually collide, to a length that covers
+        every interaction between them.
+
+        The naive scheme -- `_` -> `__` then `.` -> `_` -- fails this with 686 collisions,
+        because a dot becomes a single underscore and `'..'` collides with an escaped `'_'`.
+        """
+        alphabet = "a._ud"
+        seen: dict[str, str] = {}
+        for length in range(1, 6):
+            for tag in map("".join, itertools.product(alphabet, repeat=length)):
+                mangled = common.codegen_name(tag)
+                assert mangled not in seen, (
+                    f"collision: {seen.get(mangled)!r} and {tag!r} both map to {mangled!r}"
+                )
+                seen[mangled] = tag
+                assert common.from_codegen_name(mangled) == tag
+        assert len(seen) == sum(len(alphabet) ** n for n in range(1, 6))
