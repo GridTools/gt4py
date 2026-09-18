@@ -205,8 +205,7 @@ class NodeTranslator(NodeVisitor):
             return new_node
 
         if isinstance(node, _IMMUTABLE_LEAF_TYPES):
-            # A `deepcopy` of these would only produce an equal object, at a high cost for
-            # `str` subclasses like `SymbolRef`.
+            # A `deepcopy` of these would only produce an equal object.
             return node
 
         if isinstance(node, (list, set, collections.abc.Set, collections.abc.Sequence)):
