@@ -13,11 +13,26 @@ from __future__ import annotations
 import collections.abc
 import copy
 import enum
-from typing import ClassVar
+from typing import ClassVar, Final
 
 from . import concepts, trees
 from .extended_typing import Any
 from .type_definitions import NOTHING
+
+
+#: `isinstance()` tries these in order, so the ones that carry most leaves of a tree come first.
+_IMMUTABLE_LEAF_TYPES: Final = (
+    type(None),
+    str,
+    concepts.SourceLocation,
+    concepts.SourceLocationGroup,
+    int,
+    bool,
+    float,
+    complex,
+    bytes,
+    enum.Enum,
+)
 
 
 class NodeVisitor:
@@ -189,11 +204,13 @@ class NodeTranslator(NodeVisitor):
 
             return new_node
 
-        if (isinstance(node, (list, set, collections.abc.Set))) or (
-            isinstance(node, collections.abc.Sequence)
-            and not isinstance(node, (str, bytes, enum.Enum))
-        ):
-            # Sequence or set: create a new container instance with the new values
+        if isinstance(node, _IMMUTABLE_LEAF_TYPES):
+            # A `deepcopy` of these would only produce an equal object.
+            return node
+
+        if isinstance(node, (list, set, collections.abc.Set, collections.abc.Sequence)):
+            # Sequence or set: create a new container instance with the new values.
+            #  `str`, `bytes` and `Enum` are sequences too, but the branch above returned them.
             return node.__class__(  # type: ignore
                 new_child
                 for child in trees.iter_children_values(node)
