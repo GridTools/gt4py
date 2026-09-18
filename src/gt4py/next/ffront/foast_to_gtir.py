@@ -66,6 +66,26 @@ def promote_to_list(node_type: ts.TypeSpec) -> Callable[[itir.Expr], itir.Expr]:
     return lambda x: x
 
 
+def _offset_tag(offset_type: ts.OffsetType) -> str:
+    """
+    Return the tag to emit for a `FieldOffset`-based shift, i.e. its offset-provider key.
+
+    Covers both the unstructured form and a Cartesian `FieldOffset` subscript
+    (`a(Koff[1])`), which reaches the same branch.
+
+    This used to be the name of the Python variable the `FieldOffset` was bound to, which
+    is not the offset's identity: a declaration `Off = FieldOffset("Tag", ...)` made
+    compiled backends look up `'Off'` while embedded execution looked up `'Tag'`, so the
+    same program needed a different offset provider depending on how it was run.
+    """
+    assert offset_type.tag is not None, (
+        f"Offset '{offset_type}' has no tag. Only a Cartesian shift written as"
+        " 'Dim + offset' is untagged, and that lowers to a 'CartesianOffset' carrying both"
+        " dimensions, without reaching this function."
+    )
+    return offset_type.tag
+
+
 @dataclasses.dataclass
 class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
@@ -302,7 +322,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     assert isinstance(new_index, itir.Literal)
                     assert isinstance(offset_name.type, ts.OffsetType)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
+                        im.lambda_("__it")(
+                            im.deref(im.shift(_offset_tag(offset_name.type), new_index)("__it"))
+                        )
                     )(current_expr)
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
@@ -323,12 +345,13 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         )
                     )(current_expr)
                 # `field(Off)`
-                case foast.Name(id=offset_name):
+                case foast.Name():
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.
                     assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
+                    assert isinstance(arg.type, ts.OffsetType)
                     return im.as_fieldop_neighbors(
-                        str(offset_name), self.visit(node.func, **kwargs)
+                        _offset_tag(arg.type), self.visit(node.func, **kwargs)
                     )
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):

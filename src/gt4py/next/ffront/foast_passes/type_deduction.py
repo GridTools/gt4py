@@ -456,12 +456,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
-            case ts.OffsetType(source=source, target=(target1, target2)):
+            case ts.OffsetType(source=source, target=(target1, target2), tag=tag):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
-                new_type = ts.OffsetType(source=source, target=(target1,))
+                # NOTE: `tag` is propagated: subscripting drops the local dimension but not
+                # the identity of the offset, which lowering needs to emit the shift.
+                new_type = ts.OffsetType(source=source, target=(target1,), tag=tag)
             case ts.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
