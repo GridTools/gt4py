@@ -21,7 +21,6 @@ from gt4py.next.iterator.ir import (
     FunCall,
     FunctionDefinition,
     Lambda,
-    NoneLiteral,
     OffsetLiteral,
     Sym,
     SymRef,
@@ -143,6 +142,17 @@ def make_node(o):
         return o
     if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value, kind=o.kind)
+    if isinstance(o, common.Infinity):
+        if o is common.Infinity.POSITIVE:
+            return itir.InfinityLiteral.POSITIVE
+        else:
+            assert o is common.Infinity.NEGATIVE
+            return itir.InfinityLiteral.NEGATIVE
+    if isinstance(o, common.CartesianConnectivity):
+        # TODO(havogt): `itir.CartesianOffset` cannot represent `offset != 0` (embedded honors
+        #  it, see `execute_shift`); decide whether to fold it into the shift value or forbid it.
+        assert o.offset == 0
+        return im.cartesian_offset(o.domain_dim, o.codomain)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -154,8 +164,6 @@ def make_node(o):
         return im.literal_from_value(o)
     if isinstance(o, tuple):
         return _f("make_tuple", *(make_node(arg) for arg in o))
-    if o is None:
-        return NoneLiteral()
     if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
     raise NotImplementedError(f"Cannot handle '{o}'.")

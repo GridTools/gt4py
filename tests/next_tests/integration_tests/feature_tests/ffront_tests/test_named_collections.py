@@ -13,15 +13,26 @@ import numpy as np
 from typing import NamedTuple
 
 import gt4py.next as gtx
+from gt4py.next import common, neighbor_sum
 from gt4py.next.ffront import decorator
 from gt4py.next.ffront.fbuiltins import where
 from gt4py.next.ffront.experimental import concat_where
 import dataclasses
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases import (
+    IDim,
+    JDim,
+    KDim,
+    V2E,
+    V2EDim,
+    Vertex,
+    cartesian_case,
+    unstructured_case,
+)
+from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 # TODO(havogt): Since currently direct field_operator calls and program calls take different code paths the tests are duplicated.
@@ -37,6 +48,11 @@ class DataclassNamedCollection:
 class NamedTupleNamedCollection(NamedTuple):
     u: gtx.Field[[IDim, JDim], gtx.float32]
     v: gtx.Field[[IDim, JDim], gtx.float32]
+
+
+class LocalFieldNamedCollection(NamedTuple):
+    neighbors: gtx.Field[[Vertex, V2EDim], np.int32]
+    center: gtx.Field[[Vertex], np.int32]
 
 
 @gtx.field_operator
@@ -78,6 +94,7 @@ def constructed_outside_dataclass_program(
         constructed_outside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
 def test_named_tuple_like_constructed_outside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -136,6 +153,8 @@ def constructed_inside_dataclass_program(
         constructed_inside_dataclass_program,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_constructed_inside(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -192,6 +211,8 @@ def constructed_inside_dataclass_program_with_domain(
         constructed_inside_dataclass_program_with_domain,
     ],
 )
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_named_collection_with_multiple_output_domains(cartesian_case, testee):
     vel = cases.allocate(cartesian_case, testee, "vel")()
     out = cases.allocate(
@@ -256,6 +277,8 @@ def nested_mixed_named_collections_program(
     nested_mixed_named_collections(inp, out=out)
 
 
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_nested_mixed_named_collections(cartesian_case):
     inp = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "inp")()
     out = cases.allocate(cartesian_case, nested_mixed_named_collections_program, "out")()
@@ -318,6 +341,8 @@ def scan_named_tuple_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[
     "testee",
     [scan_named_tuple_wrapper, scan_dataclass_wrapper],
 )
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
 def test_scan(cartesian_case, testee):
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -358,6 +383,9 @@ def scan_with_scalar_named_collection_wrapper(
     return scan_with_scalar_named_collection(inp, scalar=scalar)
 
 
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_args
 def test_scan_with_scalar_named_collection(cartesian_case):
     inp = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, "inp")()
     out = cases.allocate(cartesian_case, scan_with_scalar_named_collection_wrapper, cases.RETURN)()
@@ -403,7 +431,90 @@ def test_locally_defined_named_collection(cartesian_case):
     )
 
 
+@gtx.field_operator
+def where_named_tuple(
+    i: cases.IField, interior: NamedTupleNamedCollection, boundary: NamedTupleNamedCollection
+) -> NamedTupleNamedCollection:
+    return where(i == 0, boundary, interior)
+
+
+@gtx.field_operator
+def where_dataclass(
+    i: cases.IField, interior: DataclassNamedCollection, boundary: DataclassNamedCollection
+) -> DataclassNamedCollection:
+    return where(i == 0, boundary, interior)
+
+
+@pytest.mark.parametrize("testee", [where_named_tuple, where_dataclass])
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
+def test_where(cartesian_case, testee):
+    i = cases.allocate(cartesian_case, testee, "i", strategy=cases.IndexInitializer())()
+    interior = cases.allocate(cartesian_case, testee, "interior")()
+    boundary = cases.allocate(cartesian_case, testee, "boundary")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    is_boundary = i.asnumpy()[:, np.newaxis] == 0
+    cases.verify(
+        cartesian_case,
+        testee,
+        i,
+        interior,
+        boundary,
+        out=out,
+        ref=out.__class__(
+            u=np.where(is_boundary, boundary.u.asnumpy(), interior.u.asnumpy()),
+            v=np.where(is_boundary, boundary.v.asnumpy(), interior.v.asnumpy()),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+def test_where_with_local_fields(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        mask: cases.VBoolField, a: cases.EField, b: cases.EField, c: cases.VField, d: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        t = where(
+            mask,
+            LocalFieldNamedCollection(neighbors=a(V2E), center=c),
+            LocalFieldNamedCollection(neighbors=b(V2E), center=d),
+        )
+        return neighbor_sum(t.neighbors, axis=V2EDim), t.center
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    mask = unstructured_case.as_field(
+        [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
+    )
+    a, b, c, d = (cases.allocate(unstructured_case, testee, name)() for name in "abcd")
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
+    cases.verify(
+        unstructured_case,
+        testee,
+        mask,
+        a,
+        b,
+        c,
+        d,
+        out=out,
+        ref=(
+            np.sum(
+                np.where(
+                    mask.asnumpy()[:, np.newaxis], a.asnumpy()[v2e_table], b.asnumpy()[v2e_table]
+                ),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.where(mask.asnumpy(), c.asnumpy(), d.asnumpy()),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_where_nested(cartesian_case):
     @gtx.field_operator
     def testee(
@@ -444,6 +555,7 @@ def test_where_nested(cartesian_case):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
 def test_concat_where(cartesian_case):
     @gtx.field_operator
     def testee(
@@ -477,6 +589,7 @@ def test_concat_where(cartesian_case):
 
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_concat_where
+@pytest.mark.uses_tuple_args
 def test_concat_where_nested(cartesian_case):
     @gtx.field_operator
     def testee(
@@ -510,4 +623,36 @@ def test_concat_where_nested(cartesian_case):
         *boundaries,
         out=out,
         ref=refs,
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_concat_where
+@pytest.mark.uses_unstructured_shift
+def test_concat_where_with_local_fields(unstructured_case):
+    @gtx.field_operator
+    def testee(
+        a: cases.EField, b: cases.EField, c: cases.VField, d: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(
+            Vertex < 2,
+            LocalFieldNamedCollection(neighbors=a(V2E), center=c),
+            LocalFieldNamedCollection(neighbors=b(V2E), center=d),
+        )
+        return neighbor_sum(t.neighbors, axis=V2EDim), t.center
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.where(vertex_mask, c, d),
+        ),
     )

@@ -31,6 +31,11 @@ def unique_name(name: str, num_assignments: int) -> str:
     return name
 
 
+def original_name(name: str) -> str:
+    """Return the variable name as written by the user, stripping the versioning of 'unique_name'."""
+    return name.split(_UNIQUE_NAME_SEPARATOR, 1)[0]
+
+
 def _make_assign(target: str, source: str, location_node: ast.AST) -> ast.Assign:
     result = ast.Assign(
         targets=[ast.Name(ctx=ast.Store(), id=target)], value=ast.Name(ctx=ast.Load(), id=source)

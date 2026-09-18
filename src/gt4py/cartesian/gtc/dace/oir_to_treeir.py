@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, List, TypeAlias
+from typing import Any, List, TypeAlias, TypeGuard
 
 from dace import data, dtypes, symbolic
 
@@ -31,10 +31,8 @@ DEFAULT_STORAGE_TYPE = {
 """Default dace residency types per device type."""
 
 
-def _resolve_default_map_schedule(
-    device_type: dtypes.DeviceType,
-) -> dtypes.ScheduleType:
-    """Default kernel target per device type."""
+def _resolve_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
+    """Optimal kernel schedule type based on target device."""
     if device_type == dtypes.DeviceType.GPU:
         return dtypes.ScheduleType.GPU_Device
 
@@ -44,7 +42,7 @@ def _resolve_default_map_schedule(
     if not gt_config.build_settings["openmp"]["use_openmp"]:
         return dtypes.ScheduleType.Sequential
 
-    return dtypes.ScheduleType.Default
+    return dtypes.ScheduleType.CPU_Multicore
 
 
 class OIRToTreeIR(eve.NodeVisitor):
@@ -75,7 +73,7 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_CodeBlock(self, node: oir.CodeBlock, ctx: tir.Context) -> None:
         dace_tasklet, inputs, outputs = oir_to_tasklet.OIRToTasklet().visit_CodeBlock(
-            node, root=ctx.root, scope=ctx.current_scope
+            node, root=ctx.root
         )
 
         tasklet = tir.Tasklet(
@@ -148,7 +146,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         loop = tir.HorizontalLoop(
             bounds_i=tir.Bounds(start=axis_start_i, end=axis_end_i),
             bounds_j=tir.Bounds(start=axis_start_j, end=axis_end_j),
-            schedule=_resolve_default_map_schedule(self._device_type),
+            schedule=_resolve_map_schedule(self._device_type),
             children=[],
             parent=ctx.current_scope,
         )
@@ -167,7 +165,16 @@ class OIRToTreeIR(eve.NodeVisitor):
             self.visit(groups, ctx=ctx)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, ctx: tir.Context) -> None:
-        condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
+        if _is_boolean_scalar(node.mask):
+            condition_name = str(node.mask.name)
+        elif (
+            isinstance(node.mask, oir.UnaryOp)
+            and node.mask.op == common.UnaryOperator.NOT
+            and _is_boolean_scalar(node.mask.expr)
+        ):
+            condition_name = f"not {node.mask.expr.name}"
+        else:
+            condition_name, _ = self._insert_evaluation_tasklet(node, ctx)
 
         if_else = tir.IfElse(
             if_condition_code=condition_name, children=[], parent=ctx.current_scope
@@ -220,10 +227,18 @@ class OIRToTreeIR(eve.NodeVisitor):
         return " and ".join(conditions)
 
     def visit_While(self, node: oir.While, ctx: tir.Context) -> None:
-        condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
-
-        # Re-evaluate the condition as last step of the while loop
-        node.body.append(assignment)
+        if _is_boolean_scalar(node.cond):
+            condition_name = str(node.cond.name)
+        elif (
+            isinstance(node.cond, oir.UnaryOp)
+            and node.cond.op == common.UnaryOperator.NOT
+            and _is_boolean_scalar(node.cond.expr)
+        ):
+            condition_name = f"not {node.cond.expr.name}"
+        else:
+            condition_name, assignment = self._insert_evaluation_tasklet(node, ctx)
+            # Re-evaluate the condition as last step of the while loop
+            node.body.append(assignment)
 
         # Use the mask created for conditional check
         while_ = tir.While(
@@ -238,8 +253,16 @@ class OIRToTreeIR(eve.NodeVisitor):
 
     def visit_AxisBound(self, node: common.AxisBound, axis_start: str, axis_end: str) -> str:
         if node.level == common.LevelMarker.START:
+            if axis_start == "0":
+                return f"({node.offset})"
+            if node.offset == 0:
+                return f"({axis_start})"
             return f"({axis_start}) + ({node.offset})"
 
+        if axis_end == "0":
+            return f"({node.offset})"
+        if node.offset == 0:
+            return f"({axis_end})"
         return f"({axis_end}) + ({node.offset})"
 
     def visit_RuntimeAxisBound(self, node: common.RuntimeAxisBound, **kwargs: Any) -> None:
@@ -258,19 +281,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return tir.Bounds(start=start, end=end)
 
-    def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
-        """
-        Defines the vertical loop schedule.
-
-        Current strategy is to
-          - keep the vertical loop on the host for both, CPU and GPU targets
-          - and run it in parallel on CPU and sequential on GPU.
-        """
-        if self._device_type == dtypes.DeviceType.GPU:
-            return dtypes.ScheduleType.Sequential
-
-        return _resolve_default_map_schedule(self._device_type)
-
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
     ) -> None:
@@ -281,14 +291,23 @@ class OIRToTreeIR(eve.NodeVisitor):
             axis_end=tir.Axis.K.domain_dace_symbol(),
         )
 
-        loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
-            loop_order=loop_order,
-            bounds_k=bounds,
-            schedule=self._vertical_loop_schedule(),
-            children=[],
-            parent=ctx.current_scope,
-        )
+        loop: tir.SequentialVerticalLoop | tir.ParallelVerticalLoop
+        if loop_order == common.LoopOrder.PARALLEL:
+            loop = tir.ParallelVerticalLoop(
+                iteration_variable=tir.Axis.K.iteration_symbol(),
+                bounds_k=bounds,
+                schedule=_resolve_map_schedule(self._device_type),
+                children=[],
+                parent=ctx.current_scope,
+            )
+        else:
+            loop = tir.SequentialVerticalLoop(
+                iteration_variable=tir.Axis.K.iteration_symbol(),
+                bounds_k=bounds,
+                loop_order=loop_order,
+                children=[],
+                parent=ctx.current_scope,
+            )
 
         with loop.scope(ctx):
             self.visit(node.horizontal_executions, ctx=ctx)
@@ -326,9 +345,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             ignore_horizontal_mask=True,
         )
 
-        missing_api_parameters: list[str] = [p.name for p in self._api_signature]
         for param in node.params:
-            missing_api_parameters.remove(param.name)
             if isinstance(param, oir.ScalarDecl):
                 containers[param.name] = data.Scalar(
                     dtype=utils.data_type_to_dace_typeclass(param.dtype),
@@ -350,7 +367,6 @@ class OIRToTreeIR(eve.NodeVisitor):
                         param,
                         field_without_mask_extents[param.name],
                         k_bound,
-                        symbols,
                     ),
                     strides=get_dace_strides(param, symbols),
                     storage=DEFAULT_STORAGE_TYPE[self._device_type],
@@ -374,7 +390,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             # than persistent will yield issues with memory leaks.
             containers[field.name] = data.Array(
                 dtype=utils.data_type_to_dace_typeclass(field.dtype),
-                shape=get_dace_shape(field, field_extent, k_bound, symbols),
+                shape=get_dace_shape(field, field_extent, k_bound),
                 strides=get_dace_strides(field, symbols),
                 transient=True,
                 lifetime=dtypes.AllocationLifetime.Persistent,
@@ -421,12 +437,9 @@ class OIRToTreeIR(eve.NodeVisitor):
         for index, axis in enumerate(tir.Axis.dims_3d()):
             if ctx.root.dimensions[field.name][index]:
                 shift_str = f" + {shift[axis]}" if shift[axis] != 0 else ""
-                iteration_symbol = (
-                    tir.k_symbol(ctx.current_scope)
-                    if axis == tir.Axis.K
-                    else axis.iteration_symbol()
+                indices.append(
+                    f"{axis.iteration_symbol()}{shift_str} + {offset_dict[axis.lower()]}"
                 )
-                indices.append(f"{iteration_symbol}{shift_str} + {offset_dict[axis.lower()]}")
 
         return ", ".join(indices)
 
@@ -441,7 +454,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         return (
             f"{tir.Axis.I.iteration_symbol()}{i_shift}, "
             f"{tir.Axis.J.iteration_symbol()}{j_shift}, "
-            f"{tir.k_symbol(ctx.current_scope)}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
+            f"{tir.Axis.K.iteration_symbol()}{k_shift} + {self.visit(node.k, ctx=ctx, **kwargs)}"
         )
 
     def visit_AbsoluteKIndex(
@@ -511,9 +524,6 @@ class OIRToTreeIR(eve.NodeVisitor):
     def visit_IteratorAccess(
         self, node: oir.IteratorAccess, ctx: tir.Context, **kwargs: Any
     ) -> str:
-        if node.name == tir.Axis.K:
-            return tir.k_symbol(ctx.current_scope)
-
         return tir.Axis(node.name).iteration_symbol()
 
     # visitors that should _not_ be called
@@ -532,7 +542,6 @@ def get_dace_shape(
     field: oir.FieldDecl,
     extent: definitions.Extent,
     k_bound: tuple[int, int],
-    symbols: tir.SymbolDict,
 ) -> list[symbolic.symbol]:
     shape = []
     for index, axis in enumerate(tir.Axis.dims_3d()):
@@ -574,3 +583,7 @@ def get_dace_strides(field: oir.FieldDecl, symbols: tir.SymbolDict) -> list[symb
         symbols[stride] = dtypes.int32
         strides.append(symbol)
     return strides
+
+
+def _is_boolean_scalar(expression: oir.Expr) -> TypeGuard[oir.ScalarAccess]:
+    return isinstance(expression, oir.ScalarAccess) and expression.dtype.isbool()

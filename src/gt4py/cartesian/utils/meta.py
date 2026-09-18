@@ -62,7 +62,7 @@ def get_ast(func_or_source_or_ast, *, feature_version: tuple[int, int]):
     if isinstance(func_or_source_or_ast, (ast.AST, list)):
         ast_root = func_or_source_or_ast
     else:
-        raise ValueError("Invalid function definition ({})".format(func_or_source_or_ast))
+        raise ValueError(f"Invalid function definition ({func_or_source_or_ast})")
     return ast_root
 
 
@@ -74,9 +74,7 @@ def ast_dump(definition, *, feature_version: tuple[int, int]) -> str:
             return "".join(
                 [
                     node.__class__.__name__,
-                    "({content})".format(
-                        content=", ".join("{}={}".format(name, value) for name, value in fields)
-                    ),
+                    f"({', '.join(f'{name}={value}' for name, value in fields)})",
                 ]
             )
 
@@ -301,7 +299,7 @@ class ASTEvaluator(ASTPass):
         return all(comparisons)
 
     def generic_visit(self, node):
-        raise ValueError("Invalid AST node for evaluation: {}".format(repr(node)))
+        raise ValueError(f"Invalid AST node for evaluation: {node!r}")
 
 
 ast_eval = ASTEvaluator.apply

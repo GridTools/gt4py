@@ -18,10 +18,15 @@ from gt4py.next.iterator.builtins import (
     shift,
     as_fieldop,
 )
-from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
+
+
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 
 # cross-reference why new type inference does not support this
@@ -40,8 +45,8 @@ def dif2(d):
     return lambda inp: ldif(d)(lift(rdif(d))(inp))
 
 
-i = offset("i")
-j = offset("j")
+i = gtx.CartesianConnectivity(IDim)
+j = gtx.CartesianConnectivity(JDim)
 
 
 @fundef
@@ -57,11 +62,6 @@ def lap_flat(inp):
         + deref(shift(j, 1)(inp))
         + deref(shift(j, -1)(inp))
     )
-
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-KDim = gtx.Dimension("KDim")
 
 
 def naive_lap(inp):
@@ -90,7 +90,7 @@ def test_anton_toy(stencil, program_processor):
             "Type inference does not support calling lambdas with offset arguments of changing type."
         )
 
-    @fendef(offset_provider={"i": IDim, "j": JDim})
+    @fendef
     def fencil(x, y, z, out, inp):
         domain = cartesian_domain(
             named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)

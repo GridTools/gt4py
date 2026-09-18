@@ -197,9 +197,8 @@ class JITCachingStrategy(CachingStrategy):
 
     @property
     def backend_root_path(self) -> pathlib.Path:
-        cpython_id = "py{version.major}{version.minor}_{api_version}".format(
-            version=sys.version_info, api_version=sys.api_version
-        )
+        version = sys.version_info
+        cpython_id = f"py{version.major}{version.minor}_{sys.api_version}"
         backend_root = self.root_path / cpython_id / gt_utils.slugify(self.builder.backend.name)
         if not backend_root.exists():
             if not backend_root.parent.exists():

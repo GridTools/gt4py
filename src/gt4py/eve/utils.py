@@ -16,7 +16,6 @@ import collections.abc
 import dataclasses
 import enum
 import functools
-import hashlib
 import io
 import itertools
 import operator
@@ -50,17 +49,12 @@ from .extended_typing import (
     ArgsOnlyCallable,
     Callable,
     Collection,
-    Dict,
     Generic,
     Iterable,
     Iterator,
-    List,
     Literal,
     Optional,
     ParamSpec,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
     Union,
     cast,
@@ -89,7 +83,7 @@ def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) ->
         raise error
 
 
-def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any], bool]:
+def isinstancechecker(type_info: Union[type[Any], Iterable[type[Any]]]) -> Callable[[Any], bool]:
     """Return a callable object that checks if operand is an instance of `type_info`.
 
     Examples:
@@ -102,7 +96,7 @@ def isinstancechecker(type_info: Union[Type, Iterable[Type]]) -> Callable[[Any],
         False
 
     """
-    types: Tuple[Type, ...] = tuple()
+    types: tuple[type[Any], ...] = tuple()
     if isinstance(type_info, type):
         types = (type_info,)
     elif not isinstance(type_info, tuple) and is_collection(type_info):
@@ -231,6 +225,18 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
+def get_fully_qualified_name(obj: type | types.FunctionType | types.ModuleType) -> str:
+    """
+    Get the fully qualified name of an object.
+
+    This is useful for creating unique identifiers for objects that can be used
+    in fingerprinting or other identification scenarios.
+    """
+    if isinstance(obj, types.ModuleType):
+        return obj.__name__
+    return f"{obj.__module__}.{obj.__qualname__}"
+
+
 _P = ParamSpec("_P")
 _S = TypeVar("_S")
 _T = TypeVar("_T")
@@ -253,7 +259,7 @@ class IndexerCallable(Generic[_S, _T]):
 
     func: ArgsOnlyCallable[_S, _T]
 
-    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+    def __getitem__(self, key: _S | tuple[_S, ...]) -> _T:
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
@@ -579,7 +585,7 @@ def with_fluid_partial(
     return _decorator(func) if func is not None else _decorator
 
 
-def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
+def register_subclasses(*subclasses: type[Any]) -> Callable[[type[Any]], type[Any]]:
     """Class decorator to automatically register virtual subclasses.
 
     Examples:
@@ -598,7 +604,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
 
     """
 
-    def _decorator(base_cls: Type) -> Type:
+    def _decorator(base_cls: type[Any]) -> type[Any]:
         for s in subclasses:
             base_cls.register(s)
         return base_cls
@@ -606,7 +612,7 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
     return _decorator
 
 
-def noninstantiable(cls: Type[_T]) -> Type[_T]:
+def noninstantiable(cls: type[_T]) -> type[_T]:
     """Make a class without abstract method non-instantiable (subclasses should be instantiable)."""
     if not isinstance(cls, type):
         raise ValueError(f"Non-type value ({cls}) passed to 'noninstantiable()' class decorator.")
@@ -625,84 +631,143 @@ def noninstantiable(cls: Type[_T]) -> Type[_T]:
     return cls
 
 
-def is_noninstantiable(cls: Type[_T]) -> bool:
+def is_noninstantiable(cls: type[_T]) -> bool:
     """Return True if `model` is a non-instantiable class."""
     return "__noninstantiable__" in cls.__dict__
 
 
+def singledispatcher(
+    default: Callable[P, T] | None = None, *, implementations: dict[type, Callable[[Any], Any]]
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Create a single-dispatch callable from a default and a registry of implementations.
+
+    This is a thin wrapper around :func:`functools.singledispatch` that allows
+    constructing a dispatcher from an existing mapping rather than decorating
+    individual functions.
+
+    Args:
+        default: The default implementation used when no type-specific handler
+            is found. If ``None``, the implementation registered for ``object``
+            in `implementations` is used as the default.
+        implementations: A mapping from types to their registered handler
+            functions. If `default` is ``None``, ``object`` must be present.
+
+    Returns:
+        A single-dispatch callable with the registered implementations.
+
+    Examples:
+        >>> def default_impl(x: Any) -> str:
+        ...     return f"default: {x}"
+        >>> def int_impl(x: int) -> str:
+        ...     return f"int: {x}"
+        >>> dispatch = singledispatcher(default_impl, implementations={int: int_impl})
+        >>> dispatch(3.14)
+        'default: 3.14'
+        >>> dispatch(42)
+        'int: 42'
+
+    """
+    if default is None:
+        if object not in implementations:
+            raise ValueError("A default implementation for 'object' must be provided.")
+        default = cast(Callable[P, T], implementations[object])
+    else:
+        if not callable(default):
+            raise ValueError(f"Default implementation must be callable, got '{default}'.")
+        if object in implementations:
+            raise ValueError(
+                "Default implementation for 'object' is already provided in 'implementations'."
+            )
+
+    assert callable(default)  # for mypy
+
+    if xtyping.is_single_dispatch_callable(default):
+        # `default` is itself a single-dispatch callable (e.g. a dispatcher used
+        # as the fallback to chain dispatchers). `functools.singledispatch`
+        # copies the wrapped callable's ``__dict__`` -- which, for a dispatcher,
+        # holds ``register``/``registry`` -- onto the new dispatcher via
+        # ``update_wrapper``, aliasing the two. Registering the implementations
+        # below would then silently mutate ``default`` itself. Forward through a
+        # plain function (empty ``__dict__``) so the new dispatcher keeps its own
+        # independent registry.
+        inner_default = default
+
+        def default(*args: Any, **kwargs: Any) -> T:  # deliberately shadowing the parameter
+            return inner_default(*args, **kwargs)
+
+    result = functools.singledispatch(default)
+    for cls, func in implementations.items():
+        result.register(cls)(func)
+    return cast(xtyping.SingleDispatchCallable[P, T], result)
+
+
+def merge_dispatchers(
+    *dispatchers: xtyping.SingleDispatchCallable[P, T], default: Callable[P, T] | None = None
+) -> xtyping.SingleDispatchCallable[P, T]:
+    """
+    Merge multiple single-dispatch callables into one.
+
+    The resulting dispatcher will have the union of the registered
+    implementations of the input dispatchers. If `default` is provided
+    it will be used as the default implementation for the merged
+    dispatcher, otherwise the default implementation of the last
+    dispatcher will be used.
+    """
+    if not dispatchers:
+        raise ValueError("At least one dispatcher must be provided.")
+
+    merged_registry: dict[Any, Any] = {}
+    for d in dispatchers:
+        if not xtyping.is_single_dispatch_callable(d):
+            raise TypeError(
+                f"Expected only single-dispatch callables, got '{d}' of type '{type(d)}'"
+            )
+        merged_registry.update(d.registry)
+
+    if default is not None:
+        merged_registry.pop(object, None)  # remove default implementation from registry if present
+
+    return singledispatcher(default, implementations=merged_registry)
+
+
+#: Pickle protocol pinned for `content_hash` so the serialized byte stream (and
+#: therefore the resulting hash) is reproducible across Python versions,
+#: regardless of changes to `pickle.DEFAULT_PROTOCOL`.
+_CONTENT_HASH_PICKLE_PROTOCOL: int = 5
+
+
 def content_hash(
     *args: Any,
-    hash_algorithm: str | xtyping.HashlibAlgorithm | None = None,
-    pickler: type = pickle.Pickler,
+    hash_algorithm: xtyping.HashlibAlgorithm | None = None,
+    pickler_type: type[pickle.Pickler] = pickle.Pickler,
 ) -> str:
     """Stable content-based hash function using instance serialization data.
 
     It provides a customizable hash function for any kind of data.
     Unlike the builtin `hash` function, it is stable (same hash value across
-    interpreter reboots) and it does not use hash customizations on user
-    classes (it uses `pickle` internally to get a byte stream).
+    interpreter reboots and Python versions) and it does not use hash
+    customizations on user classes (it uses `pickle` internally to get a byte
+    stream). The pickle protocol is pinned (:data:`CONTENT_HASH_PICKLE_PROTOCOL`)
+    so the byte stream does not depend on the running Python's default protocol.
 
     Arguments:
         hash_algorithm: object implementing the `hash algorithm` interface
-            from :mod:`hashlib` or canonical name (`str`) of the
-            hash algorithm as defined in :mod:`hashlib`.
-            Defaults to :class:`xxhash.xxh64`.
+            from :mod:`hashlib`. Defaults to :class:`xxhash.xxh64`.
 
     """
-    hasher: xtyping.HashlibAlgorithm
     if hash_algorithm is None:
-        hasher = xxhash.xxh64()  # type: ignore[assignment]  # fixing this requires https://github.com/ifduyue/python-xxhash/issues/104
-    elif isinstance(hash_algorithm, str):
-        hasher = hashlib.new(hash_algorithm)
-    else:
-        hasher = hash_algorithm
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+    assert hash_algorithm is not None
 
     buf = io.BytesIO()
-    pickler(buf).dump(args)
+    pickler_type(buf, protocol=_CONTENT_HASH_PICKLE_PROTOCOL).dump(args)
 
-    hasher.update(buf.getvalue())
-    result = hasher.hexdigest()
+    hash_algorithm.update(buf.getvalue())
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
-
-
-def custom_pickler(
-    reducer: Callable[[Any], tuple | types.NotImplementedType],
-    name: str | None = None,
-) -> type[pickle.Pickler]:
-    """
-    Create a custom pickler class using the provided function as reducer override.
-    """
-    pickler = type(
-        name or f"CustomReducePickler_{name or id(reducer)}",
-        (pickle.Pickler,),
-        {"reducer_override": staticmethod(reducer)},
-    )
-
-    return pickler
-
-
-def custom_pickler_from_reducers(
-    custom_reducers: dict[type, Callable[[Any], tuple | types.NotImplementedType]],
-    name: str | None = None,
-) -> type[pickle.Pickler]:
-    """
-    Create a pickler with the provided reducers registered in reducer override.
-
-    Since it uses `functools.singledispatch` for the implementation of the
-    reducer override, the custom reducers are used for the types in the keys
-    AND any of its subclasses. This explicitly deviates from the behavior of
-    the `dispatch_table` dict, to allow easy pickle customization of entire class
-    hierarchies.
-    """
-    reducer = functools.singledispatch(
-        cast(Callable[[Any], tuple | types.NotImplementedType], lambda _: NotImplemented)
-    )
-    for cls, func in custom_reducers.items():
-        reducer.register(cls)(func)
-
-    return custom_pickler(reducer, name=name)
 
 
 ddiff = deepdiff.diff.DeepDiff
@@ -721,7 +786,7 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 
 
 def pprint_ddiff(
-    old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
+    old: Any, new: Any, *, pprint_opts: Optional[dict[str, Any]] = None, **kwargs: Any
 ) -> None:
     """Pretty printing of deepdiff.diff.DeepDiff objects.
 
@@ -752,14 +817,14 @@ class CaseStyleConverter:
         KEBAB = "kebab"
 
     @classmethod
-    def split(cls, name: str, case_style: Union[CASE_STYLE, str]) -> List[str]:
+    def split(cls, name: str, case_style: Union[CASE_STYLE, str]) -> list[str]:
         if isinstance(case_style, str):
             case_style = cls.CASE_STYLE(case_style)
         assert isinstance(case_style, cls.CASE_STYLE)
         if case_style == cls.CASE_STYLE.CONCATENATED:
             raise ValueError("Impossible to split a simply concatenated string")
 
-        splitter: Callable[[str], List[str]] = getattr(cls, f"split_{case_style.value}_case")
+        splitter: Callable[[str], list[str]] = getattr(cls, f"split_{case_style.value}_case")
         return splitter(name)
 
     @classmethod
@@ -818,22 +883,22 @@ class CaseStyleConverter:
     #    https://stackoverflow.com/a/29920015/7232525
     #
     @staticmethod
-    def split_canonical_case(name: str) -> List[str]:
+    def split_canonical_case(name: str) -> list[str]:
         return name.split()
 
     @staticmethod
-    def split_camel_case(name: str) -> List[str]:
+    def split_camel_case(name: str) -> list[str]:
         matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$)", name)
         return [m.group(0) for m in matches]
 
     split_pascal_case = split_camel_case
 
     @staticmethod
-    def split_snake_case(name: str) -> List[str]:
+    def split_snake_case(name: str) -> list[str]:
         return name.split("_")
 
     @staticmethod
-    def split_kebab_case(name: str) -> List[str]:
+    def split_kebab_case(name: str) -> list[str]:
         return name.split("-")
 
 
@@ -863,7 +928,7 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     def __contains__(self, key: str) -> bool:
         return key in self.__dict__
 
-    def items(self) -> Iterable[Tuple[str, T]]:
+    def items(self) -> Iterable[tuple[str, T]]:
         return self.__dict__.items()
 
     def keys(self) -> Iterable[str]:
@@ -872,12 +937,12 @@ class Namespace(types.SimpleNamespace, Generic[T]):
     def values(self) -> Iterable[T]:
         return self.__dict__.values()
 
-    def reset(self, data: Optional[Dict[str, Any]] = None) -> None:
+    def reset(self, data: Optional[dict[str, Any]] = None) -> None:
         self.__dict__.clear()
         if data:
             self.__dict__.update(data)
 
-    def as_dict(self) -> Dict[str, T]:
+    def as_dict(self) -> dict[str, T]:
         return {**self.__dict__}
 
     asdict = as_dict
@@ -1047,7 +1112,7 @@ class XIterable(Iterable[T]):
             raise TypeError(f"Invalid function or callable: '{func}'.")
         return XIterable(filter(func, self.iterator))
 
-    def if_isinstance(self, *types: Type) -> XIterable[T]:
+    def if_isinstance(self, *types: type[Any]) -> XIterable[T]:
         """Filter elements using :func:`isinstance` checks.
 
         Equivalent to ``xiter(item for item in self if isinstance(item, types))``.
@@ -1060,7 +1125,7 @@ class XIterable(Iterable[T]):
         """
         return XIterable(filter(isinstancechecker([*types]), self.iterator))
 
-    def if_not_isinstance(self, *types: Type) -> XIterable[T]:
+    def if_not_isinstance(self, *types: type[Any]) -> XIterable[T]:
         """Filter elements using negated :func:`isinstance` checks.
 
         Equivalent to ``xiter(item for item in self if not isinstance(item, types))``.
@@ -1159,7 +1224,7 @@ class XIterable(Iterable[T]):
 
         """
 
-        def _contains(a: Any, collection: Tuple) -> bool:
+        def _contains(a: Any, collection: tuple) -> bool:
             try:
                 return all(operator.contains(a, v) for v in collection)
             except Exception:
@@ -1270,7 +1335,7 @@ class XIterable(Iterable[T]):
 
     def diff(
         self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
-    ) -> XIterable[Tuple[T, S]]:
+    ) -> XIterable[tuple[T, S]]:
         """Diff iterators.
 
         Equivalent to ``toolz.itertoolz.diff(self, *others)``.
@@ -1303,7 +1368,7 @@ class XIterable(Iterable[T]):
             [('Bananas', 'oranges')]
 
         """
-        kwargs: Dict[str, Any] = {}
+        kwargs: dict[str, Any] = {}
         if default is not NOTHING:
             kwargs["default"] = default
         if key is not NOTHING:
@@ -1314,7 +1379,7 @@ class XIterable(Iterable[T]):
 
     def product(
         self, other: Union[Iterable[S], int]
-    ) -> Union[XIterable[Tuple[T, S]], XIterable[Tuple[T, T]]]:
+    ) -> Union[XIterable[tuple[T, S]], XIterable[tuple[T, T]]]:
         """Product of iterators.
 
         Equivalent to ``itertools.product(it_a, it_b)``.
@@ -1346,7 +1411,7 @@ class XIterable(Iterable[T]):
 
     def partition(
         self, n: int, *, exact: bool = False, fill: Any = NOTHING
-    ) -> XIterable[Tuple[T, ...]]:
+    ) -> XIterable[tuple[T, ...]]:
         """Partition iterator into tuples of length `n` (``exact=True``) or at most `n` (``exact=False``).
 
         Equivalent to ``toolz.itertoolz.partition(n, self)`` or
@@ -1407,7 +1472,7 @@ class XIterable(Iterable[T]):
 
     def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
-    ) -> XIterable[Tuple[T, S]]:
+    ) -> XIterable[tuple[T, S]]:
         """Zip iterators.
 
         Equivalent to ``zip(self, *others)`` or ``itertools.zip_longest(self, *others, fillvalue=fill)``.
@@ -1438,7 +1503,7 @@ class XIterable(Iterable[T]):
         else:
             return XIterable(itertools.zip_longest(self.iterator, *iterators, fillvalue=fill))
 
-    def unzip(self) -> XIterable[Tuple[Any, ...]]:
+    def unzip(self) -> XIterable[tuple[Any, ...]]:
         """Unzip iterator.
 
         Equivalent to ``zip(*self)``.
@@ -1539,21 +1604,21 @@ class XIterable(Iterable[T]):
     @typing.overload
     def groupby(
         self, key: str, *other_keys: str, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     @typing.overload
     def groupby(
-        self, key: List[Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+        self, key: list[Any], *, as_dict: bool = False
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     @typing.overload
     def groupby(
         self, key: Callable[[T], Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]: ...
+    ) -> XIterable[tuple[Any, list[T]]]: ...
 
     def groupby(
-        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
-    ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
+        self, key: Union[str, list[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
+    ) -> Union[XIterable[tuple[Any, list[T]]], dict]:
         """Group a sequence by a given key.
 
         More or less equivalent to ``toolz.itertoolz.groupby(key, self)`` with some caveats.
@@ -1678,7 +1743,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[str, S]]: ...
+    ) -> XIterable[tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1689,7 +1754,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
+    ) -> XIterable[tuple[tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1699,7 +1764,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[str, S]: ...
+    ) -> dict[str, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1710,27 +1775,27 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[Tuple[str, ...], S]: ...
+    ) -> dict[tuple[str, ...], S]: ...
 
     @typing.overload
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: List[K],
+        key: list[K],
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]: ...
+    ) -> XIterable[tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: List[K],
+        key: list[K],
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]: ...
+    ) -> dict[K, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1740,7 +1805,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]: ...
+    ) -> XIterable[tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1750,22 +1815,22 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]: ...
+    ) -> dict[K, S]: ...
 
     def reduceby(
         self,
         bin_op_func: Callable[[S, T], S],
-        key: Union[str, List[K], Callable[[T], K]],
+        key: Union[str, list[K], Callable[[T], K]],
         *attr_keys: str,
         as_dict: bool = False,
         init: Union[S, NothingType] = NOTHING,
     ) -> Union[
-        XIterable[Tuple[str, S]],
-        Dict[str, S],
-        XIterable[Tuple[Tuple[str, ...], S]],
-        Dict[Tuple[str, ...], S],
-        XIterable[Tuple[K, S]],
-        Dict[K, S],
+        XIterable[tuple[str, S]],
+        dict[str, S],
+        XIterable[tuple[tuple[str, ...], S]],
+        dict[tuple[str, ...], S],
+        XIterable[tuple[K, S]],
+        dict[K, S],
     ]:
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
@@ -1838,7 +1903,7 @@ class XIterable(Iterable[T]):
             groups = toolz.itertoolz.reduceby(groupby_key, bin_op_func, self.iterator)
         return groups if as_dict else xiter(groups.items())
 
-    def to_list(self) -> List[T]:
+    def to_list(self) -> list[T]:
         """Expand iterator into a ``list``.
 
         Equivalent to ``list(self)``.
@@ -1851,7 +1916,7 @@ class XIterable(Iterable[T]):
         """
         return list(self.iterator)
 
-    def to_set(self) -> Set[T]:
+    def to_set(self) -> set[T]:
         """Expand iterator into a ``set``.
 
         Equivalent to ``set(self)``.

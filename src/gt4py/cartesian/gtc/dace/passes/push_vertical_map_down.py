@@ -43,6 +43,9 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
             // computation here (2)
     """
 
+    def __init__(self, *, forscope_only: bool = False) -> None:
+        self._forscope_only = forscope_only
+
     def _push_K_loop_in_IJ(self, node: tn.MapScope | tn.ForScope):
         # take refs before moving things around
         parent = node
@@ -76,9 +79,11 @@ class PushVerticalMapDown(tn.ScheduleNodeVisitor):
         grandparent_children.remove(node)
 
     def visit_MapScope(self, node: tn.MapScope):
-        if node.node.map.params[0].startswith("__k"):
+        if self._forscope_only:
+            return
+        if node.node.map.params[0] == "__k":
             self._push_K_loop_in_IJ(node)
 
     def visit_ForScope(self, node: tn.ForScope):
-        if node.loop.loop_variable.startswith("__k"):
+        if node.loop.loop_variable == "__k":
             self._push_K_loop_in_IJ(node)

@@ -24,12 +24,17 @@ from gt4py.next.errors import exceptions, formatting
 
 
 def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
-    if verbose_exceptions:
-        return formatting.format_compilation_error(
-            type(err), err.message, err.location, err.__traceback__, err.__cause__
-        )
-    else:
-        return formatting.format_compilation_error(type(err), err.message, err.location)
+    return formatting.format_compilation_error(
+        type(err),
+        err.message,
+        err.location,
+        err.__traceback__ if verbose_exceptions else None,
+        err.__cause__ if verbose_exceptions else None,
+        label=err.label,
+        related=err.related,
+        notes=err.notes,
+        hints=err.hints,
+    )
 
 
 def compilation_error_hook(
@@ -45,6 +50,9 @@ def compilation_error_hook(
     # in hard crashes of the interpreter, the `exceptions` module might be partially unloaded
     if exceptions.DSLError is not None and isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, config.VERBOSE_EXCEPTIONS)
+        # Our hook replaces the default, so we render PEP 678 '__notes__'
+        # ('add_note' breadcrumbs) ourselves instead of the traceback machinery.
+        exc_strs += [f"\n{note}" for note in getattr(value, "__notes__", [])]
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)

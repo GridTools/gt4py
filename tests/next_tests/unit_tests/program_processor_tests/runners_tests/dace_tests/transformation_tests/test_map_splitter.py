@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -17,12 +17,11 @@ from gt4py.next.program_processors.runners.dace import (
 
 from . import util
 
-
 import dace
 
 
 def _make_sdfg_simple() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("simple_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":

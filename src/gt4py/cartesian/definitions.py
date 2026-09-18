@@ -8,6 +8,7 @@
 
 import enum
 import functools
+import numbers
 import os
 import platform
 from dataclasses import dataclass
@@ -42,6 +43,22 @@ LITERAL_FLOAT_PRECISION = int(
 """Default literal precision used for unspecific `float` types and casts."""
 
 
+def get_integer_type(literal_integer_precision: int):
+    """Return the integer numpy type corresponding to the LITERAL_INT_PRECISION set."""
+    # I'd love to return `numpy.signedinteger[LITERAL_INT_PRECISION]` but that won't work
+    match literal_integer_precision:
+        case 8:
+            return numpy.int8
+        case 16:
+            return numpy.int16
+        case 32:
+            return numpy.int32
+        case 64:
+            return numpy.int64
+        case _:
+            raise NotImplementedError("Unknown integer precision type")
+
+
 @enum.unique
 class AccessKind(enum.IntFlag):
     NONE = 0
@@ -66,17 +83,11 @@ class FieldInfo:
     access: AccessKind
     boundary: Boundary
     axes: Tuple[str, ...]
-    data_dims: Tuple[int, ...]
+    data_dims: Tuple[numbers.Integral, ...]
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "FieldInfo(access=AccessKind.{access}, boundary={boundary}, axes={axes}, data_dims={data_dims}, dtype={dtype})".format(
-            access=self.access.name,
-            boundary=repr(self.boundary),
-            axes=repr(self.axes),
-            data_dims=repr(self.data_dims),
-            dtype=repr(self.dtype),
-        )
+        return f"FieldInfo(access=AccessKind.{self.access.name}, boundary={self.boundary!r}, axes={self.axes!r}, data_dims={self.data_dims!r}, dtype={self.dtype!r})"
 
     @functools.cached_property
     def domain_mask(self):
@@ -101,9 +112,7 @@ class ParameterInfo:
     dtype: numpy.dtype
 
     def __repr__(self):
-        return "ParameterInfo(access=AccessKind.{access}, dtype={dtype})".format(
-            access=self.access.name, dtype=repr(self.dtype)
-        )
+        return f"ParameterInfo(access=AccessKind.{self.access.name}, dtype={self.dtype!r})"
 
 
 @attribkwclass

@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import copy
 import warnings
 from typing import Final, Iterable, Optional, Sequence, TypeAlias
@@ -14,8 +16,12 @@ import dace
 import sympy
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from ordered_set import OrderedSet
 
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_utils as gtx_dace_utils,
+    transformations as gtx_transformations,
+)
 
 
 InlineSpec: TypeAlias = tuple[
@@ -73,7 +79,7 @@ def perform_dataflow_inlining(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace_graph.MultiConnectorEdge[dace.Memlet],
-    nodes_to_inline: set[dace_nodes.Node],
+    nodes_to_inline: OrderedSet[dace_nodes.Node],
     inline_spec: InlineSpec,
 ) -> Optional[tuple[dace_nodes.NestedSDFG, dace_nodes.AccessNode]]:
     """Performs the second step, i.e. the actual inlining, of the dataflow.
@@ -134,7 +140,7 @@ def find_nodes_to_inline(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
     edge: dace_graph.MultiConnectorEdge[dace.Memlet],
-) -> Optional[tuple[set[dace_nodes.Node], InlineSpec]]:
+) -> Optional[tuple[OrderedSet[dace_nodes.Node], InlineSpec]]:
     """First step of dataflow inlining, computing the inline specification.
 
     The inline specification describes how the inlining of dataflow has to be done.
@@ -192,9 +198,9 @@ def find_nodes_to_inline(
         if (step != 1) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             return None
 
-        if str(start).isdigit():
+        if gtx_dace_utils.is_compile_time_size(start):
             # The start index is a digit, we require that the end is also a digit.
-            if not str(stop).isdigit():
+            if not gtx_dace_utils.is_compile_time_size(stop):
                 return None
 
             # There is an access done using a literal.
@@ -285,7 +291,7 @@ def find_nodes_to_inline(
     producer_subset = writing_edges[0].data.get_dst_subset(writing_edges[0], state)
     producer_shape = producer_subset.size()
     for cshp, pshp in zip(consumer_shape, producer_shape, strict=True):
-        if not str(pshp).isdigit():
+        if not gtx_dace_utils.is_compile_time_size(pshp):
             return None
         if (cshp <= pshp) == True:  # noqa: E712 [true-false-comparison]  # SymPy comparison
             continue
@@ -370,7 +376,7 @@ def _insert_nested_sdfg(
     nsdfg_node = state.add_nested_sdfg(
         sdfg=nsdfg,
         inputs=input_node_map.keys(),
-        outputs={output_name},
+        outputs={output_name: None},
         symbol_mapping=first_map_param_mapping,
     )
 
@@ -477,7 +483,7 @@ def _insert_nested_sdfg(
 def _populate_nested_sdfg(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
-    nodes_to_replicate: set[dace_nodes.Node],
+    nodes_to_replicate: OrderedSet[dace_nodes.Node],
     first_map_exit: dace_nodes.MapExit,
     exchange_subset: dace_sbs.Range,
     intermediate_node: dace_nodes.AccessNode,
@@ -733,7 +739,7 @@ def _compute_offset(
     offset: list[dace_sym.SymbolicType] = []
     avail_second_map_params = set(second_map_params)
     for start, _, _ in edge_to_replace.data.src_subset:
-        if str(start).isdigit():
+        if gtx_dace_utils.is_compile_time_size(start):
             offset.append(dace_sym.pystr_to_symbolic("0"))
         else:
             start_symbols = {str(sym) for sym in start.free_symbols}

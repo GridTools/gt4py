@@ -149,7 +149,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         for decl in ir.params:
             args.append(decl.name)
             if isinstance(decl, gtir.FieldDecl):
-                args.append("list(_origin_['{}'])".format(decl.name))
+                args.append(f"list(_origin_['{decl.name}'])")
 
         # only generate implementation if any multi_stages are present. e.g. if no statement in the
         # stencil has any effect on the API fields, this may not be the case since they could be

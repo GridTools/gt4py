@@ -11,9 +11,9 @@ import pytest
 from gt4py.cartesian.gtc.dace import oir_to_tasklet
 from gt4py.cartesian.gtc import oir, common
 
-# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `uses_dace`, we still need to add the marker.
 # This global variable adds the marker to all test functions in this module.
-pytestmark = pytest.mark.requires_dace
+pytestmark = pytest.mark.uses_dace
 
 
 @pytest.mark.parametrize(
@@ -105,7 +105,7 @@ def test_integer_power_function(exponent: oir.Expr, expected_ipow_usage: bool) -
 
     visitor = oir_to_tasklet.OIRToTasklet()
     fake_context = oir_to_tasklet.Context(
-        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None
     )
     tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
 
@@ -120,7 +120,7 @@ def test_integer_power_zero() -> None:
 
     visitor = oir_to_tasklet.OIRToTasklet()
     fake_context = oir_to_tasklet.Context(
-        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None
     )
     tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
 
@@ -134,8 +134,27 @@ def test_integer_power_of_integer() -> None:
 
     visitor = oir_to_tasklet.OIRToTasklet()
     fake_context = oir_to_tasklet.Context(
-        code="asdf", targets=set(), inputs={}, outputs={}, tree=None, scope=None
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None
     )
     tasklet_code = visitor.visit_NativeFuncCall(pow_call, ctx=fake_context, is_target=False)
 
     assert "ipow" not in tasklet_code
+
+
+@pytest.mark.parametrize(
+    "arg",
+    [
+        oir.Literal(value="2", dtype=common.DataType.FLOAT32),
+        oir.Literal(value="2", dtype=common.DataType.FLOAT64),
+    ],
+)
+def test_log10_respects_floating_point_precision(arg: oir.Literal) -> None:
+    log10_call = oir.NativeFuncCall(func=common.NativeFunction.LOG10, args=[arg])
+
+    visitor = oir_to_tasklet.OIRToTasklet()
+    fake_context = oir_to_tasklet.Context(
+        code="asdf", targets=set(), inputs={}, outputs={}, tree=None
+    )
+    tasklet_code = visitor.visit_NativeFuncCall(log10_call, ctx=fake_context, is_target=False)
+
+    assert "dace.math.log10" in tasklet_code

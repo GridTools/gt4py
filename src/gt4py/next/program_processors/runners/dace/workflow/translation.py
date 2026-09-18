@@ -16,11 +16,11 @@ import dace
 import factory
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
@@ -175,7 +175,9 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     output, _ = sdfg.add_array(gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME, [1], dace.float64)
     start_time, _ = sdfg.add_scalar("gt_start_time", dace.int64, transient=True)
-    metrics_level = sdfg.add_symbol(gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, dace.int32)
+    metrics_level = sdfg.add_symbol(
+        gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL_DTYPE
+    )
 
     #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
     # Even when the target device is GPU, it can happen that dace emits code without
@@ -207,7 +209,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={"time"},
+        outputs={"time": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -239,8 +241,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
     # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
-        inputs={"run_cpp_start_time"},
-        outputs={"duration"},
+        inputs={"run_cpp_start_time": None},
+        outputs={"duration": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -266,16 +268,6 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
         None,
         dace.Memlet(f"{output}[0]"),
     )
-
-    if gpu and _has_gpu_schedule(sdfg) and config.ADD_GPU_TRACE_MARKERS:
-        sdfg.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-        for node, _ in sdfg.all_nodes_recursive():
-            if isinstance(
-                node, dace.nodes.MapEntry
-            ):  # Add ranges to scopes and maps that are NOT scheduled to the GPU
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
-            elif isinstance(node, dace.sdfg.state.SDFGState):
-                node.instrument = dace.dtypes.InstrumentationType.GPU_TX_MARKERS
 
     # Check SDFG validity after applying the above changes.
     # Normally, we do not call `SDFGState.add_tasklet()` directly, instead we call
@@ -334,8 +326,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "sync_tlet",
-        inputs=set(),
-        outputs=set(),
+        inputs={},
+        outputs={},
         code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
@@ -353,10 +345,13 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        definitions.CompilableProgramDef,
-        stages.ProgramSource[code_specs.SDFGCodeSpec],
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     ],
-    definitions.TranslationStep[code_specs.SDFGCodeSpec],
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
+    ],
 ):
     device_type: core_defs.DeviceType
     apply_common_transform: bool
@@ -421,7 +416,7 @@ class DaCeTranslator(
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,
@@ -477,8 +472,8 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
+        self, inp: stages.CompilableProgramDef
+    ) -> artifacts.ProgramSource[artifacts.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -496,14 +491,11 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+        module: artifacts.ProgramSource[artifacts.SDFGCodeSpec] = artifacts.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
-            # Set 'hash=True' to compute the SDFG hash and store it in the JSON.
-            #   We compute the hash in order to refresh `cfg_list` on the SDFG,
-            #   which makes the JSON serialization stable.
-            source_code=sdfg.to_json(hash=True),
+            source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
-            code_spec=code_specs.SDFGCodeSpec(),
+            code_spec=artifacts.SDFGCodeSpec(),
         )
         return module
 

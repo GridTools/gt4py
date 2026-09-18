@@ -7,13 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import sys
+import dace
 import pytest
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    import dace
-else:
-    dace = pytest.importorskip("dace")
 
 import numpy as np
 import pathlib
@@ -29,9 +24,9 @@ from gt4py.cartesian.backend.dace_lazy_stencil import DaCeLazyStencil
 
 from cartesian_tests.utils import OriginWrapper
 
-# Because "dace tests" filter by `requires_dace`, we still need to add the marker.
+# Because "dace tests" filter by `uses_dace`, we still need to add the marker.
 # This global variable add the marker to all test functions in this module.
-pytestmark = [pytest.mark.requires_dace, pytest.mark.usefixtures("dace_env")]
+pytestmark = [pytest.mark.uses_dace, pytest.mark.usefixtures("dace_env")]
 
 
 @pytest.fixture(scope="module")
@@ -97,7 +92,7 @@ def test_ij_field(decorator, backend):
         origin=(0, 0),
     )
 
-    value = 42.0
+    value = np.float32(42.0)
 
     @dace.program(device=dace.DeviceType.GPU if "gpu" in backend else dace.DeviceType.CPU)
     def call_stencil_object_2(stencil_out, stencil_scalar):

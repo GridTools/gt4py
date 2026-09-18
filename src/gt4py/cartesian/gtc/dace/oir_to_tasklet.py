@@ -41,9 +41,6 @@ class Context:
     tree: tir.TreeRoot
     """Schedule tree (root) in which this Tasklet will be inserted."""
 
-    scope: tir.TreeScope
-    """Schedule tree scope in which this Tasklet will be inserted."""
-
 
 class OIRToTasklet(eve.NodeVisitor):
     """
@@ -54,10 +51,10 @@ class OIRToTasklet(eve.NodeVisitor):
     """
 
     def visit_CodeBlock(
-        self, node: oir.CodeBlock, root: tir.TreeRoot, scope: tir.TreeScope
+        self, node: oir.CodeBlock, root: tir.TreeRoot
     ) -> tuple[nodes.Tasklet, dict[str, Memlet], dict[str, Memlet]]:
         """Entry point to gather all code, inputs and outputs."""
-        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root, scope=scope)
+        ctx = Context(code=[], targets=set(), inputs={}, outputs={}, tree=root)
 
         self.visit(node.body, ctx=ctx)
 
@@ -134,7 +131,7 @@ class OIRToTasklet(eve.NodeVisitor):
                 name_parts.append(f"[{abs_index}]")
         elif isinstance(node.offset, oir.VariableKOffset):
             # Variable K offset subscript
-            symbol = tir.k_symbol(ctx.scope)
+            symbol = tir.Axis.K.iteration_symbol()
             shift = ctx.tree.shift[node.name][tir.Axis.K]
             offset = self.visit(node.offset.k, ctx=ctx, is_target=False)
             var_index = f"{symbol} + {shift} + {offset}"
@@ -226,38 +223,38 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.ABS: "abs",
             common.NativeFunction.MIN: "min",
             common.NativeFunction.MAX: "max",
-            common.NativeFunction.MOD: "fmod",
+            common.NativeFunction.MOD: "dace.math.fmod",
             common.NativeFunction.SIN: "dace.math.sin",
             common.NativeFunction.COS: "dace.math.cos",
             common.NativeFunction.TAN: "dace.math.tan",
-            common.NativeFunction.ARCSIN: "asin",
-            common.NativeFunction.ARCCOS: "acos",
-            common.NativeFunction.ARCTAN: "atan",
+            common.NativeFunction.ARCSIN: "dace.math.asin",
+            common.NativeFunction.ARCCOS: "dace.math.acos",
+            common.NativeFunction.ARCTAN: "dace.math.atan",
             common.NativeFunction.SINH: "dace.math.sinh",
             common.NativeFunction.COSH: "dace.math.cosh",
             common.NativeFunction.TANH: "dace.math.tanh",
-            common.NativeFunction.ARCSINH: "asinh",
-            common.NativeFunction.ARCCOSH: "acosh",
-            common.NativeFunction.ARCTANH: "atanh",
+            common.NativeFunction.ARCSINH: "dace.math.asinh",
+            common.NativeFunction.ARCCOSH: "dace.math.acosh",
+            common.NativeFunction.ARCTANH: "dace.math.atanh",
             common.NativeFunction.SQRT: "dace.math.sqrt",
             common.NativeFunction.POW: "dace.math.pow",
             common.NativeFunction.EXP: "dace.math.exp",
             common.NativeFunction.LOG: "dace.math.log",
-            common.NativeFunction.LOG10: "log10",
-            common.NativeFunction.GAMMA: "tgamma",
-            common.NativeFunction.CBRT: "cbrt",
+            common.NativeFunction.LOG10: "dace.math.log10",
+            common.NativeFunction.GAMMA: "dace.math.tgamma",
+            common.NativeFunction.CBRT: "dace.math.cbrt",
             common.NativeFunction.ISFINITE: "isfinite",
             common.NativeFunction.ISINF: "isinf",
             common.NativeFunction.ISNAN: "isnan",
             common.NativeFunction.FLOOR: "dace.math.ifloor",
-            common.NativeFunction.CEIL: "ceil",
-            common.NativeFunction.TRUNC: "trunc",
+            common.NativeFunction.CEIL: "dace.math.ceil",
+            common.NativeFunction.TRUNC: "dace.math.trunc",
             common.NativeFunction.INT32: "dace.int32",
             common.NativeFunction.INT64: "dace.int64",
             common.NativeFunction.FLOAT32: "dace.float32",
             common.NativeFunction.FLOAT64: "dace.float64",
-            common.NativeFunction.ERF: "erf",
-            common.NativeFunction.ERFC: "erfc",
+            common.NativeFunction.ERF: "dace.math.erf",
+            common.NativeFunction.ERFC: "dace.math.erfc",
             common.NativeFunction.ROUND: "nearbyint",
             common.NativeFunction.ROUND_AWAY_FROM_ZERO: "round",
         }
@@ -285,9 +282,6 @@ class OIRToTasklet(eve.NodeVisitor):
         return f"{function_name}({arguments})"
 
     def visit_IteratorAccess(self, node: oir.IteratorAccess, ctx: Context, **kwargs: Any) -> str:
-        if node.name == tir.Axis.K:
-            return tir.k_symbol(ctx.scope)
-
         return tir.Axis(node.name).iteration_symbol()
 
     # Not (yet) supported section
@@ -406,12 +400,7 @@ def _memlet_subset_cartesian(
     # Handle cartesian indices
     for index, axis in enumerate(tir.Axis.dims_3d()):
         if dimensions[index]:
-            iteration_symbol = (
-                utils.get_dace_symbol(tir.k_symbol(ctx.scope))
-                if axis == tir.Axis.K
-                else axis.iteration_dace_symbol()
-            )
-            i = f"({iteration_symbol}) + ({shift[axis]}) + ({offset_dict[axis.lower()]})"
+            i = f"({axis.iteration_dace_symbol()}) + ({shift[axis]}) + ({offset_dict[axis.lower()]})"
             ranges.append((i, i, 1))
 
     # Append data dimensions

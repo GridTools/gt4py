@@ -12,15 +12,15 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = offset("I")
-J = offset("J")
-K = offset("K")
+I = gtx.CartesianConnectivity(IDim)
+J = gtx.CartesianConnectivity(JDim)
+K = gtx.CartesianConnectivity(KDim)
 
 
 @fundef
@@ -55,7 +55,7 @@ def test_trivial(program_processor):
         program_processor,
         inp_s,
         out=out_s,
-        offset_provider={"I": IDim, "J": JDim},
+        offset_provider={},
     )
 
     if validate:
@@ -87,7 +87,7 @@ def test_shifted_arg_to_lift(program_processor):
         program_processor,
         inp_s,
         out=out_s,
-        offset_provider={"I": IDim, "J": JDim},
+        offset_provider={},
     )
 
     if validate:
@@ -146,7 +146,7 @@ def test_vertical_shift_unstructured(program_processor):
         program_processor,
         inp_s,
         out=out_s,
-        offset_provider={"K": KDim},
+        offset_provider={},
     )
 
     if validate:

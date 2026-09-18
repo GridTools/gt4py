@@ -6,12 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
+import sympy
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
-from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next import utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
@@ -34,7 +35,7 @@ def _make_if_block_with_tasklet(
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
 ) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(gtx_transformations.utils.unique_name("if_stmt_"))
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
     for name in {b1_name, b2_name, cond_name, output_name}:
@@ -44,7 +45,7 @@ def _make_if_block_with_tasklet(
             transient=False,
         )
 
-    if_region = dace.sdfg.state.ConditionalBlock(gtx_transformations.utils.unique_name("if"))
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
 
     then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
@@ -94,7 +95,10 @@ def _make_if_block_with_tasklet(
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
     )
-    nested_sdfg.symbol_mapping["multiplier"] = 2.0
+    # TODO(edoapo): The typecast to sympy is needed because the constructor of the `symbol_mapping`
+    # dict property converts the values to symbolic expressions, but the assignment of entries
+    # in the dict does not. Update this line when dace provides better type conversion.
+    nested_sdfg.symbol_mapping["multiplier"] = sympy.Number(2.0)
     return nested_sdfg
 
 
@@ -103,7 +107,7 @@ def _make_map_with_conditional_blocks(
     with_false_branch: bool = True,
     with_else_branch: bool = False,
 ) -> dace.SDFG:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("map_with_conditional_blocks"))
+    sdfg = dace.SDFG(util.unique_name("map_with_conditional_blocks"))
     state = sdfg.add_state(is_start_block=True)
 
     sdfg.add_array(
@@ -151,14 +155,10 @@ def _make_map_with_conditional_blocks(
     cond_var = state.add_access("cond_var")
 
     me, mx = state.add_map("map_with_ifs", ndrange={"__i": "0:10"})
-    me.add_in_connector("IN_a")
-    me.add_out_connector("OUT_a")
-    me.add_in_connector("IN_b")
-    me.add_out_connector("OUT_b")
-    mx.add_in_connector("IN_c")
-    mx.add_out_connector("OUT_c")
-    mx.add_in_connector("IN_d")
-    mx.add_out_connector("OUT_d")
+    me.add_scope_connectors("a")
+    me.add_scope_connectors("b")
+    mx.add_scope_connectors("c")
+    mx.add_scope_connectors("d")
     state.add_edge(a, None, me, "IN_a", dace.Memlet("a[__i]"))
     state.add_edge(b, None, me, "IN_b", dace.Memlet("b[__i]"))
     state.add_edge(me, "OUT_a", tmp_a, None, dace.Memlet("a[__i]"))
@@ -210,7 +210,7 @@ def _make_map_with_conditional_blocks(
     return sdfg
 
 
-def test_fuse_horizontal_condition_blocks():
+def test_fuse_horizontal_condition_blocks(uids: gtx_utils.IDGeneratorPool):
     sdfg = _make_map_with_conditional_blocks()
 
     conditional_blocks = [
@@ -222,7 +222,7 @@ def test_fuse_horizontal_condition_blocks():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )
@@ -240,7 +240,7 @@ def test_fuse_horizontal_condition_blocks():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def test_fuse_horizontal_condition_blocks_single_false():
+def test_fuse_horizontal_condition_blocks_single_false(uids: gtx_utils.IDGeneratorPool):
     """
     Test that the transformation can fuse conditional blocks even if one of them does not have a false branch.
     """
@@ -255,7 +255,7 @@ def test_fuse_horizontal_condition_blocks_single_false():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )
@@ -281,7 +281,7 @@ def test_fuse_horizontal_condition_blocks_single_false():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-def test_fuse_horizontal_condition_blocks_else_branch():
+def test_fuse_horizontal_condition_blocks_else_branch(uids: gtx_utils.IDGeneratorPool):
     """
     Test that the transformation can fuse conditional blocks
     that instead of a `(not __cond)` condition have an `else` (`None`) condition.
@@ -297,7 +297,7 @@ def test_fuse_horizontal_condition_blocks_else_branch():
     util.compile_and_run_sdfg(sdfg, **ref)
 
     sdfg.apply_transformations_repeated(
-        gtx_transformations.FuseHorizontalConditionBlocks(),
+        gtx_transformations.FuseHorizontalConditionBlocks(uids=uids),
         validate=True,
         validate_all=True,
     )

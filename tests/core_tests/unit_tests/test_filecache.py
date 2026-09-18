@@ -46,3 +46,38 @@ def test_delete_item(temp_cache):
 def test_keyerror_on_missing(temp_cache):
     with pytest.raises(KeyError):
         _ = temp_cache["does_not_exist"]
+
+
+# --- Crash consistency ---
+# An interrupted write (Ctrl-C / SIGKILL / OOM during ``pickle.dump``) can leave a
+# truncated entry on disk. ``__contains__`` still reports a HIT, but reading must
+# behave like a cache miss (raise ``KeyError``) instead of propagating an
+# unpickling error, and the unusable entry must be evicted so the cache recovers.
+
+
+def test_truncated_entry_is_treated_as_missing(temp_cache):
+    key = "interrupted"
+    temp_cache[key] = {"a": 1}
+
+    # Simulate a write killed mid-``pickle.dump``: truncate the payload.
+    path = temp_cache._get_path(key)
+    path.write_bytes(path.read_bytes()[:4])
+
+    with pytest.raises(KeyError):
+        _ = temp_cache[key]
+
+
+def test_corrupt_entry_self_heals(temp_cache):
+    key = "interrupted"
+    temp_cache[key] = {"a": 1}
+
+    # A syntactically-invalid pickle (valid proto header, garbage body).
+    temp_cache._get_path(key).write_bytes(b"\x80\x05garbage-not-a-pickle")
+
+    with pytest.raises(KeyError):
+        _ = temp_cache[key]
+
+    # The unusable entry is evicted, so the cache is writable/usable again.
+    assert key not in temp_cache
+    temp_cache[key] = {"a": 2}
+    assert temp_cache[key] == {"a": 2}

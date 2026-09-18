@@ -9,16 +9,28 @@
 import math
 
 import numpy as np
-from atlas4py import (
-    Config,
-    StructuredGrid,
-    StructuredMeshGenerator,
-    Topology,
-    build_edges,
-    build_median_dual_mesh,
-    build_node_to_edge_connectivity,
-    functionspace,
-)
+
+try:
+    from atlas4py import (
+        Config,
+        StructuredGrid,
+        StructuredMeshGenerator,
+        Topology,
+        build_edges,
+        build_median_dual_mesh,
+        build_node_to_edge_connectivity,
+        functionspace,
+    )
+except ImportError as error:
+    # Stay importable so collection succeeds and `requires_atlas` can skip the tests.
+    # `nabla_setup` re-raises the error, since the marker is probed with `find_spec`
+    # and would not skip an `atlas4py` that is installed but not loadable.
+    _ATLAS_IMPORT_ERROR: ImportError | None = error
+    Config = StructuredGrid = StructuredMeshGenerator = Topology = None
+    build_edges = build_median_dual_mesh = build_node_to_edge_connectivity = None
+    functionspace = None
+else:
+    _ATLAS_IMPORT_ERROR = None
 
 from gt4py import next as gtx
 from gt4py.next.iterator import atlas_utils
@@ -45,7 +57,13 @@ class nabla_setup:
         config["angle"] = 20.0
         return config
 
-    def __init__(self, *, allocator, grid=StructuredGrid("O32"), config=None):
+    def __init__(self, *, allocator, grid=None, config=None):
+        if _ATLAS_IMPORT_ERROR is not None:
+            # Fresh exception: re-raising one object grows its traceback per call.
+            raise ImportError(str(_ATLAS_IMPORT_ERROR)) from _ATLAS_IMPORT_ERROR
+        if grid is None:
+            # Not a default argument: those are evaluated at import time.
+            grid = StructuredGrid("O32")
         if config is None:
             config = self._default_config()
         self.allocator = allocator
@@ -99,7 +117,7 @@ class nabla_setup:
 
     @property
     def is_pole_edge_field(self) -> gtx.Field:
-        edge_flags = np.array(self.mesh.edges.flags())
+        edge_flags = np.array(self.mesh.edges.flags(), copy=False)
 
         pole_edge_field = np.zeros((self.edges_size,), dtype=bool)
         for e in range(self.edges_size):
@@ -109,7 +127,7 @@ class nabla_setup:
     @property
     def sign_field(self) -> gtx.Field:
         node2edge_sign = np.zeros((self.nodes_size, self.edges_per_node))
-        edge_flags = np.array(self.mesh.edges.flags())
+        edge_flags = np.array(self.mesh.edges.flags(), copy=False)
 
         for jnode in range(0, self.nodes_size):
             node_edge_con = self.mesh.nodes.edge_connectivity
@@ -203,7 +221,7 @@ class nabla_setup:
         m_pp = self.fs_nodes.create_field(name="m_pp", levels=1, dtype=np.float64)
         rzs = np.array(m_pp, copy=False)
 
-        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"))
+        rcoords_deg = np.array(self.mesh.nodes.field("lonlat"), copy=False)
 
         for jnode in range(0, self.nodes_size):
             for i in range(0, 2):

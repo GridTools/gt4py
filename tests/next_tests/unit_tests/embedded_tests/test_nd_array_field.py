@@ -762,6 +762,23 @@ def test_premap_non_contiguous_inverse_image_raises():
         f.premap(conn)
 
 
+def test_premap_disjoint_inverse_image_raises():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    f = common._field(
+        np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
+    )
+    conn = common._connectivity(
+        np.arange(100, 105, dtype=int),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(0, 5),)),
+        codomain=V,
+    )
+
+    with pytest.raises(ValueError, match="empty"):
+        f.premap(conn)
+
+
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
     I = Dimension("I")
@@ -870,6 +887,42 @@ def test_as_offset_introduces_dimension():
 
     assert result.domain == common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
     assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
+
+
+def test_as_offset_nonzero_origin():
+    # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
+    I = Dimension("I")
+    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
+
+    dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
+    f = common._field(np.arange(10).astype(float), domain=dom)
+    off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Ioff, off))
+
+    assert result.domain == dom
+    assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
+
+
+def test_as_offset_2d_shift_second_axis():
+    # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
+    I = Dimension("I")
+    J = Dimension("J")
+    Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
+
+    NI, NJ = 3, 4
+    dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
+    f = common._field(np.arange(NI * NJ).reshape(NI, NJ).astype(float), domain=dom)
+    off_arr = np.asarray([[1, 1, 0, -1], [0, 0, 1, -1], [1, -1, 0, 0]], dtype=int)
+    off = common._field(off_arr, domain=dom)
+
+    result = f.premap(as_offset(Joff, off))
+
+    assert result.domain == dom
+    i = np.arange(NI)[:, None]
+    j = np.arange(NJ)[None, :]
+    assert np.all(result.ndarray == f.ndarray[i, j + off_arr])
 
 
 def test_as_offset_non_cartesian_offset_raises():
@@ -1393,10 +1446,10 @@ def test_connectivity_field_inverse_image_2d_domain():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
@@ -1416,10 +1469,10 @@ def test_connectivity_field_inverse_image_non_contiguous():
     result = e2v_conn.inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, 6))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
 
 
@@ -1473,10 +1526,10 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(1, 3))
 
-    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+    with pytest.raises(ValueError, match="generates non-contiguous"):
         result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
@@ -1705,3 +1758,70 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 
         assert result.domain == expected_domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_field_arguments():
+    import jax
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    a = common._field(
+        jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
+    )
+    b = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+
+    @jax.jit
+    def add(x, y):
+        return x + y
+
+    result = add(a, b)
+
+    assert isinstance(result, common.Field)
+    assert result.domain == domain
+    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_roundtrip():
+    import jax
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+
+    children, treedef = jax.tree_util.tree_flatten(field)
+
+    assert len(children) == 1
+    assert children[0] is field.ndarray
+
+    restored = jax.tree_util.tree_unflatten(treedef, children)
+    assert restored.domain == domain
+
+    other_field = common._field(
+        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
+    )
+    # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
+    assert jax.tree_util.tree_structure(other_field) != treedef
+
+
+@pytest.mark.requires_jax
+def test_jax_traced_array_dispatch():
+    import jax
+
+    domain = common.domain({D0: (0, 3)})
+    x = jax.numpy.arange(3, dtype=np.float64)
+
+    def loss(arr):
+        field = common._field(arr, domain=domain)
+        assert isinstance(field, nd_array_field.JaxArrayField)
+        return jax.numpy.sum((field * field).ndarray)
+
+    np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())
+    np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
+
+    offsets = jax.numpy.asarray([[2, 0], [1, 2]])
+    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
+
+    def make_connectivity(arr):
+        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
+
+    np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)

@@ -41,7 +41,6 @@ class _PythonObjectIdMixin:
 
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
-    GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
     GTFN_CPU_NO_TRANSFORMS = "gt4py.next.program_processors.runners.gtfn.run_gtfn_no_transforms"
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
@@ -108,7 +107,6 @@ USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
-USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -138,6 +136,18 @@ BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings
 REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
     "We cannot unroll a reduction on a sparse field only (not clear if it is legal ITIR)"
 )
+# Index-only vs. consequential markers:
+# A `uses_*` marker only affects execution if it appears in one of the skip lists below (and thus
+# in `BACKEND_SKIP_TEST_MATRIX`); such a marker is "consequential" -- it applies the listed
+# SKIP/XFAIL on the matching backends. A marker referenced nowhere here is "index-only": it has no
+# runtime effect and is purely a queryable feature tag (`pytest -m uses_<feature>`), hence always
+# safe to add. Because `xfail_strict` is enabled, adding a consequential marker to a test that
+# currently PASSES on a listed backend turns it into an unexpected pass (xpass) and FAILS -- so add
+# a consequential marker only once the test genuinely fails on that backend, and validate per-backend.
+# `uses_dace` is the one exception to "index-only is safe to add": it selects the nox test matrix
+# (`-m "uses_dace"` vs `-m "not uses_dace"` in `noxfile.py`), so tagging a test with it *removes*
+# that test from every `internal` session, and untagging removes it from the `dace` ones.
+
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -208,8 +218,6 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU_GT: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_GT_NO_OPT: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
-    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],

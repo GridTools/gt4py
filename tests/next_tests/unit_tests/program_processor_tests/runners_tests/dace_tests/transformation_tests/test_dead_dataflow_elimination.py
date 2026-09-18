@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -19,7 +19,7 @@ from . import util
 
 
 def _make_empty_memlets_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("empty_memlets"))
+    sdfg = dace.SDFG(util.unique_name("empty_memlets"))
     state = sdfg.add_state(is_start_block=True)
 
     anames = ["a", "b", "c"]
@@ -46,7 +46,7 @@ def _make_empty_memlets_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
 
 
 def _make_zero_iter_step_map() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("empty_map"))
+    sdfg = dace.SDFG(util.unique_name("empty_map"))
     state = sdfg.add_state(is_start_block=True)
 
     anames = ["a", "b", "c"]

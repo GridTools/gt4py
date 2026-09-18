@@ -1,0 +1,110 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2024, ETH Zurich
+# All rights reserved.
+#
+# Please, refer to the LICENSE file in the root directory.
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""Closure variable collection across nested scopes.
+
+A generator expression, lambda or nested function compiles to its own code object,
+so names referenced only inside it appear in that object's `co_names` and never in
+the enclosing function's. Collecting closure variables from the enclosing function
+alone therefore misses them; `get_closure_vars_from_function` takes the global names
+from the compiler's symbol table of the source instead, which covers nested scopes.
+
+Free variables need no such treatment: the enclosing code object carries a cell for
+them.
+"""
+
+import gt4py.next as gtx
+from gt4py.next import Dims, Dimension, float64, neighbor_sum
+from gt4py.next.ffront import source_utils
+from gt4py.next.ffront.source_utils import get_closure_vars_from_function
+
+
+Cell = Dimension("Cell")
+Edge = Dimension("Edge")
+C2EDim = Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
+
+CField = gtx.Field[Dims[Cell], float64]
+EField = gtx.Field[Dims[Edge], float64]
+
+
+@gtx.field_operator
+def scale(f: CField, factor: float64) -> CField:
+    return f * factor
+
+
+def _builtin_and_offset(tracers: tuple[EField, ...]) -> tuple[CField, ...]:
+    return tuple(neighbor_sum(t(C2E), axis=C2EDim) for t in tracers)
+
+
+def _module_level_operator(tracers: tuple[CField, ...], factor: float64) -> tuple[CField, ...]:
+    return tuple(scale(t, factor) for t in tracers)
+
+
+def test_names_are_collected_from_the_nested_code_object():
+    """The names live in the generator expression's code object, not the function's."""
+    assert "neighbor_sum" not in _builtin_and_offset.__code__.co_names
+    nested = [c for c in _builtin_and_offset.__code__.co_consts if hasattr(c, "co_names")]
+    assert any("neighbor_sum" in c.co_names for c in nested)
+
+    collected = get_closure_vars_from_function(_builtin_and_offset)
+    assert {"neighbor_sum", "C2E", "C2EDim"} <= set(collected)
+
+
+def test_comprehension_target_is_not_collected():
+    """The loop target is a local of the nested code object, not a global reference."""
+    assert "t" not in get_closure_vars_from_function(_module_level_operator)
+
+
+def test_free_variables_still_resolve():
+    """The path that already worked, kept as a guard."""
+
+    @gtx.field_operator
+    def local_scale(f: CField, factor: float64) -> CField:
+        return f * factor
+
+    def uses_freevar(tracers: tuple[CField, ...], factor: float64) -> tuple[CField, ...]:
+        return tuple(local_scale(t, factor) for t in tracers)
+
+    assert get_closure_vars_from_function(uses_freevar)["local_scale"] is local_scale
+
+
+def test_local_name_shadowing_a_global_is_not_collected_as_global():
+    """A comprehension referencing an enclosing local must bind the local, not the global."""
+
+    def shadows(tracers: tuple[CField, ...], factor: float64) -> tuple[CField, ...]:
+        scale = local_helper  # noqa: F841  shadows the module-level 'scale'
+        return tuple(scale(t, factor) for t in tracers)
+
+    def local_helper(t, factor):
+        return t
+
+    assert "scale" not in get_closure_vars_from_function(shadows)
+
+
+def test_source_is_analyzed_once_per_code_object(monkeypatch):
+    calls = []
+    read_source = source_utils.make_source_definition_from_function
+    monkeypatch.setattr(
+        source_utils,
+        "make_source_definition_from_function",
+        lambda f: calls.append(f) or read_source(f),
+    )
+    source_utils._global_names_of_code.cache_clear()
+
+    get_closure_vars_from_function(_module_level_operator)
+    get_closure_vars_from_function(_module_level_operator)
+
+    assert calls == [_module_level_operator.__code__]
+
+
+def test_values_are_looked_up_on_every_call(monkeypatch):
+    """Only the names are cached, so rebinding a global is seen by the next collection."""
+    assert get_closure_vars_from_function(_module_level_operator)["scale"] is scale
+    monkeypatch.setitem(globals(), "scale", 42)
+    assert get_closure_vars_from_function(_module_level_operator)["scale"] == 42

@@ -13,8 +13,11 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
-from gt4py.next.otf import code_specs, stages
-from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.otf import artifacts
+from gt4py.next.program_processors.runners.dace import (
+    sdfg_args as gtx_dace_args,
+    sdfg_utils as gtx_dace_utils,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -41,7 +44,7 @@ def _update_sdfg_array_strides(
 ) -> None:
     for i, array_stride in enumerate(sdfg_arg_desc.strides):
         arg_stride = f"{arg}.__gt_buffer_info__.elem_strides[{i}]"
-        if isinstance(array_stride, int) or str(array_stride).isdigit():
+        if gtx_dace_utils.is_compile_time_size(array_stride):
             # The array stride is set to constant value in this dimension.
             code.append(
                 f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].strides[{i}] == {arg_stride}"
@@ -155,7 +158,7 @@ def _parse_gt_param(
                 for i, (dim, array_size) in enumerate(
                     zip(param_type.dims, sdfg_arg_desc.shape, strict=True)
                 ):
-                    if isinstance(array_size, int) or str(array_size).isdigit():
+                    if gtx_dace_utils.is_compile_time_size(array_size):
                         # The array shape in this dimension is set at compile-time.
                         code.append(
                             f"assert {_cb_sdfg_argtypes}[{sdfg_arg_index}].shape[{i}] == {arg}.__gt_buffer_info__.shape[{i}]"
@@ -197,7 +200,7 @@ def _parse_gt_connectivities(
         if gtx_dace_args.is_connectivity_identifier(arg_name):
             assert isinstance(arg_desc, dace.data.Array)
             assert len(arg_desc.shape) == 2
-            assert isinstance(arg_desc.shape[1], int) or str(arg_desc.shape[1]).isdigit()
+            assert gtx_dace_utils.is_compile_time_size(arg_desc.shape[1])
             origin_size_arg = arg_desc.shape[0]
             assert len(origin_size_arg.free_symbols) == 1
             origin_size_param = next(iter(origin_size_arg.free_symbols))
@@ -223,9 +226,9 @@ def _parse_gt_connectivities(
 
 
 def _create_sdfg_bindings(
-    program_source: stages.ProgramSource[code_specs.SDFGCodeSpec],
+    program_source: artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.BindingSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
+) -> artifacts.BindingSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec]:
     """
     Creates a Python translation function to convert the GT4Py arguments list
     to the SDFG calling convention.
@@ -282,19 +285,19 @@ def _create_sdfg_bindings(
         # arrays as well in SDFG fastcall.
         _parse_gt_connectivities(code, sdfg_arglist)
 
-    return stages.BindingSource(code.text, library_deps=tuple())
+    return artifacts.BindingSource(code.text, library_deps=tuple())
 
 
 def bind_sdfg(
-    inp: stages.ProgramSource[code_specs.SDFGCodeSpec],
+    inp: artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     bind_func_name: str,
-) -> stages.CompilableProject[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec]:
+) -> artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec]:
     """
     Method to be used as workflow stage for generation of SDFG bindings.
 
     Refer to `_create_sdfg_bindings` documentation.
     """
-    return stages.CompilableProject(
+    return artifacts.ExtensionSource(
         program_source=inp,
         binding_source=_create_sdfg_bindings(inp, bind_func_name),
     )

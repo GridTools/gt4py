@@ -8,10 +8,15 @@
 
 from typing import Union
 
-from lark import lark, lexer as lark_lexer, tree as lark_tree, visitors as lark_visitors
+from lark import (
+    exceptions as lark_exceptions,
+    lark,
+    lexer as lark_lexer,
+    tree as lark_tree,
+    visitors as lark_visitors,
+)
 
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -32,7 +37,8 @@ GRAMMAR = """
     FLOAT_LITERAL: SIGNED_FLOAT
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
-    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL
+    INFINITY_LITERAL: "∞" | "-∞"
+    _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
 
     ?prec0: prec1
@@ -51,6 +57,8 @@ GRAMMAR = """
         | prec4 "==" prec5 -> eq
         | prec4 "<" prec5 -> less
         | prec4 ">" prec5 -> greater
+        | prec4 "<=" prec5 -> less_equal
+        | prec4 ">=" prec5 -> greater_equal
 
     ?prec5: prec6
         | prec5 "+" prec6 -> plus
@@ -75,8 +83,10 @@ GRAMMAR = """
         | "c⟨" ( prec0 "," )* prec0? "⟩" -> cartesian_domain
 
     ?prec9: _literal
+        | typed_literal
         | SYM_REF
         | named_range
+        | cartesian_offset
         | "(" prec0 ")"
 
     ?stmt: set_at | if_stmt
@@ -84,9 +94,15 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
+    typed_literal: ( INT_LITERAL | FLOAT_LITERAL | SYM_REF ) ":" TYPE_LITERAL
+    ?type_expr: TYPE_LITERAL
+        | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type
+        | "{" type_expr ("," type_expr)* "}" -> tuple_type
+
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
+    cartesian_offset: AXIS_LITERAL "→" AXIS_LITERAL
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" type_expr ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
     program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( stmt )+ "}"
@@ -96,6 +112,11 @@ GRAMMAR = """
 """  # noqa: RUF001 [ambiguous-unicode-character-string]
 
 
+def _bare_literal(value: str) -> ir.Literal:
+    """A literal written without a type annotation."""
+    return ir.Literal(value=value, type=pretty_printer.implied_literal_type(value))
+
+
 @lark_visitors.v_args(inline=True)
 class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
@@ -103,19 +124,35 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
-            return im.literal(value.value, "bool")
+            return _bare_literal(value.value)
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal_from_value(int(value.value))
+        return _bare_literal(str(int(value.value)))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal(value.value, "float64")
+        return _bare_literal(value.value)
 
-    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
-        if hasattr(ts.ScalarKind, value.upper()):
-            return ts.ScalarType(kind=getattr(ts.ScalarKind, value.upper()))
-        raise NotImplementedError(f"Type {value} not supported.")
+    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.ScalarType:
+        if (kind := pretty_printer.SCALAR_TYPE_KINDS.get(value.value)) is None:
+            raise ValueError(
+                f"Invalid type '{value}'; expected one of "
+                f"{', '.join(sorted(pretty_printer.SCALAR_TYPE_KINDS))}."
+            )
+        return ts.ScalarType(kind=kind)
+
+    def shaped_scalar_type(self, type_: ts.ScalarType, *shape: ir.Literal) -> ts.ScalarType:
+        return ts.ScalarType(kind=type_.kind, shape=[int(s.value) for s in shape])
+
+    def tuple_type(self, *types: ts.DataType) -> ts.TupleType:
+        return ts.TupleType(types=list(types))
+
+    def typed_literal(
+        self, value: Union[ir.Literal, ir.SymRef], type_: ts.ScalarType
+    ) -> ir.Literal:
+        if not isinstance(value, ir.Literal):
+            raise ValueError(f"Only a literal can carry a type annotation, got '{value.id}'.")
+        return ir.Literal(value=value.value, type=type_)
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]
@@ -127,6 +164,12 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def ID_NAME(self, value: lark_lexer.Token) -> str:
         return value.value
+
+    def INFINITY_LITERAL(self, value: lark_lexer.Token) -> ir.InfinityLiteral:
+        if value.value == "-∞":
+            return ir.InfinityLiteral.NEGATIVE
+        assert value.value == "∞"
+        return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
         name = value.value[:-1]
@@ -176,6 +219,12 @@ class ToIrTransformer(lark_visitors.Transformer):
     def less(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="less"), args=[lhs, rhs])
 
+    def less_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="less_equal"), args=[lhs, rhs])
+
+    def greater_equal(self, lhs: ir.Expr, rhs: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="greater_equal"), args=[lhs, rhs])
+
     def deref(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="deref"), args=[arg])
 
@@ -199,6 +248,11 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def named_range(self, name: ir.AxisLiteral, start: ir.Expr, end: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="named_range"), args=[name, start, end])
+
+    def cartesian_offset(
+        self, domain: ir.AxisLiteral, codomain: ir.AxisLiteral
+    ) -> ir.CartesianOffset:
+        return ir.CartesianOffset(domain=domain, codomain=codomain)
 
     def cartesian_domain(self, *ranges: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=list(ranges))
@@ -275,4 +329,7 @@ class ToIrTransformer(lark_visitors.Transformer):
 def pparse(pretty_str: str) -> ir.Node:
     parser = lark.Lark(GRAMMAR, parser="earley")
     tree = parser.parse(pretty_str)
-    return ToIrTransformer(visit_tokens=True).transform(tree)
+    try:
+        return ToIrTransformer(visit_tokens=True).transform(tree)
+    except lark_exceptions.VisitError as e:
+        raise e.orig_exc from None

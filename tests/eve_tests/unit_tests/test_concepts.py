@@ -107,6 +107,26 @@ class TestNode:
 
         assert set(sample_node.annex.keys()) >= {"an_int", "a_str"}
 
+    def test_nested_tuple_of_nodes_field(self):
+        # A node holding an arbitrarily nested tuple of other nodes (e.g. the targets of
+        # a tuple comprehension) is annotated with the recursive 'NestedTuple' alias.
+        class Target(eve.Node):
+            name: str
+
+        class Parent(eve.Node):
+            targets: eve.extended_typing.NestedTuple[Target]
+
+        node = Parent(targets=(Target(name="a"), (Target(name="b"), (Target(name="c"),))))
+
+        assert [target.name for target in eve.walk_values(node).if_isinstance(Target)] == [
+            "a",
+            "b",
+            "c",
+        ]
+
+        with pytest.raises((TypeError, ValueError)):
+            Parent(targets=(Target(name="a"), ("b",)))
+
     def test_children(self, sample_node):
         children_names = set(name for name, _ in sample_node.iter_children_items())
 
@@ -121,30 +141,42 @@ class TestNode:
         )
 
 
-def test_skipping_fields_node_pickler_skips_nested_fields_and_is_cached():
-    skipped_field_pickler = eve.concepts.skipping_fields_node_pickler("int_value")
-    assert skipped_field_pickler is eve.concepts.skipping_fields_node_pickler("int_value")
+class TestNodeInstanceChecks:
+    # `Node` uses a metaclass that answers `isinstance()`/`issubclass()` nominally, i.e. like
+    #  `type`, instead of the `Protocol` metaclass it inherits from `trees.Tree`.
 
-    node_a = definitions.CompoundNode(
-        int_value=1,
-        location=definitions.make_location_node(fixed=True),
-        simple=definitions.make_simple_node(fixed=True),
-        simple_loc=definitions.make_simple_node_with_loc(fixed=True),
-        simple_opt=definitions.make_simple_node_with_optionals(fixed=True),
-        other_simple_opt=None,
-    )
-    node_b = copy.deepcopy(node_a)
+    def test_instances_and_subclasses(self):
+        class Base(eve.Node):
+            value: int
 
-    node_b.int_value += 100
-    node_b.simple.int_value += 100
-    node_b.simple_loc.int_value += 100
-    node_b.simple_opt.int_value += 100
+        class Derived(Base):
+            pass
 
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) == eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
+        assert isinstance(Base(value=1), Base)
+        assert isinstance(Derived(value=1), Base)
+        assert not isinstance(Base(value=1), Derived)
+        assert issubclass(Derived, Base)
+        assert issubclass(Base, eve.Node)
 
-    node_b.simple.str_value = "changed"
-    assert eve.utils.content_hash(node_a, pickler=skipped_field_pickler) != eve.utils.content_hash(
-        node_b, pickler=skipped_field_pickler
-    )
+    def test_structural_tree_is_not_a_node(self):
+        class StructuralTree:
+            def iter_children_values(self):
+                return iter(())
+
+            def iter_children_items(self):
+                return iter(())
+
+        assert not isinstance(StructuralTree(), eve.Node)
+        assert not issubclass(StructuralTree, eve.Node)
+
+    def test_node_is_not_an_abc(self):
+        # Nothing can be made a `Node` after the fact: the class is not an ABC, so there is no
+        #  `register()` and `isinstance()` answers the nominal question, at `type`'s speed.
+        assert not hasattr(eve.Node, "register")
+        assert type(eve.Node).__instancecheck__ is type.__instancecheck__
+
+    def test_nodes_are_still_trees(self, sample_node: eve.Node):
+        from gt4py.eve import trees
+
+        assert isinstance(sample_node, trees.TreeLike)
+        assert [id(node) for node in trees.pre_walk_values(sample_node)]

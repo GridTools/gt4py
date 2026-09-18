@@ -47,9 +47,9 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 2. Clone your fork locally and check out the relevant branch:
 
    ```bash
-   $ git clone git@github.com:your_name_here/gt4py.git
-   $ cd gt4py
-   $ git checkout main
+   git clone git@github.com:your_name_here/gt4py.git
+   cd gt4py
+   git checkout main
    ```
 
 3. Follow instructions in the [README.md](README.md) file to set up an environment for local development.
@@ -57,7 +57,7 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 4. Create a branch for local development:
 
    ```bash
-   $ git checkout -b name-of-your-bugfix-or-feature
+   git checkout -b name-of-your-bugfix-or-feature
    ```
 
    Now you can make your changes locally. Make sure you follow the project code style documented in [CODING_GUIDELINES.md](CODING_GUIDELINES.md).
@@ -65,8 +65,8 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 5. When you're done making changes, check that your code complies with the project code style and other quality assurance (QA) practices using `pre-commit`. Additionally, make sure that unit and regression tests pass for all supported Python versions by running `nox`:
 
    ```bash
-   $ pre-commit run
-   $ nox
+   pre-commit run
+   nox
    ```
 
    Read [Testing](#testing) section below for further details.
@@ -74,9 +74,9 @@ Ready to start contributing? We use a [fork and pull request](https://www.atlass
 6. Commit your changes and push your branch to GitHub:
 
    ```bash
-    $ git add .
-    $ git commit -m "Your detailed description of your changes."
-    $ git push origin name-of-your-bugfix-or-feature
+    git add .
+    git commit -m "Your detailed description of your changes."
+    git push origin name-of-your-bugfix-or-feature
    ```
 
 7. Submit a pull request (PR) on [GT4Py's GitHub page](https://github.com/gridtools/gt4py).
@@ -136,6 +136,21 @@ pytest --ff tests/
 pytest -v -l -s tests/
 ```
 
+Tests which need an optional dependency carry a `requires_*` marker
+(`requires_gpu`, `requires_jax`, `requires_atlas`) and are
+skipped automatically when that dependency is unavailable. Use
+`--require-optional-deps` to disable the automatic skipping and see the actual
+error instead:
+
+```bash
+pytest --require-optional-deps tests/
+```
+
+This option is registered by `tests/conftest.py`, so it is only recognised when the
+invocation reaches that directory (a bare `pytest`, any path under `tests/`, or a
+working directory inside it). It is not accepted by, say,
+`pytest --doctest-modules src/gt4py`, which collects no marked tests anyway.
+
 Check `pytest` documentation (`pytest --help`) for all the options to select and execute tests.
 
 We recommended you to use `nox` for running the test suite in different environments. `nox` runs the package installation script in properly isolated environments to run tests in a reproducible way. A simple way to start with `nox` would be:
@@ -145,14 +160,10 @@ We recommended you to use `nox` for running the test suite in different environm
 nox --list
 
 # Run a specific session
-nox -s "test_cartesian-3.10(internal, cpu)"
+nox -s "test_cartesian-3.12(internal, cpu)"
 ```
 
 Check `nox` documentation (`nox --help`) for the complete reference.
-
-<!--
-TODO: add test coverage instructions
-Additionally, `nox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end. -->
 
 ## Pull Requests (PRs) and Merge Guidelines
 
@@ -173,7 +184,6 @@ As mentioned above, we use several tools to help us write high-quality code. New
 - [nox] for testing and task automation with different environments.
 - [pre-commit] for automating the execution of QA tools.
 - [pytest] for writing readable tests, extended with:
-  - [Coverage.py][coverage] and [pytest-cov] for test coverage reports.
   - [pytest-xdist] for running tests in parallel.
 - [ruff] for style enforcement and code linting.
 - [sphinx] for generating documentation, extended with:
@@ -184,12 +194,10 @@ As mentioned above, we use several tools to help us write high-quality code. New
 <!-- Reference links -->
 
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
-[coverage]: https://coverage.readthedocs.io/
 [jupytext]: https://jupytext.readthedocs.io/
 [nox]: https://nox.thea.codes/en/stable/
 [pre-commit]: https://pre-commit.com/
 [pytest]: https://docs.pytest.org/
-[pytest-cov]: https://pypi.org/project/pytest-cov/
 [pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
 [ruff]: https://astral.sh/ruff
 [sphinx]: https://www.sphinx-doc.org

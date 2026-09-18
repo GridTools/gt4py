@@ -13,8 +13,8 @@ The library carries two implementations available as submodule imports:
     - `gt4py.next` supports structured and unstructured grid.
 """
 
+from .__about__ import __author__, __copyright__, __license__, __version__, __version_info__  # noqa: I001
 from . import eve, storage
-from .__about__ import __author__, __copyright__, __license__, __version__, __version_info__
 
 
 __all__ = [

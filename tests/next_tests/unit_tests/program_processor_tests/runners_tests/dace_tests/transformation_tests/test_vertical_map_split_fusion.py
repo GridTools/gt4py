@@ -7,10 +7,10 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+import dace
 import numpy as np
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 from dace import subsets as dace_subsets
 
@@ -23,9 +23,7 @@ from . import util
 
 def serial_map_sdfg(N, extra_intermediate_edge=False):
     sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name(
-            "serial_map" if extra_intermediate_edge else "serial_map_extra_edge"
-        )
+        util.unique_name("serial_map" if extra_intermediate_edge else "serial_map_extra_edge")
     )
     A, _ = sdfg.add_array("A", [N], dtype=dace.float64)
     B, _ = sdfg.add_array("B", [N], dtype=dace.float64)
@@ -152,7 +150,7 @@ def test_vertical_map_fusion_disabled():
 @pytest.mark.parametrize("run_map_fusion", [True, False])
 def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     N = 80
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("simple"))
+    sdfg = dace.SDFG(util.unique_name("simple"))
     A, _ = sdfg.add_array("A", shape=(N,), dtype=dace.float64, strides=(1,))
     B, _ = sdfg.add_array("B", shape=(N,), dtype=dace.float64, strides=(1,))
     C, _ = sdfg.add_array("C", shape=(N,), dtype=dace.float64, strides=(1,))
@@ -251,10 +249,8 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     st.add_edge(b_out_node, None, red, "IN_b_out", dace.Memlet(data=b_out, subset="0:2"))
     st.add_edge(red, "OUT_t", t_node, None, dace.Memlet(data=t, subset="0"))
     st.add_edge(t_node, None, mexit, "IN_B", dace.Memlet(data=B, subset="__i"))
-    mnexit.add_in_connector("IN_b_out")
-    mnexit.add_out_connector("OUT_b_out")
-    mexit.add_in_connector("IN_B")
-    mexit.add_out_connector("OUT_B")
+    mnexit.add_scope_connectors("b_out")
+    mexit.add_scope_connectors("B")
 
     st.add_mapped_tasklet(
         "map3",
@@ -316,8 +312,7 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
         reduction_tasklet, "__d_out", mnexit2, "IN_d_out", dace.Memlet(data=d_out, subset="__j")
     )
     st.add_edge(mnexit2, "OUT_d_out", d_out_node, None, dace.Memlet(data=d_out, subset="0:2"))
-    mnexit2.add_in_connector("IN_d_out")
-    mnexit2.add_out_connector("OUT_d_out")
+    mnexit2.add_scope_connectors("d_out")
     red2 = st.add_reduce(
         wcr="lambda a, b: a + b",
         axes=None,
@@ -336,8 +331,7 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     st.add_edge(t2_node, None, tasklet2, "__inp1", dace.Memlet(data=t2, subset="0"))
     st.add_edge(mentry2, "OUT_tmp2", tasklet2, "__inp2", dace.Memlet(data=tmp2, subset="__i"))
     st.add_edge(tasklet2, "__out", mexit2, "IN_D", dace.Memlet(data=D, subset="__i"))
-    mexit2.add_in_connector("IN_D")
-    mexit2.add_out_connector("OUT_D")
+    mexit2.add_scope_connectors("D")
 
     st.add_mapped_tasklet(
         "map5",
@@ -390,3 +384,99 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
         # to the temporary field.
         assert ret == 0
         assert util.count_nodes(sdfg, dace_nodes.MapEntry) == initial_map_entries_nb
+
+
+def _make_if_block(state: dace.SDFGState) -> dace_nodes.NestedSDFG:
+    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
+    for name, dtype in [
+        ("__arg1", dace.float64),
+        ("__arg2", dace.float64),
+        ("__cond", dace.bool_),
+        ("__output", dace.float64),
+    ]:
+        inner_sdfg.add_scalar(name, dtype=dtype, transient=False)
+
+    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    for branch, arg in [("then_body", "__arg1"), ("else_body", "__arg2")]:
+        body = dace.sdfg.state.ControlFlowRegion(branch, sdfg=inner_sdfg)
+        bstate = body.add_state(branch, is_start_block=True)
+        bstate.add_nedge(
+            bstate.add_access(arg),
+            bstate.add_access("__output"),
+            dace.Memlet(data="__output", subset="0"),
+        )
+        cond = "__cond" if arg == "__arg1" else "not __cond"
+        if_region.add_branch(dace.sdfg.state.CodeBlock(cond), body)
+
+    return state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={"__arg1", "__arg2", "__cond"},
+        outputs={"__output"},
+    )
+
+
+def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
+    """The second Map consumes the intermediate through a NestedSDFG."""
+    sdfg = dace.SDFG(util.unique_name("nested_sdfg_consumer"))
+    A, _ = sdfg.add_array("A", [N], dtype=dace.float64)
+    B, _ = sdfg.add_array("B", [N], dtype=dace.float64)
+    M, _ = sdfg.add_array("M", [N], dtype=dace.bool_)
+    tmp, _ = sdfg.add_temp_transient([N], dtype=dace.float64)
+
+    st = sdfg.add_state()
+    A_node = st.add_access(A)
+    B_node = st.add_access(B)
+    M_node = st.add_access(M)
+    tmp_node = st.add_access(tmp)
+
+    st.add_mapped_tasklet(
+        "map1",
+        map_ranges={"__i": f"0:{N}"},
+        code="__out = __inp + 1",
+        inputs={"__inp": dace.Memlet(data=A, subset="__i")},
+        outputs={"__out": dace.Memlet(data=tmp, subset="__i")},
+        input_nodes={A_node},
+        output_nodes={tmp_node},
+        external_edges=True,
+    )
+
+    map_entry, map_exit = st.add_map("map2", ndrange={"__i": f"1:{N}"})
+    nsdfg = _make_if_block(st)
+    for conn, node, data, subset in [
+        ("__arg1", tmp_node, tmp, f"1:{N}"),
+        ("__arg2", A_node, A, f"1:{N}"),
+        ("__cond", M_node, M, f"1:{N}"),
+    ]:
+        map_entry.add_scope_connectors(conn)
+        st.add_edge(node, None, map_entry, f"IN_{conn}", dace.Memlet(data=data, subset=subset))
+        st.add_edge(map_entry, f"OUT_{conn}", nsdfg, conn, dace.Memlet(data=data, subset="__i"))
+    map_exit.add_scope_connectors("B")
+    st.add_edge(nsdfg, "__output", map_exit, "IN_B", dace.Memlet(data=B, subset="__i"))
+    st.add_edge(map_exit, "OUT_B", B_node, None, dace.Memlet(data=B, subset=f"1:{N}"))
+
+    sdfg.validate()
+    return sdfg
+
+
+def test_vertical_map_fusion_with_nested_sdfg_consumer():
+    N = 80
+    sdfg = nested_sdfg_consumer_sdfg(N)
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=True,
+        run_map_fusion=False,
+        fuse_map_fragments=True,
+        consolidate_edges_only_if_not_extending=False,
+        validate=True,
+        validate_all=True,
+    )
+    assert ret == 1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

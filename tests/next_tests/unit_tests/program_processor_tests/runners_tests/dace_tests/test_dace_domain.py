@@ -8,9 +8,8 @@
 
 """Test domain-related helper functions of the dace backend module."""
 
+import dace
 import pytest
-
-dace = pytest.importorskip("dace")
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace.lowering import (
@@ -19,7 +18,7 @@ from gt4py.next.program_processors.runners.dace.lowering import (
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     Cell,
     KDim,
     Vertex,

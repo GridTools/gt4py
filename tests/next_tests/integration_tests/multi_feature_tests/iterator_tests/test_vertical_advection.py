@@ -95,6 +95,7 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
     set_at(solve_tridiag2(domain, a, b, c, d), domain, x)
 
 
+@pytest.mark.uses_scan
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
 def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor

@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from gt4py.next.iterator import ir, builtins
+import pytest
+
+from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.type_system import type_specifications as ts
@@ -49,6 +51,77 @@ def test_arithmetic():
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_comparison():
+    def cmp(builtin):
+        return ir.FunCall(fun=ir.SymRef(id=builtin), args=[ir.SymRef(id="a"), ir.SymRef(id="b")])
+
+    assert pparse("a < b") == cmp("less")
+    assert pparse("a > b") == cmp("greater")
+    assert pparse("a <= b") == cmp("less_equal")
+    assert pparse("a >= b") == cmp("greater_equal")
+
+
+def test_typed_literal():
+    assert pparse("1.0:f32") == im.literal("1.0", "float32")
+    assert pparse("1:i64") == im.literal("1", "int64")
+    assert pparse("True:i1") == im.literal("True", "bool")
+
+
+def test_typed_literal_binds_tighter_than_arithmetic():
+    assert pparse("1.0:f32 + 2.0") == ir.FunCall(
+        fun=ir.SymRef(id="plus"),
+        args=[im.literal("1.0", "float32"), im.literal("2.0", "float64")],
+    )
+
+
+def test_typed_literal_scalar_kind_names_are_not_accepted():
+    with pytest.raises(ValueError, match="float32"):
+        pparse("1.0:float32")
+
+
+def test_only_a_literal_can_be_annotated():
+    with pytest.raises(ValueError, match="'x'"):
+        pparse("x:i32")
+
+
+def test_typed_literal_does_not_shadow_named_range():
+    assert pparse("c⟨ IDimₕ: [0:i64, 4:i64[ ⟩") == ir.FunCall(
+        fun=ir.SymRef(id="cartesian_domain"),
+        args=[
+            ir.FunCall(
+                fun=ir.SymRef(id="named_range"),
+                args=[
+                    ir.AxisLiteral(value="IDim"),
+                    im.literal("0", "int64"),
+                    im.literal("4", "int64"),
+                ],
+            )
+        ],
+    )
+
+
+def test_type_name_lexing_prefers_the_longest_match():
+    # `i1` is a proper prefix of `i16`; `TYPE_LITERAL` is a single greedy `CNAME`,
+    # so the shorter name must never win.
+    assert pparse("1:i1") == im.literal("1", "bool")
+    assert pparse("1:i16") == im.literal("1", "int16")
+    # `[2]` is a tuple index, not a shape
+    assert pparse("1:i16[2]") == ir.FunCall(
+        fun=ir.SymRef(id="tuple_get"),
+        args=[im.literal("2", "int32"), im.literal("1", "int16")],
+    )
+    assert pparse("t = temporary(domain=domain, dtype={i1, i16});") == ir.Temporary(
+        id="t",
+        domain=ir.SymRef(id="domain"),
+        dtype=ts.TupleType(
+            types=[
+                ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                ts.ScalarType(kind=ts.ScalarKind.INT16),
+            ]
+        ),
+    )
 
 
 def test_deref():
@@ -102,6 +175,49 @@ def test_shift():
     testee = "⟪Iₒ, 1ₒ⟫"
     expected = ir.FunCall(
         fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)]
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_infinity_literal():
+    assert pparse("∞") == ir.InfinityLiteral.POSITIVE
+    assert pparse("-∞") == ir.InfinityLiteral.NEGATIVE
+
+
+def test_named_range_unbounded():
+    testee = "KDimᵥ: [-∞, ∞["
+    expected = ir.FunCall(
+        fun=ir.SymRef(id="named_range"),
+        args=[
+            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.InfinityLiteral.NEGATIVE,
+            ir.InfinityLiteral.POSITIVE,
+        ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "testee, rhs",
+    [
+        ("a - ∞", ir.InfinityLiteral.POSITIVE),
+        ("a -∞", ir.InfinityLiteral.POSITIVE),
+        ("a-∞", ir.InfinityLiteral.POSITIVE),
+        ("a - -∞", ir.InfinityLiteral.NEGATIVE),
+    ],
+)
+def test_subtraction_of_infinity_is_not_a_negative_literal(testee, rhs):
+    expected = ir.FunCall(fun=ir.SymRef(id="minus"), args=[ir.SymRef(id="a"), rhs])
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_cartesian_offset():
+    testee = "Iₕ→Jₕ"
+    expected = ir.CartesianOffset(
+        domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
     )
     actual = pparse(testee)
     assert actual == expected
@@ -201,11 +317,34 @@ def test_function_definition():
 
 
 def test_temporary():
-    testee = "t = temporary(domain=domain, dtype=float64);"
+    testee = "t = temporary(domain=domain, dtype=f64);"
     float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=float64_type)
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_temporary_compound_dtype():
+    assert pparse("t = temporary(domain=domain, dtype={i1, i16});") == ir.Temporary(
+        id="t",
+        domain=ir.SymRef(id="domain"),
+        dtype=ts.TupleType(
+            types=[
+                ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                ts.ScalarType(kind=ts.ScalarKind.INT16),
+            ]
+        ),
+    )
+    assert pparse("t = temporary(domain=domain, dtype=f64[3]);") == ir.Temporary(
+        id="t",
+        domain=ir.SymRef(id="domain"),
+        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]),
+    )
+
+
+def test_scalar_kind_names_are_not_accepted():
+    with pytest.raises(ValueError, match="float64"):
+        pparse("t = temporary(domain=domain, dtype=float64);")
 
 
 def test_set_at():
@@ -251,7 +390,7 @@ def test_if_stmt():
 
 
 def test_program():
-    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=f64);\n  y @ cartesian_domain() ← x;\n}"
     expected = ir.Program(
         id="f",
         function_definitions=[
@@ -275,3 +414,8 @@ def test_program():
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_transformer_error_is_not_wrapped():
+    with pytest.raises(ValueError, match="nonesuch"):
+        pparse("t = temporary(domain=cartesian_domain(), dtype=nonesuch);")

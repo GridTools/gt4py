@@ -8,45 +8,58 @@
 
 """Caching for compiled backend artifacts."""
 
-import hashlib
 import pathlib
 import tempfile
+from typing import Final
 
-from gt4py.next import config
-from gt4py.next.otf import stages
-from gt4py.next.otf.binding import interface
+from gt4py.next import config, fingerprinting
+from gt4py.next.otf import artifacts
 
+
+#: Regex describing the folder names produced by `get_cache_folder` (use
+#: `re.fullmatch`): `{name}_{fingerprint}_{version_id}`, plus a trailing
+#: `_{build_context_id}` when a fingerprint-style (16-hex) build context id was
+#: given. Where `get_cache_folder` assembles a folder name from these parts, the
+#: pattern's capture groups take an existing folder name apart again — most
+#: importantly recovering the program `name`. External tools use it to recognize
+#: cached program folders — e.g. `scripts/python/dace_determinism.py` reads this
+#: pattern from the installed gt4py at runtime. When changing the naming scheme
+#: in `get_cache_folder`, update this pattern with it; the round-trip test in
+#: `test_cache.py` fails otherwise.
+CACHE_FOLDER_NAME_PATTERN: Final[str] = (
+    r"(?P<name>.+)_(?P<fingerprint>[0-9a-f]{16})_(?P<version_id>.+?)"
+    r"(?:_(?P<build_context_id>[0-9a-f]{16}))?"
+)
+
+#: Suffix appended by `get_cache_folder` to the program name when the cached
+#: artifact includes bindings. It is part of the pattern's `name` group, so
+#: recovering the plain program name means stripping this suffix.
+BINDINGS_NAME_SUFFIX: Final[str] = "_pyext"
+
+#: Directory under the cache base holding the translation caches, one
+#: sub-directory per backend. Unlike a build cache folder, which holds the
+#: artifacts of one compiled program variant, these hold the output of the
+#: translation step: an optimized SDFG or generated source per translated
+#: program.
+TRANSLATION_CACHE_DIR_NAME: Final[str] = "translation_cache"
+
+#: Backends that persist the output of their translation step, i.e. those whose
+#: workflow factory enables the `cached_translation` trait.
+TRANSLATION_CACHE_BACKENDS: Final[tuple[str, ...]] = ("dace", "gtfn")
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
 
 
-def _serialize_param(parameter: interface.Parameter) -> str:
-    return f"{parameter.name}: {parameter.type_!s}"
+def get_translation_cache_folder(cache_base: pathlib.Path, backend: str) -> pathlib.Path:
+    """Return the folder under `cache_base` where `backend` caches its translations.
 
-
-def _serialize_library_dependency(dependency: interface.LibraryDependency) -> str:
-    return f"{dependency.name}/{dependency.version}"
-
-
-def _serialize_source(source: stages.ProgramSource) -> str:
-    parameters = [_serialize_param(param) for param in source.entry_point.parameters]
-    dependencies = [_serialize_library_dependency(dep) for dep in source.library_deps]
-    return f"""\
-    language: {source.code_spec}
-    name: {source.entry_point.name}
-    params: {", ".join(parameters)}
-    deps: {", ".join(dependencies)}
-    src: {source.source_code}
+    Unlike `get_cache_folder`, this only computes a path. The folder is created by
+    the cache that writes into it, so that asking where a cache would be does not
+    create it — which tools that only inspect a cache rely on.
     """
-
-
-def _cache_folder_name(source: stages.ProgramSource) -> str:
-    serialized = _serialize_source(source)
-    fingerprint = hashlib.sha256(serialized.encode(encoding="utf-8"))
-    fingerprint_hex_str = fingerprint.hexdigest()
-    return source.entry_point.name + "_" + fingerprint_hex_str
+    return cache_base / TRANSLATION_CACHE_DIR_NAME / backend
 
 
 def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
@@ -61,15 +74,32 @@ def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
 
 
 def get_cache_folder(
-    compilable_source: stages.CompilableProject, lifetime: config.BuildCacheLifetime
+    ext_source: artifacts.ExtensionSource,
+    lifetime: config.BuildCacheLifetime,
+    build_context_id: str = "",
 ) -> pathlib.Path:
     """
-    Construct the path to where the build system project artifact of a compilable source should be cached.
+    Construct the path to where the build system project artifact of an extension source should be cached.
 
+    The folder name is salted with ``config.BUILD_CACHE_VERSION_ID`` (defaulting to the gt4py
+    version, overridable via the ``GT4PY_BUILD_CACHE_VERSION_ID`` env var) so that a change to
+    the build-cache version forces incompatibility with previously cached builds, even when the
+    extension source fingerprint is unchanged.
+
+    An optional ``build_context_id`` can be provided to distinguish between different contexts
+    that may produce different artifacts for the same extension source.
     The returned path points to an existing folder in all cases.
+
+    The folder name layout is documented by ``CACHE_FOLDER_NAME_PATTERN``; keep the
+    two in sync when changing the naming scheme here.
     """
-    # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
-    folder_name = _cache_folder_name(compilable_source.program_source)
+    fingerprinter = fingerprinting.strict_fingerprinter
+    slug = ext_source.program_source.entry_point.name
+    if ext_source.binding_source:
+        slug = f"{slug}{BINDINGS_NAME_SUFFIX}"
+    folder_name = f"{slug}_{fingerprinter(ext_source)}_{config.BUILD_CACHE_VERSION_ID}"
+    if build_context_id:
+        folder_name = f"{folder_name}_{build_context_id}"
 
     base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)

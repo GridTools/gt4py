@@ -2,6 +2,91 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-08-31
+
+### General
+
+- Update DaCe to 2.0.0a7.
+- Fix `eve` annotation dispatch for modern typing spellings.
+- Validate `type[X]` annotations by subclass in `eve`.
+- Support recursive type aliases through containers in `eve`.
+- Make DaCe node connector ordering deterministic.
+
+### Cartesian
+
+- Remove support for `field[...]` assignment syntax.
+
+### Next
+
+See commit history.
+
+## [1.2.1] - 2026-08-17
+
+### General
+
+- Update `dace` dependency to `2.0.0a6`.
+- Support PEP 695 type aliases (`type X = ...`) in annotations, with diagnostics that point at the offending annotation.
+- Fix latent bugs surfaced by the Python 3.12 floor and stop re-exporting the deprecated `typing` aliases (`Dict`, `List`, `Set`, `FrozenSet`, `Tuple`, `Type`) from `gt4py.eve`; use the builtin generics instead.
+
+### Cartesian
+
+- Add support for `IntEnum` values in stencil code and as stencil arguments.
+- Allow data dimension sizes to be any integer type, not just plain `int`.
+- Remove deprecation warnings emitted by the GTScript frontend on Python 3.12 and later.
+
+### Next
+
+See commit history.
+
+## [1.2.0] - 2026-08-05
+
+### General
+
+- Drop support for Python 3.10 and 3.11.
+- Update `dace` dependency to `2.0.0a5`.
+
+### Cartesian
+
+- Add `gtscript.lazy_function` decorator that delays parsing of annotated gtscript functions until first use, enabling types that are not fully defined at import time.
+- Update the C++ standard to C++20 for generated code.
+- Fix derived math functions in the DaCe backend to respect literal float precision, matching Fortran behavior.
+- Avoid long compilation times in the DaCe backend by skipping a costly simplification pass.
+
+### Next
+
+See commit history.
+
+## [1.1.12] - 2026-07-10
+
+### Cartesian
+
+- Improve DaCe loop scheduling for CPU and CUDA backends.
+- Generate cleaner index-bound expressions in the DaCe backend.
+- Use descriptive loop names in the DaCe schedule tree for easier profiling and debugging.
+- Fix out-of-bounds reads for stencils using K-axis interfaces without extra vertical padding.
+
+### Next
+
+See commit history.
+
+## [1.1.11] - 2026-06-18
+
+### General
+
+- Add minimal harness for coding agents.
+- Improve the infrastructure for development scripts.
+
+### Cartesian
+
+- Add a DaCe GPU backend with `IJK`-loop layout.
+- Change DaCe GPU backends to unit alignment, enabling Fortran-style memory mapping and reducing memory footprint.
+- Change DaCe backends to nest the sequential vertical `K`-loop inside the parallel `IJ`-kernel on parallel targets.
+- Fix format of `extra` flags for device compilation.
+
+### Next
+
+See commit history.
+
 ## [1.1.10] - 2026-05-22
 
 ### General

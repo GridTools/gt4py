@@ -15,7 +15,7 @@ jobs:
     outputs:
       python-versions: ${{ steps.get-versions.outputs.python-versions }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - id: get-versions
         uses: ./.github/actions/get-python-versions
 
@@ -30,7 +30,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv and set the python version
         uses: astral-sh/setup-uv@v7

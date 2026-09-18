@@ -12,14 +12,14 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import field_utils
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
+from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = offset("I")
-K = offset("K")
+I = gtx.CartesianConnectivity(IDim)
+K = gtx.CartesianConnectivity(KDim)
 
 
 @fundef
@@ -91,7 +91,7 @@ def test_basic_column_stencils(program_processor, basic_stencils):
         program_processor,
         inp,
         out=out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
         column_axis=KDim,
     )
 
@@ -161,7 +161,7 @@ def test_k_level_condition(program_processor, fun, k_level, inp_function, ref_fu
         inp,
         k_level(inp),
         out=out,
-        offset_provider={"K": KDim},
+        offset_provider={},
         column_axis=KDim,
     )
 
@@ -199,7 +199,7 @@ def test_ksum_scan(program_processor, kstart, reference):
         shape[1],
         inp,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -228,7 +228,7 @@ def test_ksum_back_scan(program_processor):
         shape[1],
         inp,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -276,7 +276,7 @@ def test_ksum_even_odd_scan(program_processor):
         shape[1],
         inp,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -325,7 +325,7 @@ def test_ksum_even_odd_nested_scan(program_processor):
         shape[1],
         inp,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -357,7 +357,7 @@ def test_ksum_even_odd_nested_only_even_scan(program_processor):
         shape[1],
         inp,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -414,7 +414,7 @@ def test_kdoublesum_scan(program_processor, kstart, reference):
         inp0,
         inp1,
         out,
-        offset_provider={"I": IDim, "K": KDim},
+        offset_provider={},
     )
 
     if validate:
@@ -443,7 +443,7 @@ def test_different_vertical_sizes(program_processor):
     ref = inp0.ndarray + inp1.ndarray[1:]
 
     run_processor(
-        sum_shifted_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={"K": KDim}
+        sum_shifted_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={}
     )
 
     if validate:
@@ -471,9 +471,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     out = gtx.as_field([KDim], np.zeros(k_size, dtype=np.int64))
     ref = inp0.asnumpy() + inp1.asnumpy()[:-1]
 
-    run_processor(
-        sum_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={"K": KDim}
-    )
+    run_processor(sum_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={})
 
     if validate:
         assert np.allclose(ref, out.asnumpy())

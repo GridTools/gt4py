@@ -16,7 +16,7 @@ from gt4py.next.iterator.transforms import fuse_as_fieldop, inline_lambdas, trac
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 
 
-def _dynamic_shift_args(node: itir.Expr) -> None | list[bool]:
+def _dynamic_shift_args(node: itir.Expr) -> list[bool] | None:
     if not cpm.is_applied_as_fieldop(node):
         return None
     params_shifts = trace_shifts.trace_stencil(
@@ -59,24 +59,32 @@ class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     if ref in inline_let_params and is_dynamic_shift_arg:
                         inline_let_params[ref] = True
 
-            if any(inline_let_params):
+            if any(inline_let_params.values()):
                 node = inline_lambdas.inline_lambda(
                     node, eligible_params=list(inline_let_params.values())
                 )
 
-        if dynamic_shift_args := _dynamic_shift_args(node):
-            assert len(node.fun.args) in [1, 2]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop in _dynamic_shift_args
+        # Fusing one producer can expose another one behind it (e.g. a chain of shifts split
+        # across multiple `as_fieldop`s), so repeat until no dynamically shifted argument that is
+        # not a `SymRef` is left. A let-bound producer shared between two dynamically shifted
+        # consumers is therefore left behind, see #2839.
+        # This terminates: each iteration either replaces an `as_fieldop` or `if_` argument by
+        # strict subterms of itself, or drops a tuple-of-literals argument entirely.
+        expr: itir.Expr = node
+        while dynamic_shift_args := _dynamic_shift_args(expr):
+            assert isinstance(expr, itir.FunCall) and len(expr.fun.args) in [1, 2]  # type: ignore[attr-defined]  # ensured by is_applied_as_fieldop in _dynamic_shift_args
             fuse_args = [
                 not isinstance(inp, itir.SymRef) and dynamic_shift_arg
-                for inp, dynamic_shift_arg in zip(node.args, dynamic_shift_args, strict=True)
+                for inp, dynamic_shift_arg in zip(expr.args, dynamic_shift_args, strict=True)
             ]
-            if any(fuse_args):
-                return fuse_as_fieldop.fuse_as_fieldop(
-                    node,
-                    fuse_args,
-                    uids=self.uids,
-                    offset_provider_type=self.offset_provider_type,
-                    enable_cse=True,
-                )
+            if not any(fuse_args):
+                break
+            expr = fuse_as_fieldop.fuse_as_fieldop(
+                expr,
+                fuse_args,
+                uids=self.uids,
+                offset_provider_type=self.offset_provider_type,
+                enable_cse=True,
+            )
 
-        return node
+        return expr

@@ -22,6 +22,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
+    CartesianConnectivity,
     Connectivity,
     Dimension,
     DimensionKind,
@@ -30,7 +31,10 @@ from .common import (
     Field,
     GridType,
     UnitRange,
+    as_non_staggered,
     domain,
+    flip_staggered,
+    is_staggered,
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
@@ -93,10 +97,7 @@ from .ffront.fbuiltins import (
     where,
 )
 from .otf.compiled_program import wait_for_compilation
-from .program_processors.runners.gtfn import (
-    run_gtfn_cached as gtfn_cpu,
-    run_gtfn_gpu_cached as gtfn_gpu,
-)
+from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
 from .program_processors.runners.roundtrip import default as itir_python
 
 
@@ -117,12 +118,16 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "DimensionKind",
     "Dims",
     "Field",
+    "CartesianConnectivity",
     "Connectivity",
     "GridType",
     "domain",
     "Domain",
     "unit_range",
     "UnitRange",
+    "is_staggered",
+    "flip_staggered",
+    "as_non_staggered",
     # from constructors
     "FieldConstructor",
     "empty",
@@ -143,7 +148,6 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "gtfn_gpu",
     "itir_python",
     # from fbuiltins
-    "FieldOffset",
     "IndexType",
     "abs",
     "arccos",

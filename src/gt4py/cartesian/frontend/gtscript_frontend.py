@@ -33,6 +33,7 @@ from typing import (
 import numpy as np
 
 from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
+from gt4py.cartesian.definitions import LITERAL_INT_PRECISION
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.base import Frontend, register
 from gt4py.cartesian.frontend.defir_builder import DefIRBuilder
@@ -48,8 +49,12 @@ from gt4py.cartesian.frontend.exceptions import (
 from gt4py.cartesian.utils import meta as gt_meta, warn_experimental_feature
 
 
-PYTHON_AST_VERSION: Final = (3, 10)
-ELLIPSIS_TYPE = getattr(ast, "Ellipsis", types.EllipsisType)
+PYTHON_AST_VERSION: Final = (3, 12)
+
+
+def _is_ellipsis_node(node: ast.AST) -> bool:
+    """Check whether an AST node is the '...' literal."""
+    return isinstance(node, ast.Constant) and node.value is Ellipsis
 
 
 class AssertionChecker(ast.NodeTransformer):
@@ -127,7 +132,7 @@ class IntervalParser(gt_meta.ASTPass):
 
     def _make_axis_bound(
         self,
-        value: Union[int, None, gtscript.AxisIndex, nodes.AxisBound, nodes.VarRef],
+        value: Union[int, gtscript.AxisIndex, nodes.AxisBound, nodes.VarRef, None],
         endpt: nodes.LevelMarker,
     ) -> nodes.AxisBound | nodes.RuntimeAxisBound:
         if isinstance(value, nodes.AxisBound):
@@ -298,7 +303,7 @@ class HorizontalIntervalParser(IntervalParser):
 class VerticalIntervalParser(IntervalParser):
     """Parse Python AST interval syntax in the form of a Slice.
 
-    Corner cases: `ast.Ellipsis` refers to the entire interval, and
+    Corner cases: an ellipsis (`...`) constant refers to the entire interval, and
     if an `ast.Subscript` is passed, this parses its slice attribute.
     """
 
@@ -344,7 +349,7 @@ class VerticalIntervalParser(IntervalParser):
         if isinstance(node, ast.Subscript):
             raise parser.interval_error
 
-        if isinstance(node, ast.Constant) and node.value is Ellipsis:
+        if _is_ellipsis_node(node):
             interval = nodes.AxisInterval.full_interval()
             interval.loc = loc
             return interval
@@ -442,6 +447,18 @@ class ValueInliner(ast.NodeTransformer):
         return node
 
     def visit_Attribute(self, node: ast.Attribute):
+        # An enum MyEnum.A would come has
+        # > ast.Attribute("A")
+        #   - value: ast.Name("MyEnum")
+        # We want to replace the entire thing - so we capture the top level
+        # attribute. We don't use the `self.context` because of this
+        # two-step AST structure which doesn't fit the generic `replace_node`.
+
+        if isinstance(node.value, ast.Name) and node.value.id in _ENUM_REGISTER.keys():
+            int_value = getattr(_ENUM_REGISTER[node.value.id], node.attr)
+            return ast.Constant(value=int_value)
+
+        # Common replace for all other nodes in context.
         return self._replace_node(node)
 
     def visit_Name(self, node: ast.Name):
@@ -738,10 +755,11 @@ class CallInliner(ast.NodeTransformer):
         return result_node
 
     def visit_Expr(self, node: ast.Expr):
-        """Ignore pure string statements in callee."""
-        pure_str_types = (ast.Constant,) + ((ast.Str,) if hasattr(ast, "Str") else ())
-        if not isinstance(node.value, pure_str_types):
-            return super().visit(node.value)
+        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            # Ignore pure string statements in callee
+            return
+
+        return super().visit(node.value)
 
 
 class CompiledIfInliner(ast.NodeTransformer):
@@ -1359,8 +1377,11 @@ class IRMaker(ast.NodeVisitor):
 
         if any(isinstance(cn, ast.Slice) for cn in index_nodes):
             raise GTScriptSyntaxError(message="Invalid target in assignment.", loc=node)
-        if any(isinstance(cn, ELLIPSIS_TYPE) for cn in index_nodes):
-            return None
+        if any(_is_ellipsis_node(cn) for cn in index_nodes):
+            raise GTScriptSyntaxError(
+                "Field access with ellipsis has been replaced with the plain field name."
+                " Hint: Change `field[...]` to just `field`."
+            )
 
         # Determine if we are using the new-style axis syntax, or the old style.
         # If this is parsing a data index, this should be fine and will return False.
@@ -1460,7 +1481,7 @@ class IRMaker(ast.NodeVisitor):
         op = self.visit(node.op)
         arg = self.visit(node.operand)
         if isinstance(arg, numbers.Number):
-            return eval("{op}{arg}".format(op=op.python_symbol, arg=arg))
+            return eval(f"{op.python_symbol}{arg}")
 
         return nodes.UnaryOpExpr(
             op=op,
@@ -2065,6 +2086,11 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                     raise invalid_target
 
 
+_ENUM_REGISTER: dict[str, object] = {}
+"""Register of IntEnum that will be available to parsing in stencils. Register
+with @gtscript.enum()"""
+
+
 class GTScriptParser(ast.NodeVisitor):
     CONST_VALUE_TYPES = (
         *gtscript._VALID_DATA_TYPES,
@@ -2090,7 +2116,7 @@ class GTScriptParser(ast.NodeVisitor):
 
     def __str__(self) -> str:
         result = "<GT4Py.GTScriptParser> {\n"
-        result += "\n".join("\t{}: {}".format(name, getattr(self, name)) for name in vars(self))
+        result += "\n".join(f"\t{name}: {getattr(self, name)}" for name in vars(self))
         result += "\n}"
         return result
 
@@ -2098,7 +2124,7 @@ class GTScriptParser(ast.NodeVisitor):
     def annotate_definition(
         definition: Callable,
         options: gt_definitions.BuildOptions | None = None,
-        externals=None,
+        externals: dict[str, Any] | None = None,
     ) -> Callable:
         """Annotate the function definition with dtypes, resolve externals and add default values.
 
@@ -2115,12 +2141,12 @@ class GTScriptParser(ast.NodeVisitor):
             GTScriptSyntaxError
 
         Returns:
-            definition (Callable): function to annotate
+            definition (Callable): annotated function
         """
         api_signature = []
         api_annotations = []
 
-        qualified_name = "{}.{}".format(definition.__module__, definition.__name__)
+        qualified_name = f"{definition.__module__}.{definition.__name__}"
         sig = inspect.signature(definition)
         for param in sig.parameters.values():
             if param.kind == inspect.Parameter.VAR_POSITIONAL:
@@ -2155,6 +2181,13 @@ class GTScriptParser(ast.NodeVisitor):
                 and param.annotation in gtscript._VALID_DATA_TYPES
             ):
                 dtype_annotation = np.dtype(param.annotation)
+            elif param.annotation in _ENUM_REGISTER.values():
+                literal_int_precision = (
+                    options.literal_int_precision if options else LITERAL_INT_PRECISION
+                )
+                dtype_annotation = gt_definitions.get_integer_type(
+                    literal_int_precision
+                )  # We will replace all enums with `int`
             elif param.annotation is inspect.Signature.empty:
                 dtype_annotation = None
             else:
@@ -2274,7 +2307,7 @@ class GTScriptParser(ast.NodeVisitor):
                     wrong_imports.append(key)
 
         if wrong_imports:
-            raise GTScriptSyntaxError("Invalid 'import' statements ({})".format(wrong_imports))
+            raise GTScriptSyntaxError(f"Invalid 'import' statements ({wrong_imports})")
 
         context, unbound = gt_meta.get_closure(
             definition, included_nonlocals=True, include_builtins=False
@@ -2283,6 +2316,10 @@ class GTScriptParser(ast.NodeVisitor):
         imported_symbols = {name: {} for name in imported_names}
         local_symbols = CollectLocalSymbolsAstVisitor.apply(gtscript_ast)
         nonlocal_symbols = {}
+
+        # Remove enums from `context`, they will be turned into integers in the ValueReplacer
+        for enum_ in _ENUM_REGISTER.keys():
+            context.pop(enum_, "")
 
         name_nodes = gt_meta.collect_names(gtscript_ast, skip_annotations=False)
         for collected_name in name_nodes.keys():
@@ -2312,6 +2349,16 @@ class GTScriptParser(ast.NodeVisitor):
                         loc=nodes.Location.from_ast_node(name_nodes[collected_name][0]),
                     )
 
+        for key, value in nonlocal_symbols.items():
+            # Support @lazy_function() decorators by only evaluating them at this point
+            if (
+                callable(value)
+                and not hasattr(value, "_gtscript_")
+                and value.__qualname__.startswith("lazy_function.")
+            ):
+                value = value()
+                nonlocal_symbols[key] = value
+
         return nonlocal_symbols, imported_symbols
 
     @staticmethod
@@ -2329,7 +2376,7 @@ class GTScriptParser(ast.NodeVisitor):
             raise GTScriptDefinitionError(
                 name=name,
                 value="<unknown>",
-                message="Missing or invalid value for external symbol {name}".format(name=name),
+                message=f"Missing or invalid value for external symbol {name}",
                 loc=loc,
             ) from e
         return value
@@ -2380,7 +2427,7 @@ class GTScriptParser(ast.NodeVisitor):
                 if hasattr(value, "_gtscript_") and exhaustive:
                     assert callable(value)
                     nested_inlined_values = {
-                        "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
+                        f"{value._gtscript_['qualified_name']}.{item_name}": item_value
                         for item_name, item_value in value._gtscript_["nonlocals"].items()
                     }
                     resolved_values_list.extend(nested_inlined_values.items())
@@ -2408,6 +2455,20 @@ class GTScriptParser(ast.NodeVisitor):
             resolved_values_list = []
 
         return result
+
+    @staticmethod
+    def register_enum(class_: type[enum.IntEnum]):
+        class_name = class_.__name__
+        if class_name in _ENUM_REGISTER:
+            raise ValueError(
+                f"Enum names must be unique. @gtscript.enum {class_name} is already taken."
+            )
+
+        if not issubclass(class_, enum.IntEnum):
+            raise ValueError(f"Enum {class_name} needs to derive from `enum.IntEnum`.")
+
+        _ENUM_REGISTER[class_name] = class_
+        return class_
 
     def extract_arg_descriptors(self):
         api_signature = self.definition._gtscript_["api_signature"]
@@ -2557,7 +2618,7 @@ class GTScriptFrontend(Frontend):
     def prepare_stencil_definition(
         cls,
         definition: Callable,
-        externals,
+        externals: dict[str, Any],
         options: gt_definitions.BuildOptions | None = None,
     ) -> Callable:
         """Return an annotated version of the stencil definition.

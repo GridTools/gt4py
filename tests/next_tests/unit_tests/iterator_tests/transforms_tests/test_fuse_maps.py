@@ -13,11 +13,11 @@ from gt4py.next.iterator.transforms import fuse_maps, inline_lambdas
 
 
 def _map(op: ir.Expr, *args: ir.Expr) -> ir.FunCall:
-    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[op]), args=[*args])
+    return ir.FunCall(fun=ir.FunCall(fun=ir.SymRef(id="map_list"), args=[op]), args=[*args])
 
 
 def _map_p(op: ir.Expr | P, *args: ir.Expr | P) -> P:
-    return P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="map_"), args=[op]), args=[*args])
+    return P(ir.FunCall, fun=P(ir.FunCall, fun=ir.SymRef(id="map_list"), args=[op]), args=[*args])
 
 
 def _reduce(op: ir.Expr, init: ir.Expr, *args: ir.Expr) -> ir.FunCall:

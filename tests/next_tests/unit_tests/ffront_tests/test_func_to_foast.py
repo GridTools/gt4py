@@ -73,6 +73,9 @@ LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
 TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
+# PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
+type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]
+
 
 # --- Parsing ---
 def test_untyped_arg():
@@ -91,8 +94,23 @@ def test_mistyped_arg():
     def mistyped(inp: gtx.Field):
         return inp
 
-    with pytest.raises(ValueError, match="Field type requires two arguments, got 0."):
+    with pytest.raises(errors.InvalidAnnotationError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(mistyped)
+
+    assert any("Field type requires two arguments, got 0" in note for note in exc_info.value.notes)
+
+
+def test_type_alias_arg():
+    """PEP 695 type aliases are accepted in parameter and return annotations."""
+
+    def with_alias(inp: TFloatFieldAlias) -> TFloatFieldAlias:
+        return inp
+
+    parsed = FieldOperatorParser.apply_to_function(with_alias)
+
+    assert parsed.params[0].type == ts.FieldType(
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
+    )
 
 
 def test_return_type():
@@ -132,6 +150,15 @@ def test_invalid_assign_to_expr():
         _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
+def test_declaration_without_assignment():
+    def empty_assign() -> float:
+        x: float
+        return 1.0
+
+    with pytest.raises(errors.DSLError, match=r"without assignment"):
+        _ = FieldOperatorParser.apply_to_function(empty_assign)
+
+
 def test_temp_assignment():
     def copy_field(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp
@@ -158,14 +185,30 @@ def test_clashing_annotated_assignment():
 
 
 def test_binary_pow():
-    def power(inp: gtx.Field[[TDim], "float64"]):
+    def pow_op(inp: gtx.Field[[TDim], "float64"]):
         return inp**3
 
-    parsed = FieldOperatorParser.apply_to_function(power)
+    parsed = FieldOperatorParser.apply_to_function(pow_op)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
         dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
+
+
+def test_field_operator_name_shadows_builtin():
+    def power(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        _ = FieldOperatorParser.apply_to_function(power)
+
+
+def test_field_operator_name_shadows_experimental_builtin():
+    def concat_where(inp: gtx.Field[[TDim], "float64"]):
+        return inp
+
+    with pytest.raises(errors.DSLError, match="reserved GT4Py builtin"):
+        _ = FieldOperatorParser.apply_to_function(concat_where)
 
 
 def test_binary_mod():
@@ -243,7 +286,10 @@ def test_conditional_wrong_arg_type():
 
     with pytest.raises(
         errors.DSLError,
-        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+        match=re.escape(
+            "Could not promote 'Field[[TDim], float32]' and 'Field[[TDim], float64]' "
+            "to common type in call to 'where'."
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 

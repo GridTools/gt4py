@@ -14,25 +14,30 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Optional, TypeVar
+from typing import Final, Optional, TypeVar
 
-from gt4py._core import locking
-from gt4py.next import config, errors
-from gt4py.next.otf import code_specs, stages
+from gt4py._core import file_utils, locking
+from gt4py.next import config, errors, fingerprinting
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
-CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
+CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=artifacts.CPPLikeCodeSpec)
+
+#: Name prefix of the synthetic program under which the shared compiledb is cached.
+#: Its cache folder sits next to the folders of real programs, so tools that scan
+#: the build cache use this to tell the two apart.
+COMPILEDB_PROTOTYPE_NAME_PREFIX: Final[str] = "compile_commands_cache"
 
 
 @dataclasses.dataclass
 class CompiledbFactory(
-    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, artifacts.PythonCodeSpec]
 ):
     """
-    Create a CompiledbProject from a ``CompilableSource`` stage object with given CMake settings.
+    Create a CompiledbProject from an ``ExtensionSource`` stage object with given CMake settings.
 
     Use CMake to generate a compiledb with the required sequence of build commands.
     Generate a compiledb only if there isn't one for the given combination of cmake configuration
@@ -45,7 +50,7 @@ class CompiledbFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        source: artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
@@ -72,7 +77,11 @@ class CompiledbFactory(
         )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_lifetime),
+            root_path=cache.get_cache_folder(
+                source,
+                cache_lifetime,
+                build_context_id=fingerprinting.strict_fingerprinter(self),
+            ),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
@@ -100,7 +109,7 @@ def _relative_path_to_parent(current: pathlib.Path, parent: pathlib.Path) -> str
 
 
 @dataclasses.dataclass()
-class CompiledbProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]):
+class CompiledbProject(artifacts.BuildSystemProject[CPPLikeCodeSpecT, artifacts.PythonCodeSpec]):
     """
     Compiledb build system for gt4py programs.
 
@@ -236,7 +245,7 @@ class CompiledbProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.Py
 def _cc_prototype_program_name(
     deps: tuple[interface.LibraryDependency, ...], build_type: str, flags: list[str]
 ) -> str:
-    base_name = "compile_commands_cache"
+    base_name = COMPILEDB_PROTOTYPE_NAME_PREFIX
     deps_str = "_".join(f"{dep.name}_{dep.version}" for dep in deps)
     flags_str = "_".join(re.sub(r"\W+", "", f) for f in flags)
     return "_".join([base_name, deps_str, build_type, flags_str]).replace(".", "_")
@@ -246,10 +255,10 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    code_spec: code_specs.CPPLikeCodeSpec,
-) -> stages.ProgramSource:
+    code_spec: artifacts.CPPLikeCodeSpec,
+) -> artifacts.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
-    return stages.ProgramSource(
+    return artifacts.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
@@ -259,21 +268,24 @@ def _cc_prototype_program_source(
 
 def _cc_get_compiledb(
     renew_compiledb: bool,
-    prototype_program_source: stages.ProgramSource,
+    prototype_program_source: artifacts.ProgramSource,
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
     cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
-    cache_path = cache.get_cache_folder(
-        stages.CompilableProject(prototype_program_source, None), cache_lifetime
+    # Use the same prototype source (with empty bindings) for both locating and creating the
+    # compiledb, so `get_cache_folder` names the same folder in either path.
+    prototype_source: artifacts.ExtensionSource = artifacts.ExtensionSource(
+        prototype_program_source, artifacts.BindingSource(source_code="", library_deps=())
     )
+    cache_path = cache.get_cache_folder(prototype_source, cache_lifetime)
 
     # In a multi-threaded environment, multiple threads may try to create the compiledb at the same time
     # leading to compilation errors.
     with locking.lock(cache_path):
         if renew_compiledb or not (compiled_db := _cc_find_compiledb(path=cache_path)):
             compiled_db = _cc_create_compiledb(
-                prototype_program_source=prototype_program_source,
+                prototype_source=prototype_source,
                 build_type=build_type,
                 cmake_flags=cmake_flags,
                 cache_lifetime=cache_lifetime,
@@ -287,12 +299,20 @@ def _cc_get_compiledb(
 def _cc_find_compiledb(path: pathlib.Path) -> Optional[pathlib.Path]:
     compile_db_path = path / "compile_commands.json"
     if compile_db_path.exists():
+        try:
+            json.loads(compile_db_path.read_text())
+        except (OSError, ValueError):
+            # The template is shared by every program built with the same
+            # configuration; one left truncated/corrupt by an interrupted write
+            # would poison all of them. Drop it so the caller regenerates.
+            compile_db_path.unlink(missing_ok=True)
+            return None
         return compile_db_path
     return None
 
 
 def _cc_create_compiledb(
-    prototype_program_source: stages.ProgramSource,
+    prototype_source: artifacts.ExtensionSource,
     build_type: config.CMakeBuildType,
     cmake_flags: list[str],
     cache_lifetime: config.BuildCacheLifetime,
@@ -302,18 +322,17 @@ def _cc_create_compiledb(
         cmake_build_type=build_type,
         cmake_extra_flags=cmake_flags,
     )(
-        stages.CompilableProject(
-            prototype_program_source, stages.BindingSource(source_code="", library_deps=())
-        ),
+        prototype_source,
         cache_lifetime,
     )
 
     path = prototype_project.root_path
     name = prototype_project.program_name
+    file_extension = prototype_source.program_source.code_spec.file_extension
     binding_src_name = next(
         name
         for name in prototype_project.source_files.keys()
-        if name.endswith(f"_bindings.{prototype_program_source.code_spec.file_extension}")
+        if name.endswith(f"_bindings.{file_extension}")
     )
 
     prototype_project.build()
@@ -362,6 +381,6 @@ def _cc_create_compiledb(
         )
 
     compile_db_path = path / "compile_commands.json"
-    compile_db_path.write_text(json.dumps(compile_db))
+    file_utils.atomic_write_text(compile_db_path, json.dumps(compile_db))
 
     return compile_db_path

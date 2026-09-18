@@ -12,6 +12,7 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
+from types import UnionType
 from typing import (
     Any,
     Callable,
@@ -23,6 +24,8 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
+    get_origin,
     overload,
 )
 
@@ -138,12 +141,15 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or get_origin(t) is tuple:
         return ts.TupleType
-    elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
-        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
-        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    # 'Union[A, B]' and 'A | B' are different runtime objects: the latter is a
+    # 'types.UnionType', which carries no '__origin__' at all.
+    elif get_origin(t) in (Union, UnionType):
+        member_types = [_type_conversion_helper(e) for e in get_args(t)]
+        assert all(type(m) is type and issubclass(m, ts.TypeSpec) for m in member_types)
+        # `cast` to break the recursion
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(member_types))
     elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
         return ts.NamedCollectionType
     else:
@@ -237,6 +243,16 @@ class WhereBuiltinFunction(
     ) -> Tuple: ...
 
     def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
+        if isinstance(true_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES) or isinstance(
+            false_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES
+        ):
+            if type(true_field) is not type(false_field):
+                raise ValueError(
+                    f"Either both or none can be a named collection of the same type in '{true_field=}' and '{false_field=}'."
+                )
+            return named_collections.tree_map_named_collection(lambda t, f: self(cond, t, f))(  # type: ignore[return-value] # `NamedCollection` is not `_R`
+                true_field, false_field
+            )
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -313,34 +329,44 @@ def astype(
 _UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
 UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
 
+
+try:
+    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
+except ImportError:
+
+    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
+        # restore the input scalar type, which `math.gamma` widens to `float`
+        return type(value)(math.gamma(value))
+
+
 _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
-    "sin": math.sin,
-    "cos": math.cos,
-    "tan": math.tan,
-    "arcsin": math.asin,
-    "arccos": math.acos,
-    "arctan": math.atan,
-    "sinh": math.sinh,
-    "cosh": math.cosh,
-    "tanh": math.tanh,
-    "arcsinh": math.asinh,
-    "arccosh": math.acosh,
-    "arctanh": math.atanh,
-    "sqrt": math.sqrt,
-    "exp": math.exp,
-    "log": math.log,
-    "gamma": math.gamma,
-    "cbrt": math.cbrt if hasattr(math, "cbrt") else np.cbrt,  # match.cbrt() only added in 3.11
-    "floor": math.floor,
-    "ceil": math.ceil,
-    "trunc": math.trunc,
+    "sin": np.sin,
+    "cos": np.cos,
+    "tan": np.tan,
+    "arcsin": np.arcsin,
+    "arccos": np.arccos,
+    "arctan": np.arctan,
+    "sinh": np.sinh,
+    "cosh": np.cosh,
+    "tanh": np.tanh,
+    "arcsinh": np.arcsinh,
+    "arccosh": np.arccosh,
+    "arctanh": np.arctanh,
+    "sqrt": np.sqrt,
+    "exp": np.exp,
+    "log": np.log,
+    "gamma": _gamma,
+    "cbrt": np.cbrt,
+    "floor": np.floor,
+    "ceil": np.ceil,
+    "trunc": np.trunc,
 }
 UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
 
 _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
-    "isfinite": math.isfinite,
-    "isinf": math.isinf,
-    "isnan": math.isnan,
+    "isfinite": np.isfinite,
+    "isinf": np.isinf,
+    "isnan": np.isnan,
 }
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
 
@@ -358,7 +384,7 @@ def _make_unary_math_builtin(name: str) -> BuiltInFunction:
             value
         )  # default implementation for scalars, Fields are handled via dispatch
 
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))  # type: ignore[operator, arg-type] # calling a function of unknown type; trunc not supported for all types
+        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -477,15 +503,9 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
-        connectivity: common.Connectivity
-        if isinstance(offset_definition, common.Dimension):
-            connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(offset_definition, common.Connectivity):
-            assert common.is_neighbor_table(offset_definition)
-            named_index = common.NamedIndex(self.target[-1], offset)
-            connectivity = offset_definition[named_index]
-        else:
-            raise NotImplementedError()
+        assert common.is_neighbor_table(offset_definition)
+        named_index = common.NamedIndex(self.target[-1], offset)
+        connectivity = offset_definition[named_index]
 
         return connectivity
 

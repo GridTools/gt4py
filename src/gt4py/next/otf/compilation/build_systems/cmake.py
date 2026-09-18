@@ -9,64 +9,38 @@
 from __future__ import annotations
 
 import dataclasses
-import os
 import pathlib
 import subprocess
-import warnings
 from typing import TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, errors
-from gt4py.next.otf import code_specs, stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
 
 
-def get_device_arch() -> str | None:
-    if core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.CUDA:
-        # use `cp` from core_defs to avoid trying to re-import cupy
-        try:
-            return core_defs.cp.cuda.Device(0).compute_capability  # type: ignore[attr-defined]
-        except core_defs.cp.cuda.runtime.CUDARuntimeError as e:  # type: ignore[attr-defined]
-            warnings.warn(
-                UserWarning(f"Could not determine the CUDA compute capability: {e}"), stacklevel=2
-            )
-            return None
-    elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
-        # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
-        # or using the HIP low level bindings.
-        # Check: https://rocm.docs.amd.com/projects/hip-python/en/latest/user_guide/1_usage.html
-        return "gfx942"  # MI300A
-
-    return None
-
-
 def get_cmake_device_arch_option() -> str:
-    cmake_flag = ""
-    device_archs: str | None = ""
-
     match core_defs.CUPY_DEVICE_TYPE:
         case core_defs.DeviceType.CUDA:
             cmake_flag_template = "-DCMAKE_CUDA_ARCHITECTURES={device_archs}"
-            device_archs = os.environ.get("CUDAARCHS", "").strip() or get_device_arch()
         case core_defs.DeviceType.ROCM:
             cmake_flag_template = "-DCMAKE_HIP_ARCHITECTURES={device_archs}"
-            # `HIPARCHS` is not officially supported by CMake yet, but it might be in the future
-            device_archs = os.environ.get("HIPARCHS", "").strip() or get_device_arch()
+        case _:
+            return ""
 
-    cmake_flag = cmake_flag_template.format(device_archs=device_archs) if device_archs else ""
+    device_archs = common.get_device_arch()
+    return cmake_flag_template.format(device_archs=device_archs) if device_archs else ""
 
-    return cmake_flag
 
-
-CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
+CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=artifacts.CPPLikeCodeSpec)
 
 
 @dataclasses.dataclass
 class CMakeFactory(
-    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    compiler.BuildSystemProjectGenerator[CPPLikeCodeSpecT, artifacts.PythonCodeSpec]
 ):
-    """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
+    """Create a CMakeProject from an ``ExtensionSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
@@ -74,7 +48,7 @@ class CMakeFactory(
 
     def __call__(
         self,
-        source: stages.CompilableProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        source: artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
@@ -86,8 +60,8 @@ class CMakeFactory(
         bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
         if (src_lang_name := source.program_source.code_spec.source_language) in {
-            code_specs.CUDACodeSpec.source_language,
-            code_specs.HIPCodeSpec.source_language,
+            artifacts.CUDACodeSpec.source_language,
+            artifacts.HIPCodeSpec.source_language,
         }:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang_name)]
             if device_arch_flag := get_cmake_device_arch_option():
@@ -114,7 +88,7 @@ class CMakeFactory(
 
 
 @dataclasses.dataclass
-class CMakeProject(stages.BuildSystemProject[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]):
+class CMakeProject(artifacts.BuildSystemProject[CPPLikeCodeSpecT, artifacts.PythonCodeSpec]):
     """
     CMake build system for gt4py programs.
 

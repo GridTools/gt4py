@@ -90,8 +90,6 @@ def ensure_expr(expr_like: ExprLike) -> itir.Expr:
         return ref(expr_like)
     elif core_defs.is_scalar_type(expr_like):
         return literal_from_value(expr_like)
-    elif expr_like is None:
-        return itir.NoneLiteral()
     elif isinstance(expr_like, common.Dimension):
         return axis_literal(expr_like)
     assert isinstance(expr_like, itir.Expr), expr_like
@@ -588,6 +586,27 @@ def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
     return itir.AxisLiteral(value=dim.value, kind=dim.kind)
 
 
+def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
+    """
+    Create a broadcast FunCall of `expr` to `dims`.
+
+    Examples
+    --------
+    >>> IDim = common.Dimension("IDim")
+    >>> str(broadcast("a", (IDim,)))
+    'broadcast(a, {IDimₕ})'
+    """
+    return call("broadcast")(expr, make_tuple(*(axis_literal(dim) for dim in dims)))
+
+
+def cartesian_offset(
+    domain: common.Dimension, codomain: Optional[common.Dimension] = None
+) -> itir.CartesianOffset:
+    if codomain is None:
+        codomain = domain
+    return itir.CartesianOffset(domain=axis_literal(domain), codomain=axis_literal(codomain))
+
+
 def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
     """
     Promotes the function `cast_` to a field_operator.
@@ -624,9 +643,19 @@ def index(dim: common.Dimension) -> itir.FunCall:
     return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
 
 
-def map_(op):
-    """Create a `map_` call."""
-    return call(call("map_")(op))
+def map_list(op):
+    """Create a `map_list` call."""
+    return call(call("map_list")(op))
+
+
+def tree_map_tuple(op):
+    """Create a `tree_map_tuple` call: tree_map_tuple(op)(tup)."""
+    return call(call("tree_map_tuple")(op))
+
+
+def map_tuple(op):
+    """Create a `map_tuple` call: map_tuple(op)(tup)."""
+    return call(call("map_tuple")(op))
 
 
 def reduce(op, expr):

@@ -12,7 +12,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
 from gt4py.next.otf import cpp_utils
-from gt4py.next.program_processors.codegens.gtfn import gtfn_im_ir, gtfn_ir, gtfn_ir_common
+from gt4py.next.program_processors.codegens.gtfn import gtfn_ir
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
@@ -81,7 +81,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     Sym = as_fmt("{id}")
 
-    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> str:
+    def visit_SymRef(self, node: gtfn_ir.SymRef, **kwargs: Any) -> str:
         if node.id == "get":
             return "::gridtools::tuple_util::get"
         if node.id in self._builtins_mapping:
@@ -155,8 +155,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def is_functor_call(self, node: gtfn_ir.FunCall) -> bool:
         return (
-            isinstance(node.fun, gtfn_ir_common.SymRef)
-            and node.fun.id in self.user_defined_function_ids
+            isinstance(node.fun, gtfn_ir.SymRef) and node.fun.id in self.user_defined_function_ids
         )
 
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
@@ -315,68 +314,17 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
         if self.is_cartesian:
-            block_dims = []
-            block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
-            for i, tag in enumerate(offset_definitions):
-                if tag.alias is None:
-                    block_dims.append(
-                        f"gridtools::meta::list<{tag.name.id}_t, "
-                        f"gridtools::integral_constant<int, {block_sizes[i]}>>"
-                    )
+            dims = [tag for tag in offset_definitions if tag.alias is None]
+            block_sizes = [32, 8] + [1] * (len(dims) - 2)
+            block_dims = [
+                f"gridtools::meta::list<{tag.name.id}_t, "
+                f"gridtools::integral_constant<int, {block_size}>>"
+                for tag, block_size in zip(dims, block_sizes)
+            ]
             sizes_str = ",\n".join(block_dims)
             return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
         else:
             return "using block_sizes_t = gridtools::meta::list<gridtools::meta::list<gtfn::unstructured::dim::horizontal, gridtools::integral_constant<int, 32>>, gridtools::meta::list<gtfn::unstructured::dim::vertical, gridtools::integral_constant<int, 8>>>;"
-
-    @classmethod
-    def apply(cls, root: Any, **kwargs: Any) -> str:
-        generated_code = super().apply(root, **kwargs)
-        return generated_code
-
-
-class GTFNIMCodegen(GTFNCodegen):
-    Stmt = as_fmt("{lhs} {op} {rhs};")
-
-    InitStmt = as_fmt("{init_type} {lhs} {op} {rhs};")
-
-    EmptyListInitializer = as_mako("{}")
-
-    Conditional = as_mako(
-        """
-          using ${cond_type} = typename std::common_type<decltype(${if_rhs_}), decltype(${else_rhs_})>::type;
-          ${init_stmt}
-          if (${cond}) {
-            ${if_stmt}
-          } else {
-            ${else_stmt}
-          }
-    """
-    )
-
-    ImperativeFunctionDefinition = as_mako(
-        """
-        struct ${id} {
-            constexpr auto operator()() const {
-                return [](${','.join('auto const& ' + p for p in params)}){
-                    ${expr_};
-                };
-            }
-        };
-    """
-    )
-
-    ReturnStmt = as_fmt("return {ret};")
-
-    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs: Any) -> str:
-        if_rhs_ = self.visit(node.if_stmt.rhs)
-        else_rhs_ = self.visit(node.else_stmt.rhs)
-        return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
-
-    def visit_ImperativeFunctionDefinition(
-        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs: Any
-    ) -> str:
-        expr_ = "".join(self.visit(stmt) for stmt in node.fun)
-        return self.generic_visit(node, expr_=expr_)
 
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:

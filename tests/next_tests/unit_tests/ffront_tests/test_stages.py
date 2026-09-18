@@ -6,134 +6,187 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from unittest import mock
+
 import pytest
 
-from gt4py import next as gtx
+import gt4py.next as gtx
 from gt4py.next.ffront import stages
-from gt4py.next.otf import arguments, toolchain
+from gt4py.next.type_system import type_specifications as ts
 
 
-@pytest.fixture
-def idim():
-    yield gtx.Dimension("I")
+IDim = gtx.Dimension("I")
 
 
-@pytest.fixture
-def jdim():
-    yield gtx.Dimension("J")
+def _field_type(kind: ts.ScalarKind) -> ts.FieldType:
+    return ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=kind))
 
 
-@pytest.fixture
-def fieldop(idim):
-    @gtx.field_operator
-    def copy(a: gtx.Field[[idim], gtx.int32]) -> gtx.Field[[idim], gtx.int32]:
+def _make_field_operator_definition(offset: int):
+    def copy(a):
+        return a + offset
+
+    return copy
+
+
+def _make_program_definition(offset: int):
+    def copy_program(a, out):
+        return a + out + offset
+
+    return copy_program
+
+
+def _make_field_operator_definition_elsewhere(offset: int):
+    # Byte-identical body to `_make_field_operator_definition`, but defined at a
+    # different source location, so the resulting functions must fingerprint
+    # differently (location-sensitive frontend-stage keys).
+    def copy(a):
+        return a + offset
+
+    return copy
+
+
+def test_fingerprinter_hashes_functions_by_source_and_closure():
+    first = _make_field_operator_definition(1)
+    same = _make_field_operator_definition(1)
+    different = _make_field_operator_definition(2)
+
+    assert stages.fingerprinter(first) == stages.fingerprinter(same)
+    assert stages.fingerprinter(first) != stages.fingerprinter(different)
+
+
+def _make_annotated_definition(dtype, length):
+    def copy(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], dtype],) * length],
+    ) -> tuple[(gtx.Field[gtx.Dims[IDim], dtype],) * length]:
         return a
 
-    yield copy
+    return copy
 
 
-@pytest.fixture
-def samecode_fieldop(idim):
+def test_fingerprinter_hashes_functions_by_annotations():
+    first = _make_annotated_definition(gtx.float64, 1)
+    same = _make_annotated_definition(gtx.float64, 1)
+
+    assert stages.fingerprinter(first) == stages.fingerprinter(same)
+    assert stages.fingerprinter(first) != stages.fingerprinter(
+        _make_annotated_definition(gtx.float32, 1)
+    )
+    assert stages.fingerprinter(first) != stages.fingerprinter(
+        _make_annotated_definition(gtx.float64, 2)
+    )
+
+
+def test_fingerprinter_is_location_sensitive():
+    # Two functions with byte-identical source and closure but different source
+    # locations must fingerprint differently, otherwise a cached lowering would
+    # carry the wrong `SourceLocation`s (mislabeled errors / debug info).
+    here = _make_field_operator_definition(1)
+    elsewhere = _make_field_operator_definition_elsewhere(1)
+
+    assert stages.fingerprinter(here) != stages.fingerprinter(elsewhere)
+
+
+def test_definition_stages_use_the_custom_fingerprinter():
+    first_fieldop = stages.DSLFieldOperatorDef(definition=_make_field_operator_definition(1))
+    same_fieldop = stages.DSLFieldOperatorDef(definition=_make_field_operator_definition(1))
+    different_fieldop = stages.DSLFieldOperatorDef(definition=_make_field_operator_definition(2))
+
+    first_program = stages.DSLProgramDef(definition=_make_program_definition(1))
+    same_program = stages.DSLProgramDef(definition=_make_program_definition(1))
+    different_program = stages.DSLProgramDef(definition=_make_program_definition(2))
+
+    assert stages.fingerprinter(first_fieldop) == stages.fingerprinter(same_fieldop)
+    assert stages.fingerprinter(first_fieldop) != stages.fingerprinter(different_fieldop)
+    assert stages.fingerprinter(first_program) == stages.fingerprinter(same_program)
+    assert stages.fingerprinter(first_program) != stages.fingerprinter(different_program)
+
+
+def _make_copies_of_dtype(dtype):
     @gtx.field_operator
-    def copy(a: gtx.Field[[idim], gtx.int32]) -> gtx.Field[[idim], gtx.int32]:
+    def copy(a: gtx.Field[gtx.Dims[IDim], dtype]) -> gtx.Field[gtx.Dims[IDim], dtype]:
         return a
 
-    yield copy
+    @gtx.program
+    def copy_program(
+        a: gtx.Field[gtx.Dims[IDim], dtype], out: gtx.Field[gtx.Dims[IDim], dtype]
+    ) -> None:
+        copy(a, out=out)
+
+    return copy, copy_program
 
 
-@pytest.fixture
-def different_fieldop(jdim):
+def _make_copies_of_tuple_length(length):
     @gtx.field_operator
-    def copy(a: gtx.Field[[jdim], gtx.int32]) -> gtx.Field[[jdim], gtx.int32]:
+    def copy(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+    ) -> tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length]:
         return a
 
-    yield copy
-
-
-@pytest.fixture
-def program(fieldop, idim):
-    copy = fieldop
-
     @gtx.program
-    def copy_program(a: gtx.Field[[idim], gtx.int32], out: gtx.Field[[idim], gtx.int32]):
+    def copy_program(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+        out: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+    ) -> None:
         copy(a, out=out)
 
-    yield copy_program
+    return copy, copy_program
 
 
-@pytest.fixture
-def samecode_program(samecode_fieldop, idim):
-    copy = samecode_fieldop
+@pytest.mark.parametrize(
+    "factory, variants",
+    [
+        (
+            _make_copies_of_dtype,
+            {
+                gtx.float64: _field_type(ts.ScalarKind.FLOAT64),
+                gtx.float32: _field_type(ts.ScalarKind.FLOAT32),
+            },
+        ),
+        (
+            _make_copies_of_tuple_length,
+            {
+                1: ts.TupleType(types=[_field_type(ts.ScalarKind.FLOAT64)]),
+                3: ts.TupleType(types=[_field_type(ts.ScalarKind.FLOAT64)] * 3),
+            },
+        ),
+    ],
+    ids=["dtype", "tuple_length"],
+)
+def test_definitions_differing_only_in_annotations_are_not_shared(factory, variants):
+    built = {variant: factory(variant) for variant in variants}
 
-    @gtx.program
-    def copy_program(a: gtx.Field[[idim], gtx.int32], out: gtx.Field[[idim], gtx.int32]):
-        copy(a, out=out)
-
-    yield copy_program
-
-
-@pytest.fixture
-def different_program(different_fieldop, jdim):
-    copy = different_fieldop
-
-    @gtx.program
-    def copy_program(a: gtx.Field[[jdim], gtx.int32], out: gtx.Field[[jdim], gtx.int32]):
-        copy(a, out=out)
-
-    yield copy_program
-
-
-def test_fingerprint_stage_field_op_def(fieldop, samecode_fieldop, different_fieldop):
-    assert stages.fingerprint_stage(samecode_fieldop.definition_stage) != stages.fingerprint_stage(
-        fieldop.definition_stage
-    )
-    assert stages.fingerprint_stage(different_fieldop.definition_stage) != stages.fingerprint_stage(
-        fieldop.definition_stage
-    )
-
-
-def test_fingerprint_stage_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
-    foast = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        toolchain.ConcreteArtifact(fieldop.definition_stage, arguments.CompileTimeArgs.empty())
-    ).data
-    samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        toolchain.ConcreteArtifact(
-            samecode_fieldop.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-    ).data
-    different = gtx.backend.DEFAULT_TRANSFORMS.func_to_foast(
-        toolchain.ConcreteArtifact(
-            different_fieldop.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-    ).data
-
-    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
-    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast)
+    for variant, (copy, copy_program) in built.items():
+        assert (
+            copy.foast_stage.foast_node.definition.params[0].type,
+            copy_program.past_stage.past_node.params[0].type,
+        ) == (variants[variant], variants[variant])
 
 
-def test_fingerprint_stage_program_def(program, samecode_program, different_program):
-    assert stages.fingerprint_stage(samecode_program.definition_stage) != stages.fingerprint_stage(
-        program.definition_stage
-    )
-    assert stages.fingerprint_stage(different_program.definition_stage) != stages.fingerprint_stage(
-        program.definition_stage
-    )
+@pytest.mark.parametrize(
+    "factory, variant", [(_make_copies_of_dtype, gtx.float32), (_make_copies_of_tuple_length, 2)]
+)
+def test_identical_definitions_share_their_frontend_stages(factory, variant):
+    copy, copy_program = factory(variant)
+    same_copy, same_copy_program = factory(variant)
+
+    assert same_copy.foast_stage is copy.foast_stage
+    assert same_copy_program.past_stage is copy_program.past_stage
 
 
-def test_fingerprint_stage_past_def(program, samecode_program, different_program):
-    past = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        toolchain.ConcreteArtifact(program.definition_stage, arguments.CompileTimeArgs.empty())
-    )
-    samecode = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        toolchain.ConcreteArtifact(
-            samecode_program.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-    )
-    different = gtx.backend.DEFAULT_TRANSFORMS.func_to_past(
-        toolchain.ConcreteArtifact(
-            different_program.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-    )
+def test_fingerprint_excludes_backend():
+    # The backend must not contribute to the lowering fingerprint: it is keyed
+    # separately in the backend's own caches, and a backend graph may hold
+    # non-importable objects (e.g. test doubles / custom workflow steps) that
+    # would otherwise crash fingerprinting.
+    @gtx.field_operator
+    def copy(a: gtx.Field[[IDim], gtx.int32]) -> gtx.Field[[IDim], gtx.int32]:
+        return a
 
-    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)
-    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(past)
+    without_backend = stages.fingerprinter(copy.with_backend(None))
+    with_backend = stages.fingerprinter(copy.with_backend(gtx.gtfn_cpu))
+    assert without_backend == with_backend
+
+    # A non-fingerprintable backend (here a `Mock`) must not crash fingerprinting.
+    object.__setattr__(copy, "backend", mock.Mock())
+    assert stages.fingerprinter(copy) == without_backend

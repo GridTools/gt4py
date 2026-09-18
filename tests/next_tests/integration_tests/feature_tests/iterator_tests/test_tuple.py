@@ -112,6 +112,7 @@ def test_tuple_of_tuple_of_field_output(program_processor):
 
 @pytest.mark.parametrize("stencil", [tuple_output1, tuple_output2])
 @pytest.mark.uses_tuple_iterator
+@pytest.mark.uses_tuple_returns
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -148,6 +149,7 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
 
 @pytest.mark.uses_tuple_iterator
+@pytest.mark.uses_tuple_returns
 def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
     program_processor, validate = program_processor
 

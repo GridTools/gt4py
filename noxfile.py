@@ -9,11 +9,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import os
 import pathlib
+import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
 
 import nox
-import tomllib
 
 
 # This is needed because uv now fails to create an env when it already exists.
@@ -39,38 +39,24 @@ NO_TESTS_COLLECTED_EXIT_CODE: Final = 5
 # -- nox configuration --
 nox.options.default_venv_backend = "uv"
 nox.options.sessions = [
-    "test_cartesian-3.10(internal, cpu)",
-    "test_cartesian-3.10(dace, cpu)",
-    "test_cartesian-3.11(internal, cpu)",
-    "test_cartesian-3.11(dace, cpu)",
     "test_cartesian-3.12(internal, cpu)",
     "test_cartesian-3.12(dace, cpu)",
     "test_cartesian-3.13(internal, cpu)",
     "test_cartesian-3.13(dace, cpu)",
     "test_cartesian-3.14(internal, cpu)",
     "test_cartesian-3.14(dace, cpu)",
-    "test_eve-3.10",
-    "test_eve-3.11",
     "test_eve-3.12",
     "test_eve-3.13",
     "test_eve-3.14",
-    "test_next-3.10(internal, cpu, nomesh)",
-    "test_next-3.10(dace, cpu, nomesh)",
-    "test_next-3.11(internal, cpu, nomesh)",
-    "test_next-3.11(dace, cpu, nomesh)",
     "test_next-3.12(internal, cpu, nomesh)",
     "test_next-3.12(dace, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
     "test_next-3.14(internal, cpu, nomesh)",
     "test_next-3.14(dace, cpu, nomesh)",
-    "test_package-3.10",
-    "test_package-3.11",
     "test_package-3.12",
     "test_package-3.13",
     "test_package-3.14",
-    "test_storage-3.10(cpu)",
-    "test_storage-3.11(cpu)",
     "test_storage-3.12(cpu)",
     "test_storage-3.13(cpu)",
     "test_storage-3.14(cpu)",
@@ -105,10 +91,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "markers": ["uses_dace"]},
 }
 
 
@@ -178,6 +164,10 @@ def test_cartesian(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -216,7 +206,7 @@ def test_examples(session: nox.Session) -> None:
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
-        ("docs/user/next/workshop/exercises", ["-k", "solutions"]),
+        ("docs/user/next/workshop/exercises", ["-k", "solution"]),
         ("docs/user/next/QuickstartGuide.ipynb", None),
         ("docs/user/next/advanced", None),
         ("examples", (None)),
@@ -269,10 +259,15 @@ def test_next(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        # No `NO_TESTS_COLLECTED_EXIT_CODE` here: every combination selects tests,
+        # so collecting none means the selection broke.
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
@@ -319,6 +314,10 @@ def test_storage(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -335,13 +334,108 @@ def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
     install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
     session.run(
         "pytest",
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
         "typing_tests",
         *session.posargs,
+    )
+
+
+# -- DaCe codegen determinism check --
+#
+# The `test_next_dace_determinism` session below runs gt4py's pytest selection
+# twice with an isolated GT4PY_BUILD_CACHE_DIR per run, then verifies the
+# DaCe-generated source files are byte-identical between the two runs. A diff is
+# a determinism bug somewhere in the gt4py + dace toolchain for that selection.
+#
+# The orchestration (run twice + compare) and the hashing/comparison library
+# both live in `scripts/python/dace_determinism.py`, exposed as its
+# `ci-check` and `check` subcommands. This session installs the `scripts`
+# dependency group into the session venv and executes that script with the
+# venv's own python (a gt4py-capable interpreter) — it does not import the
+# module.
+#
+# Only `dace` codegen is checked (`internal` doesn't go through dace), so the
+# codegen parameter is dropped from this session's signature.
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["next", "dace", "determinism"])
+@nox.parametrize(
+    "meshlib",
+    [
+        nox.param("nomesh", id="nomesh", tags=["nomesh"]),
+        nox.param("atlas", id="atlas", tags=["atlas"]),
+    ],
+)
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_next_dace_determinism(
+    session: nox.Session,
+    device: DeviceOption,
+    meshlib: Literal["nomesh", "atlas"],
+) -> None:
+    """Run selected 'gt4py.next' DaCe tests twice and verify codegen
+    is byte-identical between the two runs."""
+
+    codegen_settings = CodeGenDaceTestSettings["dace"]
+    device_settings = DeviceTestSettings[device]
+    extras = [
+        "standard",
+        "testing",
+        *codegen_settings.get("extras", []),
+        *device_settings.get("extras", []),
+    ]
+    groups = ["test", *codegen_settings.get("groups", []), *device_settings.get("groups", [])]
+    mesh_markers: list[str] = []
+
+    match meshlib:
+        case "nomesh":
+            mesh_markers.append("not requires_atlas")
+        case "atlas":
+            mesh_markers.append("requires_atlas")
+            groups.append("frameworks")
+
+    # The `scripts` group provides `typer`, needed by the dace-determinism CLI.
+    install_session_venv(session, extras=extras, groups=[*groups, "scripts"])
+
+    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+
+    # Execute the determinism script with the session venv's own python (resolved
+    # by nox from "python"); the script runs the pytest selection twice via
+    # `sys.executable` and compares the generated sources. A non-zero exit fails
+    # the session; the script writes report.txt + diffs/ under the workdir.
+    pytest_args = [
+        "--cache-clear",
+        "-sv",
+        "-n",
+        "auto",
+        "--dist",
+        "loadgroup",
+        # See the note in 'test_next' above.
+        "--require-optional-deps",
+        "-m",
+        f"{markers}",
+        str(pathlib.Path("tests") / "next_tests"),
+    ]
+    session.run(
+        "python",
+        str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
+        "ci-check",
+        "--workdir",
+        str(REPO_ROOT / "_dace_deterministic_codegen"),
+        "--",
+        *pytest_args,
+        *session.posargs,
+        env=session.env,
     )
 
 

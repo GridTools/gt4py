@@ -47,7 +47,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, compiled_program, options, toolchain
+from gt4py.next.otf import arguments, compiled_program, options, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -91,7 +91,15 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     """
 
     definition_stage: ffront_stages.DSLDefinitionT
-    backend: Optional[next_backend.Backend]
+    # The backend is excluded from the fingerprint: it does not affect the
+    # lowering (which these program-likes cache by their definition/FOAST stage,
+    # e.g. when they appear in another program's closure variables), the
+    # backend-specific compilation is keyed separately in the backend's own
+    # caches, and fingerprinting the whole backend object graph is both wasteful
+    # and fragile (it may hold non-importable callables, see also test doubles).
+    backend: Optional[next_backend.Backend] = dataclasses.field(
+        metadata=utils.gt4py_metadata(fingerprint=False)
+    )
     compilation_options: options.CompilationOptions
 
     @abc.abstractmethod
@@ -130,6 +138,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
 
+        # The argument descriptor mapping built here must be kept in sync with the descriptors
+        # created in the explicitly-triggered-compilation code path
+        # `CompiledProgramsPool.compile()`.
         argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] = {}
 
         if static_params:
@@ -253,9 +264,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.ConcreteArtifact(
-            self.past_stage, arguments.CompileTimeArgs.empty()
-        )
+        no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
         _ = self._frontend_transforms.past_lint(no_args_past).data
 
     @property
@@ -278,7 +287,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.ConcreteArtifact(
+        no_args_def = workflow.ConcreteArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -298,7 +307,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.ConcreteArtifact(
+        no_args_past = workflow.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -598,7 +607,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.ConcreteArtifact(
+            workflow.ConcreteArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data
@@ -817,7 +826,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator | Callable[[Callable], FieldOperator]:
     """
@@ -862,23 +871,3 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_foast_fieldop_to_fingerprint(
-    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
-) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
-
-
-@ffront_stages.add_content_to_fingerprint.register
-def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
-    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
-    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

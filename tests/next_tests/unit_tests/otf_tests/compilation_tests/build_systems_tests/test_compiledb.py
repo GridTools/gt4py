@@ -10,14 +10,28 @@ import pathlib
 import shutil
 import tempfile
 
-from gt4py.next import config
-from gt4py.next.otf.compilation import build_data, importer
+import pytest
+
+from gt4py.next import config, fingerprinting
+from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
-def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
+@pytest.fixture
+def clean_compiledb_cache(extension_source_example):
+    cache_dir = cache.get_cache_folder(
+        ext_source=extension_source_example,
+        lifetime=config.BuildCacheLifetime.SESSION,
+        build_context_id=fingerprinting.strict_fingerprinter(compiledb.CompiledbFactory()),
+    )
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+    yield
+
+
+def test_default_compiledb_factory(extension_source_example, clean_compiledb_cache):
     otf_builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+        extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
 
     # make sure the example project has not been written yet
@@ -35,9 +49,9 @@ def test_default_compiledb_factory(compilable_source_example, clean_example_sess
     assert (otf_builder.root_path / "build.sh").exists()
 
 
-def test_compiledb_project_is_relocatable(compilable_source_example, clean_example_session_cache):
+def test_compiledb_project_is_relocatable(extension_source_example, clean_compiledb_cache):
     builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+        extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
 
     # make sure the example project has not been written yet

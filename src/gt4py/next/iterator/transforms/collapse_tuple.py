@@ -193,6 +193,7 @@ class CollapseTuple(
         enabled_transformations: Optional[Transformation] = None,
         # allow sym references without a symbol declaration, mostly for testing
         allow_undeclared_symbols: bool = False,
+        recursive: bool = True,
         uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         """
@@ -205,6 +206,9 @@ class CollapseTuple(
             remove_letified_make_tuple_elements: Run `InlineLambdas` as a post-processing step
                 to remove left-overs from `LETIFY_MAKE_TUPLE_ELEMENTS` transformation.
                 `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
+            recursive: If `True` (default) transform the given node and all its children (until a
+                fixed point is reached). If `False` only transform the given node itself to a fixed
+                point, without recursing into its children.
         """
         enabled_transformations = enabled_transformations or cls.enabled_transformations
         offset_provider_type = offset_provider_type or {}
@@ -230,10 +234,15 @@ class CollapseTuple(
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 
-        new_node = cls(
+        instance = cls(
             enabled_transformations=enabled_transformations,
             uids=uids,
-        ).visit(node, within_stencil=within_stencil)
+        )
+        if recursive:
+            new_node = instance.visit(node, within_stencil=within_stencil, recurse=True)
+        else:
+            # only transform the node itself (to a fixed point) without recursing into its children
+            new_node = instance.fp_transform(node, within_stencil=within_stencil, recurse=False)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -287,7 +296,7 @@ class CollapseTuple(
             and cpm.is_call_to(node.args[1], "make_tuple")
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert not node.args[0].type or type_info.is_integer(node.args[0].type)
+            assert not node.args[0].type or type_info.is_integral_scalar(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(make_tuple_call.args), (
@@ -348,9 +357,10 @@ class CollapseTuple(
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
-                return self.visit(
-                    inline_lambdas.inline_lambda(node, eligible_params=eligible_params), **kwargs
-                )
+                inlined = inline_lambdas.inline_lambda(node, eligible_params=eligible_params)
+                if kwargs["recurse"]:
+                    return self.visit(inlined, **kwargs)
+                return inlined
         return None
 
     def transform_propagate_to_if_on_tuples(
@@ -622,7 +632,8 @@ class CollapseTuple(
             flags=inline_lifts.InlineLifts.Flag.INLINE_DEREF_LIFT
             | inline_lifts.InlineLifts.Flag.PROPAGATE_SHIFT
         ).visit(new_body)
-        new_body = self.visit(new_body, **kwargs)
+        if kwargs["recurse"]:
+            new_body = self.visit(new_body, **kwargs)
         new_stencil = restore_scan(im.lambda_(*new_params)(new_body))
 
         return im.let(*remapped_args.items())(im.as_fieldop(new_stencil, domain)(*new_args))

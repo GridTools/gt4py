@@ -6,12 +6,12 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 
 1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the `main` public branch.
 
-2. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. Note that this step becomes much simpler when commit messages follow the [Conventional Commits][conventional-commits] convention as encouraged in the [Pull Request and Merge Guidelines](CONTRIBUTING.md#pull-request-and-merge-guidelines) section of the contributing guidelines.
+2. Update the [CHANGELOG.md](../../../CHANGELOG.md) file to document the changes included in the new release. Note that this step becomes much simpler when commit messages follow the [Conventional Commits][conventional-commits] convention as encouraged in the [Pull Requests (PRs) and Merge Guidelines](../../../CONTRIBUTING.md#pull-requests-prs-and-merge-guidelines) section of the contributing guidelines.
 
 3. Update the default fallback version used by `version-in-git` when `git` version information is not available at build or run-time.
 
    ```bash
-   ./scripts-cli.py update package-version {M}.{m}.{p}  # e.g. 1.2.3
+   ./scripts/run update package-version {M}.{m}.{p}  # e.g. 1.2.3
    ```
 
 4. Commit the changes with the following message:

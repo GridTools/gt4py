@@ -6,9 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -21,9 +21,7 @@ import dace
 
 
 def _make_transients_persistent_inner_access_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("transients_persistent_inner_access_sdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("transients_persistent_inner_access_sdfg"))
     state = sdfg.add_state(is_start_block=True)
 
     for name in "abc":
@@ -46,18 +44,14 @@ def _make_transients_persistent_inner_access_sdfg() -> tuple[dace.SDFG, dace.SDF
         outputs={"__out"},
     )
 
-    me.add_in_connector("IN_A")
+    me.add_scope_connectors("A")
     state.add_edge(a, None, me, "IN_A", dace.Memlet("a[0:10]"))
-
-    me.add_out_connector("OUT_A")
     state.add_edge(me, "OUT_A", b, None, dace.Memlet("a[__i0] -> [__i0]"))
 
     state.add_edge(b, None, tsklt, "__in", dace.Memlet("b[__i0]"))
 
-    mx.add_in_connector("IN_C")
+    mx.add_scope_connectors("C")
     state.add_edge(tsklt, "__out", mx, "IN_C", dace.Memlet("c[__i0]"))
-
-    mx.add_out_connector("OUT_C")
     state.add_edge(mx, "OUT_C", c, None, dace.Memlet("c[0:10]"))
     sdfg.validate()
     return sdfg, state
@@ -69,8 +63,8 @@ def test_make_transients_persistent_inner_access():
 
     # Because `b`, the only transient, is used inside a map scope, it is not selected,
     #  although in this situation it would be possible.
-    change_report: dict[int, set[str]] = gtx_transformations.gt_make_transients_persistent(
-        sdfg, device=dace.DeviceType.CPU
+    change_report: dict[int, set[str]] = gtx_transformations.gt_configure_transient_lifetime(
+        sdfg, lifetime=dace.AllocationLifetime.Persistent
     )
     assert len(change_report) == 1
     assert change_report[sdfg.cfg_id] == set()

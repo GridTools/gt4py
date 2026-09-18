@@ -11,7 +11,7 @@ import dataclasses
 from typing import Any, Callable, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never, cast
+from gt4py.eve.extended_typing import Never
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -47,7 +47,9 @@ def foast_to_gtir_factory(
     """Wrap `foast_to_gtir` into a chainable and, optionally, cached workflow step."""
     wf = foast_to_gtir
     if cached:
-        wf = workflow.CachedStep(step=wf, hash_function=ffront_stages.fingerprint_stage)
+        wf = workflow.CachedStep.in_memory(
+            step=wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        )
     return wf
 
 
@@ -293,28 +295,29 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                case foast.Subscript(value=foast.Name(id=offset_name), index=index):
+                case foast.Subscript(value=foast.Name() as offset_name, index=index):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
                     # which can be generated as compile-time value backend code.
                     new_index = constant_folding.ConstantFolding.apply(self.visit(index, **kwargs))
                     assert isinstance(new_index, itir.Literal)
+                    assert isinstance(offset_name.type, ts.OffsetType)
                     current_expr = im.as_fieldop(
-                        im.lambda_("__it")(im.deref(im.shift(offset_name, new_index)("__it")))
+                        im.lambda_("__it")(im.deref(im.shift(offset_name.id, new_index)("__it")))
                     )(current_expr)
-                # `field(Dim + idx)`
+                # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.Name(id=dimension),  # TODO(tehrengruber): use type of lhs
+                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.Dimension() as dim)),
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
-                    # TODO(havogt): we rely on the naming-convention for implicit offsets, see `dimension_to_implicit_offset`
+                    conn = common.connectivity_for_cartesian_shift(dim, offset_index)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it")(
                             im.deref(
                                 im.shift(
-                                    common.dimension_to_implicit_offset(dimension), offset_index
+                                    im.cartesian_offset(conn.domain_dim, conn.codomain), conn.offset
                                 )("__it")
                             )
                         )
@@ -330,14 +333,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
-                    # TODO(tehrengruber): Discuss representation. We could use the type system to
-                    #  deduce the offset dimension instead of (e.g. to allow aliasing).
-                    offset_dim = func_args.args[0]
-                    assert isinstance(offset_dim, foast.Name)
+                    offset_type = func_args.args[0].type
+                    assert isinstance(offset_type, ts.OffsetType)
+                    dim = offset_type.source
                     offset_field = self.visit(func_args.args[1], **kwargs)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it", "__offset")(
-                            im.deref(im.shift(offset_dim.id, im.deref("__offset"))("__it"))
+                            im.deref(
+                                im.shift(im.cartesian_offset(dim), im.deref("__offset"))("__it")
+                            )
                         )
                     )(current_expr, offset_field)
                 case _:
@@ -408,11 +412,15 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        if not isinstance(node.type, ts.TupleType):  # to keep the IR simpler
+        # TODO(tehrengruber): For tuples we expand the tuple structure via `process_elements`
+        #  instead of emitting `tree_map_tuple` so mixed field types are supported,
+        #  e.g. (local field, regular field).
+        # to keep the IR simpler
+        if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
             return self._lower_and_map("if_", *node.args)
 
         cond_ = self.visit(node.args[0])
-        cond_symref_name = f"__cond_{cond_.fingerprint()}"
+        cond_symref_name = f"__cond_{itir.lenient_ir_fingerprinter(cond_)}"
 
         def create_if(
             true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
@@ -433,8 +441,24 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return im.let(cond_symref_name, cond_)(result)
 
     def _visit_concat_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
+        # TODO(tehrengruber): Use `tree_map_tuple` when the domain inference is able to handle
+        #  lambda functions (with the results domain depending on the caller / args)
         domain, true_branch, false_branch = self.visit(node.args, **kwargs)
-        return im.concat_where(domain, true_branch, false_branch)
+
+        def create_concat_where(
+            true_: itir.Expr, false_: itir.Expr, arg_types: tuple[ts.TypeSpec, ts.TypeSpec]
+        ) -> itir.FunCall:
+            if any(type_info.contains_local_field(t) for t in arg_types):
+                true_, false_ = (promote_to_list(t)(e) for t, e in zip(arg_types, (true_, false_)))
+            return im.concat_where(domain, true_, false_)
+
+        branch_types = (node.args[1].type, node.args[2].type)
+        # to keep the IR simpler
+        if not isinstance(node.type, (ts.TupleType, ts.NamedCollectionType)):
+            return create_concat_where(true_branch, false_branch, branch_types)
+        return lowering_utils.process_elements(
+            create_concat_where, (true_branch, false_branch), node.type, arg_types=branch_types
+        )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return im.call("broadcast")(*self.visit(node.args, **kwargs))
@@ -505,9 +529,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         if isinstance(type_, ts.COLLECTION_TYPE_SPECS):
-            type_ = cast(
-                ts.CollectionTypeSpec, type_
-            )  # This shouldn't be needed after the previous isinstance() check
             # This code-path is only active in the init of a scan,
             # as otherwise the frontend generates tuple expressions of `Constant`s.
             val = arguments.extract(val) if isinstance(type_, ts.NamedCollectionType) else val
@@ -534,7 +555,7 @@ def _map(
     original_arg_types: tuple[ts.TypeSpec, ...],
 ) -> itir.FunCall:
     """
-    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_`ing lists.
+    Mapping includes making the operation an `as_fieldop` (first kind of mapping), but also `itir.map_list`ing lists.
     """
     if all(
         isinstance(t, (ts.ScalarType, ts.DimensionType, ts.DomainType))
@@ -547,7 +568,7 @@ def _map(
             promote_to_list(arg_type)(larg)
             for arg_type, larg in zip(original_arg_types, lowered_args)
         )
-        op = im.map_(op)
+        op = im.map_list(op)
 
     return im.op_as_fieldop(op)(*lowered_args)
 

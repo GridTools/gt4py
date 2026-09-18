@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import dace
 import pytest
 import numpy as np
-
-dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
@@ -21,7 +20,7 @@ from . import util
 
 
 def _mk_distributed_buffer_sdfg() -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
-    sdfg = dace.SDFG(gtx_transformations.utils.unique_name("distributed_buffer_sdfg"))
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_sdfg"))
 
     for name in ["a", "b", "tmp"]:
         sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
@@ -84,9 +83,7 @@ def test_distributed_buffer_remover():
 
 
 def _make_distributed_buffer_global_memory_data_race_sdfg() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_race")
-    )
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_race"))
     arr_names = ["a", "b", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -138,9 +135,7 @@ def test_distributed_buffer_global_memory_data_race():
 def _make_distributed_buffer_global_memory_data_race_sdfg2() -> tuple[
     dace.SDFG, dace.SDFGState, dace.SDFGState
 ]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_race2_sdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_race2_sdfg"))
     arr_names = ["a", "b", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -193,9 +188,7 @@ def test_distributed_buffer_global_memory_data_race2():
 
 
 def _make_distributed_buffer_global_memory_data_no_rance() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("distributed_buffer_global_memory_data_no_rance_sdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_no_rance_sdfg"))
     arr_names = ["a", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -241,11 +234,7 @@ def test_distributed_buffer_global_memory_data_no_rance():
 
 
 def _make_distributed_buffer_global_memory_data_no_rance2() -> tuple[dace.SDFG, dace.SDFGState]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name(
-            "distributed_buffer_global_memory_data_no_rance2_sdfg"
-        )
-    )
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_global_memory_data_no_rance2_sdfg"))
     arr_names = ["a", "t"]
     for name in arr_names:
         sdfg.add_array(
@@ -301,9 +290,7 @@ def test_distributed_buffer_global_memory_data_no_rance2():
 def _make_distributed_buffer_non_sink_temporary_sdfg() -> tuple[
     dace.SDFG, dace.SDFGState, dace.SDFGState
 ]:
-    sdfg = dace.SDFG(
-        gtx_transformations.utils.unique_name("distributed_buffer_non_sink_temporary_sdfg")
-    )
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_non_sink_temporary_sdfg"))
     state = sdfg.add_state(is_start_block=True)
     wb_state = sdfg.add_state_after(state)
 

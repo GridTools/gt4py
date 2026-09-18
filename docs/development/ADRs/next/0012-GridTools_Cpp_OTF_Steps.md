@@ -7,11 +7,14 @@ tags: [backend, cpp, gridtools, bindings, otf]
 - **Status**: valid
 - **Authors**: Peter Kardos (@petiaccja), Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2022-09-14
+- **Updated**: 2026-09-15
+
+> [!NOTE]
+> The entry points named below have since been renamed or moved: `program_processors.formatters.gtfn.format_sourcecode` is now `format_cpp`; `program_processors.codegens.gtfn_modules.translate_program` is now the `GTFNTranslationStep` class in `program_processors.codegens.gtfn.gtfn_module`; `otf.binding.pybind.bind_source` is now `otf.binding.nanobind.create_bindings` (nanobind replaced pybind11); and `program_processors.runners.gtfn_cpu.run_gtfn` is now `program_processors.runners.gtfn.run_gtfn`. `otf.step_types` was merged into `otf.stages`, `otf.workflow.Step` is now the `otf.workflow.Workflow` protocol, and `processor_interface` was split up — `ProgramFormatter` lives in `program_processors.program_formatter`. The decision — building the GTFN backend out of composable OTF steps — is unchanged.
 
 ## Context
 
-This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the on-the-fly compilation (OTFC) steps provided and / or used by the GridTools C++ backend.
+This supersedes [0009 - Compiled Backend Integration](0009-Compiled-Backend-Integration.md) and concentrates on the on-the-fly compilation (OTFC) steps provided and / or used by the GridTools C++ backend.
 
 ## Decision
 

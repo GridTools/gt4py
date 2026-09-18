@@ -33,15 +33,11 @@ from .extended_typing import (
     Callable,
     ClassVar,
     Collection,
-    Dict,
     Iterator,
-    List,
     Mapping,
     Optional,
     Protocol,
     Sequence,
-    Set,
-    Tuple,
     TypeVar,
     Union,
     overload,
@@ -52,7 +48,7 @@ from .visitors import NodeVisitor
 
 SourceFormatter = Callable[[str], str]
 
-SOURCE_FORMATTERS: Dict[str, SourceFormatter] = {}
+SOURCE_FORMATTERS: dict[str, SourceFormatter] = {}
 """Global dict storing registered formatters."""
 
 
@@ -100,7 +96,7 @@ def format_python_source(
     source: str,
     *,
     line_length: int = 100,
-    python_versions: Optional[Set[str]] = None,
+    python_versions: Optional[set[str]] = None,
     string_normalization: bool = True,
 ) -> str:
     """Format Python source code using black formatter."""
@@ -188,7 +184,7 @@ def format_source(language: str, source: str, *, skip_errors: bool = True, **kwa
 class Name:
     """Text formatter with different case styles for symbol names in source code."""
 
-    words: List[str]
+    words: list[str]
 
     @classmethod
     def from_string(cls, name: str, case_style: utils.CaseStyleConverter.CASE_STYLE) -> Name:
@@ -248,7 +244,7 @@ class TextBlock:
         self.indent_size = indent_size
         self.indent_char = indent_char
         self.end_line = end_line
-        self.lines: List[str] = []
+        self.lines: list[str] = []
 
     def append(self, new_line: str, *, update_indent: int = 0) -> TextBlock:
         if update_indent > 0:
@@ -404,7 +400,7 @@ class BaseTemplate(Template):
     """Helper class to add source location info of template definitions."""
 
     definition: Any
-    definition_loc: Optional[Tuple[str, int]]
+    definition_loc: Optional[tuple[str, int]]
 
     def __init__(self) -> None:
         self.definition_loc = None
@@ -617,7 +613,7 @@ class TemplatedGenerator(NodeVisitor):
         if "__templates__" in cls.__dict__:
             raise TypeError(f"Invalid '__templates__' member in class {cls}")
 
-        templates: Dict[str, Template] = {}
+        templates: dict[str, Template] = {}
         if inherit_templates:
             for templated_gen_class in reversed(cls.__mro__[1:]):
                 if (
@@ -719,7 +715,7 @@ class TemplatedGenerator(NodeVisitor):
 
         return self.generic_dump(node, **kwargs)
 
-    def get_template(self, node: RootNode) -> Tuple[Optional[Template], Optional[str]]:
+    def get_template(self, node: RootNode) -> tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
@@ -750,8 +746,8 @@ class TemplatedGenerator(NodeVisitor):
             _this_module=sys.modules[type(self).__module__],
         )
 
-    def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
+    def transform_children(self, node: Node, **kwargs: Any) -> dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.iter_children_items()}  # type: ignore[misc]
 
-    def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
+    def transform_annexed_items(self, node: Node, **kwargs: Any) -> dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}

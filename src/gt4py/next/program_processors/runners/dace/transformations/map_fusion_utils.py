@@ -78,8 +78,8 @@ def copy_map_graph(
         elif isinstance(node, dace_nodes.NestedSDFG):
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
-                inputs=set(node.in_connectors.keys()),
-                outputs=set(node.out_connectors.keys()),
+                inputs={k: None for k in sorted(node.in_connectors.keys())},
+                outputs={k: None for k in sorted(node.out_connectors.keys())},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
             )
@@ -224,8 +224,7 @@ def split_overlapping_map_range(
 
     first_map_splitted_dict = {}
     second_map_splitted_dict = {}
-    for param in first_map_params:
-        first_map_range = first_map_dict[param]
+    for param, first_map_range in first_map_dict.items():
         second_map_range = second_map_dict[param]
         if (step := first_map_range[2]) != second_map_range[2]:
             # we do not support splitting of map range when the range step is different

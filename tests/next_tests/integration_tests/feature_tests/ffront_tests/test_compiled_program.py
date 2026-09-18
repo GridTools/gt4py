@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 import inspect
+import threading
 import warnings
 from typing import Optional, NamedTuple
 from unittest import mock
@@ -19,6 +20,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import errors, config
 from gt4py.next.otf import compiled_program, options, arguments
+from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.ffront.fbuiltins import int32, neighbor_sum
 
@@ -30,7 +32,7 @@ from next_tests.integration_tests.cases import (
     mesh_descriptor,
     unstructured_case,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.cases_utils import (
     MeshDescriptor,
     exec_alloc_descriptor,
     simple_mesh,
@@ -124,6 +126,25 @@ def test_compile(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
 
 
+def test_precompile_and_jit_have_same_arg_descr_mapping(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    empty_static_args = {}
+    precompiled_testee = compile_testee.with_backend(cartesian_case.backend)
+    precompiled_testee.compile(offset_provider=cartesian_case.offset_provider, **empty_static_args)
+    precompiled_arg_descr_mapping = (
+        precompiled_testee._compiled_programs.argument_descriptor_mapping
+    )
+
+    jit_testee = compile_testee.with_backend(cartesian_case.backend)
+    args, kwargs = cases.get_default_data(cartesian_case, jit_testee)
+    jit_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
+    jit_arg_descr_mapping = jit_testee._compiled_programs.argument_descriptor_mapping
+
+    assert precompiled_arg_descr_mapping == jit_arg_descr_mapping
+
+
 def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -215,6 +236,7 @@ def compile_testee_unstructured_no_jit(compile_testee_unstructured):
     return compile_testee_unstructured.with_compilation_options(enable_jit=False)
 
 
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     if unstructured_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
@@ -248,33 +270,7 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
     return skip_value_mesh(exec_alloc_descriptor.allocator)
 
 
-def test_compile_unstructured_jit(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh and simple_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=[
-            skip_value_mesh_descriptor.offset_provider,
-            unstructured_case.offset_provider,
-        ],
-    )
-
-    # and executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-    compile_testee_unstructured_no_jit(
-        *args, offset_provider=unstructured_case.offset_provider, **kwargs
-    )
-
-    v2e_numpy = unstructured_case.offset_provider[V2E.value].asnumpy()
-    assert np.allclose(
-        kwargs["out"].asnumpy(),
-        np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
-    )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_wrong_offset_provider(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
@@ -298,29 +294,7 @@ def test_compile_unstructured_wrong_offset_provider(
         )
 
 
-def test_compile_unstructured_modified_offset_provider(
-    unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
-):
-    if unstructured_case.backend is None:
-        pytest.skip("Embedded compiled program doesn't make sense.")
-
-    # compiled for skip_value_mesh
-    compile_testee_unstructured_no_jit.compile(
-        offset_provider=skip_value_mesh_descriptor.offset_provider,
-    )
-
-    # but executing the simple_mesh
-    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
-
-    # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
-
-    with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
-        compile_testee_unstructured_no_jit(
-            *args, offset_provider=unstructured_case.offset_provider, **kwargs
-        )
-
-
+@pytest.mark.uses_unstructured_shift
 def test_compile_unstructured_for_two_offset_providers(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
@@ -409,6 +383,7 @@ def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
@@ -451,6 +426,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
@@ -472,6 +448,7 @@ def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_teste
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
     object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", False)
 
@@ -491,6 +468,7 @@ def test_compile_variants_not_compiled(cartesian_case, compile_variants_testee):
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_but_jit_enabled_on_call(
     cartesian_case, compile_variants_testee
 ):
@@ -581,6 +559,7 @@ def test_compile_variants_config_default_disable_jit(cartesian_case):
             )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_reset_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -639,6 +618,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 5.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_not_compiled_then_set_new_static_params(
     cartesian_case, compile_variants_testee
 ):
@@ -698,6 +678,7 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
         )
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     object.__setattr__(compile_variants_testee.compilation_options, "enable_jit", True)
 
@@ -733,6 +714,7 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_with_static_params_jit(
     cartesian_case, compile_variants_testee_not_compiled
 ):
@@ -774,6 +756,7 @@ def test_compile_variants_with_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
 
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_params_jit(
     compile_variants_field_operator, cartesian_case
 ):
@@ -881,6 +864,7 @@ def compile_variants_testee_tuple(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_args
 def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     # make sure the backend is never called
     object.__setattr__(compile_variants_testee_tuple, "backend", _raise_on_compile)
@@ -910,8 +894,8 @@ def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
 
 
 def test_synchronous_compilation(cartesian_case, compile_testee):
-    # This test is not perfect: only tests that compilation works if '_async_compilation_pool' is not initialized.
-    with mock.patch.object(compiled_program, "_async_compilation_pool", None):
+    with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+        get_runner.return_value = compiled_program.runners.SerialRunner()
         a = cases.allocate(cartesian_case, compile_testee, "a")()
         b = cases.allocate(cartesian_case, compile_testee, "b")()
 
@@ -929,23 +913,98 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
         assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
 
 
-@pytest.mark.parametrize("synchronous", [True, False], ids=["synchronous", "asynchronous"])
-def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, synchronous):
+@pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())
+def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, mode):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     with (
-        mock.patch.object(compiled_program, "_async_compilation_pool", None)
-        if synchronous
-        else contextlib.nullcontext()
+        mock.patch.object(config, "BUILD_JOBS_MODE", mode),
+        mock.patch.object(config, "BUILD_JOBS", 1),
     ):
-        compile_testee.compile(offset_provider=cartesian_case.offset_provider)
-        # TODO(havogt): currently only tests that the function call does not crash...
-        gtx.wait_for_compilation()
-        # ... and afterwards compilation still works
-        compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+        runner = compiled_program.runners.from_config()
+
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+            gtx.wait_for_compilation()
+            # afterwards compilation still works
+            compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
+    finally:
+        runner.shutdown(wait=True)
 
 
+def test_compile_local_program_offloads_to_worker_process(cartesian_case, compile_testee):
+    """Programs defined in a local scope (as `compile_testee` is) must offload cleanly.
+
+    Only the lowered, pickle-safe program crosses the process boundary — never
+    the raw definition function, which is unpicklable for local definitions.
+    A fallback to in-thread compilation would mean the boundary leaked.
+    """
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    runner = compiled_program.runners.ProcessRunner(
+        max_workers=1,
+        shared_session_cache_dir=str(compilation_cache._session_cache_dir_path),
+    )
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            with warnings.catch_warnings():
+                warnings.filterwarnings("error", message=".*in the calling thread.*")
+                compile_testee.compile(offset_provider=cartesian_case.offset_provider)
+                gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+    a = cases.allocate(cartesian_case, compile_testee, "a")()
+    b = cases.allocate(cartesian_case, compile_testee, "b")()
+    if isinstance(compile_testee, gtx.ffront.decorator.FieldOperator):
+        out = cases.allocate(cartesian_case, compile_testee, cases.RETURN)()
+    else:
+        out = cases.allocate(cartesian_case, compile_testee, "out")()
+
+    compile_testee(a, b, out=out, offset_provider=cartesian_case.offset_provider)
+    assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+
+
+def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    # Failing only once the gate opens keeps the future pending until after
+    # submission; an instant failure would raise eagerly at `compile()` already.
+    gate = threading.Event()
+
+    class FailingBackend:
+        def __getattr__(self, name):
+            return getattr(cartesian_case.backend, name)
+
+        def compile(self, program, compile_time_args):
+            gate.wait()
+            raise ValueError("compilation went boom")
+
+    runner = compiled_program.runners.ThreadRunner(max_workers=1)
+    try:
+        with mock.patch.object(compiled_program.runners, "get_default_runner") as get_runner:
+            get_runner.return_value = runner
+            # The program must stay referenced: failure tracking is weak, so the
+            # failed future of a garbage-collected program is not reported.
+            testee = compile_testee.with_backend(FailingBackend())
+            testee.compile(offset_provider=cartesian_case.offset_provider)
+            gate.set()
+            with pytest.raises(ValueError, match="compilation went boom"):
+                gtx.wait_for_compilation()
+            # each failure is reported only once
+            gtx.wait_for_compilation()
+    finally:
+        runner.shutdown(wait=True)
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_domains(cartesian_case):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
