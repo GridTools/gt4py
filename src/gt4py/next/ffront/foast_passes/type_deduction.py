@@ -461,8 +461,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     raise errors.DSLError(
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
-                # NOTE: `tag` is propagated: subscripting drops the local dimension but not
-                # the identity of the offset, which lowering needs to emit the shift.
                 new_type = ts.OffsetType(source=source, target=(target1,), tag=tag)
             case ts.OffsetType(source=source, target=(target,)):
                 # for cartesian axes (e.g. I, J) the index of the subscript only

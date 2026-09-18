@@ -295,12 +295,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         for arg in node.args:
             match arg:
                 # `field(Off[idx])`
-                # NOTE: matched on the type rather than on the node shape, so that a
-                # module-qualified offset (`field(mod.Off[idx])`) is lowered as well. The
-                # emitted shift is the offset's tag, i.e. its offset-provider key, and not the
-                # name of the Python variable the `FieldOffset` happens to be bound to. This
-                # also covers a Cartesian `FieldOffset` (`field(Koff[idx])`); only the
-                # untagged `Dim + idx` offsets fall through, to the error below.
+                # (matched on the type, not the node, to also accept `mod.Off[idx]`)
                 case foast.Subscript(
                     value=foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag)),
                     index=index,
@@ -345,8 +340,6 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         )
                     )(current_expr, offset_field)
                 # `field(Off)`
-                # NOTE: matched on the type, like `field(Off[idx])` above, and placed after
-                # `as_offset(...)`, whose type is the `OffsetType` of its first argument.
                 case foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag, target=(_, _))):
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.

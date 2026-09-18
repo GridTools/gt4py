@@ -480,9 +480,7 @@ assert (diff := actual_export - should_export) == set(), (
 #  guidelines for decision.
 @dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
-    #: Narrows `runtime.Offset.value`, which is `int | str`. A `FieldOffset`'s value is its
-    #: tag: the key its connectivity has in the offset provider, and what lowering emits as
-    #: the shift. An integer tag has no meaning here, and every consumer treats it as a name.
+    #: The tag, i.e. the offset-provider key.
     value: str
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
