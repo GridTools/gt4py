@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+from typing import Callable, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import custom_layout_allocators as next_allocators
@@ -45,7 +45,7 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 class Transforms(
     workflow.MultiWorkflow[
         stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
-        stages.CompilableProgramDef,
+        stages.CompilableProgram,
     ]
 ):
     """
@@ -92,14 +92,14 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgram
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
     def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
-        match inp.data:
+        match inp.definition:
             case ffront_stages.DSLFieldOperatorDef():
                 steps.extend(
                     [
@@ -140,32 +140,36 @@ class Transforms(
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
-# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
-#  `Backend` -> `Toolchain`
-#  `transforms` -> `frontend_transforms`
-#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
-class Backend(Generic[core_defs.DeviceTypeT]):
+class Toolchain(Generic[core_defs.DeviceTypeT]):
+    """
+    Complete pipeline from a program definition to an executable program.
+
+    The `frontend` workflow transforms any supported program definition into a
+    `CompilableProgram`, which the `backend` workflow then compiles into a
+    loadable compilation artifact. The `loading` step turns that artifact into a
+    directly-callable program; toolchains needing to inject backend-specific
+    runtime data supply their own step here. The `allocator` describes the
+    device the compiled program expects its buffers on.
+    """
+
     name: str
-    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    backend: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
+    frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram]
+    # A plain `Callable`, not `workflow.Workflow`: the protocol names its
+    # parameter `inp`, which would force every loading step to use that name.
+    loading: Callable[[artifacts.CompilationArtifact], artifacts.ExecutableProgram] = (
+        dataclasses.field(default=artifacts.load_artifact)
+    )
 
     def compile(
         self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> artifacts.ExecutableProgram:
-        artifact = self.executor(
-            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
+        artifact = self.backend(
+            self.frontend(stages.ConcreteProgramDef(definition=program, args=compile_time_args))
         )
-        return self.load_artifact(artifact)
-
-    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
-        """Load an artifact into an executable program.
-
-        Backends may override this method to inject backend-specific runtime data
-        into the loaded program.
-        """
-        return artifact.load()
+        return self.loading(artifact)
 
     @property
     def __gt_allocator__(

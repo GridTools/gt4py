@@ -211,7 +211,7 @@
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
           return a
 
-      def foo_with_backend(backend: gtx.typing.Backend | None) -> None:
+      def foo_with_backend(backend: gtx.typing.Toolchain | None) -> None:
           _ = foo.with_backend(backend)
 
   - case: with_backend_scanop
@@ -227,7 +227,7 @@
       ) -> float:
           return carry + val
 
-      def somescanop_with_backend(backend: gtx.typing.Backend | None) -> None:
+      def somescanop_with_backend(backend: gtx.typing.Toolchain | None) -> None:
           _ = somescanop.with_backend(backend)
 
   - case: with_backend_program
@@ -251,7 +251,7 @@
       ) -> None:
           foo(a, out=b, domain={KDim: (start, end)})
 
-      def foo_prg_with_backend(backend: gtx.typing.Backend | None) -> None:
+      def foo_prg_with_backend(backend: gtx.typing.Toolchain | None) -> None:
           _ = foo_prg.with_backend(backend)
 
   - case: astype_return_type

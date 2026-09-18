@@ -31,10 +31,10 @@ from next_tests.toy_connectivity import Cell, Edge
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture
 def exec_alloc_descriptor():
-    return backend.Backend(
+    return backend.Toolchain(
         name="run_gtfn_with_temporaries_and_sizes",
-        transforms=backend.DEFAULT_TRANSFORMS,
-        executor=gtfn.make_gtfn_compile_workflow(
+        frontend=backend.DEFAULT_TRANSFORMS,
+        backend=gtfn.make_gtfn_compile_workflow(
             translation=gtfn.gtfn_module.GTFNTranslationStep(
                 symbolic_domain_sizes={
                     "Cell": "num_cells",
