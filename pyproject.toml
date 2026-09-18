@@ -43,14 +43,12 @@ profiling = [
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
-  'coverage[toml]>=7.6.1',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
   'pytest>=8.0.1',
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
-  'pytest-cov>=5.0.0',
   'pytest-factoryboy>=2.6.1',
   'pytest-instafail>=0.5.0',
   'pytest-xdist[psutil]>=3.5.0'
@@ -98,7 +96,7 @@ dependencies = [
   'click>=8.0.0',
   'cmake>=3.22',
   'cytoolz>=1.0.1',
-  'dace>=2.0.0a7',
+  'dace==2.0.0a9',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
   'factory-boy>=3.3.3',
@@ -165,34 +163,11 @@ Homepage = 'https://gridtools.github.io/'
 Repository = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- coverage --
-[tool.coverage]
-
-[tool.coverage.html]
-directory = 'tests/_reports/coverage_html'
-
-[tool.coverage.paths]
-source = ['src/', '.nox/py*/lib/python3.*/site-packages/']
-
-[tool.coverage.report]
-# Regexes for lines to exclude from consideration
-exclude_lines = [
-  'raise AssertionError',  # Don't complain if tests don't hit defensive assertion code
-  'raise NotImplementedError',  # Don't complain if tests don't hit defensive assertion code
-  'if 0:',  # Don't complain if non-runnable code isn't run
-  'if __name__ == .__main__.:'  # Don't complain if non-runnable code isn't run
-]
-ignore_errors = true
-
-[tool.coverage.run]
-branch = true
-source_pkgs = ['gt4py']
-
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
-exclude = ['^setup\.py$', 'build/.*$', '.cscs-ci/*.$', 'docs/.*$', 'tests/.*$']
+exclude = ['build/.*$', 'docs/.*$', 'tests/.*$']
 ignore_missing_imports = true
 implicit_optional = false
 implicit_reexport = false
@@ -296,7 +271,6 @@ markers = [
   'uses_scan_in_stencil: tests that require backend support for scan in stencil',
   'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
   'uses_scan_nested: tests that use nested scans',
-  'uses_scan_requiring_projector: tests need a projector implementation in gtfn',
   'uses_sparse_fields: tests that require backend support for sparse fields',
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
@@ -316,7 +290,7 @@ markers = [
   'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
-norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
+norecursedirs = ['dist', 'build', '_local/*', '.*']
 python_files = ['test_*.py', '*_test.py', 'benchmark_*.py']
 python_functions = ['test_*', 'benchmark_*']
 testpaths = 'tests'
@@ -324,7 +298,7 @@ xfail_strict = true
 
 # -- ruff --
 [tool.ruff]
-line-length = 100  # It should be the same as in `tool.black.line-length` above
+line-length = 100
 respect-gitignore = true
 show-fixes = true
 # show-source = true
@@ -465,9 +439,9 @@ name = 'gridtools'
 url = 'https://gridtools.github.io/pypi/'
 
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
+# dace = {index = "gridtools"}
 [tool.uv.sources]
 atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace", branch = "main"}
 
 # -- versioningit --
 [tool.versioningit]

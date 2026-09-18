@@ -500,6 +500,7 @@ def _gt_auto_process_top_level_maps(
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
     # TODO(phimuell): Maybe switch to `reset_cfg_list()`?
     sdfg_hash = sdfg.hash_sdfg()
+    hash_before_step = sdfg_hash
 
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)  # type: ignore[call-arg]
@@ -609,7 +610,7 @@ def _gt_auto_process_top_level_maps(
             # TODO(phimuell): Implement a data cleaner.
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
-            sdfg.apply_transformations_repeated(
+            nb_applied_splits = sdfg.apply_transformations_repeated(
                 [
                     gtx_transformations.MapSplitter(
                         single_use_data=single_use_data,
@@ -622,8 +623,11 @@ def _gt_auto_process_top_level_maps(
             )
             # TODO(phimuell): Find out how to skip the propagation and integrating it
             #   into the split transformation.
-            dace_sdutils.canonicalize_memlet_trees(sdfg)
-            dace_propagation.propagate_memlets_sdfg(sdfg)
+            if nb_applied_splits != 0:
+                # Without an applied split the SDFG is the one the canonicalization and the
+                #  propagation above already ran on, and both are idempotent.
+                dace_sdutils.canonicalize_memlet_trees(sdfg)
+                dace_propagation.propagate_memlets_sdfg(sdfg)
 
             # Split the top level AccessNodes.
             # NOTE: This function will also update `single_use_data`.
@@ -706,15 +710,27 @@ def _gt_auto_process_top_level_maps(
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
             break
+        step_has_modified_sdfg = sdfg_hash != hash_before_step
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
-        gtx_transformations.gt_simplify(
+        simplify_result = gtx_transformations.gt_simplify(
             sdfg,
             validate=False,
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+        # `gt_simplify()` reports every pass it applied, so `None` means the SDFG is still the one
+        #  the hash above was taken from.
+        if simplify_result is None:
+            # The next iteration would start from the same SDFG as this one. If this one changed
+            #  nothing, it would repeat itself and find nothing again.
+            if not step_has_modified_sdfg:
+                break
+            hash_before_step = sdfg_hash
+        else:
+            hash_before_step = sdfg.hash_sdfg()
 
     # Replace `concat_where` nodes
     # TODO(phimuell): Are there better locations for this transformation?

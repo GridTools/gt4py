@@ -7,9 +7,12 @@ tags: [frontend]
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2022-10-03
-- **Updated**: 2022-10-03
+- **Updated**: 2026-09-15
 
 Do we distinguish scalars (e.g. `float`) and fields with 0 dimensions (e.g. `Field[[], float]`) in the context of field view?
+
+> [!NOTE]
+> The examples below use the original `Field[[<dims>], <dtype>]` annotation syntax; field types are spelled `gtx.Field[gtx.Dims[<dims>], <dtype>]` today. The decision the examples illustrate is unchanged.
 
 ## Context
 

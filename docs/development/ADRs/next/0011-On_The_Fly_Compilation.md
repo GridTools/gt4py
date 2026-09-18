@@ -7,9 +7,12 @@ tags: [backend, bindings, build, compile, otf]
 - **Status**: valid
 - **Authors**: Rico Häuselmann (@DropD)
 - **Created**: 2022-09-12
-- **Updated**: 2023-04-03
+- **Updated**: 2026-09-15
 
-This supersedes [0009 - Compiled Backend Integration](0009-Compiled_Backend_Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
+This supersedes [0009 - Compiled Backend Integration](0009-Compiled-Backend-Integration.md) and concentrates on the API design for on-the-fly compilation of GT4Py programs and all the steps in between IR and compiled Python extension.
+
+> [!NOTE]
+> The stage and step names introduced below have since been renamed and redistributed over two modules: `ProgramCall` is now `otf.stages.CompilableProgramDef`; `ProgramSource`, `CompilableSource` and `CompiledProgram` are now `otf.artifacts.ProgramSource`, `otf.artifacts.ExtensionSource` and `otf.artifacts.CompilationArtifact` (whose `load()` returns an `otf.artifacts.ExecutableProgram`); and `otf.step_types` was merged into `otf.stages`, where `BindingStep` no longer exists. The architecture described here — composable, statically typed workflows — is unchanged.
 
 ## Context
 
