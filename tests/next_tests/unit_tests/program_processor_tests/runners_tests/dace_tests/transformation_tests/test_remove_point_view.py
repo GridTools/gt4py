@@ -77,9 +77,7 @@ def _make_sdfg_with_map_with_view(
         state.add_edge(tmp_view_access_node, None, mexit, "IN_out", dace.Memlet("out[i, j]"))
 
     mentry.add_scope_connectors("a")
-    mentry.add_in_connector("IN_a")
-    mexit.add_in_connector("IN_out")
-    mexit.add_out_connector("OUT_out")
+    mexit.add_scope_connectors("out")
     state.add_edge(mexit, "OUT_out", out, None, dace.Memlet(f"out[0:{N}, 0:{N}]"))
 
     dace_propagation.propagate_states(sdfg)
