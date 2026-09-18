@@ -38,13 +38,11 @@ def _create_sdfg_double_read_part_1(
 
     state.add_edge(A_in, None, me, f"IN_{nb}", dace.Memlet("A[0:10]"))
     state.add_edge(me, f"OUT_{nb}", tskl, "__in1", dace.Memlet("A[__i0]"))
-    me.add_in_connector(f"IN_{nb}")
-    me.add_out_connector(f"OUT_{nb}")
+    me.add_scope_connectors(str(nb))
 
     state.add_edge(tskl, "__out", mx, f"IN_{nb}", dace.Memlet("A[__i0]"))
     state.add_edge(mx, f"OUT_{nb}", state.add_access("A"), None, dace.Memlet("A[0:10]"))
-    mx.add_in_connector(f"IN_{nb}")
-    mx.add_out_connector(f"OUT_{nb}")
+    mx.add_scope_connectors(str(nb))
 
 
 def _create_sdfg_double_read_part_2(
@@ -61,13 +59,11 @@ def _create_sdfg_double_read_part_2(
 
     state.add_edge(A_in, None, me, f"IN_{nb}", dace.Memlet("A[0:10]"))
     state.add_edge(me, f"OUT_{nb}", tskl, "__in1", dace.Memlet("A[__i0]"))
-    me.add_in_connector(f"IN_{nb}")
-    me.add_out_connector(f"OUT_{nb}")
+    me.add_scope_connectors(str(nb))
 
     state.add_edge(tskl, "__out", mx, f"IN_{nb}", dace.Memlet("B[__i0]"))
     state.add_edge(mx, f"OUT_{nb}", state.add_access("B"), None, dace.Memlet("B[0:10]"))
-    mx.add_in_connector(f"IN_{nb}")
-    mx.add_out_connector(f"OUT_{nb}")
+    mx.add_scope_connectors(str(nb))
 
 
 def _create_sdfg_double_read(
@@ -176,8 +172,7 @@ def test_local_double_buffering_no_connection():
     state.add_nedge(me, fill_tasklet, dace.Memlet())
     state.add_edge(fill_tasklet, "__out", mx, "IN_1", dace.Memlet("A[__i0]"))
     state.add_edge(mx, "OUT_1", A_out, None, dace.Memlet("A[0:10]"))
-    mx.add_in_connector("IN_1")
-    mx.add_out_connector("OUT_1")
+    mx.add_scope_connectors("1")
     sdfg.validate()
 
     count = gtx_transformations.gt_create_local_double_buffering(sdfg)

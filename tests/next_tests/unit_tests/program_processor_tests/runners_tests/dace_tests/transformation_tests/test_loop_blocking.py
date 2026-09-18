@@ -124,10 +124,8 @@ def _get_chained_sdfg() -> tuple[dace.SDFG, Callable[[np.ndarray, np.ndarray], n
     state.add_edge(b, None, mentry, "IN_b", sdfg.make_array_memlet("b"))
     state.add_edge(mexit, "OUT_c", c, None, sdfg.make_array_memlet("c"))
     for name in ["a", "b"]:
-        mentry.add_in_connector("IN_" + name)
-        mentry.add_out_connector("OUT_" + name)
-    mexit.add_in_connector("IN_c")
-    mexit.add_out_connector("OUT_c")
+        mentry.add_scope_connectors(name)
+    mexit.add_scope_connectors("c")
 
     dace_propagation.propagate_states(sdfg)
     sdfg.validate()
@@ -202,10 +200,8 @@ def _get_sdfg_with_empty_memlet(
     state.add_edge(tmp, None, task2, "__in0", dace.Memlet("tmp[0]"))
 
     if not only_empty_memlets:
-        mentry.add_in_connector("IN_a")
-        mentry.add_out_connector("OUT_a")
-    mexit.add_in_connector("IN_b")
-    mexit.add_out_connector("OUT_b")
+        mentry.add_scope_connectors("a")
+    mexit.add_scope_connectors("b")
 
     sdfg.validate()
 

@@ -137,12 +137,9 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     state.add_edge(mexit, "OUT_out1", out1, None, sdfg.make_array_memlet("out1"))
     for name in ["a", "b"]:
         mentry.add_scope_connectors(name)
-    mexit.add_in_connector("IN_out1")
-    mexit.add_out_connector("OUT_out1")
-    small_map_entry.add_in_connector("IN_tmp3")
-    small_map_entry.add_out_connector("OUT_tmp3")
-    small_map_exit.add_in_connector("IN_tmp4")
-    small_map_exit.add_out_connector("OUT_tmp4")
+    mexit.add_scope_connectors("out1")
+    small_map_entry.add_scope_connectors("tmp3")
+    small_map_exit.add_scope_connectors("tmp4")
 
     state.add_mapped_tasklet(
         name="second_computation",
