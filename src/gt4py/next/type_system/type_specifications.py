@@ -74,9 +74,12 @@ class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
+    #: The offset-provider key; `None` for the untagged Cartesian `Dim + offset`.
+    tag: Optional[common.Tag] = None
 
     def __str__(self) -> str:
-        return f"Offset[{self.source}, {self.target}]"
+        tag = "" if self.tag is None else f"{self.tag}: "
+        return f"Offset[{tag}{self.source}, {self.target}]"
 
 
 class ScalarKind(eve_types.IntEnum):
