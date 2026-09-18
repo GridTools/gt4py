@@ -14,6 +14,7 @@ import dataclasses
 import enum
 import functools
 import math
+import re
 import sys
 import types
 from collections.abc import Iterable, Mapping, Sequence
@@ -60,6 +61,56 @@ class Dims(tuple[Unpack[ShapeTs]]): ...
 DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 
 Tag: TypeAlias = str
+
+
+def codegen_name(tag: Tag) -> str:
+    """
+    Mangle a dimension or offset tag into a valid generated identifier.
+
+    A tag is a qualified Python name, so it contains dots, which are illegal in a C++
+    identifier, in a DaCe symbol, and in `eve`'s `SymbolName` (`^[a-zA-Z_]\\w*$`). Since a
+    generated identifier may only contain `[A-Za-z0-9_]`, the underscore is the only
+    available separator, and escaping it is what makes the mapping reversible.
+
+    The escape is a *prefix* escape. The obvious alternative -- double every underscore,
+    then turn dots into single underscores -- is **not injective**: a dot becomes a single
+    underscore, so `'..'` and `'_'` both map to `'__'`.
+
+    Args:
+        tag: A dimension or offset tag, i.e. a qualified Python name.
+
+    Returns:
+        A valid identifier, unique for each distinct `tag`.
+
+    Examples:
+        >>> codegen_name("mod.V2E.Local")
+        'mod_dV2E_dLocal'
+        >>> codegen_name("a_b.c")
+        'a_ub_dc'
+        >>> from_codegen_name(codegen_name("my__mod.X"))
+        'my__mod.X'
+    """
+    return tag.replace("_", "_u").replace(".", "_d")
+
+
+def from_codegen_name(name: str) -> Tag:
+    """
+    Recover a tag from the identifier `codegen_name` produced for it.
+
+    Needed wherever a backend parses a generated name back into the dimension or offset it
+    refers to.
+
+    Args:
+        name: An identifier produced by `codegen_name`.
+
+    Returns:
+        The original tag.
+
+    Examples:
+        >>> from_codegen_name("mod_dV2E_dLocal")
+        'mod.V2E.Local'
+    """
+    return re.sub(r"_([ud])", lambda m: "_" if m.group(1) == "u" else ".", name)
 
 
 @enum.unique
