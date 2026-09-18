@@ -130,6 +130,6 @@ does not offload.
 - Each worker pays an interpreter start and gt4py import on spawn, amortized
   over the session; scripts that compile at module level need the standard
   `if __name__ == "__main__":` guard under `spawn`.
-- `GT4PY_BUILD_JOBS` defaults to `min(os.cpu_count(), 32)`; in process mode
-  every job is a full interpreter, so memory-constrained environments should
-  set it explicitly.
+- `GT4PY_BUILD_JOBS` defaults to the number of CPUs available to the process
+  (affinity-aware), capped at 32; in process mode every job is a full
+  interpreter, so memory-constrained environments should set it explicitly.
