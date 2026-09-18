@@ -185,6 +185,16 @@ surfacing much later as a missing offset-provider key.
 `tag = "..."` would therefore be silently ignored, which is exactly the renaming
 pattern downstream code uses — so `__init_subclass__` raises on it.
 
+### Display uses the unqualified name
+
+The `tag` is qualified, but it is *identity and IR spelling*, not a display name.
+User-facing diagnostics use `cls.__qualname__`, so `Field[[IDim], float64]` reads
+the same as before instead of becoming `Field[[pkg.mod.IDim], float64]`. This is
+not a third name concept: `__qualname__` is a Python builtin attribute, and for a
+nested declaration it is already the readable form (`V2E.Local`). `repr()` shows
+the full tag and the kind, which disambiguates the rare case of two same-named
+dimensions from different modules appearing in one message.
+
 `DimensionMeta` must declare `__hash__ = type.__hash__` explicitly: Python sets
 `__hash__ = None` on any class body defining `__eq__` without it, and `__eq__`
 stays for the `I == 5` → `Domain` overload. Without it every dimension class is
