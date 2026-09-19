@@ -418,17 +418,20 @@ class DaCeTranslator(
         new_program = apply_common_transforms(program, unroll_reduce=False)
 
         if any(
-            cpm.is_applied_reduce(node) and _has_neighbors_argument(node)
+            cpm.is_applied_lift(node)
+            or (cpm.is_applied_reduce(node) and _has_neighbors_argument(node))
             for node in new_program.pre_walk_values().if_isinstance(itir.FunCall)
         ):
-            # A `reduce` applied directly to a `neighbors` (or lifted `neighbors`)
-            # argument cannot be lowered to SDFG as-is, so we retry with unrolled
-            # reductions (which also inlines any lifts left in the itir). A `reduce`
-            # over a materialized neighbor-list field, e.g. the result of a
-            # `concat_where`, is lowered natively and must not trigger this path:
-            # unrolling such a reduction is either unnecessary or, on meshes with
-            # skip values, outright fails since there is no `neighbors` iterator from
-            # which to build the skip-value check.
+            # We retry with unrolled reductions (whose fixed-point loop also inlines
+            # the remaining lifts) in two cases that the SDFG lowering cannot handle
+            # as-is:
+            #  - an applied `lift` is left in the itir, or
+            #  - a `reduce` is applied directly to a (lifted) `neighbors` argument.
+            # A `reduce` over a materialized neighbor-list field, e.g. the result of a
+            # `concat_where`, does not match either condition: it is lowered natively
+            # and must not trigger this path, since unrolling such a reduction is
+            # unnecessary and, on meshes with skip values, outright fails (there is no
+            # `neighbors` iterator from which to build the skip-value check).
             new_program = apply_common_transforms(program, unroll_reduce=True)
 
         return new_program
