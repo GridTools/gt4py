@@ -114,6 +114,14 @@ no_backend = NoBackend(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
             marks=pytest.mark.uses_dace,
         ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_CPU_GT,
+            marks=pytest.mark.uses_dace,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_CPU_GT_NO_OPT,
+            marks=pytest.mark.uses_dace,
+        ),
     ],
     ids=lambda p: p.short_id(),
 )
