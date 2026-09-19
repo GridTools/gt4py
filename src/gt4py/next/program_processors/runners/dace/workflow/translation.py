@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+from collections.abc import Iterable, Iterator
 from typing import Any, Optional
 
 import dace
@@ -19,6 +20,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
@@ -29,6 +31,33 @@ from gt4py.next.program_processors.runners.dace import (
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
+
+
+def _is_neighbors_or_lifted_neighbors(arg: itir.Expr) -> bool:
+    """Whether `arg` is a `neighbors` call or a lift wrapping one (transitively)."""
+    if cpm.is_call_to(arg, "neighbors"):
+        return True
+    return cpm.is_applied_lift(arg) and any(
+        _is_neighbors_or_lifted_neighbors(nested_arg) for nested_arg in arg.args
+    )
+
+
+def _has_neighbors_argument(reduce_node: itir.FunCall) -> bool:
+    """Whether an applied `reduce` operates directly on a (lifted) `neighbors` argument.
+
+    Such a reduction is not lowered to SDFG natively and must be unrolled. A reduction
+    over a materialized neighbor-list field (e.g. the result of a `concat_where`) has a
+    plain iterator argument instead and is excluded here, since it is lowered natively.
+    """
+
+    def flatten(args: Iterable[itir.Expr]) -> Iterator[itir.Expr]:
+        for arg in args:
+            if cpm.is_call_to(arg, "if_"):
+                yield from flatten(arg.args[1:3])
+            else:
+                yield arg
+
+    return any(_is_neighbors_or_lifted_neighbors(arg) for arg in flatten(reduce_node.args))
 
 
 def find_constant_symbols(
@@ -389,11 +418,17 @@ class DaCeTranslator(
         new_program = apply_common_transforms(program, unroll_reduce=False)
 
         if any(
-            node.id == "neighbors"
-            for node in new_program.pre_walk_values().if_isinstance(itir.SymRef)
+            cpm.is_applied_reduce(node) and _has_neighbors_argument(node)
+            for node in new_program.pre_walk_values().if_isinstance(itir.FunCall)
         ):
-            # if we don't unroll, there may be lifts left in the itir which can't
-            # be lowered to SDFG. In this case, just retry with unrolled reductions.
+            # A `reduce` applied directly to a `neighbors` (or lifted `neighbors`)
+            # argument cannot be lowered to SDFG as-is, so we retry with unrolled
+            # reductions (which also inlines any lifts left in the itir). A `reduce`
+            # over a materialized neighbor-list field, e.g. the result of a
+            # `concat_where`, is lowered natively and must not trigger this path:
+            # unrolling such a reduction is either unnecessary or, on meshes with
+            # skip values, outright fails since there is no `neighbors` iterator from
+            # which to build the skip-value check.
             new_program = apply_common_transforms(program, unroll_reduce=True)
 
         return new_program

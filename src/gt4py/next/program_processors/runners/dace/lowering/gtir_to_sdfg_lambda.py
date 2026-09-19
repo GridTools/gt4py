@@ -59,7 +59,7 @@ from gt4py.next.type_system import (
 
 
 # Magic local dimension used for list of values with length known at compile-time.
-_CONST_DIM: Final = gtx_common.Dimension(value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL)
+_CONST_DIM: Final = gtir_to_sdfg_utils.CONST_DIM
 
 
 @dataclasses.dataclass(frozen=True)
