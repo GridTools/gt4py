@@ -45,7 +45,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Protocol, Seque
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 from dace.frontend.python import astutils as dace_astutils
-from dace.libraries import standard as dace_stdlib
 from dace.sdfg import state as dace_state
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 
@@ -64,10 +63,7 @@ from gt4py.next.iterator.transforms import (
     prune_casts as ir_prune_casts,
 )
 from gt4py.next.iterator.type_system import inference as gtir_type_inference
-from gt4py.next.program_processors.runners.dace import (
-    library_nodes as gtx_library_nodes,
-    sdfg_args as gtx_dace_args,
-)
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_codegen import (
     generate_list_tasklet_code,
     generate_tasklet_code,
@@ -82,7 +78,6 @@ from gt4py.next.program_processors.runners.dace.lowering_stree.gtir_to_stree_uti
     FieldopDomain,
     extract_target_domain,
     flatten_tuple_fields,
-    format_builtin,
     get_field_domain,
     get_field_layout,
     get_map_variable,
@@ -333,239 +328,6 @@ def _get_scalar_field_dims(
     return result
 
 
-# Reduction builtins supported by the schedule-tree library-node lowering,
-# mapped to the DaCe reduction type used to derive the neutral (identity)
-# element.  Mirrors ``DACE_REDUCTION_MAPPING`` in the SDFG lowering
-# (``lowering.gtir_to_sdfg_lambda``); kept local to avoid a dependency from
-# ``lowering_stree`` on ``lowering``.
-_DACE_REDUCTION_MAPPING: dict[str, dace.dtypes.ReductionType] = {
-    "plus": dace.dtypes.ReductionType.Sum,
-    "multiplies": dace.dtypes.ReductionType.Product,
-    "minimum": dace.dtypes.ReductionType.Min,
-    "maximum": dace.dtypes.ReductionType.Max,
-}
-
-
-def _expr_references(expr: gtir.Expr, name: str) -> bool:
-    """Whether ``name`` occurs as a ``SymRef`` anywhere in ``expr``."""
-    return any(
-        isinstance(sub, gtir.SymRef) and str(sub.id) == name for sub in eve.walk_values(expr)
-    )
-
-
-def _reduce_local_dimension(args: Sequence[gtir.Expr]) -> Optional[gtx_common.Dimension]:
-    """Return the local (neighbor) dimension of the first list-typed reduce argument."""
-    for arg in args:
-        arg_type = arg.type
-        if (
-            isinstance(arg_type, ts.ListType)
-            and arg_type.offset_type is not None
-            and arg_type.offset_type != CONST_DIM
-        ):
-            return arg_type.offset_type
-    return None
-
-
-def _decompose_reduce(
-    node: gtir.FunCall,
-) -> Optional[tuple[str, gtir.Literal, gtir.Expr]]:
-    """Decompose an applied ``reduce`` for the library-node lowering.
-
-    A DaCe reduce library node reduces a *single* input list with a binary WCR.
-    A fused reduce ``reduce(λ(acc, e0..ek) → op(acc, f(e0..ek)), init)(l0..lk)``
-    is therefore split into the per-neighbor element list
-    ``map_list(λ(e0..ek) → f(e0..ek))(l0..lk)`` (materialized separately) reduced
-    with WCR ``op``.  The simple shape ``reduce(op, init)(l)`` maps directly.
-
-    Returns ``(wcr_op_name, init_literal, element_list_expr)`` or ``None`` when
-    the reduce shape is not supported (the caller then falls back to the native
-    accumulation-loop lowering).
-    """
-    assert cpm.is_applied_reduce(node)
-    op_expr, init_expr = node.fun.args
-    if not isinstance(init_expr, gtir.Literal):
-        return None
-    args = node.args
-
-    # Nested reductions (a reduce whose element expression contains another
-    # reduce, e.g. through a lifted stencil) materialize the inner reduce as an
-    # accumulation loop inside the element tasklet; that does not fit the single
-    # element-list model of a reduce library node.  Fall back to the native
-    # accumulation-loop lowering for these.
-    if any(cpm.is_applied_reduce(sub) for arg in args for sub in eve.walk_values(arg)):
-        return None
-
-    # Simple builtin reduce: reduce(plus, 0)(list).
-    if isinstance(op_expr, gtir.SymRef):
-        op_name = str(op_expr.id)
-        if op_name not in _DACE_REDUCTION_MAPPING or len(args) != 1:
-            return None
-        return op_name, init_expr, args[0]
-
-    # Fused reduce+map: reduce(λ(acc, e0..ek) → op(acc, f(...)), init)(l0..lk).
-    if isinstance(op_expr, gtir.Lambda):
-        params = op_expr.params
-        if len(params) != 1 + len(args):
-            return None
-        acc = str(params[0].id)
-        body = op_expr.expr
-        if not (
-            isinstance(body, gtir.FunCall)
-            and isinstance(body.fun, gtir.SymRef)
-            and len(body.args) == 2
-        ):
-            return None
-        op_name = str(body.fun.id)
-        if op_name not in _DACE_REDUCTION_MAPPING:
-            return None
-        lhs, rhs = body.args
-        lhs_is_acc = isinstance(lhs, gtir.SymRef) and str(lhs.id) == acc
-        rhs_is_acc = isinstance(rhs, gtir.SymRef) and str(rhs.id) == acc
-        # The supported reduction ops are commutative, so acc may appear as
-        # either operand; the other operand is the per-neighbor element.
-        if lhs_is_acc and not _expr_references(rhs, acc):
-            element = rhs
-        elif rhs_is_acc and not _expr_references(lhs, acc):
-            element = lhs
-        else:
-            return None
-
-        element_params = params[1:]
-        # ``op(acc, e0)`` with a single element parameter is a plain builtin
-        # reduce over that single list; no ``map_list`` wrapper is needed.
-        if (
-            len(element_params) == 1
-            and isinstance(element, gtir.SymRef)
-            and str(element.id) == str(element_params[0].id)
-        ):
-            return op_name, init_expr, args[0]
-
-        local_dim = _reduce_local_dimension(args)
-        if local_dim is None or not isinstance(node.type, ts.ScalarType):
-            return None
-        element_lambda = im.lambda_(*[str(p.id) for p in element_params])(element)
-        element_list_expr = im.call(im.call("map_list")(element_lambda))(*args)
-        element_list_expr.type = ts.ListType(element_type=node.type, offset_type=local_dim)
-        return op_name, init_expr, element_list_expr
-
-    return None
-
-
-def translate_reduce_fieldop(
-    node: gtir.FunCall,
-    stencil_expr: gtir.Lambda,
-    fieldop_domain_expr: gtir.Expr,
-    field_domain: FieldopDomain,
-    ctx: SubgraphContext,
-    sdfg_builder: SDFGBuilder,
-) -> DataRef:
-    """Lower an ``as_fieldop`` whose body is a ``reduce`` using library nodes.
-
-    Instead of emitting the reduction as a native Python accumulation loop in
-    the field-operator tasklet, this:
-
-    1. materializes the reduce's per-neighbor element list into a temporary
-       local-dimension array (by lowering a synthetic ``as_fieldop`` with the
-       element-list body, reusing the ``ListType`` materialization path), and
-    2. adds a ``LibraryCall`` reducing that array to a scalar field, using
-       ``dace.libraries.standard.Reduce`` (dense connectivity) or gt4py's
-       ``ReduceWithSkipValues`` (connectivity with skip values).
-
-    This mirrors ``_visit_reduce`` in the SDFG lowering, so both lowering paths
-    instantiate the same reduce library nodes.
-    """
-    reduce_node = stencil_expr.expr
-    decomposed = _decompose_reduce(reduce_node)
-    assert decomposed is not None, reduce_node
-    wcr_op, init_expr, element_list_expr = decomposed
-
-    assert isinstance(element_list_expr.type, ts.ListType)
-    local_dim = element_list_expr.type.offset_type
-    assert local_dim is not None
-    conn_type = sdfg_builder.get_offset_provider_type(local_dim.value)
-    assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
-    max_neighbors = conn_type.max_neighbors
-
-    assert isinstance(node.type, ts.FieldType) and isinstance(node.type.dtype, ts.ScalarType)
-    dc_dtype = gtx_dace_args.as_dace_type(node.type.dtype)
-
-    # 1) Materialize the per-neighbor element list into a local-dimension array
-    #    by lowering a synthetic field operator with the element-list body.
-    list_field_type = ts.FieldType(dims=node.type.dims, dtype=element_list_expr.type)
-    list_stencil = im.lambda_(*[str(p.id) for p in stencil_expr.params])(element_list_expr)
-    list_call = im.as_fieldop(list_stencil, fieldop_domain_expr)(*node.args)
-    list_call.type = list_field_type
-    neighbor_list = translate_as_fieldop(list_call, ctx, sdfg_builder)
-    assert isinstance(neighbor_list, DataRef)
-
-    # Field layout of the (scalar) reduction result and of the neighbor list.
-    field_dims, field_origin, field_shape = get_field_layout(field_domain)
-    extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
-    local_dim_index = extended_dims.index(local_dim)
-
-    # Allocate the reduction result: a scalar field over the field domain.
-    if len(field_shape) == 0:
-        result_name, _ = sdfg_builder.add_temp_scalar(ctx.root, dc_dtype)
-    else:
-        result_name, _ = sdfg_builder.add_temp_array(ctx.root, field_shape, dc_dtype)
-
-    # 2) Add a map over the field domain containing the reduce library node.
-    if len(field_domain) == 0:
-        red_map_range: dict[str, str] = {"__gt4py_zerodim": "0"}
-    else:
-        red_map_range = {get_map_variable(r.dim): f"{r.start}:{r.stop}" for r in field_domain}
-    red_map_entry, _red_map_exit = sdfg_builder.add_map("reduce", red_map_range)
-
-    field_index_parts = [
-        f"{get_map_variable(dim)} - ({origin})"
-        for dim, origin in zip(field_dims, field_origin, strict=True)
-    ]
-    # Input subset over the neighbor-list array: field indices + full local dim.
-    in_subset_parts = list(field_index_parts)
-    in_subset_parts.insert(local_dim_index, f"0:{max_neighbors}")
-    in_subset = ",".join(in_subset_parts) if in_subset_parts else f"0:{max_neighbors}"
-    out_subset = ",".join(field_index_parts) if field_index_parts else "0"
-
-    wcr = "lambda x, y: " + format_builtin(wcr_op, "x", "y")
-    in_memlets = {"_in": dace.Memlet(data=neighbor_list.name, subset=in_subset)}
-    out_memlets = {"_out": dace.Memlet(data=result_name, subset=out_subset)}
-
-    if conn_type.has_skip_values:
-        # Skip-value reduction: the connectivity table masks invalid neighbors.
-        identity_value = dace.dtypes.reduction_identity(dc_dtype, _DACE_REDUCTION_MAPPING[wcr_op])
-        reduce_lib_node: dace_nodes.LibraryNode = gtx_library_nodes.ReduceWithSkipValues(
-            name=sdfg_builder.unique_lib_node_name("reduce_with_skip_values"),
-            wcr=wcr,
-            identity=identity_value,
-            init=init_expr.value,
-            input_conn="_in",
-            output_conn="_out",
-            mask_conn="_mask",
-        )
-        conn_name = gtx_dace_args.connectivity_identifier(local_dim.value)
-        ctx.root.containers[conn_name].transient = False
-        source_index = get_map_variable(conn_type.source_dim)
-        in_memlets["_mask"] = dace.Memlet(
-            data=conn_name, subset=f"{source_index}, 0:{max_neighbors}"
-        )
-    else:
-        reduce_lib_node = dace_stdlib.Reduce(
-            name=sdfg_builder.unique_lib_node_name("reduce"),
-            wcr=wcr,
-            axes=None,
-            identity=init_expr.value,
-            inputs={"_in"},
-            outputs={"_out"},
-        )
-
-    library_call = tn.LibraryCall(
-        node=reduce_lib_node, in_memlets=in_memlets, out_memlets=out_memlets
-    )
-    ctx.current_scope.add_child(tn.MapScope(node=red_map_entry, children=[library_call]))
-
-    return DataRef(result_name, node.type, tuple(field_origin))
-
-
 def translate_as_fieldop(
     node: gtir.Node,
     ctx: SubgraphContext,
@@ -629,17 +391,6 @@ def translate_as_fieldop(
     else:
         raise NotImplementedError(
             f"Expression type '{type(fieldop_expr)}' not supported as argument to 'as_fieldop' node."
-        )
-
-    # When the field-operator body is a reduction, lower it with reduce library
-    # nodes (matching the SDFG lowering) rather than a native accumulation loop.
-    if (
-        isinstance(stencil_expr, gtir.Lambda)
-        and cpm.is_applied_reduce(stencil_expr.expr)
-        and _decompose_reduce(stencil_expr.expr) is not None
-    ):
-        return translate_reduce_fieldop(
-            node, stencil_expr, fieldop_domain_expr, field_domain, ctx, sdfg_builder
         )
 
     # Visit the arguments to be passed to the lambda expression.
