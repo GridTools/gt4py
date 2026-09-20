@@ -38,6 +38,8 @@ Writing a new ADR is simple:
 
 ### Transformations
 
+- [0028 - Guarded DaCe Fusion](0028-Guarded_DaCe_Fusion.md)
+
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
 
 ### Backends and Code Generation

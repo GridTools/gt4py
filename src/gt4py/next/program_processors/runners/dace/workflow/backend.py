@@ -95,8 +95,14 @@ def make_dace_backend(
         auto_optimize: Enable the SDFG auto-optimize pipeline.
         async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
             of GPU kernel execution with the Python driver code.
-        optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        optimization_args: Configuration for `gt_auto_optimize()` and optional
+            scan-input fusion before SDFG lowering. `fuse_scan_inputs=True`
+            enables one-layer fusion; it is disabled by default. An optional
+            `scan_input_selector(scan_call, input_index)` restricts eligible
+            inputs; indices exclude the carry. `scan_fusion_scope` defaults
+            to "immediate". With "field_operator", local producer expressions
+            are normalized within their original function before inlining,
+            and the selector sees the scan after this normalization.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
