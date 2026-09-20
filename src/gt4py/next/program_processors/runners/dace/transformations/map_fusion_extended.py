@@ -821,6 +821,9 @@ class VerticalSplitMapRange(SplitMapRange):
             (edge, []) for edge, _ in writers
         ]
         for reader, region in readers:
+            # covers() compares bounding boxes. This is exact here because the
+            # guards above require unit-stride, pointwise accesses with outer
+            # subsets equal to map ranges. Keep those guards when extending this.
             owners = [i for i, (_, written) in enumerate(writers) if written.covers(region)]
             if len(owners) != 1:
                 return None

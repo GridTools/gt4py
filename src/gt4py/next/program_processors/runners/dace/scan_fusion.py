@@ -248,6 +248,10 @@ def fuse_scan_inputs(
     coefficient fields. Scan direction, initial state and arithmetic casts are
     retained. Unsupported shifted accesses keep the original scan.
 
+    Overlap checks track IR symbols and let bindings, not runtime buffer
+    addresses. Callers must not supply overlapping input/output buffers under
+    different symbols when enabling this optimization.
+
     Args:
         program: Typed, domain-inferred iterator IR before SDFG lowering.
         offset_provider: Connectivities used for type and domain inference.

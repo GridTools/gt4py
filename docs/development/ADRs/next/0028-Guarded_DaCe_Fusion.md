@@ -111,3 +111,22 @@ matched exactly. Direct comparisons with the earlier frontend solver rewrite
 showed no resolved difference. These results motivate opt-in use, not a general
 speedup guarantee or a default policy. Global-grid regression testing remains
 outstanding; cache capacity is not established as the cause of the vendor gap.
+
+## Review clarifications
+
+The shared-output coverage test uses bounding boxes. It is exact for the accepted
+pointwise, unit-stride partitions because outer subsets must equal map ranges.
+These guards are part of the safety proof; extending them requires revisiting
+coverage, not simply retaining the same `covers()` call. Arrays marked
+`may_alias` and views are rejected; no runtime pointer comparison is added.
+
+The scan overlap guard resolves IR symbols and let aliases. It does not detect
+runtime aliasing between differently named input/output fields. Callers enabling
+this optimization must not pass overlapping input/output buffers under distinct
+symbols. Existing alias tests exercise symbolic and let aliases only.
+
+The published GPU reductions measure both passes together. They are not separate
+measurements of each compiler pass. If review is split into separate PRs, each
+must retain its own design documentation and label the performance evidence as
+joint. The current review targets `amd_chiplet_setting`; merging there does not
+by itself deliver the changes to `main`.
