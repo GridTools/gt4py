@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import abc
 import collections
+import copyreg
 import dataclasses
 import enum
-import copyreg
 import functools
 import importlib
 import math
@@ -212,6 +212,8 @@ class DimensionMeta(type):
         # NOTE: dimension-vs-dimension comparison is deliberately *not* handled here. A
         # dimension's identity is its type, so `type.__eq__` (identity) is the correct
         # answer; overriding it with `(tag, kind)` equality is what ADR 0028 rejects.
+        if isinstance(value, DimensionMeta):
+            return NotImplemented  # both sides decline, so Python falls back to identity
         if isinstance(value, core_defs.INTEGRAL_TYPES):
             return Domain(dims=(cls,), ranges=(UnitRange(value, value + 1),))
         return NotImplemented
@@ -389,7 +391,7 @@ def resolve(tag: Tag) -> Dimension:
                 ) from ex
         if not isinstance(obj, DimensionMeta):
             raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
-        return obj
+        return cast(Dimension, obj)
     raise ValueError(
         f"Cannot resolve dimension tag '{tag}': no importable module prefix. A dimension"
         " referenced from the IR must be declared at module level in an importable module."
@@ -974,7 +976,10 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
 
     @property
     def __gt_dims__(self) -> tuple[str, ...]:
-        return tuple(d.tag for d in self.__gt_domain__.dims)
+        # NOTE: the unqualified name, not the `tag`. This is the interop protocol with
+        # `gt4py.cartesian`, which identifies axes by their bare names (`"I"`, `"J"`, `"K"`); a
+        # qualified tag would not match and the axes would be transposed wrongly (ADR 0028).
+        return tuple(d.__qualname__ for d in self.__gt_domain__.dims)
 
 
 @runtime_checkable
@@ -1715,8 +1720,7 @@ class StaggeredMeta(DimensionMeta):
     def __getitem__(cls, base: Dimension) -> Dimension:
         if "base" in cls.__dict__:
             raise TypeError(
-                f"'{cls.__qualname__}' is already staggered; a dimension cannot be staggered"
-                " twice."
+                f"'{cls.__qualname__}' is already staggered; a dimension cannot be staggered twice."
             )
         if not isinstance(base, DimensionMeta):
             raise TypeError(f"'Staggered' expects a dimension, got '{base!r}'.")
@@ -1747,7 +1751,7 @@ if TYPE_CHECKING:
     # inside `Field[Dims[Staggered[K]], ...]`. The runtime form below builds a real, interned
     # class so that `issubclass` and eve's `type[...]` validation work. Verified clean under
     # `mypy --strict` and pyright.
-    class Staggered[D: DimensionIndex](DimensionIndex):  # noqa: D101 [undocumented-public-class]
+    class Staggered[D: DimensionIndex](DimensionIndex):
         base: ClassVar[Dimension]
 
 else:
@@ -1811,7 +1815,7 @@ def _make_staggered(base: Dimension) -> Dimension:
     return Staggered[base]  # type: ignore[valid-type] # runtime subscription, see StaggeredMeta
 
 
-copyreg.pickle(StaggeredMeta, _reduce_staggered)  # type: ignore[arg-type] # metaclass reducer
+copyreg.pickle(StaggeredMeta, _reduce_staggered)
 
 
 def is_staggered(dim: Dimension) -> bool:
