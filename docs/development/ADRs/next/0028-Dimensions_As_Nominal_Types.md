@@ -116,17 +116,19 @@ disappears.
 
    ```python
    def codegen_name(tag: Tag) -> str:
-       return tag.replace("_", "_u").replace(".", "_d")
+       return tag.replace("_", "_u").replace(".", "_d").replace("[", "_l").replace("]", "_r")
 
 
    def from_codegen_name(name: str) -> Tag:
-       return re.sub(r"_([ud])", lambda m: "_" if m.group(1) == "u" else ".", name)
+       return re.sub(r"_([udlr])", lambda m: {"u": "_", "d": ".", "l": "[", "r": "]"}[m.group(1)], name)
    ```
 
    A *prefix* escape, not `_ -> __` followed by `. -> _`: the latter is **not
    injective**, since a dot becomes a single underscore and `".."` collides with
    an escaped `"_"`. Every `_` in the output is the first character of a
-   two-character escape, so decoding is unambiguous. Names grow, which is what
+   two-character escape, so decoding is unambiguous. Brackets are escaped too: a
+   parametrized tag such as `Staggered[pkg.K]` contains them, and they would
+   otherwise survive into the identifier. Names grow, which is what
    gtfn's existing `TagDefinition.alias` mechanism is for.
 
 6. **Staggered dimensions become a real parametrized type.** ADR 0026's

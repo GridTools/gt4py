@@ -43,6 +43,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 from gt4py.next.program_processors.runners.dace import lowering as dace_lowering
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 
 
 @pytest.fixture
@@ -75,18 +76,18 @@ SIMPLE_MESH: MeshDescriptor = simple_mesh(None)
 SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh(None)
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
-    __w_IDim_range_0=0,
-    __w_IDim_range_1=N,
-    __w_IDim_stride=1,
-    __x_IDim_range_0=0,
-    __x_IDim_range_1=N,
-    __x_IDim_stride=1,
-    __y_IDim_range_0=0,
-    __y_IDim_range_1=N,
-    __y_IDim_stride=1,
-    __z_IDim_range_0=0,
-    __z_IDim_range_1=N,
-    __z_IDim_stride=1,
+    **{gtx_dace_args.range_start_symbol("w", IDim).name: 0},
+    **{gtx_dace_args.range_stop_symbol("w", IDim).name: N},
+    **{gtx_dace_args.field_stride_symbol("w", IDim).name: 1},
+    **{gtx_dace_args.range_start_symbol("x", IDim).name: 0},
+    **{gtx_dace_args.range_stop_symbol("x", IDim).name: N},
+    **{gtx_dace_args.field_stride_symbol("x", IDim).name: 1},
+    **{gtx_dace_args.range_start_symbol("y", IDim).name: 0},
+    **{gtx_dace_args.range_stop_symbol("y", IDim).name: N},
+    **{gtx_dace_args.field_stride_symbol("y", IDim).name: 1},
+    **{gtx_dace_args.range_start_symbol("z", IDim).name: 0},
+    **{gtx_dace_args.range_stop_symbol("z", IDim).name: N},
+    **{gtx_dace_args.field_stride_symbol("z", IDim).name: 1},
 )
 
 
@@ -96,27 +97,83 @@ def make_mesh_symbols(mesh: MeshDescriptor):
     e2v_ndarray = mesh.offset_provider[E2VDim.tag].ndarray
     v2e_ndarray = mesh.offset_provider[V2EDim.tag].ndarray
     return dict(
-        __cells_Cell_range_0=0,
-        __cells_Cell_range_1=mesh.num_cells,
-        __cells_Cell_stride=1,
-        __edges_Edge_range_0=0,
-        __edges_Edge_range_1=mesh.num_edges,
-        __edges_Edge_stride=1,
-        __vertices_Vertex_range_0=0,
-        __vertices_Vertex_range_1=mesh.num_vertices,
-        __vertices_Vertex_stride=1,
-        __gt_conn_C2E_source_size=c2e_ndarray.shape[0],
-        __gt_conn_C2E_source_stride=c2e_ndarray.strides[0] // c2e_ndarray.itemsize,
-        __gt_conn_C2E_neighbor_stride=c2e_ndarray.strides[1] // c2e_ndarray.itemsize,
-        __gt_conn_C2V_source_size=c2v_ndarray.shape[0],
-        __gt_conn_C2V_source_stride=c2v_ndarray.strides[0] // c2v_ndarray.itemsize,
-        __gt_conn_C2V_neighbor_stride=c2v_ndarray.strides[1] // c2v_ndarray.itemsize,
-        __gt_conn_E2V_source_size=e2v_ndarray.shape[0],
-        __gt_conn_E2V_source_stride=e2v_ndarray.strides[0] // e2v_ndarray.itemsize,
-        __gt_conn_E2V_neighbor_stride=e2v_ndarray.strides[1] // e2v_ndarray.itemsize,
-        __gt_conn_V2E_source_size=v2e_ndarray.shape[0],
-        __gt_conn_V2E_source_stride=v2e_ndarray.strides[0] // v2e_ndarray.itemsize,
-        __gt_conn_V2E_neighbor_stride=v2e_ndarray.strides[1] // v2e_ndarray.itemsize,
+        **{gtx_dace_args.range_start_symbol("cells", Cell).name: 0},
+        **{gtx_dace_args.range_stop_symbol("cells", Cell).name: mesh.num_cells},
+        **{gtx_dace_args.field_stride_symbol("cells", Cell).name: 1},
+        **{gtx_dace_args.range_start_symbol("edges", Edge).name: 0},
+        **{gtx_dace_args.range_stop_symbol("edges", Edge).name: mesh.num_edges},
+        **{gtx_dace_args.field_stride_symbol("edges", Edge).name: 1},
+        **{gtx_dace_args.range_start_symbol("vertices", Vertex).name: 0},
+        **{gtx_dace_args.range_stop_symbol("vertices", Vertex).name: mesh.num_vertices},
+        **{gtx_dace_args.field_stride_symbol("vertices", Vertex).name: 1},
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2EDim.tag)}_source_size": c2e_ndarray.shape[
+                0
+            ]
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2EDim.tag)}_source_stride": c2e_ndarray.strides[
+                0
+            ]
+            // c2e_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2EDim.tag)}_neighbor_stride": c2e_ndarray.strides[
+                1
+            ]
+            // c2e_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2VDim.tag)}_source_size": c2v_ndarray.shape[
+                0
+            ]
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2VDim.tag)}_source_stride": c2v_ndarray.strides[
+                0
+            ]
+            // c2v_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(C2VDim.tag)}_neighbor_stride": c2v_ndarray.strides[
+                1
+            ]
+            // c2v_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(E2VDim.tag)}_source_size": e2v_ndarray.shape[
+                0
+            ]
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(E2VDim.tag)}_source_stride": e2v_ndarray.strides[
+                0
+            ]
+            // e2v_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(E2VDim.tag)}_neighbor_stride": e2v_ndarray.strides[
+                1
+            ]
+            // e2v_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(V2EDim.tag)}_source_size": v2e_ndarray.shape[
+                0
+            ]
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(V2EDim.tag)}_source_stride": v2e_ndarray.strides[
+                0
+            ]
+            // v2e_ndarray.itemsize
+        },
+        **{
+            f"__{gtx_dace_args.connectivity_identifier(V2EDim.tag)}_neighbor_stride": v2e_ndarray.strides[
+                1
+            ]
+            // v2e_ndarray.itemsize
+        },
     )
 
 
@@ -311,15 +368,15 @@ def test_gtir_tuple_args():
     x_fields = (a, a, b)
 
     tuple_symbols = {
-        "__x_0_IDim_range_0": 0,
-        "__x_0_IDim_range_1": N,
-        "__x_0_IDim_stride": 1,
-        "__x_1_0_IDim_range_0": 0,
-        "__x_1_0_IDim_range_1": N,
-        "__x_1_0_IDim_stride": 1,
-        "__x_1_1_IDim_range_0": 0,
-        "__x_1_1_IDim_range_1": N,
-        "__x_1_1_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("x_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("x_1_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_1_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_1_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("x_1_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_1_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_1_1", IDim).name: 1,
     }
 
     sdfg(*x_fields, c, **FSYMBOLS, **tuple_symbols)
@@ -496,15 +553,15 @@ def test_gtir_tuple_return():
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
     tuple_symbols = {
-        "__z_0_0_IDim_range_0": 0,
-        "__z_0_0_IDim_range_1": N,
-        "__z_0_0_IDim_stride": 1,
-        "__z_0_1_IDim_range_0": 0,
-        "__z_0_1_IDim_range_1": N,
-        "__z_0_1_IDim_stride": 1,
-        "__z_1_IDim_range_0": 0,
-        "__z_1_IDim_range_1": N,
-        "__z_1_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("z_0_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_0_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_0_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_0_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_0_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_0_1", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_1", IDim).name: 1,
     }
 
     sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
@@ -758,12 +815,12 @@ def test_gtir_cond_with_tuple_return():
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
     tuple_symbols = {
-        "__z_0_IDim_range_0": 0,
-        "__z_0_IDim_range_1": N,
-        "__z_0_IDim_stride": 1,
-        "__z_1_IDim_range_0": 0,
-        "__z_1_IDim_range_1": N,
-        "__z_1_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("z_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_1", IDim).name: 1,
     }
 
     for s in [False, True]:
@@ -894,9 +951,9 @@ def test_gtir_cartesian_shift_left():
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
         symbols = FSYMBOLS | {
-            "__x_offset_IDim_range_0": 0,
-            "__x_offset_IDim_range_1": N,
-            "__x_offset_IDim_stride": 1,
+            gtx_dace_args.range_start_symbol("x_offset", IDim).name: 0,
+            gtx_dace_args.range_stop_symbol("x_offset", IDim).name: N,
+            gtx_dace_args.field_stride_symbol("x_offset", IDim).name: 1,
         }
 
         sdfg(a, a_offset, b, **symbols)
@@ -985,9 +1042,9 @@ def test_gtir_cartesian_shift_right():
         sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
 
         symbols = FSYMBOLS | {
-            "__x_offset_IDim_range_0": 0,
-            "__x_offset_IDim_range_1": N,
-            "__x_offset_IDim_stride": 1,
+            gtx_dace_args.range_start_symbol("x_offset", IDim).name: 0,
+            gtx_dace_args.range_stop_symbol("x_offset", IDim).name: N,
+            gtx_dace_args.field_stride_symbol("x_offset", IDim).name: 1,
         }
 
         sdfg(a, a_offset, b, **symbols)
@@ -1116,28 +1173,28 @@ def test_gtir_connectivity_shift():
             ev,
             c2e_offset=np.full(SIMPLE_MESH.num_cells, C2E_neighbor_idx, dtype=np.int32),
             e2v_offset=np.full(SIMPLE_MESH.num_edges, E2V_neighbor_idx, dtype=np.int32),
-            gt_conn_C2E=connectivity_C2E.ndarray,
-            gt_conn_E2V=connectivity_E2V.ndarray,
+            **{gtx_dace_args.connectivity_identifier(C2EDim.tag): connectivity_C2E.ndarray},
+            **{gtx_dace_args.connectivity_identifier(E2VDim.tag): connectivity_E2V.ndarray},
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
-            __ce_field_Cell_range_0=0,
-            __ce_field_Cell_range_1=SIMPLE_MESH.num_cells,
-            __ce_field_Cell_stride=SIMPLE_MESH.num_edges,
-            __ce_field_Edge_range_0=0,
-            __ce_field_Edge_range_1=SIMPLE_MESH.num_edges,
-            __ce_field_Edge_stride=1,
-            __ev_field_Edge_range_0=0,
-            __ev_field_Edge_range_1=SIMPLE_MESH.num_edges,
-            __ev_field_Edge_stride=SIMPLE_MESH.num_vertices,
-            __ev_field_Vertex_range_0=0,
-            __ev_field_Vertex_range_1=SIMPLE_MESH.num_vertices,
-            __ev_field_Vertex_stride=1,
-            __c2e_offset_Cell_range_0=0,
-            __c2e_offset_Cell_range_1=SIMPLE_MESH.num_cells,
-            __c2e_offset_Cell_stride=1,
-            __e2v_offset_Edge_range_0=0,
-            __e2v_offset_Edge_range_1=SIMPLE_MESH.num_edges,
-            __e2v_offset_Edge_stride=1,
+            **{gtx_dace_args.range_start_symbol("ce_field", Cell).name: 0},
+            **{gtx_dace_args.range_stop_symbol("ce_field", Cell).name: SIMPLE_MESH.num_cells},
+            **{gtx_dace_args.field_stride_symbol("ce_field", Cell).name: SIMPLE_MESH.num_edges},
+            **{gtx_dace_args.range_start_symbol("ce_field", Edge).name: 0},
+            **{gtx_dace_args.range_stop_symbol("ce_field", Edge).name: SIMPLE_MESH.num_edges},
+            **{gtx_dace_args.field_stride_symbol("ce_field", Edge).name: 1},
+            **{gtx_dace_args.range_start_symbol("ev_field", Edge).name: 0},
+            **{gtx_dace_args.range_stop_symbol("ev_field", Edge).name: SIMPLE_MESH.num_edges},
+            **{gtx_dace_args.field_stride_symbol("ev_field", Edge).name: SIMPLE_MESH.num_vertices},
+            **{gtx_dace_args.range_start_symbol("ev_field", Vertex).name: 0},
+            **{gtx_dace_args.range_stop_symbol("ev_field", Vertex).name: SIMPLE_MESH.num_vertices},
+            **{gtx_dace_args.field_stride_symbol("ev_field", Vertex).name: 1},
+            **{gtx_dace_args.range_start_symbol("c2e_offset", Cell).name: 0},
+            **{gtx_dace_args.range_stop_symbol("c2e_offset", Cell).name: SIMPLE_MESH.num_cells},
+            **{gtx_dace_args.field_stride_symbol("c2e_offset", Cell).name: 1},
+            **{gtx_dace_args.range_start_symbol("e2v_offset", Edge).name: 0},
+            **{gtx_dace_args.range_stop_symbol("e2v_offset", Edge).name: SIMPLE_MESH.num_edges},
+            **{gtx_dace_args.field_stride_symbol("e2v_offset", Edge).name: 1},
         )
         assert np.allclose(ce, ref)
 
@@ -1193,13 +1250,13 @@ def test_gtir_connectivity_shift_chain():
     sdfg(
         e,
         e_out,
-        gt_conn_E2V=connectivity_E2V.ndarray,
-        gt_conn_V2E=connectivity_V2E.ndarray,
+        **{gtx_dace_args.connectivity_identifier(E2VDim.tag): connectivity_E2V.ndarray},
+        **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
-        __edges_out_Edge_range_0=0,
-        __edges_out_Edge_range_1=SIMPLE_MESH.num_edges,
-        __edges_out_Edge_stride=1,
+        **{gtx_dace_args.range_start_symbol("edges_out", Edge).name: 0},
+        **{gtx_dace_args.range_stop_symbol("edges_out", Edge).name: SIMPLE_MESH.num_edges},
+        **{gtx_dace_args.field_stride_symbol("edges_out", Edge).name: 1},
     )
     assert np.allclose(e_out, ref)
 
@@ -1273,26 +1330,35 @@ def test_gtir_neighbors_as_input():
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
         # override SDFG symbols for array shape and strides because of extra K-dimension
-        "__edges_KDim_range_0": 0,
-        "__edges_KDim_range_1": e.shape[1],
-        "__edges_Edge_stride": e.strides[0] // e.itemsize,
-        "__edges_KDim_stride": e.strides[1] // e.itemsize,
-        "__vertices_KDim_range_0": 0,
-        "__vertices_KDim_range_1": v.shape[1],
-        "__vertices_Vertex_stride": v.strides[0] // v.itemsize,
-        "__vertices_KDim_stride": v.strides[1] // v.itemsize,
-        "__v2e_field_Vertex_range_0": 0,
-        "__v2e_field_Vertex_range_1": v2e_field.shape[0],
-        "__v2e_field_Vertex_stride": v2e_field.strides[0] // v2e_field.itemsize,
-        "__v2e_field_V2E_range_0": 0,
-        "__v2e_field_V2E_range_1": v2e_field.shape[1],
-        "__v2e_field_V2E_stride": v2e_field.strides[1] // v2e_field.itemsize,
-        "__v2e_field_KDim_range_0": 0,
-        "__v2e_field_KDim_range_1": v2e_field.shape[2],
-        "__v2e_field_KDim_stride": v2e_field.strides[2] // v2e_field.itemsize,
+        gtx_dace_args.range_start_symbol("edges", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("edges", KDim).name: e.shape[1],
+        gtx_dace_args.field_stride_symbol("edges", Edge).name: e.strides[0] // e.itemsize,
+        gtx_dace_args.field_stride_symbol("edges", KDim).name: e.strides[1] // e.itemsize,
+        gtx_dace_args.range_start_symbol("vertices", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("vertices", KDim).name: v.shape[1],
+        gtx_dace_args.field_stride_symbol("vertices", Vertex).name: v.strides[0] // v.itemsize,
+        gtx_dace_args.field_stride_symbol("vertices", KDim).name: v.strides[1] // v.itemsize,
+        gtx_dace_args.range_start_symbol("v2e_field", Vertex).name: 0,
+        gtx_dace_args.range_stop_symbol("v2e_field", Vertex).name: v2e_field.shape[0],
+        gtx_dace_args.field_stride_symbol("v2e_field", Vertex).name: v2e_field.strides[0]
+        // v2e_field.itemsize,
+        gtx_dace_args.range_start_symbol("v2e_field", V2EDim).name: 0,
+        gtx_dace_args.range_stop_symbol("v2e_field", V2EDim).name: v2e_field.shape[1],
+        gtx_dace_args.field_stride_symbol("v2e_field", V2EDim).name: v2e_field.strides[1]
+        // v2e_field.itemsize,
+        gtx_dace_args.range_start_symbol("v2e_field", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("v2e_field", KDim).name: v2e_field.shape[2],
+        gtx_dace_args.field_stride_symbol("v2e_field", KDim).name: v2e_field.strides[2]
+        // v2e_field.itemsize,
     }
 
-    sdfg(v2e_field, e, v, gt_conn_V2E=connectivity_V2E.ndarray, **symbols)
+    sdfg(
+        v2e_field,
+        e,
+        v,
+        **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
+        **symbols,
+    )
     assert np.allclose(v, v_ref)
 
 
@@ -1344,7 +1410,7 @@ def test_gtir_reduce():
         sdfg(
             e,
             v,
-            gt_conn_V2E=connectivity_V2E.ndarray,
+            **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
             **FSYMBOLS,
             **make_mesh_symbols(SIMPLE_MESH),
         )
@@ -1401,7 +1467,7 @@ def test_gtir_reduce_with_skip_values():
         sdfg(
             e,
             v,
-            gt_conn_V2E=connectivity_V2E.ndarray,
+            **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
             **FSYMBOLS,
             **make_mesh_symbols(SKIP_VALUE_MESH),
         )
@@ -1464,12 +1530,12 @@ def test_gtir_reduce_dot_product():
         v2e_field,
         e,
         v,
-        gt_conn_V2E=connectivity_V2E.ndarray,
+        **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
         **make_mesh_symbols(SKIP_VALUE_MESH),
-        __v2e_field_Vertex_range_0=0,
-        __v2e_field_Vertex_range_1=SKIP_VALUE_MESH.num_vertices,
-        __v2e_field_Vertex_stride=connectivity_V2E.shape[1],
-        __v2e_field_V2E_stride=1,
+        **{gtx_dace_args.range_start_symbol("v2e_field", Vertex).name: 0},
+        **{gtx_dace_args.range_stop_symbol("v2e_field", Vertex).name: SKIP_VALUE_MESH.num_vertices},
+        **{gtx_dace_args.field_stride_symbol("v2e_field", Vertex).name: connectivity_V2E.shape[1]},
+        **{gtx_dace_args.field_stride_symbol("v2e_field", V2EDim).name: 1},
     )
     assert np.allclose(v, v_ref)
 
@@ -1535,13 +1601,13 @@ def test_gtir_reduce_with_cond_neighbors(use_sparse):
         v2e_field,
         e,
         v,
-        gt_conn_V2E=connectivity_V2E.ndarray,
+        **{gtx_dace_args.connectivity_identifier(V2EDim.tag): connectivity_V2E.ndarray},
         **FSYMBOLS,
         **make_mesh_symbols(SKIP_VALUE_MESH),
-        __v2e_field_Vertex_range_0=0,
-        __v2e_field_Vertex_range_1=SKIP_VALUE_MESH.num_vertices,
-        __v2e_field_Vertex_stride=connectivity_V2E.shape[1],
-        __v2e_field_V2E_stride=1,
+        **{gtx_dace_args.range_start_symbol("v2e_field", Vertex).name: 0},
+        **{gtx_dace_args.range_stop_symbol("v2e_field", Vertex).name: SKIP_VALUE_MESH.num_vertices},
+        **{gtx_dace_args.field_stride_symbol("v2e_field", Vertex).name: connectivity_V2E.shape[1]},
+        **{gtx_dace_args.field_stride_symbol("v2e_field", V2EDim).name: 1},
     )
     assert np.allclose(v, v_ref)
 
@@ -1741,7 +1807,7 @@ def test_gtir_let_lambda_scalar_expression():
     # to the symbol `inner_size` is preserved, for which we want to test the lowering.
     sdfg = build_dace_sdfg(testee, offset_provider=CARTESIAN_OFFSETS, skip_domain_inference=True)
 
-    sdfg(a, b, c, d, **(FSYMBOLS | {"__x_IDim_range_1": N + 1}))
+    sdfg(a, b, c, d, **(FSYMBOLS | {gtx_dace_args.range_stop_symbol("x", IDim).name: N + 1}))
     assert np.allclose(d, (a * a * b * b * c[1 : N + 1]))
 
 
@@ -1796,8 +1862,8 @@ def test_gtir_let_lambda_with_connectivity():
         cells=c,
         edges=e,
         vertices=v,
-        gt_conn_C2E=connectivity_C2E.ndarray,
-        gt_conn_C2V=connectivity_C2V.ndarray,
+        **{gtx_dace_args.connectivity_identifier(C2EDim.tag): connectivity_C2E.ndarray},
+        **{gtx_dace_args.connectivity_identifier(C2VDim.tag): connectivity_C2V.ndarray},
         **FSYMBOLS,
         **make_mesh_symbols(SIMPLE_MESH),
     )
@@ -1846,20 +1912,20 @@ def test_gtir_let_lambda_with_origin():
     )
 
     symbols = make_mesh_symbols(SIMPLE_MESH) | {
-        "__cells_KDim_range_0": 0,
-        "__cells_KDim_range_1": MESH_NUM_LEVELS,
-        "__cells_Cell_stride": c.strides[0] // c.itemsize,
-        "__cells_KDim_stride": c.strides[1] // c.itemsize,
-        "__edges_KDim_range_0": 0,
-        "__edges_KDim_range_1": MESH_NUM_LEVELS,
-        "__edges_Edge_stride": e.strides[0] // e.itemsize,
-        "__edges_KDim_stride": e.strides[1] // e.itemsize,
+        gtx_dace_args.range_start_symbol("cells", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("cells", KDim).name: MESH_NUM_LEVELS,
+        gtx_dace_args.field_stride_symbol("cells", Cell).name: c.strides[0] // c.itemsize,
+        gtx_dace_args.field_stride_symbol("cells", KDim).name: c.strides[1] // c.itemsize,
+        gtx_dace_args.range_start_symbol("edges", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("edges", KDim).name: MESH_NUM_LEVELS,
+        gtx_dace_args.field_stride_symbol("edges", Edge).name: e.strides[0] // e.itemsize,
+        gtx_dace_args.field_stride_symbol("edges", KDim).name: e.strides[1] // e.itemsize,
     }
 
     sdfg(
         cells=c,
         edges=e,
-        gt_conn_C2E=connectivity_C2E.ndarray,
+        **{gtx_dace_args.connectivity_identifier(C2EDim.tag): connectivity_C2E.ndarray},
         **symbols,
     )
 
@@ -1942,12 +2008,12 @@ def test_gtir_let_lambda_with_tuple1():
     b_ref = np.concatenate((z_fields[1][:1], b[1 : N - 1], z_fields[1][N - 1 :]))
 
     tuple_symbols = {
-        "__z_0_IDim_range_0": 1,
-        "__z_0_IDim_range_1": N - 1,
-        "__z_0_IDim_stride": 1,
-        "__z_1_IDim_range_0": 1,
-        "__z_1_IDim_range_1": N - 1,
-        "__z_1_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("z_0", IDim).name: 1,
+        gtx_dace_args.range_stop_symbol("z_0", IDim).name: N - 1,
+        gtx_dace_args.field_stride_symbol("z_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_1", IDim).name: 1,
+        gtx_dace_args.range_stop_symbol("z_1", IDim).name: N - 1,
+        gtx_dace_args.field_stride_symbol("z_1", IDim).name: 1,
     }
 
     sdfg(a, b, z_fields[0][1 : N - 1], z_fields[1][1 : N - 1], **FSYMBOLS, **tuple_symbols)
@@ -2000,15 +2066,15 @@ def test_gtir_let_lambda_with_tuple2():
     z_fields = (np.empty_like(a), np.empty_like(a), np.empty_like(a))
 
     tuple_symbols = {
-        "__z_0_IDim_range_0": 0,
-        "__z_0_IDim_range_1": N,
-        "__z_0_IDim_stride": 1,
-        "__z_1_IDim_range_0": 0,
-        "__z_1_IDim_range_1": N,
-        "__z_1_IDim_stride": 1,
-        "__z_2_IDim_range_0": 0,
-        "__z_2_IDim_range_1": N,
-        "__z_2_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("z_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_1", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("z_2", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z_2", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("z_2", IDim).name: 1,
     }
 
     sdfg(a, b, *z_fields, **FSYMBOLS, **tuple_symbols)
@@ -2063,15 +2129,15 @@ def test_gtir_if_scalars(s):
     sdfg = build_dace_sdfg(testee, {})
 
     tuple_symbols = {
-        "__x_0_IDim_range_0": 0,
-        "__x_0_IDim_range_1": N,
-        "__x_0_IDim_stride": 1,
-        "__x_1_0_IDim_range_0": 0,
-        "__x_1_0_IDim_range_1": N,
-        "__x_1_0_IDim_stride": 1,
-        "__x_1_1_IDim_range_0": 0,
-        "__x_1_1_IDim_range_1": N,
-        "__x_1_1_IDim_stride": 1,
+        gtx_dace_args.range_start_symbol("x_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("x_1_0", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_1_0", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_1_0", IDim).name: 1,
+        gtx_dace_args.range_start_symbol("x_1_1", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x_1_1", IDim).name: N,
+        gtx_dace_args.field_stride_symbol("x_1_1", IDim).name: 1,
     }
 
     sdfg(x_0=a, x_1_0=d1, x_1_1=d2, z=b, pred=np.bool_(s), **FSYMBOLS, **tuple_symbols)
@@ -2245,30 +2311,30 @@ def test_gtir_concat_where_two_dimensions():
     )
 
     field_symbols = {
-        "__x_IDim_range_0": 0,
-        "__x_IDim_range_1": a.shape[0],
-        "__x_JDim_range_0": 0,
-        "__x_JDim_range_1": a.shape[1],
-        "__x_IDim_stride": a.strides[0] // a.itemsize,
-        "__x_JDim_stride": a.strides[1] // a.itemsize,
-        "__y_IDim_range_0": 0,
-        "__y_IDim_range_1": b.shape[0],
-        "__y_JDim_range_0": 0,
-        "__y_JDim_range_1": b.shape[1],
-        "__y_IDim_stride": b.strides[0] // b.itemsize,
-        "__y_JDim_stride": b.strides[1] // b.itemsize,
-        "__w_IDim_range_0": 0,
-        "__w_IDim_range_1": c.shape[0],
-        "__w_JDim_range_0": 0,
-        "__w_JDim_range_1": c.shape[1],
-        "__w_IDim_stride": c.strides[0] // c.itemsize,
-        "__w_JDim_stride": c.strides[1] // c.itemsize,
-        "__z_IDim_range_0": 0,
-        "__z_IDim_range_1": d.shape[0],
-        "__z_JDim_range_0": 0,
-        "__z_JDim_range_1": d.shape[1],
-        "__z_IDim_stride": d.strides[0] // d.itemsize,
-        "__z_JDim_stride": d.strides[1] // d.itemsize,
+        gtx_dace_args.range_start_symbol("x", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x", IDim).name: a.shape[0],
+        gtx_dace_args.range_start_symbol("x", JDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x", JDim).name: a.shape[1],
+        gtx_dace_args.field_stride_symbol("x", IDim).name: a.strides[0] // a.itemsize,
+        gtx_dace_args.field_stride_symbol("x", JDim).name: a.strides[1] // a.itemsize,
+        gtx_dace_args.range_start_symbol("y", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("y", IDim).name: b.shape[0],
+        gtx_dace_args.range_start_symbol("y", JDim).name: 0,
+        gtx_dace_args.range_stop_symbol("y", JDim).name: b.shape[1],
+        gtx_dace_args.field_stride_symbol("y", IDim).name: b.strides[0] // b.itemsize,
+        gtx_dace_args.field_stride_symbol("y", JDim).name: b.strides[1] // b.itemsize,
+        gtx_dace_args.range_start_symbol("w", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("w", IDim).name: c.shape[0],
+        gtx_dace_args.range_start_symbol("w", JDim).name: 0,
+        gtx_dace_args.range_stop_symbol("w", JDim).name: c.shape[1],
+        gtx_dace_args.field_stride_symbol("w", IDim).name: c.strides[0] // c.itemsize,
+        gtx_dace_args.field_stride_symbol("w", JDim).name: c.strides[1] // c.itemsize,
+        gtx_dace_args.range_start_symbol("z", IDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z", IDim).name: d.shape[0],
+        gtx_dace_args.range_start_symbol("z", JDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z", JDim).name: d.shape[1],
+        gtx_dace_args.field_stride_symbol("z", IDim).name: d.strides[0] // d.itemsize,
+        gtx_dace_args.field_stride_symbol("z", JDim).name: d.strides[1] // d.itemsize,
     }
 
     sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS)
@@ -2340,18 +2406,18 @@ def test_gtir_scan(id, use_symbolic_column_size):
     ref = np.add.accumulate(a, axis=1) + VAL
 
     symbols = FSYMBOLS | {
-        "__x_KDim_range_0": 0,
-        "__x_KDim_range_1": a.shape[1],
-        "__x_IDim_stride": a.strides[0] // a.itemsize,
-        "__x_KDim_stride": a.strides[1] // a.itemsize,
-        "__y_KDim_range_0": 0,
-        "__y_KDim_range_1": b.shape[1],
-        "__y_IDim_stride": b.strides[0] // b.itemsize,
-        "__y_KDim_stride": b.strides[1] // b.itemsize,
-        "__z_KDim_range_0": 0,
-        "__z_KDim_range_1": z.shape[1],
-        "__z_IDim_stride": z.strides[0] // z.itemsize,
-        "__z_KDim_stride": z.strides[1] // z.itemsize,
+        gtx_dace_args.range_start_symbol("x", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x", KDim).name: a.shape[1],
+        gtx_dace_args.field_stride_symbol("x", IDim).name: a.strides[0] // a.itemsize,
+        gtx_dace_args.field_stride_symbol("x", KDim).name: a.strides[1] // a.itemsize,
+        gtx_dace_args.range_start_symbol("y", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("y", KDim).name: b.shape[1],
+        gtx_dace_args.field_stride_symbol("y", IDim).name: b.strides[0] // b.itemsize,
+        gtx_dace_args.field_stride_symbol("y", KDim).name: b.strides[1] // b.itemsize,
+        gtx_dace_args.range_start_symbol("z", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z", KDim).name: z.shape[1],
+        gtx_dace_args.field_stride_symbol("z", IDim).name: z.strides[0] // z.itemsize,
+        gtx_dace_args.field_stride_symbol("z", KDim).name: z.strides[1] // z.itemsize,
     }
 
     sdfg(a, b, z, **symbols)
@@ -2404,18 +2470,18 @@ def test_gtir_scan_single_level_output():
     ref = np.add.accumulate(a, axis=1)
 
     symbols = FSYMBOLS | {
-        "__x_KDim_range_0": 0,
-        "__x_KDim_range_1": a.shape[1],
-        "__x_IDim_stride": a.strides[0] // a.itemsize,
-        "__x_KDim_stride": a.strides[1] // a.itemsize,
-        "__y_KDim_range_0": 0,
-        "__y_KDim_range_1": b.shape[1],
-        "__y_IDim_stride": b.strides[0] // b.itemsize,
-        "__y_KDim_stride": b.strides[1] // b.itemsize,
-        "__z_KDim_range_0": 0,
-        "__z_KDim_range_1": c.shape[1],
-        "__z_IDim_stride": c.strides[0] // c.itemsize,
-        "__z_KDim_stride": c.strides[1] // c.itemsize,
+        gtx_dace_args.range_start_symbol("x", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("x", KDim).name: a.shape[1],
+        gtx_dace_args.field_stride_symbol("x", IDim).name: a.strides[0] // a.itemsize,
+        gtx_dace_args.field_stride_symbol("x", KDim).name: a.strides[1] // a.itemsize,
+        gtx_dace_args.range_start_symbol("y", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("y", KDim).name: b.shape[1],
+        gtx_dace_args.field_stride_symbol("y", IDim).name: b.strides[0] // b.itemsize,
+        gtx_dace_args.field_stride_symbol("y", KDim).name: b.strides[1] // b.itemsize,
+        gtx_dace_args.range_start_symbol("z", KDim).name: 0,
+        gtx_dace_args.range_stop_symbol("z", KDim).name: c.shape[1],
+        gtx_dace_args.field_stride_symbol("z", IDim).name: c.strides[0] // c.itemsize,
+        gtx_dace_args.field_stride_symbol("z", KDim).name: c.strides[1] // c.itemsize,
     }
 
     sdfg(a, b, c, **symbols)

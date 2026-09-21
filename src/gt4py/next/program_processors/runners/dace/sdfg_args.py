@@ -54,7 +54,9 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
+    # NOTE: `name` is an offset-provider key, i.e. a qualified tag, which is not a valid SDFG
+    # array name; parse it back with `from_codegen_name` (see `is_connectivity_identifier`).
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{gtx_common.codegen_name(name)}"
 
 
 def is_connectivity_identifier(
@@ -67,7 +69,7 @@ def is_connectivity_identifier(
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
     else:
-        return gtx_common.has_offset(offset_provider_type, m[1])
+        return gtx_common.has_offset(offset_provider_type, gtx_common.from_codegen_name(m[1]))
 
 
 def _field_symbol(
@@ -80,8 +82,8 @@ def _field_symbol(
         name = f"__{field_name}_{gtx_common.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
-        assert m[1] in offset_provider_type
-        offset = m[1]
+        offset = gtx_common.from_codegen_name(m[1])
+        assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
         if dim == conn_type.source_dim:

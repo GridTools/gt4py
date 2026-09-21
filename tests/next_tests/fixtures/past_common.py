@@ -13,11 +13,10 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import float64
 
-
-class IDim(gtx.DimensionIndex): ...
-
-
-class JDim(gtx.DimensionIndex): ...
+# NOTE: imported, not redeclared. Under nominal identity (ADR 0028) a same-named declaration
+# here would be a different dimension from the one `cases_utils` declares, where the old
+# `Dimension("...")` values compared equal -- and tests mix objects from both modules.
+from next_tests.integration_tests.cases_utils import IDim
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated

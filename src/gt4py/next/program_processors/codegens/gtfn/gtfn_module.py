@@ -109,10 +109,16 @@ class GTFNTranslationStep(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
                     )
 
+                # NOTE: `name` is the offset-provider key, a qualified tag, so every identifier
+                # derived from it is mangled -- and identically, since the parameter name is
+                # referenced below and the `generated::<name>_t` tag type is declared elsewhere.
+                cname = common.codegen_name(name)
+                param_name = GENERATED_CONNECTIVITY_PARAM_PREFIX + cname.lower()
+
                 # parameter
                 parameters.append(
                     interface.Parameter(
-                        name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
+                        name=param_name,
                         type_=ts.FieldType(
                             dims=list(connectivity_type.domain),
                             dtype=type_translation.from_dtype(connectivity_type.dtype),
@@ -126,10 +132,10 @@ class GTFNTranslationStep(
                     f"generated::{common.codegen_name(connectivity_type.domain[0].tag)}_t, "
                     f"generated::{common.codegen_name(connectivity_type.domain[1].tag)}_t, "
                     f"{connectivity_type.max_neighbors}"
-                    f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
+                    f">(std::forward<decltype({param_name})>({param_name}))"
                 )
                 arg_exprs.append(
-                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
+                    f"gridtools::hymap::keys<generated::{cname}_t>::make_values({nbtbl})"
                 )
             else:
                 raise AssertionError(

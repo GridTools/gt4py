@@ -1160,7 +1160,8 @@ class IndexField(common.Field):
         if isinstance(item, Sequence) and all(isinstance(e, common.DimensionIndex) for e in item):
             assert len(item) == 1
             assert isinstance(item[0], common.DimensionIndex)  # for mypy errors on multiple lines below
-            d, r = item[0]
+            # an index is a `DimensionIndex` instance now, not a (dim, value) namedtuple
+            d, r = item[0].dim, item[0].value
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
             # TODO(tehrengruber): Use a regular zero dimensional field instead.

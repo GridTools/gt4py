@@ -65,6 +65,9 @@ DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 Tag: TypeAlias = str
 
 
+_CODEGEN_UNESCAPE: Final = {"u": "_", "d": ".", "l": "[", "r": "]"}
+
+
 def codegen_name(tag: Tag) -> str:
     """
     Mangle a dimension or offset tag into a valid generated identifier.
@@ -92,7 +95,10 @@ def codegen_name(tag: Tag) -> str:
         >>> from_codegen_name(codegen_name("my__mod.X"))
         'my__mod.X'
     """
-    return tag.replace("_", "_u").replace(".", "_d")
+    # NOTE: `_` first, so the underscores introduced by the other escapes are not re-escaped.
+    # A tag's alphabet is `[A-Za-z0-9_.[]]`: brackets come from a parametrized tag such as
+    # `Staggered[pkg.K]`, and would otherwise survive into the identifier.
+    return tag.replace("_", "_u").replace(".", "_d").replace("[", "_l").replace("]", "_r")
 
 
 def from_codegen_name(name: str) -> Tag:
@@ -112,7 +118,7 @@ def from_codegen_name(name: str) -> Tag:
         >>> from_codegen_name("mod_dV2E_dLocal")
         'mod.V2E.Local'
     """
-    return re.sub(r"_([ud])", lambda m: "_" if m.group(1) == "u" else ".", name)
+    return re.sub(r"_([udlr])", lambda m: _CODEGEN_UNESCAPE[m.group(1)], name)
 
 
 @enum.unique

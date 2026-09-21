@@ -117,7 +117,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case "bool":
                 return node.value.lower()
             case "axis_literal":
-                return node.value
+                # a qualified tag names a `generated::<name>_t` tag type: mangle it as declared
+                return common.codegen_name(node.value)
             case _:
                 # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
