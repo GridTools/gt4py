@@ -46,6 +46,10 @@ class E2V(NeighborConnectivity[Edge, Vertex]):
 class LsqCoeff(LocalDimensionIndex, size=3): ...
 
 
+class V2EShared(NeighborConnectivity[Vertex, Edge]):
+    Local = V2E.Local
+
+
 def _declare(source: str) -> dict:
     """
     Run `source` as the body of a throwaway module.
@@ -387,10 +391,6 @@ class TestFrontendIntegration:
             source=Edge, target=(Vertex, V2E.Local), tag=V2E.Local.tag
         )
 
-    def test_field_offset_is_derived_once(self):
-        assert V2E.__gt_field_offset__() is V2E.__gt_field_offset__()
-        assert V2E.__gt_field_offset__().value == V2E.Local.tag
-
     def test_neighbor_index_accepts_numpy_integers(self):
         from gt4py.next import constructors, embedded
 
@@ -399,13 +399,8 @@ class TestFrontendIntegration:
             codomain=Edge,
             data=np.array([[0, 1, 2, 3], [1, 2, 3, 0]]),
         )
-        with embedded.context.update(offset_provider={V2E.Local.tag: table}):
+        with embedded.context.update(offset_provider={V2E: table}):
             assert np.array_equal(V2E[np.int32(1)].asnumpy(), V2E[1].asnumpy())
-
-    def test_legacy_field_offset_has_local(self):
-        from gt4py.next import FieldOffset
-
-        assert FieldOffset("V2E", source=Edge, target=(Vertex, V2E.Local)).Local is V2E.Local
 
     def test_attribute_errors_are_dsl_errors(self):
         from gt4py.next import errors, field_operator
@@ -454,6 +449,10 @@ class TestFrontendIntegration:
             transform_utils._deduce_grid_type(common.GridType.CARTESIAN, [V2E])
 
 
+def _table(domain=(Vertex, V2E.Local), codomain=Edge, data=((0, 1, 2, 3), (1, 2, 3, 0))):
+    from gt4py.next import constructors
+
+
 def test_redefined_declaration_with_an_adopted_local(monkeypatch):
     """Re-running a cell must re-own the adopted local dimension, not become a sharer."""
     import sys
@@ -496,26 +495,65 @@ def test_local_dimension_of():
     with pytest.raises(TypeError, match="not a connectivity declaration"):
         common.local_dimension_of(NeighborConnectivity)
 
+    data = np.array(data)
+    return constructors.as_connectivity(
+        domain=dict(zip(domain, data.shape)),
+        codomain=codomain,
+        data=data,
+        skip_value=common._DEFAULT_SKIP_VALUE,
+    )
 
-class TestFieldOffsetDeprecation:
-    def test_unstructured_field_offset_warns(self):
-        from gt4py.next import FieldOffset
 
-        with pytest.warns(DeprecationWarning, match="NeighborConnectivity"):
-            FieldOffset(V2E.Local.tag, source=Edge, target=(Vertex, V2E.Local))
+class TestOffsetProvider:
+    def test_class_keys_become_tags(self):
+        table = _table()
+        assert common.as_tag_keyed_offset_provider({V2E: table}) == {V2E.Local.tag: table}
 
-    def test_derived_and_cartesian_field_offsets_do_not_warn(self, recwarn):
-        from gt4py.next import FieldOffset
+    def test_tag_keys_pass_through(self):
+        provider = {V2E.Local.tag: _table()}
+        assert common.as_tag_keyed_offset_provider(provider) is provider
 
-        class_ns = _declare(
-            """
-            class C2E(NeighborConnectivity[Vertex, Edge]):
-                class Local(LocalDimensionIndex): ...
-            """
-        )
-        class_ns["C2E"].__gt_field_offset__()
-        FieldOffset("Koff", source=KDim, target=(KDim,))
-        assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]
+    def test_bare_name_is_rejected(self):
+        with pytest.raises(TypeError, match="keyed by 'NeighborConnectivity' declarations"):
+            common.as_tag_keyed_offset_provider({"V2E": _table()})
+
+    def test_non_string_key_is_rejected(self):
+        with pytest.raises(TypeError, match="keyed by 'NeighborConnectivity' declarations"):
+            common.as_tag_keyed_offset_provider({V2E: _table(), Vertex: _table()})
+
+    def test_binding_twice_is_rejected(self):
+        with pytest.raises(ValueError, match="twice"):
+            common.as_tag_keyed_offset_provider({V2E: _table(), V2E.Local.tag: _table()})
+
+    def test_check_accepts_matching_tables(self):
+        common.check_offset_provider({V2E.Local.tag: _table()})
+        common.check_offset_provider({V2E: _table().__gt_type__()})
+
+    def test_check_rejects_mismatching_tables(self):
+        with pytest.raises(ValueError, match="does not match its declaration"):
+            common.check_offset_provider({V2E.Local.tag: _table(codomain=Vertex)})
+
+    def test_sharing_connectivity_is_keyed_and_checked_by_its_own_tag(self):
+        provider = common.as_tag_keyed_offset_provider({V2E: _table(), V2EShared: _table()})
+        assert set(provider) == {V2E.Local.tag, V2EShared.tag}
+        common.check_offset_provider(provider)
+        with pytest.raises(ValueError, match="'V2EShared' does not match its declaration"):
+            common.check_offset_provider({V2EShared.tag: _table(codomain=Vertex)})
+
+    def test_sharing_connectivities_need_the_same_skip_positions(self):
+        owner = _table(data=((0, 1, 2, 3), (1, 2, 3, 0)))
+        consistent = _table(data=((3, 2, 1, 0), (0, 3, 2, 1)))
+        inconsistent = _table(data=((3, 2, 1, -1), (0, 3, 2, 1)))
+        common.check_offset_provider({V2E: owner, V2EShared: consistent})
+        with pytest.raises(ValueError, match="different neighbor structure"):
+            common.check_offset_provider({V2E: owner, V2EShared: inconsistent})
+
+    def test_check_skips_undeclared_tags(self):
+        common.check_offset_provider({"some.hand.written.tag": _table()})
+
+    def test_missing_connectivity_error_is_actionable(self):
+        with pytest.raises(KeyError, match="keyed by 'NeighborConnectivity' declarations"):
+            common.get_offset({}, V2E.Local.tag)
 
 
 class TestConnectivityKeyOver:

@@ -17,7 +17,6 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen
 from gt4py.next import common
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
@@ -81,21 +80,14 @@ class GTFNTranslationStep(
 
             if isinstance(parameter.type_, ts.FieldType):
                 for dim in parameter.type_.dims:
-                    if (
-                        isinstance(
-                            dim, fbuiltins.FieldOffset
-                        )  # TODO(havogt): remove support for FieldOffset as Dimension
-                        or dim.kind is common.DimensionKind.LOCAL
-                    ):
+                    if dim.kind is common.DimensionKind.LOCAL:
                         # translate sparse dimensions to tuple dtype
-                        # NOTE: the tag is the offset-provider key, and its mangled form names the
-                        # `generated::<name>_t` tag type. A legacy `FieldOffset` carries it as `value`.
-                        dim_name = dim.value if isinstance(dim, fbuiltins.FieldOffset) else dim.tag
+                        # NOTE: the local dimension's tag names the `generated::<name>_t` tag type
+                        # (mangled); its table may be keyed by a connectivity sharing it.
+                        dim_name = dim.tag
                         connectivity = common.get_offset_type(
                             offset_provider_type,
-                            dim_name
-                            if isinstance(dim, fbuiltins.FieldOffset)
-                            else common.connectivity_key_over(offset_provider_type, dim),
+                            common.connectivity_key_over(offset_provider_type, dim),
                         )
                         assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors

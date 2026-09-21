@@ -390,6 +390,15 @@ def resolve(tag: Tag) -> Dimension:
             )
         return owner[resolve(match["base"])]  # type: ignore[index] # a StaggeredMeta, checked
 
+    obj = _import_qualified_name(tag)
+    if not isinstance(obj, DimensionMeta):
+        raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
+    return cast(Dimension, obj)
+
+
+@functools.cache
+def _import_qualified_name(tag: Tag) -> Any:
+    """Import the object a dotted qualified name refers to; see `resolve`."""
     parts = tag.split(".")
     for split in range(len(parts), 0, -1):
         try:
@@ -404,9 +413,7 @@ def resolve(tag: Tag) -> Dimension:
                     f"Cannot resolve dimension tag '{tag}': '{'.'.join(parts[:split])}' has"
                     f" no attribute '{attr}'."
                 ) from ex
-        if not isinstance(obj, DimensionMeta):
-            raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
-        return cast(Dimension, obj)
+        return obj
     raise ValueError(
         f"Cannot resolve dimension tag '{tag}': no importable module prefix. A dimension"
         " referenced from the IR must be declared at module level in an importable module."
@@ -1036,9 +1043,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
-    def premap(
-        self, index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity]
-    ) -> Field: ...
+    def premap(self, index_field: Connectivity | type[NeighborConnectivity]) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
@@ -1046,8 +1051,8 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __call__(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
-        *args: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
+        index_field: Connectivity | type[NeighborConnectivity],
+        *args: Connectivity | type[NeighborConnectivity],
     ) -> Field: ...
 
     @abc.abstractmethod
@@ -1432,8 +1437,16 @@ OffsetProviderElem: TypeAlias = NeighborTable
 OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
 # Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
+#: Neighbor tables keyed by the connectivity's `offset_tag`, which is how the IR names it.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
+#: An offset provider as users write it: keyed by `NeighborConnectivity` declarations (or, at the
+#: IR level, by tags). The entry points of a program normalize it to an `OffsetProvider` with
+#: `as_tag_keyed_offset_provider`, so everything below them sees tags only.
+#: NOTE: `Any` keys, since `Mapping` is invariant in its key type: a tag-keyed provider would not
+#: be a `Mapping[type[NeighborConnectivity] | Tag, ...]`. Keys are checked at runtime instead.
+OffsetProviderLike: TypeAlias = Mapping[Any, OffsetProviderElem]
+OffsetProviderTypeLike: TypeAlias = Mapping[Any, OffsetProviderTypeElem]
 
 
 def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
@@ -1464,8 +1477,12 @@ def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProvid
     """
     # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
     if offset_tag not in offset_provider:
-        raise KeyError(f"Offset '{offset_tag}' not found in offset provider.")
-    return offset_provider[offset_tag]  # TODO return a valid dimension
+        raise KeyError(
+            f"Connectivity '{offset_tag}' not found in the offset provider, which has"
+            f" {sorted(map(str, offset_provider))}. Offset providers are keyed by"
+            " 'NeighborConnectivity' declarations, e.g. '{V2E: v2e_table}'."
+        )
+    return offset_provider[offset_tag]
 
 
 get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
@@ -1613,8 +1630,8 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     def premap(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
-        *args: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
+        index_field: Connectivity | type[NeighborConnectivity],
+        *args: Connectivity | type[NeighborConnectivity],
     ) -> Connectivity:
         raise NotImplementedError()
 
@@ -2056,7 +2073,7 @@ class ConnectivityMeta(type):
         # NOTE: `numbers.Integral`, not `int`, so `V2E[np.int32(1)]` does not fall through to
         # type-parameter subscription; `bool` is excluded so `V2E[True]` is an error.
         if isinstance(item, numbers.Integral) and not isinstance(item, bool):
-            return cls.__gt_field_offset__()[int(item)]
+            return cls.bound_table()[cls._local()(int(item))]
         if "Local" in cls.__dict__:
             raise TypeError(
                 f"'{cls.__qualname__}[{item!r}]': a connectivity is indexed by an integer"
@@ -2073,23 +2090,29 @@ class ConnectivityMeta(type):
         return cls.__qualname__
 
     def __gt_type__(cls) -> Any:
-        return cls.__gt_field_offset__().__gt_type__()
-
-    def __gt_field_offset__(cls) -> Any:
         """
-        The `FieldOffset` equivalent to this connectivity, tagged with `offset_tag`.
-        """
-        from gt4py.next.ffront import fbuiltins
+        The type of the connectivity in DSL code: an offset from `Codomain` to `(Origin, Local)`.
 
-        if (field_offset := cls.__dict__.get("_field_offset")) is None:
-            field_offset = fbuiltins.FieldOffset(
-                cls.offset_tag,
-                source=cls.codomain,
-                target=(cls.origin, cls._local()),
-                _derived=True,
+        Its tag is `offset_tag`, which is how the IR names the connectivity and how the offset
+        provider is keyed once normalized (see `as_tag_keyed_offset_provider`).
+        """
+        from gt4py.next.type_system import type_specifications as ts
+
+        local = cls._local()
+        return ts.OffsetType(source=cls.codomain, target=(cls.origin, local), tag=cls.offset_tag)
+
+    def bound_table(cls) -> NeighborTable:
+        """The neighbor table bound to this connectivity in the current embedded execution."""
+        from gt4py.next import embedded
+
+        offset_provider = embedded.context.get_offset_provider(None)
+        if offset_provider is None:
+            raise RuntimeError(
+                f"'{cls.__qualname__}' can only be resolved to a table during embedded execution."
             )
-            type.__setattr__(cls, "_field_offset", field_offset)
-        return field_offset
+        table = get_offset(offset_provider, cls.offset_tag)
+        assert is_neighbor_table(table)
+        return table
 
 
 class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
@@ -2293,3 +2316,128 @@ def check_neighbor_table(
                 f"min_neighbors == max_neighbors == {max_neighbors} means every element has all"
                 f" its neighbors, but the table has skip value {table_type.skip_value}"
             )
+
+
+@overload
+def as_tag_keyed_offset_provider(
+    offset_provider: OffsetProviderLike, *, strict: bool = True
+) -> OffsetProvider: ...
+@overload
+def as_tag_keyed_offset_provider(
+    offset_provider: OffsetProviderTypeLike, *, strict: bool = True
+) -> OffsetProviderType: ...
+def as_tag_keyed_offset_provider(
+    offset_provider: OffsetProviderLike | OffsetProviderTypeLike, *, strict: bool = True
+) -> OffsetProvider | OffsetProviderType:
+    """
+    Key an offset provider by tags, the form the IR and the backends use.
+
+    A `NeighborConnectivity` key becomes its local dimension's tag. A string key is taken to be
+    such a tag already, and is rejected if it cannot be one: a tag is a qualified name, so a bare
+    name such as `"V2E"` is the removed `FieldOffset` spelling.
+
+    Called on every program call, so it does not check tables against their declarations; see
+    `check_offset_provider`.
+
+    Args:
+        offset_provider: The provider to normalize.
+        strict: Whether to reject string keys that cannot be tags. Internal hooks that are handed
+            hand-written providers, such as `embedded.context.update`, pass `False`.
+    """
+    if not any(isinstance(key, ConnectivityMeta) for key in offset_provider):
+        if strict:
+            _check_tag_keys(offset_provider)
+        return offset_provider
+    result: dict[Tag, Any] = {}
+    for key, value in offset_provider.items():
+        tag = key.offset_tag if isinstance(key, ConnectivityMeta) else key
+        if tag in result:
+            raise ValueError(f"The offset provider binds '{tag}' twice.")
+        result[tag] = value
+    if strict:
+        _check_tag_keys(result)
+    return result
+
+
+def _check_tag_keys(offset_provider: Mapping[Any, Any]) -> None:
+    for key in offset_provider:
+        if not isinstance(key, str) or "." not in key:
+            raise TypeError(
+                f"Invalid offset-provider key '{key!r}': offset providers are keyed by"
+                " 'NeighborConnectivity' declarations, e.g. '{V2E: v2e_table}'. A bare name is the"
+                " spelling of the removed 'FieldOffset' (see ADR 0029)."
+            )
+
+
+def check_offset_provider(offset_provider: OffsetProviderLike | OffsetProviderTypeLike) -> None:
+    """
+    Check every table of a tag-keyed offset provider against its connectivity declaration.
+
+    A tag that does not name the local dimension of a declared connectivity -- e.g. one used only
+    by hand-written IR -- has no declaration to be checked against and is skipped.
+
+    Raises:
+        ValueError: If a table does not match its declaration, see `check_neighbor_table`.
+    """
+    for key, table in offset_provider.items():
+        declaration: Any = key
+        if isinstance(key, str):
+            try:
+                declaration = _import_qualified_name(key)
+            except ValueError:
+                continue
+        if isinstance(declaration, DimensionMeta):
+            # the local dimension's tag names its owner's table
+            declaration = getattr(declaration, "owner", None)
+        if isinstance(declaration, ConnectivityMeta) and declaration.offset_tag in (
+            key,
+            getattr(key, "offset_tag", None),
+        ):
+            check_neighbor_table(cast(type[NeighborConnectivity], declaration), table)
+    _check_shared_local_dimensions(offset_provider)
+
+
+def _check_shared_local_dimensions(
+    offset_provider: OffsetProviderLike | OffsetProviderTypeLike,
+) -> None:
+    """
+    Check that the tables over one local dimension have the same neighbor structure.
+
+    Reductions and sparse fields take the neighbor count and the skip values of a local dimension
+    from any one table over it (see `connectivity_key_over`), which is only sound if all of them
+    agree: the same number of neighbors, and a skip value at the same positions.
+    """
+    by_local_dim: dict[Tag, list[tuple[Any, Any]]] = collections.defaultdict(list)
+    for key, table in offset_provider.items():
+        if (neighbor_dim := _neighbor_dim_of(table)) is not None:
+            by_local_dim[neighbor_dim.tag].append((key, table))
+    for local_tag, tables in by_local_dim.items():
+        (first_key, first), *others = tables
+        first_type = first if isinstance(first, NeighborConnectivityType) else first.__gt_type__()
+        for key, table in others:
+            table_type = (
+                table if isinstance(table, NeighborConnectivityType) else table.__gt_type__()
+            )
+            same_structure = (table_type.max_neighbors, table_type.has_skip_values) == (
+                first_type.max_neighbors,
+                first_type.has_skip_values,
+            )
+            if (
+                same_structure
+                and first_type.has_skip_values
+                and is_neighbor_table(first)
+                and is_neighbor_table(table)
+            ):
+                same_structure = bool(
+                    np.array_equal(
+                        first.asnumpy() == first_type.skip_value,
+                        table.asnumpy() == table_type.skip_value,
+                    )
+                )
+            if not same_structure:
+                raise ValueError(
+                    f"'{key}' and '{first_key}' are bound to tables over the same local dimension"
+                    f" '{local_tag}' with a different neighbor structure: connectivities sharing a"
+                    " local dimension must have the same number of neighbors, and skip values at"
+                    " the same positions."
+                )

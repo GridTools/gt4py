@@ -51,7 +51,6 @@ from gt4py.next.embedded import (
     exceptions as embedded_exceptions,
     operators,
 )
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -156,9 +155,7 @@ class StridedConnectivityField(common.Connectivity):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         raise NotImplementedError
 
@@ -176,10 +173,8 @@ class StridedConnectivityField(common.Connectivity):
 
     def __call__(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         raise NotImplementedError()
 
@@ -1165,10 +1160,8 @@ class IndexField(common.Field):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1308,10 +1301,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1475,7 +1466,9 @@ def _as_offset_tag(
 @builtins.neighbors.register(EMBEDDED)
 def neighbors(offset: runtime.Offset | type[common.NeighborConnectivity], it: ItIterator) -> _List:
     field_offset: runtime.Offset = (
-        offset.__gt_field_offset__() if isinstance(offset, common.ConnectivityMeta) else offset
+        runtime.Offset(value=offset.offset_tag)
+        if isinstance(offset, common.ConnectivityMeta)
+        else offset
     )
     offset_str = _as_offset_tag(field_offset)
     assert isinstance(offset_str, str)

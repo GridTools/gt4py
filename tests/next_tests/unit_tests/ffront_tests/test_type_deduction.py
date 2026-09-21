@@ -21,7 +21,6 @@ from gt4py.next import (
     LocalDimensionIndex,
     NeighborConnectivity,
     Field,
-    FieldOffset,
     astype,
     broadcast,
     errors,
@@ -556,39 +555,33 @@ def test_undefined_symbols():
 
 
 def test_as_offset_dim():
-    Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
-
     def as_offset_dim(a: Field[[ADim, BDim], float], b: Field[[ADim], int]):
-        return a(as_offset(Boff, b))
+        return a(as_offset(BDim, b))
 
     with pytest.raises(errors.DSLError, match=f"not in list of offset field dimensions"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dim)
 
 
 def test_as_offset_dtype():
-    Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
-
     def as_offset_dtype(a: Field[[ADim, BDim], float], b: Field[[BDim], float]):
-        return a(as_offset(Boff, b))
+        return a(as_offset(BDim, b))
 
     with pytest.raises(errors.DSLError, match=f"expected integer for offset field dtype"):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)
 
 
-def test_as_offset_non_cartesian():
+def test_as_offset_non_dimension():
     def as_offset_neighbor(a: Field[[Edge], float], b: Field[[Edge], int]):
         return a(as_offset(V2E, b))
 
-    with pytest.raises(errors.DSLError, match="Cartesian"):
+    with pytest.raises(errors.DSLError, match="Expected 1st argument to be of type"):
         _ = FieldOperatorParser.apply_to_function(as_offset_neighbor)
 
-    IfromJ = FieldOffset("IfromJ", source=IDim, target=(JDim,))
+    def as_offset_local_dim(a: Field[[Vertex, V2EDim], float], b: Field[[Vertex, V2EDim], int]):
+        return a(as_offset(V2EDim, b))
 
-    def as_offset_cross_dim(a: Field[[IDim], float], b: Field[[IDim], int]):
-        return a(as_offset(IfromJ, b))
-
-    with pytest.raises(errors.DSLError, match="Cartesian"):
-        _ = FieldOperatorParser.apply_to_function(as_offset_cross_dim)
+    with pytest.raises(errors.DSLError, match="non-local dimension"):
+        _ = FieldOperatorParser.apply_to_function(as_offset_local_dim)
 
 
 vpfloat: TypeAlias = float32

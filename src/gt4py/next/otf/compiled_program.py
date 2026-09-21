@@ -643,6 +643,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             else:
                 raise ValueError(f"Invalid 'offset_provider': {offset_provider}")
 
+        common.check_offset_provider(offset_provider)
         self._initialize_argument_descriptor_mapping(argument_descriptors)
         _validate_argument_descriptors(self.program_type, argument_descriptors)
 

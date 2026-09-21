@@ -231,7 +231,7 @@ class E2C(gtx.NeighborConnectivity[EdgeDim, CellDim]):
     class Local(gtx.LocalDimensionIndex): ...
 ```
 
-Note that the declaration does not contain the actual connectivity table, that's provided through an _offset provider_, keyed by the local dimension's `tag`:
+Note that the declaration does not contain the actual connectivity table, that's provided through an _offset provider_, a dictionary from connectivity declarations to tables:
 
 ```{code-cell} ipython3
 E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2C.Local], codomain=CellDim, data=edge_to_cell_table, skip_value=-1)
@@ -250,7 +250,7 @@ def nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64]) -> gtx.
 def run_nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     nearest_cell_to_edge(cell_values, out=out)
 
-run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={E2C.Local.tag: E2C_offset_provider})
+run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={E2C: E2C_offset_provider})
 
 print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 ```
@@ -277,7 +277,7 @@ def sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64]) -> gtx.Field[D
 def run_sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
 
-run_sum_adjacent_cells(cell_values, edge_values, offset_provider={E2C.Local.tag: E2C_offset_provider})
+run_sum_adjacent_cells(cell_values, edge_values, offset_provider={E2C: E2C_offset_provider})
 
 print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 ```
@@ -441,7 +441,7 @@ result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
 run_pseudo_laplacian(cell_values,
                      edge_weight_field,
                      result_pseudo_lap,
-                     offset_provider={E2C.Local.tag: E2C_offset_provider, C2E.Local.tag: C2E_offset_provider})
+                     offset_provider={E2C: E2C_offset_provider, C2E: C2E_offset_provider})
 
 print("pseudo-laplacian: {}".format(result_pseudo_lap.asnumpy()))
 ```

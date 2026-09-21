@@ -26,6 +26,7 @@ from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
+from next_tests.integration_tests import cases_utils
 from next_tests.integration_tests.cases_utils import (
     E2VDim,
     C2VDim,
@@ -72,8 +73,8 @@ V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 IOff = im.cartesian_offset(IDim, IDim)
 # Cartesian shifts are self-describing (`CartesianOffset`), so no offset provider entry is needed.
 CARTESIAN_OFFSETS: dict = {}
-SIMPLE_MESH: MeshDescriptor = simple_mesh(None)
-SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh(None)
+SIMPLE_MESH: MeshDescriptor = cases_utils.ir_level(simple_mesh(None))
+SKIP_VALUE_MESH: MeshDescriptor = cases_utils.ir_level(skip_value_mesh(None))
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
     **{gtx_dace_args.range_start_symbol("w", IDim).name: 0},

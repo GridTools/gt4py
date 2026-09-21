@@ -239,9 +239,7 @@ class NdArrayField(
 
     def premap(
         self: NdArrayField,
-        *connectivities: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
+        *connectivities: common.Connectivity | type[common.NeighborConnectivity],
     ) -> NdArrayField:
         """
         Rearrange the field content using the provided connectivities (index mappings).
@@ -316,13 +314,9 @@ class NdArrayField(
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
 
         for connectivity in connectivities:
-            # For neighbor reductions, a FieldOffset or a connectivity declaration is passed
-            # instead of an actual Connectivity
+            # For neighbor reductions, a connectivity declaration is passed instead of a table
             if isinstance(connectivity, common.ConnectivityMeta):
-                connectivity = connectivity.__gt_field_offset__()
-            if not isinstance(connectivity, common.Connectivity):
-                assert isinstance(connectivity, fbuiltins.FieldOffset)
-                connectivity = connectivity.as_connectivity_field()
+                connectivity = connectivity.bound_table()
             assert isinstance(connectivity, common.Connectivity)
 
             # Current implementation relies on skip_value == -1:
@@ -371,10 +365,8 @@ class NdArrayField(
 
     def __call__(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),
@@ -948,15 +940,12 @@ def _concat_where(
 NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
 
 
-def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
-    if not fbuiltins.is_cartesian_offset(offset):
-        target_dims = ", ".join(d.__qualname__ for d in offset.target)  # for the diagnostic
-        raise ValueError(
-            f"'as_offset' is only supported for Cartesian offsets "
-            f"(single target dimension equal to source dimension); "
-            f"got source '{offset.source.__qualname__}' and target ({target_dims})."
-        )
-    source_dim = offset.source
+def _as_offset(source_dim: common.Dimension, offset_field: NdArrayField) -> common.Connectivity:
+    if (
+        not isinstance(source_dim, common.DimensionMeta)
+        or source_dim.kind is common.DimensionKind.LOCAL
+    ):
+        raise ValueError(f"'as_offset' shifts along a non-local dimension, got '{source_dim}'.")
     coords = _identity_index_array(
         offset_field.domain, source_dim, offset_field.array_ns, dtype=fbuiltins.IndexType
     )

@@ -331,9 +331,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(as_offset(Off, offset_field))`
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
-                    offset_type = func_args.args[0].type
-                    assert isinstance(offset_type, ts.OffsetType)
-                    dim = offset_type.source
+                    dim_type = func_args.args[0].type
+                    assert isinstance(dim_type, ts.DimensionType)
+                    dim = dim_type.dim
                     offset_field = self.visit(func_args.args[1], **kwargs)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it", "__offset")(

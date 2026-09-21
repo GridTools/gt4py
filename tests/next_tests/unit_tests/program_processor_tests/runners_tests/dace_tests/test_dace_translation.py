@@ -29,6 +29,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 from gt4py.next.type_system import type_specifications as ts
 
+from next_tests.integration_tests import cases_utils
 from next_tests.integration_tests.cases_utils import (
     V2E,
     Edge,
@@ -80,7 +81,7 @@ def _translate_gtir_to_sdfg(
 @pytest.mark.parametrize("has_unit_stride", [False, True])
 @pytest.mark.parametrize("disable_field_origin", [False, True])
 def test_find_constant_symbols(has_unit_stride, disable_field_origin):
-    SKIP_VALUE_MESH = skip_value_mesh(None)
+    SKIP_VALUE_MESH = cases_utils.ir_level(skip_value_mesh(None))
 
     ir = itir.Program(
         id="find_constant_symbols_sdfg",

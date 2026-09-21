@@ -7,11 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import functools
 import inspect
 import math
 import operator
-import warnings
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
 from types import UnionType
 from typing import (
@@ -36,7 +34,6 @@ from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, ui
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, named_collections
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
-from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -130,8 +127,6 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
-    elif t is FieldOffset:
-        return ts.OffsetType
     elif t is common.Connectivity:
         return ts.OffsetType
     elif t is core_defs.ScalarT:
@@ -473,91 +468,3 @@ assert (diff := should_export - actual_export) == set(), (
 assert (diff := actual_export - should_export) == set(), (
     f"Symbol(s) exported but not defined in 'fbuiltins': {diff}"
 )
-
-
-# TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual
-#  match. Revisit if we want to continue subclassing here. If we split
-#  them also check whether Dimension should continue to be the shared or define
-#  guidelines for decision.
-@dataclasses.dataclass(frozen=True)
-class FieldOffset(runtime.Offset):
-    #: The tag, i.e. the offset-provider key.
-    value: str
-    source: common.Dimension
-    target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-    #: Set when derived from a `NeighborConnectivity` declaration, which is not deprecated.
-    _derived: bool = dataclasses.field(default=False, repr=False, compare=False, kw_only=True)
-
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
-
-    def __post_init__(self) -> None:
-        if len(self.target) == 2:
-            if self.target[1].kind != common.DimensionKind.LOCAL:
-                raise ValueError("Second dimension in offset must be a local dimension.")
-            if not self._derived:
-                warnings.warn(
-                    "Declaring an unstructured connectivity with 'FieldOffset' is deprecated;"
-                    " declare a 'NeighborConnectivity' class instead (see ADR 0029):\n"
-                    "    class V2E(gtx.NeighborConnectivity[Vertex, Edge]):\n"
-                    "        class Local(gtx.LocalDimensionIndex): ...",
-                    DeprecationWarning,
-                    stacklevel=3,
-                )
-
-    def __gt_type__(self) -> ts.OffsetType:
-        return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
-
-    @property
-    def Local(self) -> common.Dimension:
-        """The local dimension, as `V2E.Local` names it on a `NeighborConnectivity`."""
-        if len(self.target) != 2:
-            raise AttributeError(
-                f"'{self.value}' is a Cartesian offset and has no local dimension."
-            )
-        return self.target[1]
-
-    def __getitem__(self, offset: int) -> common.Connectivity:
-        """Serve as a connectivity factory."""
-        from gt4py.next import embedded  # avoid circular import
-
-        assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.get_offset_provider(None)
-        assert current_offset_provider is not None
-        offset_definition = common.get_offset(current_offset_provider, self.value)
-
-        assert common.is_neighbor_table(offset_definition)
-        named_index = (self.target[-1])(offset)
-        connectivity = offset_definition[named_index]
-
-        return connectivity
-
-    def as_connectivity_field(self) -> common.Connectivity:
-        """Convert to connectivity field using the offset providers in current embedded execution context."""
-        from gt4py.next import embedded  # avoid circular import
-
-        assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.get_offset_provider(None)
-        assert current_offset_provider is not None
-        offset_definition = common.get_offset(current_offset_provider, self.value)
-
-        cache_key = id(offset_definition)
-        if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.Connectivity):
-                connectivity = offset_definition
-            else:
-                raise NotImplementedError()
-
-            self._cache[cache_key] = connectivity
-
-        return connectivity
-
-
-def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
-    return (
-        len(offset.target) == 1
-        and offset.source == offset.target[0]
-        and offset.source.kind == offset.target[0].kind
-        and offset.target[0].kind != common.DimensionKind.LOCAL
-    )

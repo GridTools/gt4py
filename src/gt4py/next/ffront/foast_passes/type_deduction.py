@@ -997,16 +997,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_as_offset(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
-        assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
-        if not fbuiltins.is_cartesian_offset(arg_0):
-            target_dims = ", ".join(d.__qualname__ for d in arg_0.target)  # for the diagnostic
+        if not isinstance(arg_0, ts.DimensionType) or arg_0.dim.kind is common.DimensionKind.LOCAL:
             raise errors.DSLError(
                 node.location,
-                f"'as_offset' is only supported for Cartesian offsets "
-                f"(single target dimension equal to source dimension); "
-                f"got source '{arg_0.source.__qualname__}' and target ({target_dims}).",
+                f"'as_offset' shifts along a non-local dimension, e.g. 'as_offset(KDim, field)';"
+                f" got '{arg_0}'.",
             )
+        dim = arg_0.dim
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
@@ -1015,16 +1013,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"{node.location}",
             )
 
-        if arg_0.source not in arg_1.dims:
+        if dim not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
                 f"Incompatible argument in call to '{node.func!s}': "
-                f"'{arg_0.source}' not in list of offset field dimensions '{arg_1.dims}'. "
+                f"'{dim}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
 
         return foast.Call(
-            func=node.func, args=node.args, kwargs=node.kwargs, type=arg_0, location=node.location
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=ts.OffsetType(source=dim, target=(dim,)),
+            location=node.location,
         )
 
     def _deduce_where_return_type(

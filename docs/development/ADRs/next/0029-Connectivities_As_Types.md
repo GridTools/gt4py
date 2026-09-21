@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-21
-- **Updated**: 2026-09-21
+- **Updated**: 2026-09-22
 
 A neighbor connectivity is declared as a **class**, and its local dimension as a
 class **nested** in it:
@@ -71,10 +71,8 @@ and skip values were never checked against the `FieldOffset` declaration.
   the domain is `(Origin, V2E.Local)`, the codomain is `Codomain`, the dtype is
   integral, and the neighbor counts and skip values agree. Skip values are
   checked on the table's type: a table with a `skip_value` counts as having skip
-  values whether or not an entry uses it. The check is explicit for as long as
-  offset providers are keyed by tag strings, since nothing then connects a
-  provider entry to a declaration; it becomes automatic with class-keyed
-  providers.
+  values whether or not an entry uses it. Programs run the check on the tables
+  they are given, see below.
 
 ### `NeighborConnectivity` is not a `Connectivity`
 
@@ -139,6 +137,36 @@ works for both. The other frontend touch points treat the class like the
 counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
 metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
 
+### Offset providers are keyed by the declaration
+
+Users bind tables to declarations:
+
+```python
+program(..., offset_provider={V2E: v2e_table, C2E: c2e_table})
+```
+
+Every entry point of a program (`Program.__call__`, `FieldOperator.__call__`,
+`compile`, `CompilationOptions.connectivities`, `embedded.context.update`, the
+iterator `fendef`) normalizes such a provider to the form the IR uses: each
+declaration is replaced by its `offset_tag`. Everything below the entry points —
+lowering, the backends, compiled-program caching — therefore keeps seeing a
+provider keyed by strings, which is also what hand-written IR uses. A string key
+must be a tag, i.e. a qualified name; a bare name such as `"V2E"` is the removed
+`FieldOffset` spelling and is rejected with a message pointing here.
+
+Tables are checked against their declarations (`check_offset_provider`) once per
+compiled variant and on each embedded call, not on every compiled call: the
+check builds the table's type, which is too slow for the call path. A tag that
+names no declared connectivity, as in hand-written IR, is not checked.
+
+### `FieldOffset` is removed
+
+`FieldOffset` and its export are gone. An unstructured connectivity is a
+`NeighborConnectivity`; a Cartesian shift is `Dim + i`, which the DSL already
+had; and `as_offset` takes the dimension to shift along, `as_offset(KDim, k_offsets)`, instead of a Cartesian `FieldOffset`. `scripts/python/migrate_connectivities.py`
+rewrites declarations and Cartesian offset uses, and reports the provider keys
+and other sites it cannot rewrite from the source alone.
+
 ## Consequences
 
 - An unstructured connectivity is spelled once. The provider key, the offset tag
@@ -149,8 +177,8 @@ metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, 
 - A declaration is fingerprinted by its name *and* its declared dimensions and
   counts, so redefining it under the same name (e.g. re-running a notebook
   cell) does not reuse artifacts compiled for the old declaration.
-- `FieldOffset` remains during migration; a `FieldOffset` and a
-  `NeighborConnectivity` sharing a local dimension are interchangeable.
+- `FieldOffset` is removed, and offset providers are keyed by declarations: a
+  breaking change for every unstructured program, eased by the migration script.
 
 ## Alternatives considered
 

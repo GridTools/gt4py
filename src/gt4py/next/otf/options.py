@@ -15,7 +15,7 @@ from gt4py.next import common, config
 class CompilationOptionsArgs(TypedDict, total=False):
     enable_jit: bool
     static_params: Sequence[str]
-    connectivities: common.OffsetProvider
+    connectivities: common.OffsetProviderLike
     static_domains: bool
 
 
@@ -36,9 +36,15 @@ class CompilationOptions:
     #: A dictionary holding static/compile-time information about the offset providers.
     #: For now, it is used for ahead of time compilation in DaCe orchestrated programs,
     #: i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
-    connectivities: common.OffsetProvider | None = None
+    connectivities: common.OffsetProviderLike | None = None
 
     static_domains: bool = False
+
+    def __post_init__(self) -> None:
+        if self.connectivities is not None:
+            object.__setattr__(
+                self, "connectivities", common.as_tag_keyed_offset_provider(self.connectivities)
+            )
 
 
 assert CompilationOptionsArgs.__annotations__.keys() == CompilationOptions.__annotations__.keys()

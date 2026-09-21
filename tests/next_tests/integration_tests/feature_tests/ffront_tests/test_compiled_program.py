@@ -252,7 +252,7 @@ def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
 
     compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
 
-    v2e_numpy = unstructured_case.offset_provider[V2E.Local.tag].asnumpy()
+    v2e_numpy = unstructured_case.offset_provider[V2E].asnumpy()
     assert np.allclose(
         kwargs["out"].asnumpy(),
         np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
@@ -317,7 +317,7 @@ def test_compile_unstructured_for_two_offset_providers(
         *args, offset_provider=unstructured_case.offset_provider, **kwargs
     )
 
-    v2e_numpy = unstructured_case.offset_provider[V2E.Local.tag].asnumpy()
+    v2e_numpy = unstructured_case.offset_provider[V2E].asnumpy()
     assert np.allclose(
         kwargs["out"].asnumpy(),
         np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
