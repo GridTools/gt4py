@@ -35,8 +35,13 @@ GRAMMAR = """
     TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
-    OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
-    AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
+    // A dimension or offset tag is a qualified Python name (ADR 0028): dotted, and -- for a
+    // parametrized dimension such as `Staggered[pkg.K]` -- with one bracketed dotted name.
+    // Unambiguous here: a tag starts with a letter (a float does not), and the literal's
+    // suffix terminates it.
+    TAG: /[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\[[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\])?/
+    OFFSET_LITERAL: ( INT_LITERAL | TAG ) "ₒ"
+    AXIS_LITERAL: TAG ("ᵥ" | "ₕ")
     INFINITY_LITERAL: "∞" | "-∞"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
