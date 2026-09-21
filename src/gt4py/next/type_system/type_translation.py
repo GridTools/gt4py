@@ -223,11 +223,19 @@ def from_type_hint(
                 and not any(arg is Ellipsis for arg in args)
             ):
                 tuple_types = [from_type_hint_same_ns(arg) for arg in args]
-                assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
+                if not all(isinstance(elem, ts.DataType) for elem in tuple_types):
+                    raise ValueError(
+                        f"Tuple annotation '{type_hint}' contains invalid element types."
+                    )
                 return ts.TupleType(types=tuple_types)
             # Variable-length tuple, e.g. `tuple[int32, ...]`
             elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
-                return ts.VarArgType(element_type=from_type_hint_same_ns(args[0]))
+                element_type = from_type_hint_same_ns(args[0])
+                if not isinstance(element_type, ts.DataType):
+                    raise ValueError(
+                        f"Tuple annotation '{type_hint}' contains an invalid element type."
+                    )
+                return ts.VarArgType(element_type=element_type)
             # Unparametrized annotation, i.e. bare `tuple` / `typing.Tuple` (the
             # empty-tuple annotation `tuple[()]` has `args == ()` and is rejected below)
             elif args is None:

@@ -594,10 +594,23 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],
                     )
 
+                seen_target_names: set[str] = set()
+
                 def parse_target(target: ast.expr) -> MaybeNestedInTuple[foast.DataSymbol]:
                     if isinstance(target, ast.Tuple):
                         return tuple(parse_target(el) for el in target.elts)
-                    assert isinstance(target, ast.Name) and isinstance(target.ctx, ast.Store)
+                    if not (isinstance(target, ast.Name) and isinstance(target.ctx, ast.Store)):
+                        raise errors.UnsupportedPythonFeatureError(
+                            self.get_location(target),
+                            "generator expression targets other than names "
+                            "and (nested) tuples of names",
+                        )
+                    if target.id in seen_target_names:
+                        raise errors.DSLError(
+                            self.get_location(target),
+                            f"Duplicate name '{target.id}' in generator expression target.",
+                        )
+                    seen_target_names.add(target.id)
                     return foast.DataSymbol(
                         id=target.id,
                         location=self.get_location(target),

@@ -243,6 +243,12 @@ def test_invalid_symbol_types():
     with pytest.raises(ValueError, match="Tuple annotation"):
         type_translation.from_type_hint(typing.Tuple[()])
 
+    # Invalid element annotations are reported as ValueError, not internal errors.
+    with pytest.raises(ValueError, match="invalid element type"):
+        type_translation.from_type_hint(tuple[tuple, int])
+    with pytest.raises(ValueError, match="invalid element type"):
+        type_translation.from_type_hint(tuple[tuple, ...])
+
     # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarArgType.
     assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarArgType(
         element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)

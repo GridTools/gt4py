@@ -758,6 +758,25 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         replaces that by the constituent of `element_type` at the symbol's unpacking position.
         """
 
+        def first_symbol(target_el: MaybeNestedInTuple[foast.Symbol]) -> foast.Symbol:
+            return first_symbol(target_el[0]) if isinstance(target_el, tuple) else target_el
+
+        def ensure_all_values_consumed(
+            target_el: MaybeNestedInTuple[foast.Symbol], type_: ts.TypeSpec
+        ) -> None:
+            # An unpacking pattern with fewer names than the element has values would
+            # silently drop the excess values; reject it like the equivalent assignment.
+            if isinstance(target_el, tuple) and isinstance(type_, ts.TupleType):
+                if len(type_.types) > len(target_el):
+                    raise errors.DSLError(
+                        first_symbol(target_el).location,
+                        f"Too many values to unpack (expected {len(target_el)}).",
+                    )
+                for el, el_type in zip(target_el, type_.types):
+                    ensure_all_values_consumed(el, el_type)
+
+        ensure_all_values_consumed(target, element_type)
+
         @tree_map(with_path_arg=True)
         def process_target(target_el: foast.Symbol, path: tuple[int, ...]) -> foast.Symbol:
             type_ = element_type

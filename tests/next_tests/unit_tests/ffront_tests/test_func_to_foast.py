@@ -509,6 +509,38 @@ def test_tuple_index_failure():
         _ = FieldOperatorParser.apply_to_function(tuple_index_failure)
 
 
+def test_tuple_compr_list_target_failure():
+    def testee(arg: tuple[tuple[int32, int32], ...]):
+        return tuple(p + q for [p, q] in arg)
+
+    with pytest.raises(errors.UnsupportedPythonFeatureError, match=r"generator expression targets"):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_tuple_compr_starred_target_failure():
+    def testee(arg: tuple[tuple[int32, int32], ...]):
+        return tuple(p for p, *q in arg)
+
+    with pytest.raises(errors.UnsupportedPythonFeatureError, match=r"generator expression targets"):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_tuple_compr_subscript_target_failure():
+    def testee(arg: tuple[int32, ...], x: tuple[int32, int32]):
+        return tuple(x[0] for x[0] in arg)
+
+    with pytest.raises(errors.UnsupportedPythonFeatureError, match=r"generator expression targets"):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
+def test_tuple_compr_duplicate_target_name_failure():
+    def testee(arg: tuple[tuple[int32, int32], ...]):
+        return tuple(p for p, p in arg)
+
+    with pytest.raises(errors.DSLError, match=r"Duplicate name 'p'"):
+        _ = FieldOperatorParser.apply_to_function(testee)
+
+
 def test_tuple_compr_non_tuple_iterable_failure():
     def testee(arg: float):
         return tuple(_ for _ in arg)

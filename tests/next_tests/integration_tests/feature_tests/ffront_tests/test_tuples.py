@@ -158,6 +158,29 @@ def test_var_len_tuple_comprehension_empty(cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_var_len_tuple_comprehension_in_fixed_tuple_return(cartesian_case):
+    # A comprehension result nested inside a fixed-length return tuple, called directly.
+    @gtx.field_operator
+    def testee(
+        tracers: tuple[cases.IField, ...], rho: cases.IField
+    ) -> tuple[tuple[cases.IField, ...], cases.IField]:
+        return tuple(tracer * 2 for tracer in tracers), rho
+
+    tracers = cases.allocate(cartesian_case, testee, "tracers")()
+    rho = cases.allocate(cartesian_case, testee, "rho")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    cases.verify(
+        cartesian_case,
+        testee,
+        tracers,
+        rho,
+        out=out,
+        ref=(tuple(t.asnumpy() * 2 for t in tracers), rho.asnumpy()),
+    )
+
+
+@pytest.mark.uses_tuple_args
 def test_var_len_tuple_comprehension_different_lengths(cartesian_case):
     # An operator with variable-length tuple parameters is generic: every call must be
     # specialized (and compiled) for the concrete tuple length of its arguments.

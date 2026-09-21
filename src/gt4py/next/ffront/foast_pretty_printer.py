@@ -123,9 +123,13 @@ class _PrettyPrinter(TemplatedGenerator):
     def visit_TupleComprehensionMapper(
         self, node: foast.TupleComprehensionMapper, **kwargs: Any
     ) -> str:
+        def format_target(target: Any) -> str:
+            if isinstance(target, tuple):
+                return f"({', '.join(format_target(el) for el in target)})"
+            return self.visit(target, **kwargs)
+
         element_expr = self.visit(node.element_expr, **kwargs)
-        target = self.visit(node.target, **kwargs)
-        return f"{element_expr} for {target}"
+        return f"{element_expr} for {format_target(node.target)}"
 
     def visit_TupleComprehension(self, node: foast.TupleComprehension, **kwargs: Any) -> str:
         mapper = self.visit(node.inner, **kwargs)

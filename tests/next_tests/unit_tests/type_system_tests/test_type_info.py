@@ -491,3 +491,17 @@ def test_promote_lists():
         type_info.promote(v2e_list, ts.ListType(element_type=int32, offset_type=V2EDim))
     with pytest.raises(ValueError, match="non-lists"):
         type_info.promote(v2e_list, float64)
+
+
+def test_is_concretizable_tuple_with_nested_vararg():
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    field_type = ts.FieldType(dims=[], dtype=float_type)
+    nested = ts.TupleType(types=[ts.VarArgType(element_type=field_type), field_type])
+
+    assert type_info.is_concretizable(
+        nested, ts.TupleType(types=[ts.TupleType(types=[field_type, field_type]), field_type])
+    )
+    assert not type_info.is_concretizable(
+        nested, ts.TupleType(types=[ts.TupleType(types=[float_type]), field_type])
+    )
+    assert not type_info.is_concretizable(nested, ts.TupleType(types=[field_type]))

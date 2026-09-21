@@ -555,12 +555,17 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.TupleType):
         # The empty tuple is a valid concretization of any variable-length tuple: there
         # are no elements whose type could conflict with the element type.
-        if len(to_type.types) == 0 or (
+        return len(to_type.types) == 0 or (
             all(type_ == to_type.types[0] for type_ in to_type.types)
             and is_concretizable(symbol_type.element_type, to_type.types[0])
-        ):
-            return True
-    elif is_concrete(symbol_type):
+        )
+    if isinstance(symbol_type, ts.TupleType) and isinstance(to_type, ts.TupleType):
+        # Recurse elementwise so that e.g. a variable-length tuple nested inside a
+        # fixed-length tuple can be concretized.
+        return len(symbol_type.types) == len(to_type.types) and all(
+            is_concretizable(el, to_el) for el, to_el in zip(symbol_type.types, to_type.types)
+        )
+    if is_concrete(symbol_type):
         return symbol_type == to_type
     return False
 
