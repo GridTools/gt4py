@@ -155,9 +155,7 @@ class SymbolicDomain:
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, itir.AxisLiteral)
 
-            ranges[common.resolve(axis_literal.value)] = (
-                SymbolicRange(lower_bound, upper_bound)
-            )
+            ranges[common.resolve(axis_literal.value)] = SymbolicRange(lower_bound, upper_bound)
         return cls(_GRID_TYPE_MAPPING[node.fun.id], ranges)
 
     def as_expr(self) -> itir.FunCall:
