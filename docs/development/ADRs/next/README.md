@@ -23,6 +23,7 @@ Writing a new ADR is simple:
 - [0023 - Fingerprinting](0023-Fingerprinting.md)
 - [0026 - Staggered Dimensions](0026-Staggered_Dimensions.md)
 - [0028 - Dimensions as Nominal Types](0028-Dimensions_As_Nominal_Types.md)
+- [0029 - Connectivities as Types](0029-Connectivities_As_Types.md)
 
 ### Frontend and Parsing #frontend
 
