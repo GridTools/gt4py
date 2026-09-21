@@ -23,8 +23,7 @@ def f(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
 ```
 
 The declaration is written in DSL code, owns its local dimension, and states the
-constraints the neighbor table bound at call time has to satisfy. It holds no
-data. It builds on [ADR 0028](0028-Dimensions_As_Nominal_Types.md): the
+constraints a neighbor table bound to it has to satisfy. It holds no data. It builds on [ADR 0028](0028-Dimensions_As_Nominal_Types.md): the
 connectivity, like a dimension, is identified by its type, and `V2E.Local` is an
 ordinary dimension class with the tag `<module>.V2E.Local`.
 
@@ -62,7 +61,12 @@ and skip values were never checked against the `FieldOffset` declaration.
 - `common.check_neighbor_table(V2E, table)` checks a table, or just its type
   (which is all an ahead-of-time compilation has), against the declaration:
   the domain is `(Origin, V2E.Local)`, the codomain is `Codomain`, the dtype is
-  integral, and the neighbor counts and skip values agree.
+  integral, and the neighbor counts and skip values agree. Skip values are
+  checked on the table's type: a table with a `skip_value` counts as having skip
+  values whether or not an entry uses it. The check is explicit for as long as
+  offset providers are keyed by tag strings, since nothing then connects a
+  provider entry to a declaration; it becomes automatic with class-keyed
+  providers.
 
 ### `NeighborConnectivity` is not a `Connectivity`
 
@@ -98,7 +102,11 @@ is the `ts.OffsetType` of the derived offset `(Codomain -> (Origin, Local))`,
 whose tag is **the local dimension's tag**, `V2E.Local.tag`. This is the single
 string that shifts, neighbor reductions and sparse arguments already use to find
 the table in the offset provider, so existing backends need no change.
-`V2E.Local` inside DSL code types as that local dimension. `V2E[i]` subscripts the
+`V2E.Local` inside DSL code types as that local dimension, and
+`FieldOffset.Local` names the same thing on a legacy offset, so the spelling
+works for both. The other frontend touch points treat the class like the
+`FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
+counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
 metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
 
 ## Consequences
@@ -106,8 +114,11 @@ metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, 
 - An unstructured connectivity is spelled once. The provider key, the offset tag
   and the local dimension are all derived from the declaration.
 - A table bound to a connectivity can be checked against its declaration.
-- The frontend needs one special case: `V2E.Local` is resolved from the offset
-  type, because the type of `V2E` is not the class.
+- `V2E.Local` in DSL code is resolved from the offset type, because the type of
+  `V2E` is not the class.
+- A declaration is fingerprinted by its name *and* its declared dimensions and
+  counts, so redefining it under the same name (e.g. re-running a notebook
+  cell) does not reuse artifacts compiled for the old declaration.
 - `FieldOffset` remains during migration; a `FieldOffset` and a
   `NeighborConnectivity` sharing a local dimension are interchangeable.
 

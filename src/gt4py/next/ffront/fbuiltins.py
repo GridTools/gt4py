@@ -496,6 +496,15 @@ class FieldOffset(runtime.Offset):
     def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
 
+    @property
+    def Local(self) -> common.Dimension:
+        """The local dimension, as `V2E.Local` names it on a `NeighborConnectivity`."""
+        if len(self.target) != 2:
+            raise AttributeError(
+                f"'{self.value}' is a Cartesian offset and has no local dimension."
+            )
+        return self.target[1]
+
     def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
         from gt4py.next import embedded  # avoid circular import

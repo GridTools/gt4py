@@ -440,7 +440,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             case ts.OffsetType(target=(_, local)) if node.attr == "Local":
                 attr_type: ts.TypeSpec = ts.DimensionType(dim=local)
             case _:
-                attr_type = getattr(new_value.type, node.attr)
+                try:
+                    attr_type = getattr(new_value.type, node.attr)
+                except AttributeError:
+                    raise errors.DSLError(
+                        node.location, f"'{new_value.type}' has no attribute '{node.attr}'."
+                    ) from None
         return foast.Attribute(
             value=new_value, attr=node.attr, location=node.location, type=attr_type
         )
