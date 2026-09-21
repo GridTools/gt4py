@@ -130,3 +130,16 @@ measurements of each compiler pass. If review is split into separate PRs, each
 must retain its own design documentation and label the performance evidence as
 joint. The current review targets `amd_chiplet_setting`; merging there does not
 by itself deliver the changes to `main`.
+
+## Global validation update — 2026-09-21
+
+This supersedes the earlier note that global-grid validation is outstanding.
+On global/120, both compiler passes reduced whole-granule summed program device
+time by 4.81% on MI300A and 4.45% on GH200; wall time fell 4.60% and 4.23%.
+All 148 fields matched exactly. Solver time fell 11.68% and 11.19%, accounting
+for essentially all of the global gain; theta retained three kernels. A small
+GH200 theta slowdown (0.16%) was measured in the combined arm, without causal
+attribution to that pass. Direct compiler/frontend contrasts did not establish
+an additional gain or regression under the control criterion. The opt-in
+implementation now has evidence on both meshes at 120 levels; this is not a
+universal profitability guarantee or cache-capacity attribution.
