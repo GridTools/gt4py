@@ -151,7 +151,12 @@ class StridedConnectivityField(common.Connectivity):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError
 
-    def premap(self, index_field: common.Connectivity | fbuiltins.FieldOffset) -> common.Field:
+    def premap(
+        self,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+    ) -> common.Field:
         raise NotImplementedError
 
     def restrict(  # type: ignore[override]
@@ -168,8 +173,10 @@ class StridedConnectivityField(common.Connectivity):
 
     def __call__(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
     ) -> common.Field:
         raise NotImplementedError()
 
@@ -1143,8 +1150,10 @@ class IndexField(common.Field):
 
     def premap(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1284,8 +1293,10 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     def premap(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()

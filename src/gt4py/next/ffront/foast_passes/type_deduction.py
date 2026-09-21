@@ -434,11 +434,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> foast.Attribute:
         new_value = self.visit(node.value, **kwargs)
+        match new_value.type:
+            # `V2E.Local`: the local dimension of a connectivity declaration, which is the last
+            # target of the offset it is typed as.
+            case ts.OffsetType(target=(_, local)) if node.attr == "Local":
+                attr_type: ts.TypeSpec = ts.DimensionType(dim=local)
+            case _:
+                attr_type = getattr(new_value.type, node.attr)
         return foast.Attribute(
-            value=new_value,
-            attr=node.attr,
-            location=node.location,
-            type=getattr(new_value.type, node.attr),
+            value=new_value, attr=node.attr, location=node.location, type=attr_type
         )
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> foast.Subscript:

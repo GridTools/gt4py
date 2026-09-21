@@ -47,7 +47,9 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
 
 def _deduce_grid_type(
     requested_grid_type: Optional[common.GridType],
-    offsets_and_dimensions: Iterable[fbuiltins.FieldOffset | common.Dimension],
+    offsets_and_dimensions: Iterable[
+        fbuiltins.FieldOffset | type[common.NeighborConnectivity] | common.Dimension
+    ],
 ) -> common.GridType:
     """
     Derive grid type from actually occurring dimensions and check against optional user request.
@@ -59,7 +61,9 @@ def _deduce_grid_type(
 
     deduced_grid_type = common.GridType.CARTESIAN
     for o in offsets_and_dimensions:
-        if isinstance(o, fbuiltins.FieldOffset) and not fbuiltins.is_cartesian_offset(o):
+        if isinstance(o, common.ConnectivityMeta) or (
+            isinstance(o, fbuiltins.FieldOffset) and not fbuiltins.is_cartesian_offset(o)
+        ):
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
         if isinstance(o, common.DimensionMeta) and o.kind == common.DimensionKind.LOCAL:
