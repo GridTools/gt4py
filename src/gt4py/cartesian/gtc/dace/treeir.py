@@ -126,15 +126,16 @@ class HorizontalLoop(TreeScope):
     schedule: dtypes.ScheduleType
 
 
-class SequentialVerticalLoop(TreeScope):
+class VerticalLoop(TreeScope):
     iteration_variable: eve.SymbolRef
-    bounds_k: Bounds
+    """
+    DaCe 1.x (without CFGs) maps sequential loops to a state machine with the iteration variable
+    on interstate edges. Having unique symbols makes DaCe 1.x happy and allows to rename symbols
+    via search & replace.
+    """
     loop_order: common.LoopOrder
-
-
-class ParallelVerticalLoop(TreeScope):
-    iteration_variable: eve.SymbolRef
     bounds_k: Bounds
+
     schedule: dtypes.ScheduleType
 
 
