@@ -42,7 +42,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
     Example:
         >>> from gt4py import next as gtx
         >>> from gt4py.next.otf import arguments, workflow
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
 
         >>> @gtx.field_operator
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
@@ -174,7 +174,8 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
 
     if len(scanops_per_axis.values()) != 1:
         scanops_per_axis_str = "\n".join(
-            f"- {dim.__qualname__}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
+            f"- {dim.__qualname__}: {', '.join(scanops)}"
+            for dim, scanops in scanops_per_axis.items()
         )
 
         raise TypeError(
@@ -246,7 +247,8 @@ class ProgramLowering(
     >>> from gt4py.next import Dimension, Field
     >>>
     >>> float64 = float
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):

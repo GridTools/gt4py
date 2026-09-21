@@ -8,7 +8,7 @@
 import functools
 import inspect
 from collections.abc import Callable, Iterable
-from typing import Final, Any, Iterator, Sequence, cast
+from typing import Any, Final, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -188,13 +188,12 @@ def _scan_param_promotion(
 
     Example:
     --------
+    >>> class I(common.DimensionIndex): ...
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(
-    ...         dims=[common.Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ...     ),
+    ...     ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
+    FieldType(dims=[gt4py.next.ffront.type_info.I[horizontal]], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:

@@ -44,7 +44,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     ...     params=[im.sym("a")],
     ...     expr=im.deref("a"),
     ... )
-    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> class IDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
     >>> program = itir.Program(
     ...     id="testee",
     ...     function_definitions=[fun1, fun2],
@@ -61,7 +61,7 @@ def prune_unreferenced_fundefs(program: itir.Program) -> itir.Program:
     >>> print(prune_unreferenced_fundefs(program))
     testee(inp, out) {
       fun1 = λ(a) → ·a;
-      out @ c⟨ IDimₕ: [0, 10[ ⟩ ← fun1(inp);
+      out @ c⟨ gt4py.next.iterator.transforms.inline_fundefs.IDimₕ: [0, 10[ ⟩ ← fun1(inp);
     }
     """
     fun_names = [fun.id for fun in program.function_definitions]

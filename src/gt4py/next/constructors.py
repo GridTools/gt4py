@@ -431,7 +431,7 @@ def empty(
         Initialize a field in one dimension with a backend and a range domain:
 
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
         >>> a.shape
         (7,)
@@ -440,7 +440,7 @@ def empty(
 
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=np)
         >>> a.shape
         (7,)
@@ -448,7 +448,7 @@ def empty(
         Initialize with a device and an integer domain. It works like a shape with named dimensions:
 
         >>> from gt4py._core import definitions as core_defs
-        >>> JDim = gtx.Dimension("J")
+        >>> class JDim(gtx.DimensionIndex): ...
         >>> b = gtx.empty(
         ...     {IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0)
         ... )
@@ -476,7 +476,7 @@ def zeros(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
@@ -501,7 +501,7 @@ def ones(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
@@ -532,7 +532,7 @@ def full(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
@@ -577,7 +577,7 @@ def as_field(
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
         >>> xdata = np.array([1, 2, 3])
 
         Automatic domain from just dimensions:
@@ -651,9 +651,9 @@ def as_connectivity(
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> Vertex = gtx.Dimension("Vertex")
-        >>> Edge = gtx.Dimension("Edge")
-        >>> V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+        >>> class Vertex(gtx.DimensionIndex): ...
+        >>> class Edge(gtx.DimensionIndex): ...
+        >>> class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
         >>> data = np.array([[0, 1], [1, 2], [2, 0]])
         >>> conn = gtx.as_connectivity([Vertex, V2EDim], Edge, data)
         >>> conn.ndarray
@@ -661,7 +661,7 @@ def as_connectivity(
                [1, 2],
                [2, 0]])
         >>> conn.domain
-        Domain(dims=(Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
+        Domain(dims=(gt4py.next.constructors.Vertex[horizontal], gt4py.next.constructors.V2EDim[local]), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
     """
     if skip_value is eve.NOTHING:
         skip_value = (
