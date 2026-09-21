@@ -56,6 +56,12 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
+class Node(gtx.DimensionIndex): ...
+
+
+class NeighDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
 def array_maker(*lists):
     def _listify(val):
         if isinstance(val, Iterable):
@@ -67,7 +73,7 @@ def array_maker(*lists):
     return res
 
 
-IDim = gtx.Dimension("IDim")
+class IDim(gtx.DimensionIndex): ...
 
 
 def field_maker(*arrays):
@@ -244,9 +250,6 @@ def _can_deref_lifted(inp):
 @pytest.mark.uses_can_deref
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
-
-    Node = gtx.Dimension("Node")
-    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))

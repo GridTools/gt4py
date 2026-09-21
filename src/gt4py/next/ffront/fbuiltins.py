@@ -506,7 +506,7 @@ class FieldOffset(runtime.Offset):
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
         assert common.is_neighbor_table(offset_definition)
-        named_index = common.NamedIndex(self.target[-1], offset)
+        named_index = (self.target[-1])(offset)
         connectivity = offset_definition[named_index]
 
         return connectivity

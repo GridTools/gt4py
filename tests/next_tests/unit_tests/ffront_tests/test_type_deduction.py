@@ -16,6 +16,7 @@ import pytest
 import gt4py.next.ffront.type_specifications
 from gt4py.next import (
     Dimension,
+    DimensionIndex,
     DimensionKind,
     Field,
     FieldOffset,
@@ -37,9 +38,50 @@ from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.artifacts import custom_named_collections as cnc
 
+# NOTE: the named collections in the artifact are annotated with *its* `TDim`, and the expected
+# types below are compared against them. Under nominal identity (ADR 0028) a redeclared `TDim`
+# here would be a different dimension, where the old `Dimension("TDim")` compared equal.
+TDim = cnc.TDim
+
+
+class X(DimensionIndex): ...
+
+
+class Y(DimensionIndex): ...
+
+
+class Y2XDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+
+
+class ADim(DimensionIndex): ...
+
+
+class BDim(DimensionIndex): ...
+
+
+class CDim(DimensionIndex): ...
+
+
+class Vertex(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+
+
+class Edge(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+
+
+class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class IDim(DimensionIndex): ...
+
+
+class JDim(DimensionIndex): ...
+
+
 # Meaningless dimensions, used for tests.
-TDim = Dimension("TDim")
-SDim = Dimension("SDim")
+class SDim(DimensionIndex): ...
 
 
 def test_unpack_assign():
@@ -93,8 +135,6 @@ def test_adding_bool():
 
 def test_binop_nonmatching_dims():
     """Dimension promotion is applied before Binary operations, i.e., they can also work on two fields that don't have the same dimensions."""
-    X = Dimension("X")
-    Y = Dimension("Y")
 
     def nonmatching(a: Field[[X], float64], b: Field[[Y], float64]):
         return a + b
@@ -246,10 +286,7 @@ def test_concat_where_invalid_dtype():
 
 @pytest.fixture
 def premap_setup():
-    X = Dimension("X")
-    Y = Dimension("Y")
-    Y2XDim = Dimension("Y2X", kind=DimensionKind.LOCAL)
-    Y2X = FieldOffset("Y2X", source=X, target=(Y, Y2XDim))
+    Y2X = FieldOffset(Y2XDim.tag, source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 
 
@@ -281,7 +318,6 @@ def test_premap_nbfield(premap_setup):
 
 def test_premap_nbfield_with_vertical(premap_setup):
     X, Y, Y2XDim, Y2X = premap_setup
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
 
     def premap_fo(bar: Field[[X, K], int64]) -> Field[[Y, Y2XDim, K], int64]:
         return bar(Y2X)
@@ -331,9 +367,6 @@ def test_mismatched_literals():
 
 
 def test_broadcast_multi_dim():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
-    CDim = Dimension("CDim")
 
     def simple_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (ADim, BDim, CDim))
@@ -346,9 +379,6 @@ def test_broadcast_multi_dim():
 
 
 def test_broadcast_disjoint():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
-    CDim = Dimension("CDim")
 
     def disjoint_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (BDim, CDim))
@@ -358,9 +388,7 @@ def test_broadcast_disjoint():
 
 
 def test_broadcast_badtype():
-    ADim = Dimension("ADim")
     BDim = "BDim"
-    CDim = Dimension("CDim")
 
     def badtype_broadcast(a: Field[[ADim], float64]):
         return broadcast(a, (BDim, CDim))
@@ -372,8 +400,6 @@ def test_broadcast_badtype():
 
 
 def test_where_dim():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
 
     def simple_where(a: Field[[ADim], bool], b: Field[[ADim, BDim], float64]):
         return where(a, b, 9.0)
@@ -386,7 +412,6 @@ def test_where_dim():
 
 
 def test_where_broadcast_dim():
-    ADim = Dimension("ADim")
 
     def simple_where(a: Field[[ADim], bool]):
         return where(a, 5.0, 9.0)
@@ -399,7 +424,6 @@ def test_where_broadcast_dim():
 
 
 def test_where_tuple_dim():
-    ADim = Dimension("ADim")
 
     def tuple_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), ((8.0, b), (5.0, 9.0)))
@@ -425,7 +449,6 @@ def test_where_tuple_dim():
 
 
 def test_where_bad_dim():
-    ADim = Dimension("ADim")
 
     def bad_dim_where(a: Field[[ADim], bool], b: Field[[ADim], float64]):
         return where(a, ((5.0, 9.0), (b, 6.0)), b)
@@ -438,8 +461,6 @@ def test_where_bad_dim():
 
 
 def test_where_mixed_dims():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
 
     def tuple_where_mix_dims(
         a: Field[[ADim], bool], b: Field[[ADim], float64], c: Field[[ADim, BDim], float64]
@@ -526,8 +547,6 @@ def test_undefined_symbols():
 
 
 def test_as_offset_dim():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
     Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
 
     def as_offset_dim(a: Field[[ADim, BDim], float], b: Field[[ADim], int]):
@@ -538,8 +557,6 @@ def test_as_offset_dim():
 
 
 def test_as_offset_dtype():
-    ADim = Dimension("ADim")
-    BDim = Dimension("BDim")
     Boff = FieldOffset("Boff", source=BDim, target=(BDim,))
 
     def as_offset_dtype(a: Field[[ADim, BDim], float], b: Field[[BDim], float]):
@@ -550,10 +567,7 @@ def test_as_offset_dtype():
 
 
 def test_as_offset_non_cartesian():
-    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
-    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
-    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
-    V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+    V2E = FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
 
     def as_offset_neighbor(a: Field[[Edge], float], b: Field[[Edge], int]):
         return a(as_offset(V2E, b))
@@ -561,8 +575,6 @@ def test_as_offset_non_cartesian():
     with pytest.raises(errors.DSLError, match="Cartesian"):
         _ = FieldOperatorParser.apply_to_function(as_offset_neighbor)
 
-    IDim = Dimension("IDim")
-    JDim = Dimension("JDim")
     IfromJ = FieldOffset("IfromJ", source=IDim, target=(JDim,))
 
     def as_offset_cross_dim(a: Field[[IDim], float], b: Field[[IDim], int]):

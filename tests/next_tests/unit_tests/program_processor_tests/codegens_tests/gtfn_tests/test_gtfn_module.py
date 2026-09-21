@@ -30,9 +30,11 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+class IDim(gtx.DimensionIndex): ...
+
+
 @pytest.fixture
 def program_example():
-    IDim = gtx.Dimension("I")
     params = [gtx.as_field([IDim], np.empty((1,), dtype=np.float32)), np.float32(3.14)]
     param_types = [type_translation.from_value(param) for param in params]
 
@@ -42,7 +44,7 @@ def program_example():
             itir.FunCall(
                 fun=itir.SymRef(id="named_range"),
                 args=[
-                    itir.AxisLiteral(value="I"),
+                    itir.AxisLiteral(value=IDim.tag),
                     im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
                     im.literal("10", builtins.INTEGER_INDEX_BUILTIN),
                 ],

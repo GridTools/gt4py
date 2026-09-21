@@ -114,7 +114,10 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
                 f"'{field}'."
             )
 
-        index = next((i for i, d in enumerate(domain.dims) if d.value == dim.value), None)
-        assert index is not None, f"Dimension {dim.value} not found in {domain.dims}"
+        # NOTE: `dim` is the IR argument -- an `AxisLiteral` whose `value` is the dimension's tag
+        # -- while `domain.dims` holds dimension classes, so the tag is what they share.
+        assert isinstance(dim, itir.AxisLiteral)
+        index = next((i for i, d in enumerate(domain.dims) if d.tag == dim.value), None)
+        assert index is not None, f"Dimension '{dim.value}' not found in {domain.dims}"
 
         return im.make_tuple(domain.ranges[index].start, domain.ranges[index].stop)

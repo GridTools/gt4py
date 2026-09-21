@@ -108,7 +108,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
 
-    testee2 = testee.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
+    testee2 = testee.with_backend(backend).with_compilation_options(
+        connectivities={E2VDim.tag: e2v}
+    )
 
     @dace.program
     def sdfg(
@@ -122,7 +124,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         )
         return out
 
-    connectivities = {"E2V": e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
+    connectivities = {E2VDim.tag: e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)

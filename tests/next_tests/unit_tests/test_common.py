@@ -18,6 +18,7 @@ from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
+    DimensionIndex,
     DimensionKind,
     Domain,
     Infinity,
@@ -29,15 +30,58 @@ from gt4py.next.common import (
     unit_range,
 )
 
-C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
-V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
-E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
-E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
-ECDim = Dimension("ECDim")
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+
+class X(DimensionIndex): ...
+
+
+class Y(DimensionIndex): ...
+
+
+class Z(DimensionIndex): ...
+
+
+class Foo(DimensionIndex): ...
+
+
+class J(DimensionIndex): ...
+
+
+class K(DimensionIndex): ...
+
+
+class I(common.DimensionIndex): ...
+
+
+class I_half(common.DimensionIndex): ...
+
+
+class C2E(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class V2E(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2C2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class ECDim(DimensionIndex): ...
+
+
+class IDim(DimensionIndex): ...
+
+
+class JDim(DimensionIndex): ...
+
+
+class KDim(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+
+
 IHalfDim = common.flip_staggered(IDim)
 
 
@@ -394,7 +438,7 @@ def test_domain_dims_ranges_length_mismatch():
         ValueError,
         match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)",
     ):
-        dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+        dims = [X, Y, Z]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
 
@@ -435,21 +479,21 @@ def test_domain_slice_at():
 
 
 def test_domain_dim_index():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [X, Y, Z]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.dim_index(Dimension("Y")) == 1
+    domain.dim_index(Y) == 1
 
-    domain.dim_index(Dimension("Foo")) == None
+    domain.dim_index(Foo) == None
 
 
 def test_domain_pop():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [X, Y, Z]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.pop(Dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
+    domain.pop(X) == Domain(dims=dims[1:], ranges=ranges[1:])
 
     domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
 
@@ -462,92 +506,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(X, UnitRange(100, 110)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(X, UnitRange(100, 110)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(X, UnitRange(100, 110)),
             ),
         ),
         (
-            Dimension("J"),
+            J,
             [
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                NamedRange(X, UnitRange(100, 110)),
+                NamedRange(Z, UnitRange(100, 110)),
             ],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(X, UnitRange(100, 110)),
+                NamedRange(Z, UnitRange(100, 110)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
-            Dimension("Foo"),
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            Foo,
+            [NamedRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                NamedRange(I, UnitRange(0, 10)),
+                NamedRange(J, UnitRange(0, 10)),
+                NamedRange(K, UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -667,7 +711,6 @@ class TestBufferInfo:
 class TestCartesianConnectivity:
     def test_for_translation(self):
         offset = 5
-        I = common.Dimension("I")
 
         result = common.CartesianConnectivity.for_translation(I, offset)
         assert isinstance(result, common.CartesianConnectivity)
@@ -676,8 +719,6 @@ class TestCartesianConnectivity:
         assert result.offset == offset
 
     def test_for_relocation(self):
-        I = common.Dimension("I")
-        I_half = common.Dimension("I_half")
 
         result = common.CartesianConnectivity.for_relocation(I, I_half)
         assert isinstance(result, common.CartesianConnectivity)

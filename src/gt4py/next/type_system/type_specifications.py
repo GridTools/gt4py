@@ -125,7 +125,7 @@ class FieldType(DataType, CallableType):
     dtype: ScalarType | ListType
 
     def __str__(self) -> str:
-        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
+        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.__qualname__ for dim in self.dims)}]"
         return f"Field[{dims}, {self.dtype}]"
 
     @eve_datamodels.validator("dims")

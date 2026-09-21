@@ -317,6 +317,24 @@ type Dimension = type[DimensionIndex]
 _STAGGERED_TAG_RE: Final = re.compile(r"^(?P<owner>[^\[\]]+)\[(?P<base>.+)\]$")
 
 
+def staggered_base_tag(tag: Tag) -> Optional[Tag]:
+    """
+    Return the base dimension's tag if `tag` names a staggered dimension, else `None`.
+
+    Reads the `<owner>[<base>]` grammar that `Staggered[D]` produces and `resolve` parses, so it
+    works on a bare tag without importing anything. That matters where tags of dimensions and
+    of offsets are mixed in one collection: an offset tag is not a dimension and cannot be
+    resolved, but it simply does not match.
+
+    Examples:
+        >>> staggered_base_tag("gt4py.next.common.Staggered[pkg.KDim]")
+        'pkg.KDim'
+        >>> staggered_base_tag("pkg.KDim") is None
+        True
+    """
+    return match["base"] if (match := _STAGGERED_TAG_RE.match(tag)) is not None else None
+
+
 @functools.cache
 def resolve(tag: Tag) -> Dimension:
     """
@@ -585,20 +603,12 @@ class NamedRange(NamedTuple, Generic[_Rng]):
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 
 
-class NamedIndex(NamedTuple):
-    dim: Dimension
-    value: IntIndex
-
-    def __str__(self) -> str:
-        return f"{self.dim}={self.value}"
-
-
 FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
+NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[DimensionIndex, DimensionIndex, Literal[1]], see https://peps.python.org/pep-0696/
+AbsoluteIndexElement: TypeAlias = DimensionIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
-AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
+AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | DimensionIndex]
 RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
@@ -618,16 +628,16 @@ def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
 
 def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
     return isinstance(obj, slice) and (
-        isinstance(obj.start, NamedIndex) and isinstance(obj.stop, NamedIndex)
+        isinstance(obj.start, DimensionIndex) and isinstance(obj.stop, DimensionIndex)
     )
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
-    return is_int_index(v) or isinstance(v, (NamedRange, NamedIndex, slice)) or v is Ellipsis
+    return is_int_index(v) or isinstance(v, (NamedRange, DimensionIndex, slice)) or v is Ellipsis
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, NamedIndex)) for e in v)
+    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, DimensionIndex)) for e in v)
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -669,7 +679,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 )
 
             assert dims is not None and ranges is not None  # for mypy
-            if not all(isinstance(dim, Dimension) for dim in dims):
+            if not all(isinstance(dim, DimensionMeta) for dim in dims):
                 raise ValueError(
                     f"'dims' argument needs to be a 'tuple[Dimension, ...]', got '{dims}'."
                 )
@@ -724,7 +734,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def __getitem__(self, index: Dimension) -> NamedRange: ...
 
     def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
-        if isinstance(index, Dimension):
+        if isinstance(index, DimensionMeta):
             try:
                 index = self.dims.index(index)
             except ValueError as ex:
@@ -853,7 +863,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
         assert all(isinstance(nr, NamedRange) for nr in named_ranges)
-        if isinstance(index, Dimension):
+        if isinstance(index, DimensionMeta):
             dim_index = self.dim_index(index)
             if dim_index is None:
                 raise ValueError(f"Dimension '{index}' not found in Domain.")
@@ -960,7 +970,7 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
 
     @property
     def __gt_dims__(self) -> tuple[str, ...]:
-        return tuple(d.value for d in self.__gt_domain__.dims)
+        return tuple(d.tag for d in self.__gt_domain__.dims)
 
 
 @runtime_checkable
@@ -1554,11 +1564,17 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+    # NOTE: `__qualname__`, not `tag`. The tag is qualified, so ordering by it would make a
+    # field's canonical dimension order depend on *which module* each dimension is declared in --
+    # moving a declaration would silently reorder a field's dimensions. The unqualified name keeps
+    # the ordering a property of the dimensions themselves; `tag` only breaks ties between
+    # same-named dimensions from different modules, so the order stays total.
     return sorted(
         dims,
         key=lambda dim: (
             _DIM_KIND_ORDER[dim.kind],
-            as_non_staggered(dim).value,
+            as_non_staggered(dim).__qualname__,
+            as_non_staggered(dim).tag,
         ),
     )
 
@@ -1588,7 +1604,7 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     The resulting list contains all unique dimensions from the input lists,
     sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
-    lexicographically by `Dimension.value`.
+    lexicographically by `Dimension.tag`.
 
     Examples:
         >>> from gt4py.next.common import Dimension
@@ -1682,13 +1698,15 @@ class StaggeredMeta(DimensionMeta):
     #: staggered dimension from the bare `Staggered` base, which is also a `StaggeredMeta`.
     base: Dimension
 
-    def __str__(cls) -> str:
-        # NOTE: `__qualname__` has to carry the base's *full* tag so that `resolve` can find a
-        # base declared in another module, but that is too noisy for a diagnostic. Compose the
-        # short form here instead.
+    @property
+    def tag(cls) -> Tag:
+        # NOTE: overridden so that `__qualname__` can stay the short, readable form used in
+        # diagnostics while the tag carries the base's *full* tag, which `resolve` needs to find
+        # a base declared in another module. Display is `__qualname__` and identity is `tag`,
+        # for staggered dimensions exactly as for any other.
         if "base" in cls.__dict__:
-            return f"Staggered[{cls.base.__qualname__}][{cls.kind}]"
-        return super().__str__()
+            return f"{cls.__module__}.Staggered[{cls.base.tag}]"
+        return super().tag
 
     def __getitem__(cls, base: Dimension) -> Dimension:
         if "base" in cls.__dict__:
@@ -1713,7 +1731,7 @@ class StaggeredMeta(DimensionMeta):
                         "kind": base.kind,
                         "__slots__": (),
                         "__module__": cls.__module__,
-                        "__qualname__": f"{cls.__qualname__}[{base.tag}]",
+                        "__qualname__": f"{cls.__qualname__}[{base.__qualname__}]",
                     },
                 ),
             )

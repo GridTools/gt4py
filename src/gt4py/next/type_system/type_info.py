@@ -902,9 +902,9 @@ def function_signature_incompatibilities_field(
     if field_type.dims and source_dim not in field_type.dims:
         yield (
             f"Incompatible offset can not shift field defined on "
-            f"{', '.join([dim.value for dim in field_type.dims])} from "
-            f"{source_dim.value} to target dim(s): "
-            f"{', '.join([dim.value for dim in target_dims])}"
+            f"{', '.join([dim.__qualname__ for dim in field_type.dims])} from "
+            f"{source_dim.__qualname__} to target dim(s): "
+            f"{', '.join([dim.tag for dim in target_dims])}"
         )
 
 

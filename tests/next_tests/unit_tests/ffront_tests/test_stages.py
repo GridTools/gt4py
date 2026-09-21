@@ -15,7 +15,7 @@ from gt4py.next.ffront import stages
 from gt4py.next.type_system import type_specifications as ts
 
 
-IDim = gtx.Dimension("I")
+class IDim(gtx.DimensionIndex): ...
 
 
 def _field_type(kind: ts.ScalarKind) -> ts.FieldType:

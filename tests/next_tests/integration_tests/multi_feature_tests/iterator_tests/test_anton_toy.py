@@ -24,9 +24,13 @@ from gt4py.next.program_processors.runners import gtfn
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-KDim = gtx.Dimension("KDim")
+class IDim(gtx.DimensionIndex): ...
+
+
+class JDim(gtx.DimensionIndex): ...
+
+
+class KDim(gtx.DimensionIndex): ...
 
 
 # cross-reference why new type inference does not support this

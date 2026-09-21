@@ -54,6 +54,12 @@ from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
 
+class ADim(gtx.DimensionIndex): ...
+
+
+class BDim(gtx.DimensionIndex): ...
+
+
 DEREF = itir.SymRef(id=itb.deref.fun.__name__)
 PLUS = itir.SymRef(id=itb.plus.fun.__name__)
 MINUS = itir.SymRef(id=itb.minus.fun.__name__)
@@ -71,7 +77,9 @@ OR = itir.SymRef(id=itb.or_.fun.__name__)
 XOR = itir.SymRef(id=itb.xor_.fun.__name__)
 LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
-TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
+
+class TDim(gtx.DimensionIndex): ...
+
 
 # PEP 695 type alias, used to check that aliases are accepted as DSL annotations.
 type TFloatFieldAlias = gtx.Field[gtx.Dims[TDim], float64]
@@ -426,8 +434,6 @@ def test_closure_symbols():
 
 
 def test_wrong_return_type_annotation():
-    ADim = gtx.Dimension("ADim")
-    BDim = gtx.Dimension("BDim")
 
     def wrong_return_type_annotation(a: gtx.Field[[ADim], float64]) -> gtx.Field[[BDim], float64]:
         return a
@@ -449,7 +455,6 @@ def test_empty_dims_type():
 
 
 def test_zero_dims_ternary():
-    ADim = gtx.Dimension("ADim")
 
     def zero_dims_ternary(
         cond: gtx.Field[[], float64], a: gtx.Field[[ADim], float64], b: gtx.Field[[ADim], float64]

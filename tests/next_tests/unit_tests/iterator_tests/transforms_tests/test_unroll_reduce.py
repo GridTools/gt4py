@@ -15,25 +15,40 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_part
 from gt4py.next.type_system import type_specifications as ts
 
 
+class dummy_codomain(common.DimensionIndex): ...
+
+
+class dummy_origin(common.DimensionIndex): ...
+
+
+class dummy_neighbor(common.DimensionIndex): ...
+
+
+#: The local dimensions of the neighbor lists under test. Each one's `tag` is also its IR offset
+#: string and its offset-provider key: `UnrollReduce` looks a connectivity up by the local
+#: dimension of the list it reduces, so those three names must be a single string (ADR 0028).
+class Dim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
+class Dim2(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
     return common.NeighborConnectivityType(
-        domain=[common.Dimension("dummy_origin"), common.Dimension("dummy_neighbor")],
-        codomain=common.Dimension("dummy_codomain"),
+        domain=[dummy_origin, dummy_neighbor],
+        codomain=dummy_codomain,
         skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
         dtype=None,
         max_neighbors=max_neighbors,
     )
 
 
-def _list_type(dim: str) -> ts.ListType:
-    return ts.ListType(
-        element_type=ts.DataType(),
-        offset_type=common.Dimension(value=dim, kind=common.DimensionKind.LOCAL),
-    )
+def _list_type(dim: common.Dimension) -> ts.ListType:
+    return ts.ListType(element_type=ts.DataType(), offset_type=dim)
 
 
-def typed_neighbors(dim: str, arg: str | ir.Expr) -> ir.FunCall:
-    neighbors = im.neighbors(dim, arg)
+def typed_neighbors(dim: common.Dimension, arg: str | ir.Expr) -> ir.FunCall:
+    neighbors = im.neighbors(dim.tag, arg)
     neighbors.type = _list_type(dim)
     return neighbors
 
@@ -45,32 +60,32 @@ def has_skip_values(request):
 
 @pytest.fixture
 def basic_reduction():
-    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"))
+    return im.reduce("foo", 0.0)(typed_neighbors(Dim, "x"))
 
 
 @pytest.fixture
 def reduction_with_shift_on_second_arg():
     const_list = im.call("make_const_list")(42)
-    const_list.type = _list_type("Dim")
-    return im.reduce("foo", 0.0)(const_list, typed_neighbors("Dim", "y"))
+    const_list.type = _list_type(Dim)
+    return im.reduce("foo", 0.0)(const_list, typed_neighbors(Dim, "y"))
 
 
 @pytest.fixture
 def reduction_with_incompatible_shifts():
-    return im.reduce("foo", 0.0)(typed_neighbors("Dim", "x"), typed_neighbors("Dim2", "y"))
+    return im.reduce("foo", 0.0)(typed_neighbors(Dim, "x"), typed_neighbors(Dim2, "y"))
 
 
 @pytest.fixture
 def reduction_with_irrelevant_full_shift():
     return im.reduce("foo", 0.0)(
-        typed_neighbors("Dim", im.shift("IrrelevantDim", 0)("x")), typed_neighbors("Dim", "y")
+        typed_neighbors(Dim, im.shift("IrrelevantDim", 0)("x")), typed_neighbors(Dim, "y")
     )
 
 
 @pytest.fixture
 def reduction_if():
-    if_expr = im.if_(True, typed_neighbors("Dim", "x"), "y")
-    if_expr.type = _list_type("Dim")
+    if_expr = im.if_(True, typed_neighbors(Dim, "x"), "y")
+    if_expr.type = _list_type(Dim)
     return im.reduce("foo", 0.0)(if_expr)
 
 
@@ -86,7 +101,7 @@ def reduction_if():
 def test_get_partial_offsets(reduction, request):
     partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
 
-    assert set(partial_offsets) == {"Dim"}
+    assert set(partial_offsets) == {Dim.tag}
 
 
 def _expected(red, max_neighbors, has_skip_values, shifted_arg=0):
@@ -116,7 +131,7 @@ def test_basic(basic_reduction, has_skip_values, uids: utils.IDGeneratorPool):
     expected = _expected(basic_reduction, 3, has_skip_values)
 
     offset_provider_type = {
-        "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=has_skip_values)
+        Dim.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=has_skip_values)
     }
     actual = UnrollReduce.apply(
         basic_reduction, offset_provider_type=offset_provider_type, uids=uids
@@ -130,7 +145,7 @@ def test_reduction_with_shift_on_second_arg(
     expected = _expected(reduction_with_shift_on_second_arg, 1, has_skip_values, 1)
 
     offset_provider_type = {
-        "Dim": dummy_connectivity_type(max_neighbors=1, has_skip_values=has_skip_values)
+        Dim.tag: dummy_connectivity_type(max_neighbors=1, has_skip_values=has_skip_values)
     }
     actual = UnrollReduce.apply(
         reduction_with_shift_on_second_arg, offset_provider_type=offset_provider_type, uids=uids
@@ -141,7 +156,9 @@ def test_reduction_with_shift_on_second_arg(
 def test_reduction_with_if(reduction_if, uids: utils.IDGeneratorPool):
     expected = _expected(reduction_if, 2, False)
 
-    offset_provider_type = {"Dim": dummy_connectivity_type(max_neighbors=2, has_skip_values=False)}
+    offset_provider_type = {
+        Dim.tag: dummy_connectivity_type(max_neighbors=2, has_skip_values=False)
+    }
     actual = UnrollReduce.apply(reduction_if, offset_provider_type=offset_provider_type, uids=uids)
     assert actual == expected
 
@@ -152,7 +169,7 @@ def test_reduction_with_irrelevant_full_shift(
     expected = _expected(reduction_with_irrelevant_full_shift, 3, False)
 
     offset_provider_type = {
-        "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
+        Dim.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
         "IrrelevantDim": dummy_connectivity_type(
             max_neighbors=1, has_skip_values=True
         ),  # different max_neighbors and skip value to trigger error
@@ -167,16 +184,16 @@ def test_reduction_with_irrelevant_full_shift(
     "offset_provider_type",
     [
         {
-            "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
-            "Dim2": dummy_connectivity_type(max_neighbors=2, has_skip_values=False),
+            Dim.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
+            Dim2.tag: dummy_connectivity_type(max_neighbors=2, has_skip_values=False),
         },
         {
-            "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
-            "Dim2": dummy_connectivity_type(max_neighbors=3, has_skip_values=True),
+            Dim.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
+            Dim2.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=True),
         },
         {
-            "Dim": dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
-            "Dim2": dummy_connectivity_type(max_neighbors=2, has_skip_values=True),
+            Dim.tag: dummy_connectivity_type(max_neighbors=3, has_skip_values=False),
+            Dim2.tag: dummy_connectivity_type(max_neighbors=2, has_skip_values=True),
         },
     ],
 )

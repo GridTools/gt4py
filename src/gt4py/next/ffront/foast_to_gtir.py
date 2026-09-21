@@ -233,12 +233,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
-            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+            return itir.AxisLiteral(value=node.type.dim.tag, kind=node.type.dim.kind)
         return im.ref(node.id)
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
-            return itir.AxisLiteral(value=node.type.dim.value, kind=node.type.dim.kind)
+            return itir.AxisLiteral(value=node.type.dim.tag, kind=node.type.dim.kind)
 
         if isinstance(named_tup_type := node.value.type, ts.NamedCollectionType):
             ind = named_tup_type.keys.index(node.attr)
@@ -310,7 +310,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.Dimension() as dim)),
+                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.DimensionMeta() as dim)),
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:

@@ -372,8 +372,8 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     b = cases.allocate(test_case, testee, "b")()
 
     ref = np.sum(
-        np.sum(a.asnumpy()[offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
-            offset_provider["V2E"].asnumpy()
+        np.sum(a.asnumpy()[offset_provider[E2VDim.tag].asnumpy()], axis=1, initial=0)[
+            offset_provider[V2EDim.tag].asnumpy()
         ],
         axis=1,
     )

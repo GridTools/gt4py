@@ -15,19 +15,29 @@ from gt4py.next.iterator.builtins import deref
 from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
 
 
+class dummy_codomain(gtx.DimensionIndex): ...
+
+
+class dummy_origin(gtx.DimensionIndex): ...
+
+
+class dummy_neighbor(gtx.DimensionIndex): ...
+
+
 @fundef
 def foo(inp):
     return deref(inp)
 
 
 connectivity = common.ConnectivityType(
-    domain=[gtx.Dimension("dummy_origin"), gtx.Dimension("dummy_neighbor")],
-    codomain=gtx.Dimension("dummy_codomain"),
+    domain=[dummy_origin, dummy_neighbor],
+    codomain=dummy_codomain,
     skip_value=common._DEFAULT_SKIP_VALUE,
     dtype=None,
 )
 
-I = gtx.Dimension("I")
+
+class I(gtx.DimensionIndex): ...
 
 
 def test_deduce_domain():
