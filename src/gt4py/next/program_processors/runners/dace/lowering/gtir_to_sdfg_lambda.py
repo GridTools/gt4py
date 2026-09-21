@@ -1425,6 +1425,36 @@ class LambdaToDataflow(eve.NodeVisitor):
             gt_dtype=ts.ListType(node.type.element_type, offset_type),
         )
 
+    def _broadcast_const_list(
+        self, const_list: MemletExpr | ValueExpr, list_type: ts.ListType
+    ) -> ValueExpr:
+        assert list_type.offset_type is not None
+        offset_provider_t = self.subgraph_builder.get_offset_provider_type(
+            list_type.offset_type.value
+        )
+        assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
+        local_size = offset_provider_t.max_neighbors
+        map_index = gtir_to_sdfg_utils.get_map_variable(list_type.offset_type)
+
+        input_node = self._construct_local_view(const_list).dc_node
+        result, _ = self.subgraph_builder.add_temp_array(
+            self.sdfg, (local_size,), input_node.desc(self.sdfg).dtype
+        )
+        result_node = self.state.add_access(result)
+
+        self._add_mapped_tasklet(
+            name="broadcast",
+            map_ranges={map_index: f"0:{local_size}"},
+            code="__out = __inp",
+            inputs={"__inp": dace.Memlet(data=input_node.data, subset="0")},
+            input_nodes={input_node.data: input_node},
+            outputs={"__out": dace.Memlet(data=result, subset=map_index)},
+            output_nodes={result: result_node},
+            external_edges=True,
+        )
+
+        return ValueExpr(dc_node=result_node, gt_dtype=list_type)
+
     def _visit_reduce(self, node: gtir.FunCall) -> ValueExpr:
         assert isinstance(node.type, ts.ScalarType)
         op_name, reduce_init, reduce_identity = get_reduce_params(node)
@@ -1878,6 +1908,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             return DataflowOutputEdge(self.state, output_expr)
 
         result = self.visit(node.expr)
+
+        if (
+            isinstance(node.expr.type, ts.ListType)
+            and node.expr.type.offset_type is not None
+            and isinstance(result, (MemletExpr, ValueExpr))
+            and isinstance(result.gt_dtype, ts.ListType)
+            and result.gt_dtype.offset_type == _CONST_DIM
+        ):
+            result = self._broadcast_const_list(result, node.expr.type)
 
         return (
             gtx_utils.tree_map(_visit_Lambda_impl)(result)

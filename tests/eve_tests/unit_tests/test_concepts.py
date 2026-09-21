@@ -139,3 +139,44 @@ class TestNode:
                 sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )
+
+
+class TestNodeInstanceChecks:
+    # `Node` uses a metaclass that answers `isinstance()`/`issubclass()` nominally, i.e. like
+    #  `type`, instead of the `Protocol` metaclass it inherits from `trees.Tree`.
+
+    def test_instances_and_subclasses(self):
+        class Base(eve.Node):
+            value: int
+
+        class Derived(Base):
+            pass
+
+        assert isinstance(Base(value=1), Base)
+        assert isinstance(Derived(value=1), Base)
+        assert not isinstance(Base(value=1), Derived)
+        assert issubclass(Derived, Base)
+        assert issubclass(Base, eve.Node)
+
+    def test_structural_tree_is_not_a_node(self):
+        class StructuralTree:
+            def iter_children_values(self):
+                return iter(())
+
+            def iter_children_items(self):
+                return iter(())
+
+        assert not isinstance(StructuralTree(), eve.Node)
+        assert not issubclass(StructuralTree, eve.Node)
+
+    def test_node_is_not_an_abc(self):
+        # Nothing can be made a `Node` after the fact: the class is not an ABC, so there is no
+        #  `register()` and `isinstance()` answers the nominal question, at `type`'s speed.
+        assert not hasattr(eve.Node, "register")
+        assert type(eve.Node).__instancecheck__ is type.__instancecheck__
+
+    def test_nodes_are_still_trees(self, sample_node: eve.Node):
+        from gt4py.eve import trees
+
+        assert isinstance(sample_node, trees.TreeLike)
+        assert [id(node) for node in trees.pre_walk_values(sample_node)]

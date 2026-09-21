@@ -23,7 +23,7 @@ import factory
 from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, config, fingerprinting
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -34,8 +34,8 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
-SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
-    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+SDFGExtensionSource: TypeAlias = artifacts.ExtensionSource[
+    artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec
 ]
 
 
@@ -257,7 +257,7 @@ class DaCeCompilationArtifact:
     bind_func_name: str
     device_type: core_defs.DeviceType
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
@@ -270,14 +270,13 @@ class DaCeCompilationArtifact:
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
-    definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
     """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
@@ -323,26 +322,38 @@ class DaCeCompiler(
             # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
 
-            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
-            # path here so ``get_binary_name`` sees the same mode dace built under.
-            library_path = dace_compiler.get_binary_name(
-                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
-            )
-
             with locking.lock(sdfg_build_folder):
                 # With `compiler.use_cache=True` dace reuses a cached library on mere
                 # *existence*, without validating it; an interrupted build can leave a
-                # truncated, unloadable library behind. The marker is written only
-                # after a completed compile: no marker -> drop the stale library so
-                # dace rebuilds it instead of handing it out.
+                # truncated, unloadable library behind, or a `FOLDER_MODE` file that was
+                # created but never written, which dace refuses as an unknown mode. The
+                # marker is written only after a completed compile: no marker -> drop
+                # both so dace rebuilds instead of handing out or choking on them.
                 marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
-                if not marker.exists():
+                build_complete = marker.exists()
+                if not build_complete:
+                    (sdfg_build_folder / "FOLDER_MODE").unlink(missing_ok=True)
+
+                # `get_binary_name` reads the folder mode from the build folder before it
+                # falls back to the dace config, and a concurrent build may have created
+                # but not yet written the mode file: only probe the folder under the lock.
+                library_path = dace_compiler.get_binary_name(
+                    object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+                )
+
+                if not build_complete:
                     for stale in (
                         library_path,
                         *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
                     ):
                         stale.unlink(missing_ok=True)
-                marker.unlink(missing_ok=True)
+                # On a cache hit `sdfg.compile` writes nothing: keep the marker, or an
+                # interruption would make the next compile delete a complete library that
+                # other processes may be loading. `use_cache` is not implied by
+                # `dace_context`: a `DACE_compiler_use_cache` env var overrides the value
+                # set there, and with it off dace rebuilds over the existing library.
+                if not (dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()):
+                    marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
                 marker.touch()
 
