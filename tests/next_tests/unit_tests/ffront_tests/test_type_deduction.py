@@ -99,7 +99,7 @@ def test_tuple_comprehension_unpack_too_short_tuple():
         return tuple(a + b + c for a, b, c in it)
 
     with pytest.raises(
-        errors.DSLError, match=r"Not enough values to unpack \(expected at least 3, got 2\)"
+        errors.DSLError, match=r"Not enough values to unpack \(expected 3, got 2\)"
     ):
         _ = FieldOperatorParser.apply_to_function(foo)
 
