@@ -665,7 +665,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         index_internals = ",".join(
             str(index.value - offset)
             if isinstance(index := arg_expr.indices[dim], SymbolExpr)
-            else f"{IndexConnectorFmt.format(dim=dim.tag)} - {offset}"
+            else f"{IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))} - {offset}"
             for (dim, offset) in arg_expr.field_domain
         )
         deref_node, connector_mapping = self._add_tasklet(
@@ -684,7 +684,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # add termination points for the dynamic iterator indices
         for dim, index_expr in field_indices:
-            index_connector = IndexConnectorFmt.format(dim=dim.tag)
+            index_connector = IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))
             if isinstance(index_expr, MemletExpr):
                 self._add_input_data_edge(
                     index_expr.dc_node,

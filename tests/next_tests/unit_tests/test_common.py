@@ -849,19 +849,23 @@ class TestCodegenName:
             ("a_b.c", "a_ub_dc"),
             ("my__mod.X", "my_u_umod_dX"),
             ("_CONST_DIM", "_uCONST_uDIM"),
+            # a parametrized tag: the brackets must not survive into the identifier
+            ("gt4py.next.common.Staggered[pkg.K]", "gt4py_dnext_dcommon_dStaggered_lpkg_dK_r"),
         ],
     )
     def test_known_values(self, tag, expected):
         assert common.codegen_name(tag) == expected
         assert common.from_codegen_name(expected) == tag
 
-    @pytest.mark.parametrize("tag", ["_u", "_d", "a_ud.b", "_ud_du", "..", "__"])
+    @pytest.mark.parametrize(
+        "tag", ["_u", "_d", "_l", "_r", "a_ud.b", "_ud_du", "..", "__", "[]", "a[b.c]", "_l[_r]"]
+    )
     def test_roundtrip_adversarial(self, tag):
         """Tags that look like the escape sequences themselves must still round-trip."""
         assert common.from_codegen_name(common.codegen_name(tag)) == tag
 
     def test_output_is_a_valid_identifier(self):
-        for tag in ["mod.V2E.Local", "a.b_c", "_CONST_DIM", "pkg.sub.Dim"]:
+        for tag in ["mod.V2E.Local", "a.b_c", "_CONST_DIM", "pkg.sub.Dim", "mod.Staggered[mod.K]"]:
             assert re.fullmatch(r"[A-Za-z_]\w*", common.codegen_name(tag)), tag
 
     def test_injective_and_reversible_exhaustively(self):
@@ -872,9 +876,10 @@ class TestCodegenName:
         The naive scheme -- `_` -> `__` then `.` -> `_` -- fails this with 686 collisions,
         because a dot becomes a single underscore and `'..'` collides with an escaped `'_'`.
         """
-        alphabet = "a._ud"
+        # every character a tag can contain that needs escaping, plus the escape letters
+        alphabet = "a._[]udlr"
         seen: dict[str, str] = {}
-        for length in range(1, 6):
+        for length in range(1, 5):
             for tag in map("".join, itertools.product(alphabet, repeat=length)):
                 mangled = common.codegen_name(tag)
                 assert mangled not in seen, (
@@ -882,4 +887,4 @@ class TestCodegenName:
                 )
                 seen[mangled] = tag
                 assert common.from_codegen_name(mangled) == tag
-        assert len(seen) == sum(len(alphabet) ** n for n in range(1, 6))
+        assert len(seen) == sum(len(alphabet) ** n for n in range(1, 5))

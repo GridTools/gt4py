@@ -492,7 +492,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     common.get_offset_type(self.offset_provider_type, o),
                     common.NeighborConnectivityType,
                 ):
-                    connectivities.append(SymRef(id=o))
+                    # `o` is an offset-provider key, i.e. a qualified tag: mangle it exactly as
+                    # its `TagDefinition` was, or the reference names an undeclared tag type.
+                    connectivities.append(SymRef(id=common.codegen_name(o)))
         return UnstructuredDomain(
             tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )

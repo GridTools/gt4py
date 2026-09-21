@@ -13,6 +13,7 @@ from typing import Final
 import dace
 
 from gt4py.eve import codegen
+from gt4py.next import common as gtx_common
 from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import (
     sdfg_args as gtx_dace_args,
@@ -206,8 +207,11 @@ def _parse_gt_connectivities(
             origin_size_param = next(iter(origin_size_arg.free_symbols))
             m = gtx_dace_args.CONNECTIVITY_INDENTIFIER_RE.match(arg_name)
             assert m is not None
+            # NOTE: `m[1]` is the mangled offset name. It is a valid part of the Python variable
+            # name, but the offset provider is keyed by the real tag, so the lookup unmangles it.
             conn_arg = f"{_cb_neighbor_table}_{m[1]}"
-            code.append(f'{conn_arg} = {_cb_offset_provider}["{m[1]}"]')
+            offset = gtx_common.from_codegen_name(m[1])
+            code.append(f'{conn_arg} = {_cb_offset_provider}["{offset}"]')
             _update_sdfg_array_ptr(code, conn_arg, sdfg_arg_index)
             _parse_gt_param(  # set the size in the horizontal dimension
                 param_name=origin_size_param,
