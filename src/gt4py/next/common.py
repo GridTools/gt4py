@@ -1947,13 +1947,13 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
         cls.max_neighbors = cls.min_neighbors = _check_neighbor_count(cls, "size", size)
 
 
-def _check_neighbor_count(owner: type, name: str, count: Optional[int]) -> Optional[int]:
+def _check_neighbor_count(cls: type, name: str, count: Optional[int]) -> Optional[int]:
     if count is None:
         return None
-    if not isinstance(count, numbers.Integral) or isinstance(count, bool) or count < 0:
-        raise TypeError(
-            f"'{owner.__qualname__}': '{name}' must be a non-negative integer, got '{count!r}'."
-        )
+    if not isinstance(count, numbers.Integral) or isinstance(count, bool):
+        raise TypeError(f"'{cls.__qualname__}': '{name}' must be an integer, got '{count!r}'.")
+    if count < 0:
+        raise ValueError(f"'{cls.__qualname__}': '{name}' must be non-negative, got {count}.")
     return int(count)
 
 
@@ -1989,6 +1989,11 @@ class ConnectivityMeta(type):
         # type-parameter subscription; `bool` is excluded so `V2E[True]` is an error.
         if isinstance(item, numbers.Integral) and not isinstance(item, bool):
             return cls.__gt_field_offset__()[int(item)]
+        if "Local" in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}[{item!r}]': a connectivity is indexed by an integer"
+                " neighbor position."
+            )
         # A metaclass `__getitem__` shadows `__class_getitem__`, so type-parameter
         # subscription (`NeighborConnectivity[V, E]`) has to be forwarded explicitly.
         return cast(Any, cls).__class_getitem__(item)
@@ -2011,6 +2016,11 @@ class ConnectivityMeta(type):
         """
         from gt4py.next.ffront import fbuiltins
 
+        if "Local" not in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}' is not a connectivity declaration; declare one by"
+                " subclassing 'NeighborConnectivity[Origin, Codomain]'."
+            )
         if (field_offset := cls.__dict__.get("_field_offset")) is None:
             field_offset = fbuiltins.FieldOffset(
                 cls.Local.tag, source=cls.codomain, target=(cls.origin, cls.Local)
@@ -2027,7 +2037,8 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
 
     The declaration names the connectivity's local dimension -- its nested `Local` class --
     and optionally its neighbor counts. It holds no data: the neighbor table is bound at call
-    time through the offset provider, and checked against the declaration.
+    time through the offset provider. `check_neighbor_table` checks a table against the
+    declaration.
 
     Examples:
         >>> class Vertex(DimensionIndex): ...
@@ -2124,6 +2135,9 @@ def check_neighbor_table(
     """
     Check that a neighbor table matches the connectivity declaration it is bound to.
 
+    Skip values are checked on the table's *type*: a table with a `skip_value` counts as
+    having skip values whether or not any entry uses it.
+
     Args:
         connectivity: The declaration.
         table: The bound table, or its type (which is all an ahead-of-time compilation has).
@@ -2148,7 +2162,7 @@ def check_neighbor_table(
         )
     if table_type.codomain is not connectivity.codomain:
         fail(f"its codomain is '{table_type.codomain}', expected '{connectivity.codomain}'")
-    if table_type.dtype.kind not in (core_defs.DTypeKind.INT, core_defs.DTypeKind.UINT):
+    if not np.issubdtype(table_type.dtype.scalar_type, np.integer):
         fail(f"its dtype '{table_type.dtype}' is not integral")
     if local.max_neighbors is not None and table_type.max_neighbors != local.max_neighbors:
         fail(
@@ -2157,6 +2171,11 @@ def check_neighbor_table(
         )
     if local.min_neighbors is not None:
         max_neighbors = table_type.max_neighbors
+        if local.min_neighbors > max_neighbors:
+            fail(
+                f"min_neighbors={local.min_neighbors} exceeds its {max_neighbors} neighbors"
+                " per element"
+            )
         if local.min_neighbors < max_neighbors and not table_type.has_skip_values:
             fail(
                 f"min_neighbors={local.min_neighbors} < {max_neighbors} requires a skip value,"

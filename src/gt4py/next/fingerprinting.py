@@ -231,6 +231,23 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
         if "base" in obj.__dict__
         else EmptyDeconstruction.from_reference(obj)
     ),
+    # A connectivity declaration is a class, fingerprinted by reference like a dimension, *and*
+    # by what it declares: redefining `V2E` under the same name with other dimensions or counts
+    # (e.g. re-running a notebook cell) must not reuse artifacts built for the old declaration.
+    common.ConnectivityMeta: lambda obj: (
+        # NOTE: the name goes into the state unverified; importability is still enforced by the
+        # strict fingerprinter through `obj.Local`, which is a class nested in `obj`.
+        Deconstruction.from_pieces(
+            obj.origin,
+            obj.codomain,
+            obj.Local,
+            obj.Local.max_neighbors,
+            obj.Local.min_neighbors,
+            state=b"neighbor_connectivity\0" + obj.tag.encode(),
+        )
+        if "Local" in obj.__dict__
+        else EmptyDeconstruction.from_reference(obj)
+    ),
     type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
     bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
     int: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), str(int(obj)).encode()),
