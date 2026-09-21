@@ -43,14 +43,14 @@ class E(gtx.DimensionIndex): ...
 
 
 #: N1 == N3 == N4, but N2 differs: the tag is `TaggedOffDim.tag`, the variable is `off_a`.
-class TaggedOffDim(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+class TaggedOffDim(gtx.LocalDimensionIndex): ...
 
 
 off_a = gtx.FieldOffset(TaggedOffDim.tag, source=E, target=(V, TaggedOffDim))
 
 
 #: N1 == N2 == N4, but N3 differs: the local dimension is `Neigh`, the tag is `OffB`.
-class Neigh(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+class Neigh(gtx.LocalDimensionIndex): ...
 
 
 OffB = gtx.FieldOffset("OffB", source=E, target=(V, Neigh))

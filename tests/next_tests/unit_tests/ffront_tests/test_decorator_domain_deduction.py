@@ -21,11 +21,14 @@ class VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 class Dim(gtx.DimensionIndex): ...
 
 
-class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class LocalDim(gtx.LocalDimensionIndex): ...
 
 
 CartesianOffset = gtx.FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
-UnstructuredOffset = gtx.FieldOffset(LocalDim.tag, source=Dim, target=(Dim, LocalDim))
+
+
+class UnstructuredOffset(gtx.NeighborConnectivity[Dim, Dim]):
+    Local = LocalDim
 
 
 def test_domain_deduction_cartesian():

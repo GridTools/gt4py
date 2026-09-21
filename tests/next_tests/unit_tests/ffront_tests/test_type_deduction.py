@@ -18,6 +18,8 @@ from gt4py.next import (
     Dimension,
     DimensionIndex,
     DimensionKind,
+    LocalDimensionIndex,
+    NeighborConnectivity,
     Field,
     FieldOffset,
     astype,
@@ -50,7 +52,11 @@ class X(DimensionIndex): ...
 class Y(DimensionIndex): ...
 
 
-class Y2XDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class Y2X(NeighborConnectivity[Y, X]):
+    class Local(LocalDimensionIndex): ...
+
+
+Y2XDim = Y2X.Local
 
 
 class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
@@ -71,7 +77,11 @@ class Vertex(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
 class Edge(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
 
 
-class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class V2E(NeighborConnectivity[Vertex, Edge]):
+    class Local(LocalDimensionIndex): ...
+
+
+V2EDim = V2E.Local
 
 
 class IDim(DimensionIndex): ...
@@ -286,7 +296,6 @@ def test_concat_where_invalid_dtype():
 
 @pytest.fixture
 def premap_setup():
-    Y2X = FieldOffset(Y2XDim.tag, source=X, target=(Y, Y2XDim))
     return X, Y, Y2XDim, Y2X
 
 
@@ -567,8 +576,6 @@ def test_as_offset_dtype():
 
 
 def test_as_offset_non_cartesian():
-    V2E = FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
-
     def as_offset_neighbor(a: Field[[Edge], float], b: Field[[Edge], int]):
         return a(as_offset(V2E, b))
 

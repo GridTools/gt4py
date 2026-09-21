@@ -42,10 +42,11 @@ class Cell(gtx.DimensionIndex): ...
 class Edge(gtx.DimensionIndex): ...
 
 
-class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class C2E(gtx.NeighborConnectivity[Cell, Edge]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
+C2EDim = C2E.Local
 
 C2E_TABLE = np.array(
     [

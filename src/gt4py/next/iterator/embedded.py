@@ -1400,10 +1400,10 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 
 @builtins.shift.register(EMBEDDED)
 def shift(
-    *offsets: Union[runtime.Offset, OffsetPart],
+    *offsets: Union[runtime.Offset, type[common.NeighborConnectivity], OffsetPart],
 ) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
+        return it.shift(*list(_as_offset_tag(o) for o in offsets))
 
     return impl
 
@@ -1448,9 +1448,20 @@ class _ConstList(Generic[DT]):
         )
 
 
+def _as_offset_tag(
+    offset: runtime.Offset | type[common.NeighborConnectivity] | OffsetPart,
+) -> OffsetPart:
+    if isinstance(offset, common.ConnectivityMeta):
+        return offset.Local.tag
+    return offset.value if isinstance(offset, runtime.Offset) else offset
+
+
 @builtins.neighbors.register(EMBEDDED)
-def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
-    offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+def neighbors(offset: runtime.Offset | type[common.NeighborConnectivity], it: ItIterator) -> _List:
+    field_offset: runtime.Offset = (
+        offset.__gt_field_offset__() if isinstance(offset, common.ConnectivityMeta) else offset
+    )
+    offset_str = _as_offset_tag(field_offset)
     assert isinstance(offset_str, str)
     offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
@@ -1462,7 +1473,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
             for i in range(connectivity.__gt_type__().max_neighbors)
             if (shifted := it.shift(offset_str, i)).can_deref()
         ),
-        offset=offset,
+        offset=field_offset,
     )
 
 

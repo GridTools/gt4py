@@ -137,7 +137,7 @@ class TestDeclarationErrors:
             (
                 """
                 class C(NeighborConnectivity[Vertex, Edge]):
-                    class Local(DimensionIndex, kind=DimensionKind.LOCAL): ...
+                    class Local(DimensionIndex): ...
                 """,
                 "must declare its local dimension",
             ),
@@ -201,6 +201,12 @@ class TestDeclarationErrors:
                 class L(LocalDimensionIndex, size=1.5): ...
                 """,
                 "must be an integer",
+            ),
+            (
+                """
+                class L(DimensionIndex, kind=DimensionKind.LOCAL): ...
+                """,
+                "subclassing 'LocalDimensionIndex'",
             ),
         ],
     )
@@ -473,3 +479,24 @@ def test_local_dimension_of():
     assert common.local_dimension_of(shared) is V2E.Local
     with pytest.raises(TypeError, match="not a connectivity declaration"):
         common.local_dimension_of(NeighborConnectivity)
+
+
+class TestFieldOffsetDeprecation:
+    def test_unstructured_field_offset_warns(self):
+        from gt4py.next import FieldOffset
+
+        with pytest.warns(DeprecationWarning, match="NeighborConnectivity"):
+            FieldOffset(V2E.Local.tag, source=Edge, target=(Vertex, V2E.Local))
+
+    def test_derived_and_cartesian_field_offsets_do_not_warn(self, recwarn):
+        from gt4py.next import FieldOffset
+
+        class_ns = _declare(
+            """
+            class C2E(NeighborConnectivity[Vertex, Edge]):
+                class Local(LocalDimensionIndex): ...
+            """
+        )
+        class_ns["C2E"].__gt_field_offset__()
+        FieldOffset("Koff", source=KDim, target=(KDim,))
+        assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]

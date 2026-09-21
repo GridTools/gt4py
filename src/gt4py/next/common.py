@@ -284,6 +284,14 @@ class DimensionIndex(metaclass=DimensionMeta):
             )
         if kind is not None:
             cls.kind = kind
+        if cls.kind is DimensionKind.LOCAL and not any(
+            "_local_dimension_root" in base.__dict__ for base in cls.__mro__
+        ):
+            raise TypeError(
+                f"'{cls.__qualname__}': a local dimension is declared by subclassing"
+                " 'LocalDimensionIndex', or as the nested 'Local' class of a"
+                " 'NeighborConnectivity', not with 'kind=DimensionKind.LOCAL'."
+            )
 
     def __init__(self, value: int) -> None:
         self.value = value
@@ -1633,8 +1641,8 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         >>> class I(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
         >>> class J(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
         >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
-        >>> class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
-        >>> class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
+        >>> class E2V(LocalDimensionIndex): ...
+        >>> class E2C(LocalDimensionIndex): ...
         >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
         >>> promote_dims([K, J], [I, K])
@@ -1799,24 +1807,6 @@ else:
             super().__init_subclass__(**kwargs)
 
 
-class ConstListDim(DimensionIndex, kind=DimensionKind.LOCAL):
-    """
-    The local dimension of a list whose length is known at compile time (`make_const_list`).
-
-    Declared here, once, because it must be a *single* class. It used to be built
-    independently in `iterator/embedded.py` and in the DaCe lowering, which was harmless
-    while dimensions compared by `(name, kind)` -- the two instances were equal. Under
-    nominal identity (ADR 0028) two declarations would be two different dimensions, and the
-    `offset_type == _CONST_DIM` checks in the DaCe lowering would stop matching `ListType`s
-    built by embedded execution.
-
-    TODO: becomes an owner-less local dimension with an explicit size, generalising this from
-    length 1 to length *n*, once local dimensions know their connectivity.
-    """
-
-    __slots__ = ()
-
-
 def _reduce_staggered(cls: StaggeredMeta) -> Any:
     """
     Pickle a staggered dimension through its base, falling back to by-reference.
@@ -1888,7 +1878,7 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
         return CartesianConnectivity(dim, int(integral_offset), codomain=dim)
 
 
-class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
+class LocalDimensionIndex(DimensionIndex):
     """
     A local dimension: the axis that runs over the neighbors of one element.
 
@@ -1905,6 +1895,9 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
     """
 
     __slots__ = ()
+
+    kind: ClassVar[DimensionKind] = DimensionKind.LOCAL
+    _local_dimension_root: ClassVar[bool] = True
 
     #: The connectivity this dimension is the local axis of, or `None` if it indexes no table.
     #: Set by `NeighborConnectivity` when the connectivity is declared.
@@ -1945,6 +1938,24 @@ def _check_neighbor_count(cls: type, name: str, count: Optional[int]) -> Optiona
     if count < 0:
         raise ValueError(f"'{cls.__qualname__}': '{name}' must be non-negative, got {count}.")
     return int(count)
+
+
+class ConstListDim(LocalDimensionIndex):
+    """
+    The local dimension of a list whose length is known at compile time (`make_const_list`).
+
+    Declared here, once, because it must be a *single* class. It used to be built
+    independently in `iterator/embedded.py` and in the DaCe lowering, which was harmless
+    while dimensions compared by `(name, kind)` -- the two instances were equal. Under
+    nominal identity (ADR 0028) two declarations would be two different dimensions, and the
+    `offset_type == _CONST_DIM` checks in the DaCe lowering would stop matching `ListType`s
+    built by embedded execution.
+
+    TODO: becomes an owner-less local dimension with an explicit size, generalising this from
+    length 1 to length *n*, once local dimensions know their connectivity.
+    """
+
+    __slots__ = ()
 
 
 class ConnectivityMeta(type):
@@ -2030,7 +2041,10 @@ class ConnectivityMeta(type):
 
         if (field_offset := cls.__dict__.get("_field_offset")) is None:
             field_offset = fbuiltins.FieldOffset(
-                cls.offset_tag, source=cls.codomain, target=(cls.origin, cls._local())
+                cls.offset_tag,
+                source=cls.codomain,
+                target=(cls.origin, cls._local()),
+                _derived=True,
             )
             type.__setattr__(cls, "_field_offset", field_offset)
         return field_offset

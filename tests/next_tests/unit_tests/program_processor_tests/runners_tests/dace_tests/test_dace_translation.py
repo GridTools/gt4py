@@ -94,7 +94,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
             itir.SetAt(
                 expr=im.as_fieldop(
                     im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it")))
-                )(im.as_fieldop_neighbors(V2E.value, "x")),
+                )(im.as_fieldop_neighbors(V2E.Local.tag, "x")),
                 domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "y", VFTYPE.dims),
                 target=itir.SymRef(id="y"),
             )

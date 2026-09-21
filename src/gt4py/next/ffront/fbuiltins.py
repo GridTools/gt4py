@@ -11,6 +11,7 @@ import functools
 import inspect
 import math
 import operator
+import warnings
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
 from types import UnionType
 from typing import (
@@ -484,14 +485,26 @@ class FieldOffset(runtime.Offset):
     value: str
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
+    #: Set when derived from a `NeighborConnectivity` declaration, which is not deprecated.
+    _derived: bool = dataclasses.field(default=False, repr=False, compare=False, kw_only=True)
 
     @functools.cached_property
     def _cache(self) -> dict:
         return {}
 
     def __post_init__(self) -> None:
-        if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
-            raise ValueError("Second dimension in offset must be a local dimension.")
+        if len(self.target) == 2:
+            if self.target[1].kind != common.DimensionKind.LOCAL:
+                raise ValueError("Second dimension in offset must be a local dimension.")
+            if not self._derived:
+                warnings.warn(
+                    "Declaring an unstructured connectivity with 'FieldOffset' is deprecated;"
+                    " declare a 'NeighborConnectivity' class instead (see ADR 0029):\n"
+                    "    class V2E(gtx.NeighborConnectivity[Vertex, Edge]):\n"
+                    "        class Local(gtx.LocalDimensionIndex): ...",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
 
     def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
