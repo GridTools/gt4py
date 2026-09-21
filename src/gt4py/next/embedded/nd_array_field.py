@@ -239,7 +239,9 @@ class NdArrayField(
 
     def premap(
         self: NdArrayField,
-        *connectivities: common.Connectivity | fbuiltins.FieldOffset,
+        *connectivities: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
     ) -> NdArrayField:
         """
         Rearrange the field content using the provided connectivities (index mappings).
@@ -314,7 +316,10 @@ class NdArrayField(
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
 
         for connectivity in connectivities:
-            # For neighbor reductions, a FieldOffset is passed instead of an actual Connectivity
+            # For neighbor reductions, a FieldOffset or a connectivity declaration is passed
+            # instead of an actual Connectivity
+            if isinstance(connectivity, common.ConnectivityMeta):
+                connectivity = connectivity.__gt_field_offset__()
             if not isinstance(connectivity, common.Connectivity):
                 assert isinstance(connectivity, fbuiltins.FieldOffset)
                 connectivity = connectivity.as_connectivity_field()
@@ -366,8 +371,10 @@ class NdArrayField(
 
     def __call__(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),

@@ -16,6 +16,7 @@ import enum
 import functools
 import importlib
 import math
+import numbers
 import re
 import sys
 import types
@@ -1047,7 +1048,9 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
-    def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
+    def premap(
+        self, index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity]
+    ) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
@@ -1055,8 +1058,8 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __call__(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset,
-        *args: Connectivity | fbuiltins.FieldOffset,
+        index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
+        *args: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
     ) -> Field: ...
 
     @abc.abstractmethod
@@ -1577,8 +1580,8 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     def premap(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset,
-        *args: Connectivity | fbuiltins.FieldOffset,
+        index_field: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
+        *args: Connectivity | fbuiltins.FieldOffset | type[NeighborConnectivity],
     ) -> Connectivity:
         raise NotImplementedError()
 
@@ -1751,6 +1754,8 @@ class StaggeredMeta(DimensionMeta):
             )
         if not isinstance(base, DimensionMeta):
             raise TypeError(f"'Staggered' expects a dimension, got '{base!r}'.")
+        if base.kind is DimensionKind.LOCAL:
+            raise TypeError(f"'{base.__qualname__}' is a local dimension and cannot be staggered.")
         if is_staggered(base):
             raise TypeError(
                 f"'{base.__qualname__}' is already staggered; a dimension cannot be staggered twice."
@@ -1894,3 +1899,271 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
     else:
         assert staggered_offset == 0
         return CartesianConnectivity(dim, int(integral_offset), codomain=dim)
+
+
+class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
+    """
+    A local dimension: the axis that runs over the neighbors of one element.
+
+    A local dimension is declared either inside a `NeighborConnectivity`, as its nested `Local`
+    class, or on its own for a local axis that indexes no table (`owner is None`), such as the
+    coefficients of a fixed-size stencil:
+
+        >>> class LsqCoeff(LocalDimensionIndex, size=3): ...
+        >>> LsqCoeff.kind, LsqCoeff.owner, LsqCoeff.max_neighbors
+        (<DimensionKind.LOCAL: 'local'>, None, 3)
+
+    Neighbor counts are optional. A declared count is a constraint the bound table has to
+    satisfy (see `check_neighbor_table`); an undeclared one is taken from the table.
+    """
+
+    __slots__ = ()
+
+    #: The connectivity this dimension is the local axis of, or `None` if it indexes no table.
+    #: Set by `NeighborConnectivity` when the connectivity is declared.
+    owner: ClassVar[Optional[type[NeighborConnectivity]]] = None
+    #: Number of entries per element, i.e. the table's second extent, if declared.
+    max_neighbors: ClassVar[Optional[int]] = None
+    #: Least number of *valid* neighbors of any element, if declared. Fewer than
+    #: `max_neighbors` means the table pads with skip values.
+    min_neighbors: ClassVar[Optional[int]] = None
+
+    def __init_subclass__(
+        cls,
+        /,
+        *,
+        size: Optional[int] = None,
+        kind: Optional[DimensionKind] = None,
+        **kwargs: Any,
+    ) -> None:
+        if kind is not None and kind is not DimensionKind.LOCAL:
+            raise TypeError(
+                f"'{cls.__qualname__}' is a local dimension and cannot have kind '{kind}'."
+            )
+        super().__init_subclass__(**kwargs)
+        # NOTE: reset rather than inherited: a subclass of an owned local dimension is a
+        # different dimension, and does not index its parent's table.
+        cls.owner = None
+        cls.max_neighbors = cls.min_neighbors = _check_neighbor_count(cls, "size", size)
+
+
+def _check_neighbor_count(owner: type, name: str, count: Optional[int]) -> Optional[int]:
+    if count is None:
+        return None
+    if not isinstance(count, numbers.Integral) or isinstance(count, bool) or count < 0:
+        raise TypeError(
+            f"'{owner.__qualname__}': '{name}' must be a non-negative integer, got '{count!r}'."
+        )
+    return int(count)
+
+
+class ConnectivityMeta(type):
+    """
+    Metaclass of `NeighborConnectivity` declarations.
+
+    A connectivity declaration is a class that is never instantiated. It is written in DSL code
+    (`a(V2E)`, `a(V2E[0])`), and it is what the neighbor table bound at call time must match.
+    """
+
+    Local: type[LocalDimensionIndex]
+    origin: Dimension
+    codomain: Dimension
+
+    @property
+    def tag(cls) -> Tag:
+        """The connectivity's identity: its qualified Python name."""
+        return f"{cls.__module__}.{cls.__qualname__}"
+
+    def __call__(cls, *args: Any, **kwargs: Any) -> NoReturn:
+        raise TypeError(
+            f"'{cls.__qualname__}' is a connectivity declaration and cannot be instantiated;"
+            " bind a neighbor table to it through the offset provider."
+        )
+
+    @overload
+    def __getitem__(cls, item: int) -> Connectivity: ...
+    @overload
+    def __getitem__(cls, item: Any) -> Any: ...
+    def __getitem__(cls, item: Any) -> Any:
+        # NOTE: `numbers.Integral`, not `int`, so `V2E[np.int32(1)]` does not fall through to
+        # type-parameter subscription; `bool` is excluded so `V2E[True]` is an error.
+        if isinstance(item, numbers.Integral) and not isinstance(item, bool):
+            return cls.__gt_field_offset__()[int(item)]
+        # A metaclass `__getitem__` shadows `__class_getitem__`, so type-parameter
+        # subscription (`NeighborConnectivity[V, E]`) has to be forwarded explicitly.
+        return cast(Any, cls).__class_getitem__(item)
+
+    def __repr__(cls) -> str:
+        return cls.tag
+
+    def __str__(cls) -> str:
+        return cls.__qualname__
+
+    def __gt_type__(cls) -> Any:
+        return cls.__gt_field_offset__().__gt_type__()
+
+    def __gt_field_offset__(cls) -> Any:
+        """
+        The `FieldOffset` equivalent to this connectivity.
+
+        Its tag is the *local dimension's* tag, the single string that shifts, neighbor
+        reductions and sparse arguments all use to find the table in the offset provider.
+        """
+        from gt4py.next.ffront import fbuiltins
+
+        if (field_offset := cls.__dict__.get("_field_offset")) is None:
+            field_offset = fbuiltins.FieldOffset(
+                cls.Local.tag, source=cls.codomain, target=(cls.origin, cls.Local)
+            )
+            type.__setattr__(cls, "_field_offset", field_offset)
+        return field_offset
+
+
+class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
+    metaclass=ConnectivityMeta
+):
+    """
+    Declare a neighbor connectivity: for each `Origin` element, a list of `Codomain` neighbors.
+
+    The declaration names the connectivity's local dimension -- its nested `Local` class --
+    and optionally its neighbor counts. It holds no data: the neighbor table is bound at call
+    time through the offset provider, and checked against the declaration.
+
+    Examples:
+        >>> class Vertex(DimensionIndex): ...
+        >>> class Edge(DimensionIndex): ...
+        >>> class V2E(NeighborConnectivity[Vertex, Edge], max_neighbors=6, min_neighbors=5):
+        ...     class Local(LocalDimensionIndex): ...
+        >>> V2E.origin is Vertex, V2E.codomain is Edge
+        (True, True)
+        >>> V2E.Local.owner is V2E, V2E.Local.max_neighbors, V2E.Local.min_neighbors
+        (True, 6, 5)
+    """
+
+    # NOTE: an annotation only, never assigned here. A real nested class on the base would be
+    # flagged by pyright as an incompatible override in every declaration.
+    Local: ClassVar[type[LocalDimensionIndex]]
+    origin: ClassVar[Dimension]
+    codomain: ClassVar[Dimension]
+
+    def __init_subclass__(
+        cls,
+        /,
+        *,
+        max_neighbors: Optional[int] = None,
+        min_neighbors: Optional[int] = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init_subclass__(**kwargs)
+        name = cls.__qualname__
+        if "<locals>" in name:
+            raise TypeError(
+                f"'{name}' must be declared at module level: a connectivity is referenced from"
+                " the IR by its qualified name, which has to be importable."
+            )
+        params = [
+            xtyping.get_args(base)
+            for base in cls.__dict__.get("__orig_bases__", ())
+            if xtyping.get_origin(base) is NeighborConnectivity
+        ]
+        if len(params) != 1 or len(params[0]) != 2:
+            raise TypeError(
+                f"'{name}' must derive from 'NeighborConnectivity[Origin, Codomain]' directly,"
+                " with both dimensions given."
+            )
+        origin, codomain = params[0]
+        for role, dim in (("Origin", origin), ("Codomain", codomain)):
+            if not isinstance(dim, DimensionMeta) or dim.kind is DimensionKind.LOCAL:
+                raise TypeError(f"'{name}': '{role}' must be a non-local dimension, got '{dim}'.")
+
+        local = cls.__dict__.get("Local")
+        if not (isinstance(local, DimensionMeta) and issubclass(local, LocalDimensionIndex)):
+            raise TypeError(
+                f"'{name}' must declare its local dimension as a nested class:"
+                " 'class Local(LocalDimensionIndex): ...'."
+            )
+        if local.owner is not None:
+            raise TypeError(
+                f"'{name}': '{local.__qualname__}' is already the local dimension of"
+                f" '{local.owner.__qualname__}'."
+            )
+
+        max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)
+        min_neighbors = _check_neighbor_count(cls, "min_neighbors", min_neighbors)
+        for count_name, count in (
+            ("max_neighbors", max_neighbors),
+            ("min_neighbors", min_neighbors),
+        ):
+            declared = getattr(local, count_name)
+            if count is not None and declared is not None and count != declared:
+                raise TypeError(
+                    f"'{name}': '{count_name}={count}' contradicts the size declared by"
+                    f" '{local.__qualname__}' ({declared})."
+                )
+        max_neighbors = max_neighbors if max_neighbors is not None else local.max_neighbors
+        min_neighbors = min_neighbors if min_neighbors is not None else local.min_neighbors
+        if (
+            max_neighbors is not None
+            and min_neighbors is not None
+            and min_neighbors > max_neighbors
+        ):
+            raise TypeError(
+                f"'{name}': 'min_neighbors' ({min_neighbors}) exceeds 'max_neighbors'"
+                f" ({max_neighbors})."
+            )
+
+        cls.origin, cls.codomain = origin, codomain
+        local.owner = cls
+        local.max_neighbors, local.min_neighbors = max_neighbors, min_neighbors
+
+
+def check_neighbor_table(
+    connectivity: type[NeighborConnectivity],
+    table: NeighborTable | NeighborConnectivityType,
+) -> None:
+    """
+    Check that a neighbor table matches the connectivity declaration it is bound to.
+
+    Args:
+        connectivity: The declaration.
+        table: The bound table, or its type (which is all an ahead-of-time compilation has).
+
+    Raises:
+        ValueError: On the first mismatch, naming the connectivity and the mismatch.
+    """
+    table_type = table if isinstance(table, NeighborConnectivityType) else table.__gt_type__()
+    name = connectivity.__qualname__
+    local = connectivity.Local
+
+    def fail(reason: str) -> NoReturn:
+        raise ValueError(f"The table bound to '{name}' does not match its declaration: {reason}.")
+
+    if not isinstance(table_type, NeighborConnectivityType):
+        fail(f"expected a neighbor table, got '{table_type}'")
+    expected_domain = (connectivity.origin, local)
+    if tuple(table_type.domain) != expected_domain:
+        fail(
+            f"its domain is '({', '.join(map(str, table_type.domain))})',"
+            f" expected '({', '.join(map(str, expected_domain))})'"
+        )
+    if table_type.codomain is not connectivity.codomain:
+        fail(f"its codomain is '{table_type.codomain}', expected '{connectivity.codomain}'")
+    if table_type.dtype.kind not in (core_defs.DTypeKind.INT, core_defs.DTypeKind.UINT):
+        fail(f"its dtype '{table_type.dtype}' is not integral")
+    if local.max_neighbors is not None and table_type.max_neighbors != local.max_neighbors:
+        fail(
+            f"it has {table_type.max_neighbors} neighbors per element,"
+            f" expected max_neighbors={local.max_neighbors}"
+        )
+    if local.min_neighbors is not None:
+        max_neighbors = table_type.max_neighbors
+        if local.min_neighbors < max_neighbors and not table_type.has_skip_values:
+            fail(
+                f"min_neighbors={local.min_neighbors} < {max_neighbors} requires a skip value,"
+                " but the table has none"
+            )
+        if local.min_neighbors == max_neighbors and table_type.has_skip_values:
+            fail(
+                f"min_neighbors == max_neighbors == {max_neighbors} means every element has all"
+                f" its neighbors, but the table has skip value {table_type.skip_value}"
+            )
