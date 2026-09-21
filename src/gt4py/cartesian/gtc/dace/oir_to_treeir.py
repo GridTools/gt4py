@@ -307,7 +307,7 @@ class OIRToTreeIR(eve.NodeVisitor):
         )
 
         loop = tir.VerticalLoop(
-            iteration_variable=eve.SymbolRef(f"{tir.Axis.K.iteration_symbol()}_{id(node)}"),
+            iteration_variable=tir.Axis.K.iteration_symbol(),
             loop_order=loop_order,
             bounds_k=bounds,
             schedule=self._vertical_loop_schedule(),
