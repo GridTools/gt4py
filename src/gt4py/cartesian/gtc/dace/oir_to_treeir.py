@@ -283,19 +283,6 @@ class OIRToTreeIR(eve.NodeVisitor):
 
         return tir.Bounds(start=start, end=end)
 
-    def _vertical_loop_schedule(self) -> dtypes.ScheduleType:
-        """
-        Defines the vertical loop schedule.
-
-        Current strategy is to
-          - keep the vertical loop on the host for both, CPU and GPU targets
-          - and run it in parallel on CPU and sequential on GPU.
-        """
-        if self._device_type == dtypes.DeviceType.GPU:
-            return dtypes.ScheduleType.Sequential
-
-        return _resolve_default_map_schedule(self._device_type)
-
     def visit_VerticalLoopSection(
         self, node: oir.VerticalLoopSection, ctx: tir.Context, loop_order: common.LoopOrder
     ) -> None:
@@ -310,7 +297,7 @@ class OIRToTreeIR(eve.NodeVisitor):
             iteration_variable=tir.Axis.K.iteration_symbol(),
             loop_order=loop_order,
             bounds_k=bounds,
-            schedule=self._vertical_loop_schedule(),
+            schedule=_resolve_default_map_schedule(self._device_type),
             children=[],
             parent=ctx.current_scope,
         )
