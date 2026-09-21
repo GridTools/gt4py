@@ -454,15 +454,15 @@ def domain(
     ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
-    >>> IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-    >>> JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
+    >>> class IDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+    >>> class JDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
     >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
-    'c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    'c⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
-    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    'u⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
     >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
     >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
-    'u⟨ IDimₕ: [0, 10[, JDimₕ: [0, 20[ ⟩'
+    'u⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
     """
     if isinstance(ranges_or_domain, common.Domain):
         domain = ranges_or_domain
@@ -592,9 +592,9 @@ def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
 
     Examples
     --------
-    >>> IDim = common.Dimension("IDim")
+    >>> class IDim(common.DimensionIndex): ...
     >>> str(broadcast("a", (IDim,)))
-    'broadcast(a, {IDimₕ})'
+    'broadcast(a, {gt4py.next.iterator.ir_utils.ir_makers.IDimₕ})'
     """
     return call("broadcast")(expr, make_tuple(*(axis_literal(dim) for dim in dims)))
 

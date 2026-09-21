@@ -53,7 +53,7 @@ def func_to_foast(inp: DSLFieldOperatorDef) -> FOASTOperatorDef:
     Examples:
 
         >>> from gt4py import next as gtx
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
 
         >>> const = gtx.float32(2.0)
         >>> def dsl_operator(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
@@ -140,7 +140,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     >>> from gt4py.next import Field, Dimension
     >>> float64 = float
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
     >>> def field_op(inp: Field[[IDim], float64]):
     ...     return inp
     >>> foast_tree = FieldOperatorParser.apply_to_function(field_op)

@@ -103,11 +103,11 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
     Return the intersection of the given domains.
 
     Example:
-        >>> I = common.Dimension("I")
+        >>> class I(common.DimensionIndex): ...
         >>> domain_intersection(
         ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
         ... )  # doctest: +ELLIPSIS
-        Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
+        Domain(dims=(gt4py.next.embedded.common.I[horizontal],), ranges=(UnitRange(1, 3),))
     """
     return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
 
@@ -120,8 +120,8 @@ def restrict_to_intersection(
     Return the with each other intersected domains, ignoring 'ignore_dims' dimensions for the intersection.
 
     Example:
-        >>> I = common.Dimension("I")
-        >>> J = common.Dimension("J")
+        >>> class I(common.DimensionIndex): ...
+        >>> class J(common.DimensionIndex): ...
         >>> res = restrict_to_intersection(
         ...     common.domain({I: (0, 5), J: (1, 2)}),
         ...     common.domain({I: (1, 3), J: (0, 3)}),

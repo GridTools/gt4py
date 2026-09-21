@@ -41,9 +41,8 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(
-    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ... )
+    >>> class I(common.DimensionIndex): ...
+    >>> field_t = ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
     """
@@ -174,7 +173,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> from gt4py.next import Field
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
     >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 

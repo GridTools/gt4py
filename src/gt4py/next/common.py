@@ -761,16 +761,16 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Intersect `Domain`s, missing `Dimension`s are considered infinite.
 
         Examples:
-            >>> I = Dimension("I")
-            >>> J = Dimension("J")
+            >>> class I(DimensionIndex): ...
+            >>> class J(DimensionIndex): ...
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+            Domain(dims=(gt4py.next.common.I[horizontal],), ranges=(UnitRange(1, 3),))
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
             ...     NamedRange(I, UnitRange(1, 6))
             ... )
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
@@ -818,10 +818,11 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Create a new domain by slicing the domain ranges at the provided relative slices.
 
         Examples:
-            >>> I, J = Dimension("I"), Dimension("J")
+            >>> class I(DimensionIndex): ...
+            >>> class J(DimensionIndex): ...
             >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
             >>> domain.slice_at[2:3, 2:5]
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
+            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
         """
 
         def _domain_slicer(*args: slice) -> Domain:
@@ -909,20 +910,20 @@ def domain(domain_like: DomainLike) -> Domain:
     Construct `Domain` from `DomainLike` object.
 
     Examples:
-        >>> I = Dimension("I")
-        >>> J = Dimension("J")
+        >>> class I(DimensionIndex): ...
+        >>> class J(DimensionIndex): ...
 
         >>> domain(((I, (2, 4)), (J, (3, 5))))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain({I: (2, 4), J: (3, 5)})
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain(((I, 2), (J, 4)))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
 
         >>> domain({I: 2, J: 4})
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
@@ -1619,11 +1620,11 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     Examples:
         >>> from gt4py.next.common import Dimension
-        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
-        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
-        >>> K = Dimension("K", DimensionKind.VERTICAL)
-        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> class I(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class J(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+        >>> class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+        >>> class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
         >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
         >>> promote_dims([K, J], [I, K])

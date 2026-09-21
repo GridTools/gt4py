@@ -81,7 +81,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> from gt4py.next import Field, Dimension, float64
     >>>
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
     >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...     return inp
     >>>
@@ -310,7 +311,9 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(Dim + idx)` (where `idx` is integer or half integer)
                 case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.LocatedNode(type=ts.DimensionType(dim=common.DimensionMeta() as dim)),
+                    left=foast.LocatedNode(
+                        type=ts.DimensionType(dim=common.DimensionMeta() as dim)
+                    ),
                     right=foast.Constant(value=offset_index),
                 ):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:

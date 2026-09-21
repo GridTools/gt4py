@@ -24,8 +24,13 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
 
     Example:
     >>> from gt4py.next import Dimension, common
-    >>> IDim = Dimension("IDim")
-    >>> JDim = Dimension("JDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
+    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0028), and a
+    >>> # class declared in a doctest is not an attribute of the real module:
+    >>> class JDim(DimensionIndex): ...
+    >>> import sys
+    >>> sys.modules[__name__].IDim, sys.modules[__name__].JDim = IDim, JDim
     >>> domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 10)})
     >>> expr = im.call("broadcast")(
     ...     im.ref("inp"),
@@ -36,7 +41,10 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> expr.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
     >>> transformed = RemoveBroadcast.apply(expr)
     >>> print(transformed)
-    as_fieldop(deref, c⟨ IDimₕ: [0, 10[, JDimₕ: [0, 10[ ⟩)(inp)
+    as_fieldop(
+      deref,
+      c⟨ gt4py.next.iterator.transforms.remove_broadcast.IDimₕ: [0, 10[, gt4py.next.iterator.transforms.remove_broadcast.JDimₕ: [0, 10[ ⟩
+    )(inp)
     """
 
     PRESERVED_ANNEX_ATTRS = ("domain",)

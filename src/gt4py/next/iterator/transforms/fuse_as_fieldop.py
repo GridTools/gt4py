@@ -251,7 +251,11 @@ class FuseAsFieldOp(
     >>> from gt4py import next as gtx
     >>> from gt4py.next import utils
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-    >>> IDim = gtx.Dimension("IDim")
+    >>> class IDim(gtx.DimensionIndex): ...
+    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0028), and a
+    >>> # class declared in a doctest is not an attribute of the real module:
+    >>> import sys
+    >>> sys.modules[__name__].IDim = IDim
     >>> field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))
     >>> d = im.domain("cartesian_domain", {IDim: (0, 1)})
     >>> nested_as_fieldop = im.op_as_fieldop("plus", d)(
@@ -261,8 +265,10 @@ class FuseAsFieldOp(
     ...     im.ref("inp3", field_type),
     ... )
     >>> print(nested_as_fieldop)
-    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(
-      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2), inp3
+    as_fieldop(λ(__arg0, __arg1) → ·__arg0 + ·__arg1,
+               c⟨ gt4py.next.iterator.transforms.fuse_as_fieldop.IDimₕ: [0, 1[ ⟩)(
+      as_fieldop(λ(__arg0, __arg1) → ·__arg0 × ·__arg1,
+                 c⟨ gt4py.next.iterator.transforms.fuse_as_fieldop.IDimₕ: [0, 1[ ⟩)(inp1, inp2), inp3
     )
     >>> print(
     ...     FuseAsFieldOp.apply(
@@ -272,7 +278,8 @@ class FuseAsFieldOp(
     ...         uids=utils.IDGeneratorPool(),
     ...     )
     ... )
-    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3, c⟨ IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
+    as_fieldop(λ(inp1, inp2, inp3) → ·inp1 × ·inp2 + ·inp3,
+               c⟨ gt4py.next.iterator.transforms.fuse_as_fieldop.IDimₕ: [0, 1[ ⟩)(inp1, inp2, inp3)
     """  # noqa: RUF002  # ignore ambiguous multiplication character
 
     class Transformation(enum.Flag):

@@ -732,15 +732,15 @@ def _get_axes(
     In case all arguments are zero-dimensional return an empty sequence.
 
     >>> from gt4py import next as gtx
-    >>> IDim = gtx.Dimension("I")
+    >>> class IDim(gtx.DimensionIndex): ...
     >>> i_field: LocatedField = _wrap_field(
     ...     gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )
 
     >>> _get_axes((i_field, i_field))
-    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    (gt4py.next.iterator.embedded.IDim[horizontal],)
 
-    >>> JDim = gtx.Dimension("J")
+    >>> class JDim(gtx.DimensionIndex): ...
     >>> j_field: LocatedField = _wrap_field(
     ...     gtx.empty({JDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )
@@ -756,7 +756,7 @@ def _get_axes(
     ValueError: Fields are defined on different axes.
 
     >>> _get_axes((i_field, zero_dim_field), ignore_zero_dims=True)
-    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    (gt4py.next.iterator.embedded.IDim[horizontal],)
     """
     if isinstance(field_or_tuple, tuple):
         els_axes = []
