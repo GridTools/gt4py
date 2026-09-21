@@ -8,6 +8,7 @@
 
 """A `NeighborConnectivity` declaration used directly in DSL code, on every backend."""
 
+import dataclasses
 import typing
 
 import numpy as np
@@ -120,7 +121,6 @@ def test_program(case):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_offset_tag_differing_from_local_dim
 def test_shift_through_a_shared_local_dimension(case):
     @gtx.field_operator
     def testee(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
@@ -130,8 +130,6 @@ def test_shift_through_a_shared_local_dimension(case):
 
 
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_offset_tag_differing_from_local_dim
-@pytest.mark.uses_offset_tag_differing_from_local_dim_in_reduction
 def test_reduction_through_a_shared_local_dimension(case):
     @gtx.field_operator
     def testee(
@@ -144,4 +142,38 @@ def test_reduction_through_a_shared_local_dimension(case):
         case,
         testee,
         lambda s, a: np.sum(s * a[_table(case, V2EShared)] - a[_table(case)], axis=1),
+    )
+
+
+@pytest.fixture
+def case_without_owner(case):
+    """Only the sharing connectivity is bound: enough for a shift, which needs only its table."""
+    return dataclasses.replace(
+        case, offset_provider={V2EShared.offset_tag: case.offset_provider[V2EShared.offset_tag]}
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_shift_through_a_shared_local_dimension_without_its_owner(case_without_owner):
+    @gtx.field_operator
+    def testee(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
+        return a(V2EShared[1])
+
+    cases.verify_with_default_data(
+        case_without_owner, testee, lambda a: a[_table(case_without_owner, V2EShared)[:, 1]]
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_through_a_shared_local_dimension_without_its_owner(case_without_owner):
+    @gtx.field_operator
+    def testee(
+        s: Field[Dims[V, V2E.Local], float], a: Field[Dims[E], float]
+    ) -> Field[Dims[V], float]:
+        return neighbor_sum(s * a(V2EShared), axis=V2E.Local)
+
+    cases.verify_with_default_data(
+        case_without_owner,
+        testee,
+        lambda s, a: np.sum(s * a[_table(case_without_owner, V2EShared)], axis=1),
     )

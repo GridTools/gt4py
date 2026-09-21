@@ -90,6 +90,11 @@ class DataflowBuilder(Protocol):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
 
     @abc.abstractmethod
+    def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
+        """The offset of a connectivity over `local_dim`, see `common.connectivity_key_over`."""
+        ...
+
+    @abc.abstractmethod
     def unique_nsdfg_name(self, prefix: str) -> str: ...
 
     @abc.abstractmethod
@@ -564,6 +569,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
+    def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
+        return gtx_common.connectivity_key_over(self.offset_provider_type, local_dim)
+
     def make_field(
         self,
         data_node: dace_nodes.AccessNode,
@@ -578,10 +586,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the local dimension is converted into `ListType` data element
             if not isinstance(data_type.dtype, ts.ScalarType):
                 raise ValueError(f"Invalid field type {data_type}.")
-            if not gtx_common.has_offset(self.offset_provider_type, local_dim.tag):
+            try:
+                self.connectivity_key_over(local_dim)
+            except KeyError as ex:
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
-                )
+                ) from ex
             local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
             field_type = ts.FieldType(
                 dims=[dim for dim in data_type.dims if dim != local_dim], dtype=local_type
@@ -839,7 +849,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
-                shape.append(neighbor_table_types[dim.tag].max_neighbors)
+                shape.append(gtx_dace_args.local_dimension_size(name, dim, neighbor_table_types))
             elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
                 shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))

@@ -988,8 +988,8 @@ def _make_reduction(
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
-            current_offset_provider, axis.tag
-        )  # assumes offset and local dimension have same name
+            current_offset_provider, common.connectivity_key_over(current_offset_provider, axis)
+        )
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 

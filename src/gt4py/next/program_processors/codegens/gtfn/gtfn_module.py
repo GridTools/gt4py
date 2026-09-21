@@ -91,7 +91,12 @@ class GTFNTranslationStep(
                         # NOTE: the tag is the offset-provider key, and its mangled form names the
                         # `generated::<name>_t` tag type. A legacy `FieldOffset` carries it as `value`.
                         dim_name = dim.value if isinstance(dim, fbuiltins.FieldOffset) else dim.tag
-                        connectivity = common.get_offset_type(offset_provider_type, dim_name)
+                        connectivity = common.get_offset_type(
+                            offset_provider_type,
+                            dim_name
+                            if isinstance(dim, fbuiltins.FieldOffset)
+                            else common.connectivity_key_over(offset_provider_type, dim),
+                        )
                         assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{common.codegen_name(dim_name)}_t, {size}>({arg})"

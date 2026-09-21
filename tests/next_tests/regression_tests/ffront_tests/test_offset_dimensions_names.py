@@ -56,16 +56,8 @@ class Neigh(gtx.LocalDimensionIndex): ...
 OffB = gtx.FieldOffset("OffB", source=E, target=(V, Neigh))
 
 
-def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases.Case:
-    """
-    A `Case` whose offset provider holds exactly one connectivity, keyed on its tag.
-
-    One entry per `Case` on purpose: DaCe walks every provider entry while building the
-    SDFG, and looks a connectivity up by its *local dimension's* name
-    (`gtir_to_sdfg.py`, constraint A4). A second, non-conforming entry would therefore
-    fail a program that does not even use it, and the cell under test would be measuring
-    the wrong thing.
-    """
+def _case(exec_alloc_descriptor, tags: tuple[str, ...], local_dim: common.Dimension) -> cases.Case:
+    """A `Case` binding the same table under each of `tags`."""
     mesh = cases_utils.simple_mesh(exec_alloc_descriptor.allocator)
     # NOTE: `.asnumpy()`, not `.ndarray`: under a GPU allocator the latter is a device
     # array, and `simple_mesh` builds the table from NumPy anyway.
@@ -84,6 +76,7 @@ def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases
                 skip_value=None,
                 allocator=exec_alloc_descriptor.allocator,
             )
+            for tag in tags
         },
         default_sizes={V: mesh.num_vertices, E: mesh.num_edges},
         grid_type=common.GridType.UNSTRUCTURED,
@@ -93,12 +86,14 @@ def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases
 
 @pytest.fixture
 def case_tag_vs_variable_name(exec_alloc_descriptor):
-    return _case(exec_alloc_descriptor, TaggedOffDim.tag, TaggedOffDim)
+    return _case(exec_alloc_descriptor, (TaggedOffDim.tag,), TaggedOffDim)
 
 
 @pytest.fixture
 def case_tag_vs_local_dim(exec_alloc_descriptor):
-    return _case(exec_alloc_descriptor, "OffB", Neigh)
+    # NOTE: only the offset's table: a reduction over `Neigh` finds it as the table over `Neigh`,
+    # as for a connectivity sharing another one's local dimension.
+    return _case(exec_alloc_descriptor, ("OffB",), Neigh)
 
 
 def _neighbor_table(case: cases.Case, tag: str) -> np.ndarray:
@@ -135,11 +130,9 @@ def test_reduction_tag_differs_from_variable_name(case_tag_vs_variable_name):
 
 
 # --- N3: the tag differs from the local dimension's name --------------------------
-# Lifted for the gtfn shift path by #1789; still required elsewhere, which is what
-# the markers below record.
+# The shape of a connectivity sharing another one's local dimension.
 
 
-@pytest.mark.uses_offset_tag_differing_from_local_dim
 def test_shift_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
     """
     Ensure a shift works with an offset tag that differs from the local dimension's name.
@@ -160,7 +153,6 @@ def test_shift_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
     )
 
 
-@pytest.mark.uses_offset_tag_differing_from_local_dim_in_reduction
 def test_reduction_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
     @gtx.field_operator
     def foo(a: Field[Dims[E], float]) -> Field[Dims[V], float]:

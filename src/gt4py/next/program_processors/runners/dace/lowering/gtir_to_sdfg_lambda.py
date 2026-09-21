@@ -1321,7 +1321,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             if offset_type == _CONST_DIM:
                 # this input argument is the result of `make_const_list`
                 continue
-            offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.tag)
+            offset_provider_t = self.subgraph_builder.get_offset_provider_type(
+                self.subgraph_builder.connectivity_key_over(offset_type)
+            )
             assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
             input_conn_types[offset_type] = offset_provider_t
 
@@ -1375,7 +1377,9 @@ class LambdaToDataflow(eve.NodeVisitor):
         if conn_type.has_skip_values:
             # In case the `map_list` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            conn_data = gtx_dace_args.connectivity_identifier(offset_type.tag)
+            conn_data = gtx_dace_args.connectivity_identifier(
+                self.subgraph_builder.connectivity_key_over(offset_type)
+            )
             conn_desc = self.sdfg.arrays[conn_data]
             conn_desc.transient = False
 
@@ -1477,7 +1481,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.tag)
+        offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+            self.subgraph_builder.connectivity_key_over(offset_type)
+        )
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
 
         inp_conn = "_in"
@@ -1489,7 +1495,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 and input_expr.gt_dtype.offset_type is not None
             )
             offset_type = input_expr.gt_dtype.offset_type
-            connectivity = gtx_dace_args.connectivity_identifier(offset_type.tag)
+            connectivity = gtx_dace_args.connectivity_identifier(
+                self.subgraph_builder.connectivity_key_over(offset_type)
+            )
             self.sdfg.arrays[connectivity].transient = False
 
             reduce_node = gtx_library_nodes.ReduceWithSkipValues(

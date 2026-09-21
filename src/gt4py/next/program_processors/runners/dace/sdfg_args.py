@@ -111,6 +111,27 @@ def field_stride_symbol(
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
+def local_dimension_size(
+    field_name: str,
+    dim: gtx_common.Dimension,
+    neighbor_table_types: dict[str, gtx_common.NeighborConnectivityType],
+) -> int:
+    """
+    Number of neighbors along the local dimension `dim` of the field or connectivity table.
+
+    A connectivity table has its own neighbor count. Any other field finds it in a table over
+    `dim`: normally the one keyed by `dim`'s tag, but a connectivity sharing `dim` with another
+    one (see `NeighborConnectivity`) is keyed by its own tag, and may be the only one bound.
+    """
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is not None:
+        own_type = neighbor_table_types[gtx_common.from_codegen_name(m[1])]
+        if own_type.neighbor_dim == dim:
+            return own_type.max_neighbors
+    return neighbor_table_types[
+        gtx_common.connectivity_key_over(neighbor_table_types, dim)
+    ].max_neighbors
+
+
 def _range_symbol_name(field_name: str, dim: gtx_common.Dimension) -> str:
     """Common part of the name for the range start/stop symbols."""
     field_range = im.call("get_domain_range")(field_name, dim)
