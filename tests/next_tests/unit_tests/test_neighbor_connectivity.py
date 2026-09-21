@@ -190,13 +190,6 @@ class TestDeclarationErrors:
             ),
             (
                 """
-                class C(NeighborConnectivity[Vertex, Edge], max_neighbors=-1):
-                    class Local(LocalDimensionIndex): ...
-                """,
-                "non-negative integer",
-            ),
-            (
-                """
                 class L(LocalDimensionIndex, kind=DimensionKind.HORIZONTAL): ...
                 """,
                 "cannot have kind",
@@ -205,13 +198,42 @@ class TestDeclarationErrors:
                 """
                 class L(LocalDimensionIndex, size=1.5): ...
                 """,
-                "non-negative integer",
+                "must be an integer",
             ),
         ],
     )
     def test_rejected(self, source, match):
         with pytest.raises(TypeError, match=match):
             _declare(source)
+
+    def test_negative_count(self):
+        with pytest.raises(ValueError, match="non-negative"):
+            _declare(
+                """
+                class C(NeighborConnectivity[Vertex, Edge], max_neighbors=-1):
+                    class Local(LocalDimensionIndex): ...
+                """
+            )
+
+    def test_adopting_an_ownerless_local(self):
+        ns = _declare(
+            """
+            class Coeff(LocalDimensionIndex, size=3): ...
+
+            class C(NeighborConnectivity[Vertex, Edge]):
+                Local = Coeff
+            """
+        )
+        assert ns["Coeff"].owner is ns["C"]
+        assert (ns["Coeff"].max_neighbors, ns["Coeff"].min_neighbors) == (3, 3)
+
+    def test_non_integer_index(self):
+        with pytest.raises(TypeError, match="indexed by an integer"):
+            V2E[Vertex]
+
+    def test_base_is_not_a_declaration(self):
+        with pytest.raises(TypeError, match="not a connectivity declaration"):
+            NeighborConnectivity.__gt_type__()
 
     def test_function_local_declaration(self):
         with pytest.raises(TypeError, match="module level"):
@@ -280,6 +302,31 @@ class TestCheckNeighborTable:
         with pytest.raises(ValueError, match=match):
             common.check_neighbor_table(V2E, _table_type(**kwargs))
 
+    def test_min_neighbors_exceeds_table(self):
+        ns = _declare(
+            """
+            class MinOnly(NeighborConnectivity[Vertex, Edge], min_neighbors=5):
+                class Local(LocalDimensionIndex): ...
+            """
+        )
+        min_only = ns["MinOnly"]
+        for skip_value in (None, common._DEFAULT_SKIP_VALUE):
+            with pytest.raises(ValueError, match="min_neighbors=5 exceeds"):
+                common.check_neighbor_table(
+                    min_only,
+                    _table_type(
+                        domain=(Vertex, min_only.Local), max_neighbors=3, skip_value=skip_value
+                    ),
+                )
+
+    def test_bool_table_is_not_integral(self):
+        with pytest.raises(ValueError, match="is not integral"):
+            common.check_neighbor_table(V2E, _table_type(dtype=bool))
+
+    def test_not_a_neighbor_table(self):
+        with pytest.raises(ValueError, match="expected a neighbor table"):
+            common.check_neighbor_table(V2E, common.CartesianConnectivity(Vertex, 1))
+
     def test_skip_value_without_missing_neighbors(self):
         ns = _declare(
             """
@@ -305,6 +352,61 @@ class TestFrontendIntegration:
     def test_field_offset_is_derived_once(self):
         assert V2E.__gt_field_offset__() is V2E.__gt_field_offset__()
         assert V2E.__gt_field_offset__().value == V2E.Local.tag
+
+    def test_neighbor_index_accepts_numpy_integers(self):
+        from gt4py.next import constructors, embedded
+
+        table = constructors.as_connectivity(
+            domain={Vertex: 2, V2E.Local: 4},
+            codomain=Edge,
+            data=np.array([[0, 1, 2, 3], [1, 2, 3, 0]]),
+        )
+        with embedded.context.update(offset_provider={V2E.Local.tag: table}):
+            assert np.array_equal(V2E[np.int32(1)].asnumpy(), V2E[1].asnumpy())
+
+    def test_legacy_field_offset_has_local(self):
+        from gt4py.next import FieldOffset
+
+        assert FieldOffset("V2E", source=Edge, target=(Vertex, V2E.Local)).Local is V2E.Local
+
+    def test_attribute_errors_are_dsl_errors(self):
+        from gt4py.next import errors, field_operator
+        from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+        from gt4py.next import Dims, Field
+
+        def origin_of(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
+            return a(V2E.origin)
+
+        with pytest.raises(errors.DSLError, match="has no attribute 'origin'"):
+            FieldOperatorParser.apply_to_function(origin_of)
+
+    def test_fingerprint_covers_the_declaration(self):
+        from gt4py.next import fingerprinting
+
+        def fingerprint_of(source: str) -> str:
+            # lenient: `_declare` classes are not importable, as in a re-run notebook cell
+            return fingerprinting.lenient_fingerprinter(_declare(source)["C"])
+
+        base = fingerprint_of(
+            """
+            class C(NeighborConnectivity[Vertex, Edge]):
+                class Local(LocalDimensionIndex): ...
+            """
+        )
+        swapped = fingerprint_of(
+            """
+            class C(NeighborConnectivity[Edge, Vertex]):
+                class Local(LocalDimensionIndex): ...
+            """
+        )
+        counted = fingerprint_of(
+            """
+            class C(NeighborConnectivity[Vertex, Edge], max_neighbors=3):
+                class Local(LocalDimensionIndex): ...
+            """
+        )
+        assert len({base, swapped, counted}) == 3
+        assert fingerprinting.strict_fingerprinter(V2E) != fingerprinting.strict_fingerprinter(E2V)
 
     def test_grid_type_deduction(self):
         assert (
