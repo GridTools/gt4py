@@ -107,7 +107,9 @@ def _collect_dimensions_from_domain(
             for nr in domain.args:
                 assert isinstance(nr, itir.FunCall)
                 dim_name = _name_from_named_range(nr)
-                offset_definitions[dim_name] = TagDefinition(name=Sym(id=common.codegen_name(dim_name)))
+                offset_definitions[dim_name] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim_name))
+                )
         elif domain.fun == itir.SymRef(id="unstructured_domain"):
             if len(domain.args) > 2:
                 raise ValueError("Unstructured_domain must not have more than 2 arguments.")
@@ -148,7 +150,9 @@ def _collect_dimensions_from_params(
         for type_ in type_info.primitive_constituents(param.type):
             if isinstance(type_, ts.FieldType):
                 for dim in type_.dims:
-                    offset_definitions[dim.tag] = TagDefinition(name=Sym(id=common.codegen_name(dim.tag)))
+                    offset_definitions[dim.tag] = TagDefinition(
+                        name=Sym(id=common.codegen_name(dim.tag))
+                    )
     return offset_definitions
 
 
@@ -170,7 +174,9 @@ def _collect_offset_definitions(
         ]
         for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[dim.tag] = TagDefinition(name=Sym(id=common.codegen_name(dim.tag)))
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim.tag))
+                )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if dim.kind != common.DimensionKind.VERTICAL:
@@ -184,7 +190,9 @@ def _collect_offset_definitions(
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
-            offset_definitions[offset_name] = TagDefinition(name=Sym(id=common.codegen_name(offset_name)))
+            offset_definitions[offset_name] = TagDefinition(
+                name=Sym(id=common.codegen_name(offset_name))
+            )
             if offset_name != connectivity_type.neighbor_dim.tag:
                 offset_definitions[connectivity_type.neighbor_dim.tag] = TagDefinition(
                     name=Sym(id=common.codegen_name(connectivity_type.neighbor_dim.tag))
@@ -215,7 +223,10 @@ def _add_staggered_aliases(
         if tag_def.alias is None and (base_name := common.staggered_base_tag(name)) is not None:
             # ensure the base tag exists (as alias target and loop dimension) in this position
             result.setdefault(base_name, TagDefinition(name=Sym(id=common.codegen_name(base_name))))
-            aliases[name] = TagDefinition(name=Sym(id=common.codegen_name(name)), alias=SymRef(id=common.codegen_name(base_name)))
+            aliases[name] = TagDefinition(
+                name=Sym(id=common.codegen_name(name)),
+                alias=SymRef(id=common.codegen_name(base_name)),
+            )
         else:
             result[name] = tag_def
     return {**result, **aliases}
@@ -681,7 +692,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 backend=backend,
                 scans=[scan],
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
-                axis=SymRef(id=column_axis.tag),
+                # the column axis names its `generated::<name>_t` tag type: mangle as declared
+                axis=SymRef(id=common.codegen_name(column_axis.tag)),
             )
         assert projector is None  # only scans have projectors
         return StencilExecution(
