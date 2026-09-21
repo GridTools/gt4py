@@ -1019,7 +1019,9 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    return isinstance(axis, FieldAxis)
+    # `FieldAxis` is `common.Dimension`, a PEP 695 alias, which `isinstance` rejects; a
+    # dimension is a class, i.e. an instance of its metaclass.
+    return isinstance(axis, common.DimensionMeta)
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
@@ -1159,7 +1161,9 @@ class IndexField(common.Field):
     def restrict(self, item: common.AnyIndexSpec) -> Self:
         if isinstance(item, Sequence) and all(isinstance(e, common.DimensionIndex) for e in item):
             assert len(item) == 1
-            assert isinstance(item[0], common.DimensionIndex)  # for mypy errors on multiple lines below
+            assert isinstance(
+                item[0], common.DimensionIndex
+            )  # for mypy errors on multiple lines below
             # an index is a `DimensionIndex` instance now, not a (dim, value) namedtuple
             d, r = item[0].dim, item[0].value
             assert d == self._dimension

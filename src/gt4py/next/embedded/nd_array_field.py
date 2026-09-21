@@ -943,7 +943,7 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
     if not fbuiltins.is_cartesian_offset(offset):
-        target_dims = ", ".join(d.tag for d in offset.target)
+        target_dims = ", ".join(d.__qualname__ for d in offset.target)  # for the diagnostic
         raise ValueError(
             f"'as_offset' is only supported for Cartesian offsets "
             f"(single target dimension equal to source dimension); "

@@ -96,7 +96,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all] # type: ignore[attr-defined]
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
-TYPE_BUILTINS = [
+TYPE_BUILTINS: list[Any] = [
     common.Field,
     common.Dimension,
     int8,

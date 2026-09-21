@@ -346,3 +346,38 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
         assert isinstance(runners.get_default_runner(), runners.SerialRunner)
         runners.reset_default_runner()
+
+
+class TestInteractiveMainReference:
+    """
+    A class declared in an interactive `__main__` pickles in the parent but not in a worker.
+
+    Dimensions are classes identified by their qualified name (ADR 0028), so a notebook that
+    declares one would otherwise break the default process-pool compilation.
+    """
+
+    @staticmethod
+    def _main_class(name: str) -> type:
+        cls = type(name, (), {})
+        cls.__module__ = "__main__"
+        return cls
+
+    def test_found_when_main_is_interactive(self, monkeypatch):
+        interactive_main = type(sys)("__main__")  # a notebook / REPL `__main__`: no `__file__`
+        cls = self._main_class("NotebookDim")
+        interactive_main.NotebookDim = cls
+        monkeypatch.setitem(sys.modules, "__main__", interactive_main)
+        assert runners._interactive_main_reference({"nested": [cls]}) == "NotebookDim"
+
+    def test_ignored_when_main_is_a_script(self, monkeypatch):
+        # a spawn worker re-imports a script's `__main__`, so its classes do resolve there
+        script_main = type(sys)("__main__")
+        script_main.__file__ = "/some/script.py"
+        cls = self._main_class("ScriptDim")
+        script_main.ScriptDim = cls
+        monkeypatch.setitem(sys.modules, "__main__", script_main)
+        assert runners._interactive_main_reference(cls) is None
+
+    def test_ignored_for_classes_from_ordinary_modules(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "__main__", type(sys)("__main__"))
+        assert runners._interactive_main_reference([dataclasses.dataclass, int]) is None

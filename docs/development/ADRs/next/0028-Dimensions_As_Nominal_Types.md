@@ -93,11 +93,19 @@ disappears.
    a class deleted after creation passes), so the authoritative check remains
    pickle's own `save_global`.
 
-   **Known limitation**: interactive `__main__` — the REPL, notebooks,
-   `python -c` — cannot be resolved. The `spawn`-based compile workers
-   re-execute the main *script* as `__mp_main__`, so a dimension declared in a
-   file's `__main__` does resolve, provided the script has the
-   `if __name__ == "__main__":` guard the worker pool already requires.
+   **Interactive `__main__`** -- a notebook, the REPL, `python -c` -- has no
+   `__file__` for a worker to re-import, so a class declared there pickles in the
+   parent (which has it) and then fails to unpickle in a spawn worker. This is not
+   left as a documented limitation: the repository's own Quickstart and workshop
+   notebooks declare dimensions interactively and are run in CI. Instead the
+   process runner detects a job that references a class from an interactive
+   `__main__` and compiles it in the calling thread, with a warning -- the same
+   fallback it already takes for an executor that cannot be pickled. A *script's*
+   `__main__` is re-imported by spawn workers (as `__mp_main__`), so scripts keep
+   parallel compilation, provided they have the `if __name__ == "__main__":` guard
+   the worker pool already requires. `(tag, kind)` value identity with a registry
+   avoided this by pickling dimensions by value; that is the one case where it
+   was strictly more convenient.
 
 3. **No registry and no blanket `copyreg`.** Module-level classes pickle by
    reference, which is correct. A *narrow* `copyreg` registration is still
@@ -120,7 +128,9 @@ disappears.
 
 
    def from_codegen_name(name: str) -> Tag:
-       return re.sub(r"_([udlr])", lambda m: {"u": "_", "d": ".", "l": "[", "r": "]"}[m.group(1)], name)
+       return re.sub(
+           r"_([udlr])", lambda m: {"u": "_", "d": ".", "l": "[", "r": "]"}[m.group(1)], name
+       )
    ```
 
    A *prefix* escape, not `_ -> __` followed by `. -> _`: the latter is **not

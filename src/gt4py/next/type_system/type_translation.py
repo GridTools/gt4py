@@ -19,7 +19,7 @@ import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, TypeAlias
+from typing import Any, ForwardRef, Optional, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -221,7 +221,7 @@ def from_type_hint(
                 for d in dim_arg:
                     if not isinstance(d, common.DimensionMeta):
                         raise ValueError(f"Invalid field dimension definition '{d}'.")
-                    dims.append(d)
+                    dims.append(cast(common.Dimension, d))
             else:
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
