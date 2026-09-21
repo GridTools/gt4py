@@ -12,11 +12,20 @@ import gt4py.next as gtx
 from gt4py.next.ffront.transform_utils import _deduce_grid_type
 
 
-Dim = gtx.Dimension("Dim")
-LocalDim = gtx.Dimension("LocalDim", kind=gtx.DimensionKind.LOCAL)
+class HDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+
+
+class VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class Dim(gtx.DimensionIndex): ...
+
+
+class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
 
 CartesianOffset = gtx.FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
-UnstructuredOffset = gtx.FieldOffset("UnstructuredOffset", source=Dim, target=(Dim, LocalDim))
+UnstructuredOffset = gtx.FieldOffset(LocalDim.tag, source=Dim, target=(Dim, LocalDim))
 
 
 def test_domain_deduction_cartesian():
@@ -28,8 +37,6 @@ def test_domain_deduction_unstructured():
     assert _deduce_grid_type(None, {UnstructuredOffset}) == gtx.GridType.UNSTRUCTURED
     assert _deduce_grid_type(None, {LocalDim}) == gtx.GridType.UNSTRUCTURED
     # source and target share `.value` but differ in `.kind` -> not Cartesian
-    HDim = gtx.Dimension("X", kind=gtx.DimensionKind.HORIZONTAL)
-    VDim = gtx.Dimension("X", kind=gtx.DimensionKind.VERTICAL)
     CrossKindOffset = gtx.FieldOffset("CrossKind", source=HDim, target=(VDim,))
     assert _deduce_grid_type(None, {CrossKindOffset}) == gtx.GridType.UNSTRUCTURED
     # LOCAL self-loop is unstructured

@@ -15,11 +15,20 @@ import dataclasses
 
 from gt4py import next as gtx
 from gt4py.eve.xtyping import NestedTuple
-from gt4py.next import common, Dimension, Field, float32, float64, Dims, named_collections
+from gt4py.next import (
+    common,
+    Dimension,
+    DimensionIndex,
+    Field,
+    float32,
+    float64,
+    Dims,
+    named_collections,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
-TDim = Dimension("TDim")  # Meaningless dimension just for tests
+class TDim(DimensionIndex): ...
 
 
 class SingleElementNamedTupleNamedCollection(NamedTuple):

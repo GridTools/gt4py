@@ -14,8 +14,10 @@ import gt4py.next as gtx
 from gt4py.next import float64
 
 
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+class IDim(gtx.DimensionIndex): ...
+
+
+class JDim(gtx.DimensionIndex): ...
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated

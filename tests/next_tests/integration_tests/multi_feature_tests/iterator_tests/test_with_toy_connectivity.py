@@ -27,6 +27,7 @@ from gt4py.next.iterator.runtime import fundef
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.toy_connectivity import (
+    C2EDim,
     C2E,
     E2V,
     V2E,
@@ -93,7 +94,7 @@ def test_sum_edges_to_vertices(program_processor, stencil):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": v2e_conn},
+        offset_provider={V2EDim.tag: v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -115,7 +116,7 @@ def test_map_neighbors(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": v2e_conn},
+        offset_provider={V2EDim.tag: v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -138,7 +139,7 @@ def test_map_make_const_list(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": v2e_conn},
+        offset_provider={V2EDim.tag: v2e_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -162,8 +163,8 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processo
         inp,
         out=out,
         offset_provider={
-            "E2V": e2v_conn,
-            "C2E": c2e_conn,
+            E2VDim.tag: e2v_conn,
+            C2EDim.tag: c2e_conn,
         },
     )
     if validate:
@@ -191,7 +192,7 @@ def test_sparse_input_field(program_processor):
         non_sparse,
         inp,
         out=out,
-        offset_provider={"V2E": v2e_conn},
+        offset_provider={V2EDim.tag: v2e_conn},
     )
 
     if validate:
@@ -215,8 +216,8 @@ def test_sparse_input_field_v2v(program_processor):
         inp,
         out=out,
         offset_provider={
-            "V2V": v2v_conn,
-            "V2E": v2e_conn,
+            V2VDim.tag: v2v_conn,
+            V2EDim.tag: v2e_conn,
         },
     )
 
@@ -242,7 +243,7 @@ def test_slice_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
 
     if validate:
@@ -266,7 +267,7 @@ def test_slice_twice_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
 
     if validate:
@@ -291,7 +292,7 @@ def test_slice_shifted_sparse(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
 
     if validate:
@@ -320,7 +321,7 @@ def test_lift(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
     if validate:
         assert np.allclose(out.asnumpy(), ref)
@@ -343,7 +344,7 @@ def test_shift_sparse_input_field(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
 
     if validate:
@@ -373,8 +374,8 @@ def test_shift_sparse_input_field2(program_processor):
     out2 = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))
 
     offset_provider = {
-        "E2V": e2v_conn,
-        "V2E": v2e_conn,
+        E2VDim.tag: e2v_conn,
+        V2EDim.tag: v2e_conn,
     }
 
     domain = {Vertex: range(0, 9)}
@@ -428,7 +429,7 @@ def test_sparse_shifted_stencil_reduce(program_processor):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": v2v_conn},
+        offset_provider={V2VDim.tag: v2v_conn},
     )
 
     if validate:

@@ -78,9 +78,9 @@ def test_copy_lowering(copy_program_def, gtir_identity_fundef):
                     itir.FunCall,
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
-                        P(itir.AxisLiteral, value="IDim"),
-                        get_domain_range_pattern("out", "IDim", 0),
-                        get_domain_range_pattern("out", "IDim", 1),
+                        P(itir.AxisLiteral, value=IDim.tag),
+                        get_domain_range_pattern("out", IDim.tag, 0),
+                        get_domain_range_pattern("out", IDim.tag, 1),
                     ],
                 )
             ],
@@ -122,12 +122,12 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                     itir.FunCall,
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
-                        P(itir.AxisLiteral, value="IDim"),
+                        P(itir.AxisLiteral, value=IDim.tag),
                         P(
                             itir.FunCall,
                             fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
                             args=[
-                                get_domain_range_pattern("out", "IDim", 0),
+                                get_domain_range_pattern("out", IDim.tag, 0),
                                 P(
                                     itir.Literal,
                                     value="1",
@@ -143,7 +143,7 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
                             itir.FunCall,
                             fun=P(itir.SymRef, id=eve.SymbolRef("plus")),
                             args=[
-                                get_domain_range_pattern("out", "IDim", 0),
+                                get_domain_range_pattern("out", IDim.tag, 0),
                                 P(
                                     itir.Literal,
                                     value="2",

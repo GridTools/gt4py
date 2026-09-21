@@ -13,10 +13,16 @@ import pytest
 
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import config
+from gt4py.next import common, config
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
+
+
+class I(gtx.DimensionIndex): ...
+
+
+class J(gtx.DimensionIndex): ...
 
 
 def make_program_source(name: str) -> artifacts.ProgramSource:
@@ -26,7 +32,7 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
             interface.Parameter(
                 name="buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                    dims=[I, J],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                 ),
             ),
@@ -35,11 +41,11 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                            dims=[I, J],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                         ts.FieldType(
-                            dims=[gtx.Dimension("I"), gtx.Dimension("J")],
+                            dims=[I, J],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT32),
                         ),
                     ]
@@ -49,11 +55,14 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
         ),
         returns=True,
     )
+    # NOTE: the tag types are named after the *mangled* dimension tags, which is what the
+    # generated bindings reference; a dimension's tag is its qualified Python name (ADR 0028).
+    i_t, j_t = (common.codegen_name(d.tag) for d in (I, J))
     func = cpp_interface.render_function_declaration(
         entry_point,
-        """\
-        const auto xdim = gridtools::at_key<generated::I_t>(sid_get_upper_bounds(buf));
-        const auto ydim = gridtools::at_key<generated::J_t>(sid_get_upper_bounds(buf));
+        f"""\
+        const auto xdim = gridtools::at_key<generated::{i_t}_t>(sid_get_upper_bounds(buf));
+        const auto ydim = gridtools::at_key<generated::{j_t}_t>(sid_get_upper_bounds(buf));
         return xdim * ydim * sc;\
         """,
     )
@@ -62,12 +71,12 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
         #include <gridtools/fn/cartesian.hpp>
         #include <gridtools/fn/unstructured.hpp>
         namespace generated {
-        struct I_t {} constexpr inline I;
-        struct J_t {} constexpr inline J;
+        struct {{i_t}}_t {} constexpr inline {{i_t}};
+        struct {{j_t}}_t {} constexpr inline {{j_t}};
         }
         {{func}}\
         """
-    ).render(func=func)
+    ).render(func=func, i_t=i_t, j_t=j_t)
 
     return artifacts.ProgramSource(
         entry_point=entry_point,

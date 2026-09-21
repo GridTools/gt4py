@@ -12,13 +12,30 @@ import pytest
 
 from gt4py.next import (
     Dimension,
+    DimensionIndex,
     DimensionKind,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.iterator.type_system import type_specifications as ts_it
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+
+class IDim(DimensionIndex): ...
+
+
+class JDim(DimensionIndex): ...
+
+
+class KDim(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+
+
+class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class C2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class TDim(DimensionIndex): ...
 
 
 def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
@@ -61,14 +78,10 @@ def callable_type_info_cases():
         if not isinstance(symbol_type, ts.CallableType)
     ]
 
-    IDim = Dimension("I")
-    JDim = Dimension("J")
-    KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-
     bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    field_type = ts.FieldType(dims=[Dimension("I")], dtype=float_type)
+    field_type = ts.FieldType(dims=[IDim], dtype=float_type)
     tuple_type = ts.TupleType(types=[bool_type, field_type])
     nullary_func_type = ts.FunctionType(
         pos_only_args=[], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
@@ -261,7 +274,7 @@ def callable_type_info_cases():
             [ts.TupleType(types=[float_type, field_type])],
             {},
             [
-                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[I\], float64\]\]', got 'tuple\[float64, Field\[\[I\], float64\]\]'"
+                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[IDim\], float64\]\]', got 'tuple\[float64, Field\[\[IDim\], float64\]\]'"
             ],
             ts.VoidType(),
         ),
@@ -270,7 +283,7 @@ def callable_type_info_cases():
             [int_type],
             {},
             [
-                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[I\], float64\]\]', got 'int64'"
+                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[IDim\], float64\]\]', got 'int64'"
             ],
             ts.VoidType(),
         ),
@@ -292,8 +305,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected argument 'a' to be of type 'Field\[\[K\], int64\]', got 'Field\[\[K\], float64\]'",
-                r"Expected argument 'b' to be of type 'Field\[\[K\], int64\]', got 'Field\[\[K\], float64\]'",
+                r"Expected argument 'a' to be of type 'Field\[\[KDim\], int64\]', got 'Field\[\[KDim\], float64\]'",
+                r"Expected argument 'b' to be of type 'Field\[\[KDim\], int64\]', got 'Field\[\[KDim\], float64\]'",
             ],
             ts.FieldType(dims=[KDim], dtype=float_type),
         ),
@@ -343,8 +356,8 @@ def callable_type_info_cases():
             [ts.TupleType(types=[ts.FieldType(dims=[IDim, JDim, KDim], dtype=int_type)])],
             {},
             [
-                r"Expected argument 'a' to be of type 'tuple\[Field\[\[I, J, K\], int64\], "
-                r"Field\[\[\.\.\.\], int64\]\]', got 'tuple\[Field\[\[I, J, K\], int64\]\]'."
+                r"Expected argument 'a' to be of type 'tuple\[Field\[\[IDim, JDim, KDim\], int64\], "
+                r"Field\[\[\.\.\.\], int64\]\]', got 'tuple\[Field\[\[IDim, JDim, KDim\], int64\]\]'."
             ],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
@@ -412,16 +425,14 @@ def test_return_type(
     [
         (ts.ScalarType(kind=ts.ScalarKind.INT64), False),
         (
-            ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+            ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
             False,
         ),
         (
             ts.TupleType(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
-                    ts.FieldType(
-                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-                    ),
+                    ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
                 ]
             ),
             False,
@@ -430,9 +441,7 @@ def test_return_type(
             ts.NamedCollectionType(
                 types=[
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
-                    ts.FieldType(
-                        dims=[Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-                    ),
+                    ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
                 ],
                 keys=["a", "b"],
                 original_python_type="some.module:SomeClass",
@@ -447,7 +456,7 @@ def test_return_type(
                         types=[
                             ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.FieldType(
-                                dims=[Dimension("I")],
+                                dims=[IDim],
                                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                             ),
                         ],
@@ -467,8 +476,6 @@ def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
 def test_promote_lists():
     float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int32 = ts.ScalarType(kind=ts.ScalarKind.INT32)
-    V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
-    C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
     const_list = ts.ListType(element_type=float64, offset_type=None)
     v2e_list = ts.ListType(element_type=float64, offset_type=V2EDim)
 

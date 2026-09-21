@@ -90,7 +90,7 @@ def ensure_expr(expr_like: ExprLike) -> itir.Expr:
         return ref(expr_like)
     elif core_defs.is_scalar_type(expr_like):
         return literal_from_value(expr_like)
-    elif isinstance(expr_like, common.Dimension):
+    elif isinstance(expr_like, common.DimensionMeta):
         return axis_literal(expr_like)
     assert isinstance(expr_like, itir.Expr), expr_like
     return expr_like
@@ -583,7 +583,7 @@ def op_as_fieldop(
 
 
 def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
-    return itir.AxisLiteral(value=dim.value, kind=dim.kind)
+    return itir.AxisLiteral(value=dim.tag, kind=dim.kind)
 
 
 def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
@@ -640,7 +640,7 @@ def index(dim: common.Dimension) -> itir.FunCall:
     Returns:
         A function that constructs a Field of indices in the given dimension.
     """
-    return call("index")(itir.AxisLiteral(value=dim.value, kind=dim.kind))
+    return call("index")(itir.AxisLiteral(value=dim.tag, kind=dim.kind))
 
 
 def map_list(op):

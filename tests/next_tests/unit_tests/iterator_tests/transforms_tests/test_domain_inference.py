@@ -28,12 +28,26 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
-KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
-Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
-Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
-E2VDim = common.Dimension(value="E2V", kind=common.DimensionKind.LOCAL)
+
+
+class IDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class JDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class KDim(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+
+
+class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class E2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
 float_i_field = ts.FieldType(dims=[IDim], dtype=float_type)
 float_ij_field = ts.FieldType(dims=[IDim, JDim], dtype=float_type)
 tuple_float_i_field = ts.TupleType(
@@ -47,7 +61,7 @@ Koff = im.cartesian_offset(KDim, KDim)
 @pytest.fixture
 def unstructured_offset_provider():
     return {
-        "E2V": constructors.as_connectivity(
+        E2VDim.tag: constructors.as_connectivity(
             domain={Edge: 1, E2VDim: 2},
             codomain=Vertex,
             data=np.array([[0, 1]], dtype=np.int32),
@@ -223,9 +237,9 @@ def test_multi_length_shift():
 
 
 def test_unstructured_shift(unstructured_offset_provider):
-    stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
+    stencil = im.lambda_("arg0")(im.deref(im.shift(E2VDim.tag, 1)("arg0")))
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
-    accessed_vertex = unstructured_offset_provider["E2V"].ndarray[0, 1]
+    accessed_vertex = unstructured_offset_provider[E2VDim.tag].ndarray[0, 1]
     expected_domains = {"in_field1": {Vertex: (accessed_vertex, accessed_vertex + np.int32(1))}}
 
     testee, expected = setup_test_as_fieldop(stencil, domain, expected_domains=expected_domains)
@@ -1168,9 +1182,9 @@ def test_scan():
 
 
 def test_symbolic_domain_sizes(unstructured_offset_provider):
-    stencil = im.lambda_("arg0")(im.deref(im.shift("E2V", 1)("arg0")))
+    stencil = im.lambda_("arg0")(im.deref(im.shift(E2VDim.tag, 1)("arg0")))
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
-    symbolic_domain_sizes = {"Vertex": "num_vertices"}
+    symbolic_domain_sizes = {Vertex.tag: "num_vertices"}
     expected_domains = {"in_field1": {Vertex: (0, im.ref("num_vertices"))}}
     testee, expected = setup_test_as_fieldop(
         stencil,
@@ -1412,7 +1426,7 @@ def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_o
     # `Edge: [1, 1)` range must not raise.
     domain = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, 1)})
     cond = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, itir.InfinityLiteral.POSITIVE)})
-    stencil_e2v = im.lambda_("it")(im.deref(im.shift("E2V", 0)("it")))
+    stencil_e2v = im.lambda_("it")(im.deref(im.shift(E2VDim.tag, 0)("it")))
 
     domain_empty = im.domain(common.GridType.UNSTRUCTURED, {Edge: (1, 1)})
     domain_a = im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 0)})
@@ -1439,7 +1453,7 @@ def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_o
 
 
 def test_broadcast():
-    testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value="IDim")))
+    testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value=IDim.tag)))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
     expected_domains = {
         "in_field": {IDim: (0, 10)},

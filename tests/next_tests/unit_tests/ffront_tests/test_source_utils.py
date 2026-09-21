@@ -19,15 +19,21 @@ them.
 """
 
 import gt4py.next as gtx
-from gt4py.next import Dims, Dimension, float64, neighbor_sum
+from gt4py.next import Dims, Dimension, DimensionIndex, float64, neighbor_sum
 from gt4py.next.ffront import source_utils
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
 
 
-Cell = Dimension("Cell")
-Edge = Dimension("Edge")
-C2EDim = Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
+class Cell(DimensionIndex): ...
+
+
+class Edge(DimensionIndex): ...
+
+
+class C2EDim(DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
 
 CField = gtx.Field[Dims[Cell], float64]
 EField = gtx.Field[Dims[Edge], float64]

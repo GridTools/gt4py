@@ -72,7 +72,7 @@ class FieldConstructor:
     def __init__(
         self,
         allocator: Allocator | None = None,
-        aligned_index: Sequence[common.NamedIndex] | None = None,
+        aligned_index: Sequence[common.DimensionIndex] | None = None,
         device: core_defs.Device | None = None,
     ):
         if allocator is None:
@@ -178,7 +178,7 @@ class FieldConstructor:
     ) -> nd_array_field.NdArrayField:
         """Create a `Field` from an array-like object. See :func:`as_field` for details."""
         if isinstance(domain, Sequence) and all(
-            isinstance(dim, common.Dimension) for dim in domain
+            isinstance(dim, common.DimensionMeta) for dim in domain
         ):
             domain = cast(Sequence[common.Dimension], domain)
             if len(domain) != data.ndim:
@@ -335,7 +335,7 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
 class _CustomLayoutConstructor(_FieldArrayConstructor):
     allocator: next_allocators.FieldBufferAllocatorProtocol
     device: core_defs.Device | None = None
-    aligned_index: Sequence[common.NamedIndex] | None = None
+    aligned_index: Sequence[common.DimensionIndex] | None = None
 
     @functools.cached_property
     def device_id(self) -> int:
@@ -384,7 +384,7 @@ class _CustomLayoutConstructor(_FieldArrayConstructor):
 @eve.utils.optional_lru_cache
 def _field_constructor(
     allocator: Allocator | None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     device: core_defs.Device | None = None,
 ) -> FieldConstructor:
     return FieldConstructor(allocator, aligned_index=aligned_index, device=device)
@@ -395,7 +395,7 @@ def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -465,7 +465,7 @@ def zeros(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -490,7 +490,7 @@ def ones(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = DEFAULT_DTYPE,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -516,7 +516,7 @@ def full(
     fill_value: core_defs.Scalar,
     dtype: core_defs.DTypeLike | None = None,
     *,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -548,7 +548,7 @@ def as_field(
     dtype: core_defs.DTypeLike | None = None,
     *,
     origin: Mapping[common.Dimension, int] | None = None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
 ) -> nd_array_field.NdArrayField:
@@ -615,7 +615,7 @@ def as_connectivity(
     dtype: core_defs.DTypeLike | None = None,
     *,
     origin: Mapping[common.Dimension, int] | None = None,
-    aligned_index: Sequence[common.NamedIndex] | None = None,
+    aligned_index: Sequence[common.DimensionIndex] | None = None,
     allocator: Allocator | None = None,
     device: core_defs.Device | None = None,
     skip_value: core_defs.IntegralScalar | eve.NothingType | None = eve.NOTHING,

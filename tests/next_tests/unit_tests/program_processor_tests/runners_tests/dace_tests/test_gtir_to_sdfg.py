@@ -27,6 +27,9 @@ from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.cases_utils import (
+    E2VDim,
+    C2VDim,
+    C2EDim,
     Cell,
     Edge,
     IDim,
@@ -88,10 +91,10 @@ FSYMBOLS = dict(
 
 
 def make_mesh_symbols(mesh: MeshDescriptor):
-    c2e_ndarray = mesh.offset_provider["C2E"].ndarray
-    c2v_ndarray = mesh.offset_provider["C2V"].ndarray
-    e2v_ndarray = mesh.offset_provider["E2V"].ndarray
-    v2e_ndarray = mesh.offset_provider["V2E"].ndarray
+    c2e_ndarray = mesh.offset_provider[C2EDim.tag].ndarray
+    c2v_ndarray = mesh.offset_provider[C2VDim.tag].ndarray
+    e2v_ndarray = mesh.offset_provider[E2VDim.tag].ndarray
+    v2e_ndarray = mesh.offset_provider[V2EDim.tag].ndarray
     return dict(
         __cells_Cell_range_0=0,
         __cells_Cell_range_1=mesh.num_cells,
@@ -998,15 +1001,17 @@ def test_gtir_connectivity_shift():
     # apply shift 2 times along different dimensions
     stencil1_inlined = im.as_fieldop(
         im.lambda_("it")(
-            im.deref(im.shift("C2E", C2E_neighbor_idx)(im.shift("E2V", E2V_neighbor_idx)("it")))
+            im.deref(
+                im.shift(C2EDim.tag, C2E_neighbor_idx)(im.shift(E2VDim.tag, E2V_neighbor_idx)("it"))
+            )
         )
     )("ev_field")
 
     # fieldview flavor of the same stncil: create an intermediate temporary field
     stencil1_fieldview = im.as_fieldop(
-        im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it")))
+        im.lambda_("it")(im.deref(im.shift(E2VDim.tag, E2V_neighbor_idx)("it")))
     )(
-        im.as_fieldop(im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))))(
+        im.as_fieldop(im.lambda_("it")(im.deref(im.shift(C2EDim.tag, C2E_neighbor_idx)("it"))))(
             "ev_field"
         )
     )
@@ -1017,9 +1022,9 @@ def test_gtir_connectivity_shift():
             im.deref(
                 im.call(
                     im.call("shift")(
-                        im.ensure_offset("E2V"),
+                        im.ensure_offset(E2VDim.tag),
                         im.ensure_offset(E2V_neighbor_idx),
-                        im.ensure_offset("C2E"),
+                        im.ensure_offset(C2EDim.tag),
                         im.ensure_offset(C2E_neighbor_idx),
                     )
                 )("it")
@@ -1033,9 +1038,9 @@ def test_gtir_connectivity_shift():
             im.deref(
                 im.call(
                     im.call("shift")(
-                        im.ensure_offset("E2V"),
+                        im.ensure_offset(E2VDim.tag),
                         im.plus(im.deref("e2v_off"), 0),
-                        im.ensure_offset("C2E"),
+                        im.ensure_offset(C2EDim.tag),
                         im.deref("c2e_off"),
                     )
                 )("it")
@@ -1049,9 +1054,9 @@ def test_gtir_connectivity_shift():
             im.deref(
                 im.call(
                     im.call("shift")(
-                        im.ensure_offset("E2V"),
+                        im.ensure_offset(E2VDim.tag),
                         im.deref("e2v_off"),
-                        im.ensure_offset("C2E"),
+                        im.ensure_offset(C2EDim.tag),
                         im.deref("c2e_off"),
                     )
                 )("it")
@@ -1068,8 +1073,8 @@ def test_gtir_connectivity_shift():
     CELL_OFFSET_FTYPE = ts.FieldType(dims=[Cell], dtype=SIZE_TYPE)
     EDGE_OFFSET_FTYPE = ts.FieldType(dims=[Edge], dtype=SIZE_TYPE)
 
-    connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
-    connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
+    connectivity_C2E = SIMPLE_MESH.offset_provider[C2EDim.tag]
+    connectivity_E2V = SIMPLE_MESH.offset_provider[E2VDim.tag]
 
     ev = np.random.rand(SIMPLE_MESH.num_edges, SIMPLE_MESH.num_vertices)
     ref = ev[connectivity_C2E.asnumpy()[:, C2E_neighbor_idx], :][
@@ -1153,11 +1158,11 @@ def test_gtir_connectivity_shift_chain():
             gtir.SetAt(
                 expr=im.as_fieldop(
                     # let domain inference infer the domain here
-                    im.lambda_("it")(im.deref(im.shift("E2V", E2V_neighbor_idx)("it"))),
+                    im.lambda_("it")(im.deref(im.shift(E2VDim.tag, E2V_neighbor_idx)("it"))),
                 )(
                     im.as_fieldop(
                         # let domain inference infer the domain here
-                        im.lambda_("it")(im.deref(im.shift("V2E", V2E_neighbor_idx)("it"))),
+                        im.lambda_("it")(im.deref(im.shift(V2EDim.tag, V2E_neighbor_idx)("it"))),
                     )("edges")
                 ),
                 domain=im.get_field_domain(
@@ -1172,8 +1177,8 @@ def test_gtir_connectivity_shift_chain():
 
     sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider)
 
-    connectivity_E2V = SIMPLE_MESH.offset_provider["E2V"]
-    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    connectivity_E2V = SIMPLE_MESH.offset_provider[E2VDim.tag]
+    connectivity_V2E = SIMPLE_MESH.offset_provider[V2EDim.tag]
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
     ref = e[
@@ -1223,7 +1228,7 @@ def test_gtir_neighbors_as_input():
             gtir.SetAt(
                 expr=im.let(
                     "x",
-                    im.as_fieldop_neighbors("V2E", "edges", outer_domain),
+                    im.as_fieldop_neighbors(V2EDim.tag, "edges", outer_domain),
                 )(
                     im.as_fieldop(
                         im.lambda_("it")(
@@ -1242,7 +1247,7 @@ def test_gtir_neighbors_as_input():
     # based on canonical order of field dimensions
     sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider, skip_domain_inference=True)
 
-    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    connectivity_V2E = SIMPLE_MESH.offset_provider[V2EDim.tag]
 
     v2e_field = np.random.rand(SIMPLE_MESH.num_vertices, connectivity_V2E.shape[1], MESH_NUM_LEVELS)
     e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
@@ -1295,14 +1300,14 @@ def test_gtir_reduce():
     init_value = np.random.rand()
     stencil_inlined = im.as_fieldop(
         im.lambda_("it")(
-            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors("V2E", "it"))
+            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors(V2EDim.tag, "it"))
         )
     )("edges")
     stencil_fieldview = im.as_fieldop(
         im.lambda_("it")(im.reduce("plus", im.literal_from_value(init_value))(im.deref("it")))
-    )(im.as_fieldop_neighbors("V2E", "edges"))
+    )(im.as_fieldop_neighbors(V2EDim.tag, "edges"))
 
-    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    connectivity_V2E = SIMPLE_MESH.offset_provider[V2EDim.tag]
 
     e = np.random.rand(SIMPLE_MESH.num_edges)
     v_ref = [
@@ -1350,14 +1355,14 @@ def test_gtir_reduce_with_skip_values():
     init_value = np.random.rand()
     stencil_inlined = im.as_fieldop(
         im.lambda_("it")(
-            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors("V2E", "it"))
+            im.reduce("plus", im.literal_from_value(init_value))(im.neighbors(V2EDim.tag, "it"))
         )
     )("edges")
     stencil_fieldview = im.as_fieldop(
         im.lambda_("it")(im.reduce("plus", im.literal_from_value(init_value))(im.deref("it")))
-    )(im.as_fieldop_neighbors("V2E", "edges"))
+    )(im.as_fieldop_neighbors(V2EDim.tag, "edges"))
 
-    connectivity_V2E = SKIP_VALUE_MESH.offset_provider["V2E"]
+    connectivity_V2E = SKIP_VALUE_MESH.offset_provider[V2EDim.tag]
 
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
     v_ref = [
@@ -1406,7 +1411,7 @@ def test_gtir_reduce_with_skip_values():
 def test_gtir_reduce_dot_product():
     init_value = np.random.rand()
 
-    connectivity_V2E = SKIP_VALUE_MESH.offset_provider["V2E"]
+    connectivity_V2E = SKIP_VALUE_MESH.offset_provider[V2EDim.tag]
 
     v2e_field = np.random.rand(*connectivity_V2E.shape)
     e = np.random.rand(SKIP_VALUE_MESH.num_edges)
@@ -1441,7 +1446,7 @@ def test_gtir_reduce_dot_product():
                 )(
                     im.op_as_fieldop(im.map_list("plus"))(
                         im.op_as_fieldop(im.map_list("multiplies"))(
-                            im.as_fieldop_neighbors("V2E", "edges"),
+                            im.as_fieldop_neighbors(V2EDim.tag, "edges"),
                             "v2e_field",
                         ),
                         im.op_as_fieldop("make_const_list")(1.0),
@@ -1492,7 +1497,7 @@ def test_gtir_reduce_with_cond_neighbors(use_sparse):
                     im.if_(
                         "pred",
                         "v2e_field",
-                        im.as_fieldop_neighbors("V2E", "edges"),
+                        im.as_fieldop_neighbors(V2EDim.tag, "edges"),
                     )
                 ),
                 domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "vertices", [Vertex]),
@@ -1501,7 +1506,7 @@ def test_gtir_reduce_with_cond_neighbors(use_sparse):
         ],
     )
 
-    connectivity_V2E = SKIP_VALUE_MESH.offset_provider["V2E"]
+    connectivity_V2E = SKIP_VALUE_MESH.offset_provider[V2EDim.tag]
 
     sdfg = build_dace_sdfg(testee, SKIP_VALUE_MESH.offset_provider)
 
@@ -1744,8 +1749,8 @@ def test_gtir_let_lambda_with_connectivity():
     C2E_neighbor_idx = 1
     C2V_neighbor_idx = 2
 
-    connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
-    connectivity_C2V = SIMPLE_MESH.offset_provider["C2V"]
+    connectivity_C2E = SIMPLE_MESH.offset_provider[C2EDim.tag]
+    connectivity_C2V = SIMPLE_MESH.offset_provider[C2VDim.tag]
 
     testee = gtir.Program(
         id="let_lambda_with_connectivity",
@@ -1761,13 +1766,13 @@ def test_gtir_let_lambda_with_connectivity():
                 expr=im.let(
                     "x1",
                     im.as_fieldop(
-                        im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it")))
+                        im.lambda_("it")(im.deref(im.shift(C2EDim.tag, C2E_neighbor_idx)("it")))
                     )("edges"),
                 )(
                     im.let(
                         "x2",
                         im.as_fieldop(
-                            im.lambda_("it")(im.deref(im.shift("C2V", C2V_neighbor_idx)("it")))
+                            im.lambda_("it")(im.deref(im.shift(C2VDim.tag, C2V_neighbor_idx)("it")))
                         )("vertices"),
                     )(im.op_as_fieldop("plus")("x1", "x2"))
                 ),
@@ -1818,7 +1823,7 @@ def test_gtir_let_lambda_with_origin():
             gtir.SetAt(
                 expr=im.let("e1", im.op_as_fieldop("plus")("edges", 1.0))(
                     im.as_fieldop(
-                        im.lambda_("it")(im.deref(im.shift("C2E", C2E_neighbor_idx)("it"))),
+                        im.lambda_("it")(im.deref(im.shift(C2EDim.tag, C2E_neighbor_idx)("it"))),
                     )("e1")
                 ),
                 domain=apply_margin_on_field_domain(
@@ -1835,7 +1840,7 @@ def test_gtir_let_lambda_with_origin():
 
     c = np.random.rand(SIMPLE_MESH.num_cells, MESH_NUM_LEVELS)
     e = np.random.rand(SIMPLE_MESH.num_edges, MESH_NUM_LEVELS)
-    connectivity_C2E = SIMPLE_MESH.offset_provider["C2E"]
+    connectivity_C2E = SIMPLE_MESH.offset_provider[C2EDim.tag]
     ref = np.concatenate(
         (c[:, :1], e[connectivity_C2E.asnumpy()[:, C2E_neighbor_idx], 1:] + 1.0), axis=1
     )

@@ -26,6 +26,7 @@ from gt4py.next.iterator.type_system import (
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests.cases import (
+    C2EDim,
     C2E,
     E2V,
     V2E,
@@ -101,18 +102,18 @@ def expression_test_cases():
         ),
         (
             im.named_range(
-                itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+                itir.AxisLiteral(value=Vertex.tag, kind=common.DimensionKind.HORIZONTAL), 0, 1
             ),
             it_ts.NamedRangeType(dim=Vertex),
         ),
         (
-            im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)),
+            im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)),
             ts.DomainType(dims=[IDim]),
         ),
         (
             im.call("unstructured_domain")(
                 im.named_range(
-                    itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+                    itir.AxisLiteral(value=Vertex.tag, kind=common.DimensionKind.HORIZONTAL), 0, 1
                 )
             ),
             ts.DomainType(dims=[Vertex]),
@@ -131,7 +132,7 @@ def expression_test_cases():
         ),
         # neighbors
         (
-            im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
+            im.neighbors(E2VDim.tag, im.ref("a", it_on_e_of_e_type)),
             ts.ListType(element_type=it_on_e_of_e_type.element_type, offset_type=E2VDim),
         ),
         # cast
@@ -183,7 +184,7 @@ def expression_test_cases():
             ts.TupleType(types=[int_type, float64_type]),
         ),
         # shift
-        (im.shift("V2E", 1)(im.ref("it", it_on_v_of_e_type)), it_on_e_of_e_type),
+        (im.shift(V2EDim.tag, 1)(im.ref("it", it_on_v_of_e_type)), it_on_e_of_e_type),
         # cartesian shift via `CartesianOffset`
         (im.shift(Ioff, 1)(im.ref("it", it_ijk_type)), it_ijk_type),
         # as_fieldop
@@ -207,7 +208,7 @@ def expression_test_cases():
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift(Koff, 1)(im.shift("V2E", 0)("it")))),
+                im.lambda_("it")(im.deref(im.shift(Koff, 1)(im.shift(V2EDim.tag, 0)("it")))),
                 vertex_k_domain,
             )(im.ref("inp", float_edge_k_field)),
             float_vertex_k_field,
@@ -216,7 +217,7 @@ def expression_test_cases():
             im.as_fieldop(
                 im.lambda_("it1", "it2")(
                     im.plus(
-                        im.deref(im.shift("E2V", 1)(im.shift("C2E", 1)("it1"))),
+                        im.deref(im.shift(E2VDim.tag, 1)(im.shift(C2EDim.tag, 1)("it1"))),
                         im.deref(im.shift(Koff, 1)("it2")),
                     ),
                 ),
@@ -229,7 +230,7 @@ def expression_test_cases():
         ),
         (
             im.as_fieldop(
-                im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
+                im.lambda_("it")(im.deref(im.shift(V2EDim.tag, 0)("it"))),
                 vertex_k_domain,
             )(im.ref("inp", float_edge_k_field)),
             float_vertex_k_field,
@@ -261,13 +262,13 @@ def expression_test_cases():
                 im.as_fieldop(
                     im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                     im.call("cartesian_domain")(
-                        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+                        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
                     ),
                 )(im.ref("inp", float_i_field), 1.0),
                 im.as_fieldop(
                     "deref",
                     im.call("cartesian_domain")(
-                        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+                        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
                     ),
                 )(im.ref("inp", float_i_field)),
             ),
@@ -389,7 +390,7 @@ def test_late_offset_axis():
     mesh = simple_mesh(None)
 
     func = im.lambda_("dim")(im.shift(im.ref("dim"), 1)(im.ref("it", it_on_v_of_e_type)))
-    testee = im.call(func)(im.ensure_offset("V2E"))
+    testee = im.call(func)(im.ensure_offset(V2EDim.tag))
 
     result = itir_type_inference.infer(
         testee, offset_provider_type=mesh.offset_provider_type, allow_undeclared_symbols=True
@@ -412,7 +413,7 @@ def test_cast_first_arg_inference():
 
 def test_cartesian_fencil_definition():
     cartesian_domain = im.call("cartesian_domain")(
-        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
     )
 
     testee = itir.Program(
@@ -443,9 +444,9 @@ def test_unstructured_fencil_definition():
     mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
         im.named_range(
-            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+            itir.AxisLiteral(value=Vertex.tag, kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
+        im.named_range(itir.AxisLiteral(value=KDim.tag, kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(
@@ -456,7 +457,7 @@ def test_unstructured_fencil_definition():
         body=[
             itir.SetAt(
                 expr=im.as_fieldop(
-                    im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))), unstructured_domain
+                    im.lambda_("it")(im.deref(im.shift(V2EDim.tag, 0)("it"))), unstructured_domain
                 )(im.ref("inp")),
                 domain=unstructured_domain,
                 target=im.ref("out"),
@@ -478,7 +479,7 @@ def test_unstructured_fencil_definition():
 
 def test_function_definition():
     cartesian_domain = im.call("cartesian_domain")(
-        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
     )
 
     testee = itir.Program(
@@ -510,9 +511,9 @@ def test_fencil_with_nb_field_input():
     mesh = simple_mesh(None)
     unstructured_domain = im.call("unstructured_domain")(
         im.named_range(
-            itir.AxisLiteral(value="Vertex", kind=common.DimensionKind.HORIZONTAL), 0, 1
+            itir.AxisLiteral(value=Vertex.tag, kind=common.DimensionKind.HORIZONTAL), 0, 1
         ),
-        im.named_range(itir.AxisLiteral(value="KDim", kind=common.DimensionKind.VERTICAL), 0, 1),
+        im.named_range(itir.AxisLiteral(value=KDim.tag, kind=common.DimensionKind.VERTICAL), 0, 1),
     )
 
     testee = itir.Program(
@@ -540,7 +541,7 @@ def test_fencil_with_nb_field_input():
 
 def test_program_tuple_setat_short_target():
     cartesian_domain = im.call("cartesian_domain")(
-        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
     )
 
     testee = itir.Program(
@@ -571,7 +572,7 @@ def test_program_tuple_setat_short_target():
 
 def test_program_setat_without_domain():
     cartesian_domain = im.call("cartesian_domain")(
-        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
     )
 
     testee = itir.Program(
@@ -595,7 +596,7 @@ def test_program_setat_without_domain():
 
 def test_if_stmt():
     cartesian_domain = im.call("cartesian_domain")(
-        im.named_range(itir.AxisLiteral(value="IDim"), 0, 1)
+        im.named_range(itir.AxisLiteral(value=IDim.tag), 0, 1)
     )
 
     testee = itir.IfStmt(
@@ -622,7 +623,7 @@ def test_as_fieldop_without_domain_nb_field_input():
 
     testee = im.as_fieldop(stencil)(im.ref("inp1", float_vertex_v2e_field))
     result = itir_type_inference.infer(
-        testee, offset_provider_type={"V2E": V2E}, allow_undeclared_symbols=True
+        testee, offset_provider_type={V2EDim.tag: V2E}, allow_undeclared_symbols=True
     )
     assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_list_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(

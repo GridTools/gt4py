@@ -23,10 +23,16 @@ from gt4py.next.iterator.builtins import (
 )
 
 
-E = gtx.Dimension("E")
-V = gtx.Dimension("V")
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-E2V = gtx.FieldOffset("E2V", source=V, target=(E, E2VDim))
+class E(gtx.DimensionIndex): ...
+
+
+class V(gtx.DimensionIndex): ...
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+E2V = gtx.FieldOffset(E2VDim.tag, source=V, target=(E, E2VDim))
 
 
 # 0 --0-- 1 --1-- 2
@@ -44,7 +50,7 @@ def test_write_neighbors():
         return as_fieldop(lambda it: neighbors(E2V, it), domain)(inp)
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp)
 
     ref = e2v_arr
@@ -76,7 +82,7 @@ def test_write_map_neighbors_and_const_list():
         )
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp)
 
     ref = e2v_arr + 42.0
@@ -94,7 +100,7 @@ def test_write_map_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)
@@ -122,7 +128,7 @@ def test_write_non_mapped_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)

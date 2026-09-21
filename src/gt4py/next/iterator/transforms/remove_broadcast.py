@@ -30,7 +30,7 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> expr = im.call("broadcast")(
     ...     im.ref("inp"),
     ...     im.make_tuple(
-    ...         *(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (IDim, JDim))
+    ...         *(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (IDim, JDim))
     ...     ),
     ... )
     >>> expr.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)

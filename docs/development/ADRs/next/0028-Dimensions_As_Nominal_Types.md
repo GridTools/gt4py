@@ -195,6 +195,13 @@ nested declaration it is already the readable form (`V2E.Local`). `repr()` shows
 the full tag and the kind, which disambiguates the rare case of two same-named
 dimensions from different modules appearing in one message.
 
+Ordering follows the same rule, and it matters more than it looks: `order_dimensions`
+determines a field's *canonical dimension order*. Keying it on `tag` would make
+that order depend on **which module each dimension is declared in**, so moving a
+declaration would silently reorder a field's dimensions. It is therefore keyed on
+the unqualified name, with `tag` only breaking ties between same-named dimensions
+from different modules so the order stays total.
+
 `DimensionMeta` must declare `__hash__ = type.__hash__` explicitly: Python sets
 `__hash__ = None` on any class body defining `__eq__` without it, and `__eq__`
 stays for the `I == 5` → `Domain` overload. Without it every dimension class is

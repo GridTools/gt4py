@@ -27,7 +27,9 @@ from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
-IDim = gtx.Dimension("IDim")
+class IDim(gtx.DimensionIndex): ...
+
+
 IOff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 # A PEP 695 alias whose value raises when it is evaluated, standing in for the

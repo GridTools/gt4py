@@ -710,7 +710,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     right.location,
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
-                    f"'{left.type.dim.value}'.",
+                    f"'{left.type.dim.__qualname__}'.",
                     hints=[
                         (
                             "Use an integer offset to shift within the dimension, or a half-integer "
@@ -989,12 +989,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
         if not fbuiltins.is_cartesian_offset(arg_0):
-            target_dims = ", ".join(d.value for d in arg_0.target)
+            target_dims = ", ".join(d.tag for d in arg_0.target)
             raise errors.DSLError(
                 node.location,
                 f"'as_offset' is only supported for Cartesian offsets "
                 f"(single target dimension equal to source dimension); "
-                f"got source '{arg_0.source.value}' and target ({target_dims}).",
+                f"got source '{arg_0.source.__qualname__}' and target ({target_dims}).",
             )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(

@@ -17,6 +17,9 @@ from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded
 
 
+class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+
+
 def test_column_ufunc():
     def test_func():
         a = embedded.Column(1, np.asarray(range(0, 3)))
@@ -44,9 +47,7 @@ def test_column_ufunc():
 
         with embedded_context.update(
             offset_provider={},
-            closure_column_range=common.NamedRange(
-                common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
-            ),
+            closure_column_range=common.NamedRange(K, range(0, 3)),
         ):
             test_func(2, 3)
 
@@ -148,6 +149,5 @@ def test_column_array_function_wrong_shape():
 
 
 def test_lift_accepts_cartesian_dimension_offset():
-    K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
     lifted = embedded.lift(lambda *args: 0)()
     lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise

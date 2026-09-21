@@ -655,7 +655,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(field_desc.shape) == len(arg_expr.field_domain)
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
         index_connectors = [
-            IndexConnectorFmt.format(dim=dim.value)
+            IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))
             for dim, index in field_indices
             if not isinstance(index, SymbolExpr)
         ]
@@ -665,7 +665,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         index_internals = ",".join(
             str(index.value - offset)
             if isinstance(index := arg_expr.indices[dim], SymbolExpr)
-            else f"{IndexConnectorFmt.format(dim=dim.value)} - {offset}"
+            else f"{IndexConnectorFmt.format(dim=dim.tag)} - {offset}"
             for (dim, offset) in arg_expr.field_domain
         )
         deref_node, connector_mapping = self._add_tasklet(
@@ -684,7 +684,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # add termination points for the dynamic iterator indices
         for dim, index_expr in field_indices:
-            index_connector = IndexConnectorFmt.format(dim=dim.value)
+            index_connector = IndexConnectorFmt.format(dim=dim.tag)
             if isinstance(index_expr, MemletExpr):
                 self._add_input_data_edge(
                     index_expr.dc_node,
@@ -769,7 +769,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_dim = arg.gt_dtype.offset_type
             assert local_dim is not None
             assert isinstance(
-                self.subgraph_builder.get_offset_provider_type(local_dim.value),
+                self.subgraph_builder.get_offset_provider_type(local_dim.tag),
                 gtx_common.NeighborConnectivityType,
             )
             # find position of the local dimension in the field layout
@@ -1155,7 +1155,11 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg, (conn_type.max_neighbors,), field_desc.dtype
         )
         neighbors_node = self.state.add_access(neighbors_temp)
-        offset_type = gtx_common.Dimension(offset, gtx_common.DimensionKind.LOCAL)
+        # NOTE: the connectivity's own local dimension, not one synthesized from the offset
+        # tag. The latter named a local dimension after the *offset*, which only coincided with
+        # the real one under the old `V2EDim = Dimension("V2E")` convention, and under nominal
+        # identity (ADR 0028) a tag string cannot be turned back into a dimension at all.
+        offset_type = conn_type.neighbor_dim
         neighbor_idx = gtir_to_sdfg_utils.get_map_variable(offset_type)
 
         index_connector = "__index"
@@ -1317,7 +1321,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             if offset_type == _CONST_DIM:
                 # this input argument is the result of `make_const_list`
                 continue
-            offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.value)
+            offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.tag)
             assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
             input_conn_types[offset_type] = offset_provider_t
 
@@ -1371,7 +1375,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         if conn_type.has_skip_values:
             # In case the `map_list` input expressions contain skip values, we use
             # the connectivity-based offset provider as mask for map computation.
-            conn_data = gtx_dace_args.connectivity_identifier(offset_type.value)
+            conn_data = gtx_dace_args.connectivity_identifier(offset_type.tag)
             conn_desc = self.sdfg.arrays[conn_data]
             conn_desc.transient = False
 
@@ -1433,7 +1437,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> ValueExpr:
         assert list_type.offset_type is not None
         offset_provider_t = self.subgraph_builder.get_offset_provider_type(
-            list_type.offset_type.value
+            list_type.offset_type.tag
         )
         assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
         local_size = offset_provider_t.max_neighbors
@@ -1473,7 +1477,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.value)
+        offset_provider_type = self.subgraph_builder.get_offset_provider_type(offset_type.tag)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
 
         inp_conn = "_in"
@@ -1485,7 +1489,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 and input_expr.gt_dtype.offset_type is not None
             )
             offset_type = input_expr.gt_dtype.offset_type
-            connectivity = gtx_dace_args.connectivity_identifier(offset_type.value)
+            connectivity = gtx_dace_args.connectivity_identifier(offset_type.tag)
             self.sdfg.arrays[connectivity].transient = False
 
             reduce_node = gtx_library_nodes.ReduceWithSkipValues(

@@ -20,7 +20,8 @@ from gt4py.next.type_system import type_specifications as ts
 # values inside the domain of every unary math builtin (0.5 is invalid for `arccosh`)
 _SAFE_INPUT = {"arccosh": 2.0}
 
-IDim = common.Dimension("IDim")
+
+class IDim(common.DimensionIndex): ...
 
 
 @dataclasses.dataclass
