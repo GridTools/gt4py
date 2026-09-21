@@ -9,6 +9,8 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
+from collections.abc import Iterable, Iterator
 from typing import Any, Optional
 
 import dace
@@ -18,7 +20,8 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.iterator.transforms import infer_domain, pass_manager
 from gt4py.next.iterator.transforms.pass_manager import _process_symbolic_domains_option
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
@@ -34,6 +37,33 @@ from gt4py.next.program_processors.runners.dace.lowering_stree import (
 )
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
+
+
+def _is_neighbors_or_lifted_neighbors(arg: itir.Expr) -> bool:
+    """Whether `arg` is a `neighbors` call or a lift wrapping one (transitively)."""
+    if cpm.is_call_to(arg, "neighbors"):
+        return True
+    return cpm.is_applied_lift(arg) and any(
+        _is_neighbors_or_lifted_neighbors(nested_arg) for nested_arg in arg.args
+    )
+
+
+def _has_neighbors_argument(reduce_node: itir.FunCall) -> bool:
+    """Whether an applied `reduce` operates directly on a (lifted) `neighbors` argument.
+
+    Such a reduction is not lowered to SDFG natively and must be unrolled. A reduction
+    over a materialized neighbor-list field (e.g. the result of a `concat_where`) has a
+    plain iterator argument instead and is excluded here, since it is lowered natively.
+    """
+
+    def flatten(args: Iterable[itir.Expr]) -> Iterator[itir.Expr]:
+        for arg in args:
+            if cpm.is_call_to(arg, "if_"):
+                yield from flatten(arg.args[1:3])
+            else:
+                yield arg
+
+    return any(_is_neighbors_or_lifted_neighbors(arg) for arg in flatten(reduce_node.args))
 
 
 def find_constant_symbols(
@@ -381,6 +411,40 @@ class DaCeTranslator(
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
+    def _preprocess_program(
+        self,
+        program: itir.Program,
+        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    ) -> itir.Program:
+        apply_common_transforms = functools.partial(
+            pass_manager.apply_common_transforms,
+            offset_provider=offset_provider,
+            force_inline_lambda_args=True,
+            transform_concat_where_to_as_fieldop=False,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+        )
+
+        new_program = apply_common_transforms(program, unroll_reduce=False)
+
+        if any(
+            cpm.is_applied_lift(node)
+            or (cpm.is_applied_reduce(node) and _has_neighbors_argument(node))
+            for node in new_program.pre_walk_values().if_isinstance(itir.FunCall)
+        ):
+            # We retry with unrolled reductions (whose fixed-point loop also inlines
+            # the remaining lifts) in two cases that the SDFG lowering cannot handle
+            # as-is:
+            #  - an applied `lift` is left in the itir, or
+            #  - a `reduce` is applied directly to a (lifted) `neighbors` argument.
+            # A `reduce` over a materialized neighbor-list field, e.g. the result of a
+            # `concat_where`, does not match either condition: it is lowered natively
+            # and must not trigger this path, since unrolling such a reduction is
+            # unnecessary and, on meshes with skip values, outright fails (there is no
+            # `neighbors` iterator from which to build the skip-value check).
+            new_program = apply_common_transforms(program, unroll_reduce=True)
+
+        return new_program
+
     def _generate_sdfg_without_configuring_dace(
         self,
         ir: itir.Program,
@@ -396,17 +460,7 @@ class DaCeTranslator(
                     raise NotImplementedError(
                         "The ITIR transform pipeline is only supported with the STree lowering."
                     )
-                ir = itir_transforms.apply_common_transforms(
-                    ir,
-                    offset_provider=offset_provider,
-                    extract_temporaries=False,
-                    unroll_reduce=False,
-                    common_subexpression_elimination=True,
-                    force_inline_lambda_args=False,
-                    transform_concat_where_to_as_fieldop=False,
-                    symbolic_domain_sizes=symbolic_domain_sizes,
-                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-                )
+                ir = self._preprocess_program(ir, offset_provider)
             else:
                 ir = itir_transforms.apply_fieldview_transforms(
                     ir,
