@@ -263,8 +263,6 @@ markers = [
   'uses_ir_if_stmts',
   'uses_lift: tests that require backend support for lift builtin function',
   'uses_negative_modulo: tests that require backend support for modulo on negative numbers',
-  'uses_offset_tag_differing_from_local_dim: tests that shift with an offset tag that differs from the name of its local dimension',
-  'uses_offset_tag_differing_from_local_dim_in_reduction: tests that reduce over an offset whose tag differs from the name of its local dimension',
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduce_with_lambda: tests that use lambdas as reduce functions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',

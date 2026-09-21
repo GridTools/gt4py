@@ -1483,6 +1483,38 @@ def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProvid
 get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
 
 
+def connectivity_key_over(
+    offset_provider: OffsetProvider | OffsetProviderType, local_dim: Dimension
+) -> str:
+    """
+    The key of a bound connectivity whose local dimension is `local_dim`.
+
+    Neighbor reductions and sparse fields know only their local dimension, and use its table
+    for the neighbor count and the skip values. That is the table keyed by the local dimension's
+    tag, i.e. its owner's, if bound. Otherwise it is a connectivity *sharing* the local dimension
+    (see `NeighborConnectivity`), keyed by its own tag, which has the same neighbor structure.
+
+    Raises:
+        KeyError: If no bound connectivity has `local_dim` as its local dimension.
+    """
+    if local_dim.tag in offset_provider:
+        return local_dim.tag
+    for key, connectivity in offset_provider.items():
+        if isinstance(connectivity, NeighborConnectivityType):
+            neighbor_dim = connectivity.neighbor_dim
+        elif is_neighbor_table(connectivity):
+            neighbor_dim = connectivity.domain.dims[1]
+        else:
+            continue
+        if neighbor_dim is local_dim:
+            assert isinstance(key, str)
+            return key
+    raise KeyError(
+        f"No connectivity over the local dimension '{local_dim.tag}' is bound in the offset"
+        f" provider, which has {sorted(map(str, offset_provider))}."
+    )
+
+
 def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
     """Determine if offset provider has an element for the given offset tag."""
     try:

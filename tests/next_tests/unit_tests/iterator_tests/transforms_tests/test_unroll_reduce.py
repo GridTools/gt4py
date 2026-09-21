@@ -11,7 +11,7 @@ import pytest
 from gt4py.next import common, utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_local_dims
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -98,10 +98,10 @@ def reduction_if():
         "reduction_if",
     ],
 )
-def test_get_partial_offsets(reduction, request):
-    partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
+def test_get_partial_local_dims(reduction, request):
+    partial_local_dims = _get_partial_local_dims(request.getfixturevalue(reduction).args)
 
-    assert set(partial_offsets) == {Dim.tag}
+    assert set(partial_local_dims) == {Dim}
 
 
 def _expected(red, max_neighbors, has_skip_values, shifted_arg=0):
