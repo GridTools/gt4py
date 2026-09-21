@@ -4,7 +4,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -16,7 +16,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None, backend=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -26,7 +26,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -36,7 +36,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -49,7 +49,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
       def somescanop(
@@ -64,7 +64,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -85,7 +85,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -106,7 +106,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -127,8 +127,8 @@
       import typing
       from gt4py import next as gtx
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
 
@@ -145,8 +145,8 @@
       import typing
       from gt4py import next as gtx
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
       CKTuple: typing.TypeAlias = tuple[CellKField[T], CellKField[T]]
@@ -163,8 +163,8 @@
       from gt4py import next as gtx
       from gt4py.next import where
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim], T]
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
@@ -205,7 +205,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -218,7 +218,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -236,7 +236,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -260,8 +260,8 @@
       import typing
       from gt4py import next as gtx
 
-      CDim = gtx.Dimension("CDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(
