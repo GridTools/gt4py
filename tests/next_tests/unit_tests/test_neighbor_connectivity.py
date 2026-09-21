@@ -141,10 +141,10 @@ class TestDeclarationErrors:
             ),
             (
                 """
-                class C(NeighborConnectivity[Vertex, Edge]):
+                class C(NeighborConnectivity[Vertex, Edge], max_neighbors=5):
                     Local = V2E.Local
                 """,
-                "already the local dimension of 'V2E'",
+                "counts are declared by its owner",
             ),
             (
                 """
@@ -226,6 +226,20 @@ class TestDeclarationErrors:
         )
         assert ns["Coeff"].owner is ns["C"]
         assert (ns["Coeff"].max_neighbors, ns["Coeff"].min_neighbors) == (3, 3)
+
+    def test_sharing_a_local_dimension(self):
+        ns = _declare(
+            """
+            class V2EShared(NeighborConnectivity[Vertex, Edge]):
+                Local = V2E.Local
+            """
+        )
+        shared = ns["V2EShared"]
+        assert shared.Local is V2E.Local
+        assert V2E.Local.owner is V2E
+        assert V2E.offset_tag == V2E.Local.tag
+        assert shared.offset_tag == shared.tag
+        assert shared.__gt_type__().tag == shared.tag
 
     def test_non_integer_index(self):
         with pytest.raises(TypeError, match="indexed by an integer"):

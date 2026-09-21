@@ -52,7 +52,12 @@ and skip values were never checked against the `FieldOffset` declaration.
   dimension can have at most one owner.
 - A local dimension with no table, such as the coefficient axis of a fixed-size
   stencil, is declared on its own: `class LsqCoeff(LocalDimensionIndex, size=3)`.
-  Its `owner` is `None`.
+  Its `owner` is `None`. A declaration can also *adopt* such a module-level local
+  dimension (`Local = LsqCoeff`), which then keeps its own tag.
+- A connectivity can *share* another one's local dimension, `Local = C2E.Local`.
+  This is the flattened sparse pattern, e.g. cell-to-cell-edge (`C2CE: Cell -> CellEdge`) indexing the same neighbor axis as `C2E`, so that its results
+  combine with `C2E`-shaped sparse fields. The owner stays `C2E`, and the
+  neighbor counts and skip-value structure are the owner's.
 - `max_neighbors` and `min_neighbors` are optional class keywords, not type
   parameters: Python has no integer type parameters, and nothing static needs
   the count. A declared count is a constraint on the bound table; an undeclared
@@ -99,15 +104,23 @@ dimension generically uses a `TypeVar` bound to `LocalDimensionIndex`.
 
 A declaration is typed like the `FieldOffset` it replaces: `V2E.__gt_type__()`
 is the `ts.OffsetType` of the derived offset `(Codomain -> (Origin, Local))`,
-whose tag is **the local dimension's tag**, `V2E.Local.tag`. This is the single
-string that shifts, neighbor reductions and sparse arguments already use to find
-the table in the offset provider, so existing backends need no change.
-`V2E.Local` inside DSL code types as that local dimension, and
-`FieldOffset.Local` names the same thing on a legacy offset, so the spelling
-works for both. The other frontend touch points treat the class like the
-`FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
-counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
-metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
+whose tag is the connectivity's `offset_tag`:
+
+- **the local dimension's tag**, `V2E.Local.tag`, for the connectivity that
+  declares it. This is the single string that shifts, neighbor reductions and
+  sparse arguments already use to find the table in the offset provider, so
+  existing backends need no change.
+- **its own tag**, `C2CE.tag`, for a connectivity that shares another one's local
+  dimension, since the local dimension's tag already names the owner's table.
+  Shifts find the table by that tag; reductions and sparse arguments still find
+  the owner's table by the local dimension's tag, for its neighbor structure, so
+  the owner has to be bound too.
+  `V2E.Local` inside DSL code types as that local dimension, and
+  `FieldOffset.Local` names the same thing on a legacy offset, so the spelling
+  works for both. The other frontend touch points treat the class like the
+  `FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
+  counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
+  metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
 
 ## Consequences
 

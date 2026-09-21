@@ -1958,6 +1958,28 @@ class ConnectivityMeta(type):
         """The connectivity's identity: its qualified Python name."""
         return f"{cls.__module__}.{cls.__qualname__}"
 
+    @property
+    def offset_tag(cls) -> Tag:
+        """
+        The name of the connectivity in the IR, and its key in a normalized offset provider.
+
+        The tag of its local dimension, if it declares it: shifts, neighbor reductions and sparse
+        arguments then all find the table under one string. A connectivity that *shares* another
+        one's local dimension (a flattened sparse pattern, e.g. cell-to-cell-edge indexing the
+        same neighbor axis as cell-to-edge) is named by its own tag, since the local dimension's
+        tag already names its owner's table.
+        """
+        local = cls._local()
+        return local.tag if local.owner is cls else cls.tag
+
+    def _local(cls) -> type[LocalDimensionIndex]:
+        if "Local" not in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}' is not a connectivity declaration; declare one by"
+                " subclassing 'NeighborConnectivity[Origin, Codomain]'."
+            )
+        return cls.Local
+
     def __call__(cls, *args: Any, **kwargs: Any) -> NoReturn:
         raise TypeError(
             f"'{cls.__qualname__}' is a connectivity declaration and cannot be instantiated;"
@@ -1993,21 +2015,13 @@ class ConnectivityMeta(type):
 
     def __gt_field_offset__(cls) -> Any:
         """
-        The `FieldOffset` equivalent to this connectivity.
-
-        Its tag is the *local dimension's* tag, the single string that shifts, neighbor
-        reductions and sparse arguments all use to find the table in the offset provider.
+        The `FieldOffset` equivalent to this connectivity, tagged with `offset_tag`.
         """
         from gt4py.next.ffront import fbuiltins
 
-        if "Local" not in cls.__dict__:
-            raise TypeError(
-                f"'{cls.__qualname__}' is not a connectivity declaration; declare one by"
-                " subclassing 'NeighborConnectivity[Origin, Codomain]'."
-            )
         if (field_offset := cls.__dict__.get("_field_offset")) is None:
             field_offset = fbuiltins.FieldOffset(
-                cls.Local.tag, source=cls.codomain, target=(cls.origin, cls.Local)
+                cls.offset_tag, source=cls.codomain, target=(cls.origin, cls._local())
             )
             type.__setattr__(cls, "_field_offset", field_offset)
         return field_offset
@@ -2077,14 +2091,21 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                 f"'{name}' must declare its local dimension as a nested class:"
                 " 'class Local(LocalDimensionIndex): ...'."
             )
-        if local.owner is not None:
-            raise TypeError(
-                f"'{name}': '{local.__qualname__}' is already the local dimension of"
-                f" '{local.owner.__qualname__}'."
-            )
-
         max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)
         min_neighbors = _check_neighbor_count(cls, "min_neighbors", min_neighbors)
+        if local.owner is not None:
+            # Sharing another connectivity's local dimension: the neighbor structure is the
+            # owner's, including its counts, and the sharing connectivity is named by its own tag.
+            if (max_neighbors, min_neighbors) != (None, None) and (
+                max_neighbors,
+                min_neighbors,
+            ) != (local.max_neighbors, local.min_neighbors):
+                raise TypeError(
+                    f"'{name}' shares the local dimension of '{local.owner.__qualname__}', whose"
+                    " neighbor counts are declared by its owner."
+                )
+            cls.origin, cls.codomain = origin, codomain
+            return
         for count_name, count in (
             ("max_neighbors", max_neighbors),
             ("min_neighbors", min_neighbors),
