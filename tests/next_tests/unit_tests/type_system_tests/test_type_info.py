@@ -464,6 +464,18 @@ def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
     assert type_info.needs_value_extraction(type_spec) is expected
 
 
+def test_is_concretizable_vararg_to_tuple():
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    vararg = ts.VarArgType(element_type=float_type)
+
+    assert type_info.is_concretizable(vararg, ts.TupleType(types=[float_type, float_type]))
+    assert not type_info.is_concretizable(vararg, ts.TupleType(types=[int_type]))
+    # The empty tuple is a valid concretization of any variable-length tuple: there are
+    # no elements whose type could conflict with the element type.
+    assert type_info.is_concretizable(vararg, ts.TupleType(types=[]))
+
+
 def test_promote_lists():
     float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int32 = ts.ScalarType(kind=ts.ScalarKind.INT32)
@@ -479,3 +491,17 @@ def test_promote_lists():
         type_info.promote(v2e_list, ts.ListType(element_type=int32, offset_type=V2EDim))
     with pytest.raises(ValueError, match="non-lists"):
         type_info.promote(v2e_list, float64)
+
+
+def test_is_concretizable_tuple_with_nested_vararg():
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    field_type = ts.FieldType(dims=[], dtype=float_type)
+    nested = ts.TupleType(types=[ts.VarArgType(element_type=field_type), field_type])
+
+    assert type_info.is_concretizable(
+        nested, ts.TupleType(types=[ts.TupleType(types=[field_type, field_type]), field_type])
+    )
+    assert not type_info.is_concretizable(
+        nested, ts.TupleType(types=[ts.TupleType(types=[float_type]), field_type])
+    )
+    assert not type_info.is_concretizable(nested, ts.TupleType(types=[field_type]))

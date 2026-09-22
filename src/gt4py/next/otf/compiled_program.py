@@ -507,13 +507,22 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         Is the operator or program generic in the sense that it can be called for different
         argument types.
 
-        Right now this is only the case for scan operators.
+        Right now this is the case for scan operators and for parameters containing a
+        variable-length tuple, whose concrete length is only known at the call.
         """
+
         # TODO(tehrengruber): This concept does not exist elsewhere and is not properly reflected
         #  in the type system. For now we just use `DeferredType` to communicate between
         #  here and `type_info.type_in_program_context`.
+        def is_generic_type(t: ts.TypeSpec) -> bool:
+            if isinstance(t, (ts.DeferredType, ts.VarArgType)):
+                return True
+            if isinstance(t, ts.TupleType):
+                return any(is_generic_type(el) for el in t.types)
+            return False
+
         return any(
-            isinstance(t, ts.DeferredType)
+            is_generic_type(t)
             for t in itertools.chain(
                 self.program_type.definition.pos_only_args,
                 self.program_type.definition.pos_or_kw_args.values(),
