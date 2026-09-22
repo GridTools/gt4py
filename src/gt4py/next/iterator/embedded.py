@@ -441,7 +441,7 @@ def lift(stencil):
     return impl
 
 
-NamedRange: TypeAlias = tuple[Tag | common.Dimension, range]
+NamedRange: TypeAlias = tuple[common.Dimension, range]
 
 
 @builtins.cartesian_domain.register(EMBEDDED)
@@ -455,12 +455,12 @@ def unstructured_domain(*args: NamedRange) -> runtime.UnstructuredDomain:
 
 
 Domain: TypeAlias = (
-    runtime.CartesianDomain | runtime.UnstructuredDomain | dict[str | common.Dimension, range]
+    runtime.CartesianDomain | runtime.UnstructuredDomain | dict[common.Dimension, range]
 )
 
 
 @builtins.named_range.register(EMBEDDED)
-def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange:
+def named_range(tag: common.Dimension, start: int, end: int) -> NamedRange:
     # TODO revisit this pattern after the discussion of 0d-field vs scalar
     if isinstance(start, ConstantField):
         start = start.value
@@ -1030,26 +1030,6 @@ def _is_sparse_position_entry(
     pos: FieldIndex | SparsePositionEntry,
 ) -> TypeGuard[SparsePositionEntry]:
     return isinstance(pos, list)
-
-
-def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[FieldIndex, ...]:
-    res: list[FieldIndex] = []
-    sparse_position_tracker: dict[common.Dimension, int] = {}
-    for axis in axes:
-        if _is_tuple_axis(axis):
-            res.append(slice(None))
-        else:
-            assert _is_field_axis(axis)
-            assert axis in pos
-            elem = pos[axis]
-            if _is_sparse_position_entry(elem):
-                sparse_position_tracker.setdefault(axis, 0)
-                res.append(elem[sparse_position_tracker[axis]])
-                sparse_position_tracker[axis] += 1
-            else:
-                assert isinstance(elem, (int, np.integer, slice, range))
-                res.append(elem)
-    return tuple(res)
 
 
 @overload
@@ -1684,7 +1664,14 @@ def scan(scan_pass, is_forward: bool, init):
 def _domain_as_dict(
     domain: runtime.CartesianDomain | runtime.UnstructuredDomain,
 ) -> dict[common.Dimension, range]:
-    return dict(domain.items())
+    result = dict(domain.items())
+    for dim in result:
+        if not isinstance(dim, common.DimensionMeta):
+            raise TypeError(
+                f"Domain axis '{dim!r}' is not a dimension; an axis given by its tag can be turned"
+                " into its dimension with 'gtx.resolve'."
+            )
+    return result
 
 
 def _validate_domain(domain: Domain, table_types: common.TableTypes) -> None:

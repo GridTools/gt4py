@@ -2615,7 +2615,9 @@ class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
     A position in the product of a primary dimension and local dimensions.
 
     For example the entry `(Vertex(3), V2E.Local(1))` of the table of `V2E`: the second neighbor
-    of vertex 3. It is a tuple of indices, so it indexes a field directly.
+    of vertex 3. It is a tuple of indices, so it indexes a field or a neighbor table directly, and
+    it compares and hashes like the plain tuple; tuple operations such as slicing return plain
+    tuples. A user-facing, typed index: nothing in the toolchain requires it.
 
     Examples:
         >>> class Vertex(DimensionIndex): ...
@@ -2645,6 +2647,10 @@ class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
                     f" '{local_index!r}'."
                 )
         return super().__new__(cls, (index, *local_indices))
+
+    def __getnewargs__(self) -> tuple[Any, ...]:
+        # NOTE: `tuple`'s own passes the elements as one tuple, which `__new__` does not take.
+        return tuple(cast(tuple[Any, ...], self))
 
     @property
     def dims(self) -> tuple[Dimension, ...]:

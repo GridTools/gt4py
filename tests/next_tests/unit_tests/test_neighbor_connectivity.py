@@ -493,9 +493,8 @@ class TestFrontendIntegration:
             assert np.array_equal(V2E[np.int32(1)].asnumpy(), V2E[1].asnumpy())
 
     def test_attribute_errors_are_dsl_errors(self):
-        from gt4py.next import errors, field_operator
+        from gt4py.next import Dims, Field, errors
         from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-        from gt4py.next import Dims, Field
 
         def domain_of(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
             return a(V2E.domain)
@@ -768,6 +767,18 @@ class TestMultiDimensionIndex:
         position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
         assert position == (Vertex(1), V2E.Local(2))
         assert hash(position) == hash((Vertex(1), V2E.Local(2)))
+
+    def test_pickle_and_copy(self):
+        import copy
+
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        for clone in (
+            pickle.loads(pickle.dumps(position)),
+            copy.copy(position),
+            copy.deepcopy(position),
+        ):
+            assert type(clone) is common.MultiDimensionIndex
+            assert clone == position
 
     @pytest.mark.parametrize(
         "indices",
