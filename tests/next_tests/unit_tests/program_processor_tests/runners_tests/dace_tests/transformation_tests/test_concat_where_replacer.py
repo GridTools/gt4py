@@ -888,13 +888,7 @@ def _make_concat_where_global_read(
         state.add_edge(c, None, tlet, "__in0", dace.Memlet(f"c[{scalar_access}]"))
         state.add_edge(tlet, "__out", d, None, dace.Memlet("d[5]"))
     else:
-        state.add_edge(
-            c,
-            None,
-            d,
-            None,
-            dace.Memlet(data="c", other_subset="5", subset=str(scalar_access)),
-        )
+        state.add_nedge(c, d, dace.Memlet(data="c", subset=str(scalar_access), other_subset="5"))
 
     sdfg.validate()
 
