@@ -2608,3 +2608,47 @@ def _check_shared_local_dimensions(
                     " local dimension must have the same number of neighbors, and skip values at"
                     " the same positions."
                 )
+
+
+class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
+    """
+    A position in the product of a primary dimension and local dimensions.
+
+    For example the entry `(Vertex(3), V2E.Local(1))` of the table of `V2E`: the second neighbor
+    of vertex 3. It is a tuple of indices, so it indexes a field directly.
+
+    Examples:
+        >>> class Vertex(DimensionIndex): ...
+        >>> class Edge(DimensionIndex): ...
+        >>> class V2E(NeighborConnectivity[Vertex, Edge]):
+        ...     class Local(LocalDimensionIndex): ...
+        >>> position = MultiDimensionIndex(Vertex(3), V2E.Local(1))
+        >>> position
+        MultiDimensionIndex(Vertex=3, V2E.Local=1)
+        >>> position.dims == (Vertex, V2E.Local)
+        True
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, index: D, *local_indices: *Ls) -> MultiDimensionIndex[D, *Ls]:
+        # NOTE: checked at runtime what a checker cannot: a `TypeVarTuple` has no bound.
+        if not isinstance(index, DimensionIndex) or index.dim.kind is DimensionKind.LOCAL:
+            raise TypeError(
+                f"'MultiDimensionIndex' starts with an index into a non-local dimension, got"
+                f" '{index!r}'."
+            )
+        for local_index in local_indices:
+            if not isinstance(local_index, LocalDimensionIndex):
+                raise TypeError(
+                    "'MultiDimensionIndex' continues with indices into local dimensions, got"
+                    f" '{local_index!r}'."
+                )
+        return super().__new__(cls, (index, *local_indices))
+
+    @property
+    def dims(self) -> tuple[Dimension, ...]:
+        return tuple(index.dim for index in cast(tuple[DimensionIndex, ...], self))
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join(map(repr, cast(tuple[Any, ...], self)))})"

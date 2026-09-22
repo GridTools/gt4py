@@ -755,3 +755,24 @@ def test_the_const_list_dimension_cannot_be_adopted():
                 Local: typing.TypeAlias = ConstList
             """
         )
+
+
+class TestMultiDimensionIndex:
+    def test_indexes_a_neighbor_table(self):
+        table = _table()
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        assert position.dims == (Vertex, V2E.Local)
+        assert table[position].as_scalar() == 3
+
+    def test_is_a_tuple_of_indices(self):
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        assert position == (Vertex(1), V2E.Local(2))
+        assert hash(position) == hash((Vertex(1), V2E.Local(2)))
+
+    @pytest.mark.parametrize(
+        "indices",
+        [(V2E.Local(0),), (Vertex(0), Edge(1)), (Vertex(0), 1), (0,)],
+    )
+    def test_rejects_other_shapes(self, indices):
+        with pytest.raises(TypeError, match="MultiDimensionIndex"):
+            common.MultiDimensionIndex(*indices)
