@@ -146,7 +146,14 @@ class TestDeclarationErrors:
                 class C(NeighborConnectivity[Vertex, Edge], max_neighbors=5):
                     Local: typing.TypeAlias = V2E.Local
                 """,
-                "counts are declared by its owner",
+                "contradicts the local dimension it shares with 'V2E'",
+            ),
+            (
+                """
+                class C(NeighborConnectivity[Edge, Edge]):
+                    Local = V2E.Local
+                """,
+                "cannot share the local dimension of 'V2E'",
             ),
             (
                 """
@@ -242,6 +249,15 @@ class TestDeclarationErrors:
         assert V2E.offset_tag == V2E.Local.tag
         assert shared.offset_tag == shared.tag
         assert shared.__gt_type__().tag == shared.tag
+
+    def test_sharing_with_consistent_counts(self):
+        ns = _declare(
+            """
+            class V2EShared4(NeighborConnectivity[Vertex, Edge], max_neighbors=4):
+                Local = V2E.Local
+            """
+        )
+        assert ns["V2EShared4"].Local is V2E.Local
 
     def test_non_integer_index(self):
         with pytest.raises(TypeError, match="indexed by an integer"):
@@ -473,6 +489,46 @@ def test_local_dimension_of():
     assert common.local_dimension_of(shared) is V2E.Local
     with pytest.raises(TypeError, match="not a connectivity declaration"):
         common.local_dimension_of(NeighborConnectivity)
+
+
+class TestConnectivityKeyOver:
+    def _type(self, connectivity):
+        return _table_type(domain=(connectivity.origin, common.local_dimension_of(connectivity)))
+
+    def test_owner_is_preferred(self):
+        ns = _declare(
+            """
+            class V2EShared(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = V2E.Local
+            """
+        )
+        shared = ns["V2EShared"]
+        provider = {shared.offset_tag: self._type(shared), V2E.offset_tag: self._type(V2E)}
+        assert common.connectivity_key_over(provider, V2E.Local) == V2E.offset_tag
+        assert common.connectivity_key_over(provider, V2E.Local.tag) == V2E.offset_tag
+
+    def test_sharers_are_picked_independently_of_order(self):
+        ns = _declare(
+            """
+            class SharedA(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = V2E.Local
+
+            class SharedB(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = V2E.Local
+            """
+        )
+        a, b = ns["SharedA"], ns["SharedB"]
+        forward = {a.offset_tag: self._type(a), b.offset_tag: self._type(b)}
+        backward = dict(reversed(forward.items()))
+        assert (
+            common.connectivity_key_over(forward, V2E.Local)
+            == common.connectivity_key_over(backward, V2E.Local)
+            == min(a.offset_tag, b.offset_tag)
+        )
+
+    def test_nothing_bound(self):
+        with pytest.raises(KeyError, match="No connectivity over the local dimension"):
+            common.connectivity_key_over({E2V.offset_tag: self._type(E2V)}, V2E.Local)
 
 
 def test_the_const_list_dimension_cannot_be_adopted():
