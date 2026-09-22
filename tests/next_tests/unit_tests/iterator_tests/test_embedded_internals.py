@@ -151,3 +151,12 @@ def test_column_array_function_wrong_shape():
 def test_lift_accepts_cartesian_dimension_offset():
     lifted = embedded.lift(lambda *args: 0)()
     lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise
+
+
+def test_domain_axes_must_be_dimensions():
+    from gt4py.next.iterator import embedded as iterator_embedded, runtime as iterator_runtime
+
+    with pytest.raises(TypeError, match="gtx.resolve"):
+        iterator_embedded._domain_as_dict(
+            iterator_runtime.CartesianDomain([("pkg.IDim", range(3))])
+        )
