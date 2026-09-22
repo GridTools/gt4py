@@ -92,14 +92,14 @@ def _get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
 
 def get_sdfg_conn_args(
     sdfg: dace.SDFG,
-    offset_provider: gtx_common.OffsetProvider,
+    offset_provider: gtx_common.OffsetProviderLike,
 ) -> dict[str, core_defs.NDArrayObject]:
     """
     Extracts the connectivity tables that are used in the sdfg and ensures
     that the memory buffers are allocated for the target device.
     """
     connectivity_args = {}
-    for offset, connectivity in offset_provider.items():
+    for offset, connectivity in gtx_common.as_tag_keyed_offset_provider(offset_provider).items():
         name = gtx_dace_args.connectivity_identifier(offset)
         if name in sdfg.arrays:
             assert gtx_common.is_neighbor_table(connectivity)

@@ -114,3 +114,59 @@ def test_what_is_left_is_reported():
     assert any("offset-provider key 'E2C'" in note for note in notes)
     assert any("offset-provider key 'Koff'" in note for note in notes)
     assert any("'KDim.value'" in note for note in notes)
+
+
+BARE = textwrap.dedent(
+    """\
+    from gt4py.next import Dimension, DimensionKind, FieldOffset as FO
+
+    LOCAL = DimensionKind.LOCAL
+    Vertex = Dimension("Vertex")
+    Edge = Dimension("Edge")
+    V2EDim = Dimension("V2E", LOCAL)
+    V2E = FO("V2E_TAG", source=Edge, target=(Vertex, V2EDim))
+    """
+)
+
+
+def test_unqualified_names_and_aliases():
+    results, notes = _migrate(bare=BARE, user='table = {"V2E_TAG": t}\n')
+    migrated = results["bare"]
+
+    assert "FO" not in migrated
+    assert "from gt4py.next import Dimension, DimensionKind\n" in migrated
+    assert (
+        "from gt4py.next import DimensionIndex, LocalDimensionIndex, NeighborConnectivity\n"
+        in migrated
+    )
+    assert "class V2EDim(LocalDimensionIndex): ..." in migrated
+    assert "class V2E(NeighborConnectivity[Vertex, Edge]):" in migrated
+    namespace: dict = {"__name__": "migrated_bare"}
+    exec(migrated, namespace)
+    assert namespace["V2E"].Local is namespace["V2EDim"]
+    # a key spelled with the offset's tag is reported, naming the class
+    assert any("'V2E_TAG'" in note and "{V2E: table}" in note for note in notes)
+
+
+def test_shadowed_names_and_all_are_left_alone():
+    source = textwrap.dedent(
+        """\
+        from pkg.dimension import KDim, Koff
+
+        __all__ = ["Koff"]
+
+
+        def helper(Koff):
+            return Koff + 1
+
+
+        def uses(a):
+            return a(Koff[1]) + a(dims.KDim.value)
+        """
+    )
+    results, notes = _migrate(dimension=DIMENSIONS, user=source)
+
+    assert "return Koff + 1" in results["user"]
+    assert "a(KDim + 1)" in results["user"]
+    assert any("'__all__' lists the removed offset 'Koff'" in note for note in notes)
+    assert any("'KDim.value'" in note for note in notes)

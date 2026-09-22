@@ -352,7 +352,6 @@ def staggered_base_tag(tag: Tag) -> Optional[Tag]:
     return match["base"] if (match := _STAGGERED_TAG_RE.match(tag)) is not None else None
 
 
-@functools.cache
 def resolve(tag: Tag) -> Dimension:
     """
     Return the dimension class a tag names, by importing it.
@@ -364,6 +363,10 @@ def resolve(tag: Tag) -> Dimension:
     A purely dotted tag does not record where the module path ends and the qualname begins,
     so the longest importable prefix wins and the remainder is walked as attributes. A
     collision would need a module path and an attribute chain to have the same spelling.
+
+    Only where the module path ends is memoized; the attribute walk is repeated on every call, so
+    a declaration redefined under the same name (e.g. by re-running a notebook cell) resolves to
+    the new class.
 
     Parametrized dimensions such as `Staggered[K]` have no importable qualname; their tag
     has the form `<owner tag>[<base tag>]` and is resolved by subscripting the owner, which
@@ -396,26 +399,33 @@ def resolve(tag: Tag) -> Dimension:
     return cast(Dimension, obj)
 
 
-@functools.cache
 def _import_qualified_name(tag: Tag) -> Any:
     """Import the object a dotted qualified name refers to; see `resolve`."""
+    module_name, attrs = _split_qualified_name(tag)
+    obj: Any = sys.modules.get(module_name) or importlib.import_module(module_name)
+    for attr in attrs:
+        try:
+            obj = getattr(obj, attr)
+        except AttributeError as ex:
+            raise ValueError(
+                f"Cannot resolve tag '{tag}': '{module_name}' has no attribute '{'.'.join(attrs)}'."
+            ) from ex
+    return obj
+
+
+@functools.cache
+def _split_qualified_name(tag: Tag) -> tuple[str, tuple[str, ...]]:
+    """Split a dotted name at its longest importable module prefix: `(module, attributes)`."""
     parts = tag.split(".")
     for split in range(len(parts), 0, -1):
+        module_name = ".".join(parts[:split])
         try:
-            obj: Any = importlib.import_module(".".join(parts[:split]))
+            importlib.import_module(module_name)
         except ImportError:
             continue
-        for attr in parts[split:]:
-            try:
-                obj = getattr(obj, attr)
-            except AttributeError as ex:
-                raise ValueError(
-                    f"Cannot resolve dimension tag '{tag}': '{'.'.join(parts[:split])}' has"
-                    f" no attribute '{attr}'."
-                ) from ex
-        return obj
+        return module_name, tuple(parts[split:])
     raise ValueError(
-        f"Cannot resolve dimension tag '{tag}': no importable module prefix. A dimension"
+        f"Cannot resolve tag '{tag}': no importable module prefix. A dimension or connectivity"
         " referenced from the IR must be declared at module level in an importable module."
     )
 
@@ -2284,14 +2294,27 @@ def check_neighbor_table(
 
     if not isinstance(table_type, NeighborConnectivityType):
         fail(f"expected a neighbor table, got '{table_type}'")
+
+    def redefined(found: Sequence[Dimension], expected: Sequence[Dimension]) -> str:
+        if any(f is not e and f.tag == e.tag for f, e in zip(found, expected)):
+            return (
+                " (a dimension of the same name but a different class: was the declaration"
+                " redefined, e.g. by re-running a notebook cell?)"
+            )
+        return ""
+
     expected_domain = (connectivity.origin, local)
     if tuple(table_type.domain) != expected_domain:
         fail(
             f"its domain is '({', '.join(map(str, table_type.domain))})',"
             f" expected '({', '.join(map(str, expected_domain))})'"
+            + redefined(table_type.domain, expected_domain)
         )
     if table_type.codomain is not connectivity.codomain:
-        fail(f"its codomain is '{table_type.codomain}', expected '{connectivity.codomain}'")
+        fail(
+            f"its codomain is '{table_type.codomain}', expected '{connectivity.codomain}'"
+            + redefined((table_type.codomain,), (connectivity.codomain,))
+        )
     if not np.issubdtype(table_type.dtype.scalar_type, np.integer):
         fail(f"its dtype '{table_type.dtype}' is not integral")
     if local.max_neighbors is not None and table_type.max_neighbors != local.max_neighbors:
@@ -2332,7 +2355,8 @@ def as_tag_keyed_offset_provider(
     """
     Key an offset provider by tags, the form the IR and the backends use.
 
-    A `NeighborConnectivity` key becomes its local dimension's tag. A string key is taken to be
+    A `NeighborConnectivity` key becomes its `offset_tag`: its local dimension's tag, or its own
+    for a connectivity sharing another one's local dimension. A string key is taken to be
     such a tag already, and is rejected if it cannot be one: a tag is a qualified name, so a bare
     name such as `"V2E"` is the removed `FieldOffset` spelling.
 
@@ -2428,10 +2452,12 @@ def _check_shared_local_dimensions(
                 and is_neighbor_table(first)
                 and is_neighbor_table(table)
             ):
-                same_structure = bool(
-                    np.array_equal(
-                        first.asnumpy() == first_type.skip_value,
-                        table.asnumpy() == table_type.skip_value,
+                # NOTE: compared where the tables live, without copying device arrays to the host.
+                xp = first.array_ns  # type: ignore[attr-defined] # all tables are NdArrayFields
+                same_structure = first.ndarray.shape == table.ndarray.shape and bool(
+                    xp.all(
+                        (first.ndarray == first_type.skip_value)
+                        == (xp.asarray(table.ndarray) == table_type.skip_value)
                     )
                 )
             if not same_structure:

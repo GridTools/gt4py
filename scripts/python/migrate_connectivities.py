@@ -67,6 +67,8 @@ class Module:
     tree: ast.Module
     edits: list[Edit] = dataclasses.field(default_factory=list)
     notes: list[str] = dataclasses.field(default_factory=list)
+    #: Names of `gt4py.next` the migrated declarations use unqualified, to be imported.
+    needed: set[str] = dataclasses.field(default_factory=set)
 
     @property
     def lines(self) -> list[str]:
@@ -77,7 +79,7 @@ class Module:
         assert segment is not None
         return segment
 
-    def note(self, node: ast.AST, message: str) -> None:
+    def note(self, node: ast.stmt | ast.expr, message: str) -> None:
         self.notes.append(f"{self.path}:{node.lineno}: {message}")
 
 
@@ -98,8 +100,23 @@ def _keyword(call: ast.Call, name: str, position: int) -> ast.expr | None:
     return call.args[position] if len(call.args) > position else None
 
 
+_DECLARATION_CALLEES = ("Dimension", "FieldOffset")
+
+
+def _imported_aliases(module: Module) -> dict[str, str]:
+    """Local names of imported `Dimension` / `FieldOffset`, e.g. `{"FO": "FieldOffset"}`."""
+    return {
+        alias.asname or alias.name: alias.name
+        for statement in ast.walk(module.tree)
+        if isinstance(statement, ast.ImportFrom)
+        for alias in statement.names
+        if alias.name in _DECLARATION_CALLEES
+    }
+
+
 def _declarations(module: Module) -> Iterator[tuple[ast.Assign, str, ast.Call, str, str]]:
     """Module-level `name = [prefix.]Dimension(...)` / `FieldOffset(...)` statements."""
+    aliases = _imported_aliases(module)
     for statement in module.tree.body:
         if (
             isinstance(statement, ast.Assign)
@@ -107,9 +124,11 @@ def _declarations(module: Module) -> Iterator[tuple[ast.Assign, str, ast.Call, s
             and isinstance(statement.targets[0], ast.Name)
             and isinstance(statement.value, ast.Call)
             and (callee := _callee_name(statement.value)) is not None
-            and callee[1] in ("Dimension", "FieldOffset")
         ):
-            yield statement, statement.targets[0].id, statement.value, *callee
+            prefix, name = callee
+            name = aliases.get(name, name) if prefix == "" else name
+            if name in _DECLARATION_CALLEES:
+                yield statement, statement.targets[0].id, statement.value, prefix, name
 
 
 def _replace(module: Module, statement: ast.stmt, text: str) -> None:
@@ -122,12 +141,17 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
         if kind_of_call == "Dimension":
             kind = _keyword(call, "kind", 1)
             kind_src = module.segment(kind) if kind is not None else None
-            if kind_src is not None and kind_src.endswith(".LOCAL"):
-                text = f"class {name}({prefix}LocalDimensionIndex): ...\n"
+            if kind_src is not None and kind_src.split(".")[-1] == "LOCAL":
+                base = "LocalDimensionIndex"
+                text = f"class {name}({prefix}{base}): ...\n"
             elif kind_src is None:
-                text = f"class {name}({prefix}DimensionIndex): ...\n"
+                base = "DimensionIndex"
+                text = f"class {name}({prefix}{base}): ...\n"
             else:
-                text = f"class {name}({prefix}DimensionIndex, kind={kind_src}): ...\n"
+                base = "DimensionIndex"
+                text = f"class {name}({prefix}{base}, kind={kind_src}): ...\n"
+            if not prefix:
+                module.needed.add(base)
             _replace(module, statement, text)
             continue
 
@@ -141,6 +165,8 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
                 f"class {name}({prefix}NeighborConnectivity[{origin}, {module.segment(source)}]):\n"
                 f"    Local = {local}\n"
             )
+            if not prefix:
+                module.needed.add("NeighborConnectivity")
             _replace(module, statement, text)
         elif len(target.elts) == 1 and module.segment(target.elts[0]) == module.segment(source):
             # A Cartesian offset has no declaration any more: `Off[i]` is `Dim + i`.
@@ -148,6 +174,48 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
             _replace(module, statement, "")
         else:
             module.note(statement, f"'{name}': a cross-dimension offset has no class equivalent.")
+
+
+def _migrate_imports(module: Module) -> None:
+    """Drop imports of the removed `FieldOffset`; import the class names used unqualified."""
+    fieldoffset_names = {
+        local for local, name in _imported_aliases(module).items() if name == "FieldOffset"
+    }
+    imported = {
+        alias.asname or alias.name
+        for statement in ast.walk(module.tree)
+        if isinstance(statement, ast.ImportFrom)
+        for alias in statement.names
+    }
+    missing = sorted(module.needed - imported)
+    added = False
+    for statement in module.tree.body:
+        if not isinstance(statement, ast.ImportFrom):
+            continue
+        names = {alias.asname or alias.name for alias in statement.names}
+        drops = names & fieldoffset_names
+        adds_here = bool(missing) and not added and bool(names & {"Dimension", "DimensionKind"})
+        if not (drops or adds_here):
+            continue
+        kept = [
+            ast.unparse(alias)
+            for alias in statement.names
+            if (alias.asname or alias.name) not in fieldoffset_names
+        ]
+        text = (
+            f"from {'.' * statement.level}{statement.module or ''} import {', '.join(kept)}\n"
+            if kept
+            else ""
+        )
+        if adds_here:
+            text += f"from gt4py.next import {', '.join(missing)}\n"
+            added = True
+        _replace(module, statement, text)
+    if missing and not added:
+        module.notes.append(
+            f"{module.path}: import {', '.join(missing)} from 'gt4py.next', used by the migrated"
+            " declarations."
+        )
 
 
 class _CartesianUses(ast.NodeVisitor):
@@ -159,6 +227,25 @@ class _CartesianUses(ast.NodeVisitor):
         #: (line, start column, end column, replacement) of single-line expression rewrites
         self.rewrites: list[tuple[int, int, int, str]] = []
         self.handled: set[int] = set()
+        #: names bound in the enclosing function scopes, which shadow a removed offset
+        self.shadowed: list[set[str]] = []
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> None:
+        arguments = node.args
+        bound = {
+            argument.arg
+            for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
+        } | {
+            name.id
+            for name in ast.walk(node)
+            if isinstance(name, ast.Name) and isinstance(name.ctx, ast.Store)
+        }
+        self.shadowed.append(bound)
+        self.generic_visit(node)
+        self.shadowed.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+    visit_Lambda = visit_FunctionDef
 
     def _rewrite(self, node: ast.expr, text: str) -> None:
         assert node.end_lineno is not None and node.end_col_offset is not None
@@ -170,7 +257,9 @@ class _CartesianUses(ast.NodeVisitor):
     def _dimension_of(self, node: ast.expr) -> str | None:
         """The dimension replacing `Off` or `module.Off`, qualified like the offset was."""
         match node:
-            case ast.Name(id=name) if name in self.cartesian:
+            case ast.Name(id=name) if name in self.cartesian and not any(
+                name in bound for bound in self.shadowed
+            ):
                 return self.cartesian[name]
             case ast.Attribute(value=value, attr=name) if name in self.cartesian:
                 return f"{self.module.segment(value)}.{self.cartesian[name]}"
@@ -225,6 +314,11 @@ def _migrate_cartesian_uses(module: Module, cartesian: dict[str, str]) -> None:
     for statement in module.tree.body:
         if not isinstance(statement, (ast.Import, ast.ImportFrom)):
             visitor.visit(statement)
+        match statement:
+            case ast.Assign(targets=[ast.Name(id="__all__")], value=ast.List(elts=all_names)):
+                for entry in all_names:
+                    if isinstance(entry, ast.Constant) and entry.value in cartesian:
+                        module.note(entry, f"'__all__' lists the removed offset '{entry.value}'.")
 
     lines = module.lines
     for line, start, end, text in sorted(visitor.rewrites, reverse=True):
@@ -237,17 +331,32 @@ def _migrate_cartesian_uses(module: Module, cartesian: dict[str, str]) -> None:
 _PROVIDER_KEY_RE = re.compile(r"""(?P<quote>["'])(?P<name>[A-Za-z_]\w*)(?P=quote)\s*:""")
 
 
-def _report(module: Module, offset_names: set[str], dimension_names: set[str]) -> None:
+def _report(
+    module: Module,
+    offset_keys: dict[str, str],
+    cartesian: dict[str, str],
+    dimension_names: set[str],
+) -> None:
     for number, line in enumerate(module.source.splitlines(), start=1):
         for match in _PROVIDER_KEY_RE.finditer(line):
-            if match["name"] in offset_names:
-                module.notes.append(
-                    f"{module.path}:{number}: offset-provider key '{match['name']}' is keyed by"
-                    f" the connectivity class now, e.g. '{{{match['name']}: table}}'."
+            if (connectivity := offset_keys.get(match["name"])) is None:
+                continue
+            if connectivity in cartesian:
+                message = (
+                    f"offset-provider key '{match['name']}': remove the entry, a Cartesian shift"
+                    f" ('{cartesian[connectivity]} + i') needs none."
                 )
+            else:
+                message = (
+                    f"offset-provider key '{match['name']}' is keyed by the connectivity class"
+                    f" now, e.g. '{{{connectivity}: table}}'."
+                )
+            module.notes.append(f"{module.path}:{number}: {message}")
     for node in ast.walk(module.tree):
         match node:
-            case ast.Attribute(value=ast.Name(id=name), attr="value") if name in dimension_names:
+            case ast.Attribute(
+                value=ast.Name(id=name) | ast.Attribute(attr=name), attr="value"
+            ) if name in dimension_names:
                 module.note(node, f"'{name}.value': a dimension's name is '{name}.tag' now.")
             case ast.Call(
                 func=ast.Name(id="isinstance"), args=[_, ast.Attribute(attr="Dimension")]
@@ -272,17 +381,24 @@ def migrate(sources: dict[pathlib.Path, str]) -> tuple[dict[pathlib.Path, str], 
         Module(path=path, source=source, tree=ast.parse(source)) for path, source in sources.items()
     ]
     cartesian: dict[str, str] = {}
-    offset_names: set[str] = set()
+    #: offset-provider keys that name a `FieldOffset`: its variable name and its tag, if different
+    offset_keys: dict[str, str] = {}
     dimension_names: set[str] = set()
     for module in modules:
-        for _, name, _, _, kind_of_call in _declarations(module):
-            (dimension_names if kind_of_call == "Dimension" else offset_names).add(name)
+        for _, name, call, _, kind_of_call in _declarations(module):
+            if kind_of_call == "Dimension":
+                dimension_names.add(name)
+                continue
+            offset_keys[name] = name
+            if call.args and isinstance(tag := call.args[0], ast.Constant):
+                offset_keys[str(tag.value)] = name
         _migrate_declarations(module, cartesian)
+        _migrate_imports(module)
 
     results: dict[pathlib.Path, str] = {}
     notes: list[str] = []
     for module in modules:
-        _report(module, offset_names, dimension_names)
+        _report(module, offset_keys, cartesian, dimension_names)
         migrated = _apply(module)
         # Cartesian uses are rewritten on the migrated text, re-parsed, so that line numbers
         # refer to what the declaration edits left.
@@ -327,7 +443,7 @@ def run(
                 )
             )
     if notes:
-        typer.echo("\nLeft to migrate by hand:", err=True)
+        typer.echo("\nLeft to migrate by hand (line numbers of the original files):", err=True)
         for note in notes:
             typer.echo(f"  {note}", err=True)
 

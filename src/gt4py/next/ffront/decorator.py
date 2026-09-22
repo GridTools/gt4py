@@ -729,6 +729,10 @@ class FieldOperatorFromFoast(FieldOperator):
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         assert self.backend is not None
+        if "offset_provider" in kwargs:
+            kwargs["offset_provider"] = common.as_tag_keyed_offset_provider(
+                kwargs["offset_provider"]
+            )
         compiled_fo = self.backend.compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )

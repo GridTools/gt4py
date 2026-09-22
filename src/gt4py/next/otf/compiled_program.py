@@ -41,7 +41,8 @@ T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
 
-#: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
+#: Content of the key: (*hashable_arg_descriptors, hash of the offset provider's (tag, id(table))
+#: items, concrete_instantation_if_generic)
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, str | None]
 
 ArgStaticDescriptorsByType: TypeAlias = dict[

@@ -596,6 +596,38 @@ class TestConnectivityKeyOver:
             common.connectivity_key_over({E2V.offset_tag: self._type(E2V)}, V2E.Local)
 
 
+def test_redefined_declaration_resolves_to_the_new_class(monkeypatch):
+    """Re-running a notebook cell redefines declarations under the same names."""
+    import sys
+    import types as pytypes
+
+    module = pytypes.ModuleType("_redefined_connectivity_module")
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    source = textwrap.dedent(
+        """
+        from gt4py.next.common import DimensionIndex, LocalDimensionIndex, NeighborConnectivity
+
+        class V(DimensionIndex): ...
+        class E(DimensionIndex): ...
+        class V2E(NeighborConnectivity[V, E], max_neighbors={n}):
+            class Local(LocalDimensionIndex): ...
+        """
+    )
+    exec(source.format(n=4), module.__dict__)
+    old = module.V2E
+    common.check_offset_provider({old: _table(domain=(module.V, old.Local), codomain=module.E)})
+
+    exec(source.format(n=2), module.__dict__)
+    new = module.V2E
+    assert common.resolve(new.Local.tag) is new.Local
+    common.check_offset_provider(
+        {new: _table(domain=(module.V, new.Local), codomain=module.E, data=((0, 1), (1, 0)))}
+    )
+    with pytest.raises(ValueError, match="was the declaration redefined"):
+        common.check_neighbor_table(
+            new, _table(domain=(old.origin, old.Local), codomain=module.E, data=((0, 1), (1, 0)))
+
+
 def test_the_const_list_dimension_cannot_be_adopted():
     with pytest.raises(TypeError, match="cannot adopt"):
         _declare(
