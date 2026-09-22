@@ -434,3 +434,52 @@ def test_sparse_shifted_stencil_reduce(program_processor):
 
     if validate:
         assert np.allclose(out.asnumpy(), ref)
+
+
+class V2EShared(gtx.NeighborConnectivity[Vertex, Edge]):
+    """Shares `V2E`'s local dimension; bound to the table with its columns reversed."""
+
+    Local = V2EDim
+
+
+v2e_shared_arr = np.ascontiguousarray(v2e_arr[:, ::-1])
+v2e_shared_conn = gtx.as_connectivity(
+    domain={Vertex: v2e_shared_arr.shape[0], V2EDim: v2e_shared_arr.shape[1]},
+    codomain=Edge,
+    data=v2e_shared_arr,
+)
+
+
+@fundef
+def shift_through_sharer(in_edges):
+    return deref(shift(V2EShared, 1)(in_edges))
+
+
+@fundef
+def owner_times_sharer(in_edges):
+    return reduce(plus, 0)(
+        map_list(multiplies)(neighbors(V2EShared, in_edges), neighbors(V2E, in_edges))
+    )
+
+
+@pytest.mark.parametrize(
+    "stencil, ref",
+    [
+        (shift_through_sharer, v2e_shared_arr[:, 1]),
+        (owner_times_sharer, np.sum(v2e_shared_arr * v2e_arr, axis=1)),
+    ],
+)
+def test_connectivity_sharing_a_local_dimension(program_processor, stencil, ref):
+    program_processor, validate = program_processor
+    inp = edge_index_field()
+    out = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))
+
+    run_processor(
+        stencil[{Vertex: range(0, 9)}],
+        program_processor,
+        inp,
+        out=out,
+        offset_provider={V2E.offset_tag: v2e_conn, V2EShared.offset_tag: v2e_shared_conn},
+    )
+    if validate:
+        assert np.allclose(out.asnumpy(), ref)

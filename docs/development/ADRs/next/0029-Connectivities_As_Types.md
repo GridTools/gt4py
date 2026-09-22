@@ -124,15 +124,20 @@ whose tag is the connectivity's `offset_tag`:
   existing backends need no change.
 - **its own tag**, `C2CE.tag`, for a connectivity that shares another one's local
   dimension, since the local dimension's tag already names the owner's table.
-  Shifts find the table by that tag; reductions and sparse arguments still find
-  the owner's table by the local dimension's tag, for its neighbor structure, so
-  the owner has to be bound too.
-  `V2E.Local` inside DSL code types as that local dimension, and
-  `FieldOffset.Local` names the same thing on a legacy offset, so the spelling
-  works for both. The other frontend touch points treat the class like the
-  `FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
-  counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
-  metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
+  Shifts find the table by that tag. Reductions and sparse arguments know only
+  the local dimension, and take its neighbor count and skip values from a table
+  over it (`common.connectivity_key_over`): the owner's if bound, else the
+  sharer with the smallest tag. Connectivities sharing a local dimension must
+  therefore have the same neighbor *structure* — the same count, and a skip value
+  at the same positions — which is what sharing a neighbor axis means;
+  `check_offset_provider` enforces it for the tables it is given.
+
+`V2E.Local` inside DSL code types as that local dimension, and
+`FieldOffset.Local` names the same thing on a legacy offset, so the spelling
+works for both. The other frontend touch points treat the class like the
+`FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
+counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
+metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
 
 ## Consequences
 

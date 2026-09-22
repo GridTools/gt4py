@@ -1472,35 +1472,45 @@ get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = g
 
 
 def connectivity_key_over(
-    offset_provider: OffsetProvider | OffsetProviderType, local_dim: Dimension
+    offset_provider: OffsetProvider | OffsetProviderType, local_dim: Dimension | Tag
 ) -> str:
     """
-    The key of a bound connectivity whose local dimension is `local_dim`.
+    The key of a bound connectivity whose local dimension is `local_dim` (a dimension or its tag).
 
     Neighbor reductions and sparse fields know only their local dimension, and use its table
     for the neighbor count and the skip values. That is the table keyed by the local dimension's
-    tag, i.e. its owner's, if bound. Otherwise it is a connectivity *sharing* the local dimension
-    (see `NeighborConnectivity`), keyed by its own tag, which has the same neighbor structure.
+    tag, i.e. its owner's, if bound. Otherwise it is one of the connectivities *sharing* the local
+    dimension (see `NeighborConnectivity`), each keyed by its own tag; the smallest key is taken,
+    so the choice does not depend on the order of the provider. Connectivities sharing a local
+    dimension have the same neighbor structure (see `check_offset_provider`), so which one does
+    not matter.
 
     Raises:
         KeyError: If no bound connectivity has `local_dim` as its local dimension.
     """
-    if local_dim.tag in offset_provider:
-        return local_dim.tag
-    for key, connectivity in offset_provider.items():
-        if isinstance(connectivity, NeighborConnectivityType):
-            neighbor_dim = connectivity.neighbor_dim
-        elif is_neighbor_table(connectivity):
-            neighbor_dim = connectivity.domain.dims[1]
-        else:
-            continue
-        if neighbor_dim is local_dim:
-            assert isinstance(key, str)
-            return key
-    raise KeyError(
-        f"No connectivity over the local dimension '{local_dim.tag}' is bound in the offset"
-        f" provider, which has {sorted(map(str, offset_provider))}."
-    )
+    local_tag = local_dim if isinstance(local_dim, str) else local_dim.tag
+    if local_tag in offset_provider:
+        return local_tag
+    candidates = [
+        key
+        for key, connectivity in offset_provider.items()
+        if (neighbor_dim := _neighbor_dim_of(connectivity)) is not None
+        and neighbor_dim.tag == local_tag
+    ]
+    if not candidates:
+        raise KeyError(
+            f"No connectivity over the local dimension '{local_tag}' is bound in the offset"
+            f" provider, which has {sorted(map(str, offset_provider))}."
+        )
+    return min(candidates)
+
+
+def _neighbor_dim_of(connectivity: Any) -> Optional[Dimension]:
+    if isinstance(connectivity, NeighborConnectivityType):
+        return connectivity.neighbor_dim
+    if is_neighbor_table(connectivity):
+        return connectivity.domain.dims[1]
+    return None
 
 
 def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
@@ -2160,14 +2170,23 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         if local.owner is not None and local.owner.tag != cls.tag:
             # Sharing another connectivity's local dimension: the neighbor structure is the
             # owner's, including its counts, and the sharing connectivity is named by its own tag.
-            if (max_neighbors, min_neighbors) != (None, None) and (
-                max_neighbors,
-                min_neighbors,
-            ) != (local.max_neighbors, local.min_neighbors):
+            owner_name = local.owner.__qualname__
+            if origin is not local.owner.origin:
                 raise TypeError(
-                    f"'{name}' shares the local dimension of '{local.owner.__qualname__}', whose"
-                    " neighbor counts are declared by its owner."
+                    f"'{name}' cannot share the local dimension of '{owner_name}': it has origin"
+                    f" '{origin}', but the neighbors of '{owner_name}' are those of"
+                    f" '{local.owner.origin}'."
                 )
+            for count_name, count in (
+                ("max_neighbors", max_neighbors),
+                ("min_neighbors", min_neighbors),
+            ):
+                if count is not None and count != getattr(local, count_name):
+                    raise TypeError(
+                        f"'{name}': '{count_name}={count}' contradicts the local dimension it"
+                        f" shares with '{owner_name}', which declares"
+                        f" {count_name}={getattr(local, count_name)}."
+                    )
             cls.origin, cls.codomain = origin, codomain
             return
         for count_name, count in (

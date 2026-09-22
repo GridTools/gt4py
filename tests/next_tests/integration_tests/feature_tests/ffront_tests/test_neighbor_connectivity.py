@@ -177,3 +177,23 @@ def test_reduction_through_a_shared_local_dimension_without_its_owner(case_witho
         testee,
         lambda s, a: np.sum(s * a[_table(case_without_owner, V2EShared)], axis=1),
     )
+
+
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_if_stmts
+def test_if_over_a_shared_local_dimension_without_its_owner(case_without_owner):
+    @gtx.field_operator
+    def testee(a: Field[Dims[E], float], flag: bool) -> Field[Dims[V], float]:
+        if flag:
+            s = a(V2EShared)
+        else:
+            s = a(V2EShared) * 2.0
+        return neighbor_sum(s, axis=V2E.Local)
+
+    cases.verify_with_default_data(
+        case_without_owner,
+        testee,
+        lambda a, flag: (
+            np.sum(a[_table(case_without_owner, V2EShared)], axis=1) * (1.0 if flag else 2.0)
+        ),
+    )
