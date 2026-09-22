@@ -78,7 +78,9 @@ disappears.
 1. **Reconstruction from the IR is an import.** `common.resolve(tag)` imports the
    module and walks the qualname; nested declarations resolve naturally. The IR
    references a Python type exactly the way `pickle` references a class. It is
-   memoized, because type inference calls it once per `AxisLiteral`.
+   memoized, because type inference calls it once per `AxisLiteral`. An
+   `AxisLiteral` stores only the tag: its `kind` is the resolved dimension's, so the
+   two cannot disagree.
 
    A purely dotted tag does not record where the module path ends and the
    qualname begins, so `resolve` tries the *longest importable prefix* and walks

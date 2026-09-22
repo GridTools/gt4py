@@ -382,9 +382,7 @@ class ProgramLowering(
         domain_args = []
         for dim_i, dim in enumerate(out_type.dims):
             # an expression for the range of a dimension
-            dim_range = im.call("get_domain_range")(
-                out_expr, itir.AxisLiteral(value=dim.tag, kind=dim.kind)
-            )
+            dim_range = im.call("get_domain_range")(out_expr, itir.AxisLiteral(value=dim.tag))
 
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
@@ -412,7 +410,7 @@ class ProgramLowering(
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.tag, kind=dim.kind), lower, upper],
+                    args=[itir.AxisLiteral(value=dim.tag), lower, upper],
                 )
             )
 

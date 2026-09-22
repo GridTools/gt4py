@@ -58,13 +58,6 @@ from gt4py.next.type_system import (
 )
 
 
-# Magic local dimension used for list of values with length known at compile-time.
-# NOTE: the canonical class from `common`, not a local declaration: under nominal identity a
-# second declaration would be a *different* dimension and the `== _CONST_DIM` checks below
-# would stop matching `ListType`s built by embedded execution.
-_CONST_DIM: Final = gtx_common.ConstListDim
-
-
 @dataclasses.dataclass(frozen=True)
 class ValueExpr:
     """
@@ -595,7 +588,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         return ValueExpr(
             dc_node=temp_node,
             gt_dtype=(
-                ts.ListType(element_type=data_type, offset_type=_CONST_DIM)
+                ts.ListType(element_type=data_type, offset_type=gtx_common.ConstList)
                 if use_array
                 else data_type
             ),
@@ -1144,7 +1137,8 @@ class LambdaToDataflow(eve.NodeVisitor):
                 gt_field=ts.FieldType(
                     dims=[conn_type.domain[0]],
                     dtype=ts.ListType(
-                        element_type=tt.from_dtype(conn_type.dtype), offset_type=_CONST_DIM
+                        element_type=tt.from_dtype(conn_type.dtype),
+                        offset_type=gtx_common.ConstList,
                     ),
                 ),
                 subset=dace_subsets.Range.from_string(
@@ -1320,7 +1314,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert isinstance(input_arg.gt_dtype, ts.ListType)
             assert input_arg.gt_dtype.offset_type is not None
             offset_type = input_arg.gt_dtype.offset_type
-            if offset_type == _CONST_DIM:
+            if offset_type is gtx_common.ConstList:
                 # this input argument is the result of `make_const_list`
                 continue
             offset_provider_t = self.subgraph_builder.get_offset_provider_type(
@@ -1363,7 +1357,7 @@ class LambdaToDataflow(eve.NodeVisitor):
                 raise ValueError(f"More than one local dimension in map expression {node}.")
             input_size = input_desc.shape[0]
             if input_size == 1:
-                assert input_arg.gt_dtype.offset_type == _CONST_DIM
+                assert input_arg.gt_dtype.offset_type is gtx_common.ConstList
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
             elif input_size == local_size:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
@@ -1396,7 +1390,8 @@ class LambdaToDataflow(eve.NodeVisitor):
                     gt_field=ts.FieldType(
                         dims=[conn_type.domain[0]],
                         dtype=ts.ListType(
-                            element_type=tt.from_dtype(conn_type.dtype), offset_type=_CONST_DIM
+                            element_type=tt.from_dtype(conn_type.dtype),
+                            offset_type=gtx_common.ConstList,
                         ),
                     ),
                     subset=dace_subsets.Range.from_string(
@@ -1726,7 +1721,8 @@ class LambdaToDataflow(eve.NodeVisitor):
                 gt_field=ts.FieldType(
                     dims=[conn_type.source_dim],
                     dtype=ts.ListType(
-                        element_type=tt.from_dtype(conn_type.dtype), offset_type=_CONST_DIM
+                        element_type=tt.from_dtype(conn_type.dtype),
+                        offset_type=gtx_common.ConstList,
                     ),
                 ),
                 subset=dace_subsets.Range.from_string(
@@ -1931,7 +1927,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and node.expr.type.offset_type is not None
             and isinstance(result, (MemletExpr, ValueExpr))
             and isinstance(result.gt_dtype, ts.ListType)
-            and result.gt_dtype.offset_type == _CONST_DIM
+            and result.gt_dtype.offset_type is gtx_common.ConstList
         ):
             result = self._broadcast_const_list(result, node.expr.type)
 

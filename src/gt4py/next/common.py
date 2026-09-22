@@ -2038,19 +2038,16 @@ def _check_neighbor_count(cls: type, name: str, count: Optional[int]) -> Optiona
     return int(count)
 
 
-class ConstListDim(LocalDimensionIndex):
+class ConstList(LocalDimensionIndex, size=1):
     """
-    The local dimension of a list whose length is known at compile time (`make_const_list`).
+    The local dimension of a list of one repeated value (`make_const_list`).
 
-    Declared here, once, because it must be a *single* class. It used to be built
-    independently in `iterator/embedded.py` and in the DaCe lowering, which was harmless
-    while dimensions compared by `(name, kind)` -- the two instances were equal. Under
-    nominal identity (ADR 0028) two declarations would be two different dimensions, and the
-    `offset_type == _CONST_DIM` checks in the DaCe lowering would stop matching `ListType`s
-    built by embedded execution.
+    An owner-less local dimension of size 1: the value is broadcast against the neighbor lists it
+    is combined with, and a materialized constant list has extent 1 along it. It indexes no table,
+    so it is never in an offset provider.
 
-    TODO: becomes an owner-less local dimension with an explicit size, generalising this from
-    length 1 to length *n*, once local dimensions know their connectivity.
+    Declared here, once: it used to be built independently in `iterator/embedded.py` and in the
+    DaCe lowering, which only worked while dimensions compared by `(name, kind)`.
     """
 
     __slots__ = ()

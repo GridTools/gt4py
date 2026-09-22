@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded, runtime
 from gt4py.next.iterator.builtins import (
@@ -69,7 +70,7 @@ def test_write_const_list():
     ref = np.asarray([[42.0], [42.0]])
 
     assert result.domain.dims[0] == E
-    assert result.domain.dims[1] == embedded._CONST_DIM  # this is implementation detail
+    assert result.domain.dims[1] == common.ConstList  # this is implementation detail
     assert result.shape[1] == 1  # this is implementation detail
     np.testing.assert_array_equal(result.asnumpy(), ref)
 
@@ -152,6 +153,6 @@ def test_write_map_const_list_and_const_list():
     ref = np.asarray([[43.0], [43.0]])
 
     assert result.domain.dims[0] == E
-    assert result.domain.dims[1] == embedded._CONST_DIM  # this is implementation detail
+    assert result.domain.dims[1] == common.ConstList  # this is implementation detail
     assert result.shape[1] == 1  # this is implementation detail
     np.testing.assert_array_equal(result.asnumpy(), ref)

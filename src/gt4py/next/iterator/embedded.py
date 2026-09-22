@@ -216,12 +216,6 @@ MaybePosition: TypeAlias = Optional[Position]
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 
 
-# Magic local dimension for the result of a `make_const_list`.
-# A clean implementation will probably involve to tag the `make_const_list`
-# with the neighborhood it is meant to be used with.
-_CONST_DIM = common.ConstListDim
-
-
 @runtime_checkable
 class ItIterator(Protocol):
     """
@@ -570,7 +564,7 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
-                if tag == _CONST_DIM.tag:
+                if tag == common.ConstList.tag:
                     new_entry[i] = 0
                 else:
                     # NOTE: the sparse tag is the local dimension's; the table over it may be
@@ -1014,7 +1008,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
                     ] = v
             elif isinstance(value, _ConstList):
                 self._ndarrayfield[
-                    self._translate_named_indices({**named_indices, _CONST_DIM.tag: 0})
+                    self._translate_named_indices({**named_indices, common.ConstList.tag: 0})
                 ] = value.value
             else:
                 self._ndarrayfield[self._translate_named_indices(named_indices)] = value
@@ -1451,7 +1445,7 @@ class _ConstList(Generic[DT]):
         assert isinstance(element_type, ts.DataType)
         return ts.ListType(
             element_type=element_type,
-            offset_type=_CONST_DIM,
+            offset_type=common.ConstList,
         )
 
 
@@ -1548,7 +1542,7 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
-        if self.list_offset == _CONST_DIM.tag:
+        if self.list_offset == common.ConstList.tag:
             return _ConstList(
                 value=self.it.shift(*self.offsets, SparseTag(self.list_offset), 0).deref()
             )
@@ -1806,9 +1800,9 @@ def _fieldspec_list_to_value(
 ) -> tuple[common.Domain, ts.TypeSpec]:
     """Translate the list element type into the domain."""
     if isinstance(type_, ts.ListType):
-        if type_.offset_type == _CONST_DIM:
+        if type_.offset_type is common.ConstList:
             return domain.insert(
-                len(domain), common.named_range((_CONST_DIM, 1))
+                len(domain), common.named_range((common.ConstList, 1))
             ), type_.element_type
         else:
             offset_provider = embedded_context.get_offset_provider()

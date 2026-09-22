@@ -234,12 +234,12 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef | itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
-            return itir.AxisLiteral(value=node.type.dim.tag, kind=node.type.dim.kind)
+            return itir.AxisLiteral(value=node.type.dim.tag)
         return im.ref(node.id)
 
     def visit_Attribute(self, node: foast.Attribute, **kwargs: Any) -> itir.AxisLiteral:
         if isinstance(node.type, ts.DimensionType):
-            return itir.AxisLiteral(value=node.type.dim.tag, kind=node.type.dim.kind)
+            return itir.AxisLiteral(value=node.type.dim.tag)
 
         if isinstance(named_tup_type := node.value.type, ts.NamedCollectionType):
             ind = named_tup_type.keys.index(node.attr)
