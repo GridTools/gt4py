@@ -76,7 +76,7 @@ def make_dace_toolchain(
 def make_dace_backend(
     gpu: bool,
     auto_optimize: bool = True,
-    async_sdfg_call: bool = True,
+    sync_sdfg_call: bool = False,
     optimization_args: dict[str, Any] | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
@@ -94,8 +94,8 @@ def make_dace_backend(
     Args:
         gpu: Enable GPU transformations and code generation.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
-        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
-            of GPU kernel execution with the Python driver code.
+        sync_sdfg_call: Force a synchronous SDFG call on GPU, instead of allowing
+            the GPU kernel execution to overlap with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
@@ -136,7 +136,7 @@ def make_dace_backend(
         translation=functools.partial(
             gtx_wfdfactory.make_dace_translator,
             auto_optimize_args=optimization_args,
-            async_sdfg_call=async_sdfg_call,
+            sync_sdfg_call=sync_sdfg_call,
             use_metrics=use_metrics,
             disable_field_origin_on_program_arguments=use_zero_origin,
             use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
