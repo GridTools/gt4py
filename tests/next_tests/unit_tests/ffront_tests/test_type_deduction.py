@@ -98,9 +98,7 @@ def test_tuple_comprehension_unpack_too_short_tuple():
     def foo(it: tuple[tuple[Field[[TDim], float64], Field[[TDim], float64]], ...]):
         return tuple(a + b + c for a, b, c in it)
 
-    with pytest.raises(
-        errors.DSLError, match=r"Not enough values to unpack \(expected 3, got 2\)"
-    ):
+    with pytest.raises(errors.DSLError, match=r"Not enough values to unpack \(expected 3, got 2\)"):
         _ = FieldOperatorParser.apply_to_function(foo)
 
 
