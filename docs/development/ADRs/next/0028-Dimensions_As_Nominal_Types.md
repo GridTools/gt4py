@@ -77,8 +77,10 @@ disappears.
 
 1. **Reconstruction from the IR is an import.** `common.resolve(tag)` imports the
    module and walks the qualname; nested declarations resolve naturally. The IR
-   references a Python type exactly the way `pickle` references a class. It is
-   memoized, because type inference calls it once per `AxisLiteral`. An
+   references a Python type exactly the way `pickle` references a class. Where the
+   module path ends is memoized, because type inference calls it once per
+   `AxisLiteral`; the attribute walk is repeated, so a redefined declaration is
+   found. An
    `AxisLiteral` stores only the tag: its `kind` is the resolved dimension's, so the
    two cannot disagree.
 

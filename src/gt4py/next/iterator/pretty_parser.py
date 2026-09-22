@@ -20,7 +20,7 @@ from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
-GRAMMAR = """
+GRAMMAR = r"""
     start: fencil_definition
         | function_definition
         | declaration
