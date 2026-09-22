@@ -47,7 +47,11 @@ def write_build_dir(
 ) -> pathlib.Path:
     """Create a folder named the way `cache.get_cache_folder` names them."""
     version_id = config.BUILD_CACHE_VERSION_ID if version_id is None else version_id
-    folder = cache_base / f"{name}{cache.BINDINGS_NAME_SUFFIX}_{salt * 16}_{version_id}"
+    folder = (
+        cache_base
+        / cache.BUILD_CACHE_DIR_NAME
+        / f"{name}{cache.BINDINGS_NAME_SUFFIX}_{salt * 16}_{version_id}"
+    )
     folder.mkdir(parents=True)
     (folder / "libprogram.so").write_text("not really a library")
     return folder
@@ -482,6 +486,7 @@ def test_path_command_reports_both_caches_and_the_build_folders(cache_base, caps
     # the confusion this answers: build folders are siblings of the translation
     # caches, not something inside them
     assert cache.BINDINGS_NAME_SUFFIX in out
+    assert str(cache_base.resolve() / cache.BUILD_CACHE_DIR_NAME) in out
 
 
 def test_list_json_output(cache_base, capsys):

@@ -31,7 +31,7 @@ from dace_determinism import (
     check_determinism,
     cli,
     compare,
-    fetch_cache_folder_pattern,
+    fetch_cache_layout,
     render_report,
     run_determinism_check,
 )
@@ -48,9 +48,12 @@ _FOLDER_PATTERN = (
 )
 _FOLDER_RE = _compile_folder_pattern(_FOLDER_PATTERN)
 
+# Deliberately not gt4py's own name: the script must use whatever it is told.
+_STUB_BUILD_CACHE_DIR = "builds"
+
 
 def _bags(cache: pathlib.Path):
-    return _scan(cache, _FOLDER_RE)[0]
+    return _scan(cache / _STUB_BUILD_CACHE_DIR, _FOLDER_RE)[0]
 
 
 def _hex16(salt: str) -> str:
@@ -63,7 +66,7 @@ def _folder_name(name: str, salt: str) -> str:
 
 
 def _program(cache: pathlib.Path, name: str, salt: str, sources: dict[str, str]) -> None:
-    folder = cache / _folder_name(name, salt)
+    folder = cache / _STUB_BUILD_CACHE_DIR / _folder_name(name, salt)
     for rel, content in sources.items():
         path = folder / rel
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +82,7 @@ def test_collect_groups_by_logical_name(tmp_path):
 def test_collect_ignores_non_program_dirs(tmp_path):
     cache = tmp_path / ".gt4py_cache"
     _program(cache, "p", "a", {"src/cpu/k.cpp": "x"})
-    (cache / "translation_cache").mkdir(parents=True)
+    (cache / _STUB_BUILD_CACHE_DIR / "not-a-program-folder").mkdir(parents=True)
     assert set(_bags(cache)) == {"p"}
 
 
@@ -92,7 +95,7 @@ def test_collect_unsupported_backend_raises(tmp_path):
 
 def test_empty_src_program_excluded(tmp_path):
     cache = tmp_path / ".gt4py_cache"
-    (cache / _folder_name("p", "a") / "src").mkdir(parents=True)
+    (cache / _STUB_BUILD_CACHE_DIR / _folder_name("p", "a") / "src").mkdir(parents=True)
     assert "p" not in _bags(cache)
 
 
@@ -148,7 +151,9 @@ def test_equal_count_source_mismatch_differs(tmp_path):
     (r,) = compare(_bags(c1), _bags(c2))
     assert r.comparable and r.differs
     with pytest.raises(DeterminismError):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+        check_determinism(
+            c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+        )
 
 
 def test_count_mismatch_skipped_but_others_compared(tmp_path):
@@ -164,7 +169,9 @@ def test_count_mismatch_skipped_but_others_compared(tmp_path):
     by_name = {r.name: r for r in compare(_bags(c1), _bags(c2))}
     assert by_name["ok"].match
     assert by_name["flaky"].skipped and not by_name["flaky"].match
-    check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)  # passes: the comparable name matched
+    check_determinism(
+        c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+    )  # passes: the comparable name matched
 
 
 def test_missing_on_one_side_skipped(tmp_path):
@@ -175,7 +182,7 @@ def test_missing_on_one_side_skipped(tmp_path):
     _program(c1, "only1", "a", {"src/cpu/k.cpp": "x"})
     by_name = {r.name: r for r in compare(_bags(c1), _bags(c2))}
     assert by_name["only1"].skipped and not by_name["only1"].match
-    check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+    check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR)
 
 
 def test_nothing_comparable_raises(tmp_path):
@@ -186,7 +193,9 @@ def test_nothing_comparable_raises(tmp_path):
     _program(c1, "a", "2", {"src/cpu/k.cpp": "A2"})
     _program(c2, "a", "1", {"src/cpu/k.cpp": "A1"})
     with pytest.raises(NoComparableProgramsError):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+        check_determinism(
+            c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+        )
 
 
 def test_one_empty_run_raises_not_green(tmp_path):
@@ -196,7 +205,9 @@ def test_one_empty_run_raises_not_green(tmp_path):
     _program(c1, "p", "a", {"src/cpu/k.cpp": "S1"})
     c2.mkdir(parents=True)
     with pytest.raises(NoComparableProgramsError):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+        check_determinism(
+            c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+        )
 
 
 def test_check_determinism_pass_writes_report(tmp_path):
@@ -205,7 +216,13 @@ def test_check_determinism_pass_writes_report(tmp_path):
     _program(c1, "copy", "a", {"src/cpu/k.cpp": "stable"})
     _program(c2, "copy", "a", {"src/cpu/k.cpp": "stable"})
     report = tmp_path / "report.txt"
-    results = check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, report_path=report)
+    results = check_determinism(
+        c1,
+        c2,
+        folder_pattern=_FOLDER_PATTERN,
+        build_cache_dir=_STUB_BUILD_CACHE_DIR,
+        report_path=report,
+    )
     assert all(r.match for r in results)
     assert "deterministic" in report.read_text()
 
@@ -217,7 +234,13 @@ def test_check_determinism_differs_writes_diff(tmp_path):
     _program(c2, "abs", "b", {"src/cpu/k.cpp": "B"})
     diffs = tmp_path / "diffs"
     with pytest.raises(DeterminismError):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, diffs_dir=diffs)
+        check_determinism(
+            c1,
+            c2,
+            folder_pattern=_FOLDER_PATTERN,
+            build_cache_dir=_STUB_BUILD_CACHE_DIR,
+            diffs_dir=diffs,
+        )
     body = (diffs / "abs.txt").read_text().splitlines()
     assert body[0] == "abs"
     assert "src/cpu/k.cpp" in body
@@ -229,16 +252,20 @@ def test_no_programs_raises(tmp_path):
     c1.mkdir(parents=True)
     c2.mkdir(parents=True)
     with pytest.raises(NoProgramsObservedError):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+        check_determinism(
+            c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+        )
 
 
 def test_no_source_files_raises(tmp_path):
     c1 = tmp_path / "r1" / ".gt4py_cache"
     c2 = tmp_path / "r2" / ".gt4py_cache"
-    (c1 / _folder_name("p", "a")).mkdir(parents=True)
-    (c2 / _folder_name("p", "a")).mkdir(parents=True)
+    (c1 / _STUB_BUILD_CACHE_DIR / _folder_name("p", "a")).mkdir(parents=True)
+    (c2 / _STUB_BUILD_CACHE_DIR / _folder_name("p", "a")).mkdir(parents=True)
     with pytest.raises(NoSourceFilesObservedError, match="development"):
-        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
+        check_determinism(
+            c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+        )
 
 
 def test_report_lists_mismatching_sources(tmp_path):
@@ -276,13 +303,23 @@ def test_count_mismatch_fails_when_runs_healthy(tmp_path):
     _program(c1, "wobble", "a", {"src/cpu/k.cpp": "W1"})
     _program(c1, "wobble", "b", {"src/cpu/k.cpp": "W2"})
     _program(c2, "wobble", "x", {"src/cpu/k.cpp": "W1"})
-    check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)  # health unknown -> tolerated skip
     check_determinism(
-        c1, c2, folder_pattern=_FOLDER_PATTERN, runs_healthy=False
+        c1, c2, folder_pattern=_FOLDER_PATTERN, build_cache_dir=_STUB_BUILD_CACHE_DIR
+    )  # health unknown -> tolerated skip
+    check_determinism(
+        c1,
+        c2,
+        folder_pattern=_FOLDER_PATTERN,
+        build_cache_dir=_STUB_BUILD_CACHE_DIR,
+        runs_healthy=False,
     )  # a test failed -> tolerated skip
     with pytest.raises(DeterminismError):
         check_determinism(
-            c1, c2, folder_pattern=_FOLDER_PATTERN, runs_healthy=True
+            c1,
+            c2,
+            folder_pattern=_FOLDER_PATTERN,
+            build_cache_dir=_STUB_BUILD_CACHE_DIR,
+            runs_healthy=True,
         )  # clean pair -> failure
 
 
@@ -291,7 +328,13 @@ def test_clean_pair_all_match_passes(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     _program(c1, "copy", "a", {"src/cpu/k.cpp": "S1"})
     _program(c2, "copy", "a", {"src/cpu/k.cpp": "S1"})
-    check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, runs_healthy=True)
+    check_determinism(
+        c1,
+        c2,
+        folder_pattern=_FOLDER_PATTERN,
+        build_cache_dir=_STUB_BUILD_CACHE_DIR,
+        runs_healthy=True,
+    )
 
 
 def test_report_marks_count_as_failure_when_healthy(tmp_path):
@@ -329,8 +372,9 @@ _STUB_PYTEST = """\
 #!{python}
 import hashlib, os, pathlib, sys
 
-if sys.argv[1:2] == ["-c"]:  # the folder-name pattern probe
+if sys.argv[1:2] == ["-c"]:  # the cache layout probe
     print({pattern!r})
+    print({build_cache_dir!r})
     sys.exit(0)
 
 junit = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--junit-xml="))
@@ -338,7 +382,8 @@ cache = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]) / ".gt4py_cache"
 run_name = pathlib.Path(os.environ["GT4PY_BUILD_CACHE_DIR"]).name
 # Codegen differs between runs only when perturbation is requested.
 content = run_name if os.environ.get("FAKE_PERTURB") else "stable"
-folder = cache / ("prog_" + hashlib.sha256(b"prog").hexdigest()[:16]) / "src" / "cpu"
+folder = (cache / {build_cache_dir!r}
+          / ("prog_" + hashlib.sha256(b"prog").hexdigest()[:16]) / "src" / "cpu")
 folder.mkdir(parents=True, exist_ok=True)
 (folder / "k.cpp").write_text(content)
 pathlib.Path(junit).write_text('<testsuite tests="1" failures="0" errors="0" />')
@@ -347,7 +392,13 @@ pathlib.Path(junit).write_text('<testsuite tests="1" failures="0" errors="0" />'
 
 def _stub_interpreter(tmp_path: pathlib.Path) -> str:
     stub = tmp_path / "fake_pytest.py"
-    stub.write_text(_STUB_PYTEST.format(python=sys.executable, pattern=_STUB_FOLDER_PATTERN))
+    stub.write_text(
+        _STUB_PYTEST.format(
+            python=sys.executable,
+            pattern=_STUB_FOLDER_PATTERN,
+            build_cache_dir=_STUB_BUILD_CACHE_DIR,
+        )
+    )
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IRWXU)
     return str(stub)
 
@@ -397,6 +448,7 @@ def test_run_determinism_check_infra_failure_raises(tmp_path):
         "import sys\n"
         "if sys.argv[1:2] == ['-c']:\n"
         f"    print({_STUB_FOLDER_PATTERN!r})\n"
+        f"    print({_STUB_BUILD_CACHE_DIR!r})\n"
         "    sys.exit(0)\n"
         "sys.exit(2)\n"
     )
@@ -438,6 +490,7 @@ def test_run_determinism_check_env_overrides_are_set(tmp_path):
         "import os, pathlib, sys\n"
         "if sys.argv[1:2] == ['-c']:\n"
         f"    print({_STUB_FOLDER_PATTERN!r})\n"
+        f"    print({_STUB_BUILD_CACHE_DIR!r})\n"
         "    sys.exit(0)\n"
         "junit = next(a.split('=', 1)[1] for a in sys.argv if a.startswith('--junit-xml='))\n"
         "cache = pathlib.Path(os.environ['GT4PY_BUILD_CACHE_DIR']) / '.gt4py_cache'\n"
@@ -512,7 +565,12 @@ def test_ci_check_command_success_echoes_report(monkeypatch, tmp_path):
 
 def test_pattern_without_name_group_rejected(tmp_path):
     with pytest.raises(ValueError, match="name"):
-        check_determinism(tmp_path / "r1", tmp_path / "r2", folder_pattern=r".+_[0-9a-f]{16}")
+        check_determinism(
+            tmp_path / "r1",
+            tmp_path / "r2",
+            folder_pattern=r".+_[0-9a-f]{16}",
+            build_cache_dir=_STUB_BUILD_CACHE_DIR,
+        )
 
 
 def test_check_cli_uses_fetched_pattern(monkeypatch, tmp_path):
@@ -521,12 +579,13 @@ def test_check_cli_uses_fetched_pattern(monkeypatch, tmp_path):
     c1 = tmp_path / "r1" / ".gt4py_cache"
     c2 = tmp_path / "r2" / ".gt4py_cache"
     for cache in (c1, c2):
-        src = cache / "copy-ABC" / "src" / "cpu"
+        src = cache / _STUB_BUILD_CACHE_DIR / "copy-ABC" / "src" / "cpu"
         src.mkdir(parents=True)
         (src / "k.cpp").write_text("stable")
 
     monkeypatch.setattr(
-        "dace_determinism.fetch_cache_folder_pattern", lambda python: r"(?P<name>.+)-[A-Z]{3}"
+        "dace_determinism.fetch_cache_layout",
+        lambda python: (r"(?P<name>.+)-[A-Z]{3}", _STUB_BUILD_CACHE_DIR),
     )
     result = CliRunner().invoke(cli, ["check", "--run1", str(c1), "--run2", str(c2)])
     assert result.exit_code == 0
@@ -537,7 +596,7 @@ def test_check_cli_fails_without_pattern_source(monkeypatch, tmp_path):
     def boom(python):
         raise CacheFolderPatternError("no gt4py in this interpreter")
 
-    monkeypatch.setattr("dace_determinism.fetch_cache_folder_pattern", boom)
+    monkeypatch.setattr("dace_determinism.fetch_cache_layout", boom)
     (tmp_path / "r1").mkdir()
     (tmp_path / "r2").mkdir()
     result = CliRunner().invoke(
@@ -553,22 +612,33 @@ def _fake_interpreter(tmp_path: pathlib.Path, body: str) -> str:
     return str(stub)
 
 
-def test_fetch_pattern_returns_advertised_pattern(tmp_path):
-    python = _fake_interpreter(tmp_path, f"print({_STUB_FOLDER_PATTERN!r})\n")
-    assert fetch_cache_folder_pattern(python) == _STUB_FOLDER_PATTERN
+def test_fetch_layout_returns_advertised_values(tmp_path):
+    python = _fake_interpreter(
+        tmp_path, f"print({_STUB_FOLDER_PATTERN!r})\nprint({_STUB_BUILD_CACHE_DIR!r})\n"
+    )
+    assert fetch_cache_layout(python) == (_STUB_FOLDER_PATTERN, _STUB_BUILD_CACHE_DIR)
 
 
-def test_fetch_pattern_raises_on_failing_interpreter(tmp_path):
+def test_fetch_layout_raises_on_failing_interpreter(tmp_path):
     python = _fake_interpreter(tmp_path, "import sys; sys.exit(1)\n")
     with pytest.raises(CacheFolderPatternError, match="could not provide"):
-        fetch_cache_folder_pattern(python)
+        fetch_cache_layout(python)
 
 
-def test_fetch_pattern_raises_on_unusable_pattern(tmp_path):
-    for body in ("print('no name group here')\n", "print('(?P<name>unbalanced')\n", "print()\n"):
-        python = _fake_interpreter(tmp_path, body)
+def test_fetch_layout_raises_on_incomplete_output(tmp_path):
+    # only the pattern, no build cache directory name
+    python = _fake_interpreter(tmp_path, f"print({_STUB_FOLDER_PATTERN!r})\n")
+    with pytest.raises(CacheFolderPatternError, match="unreadable"):
+        fetch_cache_layout(python)
+
+
+def test_fetch_layout_raises_on_unusable_pattern(tmp_path):
+    for pattern in ("no-name-group-here", "(?P<name>unbalanced"):
+        python = _fake_interpreter(
+            tmp_path, f"print({pattern!r})\nprint({_STUB_BUILD_CACHE_DIR!r})\n"
+        )
         with pytest.raises(CacheFolderPatternError, match="unusable"):
-            fetch_cache_folder_pattern(python)
+            fetch_cache_layout(python)
 
 
 def test_run_determinism_check_aborts_without_pattern(tmp_path):

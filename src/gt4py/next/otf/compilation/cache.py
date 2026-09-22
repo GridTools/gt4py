@@ -37,11 +37,15 @@ CACHE_FOLDER_NAME_PATTERN: Final[str] = (
 BINDINGS_NAME_SUFFIX: Final[str] = "_pyext"
 
 #: Directory under the cache base holding the translation caches, one
-#: sub-directory per backend. Unlike a build cache folder, which holds the
-#: artifacts of one compiled program variant, these hold the output of the
-#: translation step: an optimized SDFG or generated source per translated
-#: program.
+#: sub-directory per backend. These hold the output of the translation step: an
+#: optimized SDFG or generated source per translated program.
 TRANSLATION_CACHE_DIR_NAME: Final[str] = "translation_cache"
+
+#: Directory under the cache base holding the build caches, one folder per
+#: compiled program variant, named by `CACHE_FOLDER_NAME_PATTERN`. These hold
+#: build artifacts and the compiled library, so unlike a translation cache they
+#: are shared by all backends.
+BUILD_CACHE_DIR_NAME: Final[str] = "build_cache"
 
 #: Backends that persist the output of their translation step, i.e. those whose
 #: workflow factory enables the `cached_translation` trait.
@@ -101,10 +105,10 @@ def get_cache_folder(
     if build_context_id:
         folder_name = f"{folder_name}_{build_context_id}"
 
-    base_path = get_cache_base_path(lifetime)
-    base_path.mkdir(exist_ok=True)
+    build_cache_path = get_cache_base_path(lifetime) / BUILD_CACHE_DIR_NAME
+    build_cache_path.mkdir(parents=True, exist_ok=True)
 
-    complete_path = base_path / folder_name
+    complete_path = build_cache_path / folder_name
     complete_path.mkdir(exist_ok=True)
 
     # Resolve symlinks to workaround an issue on MacOS where the default tmp directory is a symlink

@@ -152,12 +152,13 @@ def get_cache_base(cache_dir: pathlib.Path | None = None) -> pathlib.Path:
     if not (
         path.name == config.BUILD_CACHE_DIR.name
         or (path / cache.TRANSLATION_CACHE_DIR_NAME).is_dir()
-        or any(_BUILD_FOLDER_RE.fullmatch(child.name) for child in path.iterdir() if child.is_dir())
+        or (path / cache.BUILD_CACHE_DIR_NAME).is_dir()
     ):
         raise CacheDirError(
             f"'{path}' does not look like a gt4py.next cache base directory: it is not named"
-            f" '{config.BUILD_CACHE_DIR.name}' and contains neither a translation cache"
-            f" ('{cache.TRANSLATION_CACHE_DIR_NAME}') nor a build cache folder."
+            f" '{config.BUILD_CACHE_DIR.name}' and holds neither a translation cache"
+            f" ('{cache.TRANSLATION_CACHE_DIR_NAME}') nor a build cache"
+            f" ('{cache.BUILD_CACHE_DIR_NAME}')."
         )
     return path
 
@@ -229,10 +230,11 @@ def find_build_dirs(cache_base: pathlib.Path, *, program: str | None = None) -> 
     The shared compiledb folder is named like a program's build folder but belongs
     to no program, so it is left out and never deleted along with one.
     """
-    if not cache_base.is_dir():
+    build_cache = cache_base / cache.BUILD_CACHE_DIR_NAME
+    if not build_cache.is_dir():
         return []
     build_dirs = []
-    for path in sorted(cache_base.iterdir()):
+    for path in sorted(build_cache.iterdir()):
         if not path.is_dir() or not (match := _BUILD_FOLDER_RE.fullmatch(path.name)):
             continue
         name = match.group("name").removesuffix(cache.BINDINGS_NAME_SUFFIX)
@@ -302,8 +304,8 @@ def delete_build_dirs(build_dirs: Sequence[BuildDir], cache_base: pathlib.Path) 
         CacheDirError: If a folder is not a build cache folder of `cache_base`.
     """
     for build_dir in build_dirs:
-        if build_dir.path.parent != cache_base or not _BUILD_FOLDER_RE.fullmatch(
-            build_dir.path.name
+        if build_dir.path.parent != cache_base / cache.BUILD_CACHE_DIR_NAME or not (
+            _BUILD_FOLDER_RE.fullmatch(build_dir.path.name)
         ):
             raise CacheDirError(f"refusing to remove '{build_dir.path}': not a build cache folder.")
         with locking.lock(build_dir.path):
@@ -340,7 +342,10 @@ def _cmd_path(args: argparse.Namespace) -> int:
     rows.append(
         (
             "build folders",
-            f"{cache_base}/<program>{cache.BINDINGS_NAME_SUFFIX}_<fingerprint>_<version>",
+            (
+                f"{cache_base / cache.BUILD_CACHE_DIR_NAME}"
+                f"/<program>{cache.BINDINGS_NAME_SUFFIX}_<fingerprint>_<version>"
+            ),
         )
     )
     width = max(len(label) for label, _ in rows) + 2
