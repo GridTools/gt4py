@@ -33,6 +33,9 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
+SDFG_ARG_EXTERNAL_GPU_STREAM: Final[str] = "gt_external_gpu_stream"
+"""Name of SDFG argument to input an external GPU stream to GT4Py."""
+
 
 ExternalWorkspace: TypeAlias = dict[
     core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface

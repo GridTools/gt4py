@@ -85,6 +85,8 @@ class DaCeDecoratedProgram:
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
             }
+            if gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM not in this_call_args:
+                this_call_args[gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM] = 0
             self._fun.construct_arguments(**this_call_args)
 
         # Perform the call to the SDFG.

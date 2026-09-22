@@ -104,7 +104,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=auto_optimize,
-        async_sdfg_call=True,
+        sync_sdfg_call=False,
         optimization_args=optimization_args,
         unstructured_horizontal_has_unit_stride=on_gpu,
         use_metrics=True,
@@ -187,7 +187,7 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },
@@ -203,7 +203,7 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
@@ -221,7 +221,7 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         backend = dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
@@ -292,7 +292,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },

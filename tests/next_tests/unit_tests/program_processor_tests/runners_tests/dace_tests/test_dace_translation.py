@@ -62,7 +62,7 @@ def _translate_gtir_to_sdfg(
     offset_provider: gtx_common.OffsetProvider,
     device_type: core_defs.DeviceType,
     auto_optimize: bool,
-    async_sdfg_call: bool,
+    sync_sdfg_call: bool,
     use_metrics: bool = False,
 ) -> dace.SDFG:
     with dace.config.set_temporary("cache", value="hash"):
@@ -71,7 +71,7 @@ def _translate_gtir_to_sdfg(
             device_type=device_type,
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
-            async_sdfg_call=async_sdfg_call,
+            sync_sdfg_call=sync_sdfg_call,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
@@ -106,7 +106,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
         offset_provider=SKIP_VALUE_MESH.offset_provider,
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=False,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
     )
 
     constant_symbols = dace_wf_translation.find_constant_symbols(
@@ -206,12 +206,12 @@ def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
 
 
 @pytest.mark.parametrize(
-    "make_async_sdfg_call",
+    "make_sync_sdfg_call",
     [False, True],
 )
-def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_defs.DeviceType):
-    """Verify that the flag `async_sdfg_call` takes effect on the SDFG generation."""
-    program_name = "field_ir_{}_async_call".format("with" if make_async_sdfg_call else "without")
+def test_generate_sdfg_sync_call(make_sync_sdfg_call: bool, device_type: core_defs.DeviceType):
+    """Verify that the flag `sync_sdfg_call` takes effect on the SDFG generation."""
+    program_name = "field_ir_{}_sync_call".format("with" if make_sync_sdfg_call else "without")
 
     ir = itir.Program(
         id=program_name,
@@ -235,19 +235,19 @@ def test_generate_sdfg_async_call(make_async_sdfg_call: bool, device_type: core_
         offset_provider={},
         device_type=device_type,
         auto_optimize=False,
-        async_sdfg_call=make_async_sdfg_call,
+        sync_sdfg_call=make_sync_sdfg_call,
     )
 
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
-    elif make_async_sdfg_call:
-        _check_sdfg_with_async_call(sdfg)
-    else:
+    elif make_sync_sdfg_call:
         _check_sdfg_without_async_call(sdfg)
+    else:
+        _check_sdfg_with_async_call(sdfg)
 
 
 def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
-    """Verify that the flag `async_sdfg_call=True` has no effect on an SDFG that does not contain any GPU map."""
+    """Verify that the flag `sync_sdfg_call=False` has no effect on an SDFG that does not contain any GPU map."""
 
     ir = itir.Program(
         id="scalar_ir_with_async_call",
@@ -271,7 +271,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         offset_provider={},
         device_type=device_type,
         auto_optimize=False,
-        async_sdfg_call=True,
+        sync_sdfg_call=False,
     )
 
     if device_type == core_defs.DeviceType.CPU:
@@ -394,7 +394,7 @@ def test_generate_sdfg_async_call_multi_state(
     # NOTE: Here we should use a configuration context. But because of
     #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
     with dace_wf_common.dace_context(device_type=device_type):
-        dace_wf_translation.make_sdfg_call_async(sdfg, on_gpu)
+        dace_wf_translation.add_configurable_stream(sdfg, on_gpu)
 
     if on_gpu:
         assert _are_streams_set_to_default_stream(sdfg)
@@ -485,7 +485,7 @@ def test_translation_source_code_invariant_under_guid_change():
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=False,
         auto_optimize_args=None,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
     )
