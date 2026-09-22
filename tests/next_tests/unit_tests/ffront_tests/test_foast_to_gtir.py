@@ -121,10 +121,38 @@ def test_premap_cartesian_invalid_fractional_offset():
 
 
 def test_premap_cartesian_non_literal_offset():
-    def foo(inp: gtx.Field[[TDim], float64], i: int):
+    # a non-literal offset stays within the dimension: without a literal there is no
+    # fractional part to resolve to the staggered counterpart
+    def foo(inp: gtx.Field[[TDim], float64], i: gtx.int32):
         return inp(TDim + i)
 
-    with pytest.raises(errors.DSLError, match="literal right-hand side"):
+    reference = im.as_fieldop(
+        im.lambda_("__it")(im.deref(im.shift(im.cartesian_offset(TDim), "i")("__it")))
+    )("inp")
+
+    lowered = FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(foo))
+    assert lowered.expr == reference
+
+
+def test_premap_cartesian_non_literal_offset_negated():
+    def foo(inp: gtx.Field[[TDim], float64], i: gtx.int32):
+        return inp(TDim - i)
+
+    reference = im.as_fieldop(
+        im.lambda_("__it")(
+            im.deref(im.shift(im.cartesian_offset(TDim), im.call("neg")("i"))("__it"))
+        )
+    )("inp")
+
+    lowered = FieldOperatorLowering.apply(FieldOperatorParser.apply_to_function(foo))
+    assert lowered.expr == reference
+
+
+def test_premap_cartesian_non_literal_offset_must_be_integral():
+    def foo(inp: gtx.Field[[TDim], float64], x: gtx.float64):
+        return inp(TDim + x)
+
+    with pytest.raises(errors.DSLError, match="must be integral"):
         FieldOperatorParser.apply_to_function(foo)
 
 
