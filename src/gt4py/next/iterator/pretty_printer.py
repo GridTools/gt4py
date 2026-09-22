@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import types as _types
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Final
+from typing import Final, Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.next import common
@@ -233,11 +233,14 @@ class PrettyPrinter(NodeTranslator):
         return [f"{domain}→{codomain}"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        try:
-            kind = _AXIS_KIND_SUFFIX[node.kind]
-        except ValueError:
-            # a tag that names no importable dimension, e.g. in IR built by hand for debugging
-            kind = "ₕ"
+        # NOTE: printing must not import modules (`str()` of any node prints it), so the kind is
+        # taken from the inferred type, or from an already loaded dimension. A tag naming neither,
+        # e.g. in IR built by hand, prints as horizontal; the parser ignores the suffix anyway.
+        if isinstance(node.type, ts.DimensionType):
+            dim: Optional[common.Dimension] = node.type.dim
+        else:
+            dim = common.resolve_loaded(node.value)
+        kind = _AXIS_KIND_SUFFIX[dim.kind] if dim is not None else "ₕ"
         return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:

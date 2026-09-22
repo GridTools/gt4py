@@ -404,6 +404,26 @@ def resolve(tag: Tag) -> Dimension:
     )
 
 
+def resolve_loaded(tag: Tag) -> Optional[Dimension]:
+    """
+    Return the dimension a tag names if its module is already loaded, else `None`.
+
+    Like `resolve`, but never imports: for code that must not have import side effects, such as
+    printing IR.
+    """
+    if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
+        owner, base = resolve_loaded(match["owner"]), resolve_loaded(match["base"])
+        return owner[base] if owner is not None and base is not None else None  # type: ignore[index] # parametrized dimension
+    parts = tag.split(".")
+    for split in range(len(parts) - 1, 0, -1):
+        if (obj := sys.modules.get(".".join(parts[:split]))) is None:
+            continue
+        for attr in parts[split:]:
+            obj = getattr(obj, attr, None)
+        return obj if isinstance(obj, DimensionMeta) else None
+    return None
+
+
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
 

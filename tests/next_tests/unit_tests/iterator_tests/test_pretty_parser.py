@@ -252,7 +252,8 @@ def test_named_range_horizontal():
     assert actual == expected
 
 
-def test_named_range_vertical():
+def test_named_range_kind_suffix_is_ignored():
+    # the kind is the dimension's own; the suffix only helps the reader
     testee = "IDimᵥ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),

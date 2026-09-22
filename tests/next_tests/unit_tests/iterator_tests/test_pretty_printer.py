@@ -277,7 +277,15 @@ def test_axis_literal(dim, suffix):
 
 
 def test_axis_literal_of_unresolvable_tag():
+    # printing does not import modules: a tag naming no loaded dimension prints as horizontal,
+    # so text -> IR -> text is not the identity for such tags (the parser ignores the suffix)
     assert pformat(ir.AxisLiteral(value="I")) == "Iₕ"
+    assert pformat(ir.AxisLiteral(value="this.I")) == "this.Iₕ"
+
+
+def test_axis_literal_kind_from_type():
+    typed = ir.AxisLiteral(value="not.loaded.KDim", type=ts.DimensionType(dim=KDim))
+    assert pformat(typed) == "not.loaded.KDimᵥ"
 
 
 def test_named_range_horizontal():
