@@ -56,6 +56,9 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
         >>> from gt4py import next as gtx
         >>> class KDim(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
         >>> class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+        >>> import sys  # register the dimensions where their tags point, as a module would
+        >>> sys.modules[__name__].KDim = KDim
+        >>> sys.modules[__name__].Vertex = Vertex
 
         >>> sizes = {
         ...     "out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)}),
