@@ -238,8 +238,8 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
     sdfg.validate()
 
 
-def add_configurable_stream(sdfg: dace.SDFG, on_gpu: bool) -> None:
-    """Add a configurable stream to the SDFG.
+def add_configurable_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None) -> None:
+    """Use an external GPU stream for the SDFG.
 
     This allows to set the stream used for all GPU work, which allows to
     synchronize the execution of GPU kernels with external workload and to share
@@ -247,23 +247,18 @@ def add_configurable_stream(sdfg: dace.SDFG, on_gpu: bool) -> None:
 
     If the stream argument is not provided, the default stream is used.
     """
-    if not on_gpu:
-        # This is only a problem on GPU. Dace uses OpenMP on CPU and
-        # the OpenMP parallel region creates a synchronization point.
-        return
-
-    stream_arg, _ = sdfg.add_scalar(gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM, dace.int64)
-    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
-    sdfg.append_init_code(
-        f"""\
-if ({stream_arg} == 0) {{
-    __dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);
-}} else {{
-    __dace_gpu_set_all_streams(__state, {stream_arg});
-}}""",
-        location="cuda",
-    )
+    if external_gpu_stream is None:
+        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+        assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+        sdfg.append_init_code(
+            f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
+            location="cuda",
+        )
+    else:
+        sdfg.append_init_code(
+            f"__dace_gpu_set_all_streams(__state, {external_gpu_stream});",
+            location="cuda",
+        )
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
@@ -340,6 +335,7 @@ class DaCeTranslator(
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     sync_sdfg_call: bool
+    external_gpu_stream: int | None
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
@@ -421,7 +417,8 @@ class DaCeTranslator(
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
 
-        add_configurable_stream(sdfg, on_gpu)
+        if on_gpu:
+            add_configurable_gpu_stream(sdfg, self.external_gpu_stream)
 
         return sdfg
 

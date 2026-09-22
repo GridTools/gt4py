@@ -82,6 +82,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     sync_sdfg_call: bool = False,
     optimization_args: dict[str, Any] | None = None,
+    external_gpu_stream: int | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
@@ -97,6 +98,10 @@ def make_dace_backend(
             the GPU kernel execution to overlap with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+        external_gpu_stream: An external GPU stream to be used for the SDFG call,
+            which allows to synchronize the execution of GPU kernels with external
+            workload and to share the stream memory pool. If not provided, the
+            default stream is used.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
@@ -160,6 +165,7 @@ def make_dace_backend(
         external_workspace=external_workspace,
         otf_workflow__bare_translation__sync_sdfg_call=sync_sdfg_call,
         otf_workflow__bare_translation__auto_optimize_args=optimization_args,
+        otf_workflow__bare_translation__external_gpu_stream=external_gpu_stream,
         otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
         otf_workflow__bare_translation__use_metrics=use_metrics,
         otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,

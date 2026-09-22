@@ -63,6 +63,7 @@ def _translate_gtir_to_sdfg(
     device_type: core_defs.DeviceType,
     auto_optimize: bool,
     sync_sdfg_call: bool,
+    external_gpu_stream: int | None = None,
     use_metrics: bool = False,
 ) -> dace.SDFG:
     with dace.config.set_temporary("cache", value="hash"):
@@ -72,6 +73,7 @@ def _translate_gtir_to_sdfg(
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
             sync_sdfg_call=sync_sdfg_call,
+            external_gpu_stream=external_gpu_stream,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
@@ -139,6 +141,19 @@ def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
     return (
         re.match(
             r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
+            sdfg.init_code["cuda"].as_string,
+        )
+        is not None
+    )
+
+
+def _are_streams_set_to_external_stream(sdfg: dace.SDFG, external_gpu_stream: int) -> bool:
+    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
+        return False
+
+    return (
+        re.match(
+            rf"__dace_gpu_set_all_streams\(__state\s*,\s*{external_gpu_stream}\);",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
@@ -280,6 +295,45 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
         _check_sdfg_with_async_call(sdfg)
 
 
+@pytest.mark.parametrize("external_gpu_stream", [None, 0x1234])
+def test_generate_sdfg_external_gpu_stream(
+    external_gpu_stream: int | None, device_type: core_defs.DeviceType
+):
+    """Verify that `external_gpu_stream` selects the GPU stream used by the SDFG."""
+    ir = itir.Program(
+        id="field_ir_external_gpu_stream",
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=device_type,
+        auto_optimize=False,
+        sync_sdfg_call=False,
+        external_gpu_stream=external_gpu_stream,
+    )
+
+    if device_type == core_defs.DeviceType.CPU:
+        assert "cuda" not in sdfg.init_code
+    elif external_gpu_stream is None:
+        assert _are_streams_set_to_default_stream(sdfg)
+    else:
+        assert _are_streams_set_to_external_stream(sdfg, external_gpu_stream)
+
+
 def _make_multi_state_sdfg_0(
     sdfg_name: str = "async_call_multi_state_0",
 ) -> tuple[dace.SDFG, dace.SDFGState, dace.SDFGState]:
@@ -394,7 +448,8 @@ def test_generate_sdfg_async_call_multi_state(
     # NOTE: Here we should use a configuration context. But because of
     #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
     with dace_wf_common.dace_context(device_type=device_type):
-        dace_wf_translation.add_configurable_stream(sdfg, on_gpu)
+        if on_gpu:
+            dace_wf_translation.add_configurable_gpu_stream(sdfg, external_gpu_stream=None)
 
     if on_gpu:
         assert _are_streams_set_to_default_stream(sdfg)
@@ -486,6 +541,7 @@ def test_translation_source_code_invariant_under_guid_change():
         auto_optimize=False,
         auto_optimize_args=None,
         sync_sdfg_call=True,
+        external_gpu_stream=None,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
     )
