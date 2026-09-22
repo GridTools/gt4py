@@ -583,7 +583,7 @@ def op_as_fieldop(
 
 
 def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
-    return itir.AxisLiteral(value=dim.tag, kind=dim.kind)
+    return itir.AxisLiteral(value=dim.tag)
 
 
 def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
@@ -640,7 +640,7 @@ def index(dim: common.Dimension) -> itir.FunCall:
     Returns:
         A function that constructs a Field of indices in the given dimension.
     """
-    return call("index")(itir.AxisLiteral(value=dim.tag, kind=dim.kind))
+    return call("index")(itir.AxisLiteral(value=dim.tag))
 
 
 def map_list(op):

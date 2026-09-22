@@ -41,7 +41,7 @@ GRAMMAR = """
     // suffix terminates it.
     TAG: /[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\[[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\])?/
     OFFSET_LITERAL: ( INT_LITERAL | TAG ) "ₒ"
-    AXIS_LITERAL: TAG ("ᵥ" | "ₕ")
+    AXIS_LITERAL: TAG ("ᵥ" | "ₕ" | "ₗ")
     INFINITY_LITERAL: "∞" | "-∞"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
@@ -177,9 +177,8 @@ class ToIrTransformer(lark_visitors.Transformer):
         return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        name = value.value[:-1]
-        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
-        return ir.AxisLiteral(value=name, kind=kind)
+        # NOTE: the kind suffix is only for the reader; the kind is the dimension's own.
+        return ir.AxisLiteral(value=value.value[:-1])
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args

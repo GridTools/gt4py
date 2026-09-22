@@ -190,7 +190,7 @@ def test_named_range_unbounded():
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[
-            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.AxisLiteral(value="KDim"),
             ir.InfinityLiteral.NEGATIVE,
             ir.InfinityLiteral.POSITIVE,
         ],
@@ -257,7 +257,7 @@ def test_named_range_vertical():
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[
-            ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL),
+            ir.AxisLiteral(value="IDim"),
             ir.SymRef(id="x"),
             ir.SymRef(id="y"),
         ],

@@ -141,7 +141,7 @@ def make_node(o):
     if isinstance(o, Node):
         return o
     if isinstance(o, common.DimensionMeta):
-        return AxisLiteral(value=o.tag, kind=o.kind)
+        return AxisLiteral(value=o.tag)
     if isinstance(o, common.Infinity):
         if o is common.Infinity.POSITIVE:
             return itir.InfinityLiteral.POSITIVE
