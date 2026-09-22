@@ -8,6 +8,8 @@
 
 import pytest
 
+import gt4py.next as gtx
+
 from gt4py.next.iterator import builtins, ir, pretty_printer
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
@@ -259,18 +261,23 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_axis_literal_horizontal():
-    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL)
-    expected = "Iₕ"
-    actual = pformat(testee)
-    assert actual == expected
+class IDim(gtx.DimensionIndex): ...
 
 
-def test_axis_literal_vertical():
-    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL)
-    expected = "Iᵥ"
-    actual = pformat(testee)
-    assert actual == expected
+class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+@pytest.mark.parametrize("dim, suffix", [(IDim, "ₕ"), (KDim, "ᵥ"), (LocalDim, "ₗ")])
+def test_axis_literal(dim, suffix):
+    # the suffix is the resolved dimension's kind
+    assert pformat(ir.AxisLiteral(value=dim.tag)) == f"{dim.tag}{suffix}"
+
+
+def test_axis_literal_of_unresolvable_tag():
+    assert pformat(ir.AxisLiteral(value="I")) == "Iₕ"
 
 
 def test_named_range_horizontal():

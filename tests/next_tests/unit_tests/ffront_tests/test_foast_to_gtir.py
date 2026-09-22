@@ -985,7 +985,7 @@ def test_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         im.ref("inp"),
-        im.make_tuple(*(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(value=dim.tag) for dim in (TDim, UDim))),
     )
 
 
@@ -999,7 +999,7 @@ def test_scalar_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         1,
-        im.make_tuple(*(itir.AxisLiteral(value=dim.tag, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(value=dim.tag) for dim in (TDim, UDim))),
     )
 
 

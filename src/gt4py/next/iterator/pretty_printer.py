@@ -19,6 +19,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import Final
 
 from gt4py.eve import NodeTranslator
+from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -134,6 +135,13 @@ DEFAULT_INDENT: Final = 2
 DEFAULT_WIDTH: Final = 100
 
 
+_AXIS_KIND_SUFFIX: Final = {
+    common.DimensionKind.HORIZONTAL: "ₕ",
+    common.DimensionKind.VERTICAL: "ᵥ",
+    common.DimensionKind.LOCAL: "ₗ",
+}
+
+
 class PrettyPrinter(NodeTranslator):
     def __init__(
         self,
@@ -225,11 +233,11 @@ class PrettyPrinter(NodeTranslator):
         return [f"{domain}→{codomain}"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        kind = ""
-        if node.kind == ir.DimensionKind.HORIZONTAL:
+        try:
+            kind = _AXIS_KIND_SUFFIX[node.kind]
+        except ValueError:
+            # a tag that names no importable dimension, e.g. in IR built by hand for debugging
             kind = "ₕ"
-        elif node.kind == ir.DimensionKind.VERTICAL:
-            kind = "ᵥ"
         return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
