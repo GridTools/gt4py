@@ -762,7 +762,9 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_dim = arg.gt_dtype.offset_type
             assert local_dim is not None
             assert isinstance(
-                self.subgraph_builder.get_offset_provider_type(local_dim.tag),
+                self.subgraph_builder.get_offset_provider_type(
+                    self.subgraph_builder.connectivity_key_over(local_dim)
+                ),
                 gtx_common.NeighborConnectivityType,
             )
             # find position of the local dimension in the field layout
@@ -1436,7 +1438,7 @@ class LambdaToDataflow(eve.NodeVisitor):
     ) -> ValueExpr:
         assert list_type.offset_type is not None
         offset_provider_t = self.subgraph_builder.get_offset_provider_type(
-            list_type.offset_type.tag
+            self.subgraph_builder.connectivity_key_over(list_type.offset_type)
         )
         assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
         local_size = offset_provider_t.max_neighbors
