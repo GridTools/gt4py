@@ -482,7 +482,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                                 " choose one."
                             )
                         ],
-                        hints=[f"Write the displacement directly, e.g. '{source.value} + 1'."],
+                        hints=[
+                            f"Write the displacement directly, e.g. '{source.__qualname__} + 1'."
+                        ],
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
