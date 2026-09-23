@@ -64,7 +64,7 @@ def _declare(source: str) -> dict:
         "Edge": Edge,
         "KDim": KDim,
         "V2E": V2E,
-        "ConstListDim": common.ConstListDim,
+        "ConstList": common.ConstList,
     }
     exec(textwrap.dedent(source), namespace)
     return namespace
@@ -473,3 +473,13 @@ def test_local_dimension_of():
     assert common.local_dimension_of(shared) is V2E.Local
     with pytest.raises(TypeError, match="not a connectivity declaration"):
         common.local_dimension_of(NeighborConnectivity)
+
+
+def test_the_const_list_dimension_cannot_be_adopted():
+    with pytest.raises(TypeError, match="cannot adopt"):
+        _declare(
+            """
+            class C(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = ConstList
+            """
+        )

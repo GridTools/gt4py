@@ -1819,20 +1819,6 @@ else:
             super().__init_subclass__(**kwargs)
 
 
-class ConstList(DimensionIndex, kind=DimensionKind.LOCAL):
-    """
-    The local dimension of a list of one repeated value (`make_const_list`).
-
-    The value is broadcast against the neighbor lists it is combined with, and a materialized
-    constant list has extent 1 along it. It indexes no table, so it is never in an offset provider.
-
-    Declared here, once: it used to be built independently in `iterator/embedded.py` and in the
-    DaCe lowering, which only worked while dimensions compared by `(name, kind)`.
-    """
-
-    __slots__ = ()
-
-
 def _reduce_staggered(cls: StaggeredMeta) -> Any:
     """
     Pickle a staggered dimension through its base, falling back to by-reference.
@@ -1961,6 +1947,21 @@ def _check_neighbor_count(cls: type, name: str, count: Optional[int]) -> Optiona
     if count < 0:
         raise ValueError(f"'{cls.__qualname__}': '{name}' must be non-negative, got {count}.")
     return int(count)
+
+
+class ConstList(LocalDimensionIndex, size=1):
+    """
+    The local dimension of a list of one repeated value (`make_const_list`).
+
+    An owner-less local dimension of size 1: the value is broadcast against the neighbor lists it
+    is combined with, and a materialized constant list has extent 1 along it. It indexes no table,
+    so it is never in an offset provider.
+
+    Declared here, once: it used to be built independently in `iterator/embedded.py` and in the
+    DaCe lowering, which only worked while dimensions compared by `(name, kind)`.
+    """
+
+    __slots__ = ()
 
 
 class ConnectivityMeta(type):
@@ -2115,6 +2116,11 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                 f"'{name}' must declare its local dimension, either as a nested class"
                 " ('class Local(LocalDimensionIndex): ...') or by adopting one"
                 " ('Local: TypeAlias = SomeLocalDim')."
+            )
+        if local is ConstList:
+            raise TypeError(
+                f"'{name}' cannot adopt '{ConstList.__qualname__}': it is the local dimension"
+                " of 'make_const_list' results and belongs to no connectivity."
             )
         max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)
         min_neighbors = _check_neighbor_count(cls, "min_neighbors", min_neighbors)
