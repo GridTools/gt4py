@@ -570,9 +570,14 @@ class NdArrayConnectivityField(
         return {}
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+        return self._inverse_image(image_range)[0]
+
+    def _inverse_image(
+        self, image_range: common.UnitRange | common.NamedRange
+    ) -> tuple[common.Domain, bool]:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
-        if (new_domain := self._cache.get(cache_key, None)) is None:
+        if (result := self._cache.get(cache_key, None)) is None:
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
@@ -587,14 +592,21 @@ class NdArrayConnectivityField(
             assert common.UnitRange.is_finite(image_range)
 
             xp = self.array_ns
-            slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
-            if slices is None:
-                raise ValueError("Restriction generates non-contiguous or empty dimensions.")
+            hyperslice = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
+            if hyperslice is None:
+                raise ValueError("Restriction generates an empty domain.")
+            slices, has_holes = hyperslice
+            # a partially kept local dimension would silently drop neighbours from reductions
+            if not _local_dims_whole(self._ndarray, self.domain, slices, xp, self.skip_value):
+                raise ValueError(
+                    "Restriction generates a partial local dimension: entries outside the image "
+                    "range that are not skip values would be dropped."
+                )
 
-            new_domain = self.domain.slice_at[slices]
-            self._cache[cache_key] = new_domain
+            result = (self.domain.slice_at[slices], has_holes)
+            self._cache[cache_key] = result
 
-        return new_domain
+        return result
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
@@ -610,6 +622,12 @@ class NdArrayConnectivityField(
         return restricted_connectivity
 
     __getitem__ = restrict
+
+
+# Points of a gather whose connectivity entry is a hole (out of the data's range, not a skip value,
+# but inside the hypercube `inverse_image` returns) have no defined value. Poisoning them with NaN
+# costs a pass over the result, so it is done only in debug mode.
+_FILL_GATHER_HOLES: bool = __debug__
 
 
 def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> NdArrayField:
@@ -667,18 +685,28 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     new_domain = _gather_output_domain(data.domain, connectivities)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
+    holes: list[core_defs.NDArrayObject] = []
+
     # one index array per original field dimension (the connectivity's, or identity), broadcast over
     # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
-    take_indices = tuple(
-        (
-            _connectivity_index_array(conn_by_codomain[dim], new_domain, xp)
-            if dim in conn_by_codomain
-            else _identity_index_array(new_domain, dim, xp)
-        )
-        - data.domain[dim].unit_range.start
-        for dim in data.domain.dims
-    )
-    new_buffer = data._ndarray[take_indices]
+    def take_index(dim: common.Dimension) -> core_defs.NDArrayObject:
+        data_range = data.domain[dim].unit_range
+        if (conn := conn_by_codomain.get(dim)) is None:
+            return _identity_index_array(new_domain, dim, xp) - data_range.start
+        index = _connectivity_index_array(conn, new_domain, xp)
+        assert isinstance(conn, NdArrayConnectivityField)
+        if conn._inverse_image(data_range)[1]:
+            # holes read the domain start, so the gather never goes out of bounds
+            hole = (index < data_range.start) | (index >= data_range.stop)
+            if conn.skip_value is not None:
+                hole &= index != conn.skip_value
+            index = xp.where(hole, data_range.start, index)
+            holes.append(hole)
+        return index - data_range.start
+
+    new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
+    if holes and _FILL_GATHER_HOLES and data.dtype.kind is core_defs.DTypeKind.FLOAT:
+        new_buffer = xp.where(functools.reduce(xp.logical_or, holes), xp.nan, new_buffer)
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
@@ -726,12 +754,12 @@ def _hyperslice(
     image_range: common.UnitRange,
     xp: ModuleType,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[tuple[slice, ...]]:
+) -> Optional[tuple[tuple[slice, ...], bool]]:
     """
-    Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+    Return the smallest hypercube slice containing all indices in `index_array` that are within `image_range`.
 
-    If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
-    A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+    Returns `None` if no index is within `image_range`, otherwise the slices and whether the
+    hypercube has holes, i.e. entries neither within `image_range` nor equal to `skip_value`.
 
     Example:
         index_array =  0  1 -1
@@ -739,7 +767,8 @@ def _hyperslice(
                       -1 -1 -1
         skip_value = -1
 
-        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+        with `image_range` [0, 5) selects the 2x2 range [0,2], [0,2] without holes, with
+        [1, 4) the same range with holes at (0, 0) and (1, 1).
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
 
@@ -756,10 +785,31 @@ def _hyperslice(
     if skip_value is not None:
         ignore_mask = index_array == skip_value
         hcube |= ignore_mask[tuple(slices)]
-    if not xp.all(hcube):
-        return None
 
-    return slices
+    return slices, not xp.all(hcube).item()
+
+
+def _local_dims_whole(
+    index_array: core_defs.NDArrayObject,
+    domain: common.Domain,
+    slices: tuple[slice, ...],
+    xp: ModuleType,
+    skip_value: Optional[core_defs.IntegralScalar],
+) -> bool:
+    widened = tuple(
+        slice(0, index_array.shape[i]) if dim.kind is common.DimensionKind.LOCAL else s
+        for i, (dim, s) in enumerate(zip(domain.dims, slices))
+    )
+    for i, (dim, s) in enumerate(zip(domain.dims, slices)):
+        if dim.kind is not common.DimensionKind.LOCAL:
+            continue
+        for dropped in (slice(0, s.start), slice(s.stop, index_array.shape[i])):
+            if dropped.start == dropped.stop:
+                continue
+            slab = index_array[(*widened[:i], dropped, *widened[i + 1 :])]
+            if skip_value is None or not xp.all(slab == skip_value):
+                return False
+    return True
 
 
 # -- Specialized implementations for builtin operations on array fields --
