@@ -1242,7 +1242,10 @@ class ConnectivityType:  # TODO(havogt): would better live in type_specification
 
 @dataclasses.dataclass(frozen=True)
 class NeighborConnectivityType(ConnectivityType):
-    # TODO(havogt): refactor towards encoding this information in the local dimensions of the ConnectivityType.domain
+    # NOTE: partly encoded in the local dimension since ADR 0029: a `LocalDimensionIndex` carries
+    # `max_neighbors` / `min_neighbors` where the declaration states them, and this record is
+    # checked against them (`check_neighbor_table`). It stays the *bound* count, which a
+    # declaration may leave to the table.
     max_neighbors: int
 
     @property
