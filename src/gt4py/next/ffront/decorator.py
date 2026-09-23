@@ -733,6 +733,7 @@ class FieldOperatorFromFoast(FieldOperator):
             kwargs["offset_provider"] = common.as_tag_keyed_offset_provider(
                 kwargs["offset_provider"]
             )
+            common.check_offset_provider(kwargs["offset_provider"])
         compiled_fo = self.backend.compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )

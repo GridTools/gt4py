@@ -452,6 +452,14 @@ class TestFrontendIntegration:
 def _table(domain=(Vertex, V2E.Local), codomain=Edge, data=((0, 1, 2, 3), (1, 2, 3, 0))):
     from gt4py.next import constructors
 
+    data = np.array(data)
+    return constructors.as_connectivity(
+        domain=dict(zip(domain, data.shape)),
+        codomain=codomain,
+        data=data,
+        skip_value=common._DEFAULT_SKIP_VALUE,
+    )
+
 
 def test_redefined_declaration_with_an_adopted_local(monkeypatch):
     """Re-running a cell must re-own the adopted local dimension, not become a sharer."""
@@ -495,14 +503,6 @@ def test_local_dimension_of():
     with pytest.raises(TypeError, match="not a connectivity declaration"):
         common.local_dimension_of(NeighborConnectivity)
 
-    data = np.array(data)
-    return constructors.as_connectivity(
-        domain=dict(zip(domain, data.shape)),
-        codomain=codomain,
-        data=data,
-        skip_value=common._DEFAULT_SKIP_VALUE,
-    )
-
 
 class TestOffsetProvider:
     def test_class_keys_become_tags(self):
@@ -544,9 +544,24 @@ class TestOffsetProvider:
         owner = _table(data=((0, 1, 2, 3), (1, 2, 3, 0)))
         consistent = _table(data=((3, 2, 1, 0), (0, 3, 2, 1)))
         inconsistent = _table(data=((3, 2, 1, -1), (0, 3, 2, 1)))
-        common.check_offset_provider({V2E: owner, V2EShared: consistent})
+        common.check_offset_provider({V2E: owner, V2EShared: consistent}, deep=True)
         with pytest.raises(ValueError, match="different neighbor structure"):
-            common.check_offset_provider({V2E: owner, V2EShared: inconsistent})
+            common.check_offset_provider({V2E: owner, V2EShared: inconsistent}, deep=True)
+        # the call path does not read the tables
+        common.check_offset_provider({V2E: owner, V2EShared: inconsistent})
+
+    def test_the_connectivity_s_own_tag_is_rejected(self):
+        with pytest.raises(ValueError, match="whose key is the declaration itself"):
+            common.check_offset_provider({V2E.tag: _table()})
+
+    def test_a_checked_provider_is_remembered(self):
+        provider = {V2E: _table(codomain=Vertex)}
+        with pytest.raises(ValueError, match="does not match its declaration"):
+            common.check_offset_provider(provider)
+        # and a provider that passes is not checked twice
+        good = {V2E: _table()}
+        common.check_offset_provider(good)
+        common.check_offset_provider(good)
 
     def test_check_skips_undeclared_tags(self):
         common.check_offset_provider({"some.hand.written.tag": _table()})
@@ -626,6 +641,7 @@ def test_redefined_declaration_resolves_to_the_new_class(monkeypatch):
     with pytest.raises(ValueError, match="was the declaration redefined"):
         common.check_neighbor_table(
             new, _table(domain=(old.origin, old.Local), codomain=module.E, data=((0, 1), (1, 0)))
+        )
 
 
 def test_the_const_list_dimension_cannot_be_adopted():

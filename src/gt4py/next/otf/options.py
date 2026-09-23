@@ -45,6 +45,8 @@ class CompilationOptions:
             object.__setattr__(
                 self, "connectivities", common.as_tag_keyed_offset_provider(self.connectivities)
             )
+            # the DaCe orchestration reads these directly, without passing an offset provider
+            common.check_offset_provider(self.connectivities, deep=True)
 
 
 assert CompilationOptionsArgs.__annotations__.keys() == CompilationOptions.__annotations__.keys()

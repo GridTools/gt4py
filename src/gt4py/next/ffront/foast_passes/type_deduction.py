@@ -793,20 +793,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
-            for arg in new_args:
-                # A Cartesian `FieldOffset` shifts by the index it is subscripted with, so it
-                # carries no displacement on its own. Only an offset with a local dimension is
-                # meaningful unsubscripted, as the neighbor access `field(Off)`.
-                if (
-                    isinstance(arg, (foast.Name, foast.Attribute))
-                    and isinstance(arg.type, ts.OffsetType)
-                    and len(arg.type.target) == 1
-                ):
-                    raise errors.DSLError(
-                        arg.location,
-                        f"Cannot shift by the Cartesian offset '{arg!s}' without an index.",
-                        hints=[f"Give the displacement, e.g. '{arg!s}[1]'."],
-                    )
+            # NOTE: a bare single-target offset used to be rejected here, as the unsubscripted
+            # Cartesian `FieldOffset` `a(Koff)`. There is no such declaration any more: a Cartesian
+            # shift is `a(Dim + i)`, and the only single-target offset left is the result of
+            # `as_offset`, which is a call, not a name.
+            pass
         elif isinstance(new_func.type, ts.DimensionType):
             assert new_func.type.dim.kind == DimensionKind.LOCAL
             return foast.Call(

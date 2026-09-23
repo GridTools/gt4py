@@ -68,6 +68,7 @@ def test_declarations():
 
     assert results["dimension"] == textwrap.dedent(
         """\
+        import typing
         import gt4py.next as gtx
 
         class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
@@ -77,11 +78,11 @@ def test_declarations():
         class E2CDim(gtx.LocalDimensionIndex): ...
         class C2EDim(gtx.LocalDimensionIndex): ...
         class E2C(gtx.NeighborConnectivity[EdgeDim, CellDim]):
-            Local = E2CDim
+            Local: typing.TypeAlias = E2CDim
         class C2E(gtx.NeighborConnectivity[CellDim, EdgeDim]):
-            Local = C2EDim
+            Local: typing.TypeAlias = C2EDim
         class C2CE(gtx.NeighborConnectivity[CellDim, CEDim]):
-            Local = C2EDim
+            Local: typing.TypeAlias = C2EDim
         """
     )
 
@@ -141,6 +142,7 @@ def test_unqualified_names_and_aliases():
     )
     assert "class V2EDim(LocalDimensionIndex): ..." in migrated
     assert "class V2E(NeighborConnectivity[Vertex, Edge]):" in migrated
+    assert "    Local: typing.TypeAlias = V2EDim" in migrated
     namespace: dict = {"__name__": "migrated_bare"}
     exec(migrated, namespace)
     assert namespace["V2E"].Local is namespace["V2EDim"]

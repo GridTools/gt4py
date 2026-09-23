@@ -99,7 +99,10 @@ def get_sdfg_conn_args(
     that the memory buffers are allocated for the target device.
     """
     connectivity_args = {}
-    for offset, connectivity in gtx_common.as_tag_keyed_offset_provider(offset_provider).items():
+    # NOTE: not strict, like the other IR-level hooks: the keys of a hand-written program are its
+    # own business, and a declaration is normalized to its tag either way.
+    provider = gtx_common.as_tag_keyed_offset_provider(offset_provider, strict=False)
+    for offset, connectivity in provider.items():
         name = gtx_dace_args.connectivity_identifier(offset)
         if name in sdfg.arrays:
             assert gtx_common.is_neighbor_table(connectivity)

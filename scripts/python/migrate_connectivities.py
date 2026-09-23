@@ -24,10 +24,10 @@ becomes
     class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
     class E2CDim(gtx.LocalDimensionIndex): ...
     class E2C(gtx.NeighborConnectivity[EdgeDim, CellDim]):
-        Local = E2CDim
+        Local: typing.TypeAlias = E2CDim
     ... a(KDim + 1) ... as_offset(KDim, k_field) ...
 
-A connectivity adopts its existing local dimension (`Local = E2CDim`), so the names already used
+A connectivity adopts its existing local dimension (`Local: TypeAlias = E2CDim`), so the names already used
 for local dimensions keep working, and so do offsets that share a local dimension (`C2CE`
 with `C2EDim`). What cannot be rewritten from the source alone is reported instead: offset
 providers keyed by strings, which become keyed by the connectivity (`{E2C: table}`), `.value`
@@ -69,6 +69,8 @@ class Module:
     notes: list[str] = dataclasses.field(default_factory=list)
     #: Names of `gt4py.next` the migrated declarations use unqualified, to be imported.
     needed: set[str] = dataclasses.field(default_factory=set)
+    #: Whether the migrated declarations need `typing` imported (for `Local: TypeAlias = ...`).
+    needed_typing: bool = False
 
     @property
     def lines(self) -> list[str]:
@@ -163,8 +165,11 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
             origin, local = (module.segment(element) for element in target.elts)
             text = (
                 f"class {name}({prefix}NeighborConnectivity[{origin}, {module.segment(source)}]):\n"
-                f"    Local = {local}\n"
+                # NOTE: `TypeAlias`, not a plain assignment: it is what keeps the adopted local
+                # dimension a *type* for mypy (see ADR 0029).
+                f"    Local: typing.TypeAlias = {local}\n"
             )
+            module.needed_typing = True
             if not prefix:
                 module.needed.add("NeighborConnectivity")
             _replace(module, statement, text)
@@ -188,6 +193,10 @@ def _migrate_imports(module: Module) -> None:
         for alias in statement.names
     }
     missing = sorted(module.needed - imported)
+    typing_missing = module.needed_typing and not any(
+        isinstance(statement, ast.Import) and any(a.name == "typing" for a in statement.names)
+        for statement in ast.walk(module.tree)
+    )
     added = False
     for statement in module.tree.body:
         if not isinstance(statement, ast.ImportFrom):
@@ -211,6 +220,18 @@ def _migrate_imports(module: Module) -> None:
             text += f"from gt4py.next import {', '.join(missing)}\n"
             added = True
         _replace(module, statement, text)
+    if typing_missing:
+        # `Local: TypeAlias = ...` needs it; the first import statement is a safe place
+        for statement in module.tree.body:
+            if isinstance(statement, (ast.Import, ast.ImportFrom)):
+                module.edits.append(
+                    Edit(statement.lineno - 1, statement.lineno - 1, "import typing\n")
+                )
+                break
+        else:
+            module.notes.append(
+                f"{module.path}: import 'typing', used by the migrated declarations."
+            )
     if missing and not added:
         module.notes.append(
             f"{module.path}: import {', '.join(missing)} from 'gt4py.next', used by the migrated"

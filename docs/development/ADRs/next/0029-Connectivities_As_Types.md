@@ -130,11 +130,10 @@ whose tag is the connectivity's `offset_tag`:
   at the same positions — which is what sharing a neighbor axis means;
   `check_offset_provider` enforces it for the tables it is given.
 
-`V2E.Local` inside DSL code types as that local dimension, and
-`FieldOffset.Local` names the same thing on a legacy offset, so the spelling
-works for both. The other frontend touch points treat the class like the
-`FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
-counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
+`V2E.Local` inside DSL code types as that local dimension. The other frontend
+touch points treat a declaration as the offset it replaces: grid-type deduction
+(`transform_utils`, `past_to_itir`) counts it as unstructured, and embedded
+`premap` accepts it. `V2E[i]` subscripts the
 metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
 
 ### Offset providers are keyed by the declaration
@@ -145,18 +144,23 @@ Users bind tables to declarations:
 program(..., offset_provider={V2E: v2e_table, C2E: c2e_table})
 ```
 
-Every entry point of a program (`Program.__call__`, `FieldOperator.__call__`,
-`compile`, `CompilationOptions.connectivities`, `embedded.context.update`, the
-iterator `fendef`) normalizes such a provider to the form the IR uses: each
-declaration is replaced by its `offset_tag`. Everything below the entry points —
-lowering, the backends, compiled-program caching — therefore keeps seeing a
-provider keyed by strings, which is also what hand-written IR uses. A string key
-must be a tag, i.e. a qualified name; a bare name such as `"V2E"` is the removed
-`FieldOffset` spelling and is rejected with a message pointing here.
+Every entry point of a program normalizes such a provider to the form the IR
+uses: each declaration is replaced by its `offset_tag`. Everything below the
+entry points — lowering, the backends, compiled-program caching — therefore keeps
+seeing a provider keyed by strings, which is also what hand-written IR uses.
 
-Tables are checked against their declarations (`check_offset_provider`) once per
-compiled variant and on each embedded call, not on every compiled call: the
-check builds the table's type, which is too slow for the call path. A tag that
+The frontend entry points (`Program.__call__`, `FieldOperator.__call__`,
+`compile`, `CompilationOptions.connectivities`) are *strict*: a string key must
+be a tag, i.e. a qualified name, and a bare name such as `"V2E"` is the removed
+`FieldOffset` spelling, rejected with a message pointing here. The IR-level hooks
+(`embedded.context.update`, the iterator `fendef`, DaCe's `get_sdfg_conn_args`)
+accept any string, because a hand-written program names its offsets itself.
+
+Tables are checked against their declarations (`check_offset_provider`) at every
+entry point, but the result is remembered per set of bound tables, so repeated
+calls cost one hash. Reading the tables — comparing the skip-value positions of
+two connectivities that share a local dimension — is done only where a program is
+compiled, not on the call path. A tag that
 names no declared connectivity, as in hand-written IR, is not checked.
 
 ### `FieldOffset` is removed

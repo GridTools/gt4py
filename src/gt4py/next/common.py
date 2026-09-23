@@ -399,6 +399,18 @@ def resolve(tag: Tag) -> Dimension:
     return cast(Dimension, obj)
 
 
+def _import_qualified_name_or_none(tag: Tag) -> Any:
+    """`_import_qualified_name`, returning `None` for a name that does not resolve."""
+    if (split := _split_qualified_name_or_none(tag)) is None:
+        return None
+    module_name, attrs = split
+    obj: Any = sys.modules.get(module_name) or importlib.import_module(module_name)
+    for attr in attrs:
+        if (obj := getattr(obj, attr, None)) is None:
+            return None
+    return obj
+
+
 def _import_qualified_name(tag: Tag) -> Any:
     """Import the object a dotted qualified name refers to; see `resolve`."""
     module_name, attrs = _split_qualified_name(tag)
@@ -411,6 +423,21 @@ def _import_qualified_name(tag: Tag) -> Any:
                 f"Cannot resolve tag '{tag}': '{module_name}' has no attribute '{'.'.join(attrs)}'."
             ) from ex
     return obj
+
+
+@functools.cache
+def _split_qualified_name_or_none(tag: Tag) -> Optional[tuple[str, tuple[str, ...]]]:
+    """
+    `_split_qualified_name`, returning `None` instead of raising.
+
+    Separate and memoized so that a string that is not a qualified name -- an offset-provider key
+    of hand-written IR, say -- costs one import attempt in total, not one per call. A module whose
+    import *fails* other than by not being found is reported, not cached away.
+    """
+    try:
+        return _split_qualified_name(tag)
+    except ValueError:
+        return None
 
 
 @functools.cache
@@ -1549,7 +1576,9 @@ def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag:
     return True
 
 
-def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
+def hash_offset_provider_items_by_id(
+    offset_provider: OffsetProviderLike | OffsetProviderTypeLike,
+) -> int:
     """
     Compute hash of an offset provider on the tuples of key and value id.
 
@@ -2121,7 +2150,10 @@ class ConnectivityMeta(type):
                 f"'{cls.__qualname__}' can only be resolved to a table during embedded execution."
             )
         table = get_offset(offset_provider, cls.offset_tag)
-        assert is_neighbor_table(table)
+        if not is_neighbor_table(table):
+            raise TypeError(
+                f"'{cls.__qualname__}' is bound to '{table}', which is not a neighbor table."
+            )
         return table
 
 
@@ -2387,42 +2419,66 @@ def _check_tag_keys(offset_provider: Mapping[Any, Any]) -> None:
     for key in offset_provider:
         if not isinstance(key, str) or "." not in key:
             raise TypeError(
-                f"Invalid offset-provider key '{key!r}': offset providers are keyed by"
+                f"Invalid offset-provider key {key!r}: offset providers are keyed by"
                 " 'NeighborConnectivity' declarations, e.g. '{V2E: v2e_table}'. A bare name is the"
                 " spelling of the removed 'FieldOffset' (see ADR 0029)."
             )
 
 
-def check_offset_provider(offset_provider: OffsetProviderLike | OffsetProviderTypeLike) -> None:
-    """
-    Check every table of a tag-keyed offset provider against its connectivity declaration.
+#: Offset providers already checked, by the hash of their `(key, id(table))` items. Bounded, and
+#: not authoritative: like the compiled-program cache (which keys on the same hash), it can in
+#: principle skip a check when a freed table is replaced at the same address. See
+#: `check_offset_provider`.
+_CHECKED_OFFSET_PROVIDERS: Final[collections.OrderedDict[int, None]] = collections.OrderedDict()
+_CHECKED_OFFSET_PROVIDERS_MAX: Final = 256
 
-    A tag that does not name the local dimension of a declared connectivity -- e.g. one used only
-    by hand-written IR -- has no declaration to be checked against and is skipped.
+
+def check_offset_provider(
+    offset_provider: OffsetProviderLike | OffsetProviderTypeLike, *, deep: bool = False
+) -> None:
+    """
+    Check every table of an offset provider against its connectivity declaration.
+
+    A key that does not name a declared connectivity -- e.g. a tag used only by hand-written IR --
+    has no declaration to be checked against and is skipped. Providers are remembered by the
+    identity of their tables, so repeated calls with the same tables cost one hash.
+
+    Args:
+        offset_provider: The provider, keyed by declarations or by tags.
+        deep: Also compare the skip-value positions of tables over one shared local dimension,
+            which reads the tables. The compile path does; the call path does not.
 
     Raises:
         ValueError: If a table does not match its declaration, see `check_neighbor_table`.
     """
+    if (seen := hash_offset_provider_items_by_id(offset_provider)) in _CHECKED_OFFSET_PROVIDERS:
+        return
     for key, table in offset_provider.items():
         declaration: Any = key
         if isinstance(key, str):
-            try:
-                declaration = _import_qualified_name(key)
-            except ValueError:
+            if (declaration := _import_qualified_name_or_none(key)) is None:
                 continue
         if isinstance(declaration, DimensionMeta):
             # the local dimension's tag names its owner's table
             declaration = getattr(declaration, "owner", None)
-        if isinstance(declaration, ConnectivityMeta) and declaration.offset_tag in (
-            key,
-            getattr(key, "offset_tag", None),
-        ):
+        if isinstance(declaration, ConnectivityMeta):
+            if declaration.offset_tag not in (key, getattr(key, "offset_tag", None)):
+                # e.g. `{V2E.tag: table}`: the connectivity's own tag, which is the IR name only
+                # of a connectivity *sharing* a local dimension
+                raise ValueError(
+                    f"Invalid offset-provider key '{key}': it names the connectivity"
+                    f" '{declaration.__qualname__}', whose key is the declaration itself"
+                    f" ('{{{declaration.__qualname__}: table}}')."
+                )
             check_neighbor_table(cast(type[NeighborConnectivity], declaration), table)
-    _check_shared_local_dimensions(offset_provider)
+    _check_shared_local_dimensions(offset_provider, deep=deep)
+    _CHECKED_OFFSET_PROVIDERS[seen] = None
+    while len(_CHECKED_OFFSET_PROVIDERS) > _CHECKED_OFFSET_PROVIDERS_MAX:
+        _CHECKED_OFFSET_PROVIDERS.popitem(last=False)
 
 
 def _check_shared_local_dimensions(
-    offset_provider: OffsetProviderLike | OffsetProviderTypeLike,
+    offset_provider: OffsetProviderLike | OffsetProviderTypeLike, *, deep: bool = False
 ) -> None:
     """
     Check that the tables over one local dimension have the same neighbor structure.
@@ -2447,7 +2503,8 @@ def _check_shared_local_dimensions(
                 first_type.has_skip_values,
             )
             if (
-                same_structure
+                deep
+                and same_structure
                 and first_type.has_skip_values
                 and is_neighbor_table(first)
                 and is_neighbor_table(table)

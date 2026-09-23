@@ -82,6 +82,7 @@ class FendefDispatcher:
         offset_provider = common.as_tag_keyed_offset_provider(
             offset_provider or self.offset_provider, strict=False
         )
+        common.check_offset_provider(offset_provider)
         column_axis = column_axis or self.column_axis
 
         if backend is not None:
