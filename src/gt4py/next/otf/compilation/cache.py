@@ -67,7 +67,7 @@ def get_translation_cache_folder(cache_base: pathlib.Path, backend: str) -> path
 
 
 def persistent_translation_cache(
-    step: workflow.Workflow[StartT, EndT], backend: str, lifetime: config.BuildCacheLifetime
+    step: workflow.Step[StartT, EndT], backend: str, lifetime: config.BuildCacheLifetime
 ) -> workflow.CachedStep[StartT, EndT, str]:
     """
     Wrap a translation step in the persistent translation cache of `backend`.

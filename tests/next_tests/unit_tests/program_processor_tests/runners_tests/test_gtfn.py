@@ -19,6 +19,7 @@ Because monkey patching the config variables is not enough, as
 other variables are computed at import time based on them.
 """
 
+import dataclasses
 import functools
 import pathlib
 import unittest.mock
@@ -56,6 +57,28 @@ def test_make_gtfn_toolchain_device():
     assert custom_layout_allocators.is_field_allocator_for(
         gpu_version.allocator, core_defs.DeviceType.CUDA
     )
+
+
+@pytest.mark.parametrize(
+    "toolchain",
+    [gtfn.run_gtfn, gtfn.run_gtfn_gpu, gtfn.run_gtfn_no_transforms],
+    ids=lambda t: t.name,
+)
+def test_prebuilt_toolchains_declare_one_device(toolchain):
+    # The construction-time device checks only see steps that declare a device;
+    # this keeps them active for the pre-built toolchains.
+    assert toolchain.backend.device_type is not None
+    assert toolchain.backend.device_type is toolchain.allocator.__gt_device_type__
+
+
+def test_replaced_translation_must_target_the_pipeline_device():
+    pipeline = gtfn.run_gtfn.backend
+    gpu_translation = dataclasses.replace(
+        pipeline.translation.step, device_type=core_defs.DeviceType.CUDA
+    )
+
+    with pytest.raises(ValueError, match="must target the same device"):
+        dataclasses.replace(pipeline, translation=gpu_translation)
 
 
 def test_make_gtfn_toolchain_build_cache_config(monkeypatch):
