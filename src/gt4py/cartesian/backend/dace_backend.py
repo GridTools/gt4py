@@ -18,6 +18,7 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
+from dace.transformation.dataflow import MapCollapse
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -440,6 +441,7 @@ class SDFGManager:
             #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
             skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
+        sdfg.apply_transformations_repeated(MapCollapse, progress=False, validate=validate)
 
         if do_cache:
             self._save_sdfg(sdfg, path)
