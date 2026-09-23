@@ -19,9 +19,7 @@ import types
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from cached_property import cached_property
-from dace import __version__ as dace_version
 
-from gt4py import __version__ as gt4py_version
 from gt4py.cartesian import config as gt_config, utils as gt_utils
 from gt4py.cartesian.definitions import StencilID
 
@@ -301,7 +299,6 @@ class JITCachingStrategy(CachingStrategy):
     @property
     def stencil_id(self) -> StencilID:
         fingerprint = {
-            "gt4py_version": gt4py_version,
             "__main__": self.builder.definition._gtscript_["canonical_ast"],
             "docstring": inspect.getdoc(self.builder.definition),
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
@@ -319,13 +316,8 @@ class JITCachingStrategy(CachingStrategy):
             fingerprint["extra_compile_args"] = self.builder.options.backend_opts.get(
                 "extra_compile_args", gt_config.GT4PY_EXTRA_COMPILE_ARGS
             )
-        if "dace" in self.builder.backend.name:
-            fingerprint["dace_version"] = dace_version
-            if self.builder.backend.name == "dace:gpu":
-                fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
-                fingerprint["parallel_vertical_loop_schedule"] = (
-                    gt_config.DACE_PARALLEL_VERTICAL_LOOP_SCHEDULE
-                )
+        if self.builder.backend.name == "dace:gpu":
+            fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
         # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore

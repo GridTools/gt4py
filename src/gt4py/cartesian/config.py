@@ -8,7 +8,7 @@
 
 import multiprocessing
 import os
-from typing import Any, Literal
+from typing import Any
 
 import gridtools_cpp
 
@@ -92,7 +92,3 @@ code_settings: dict[str, Any] = {"root_package_name": "_GT_"}
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
 
 DACE_DEFAULT_BLOCK_SIZE = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")
-
-DACE_PARALLEL_VERTICAL_LOOP_SCHEDULE: Literal[
-    "sequential", "gpu_device", "gpu_threadblock", "gpu_threadblock_dynamic"
-] = os.environ.get("DACE_PARALLEL_VERTICAL_LOOP_SCHEDULE", "gpu_device")  # type: ignore[assignment]
