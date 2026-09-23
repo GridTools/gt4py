@@ -917,3 +917,12 @@ class TestStaggered:
     def test_resolve_rejects_a_bracketed_tag_of_another_owner(self):
         with pytest.raises(ValueError, match="not a parametrized dimension"):
             common.resolve(f"{KDim.tag}[{KDim.tag}]")
+
+
+def test_resolve_loaded():
+    # `resolve_loaded` never imports: it answers for what is loaded and gives up otherwise
+    assert common.resolve_loaded(IDim.tag) is IDim
+    assert common.resolve_loaded(common.Staggered[IDim].tag) is common.Staggered[IDim]
+    assert common.resolve_loaded("not_imported_anywhere.IDim") is None
+    assert common.resolve_loaded(f"{__name__}.does_not_exist") is None
+    assert common.resolve_loaded(f"{__name__}.test_resolve_loaded") is None  # not a dimension
