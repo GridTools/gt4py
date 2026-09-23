@@ -900,3 +900,20 @@ def test_gt_dims_are_unqualified_names():
     """
     field = gtx.as_field([IDim, JDim], np.zeros((2, 3)))
     assert field.__gt_dims__ == ("IDim", "JDim")
+
+
+class TestStaggered:
+    def test_interned(self):
+        assert common.Staggered[KDim] is common.Staggered[KDim]
+        assert common.is_staggered(common.Staggered[KDim])
+        assert common.flip_staggered(common.Staggered[KDim]) is KDim
+
+    def test_a_dimension_cannot_be_staggered_twice(self):
+        with pytest.raises(TypeError, match="is already staggered"):
+            common.Staggered[common.Staggered[KDim]]
+        with pytest.raises(TypeError, match="is already staggered"):
+            common.Staggered[KDim][KDim]
+
+    def test_resolve_rejects_a_bracketed_tag_of_another_owner(self):
+        with pytest.raises(ValueError, match="not a parametrized dimension"):
+            common.resolve(f"{KDim.tag}[{KDim.tag}]")

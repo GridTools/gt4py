@@ -7,7 +7,13 @@ tags: []
 - **Status**: valid
 - **Authors**: Till Ehrengruber (@tehrengruber)
 - **Created**: 2026-07-08
-- **Updated**: 2026-07-09
+- **Updated**: 2026-09-23
+
+> The *encoding* of this record is superseded by
+> [ADR 0028](0028-Dimensions_As_Nominal_Types.md): a staggered dimension is the
+> real, interned class `Staggered[D]`, not a name prefix. The semantics below --
+> half-integer positions, the shift convention, and the gtfn and DaCe treatment
+> -- are unchanged.
 
 A **staggered dimension** is a dimension sitting at the **half-integer**
 positions of a base dimension. For example, in a cell-centered 2D Cartesian grid
@@ -58,10 +64,12 @@ index arithmetic is encoded in `common.connectivity_for_cartesian_shift`.
 
 ## Encoding
 
-A staggered dimension is encoded as its base dimension's name with the internal
-`_Staggered` prefix (`common._STAGGERED_PREFIX`), rather than as a new attribute
-on `Dimension`. The helpers `is_staggered`, `flip_staggered` and
-`as_non_staggered` operate purely on that prefix.
+A staggered dimension was encoded as its base dimension's name with the internal
+`_Staggered` prefix, rather than as a new attribute on `Dimension`. Since
+[ADR 0028](0028-Dimensions_As_Nominal_Types.md) it is the class
+`common.Staggered[D]`, whose identity is the class itself; the helpers
+`is_staggered`, `flip_staggered` and `as_non_staggered` are unchanged in meaning
+and now read the class's `base`.
 
 Dimensions are identified by their **name** and appear throughout the toolchain
 in more than one form: as a `common.Dimension` instance, but also as an
@@ -87,7 +95,7 @@ by the `as_non_staggered` name.
 
 In gtfn a staggered dimension is emitted as a C++ `using` alias of its base
 dimension's tag (`_add_staggered_aliases` in `itir_to_gtfn_ir.py`): e.g.
-`_StaggeredIDim_t` becomes an alias of `IDim_t`, and `visit_AxisLiteral`
+the staggered tag's mangled name becomes an alias of `IDim_t`, and `visit_AxisLiteral`
 correspondingly emits the base dimension name.
 
 The reason is that gtfn lowers a shift to an integer offset along a SID axis, and

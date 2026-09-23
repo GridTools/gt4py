@@ -208,7 +208,9 @@ def _interactive_main_reference(obj: object) -> str | None:
 
     try:
         _Scanner(io.BytesIO()).dump(obj)
-    except Exception:  # an unpicklable object is reported by the executor check instead
+    except Exception:
+        # An object that cannot be pickled at all: not this check's business. It surfaces when
+        # the pool pickles the task, which is where an unpicklable job is reported.
         return None
     return found[0] if found else None
 

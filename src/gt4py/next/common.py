@@ -375,7 +375,11 @@ def resolve(tag: Tag) -> Dimension:
     """
     if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
         owner = resolve(match["owner"])
-        return owner[resolve(match["base"])]  # type: ignore[index] # parametrized dimension
+        if not isinstance(owner, StaggeredMeta):
+            raise ValueError(
+                f"Cannot resolve tag '{tag}': '{match['owner']}' is not a parametrized dimension."
+            )
+        return owner[resolve(match["base"])]  # type: ignore[index] # a StaggeredMeta, checked
 
     parts = tag.split(".")
     for split in range(len(parts), 0, -1):
@@ -1727,8 +1731,12 @@ class StaggeredMeta(DimensionMeta):
             )
         if not isinstance(base, DimensionMeta):
             raise TypeError(f"'Staggered' expects a dimension, got '{base!r}'.")
-        if base not in _STAGGERED_CACHE:
-            _STAGGERED_CACHE[base] = cast(
+        if is_staggered(base):
+            raise TypeError(
+                f"'{base.__qualname__}' is already staggered; a dimension cannot be staggered twice."
+            )
+        if (staggered := _STAGGERED_CACHE.get(base)) is None:
+            staggered = cast(
                 Dimension,
                 StaggeredMeta(
                     f"Staggered[{base.__qualname__}]",
@@ -1746,7 +1754,10 @@ class StaggeredMeta(DimensionMeta):
                     },
                 ),
             )
-        return _STAGGERED_CACHE[base]
+            # NOTE: `setdefault`, not an assignment: compilation runs in threads, and two of them
+            # building `Staggered[K]` at once must still see one class (identity is the dimension).
+            staggered = _STAGGERED_CACHE.setdefault(base, staggered)
+        return staggered
 
 
 if TYPE_CHECKING:
