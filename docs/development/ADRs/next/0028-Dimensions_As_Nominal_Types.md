@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-18
-- **Updated**: 2026-09-18
+- **Updated**: 2026-09-23
 
 A concrete dimension becomes a **class**, and an index along it an **instance** of
 that class — the shape `enum.Enum` uses, where the class is the collection and

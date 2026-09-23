@@ -2238,9 +2238,9 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                 " ('class Local(LocalDimensionIndex): ...') or by adopting one"
                 " ('Local: TypeAlias = SomeLocalDim')."
             )
-        if local is ConstListDim:
+        if local is ConstList:
             raise TypeError(
-                f"'{name}' cannot adopt '{ConstListDim.__qualname__}': it is the local dimension"
+                f"'{name}' cannot adopt '{ConstList.__qualname__}': it is the local dimension"
                 " of 'make_const_list' results and belongs to no connectivity."
             )
         max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)

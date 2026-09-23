@@ -68,7 +68,7 @@ def _declare(source: str) -> dict:
         "Edge": Edge,
         "KDim": KDim,
         "V2E": V2E,
-        "ConstListDim": common.ConstListDim,
+        "ConstList": common.ConstList,
     }
     exec(textwrap.dedent(source), namespace)
     return namespace
@@ -649,6 +649,6 @@ def test_the_const_list_dimension_cannot_be_adopted():
         _declare(
             """
             class C(NeighborConnectivity[Vertex, Edge]):
-                Local: typing.TypeAlias = ConstListDim
+                Local: typing.TypeAlias = ConstList
             """
         )
