@@ -182,7 +182,7 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
     def __call__(
         self,
         *args: type_synthesizer.TypeOrTypeSynthesizer,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         **kwargs,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
         assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
@@ -256,7 +256,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
-    offset_provider_type: Optional[common.OffsetProviderType]
+    offset_provider_type: Optional[common.TableTypes]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
     #: Reinference-mode skipping already typed nodes.
@@ -267,7 +267,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         cls,
         node: T,
         *,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         inplace: bool = False,
         allow_undeclared_symbols: bool = False,
     ) -> T:
@@ -352,7 +352,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     @classmethod
     def apply_reinfer(
-        cls, node: T, *, offset_provider_type: Optional[common.OffsetProviderType] = None
+        cls, node: T, *, offset_provider_type: Optional[common.TableTypes] = None
     ) -> T:
         """
         Given a partially typed node infer the type of ``node`` and its sub-nodes.

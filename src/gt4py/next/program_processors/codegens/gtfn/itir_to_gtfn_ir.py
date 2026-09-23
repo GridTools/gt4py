@@ -159,7 +159,7 @@ def _collect_dimensions_from_params(
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
-    offset_provider_type: common.OffsetProviderType,
+    offset_provider_type: common.TableTypes,
 ) -> dict[str, TagDefinition]:
     offset_definitions = {}
     offset_provider_type = {**offset_provider_type}
@@ -188,17 +188,17 @@ def _collect_offset_definitions(
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
-        if isinstance(connectivity_type, common.NeighborConnectivityType):
+        if isinstance(connectivity_type, common.NeighborTableType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(
                 name=Sym(id=common.codegen_name(offset_name))
             )
-            if offset_name != connectivity_type.neighbor_dim.tag:
-                offset_definitions[connectivity_type.neighbor_dim.tag] = TagDefinition(
-                    name=Sym(id=common.codegen_name(connectivity_type.neighbor_dim.tag))
+            if offset_name != connectivity_type.domain[1].tag:
+                offset_definitions[connectivity_type.domain[1].tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(connectivity_type.domain[1].tag))
                 )
 
-            for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
+            for dim in [connectivity_type.domain[0], connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
                 offset_definitions[dim.tag] = TagDefinition(
@@ -206,7 +206,7 @@ def _collect_offset_definitions(
                 )
         else:
             raise AssertionError(
-                "Elements of the offset provider type need to be a 'NeighborConnectivityType'."
+                "Elements of the offset provider type need to be a 'NeighborTableType'."
             )
     return offset_definitions
 
@@ -339,7 +339,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
-    offset_provider_type: common.OffsetProviderType
+    offset_provider_type: common.TableTypes
     column_axis: Optional[common.Dimension]
     grid_type: common.GridType
 
@@ -354,7 +354,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         cls,
         node: itir.Program,
         *,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         column_axis: Optional[common.Dimension],
     ) -> Program:
         if not isinstance(node, itir.Program):
@@ -506,7 +506,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             for o in shift_offsets:
                 if o in self.offset_provider_type and isinstance(
                     common.get_offset_type(self.offset_provider_type, o),
-                    common.NeighborConnectivityType,
+                    common.NeighborTableType,
                 ):
                     # `o` is an offset-provider key, i.e. a qualified tag: mangle it exactly as
                     # its `TagDefinition` was, or the reference names an undeclared tag type.

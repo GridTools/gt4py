@@ -239,7 +239,7 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
         # class, so the strict fingerprinter still checks *its* importability (which is the
         # connectivity's own, for a nested `Local`, and another module's for a shared one).
         Deconstruction.from_pieces(
-            obj.origin,
+            obj.domain,
             obj.codomain,
             common.local_dimension_of(obj),
             common.local_dimension_of(obj).max_neighbors,

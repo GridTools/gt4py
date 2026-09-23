@@ -61,7 +61,7 @@ class ExpandTupleMaps(eve.NodeTranslator):
         node: ProgramOrExpr,
         *,
         uids: utils.IDGeneratorPool | None,
-        offset_provider_type: common.OffsetProviderType | None = None,
+        offset_provider_type: common.TableTypes | None = None,
     ) -> ProgramOrExpr:
         if node.type is None:
             node = itir_inference.infer(

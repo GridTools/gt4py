@@ -172,7 +172,7 @@ class SymbolicDomain:
             | Literal[trace_shifts.Sentinel.VALUE, trace_shifts.Sentinel.ALL_NEIGHBORS],
             ...,
         ],
-        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+        offset_provider: common.OffsetProvider | common.TableTypes,
         #: A dictionary mapping axes names to their length. See
         #: func:`gt4py.next.iterator.transforms.infer_domain.infer_expr` for more details.
         symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
@@ -208,13 +208,13 @@ class SymbolicDomain:
                     trace_shifts.Sentinel.VALUE,
                 ]
 
-                connectivity: common.NeighborTable | common.NeighborConnectivityType
+                connectivity: common.NeighborTable | common.NeighborTableType
                 if common.is_offset_provider(offset_provider):
                     connectivity = common.get_offset(offset_provider, off.value)
                     old_dim = connectivity.domain.dims[0]
                     new_dim = connectivity.codomain
                 else:
-                    assert common.is_offset_provider_type(offset_provider)
+                    assert common.is_table_types(offset_provider)
                     connectivity = common.get_offset_type(offset_provider, off.value)
                     old_dim = connectivity.domain[0]
                     new_dim = connectivity.codomain

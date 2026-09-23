@@ -87,7 +87,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType: ...
 
     @abc.abstractmethod
     def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
@@ -560,13 +560,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider_type: gtx_common.OffsetProviderType
+    offset_provider_type: gtx_common.TableTypes
     column_axis: Optional[gtx_common.Dimension]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType:
         return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
     def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
@@ -1040,7 +1040,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.offset_provider_type
         ).items():
             gt_type = ts.FieldType(
-                dims=[connectivity_type.source_dim, connectivity_type.neighbor_dim],
+                dims=[connectivity_type.domain[0], connectivity_type.domain[1]],
                 dtype=tt.from_dtype(connectivity_type.dtype),
             )
             # We store all connectivity tables as transient arrays here; later, while building
@@ -1396,7 +1396,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def lower_program_to_sdfg(
     ir: gtir.Program,
-    offset_provider_type: gtx_common.OffsetProviderType,
+    offset_provider_type: gtx_common.TableTypes,
     column_axis: Optional[gtx_common.Dimension] = None,
 ) -> dace.SDFG:
     """

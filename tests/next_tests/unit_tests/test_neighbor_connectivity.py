@@ -20,7 +20,7 @@ from gt4py.next.common import (
     DimensionKind,
     LocalDimensionIndex,
     NeighborConnectivity,
-    NeighborConnectivityType,
+    NeighborTableType,
 )
 from gt4py.next.ffront import transform_utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -73,7 +73,7 @@ def _declare(source: str) -> dict:
 class TestDeclaration:
     def test_owner_and_dimensions(self):
         assert V2E.Local.owner is V2E
-        assert V2E.origin is Vertex
+        assert V2E.domain is Vertex
         assert V2E.codomain is Edge
         assert V2E.Local.kind is DimensionKind.LOCAL
         assert issubclass(V2E.Local, DimensionIndex)
@@ -160,21 +160,21 @@ class TestDeclarationErrors:
                 class C(NeighborConnectivity):
                     class Local(LocalDimensionIndex): ...
                 """,
-                "must derive from 'NeighborConnectivity\\[Origin, Codomain\\]'",
+                "must derive from 'NeighborConnectivity\\[Domain, Codomain\\]'",
             ),
             (
                 """
                 class C(V2E):
                     class Local(LocalDimensionIndex): ...
                 """,
-                "must derive from 'NeighborConnectivity\\[Origin, Codomain\\]'",
+                "must derive from 'NeighborConnectivity\\[Domain, Codomain\\]'",
             ),
             (
                 """
                 class C(NeighborConnectivity[V2E.Local, Edge]):
                     class Local(LocalDimensionIndex): ...
                 """,
-                "'Origin' must be a non-local dimension",
+                "'Domain' must be a non-local dimension",
             ),
             (
                 """
@@ -292,10 +292,13 @@ def _table_type(
     max_neighbors=4,
     skip_value=common._DEFAULT_SKIP_VALUE,
     dtype=np.int32,
-) -> NeighborConnectivityType:
-    return NeighborConnectivityType(
-        domain=domain,
-        codomain=codomain,
+) -> NeighborTableType:
+    """The type of a table no declaration names, as `NeighborTable.__gt_type__()` describes it."""
+    structure = common.ConnectivityType(
+        domain=domain, codomain=codomain, skip_value=skip_value, dtype=core_defs.dtype(dtype)
+    )
+    return NeighborTableType(
+        connectivity=structure,
         skip_value=skip_value,
         dtype=core_defs.dtype(dtype),
         max_neighbors=max_neighbors,
@@ -373,13 +376,100 @@ class TestCheckNeighborTable:
             )
 
 
+class TestNeighborTableType:
+    @staticmethod
+    def _v2e_shaped_table(codomain=Edge):
+        from gt4py.next import constructors
+
+        return constructors.as_connectivity(
+            domain={Vertex: 2, V2E.Local: 4},
+            codomain=codomain,
+            data=np.array([[0, 1, 2, -1], [1, 2, 3, 0]]),
+            skip_value=common._DEFAULT_SKIP_VALUE,
+        )
+
+    def test_domain_and_codomain_come_from_the_declaration(self):
+        table_type = common.check_neighbor_table(V2E, self._v2e_shaped_table())
+        assert table_type.connectivity is V2E
+        assert table_type.domain == (Vertex, V2E.Local)
+        assert table_type.codomain is Edge
+        assert table_type.max_neighbors == 4 and table_type.has_skip_values
+
+    def test_a_table_alone_has_its_structural_type(self):
+        structure = self._v2e_shaped_table().__gt_type__()
+        assert type(structure) is common.ConnectivityType
+        assert structure.domain == (Vertex, V2E.Local) and structure.codomain is Edge
+
+    def test_bound_by_the_provider_key(self):
+        # a sharer's table looks like its owner's but for the codomain: only the key tells
+        # which declaration it is bound to
+        sharer = _declare(
+            """
+            class V2V(NeighborConnectivity[Vertex, Vertex]):
+                Local: typing.TypeAlias = V2E.Local
+            """
+        )["V2V"]
+        v2e_table, v2v_table = self._v2e_shaped_table(), self._v2e_shaped_table(Vertex)
+        table_types = common.offset_provider_to_type(
+            {V2E.offset_tag: v2e_table, sharer.offset_tag: v2v_table, "undeclared": v2e_table}
+        )
+        assert table_types[V2E.offset_tag].connectivity is V2E
+        assert table_types[sharer.offset_tag].connectivity is sharer
+        assert table_types[sharer.offset_tag].domain == table_types[V2E.offset_tag].domain
+        assert table_types[sharer.offset_tag].codomain is Vertex
+        # a key no declaration answers to leaves the table typed by its structure
+        assert table_types["undeclared"].connectivity == v2e_table.__gt_type__()
+        assert table_types["undeclared"].domain == table_types[V2E.offset_tag].domain
+
+    def test_a_table_that_does_not_match_its_key(self):
+        with pytest.raises(ValueError, match="its codomain is"):
+            common.offset_provider_to_type({V2E.offset_tag: self._v2e_shaped_table(Vertex)})
+
+    def test_a_type_bound_to_another_declaration(self):
+        sharer = _declare(
+            """
+            class V2EShared(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = V2E.Local
+            """
+        )["V2EShared"]
+        v2e_type = common.check_neighbor_table(V2E, self._v2e_shaped_table())
+        with pytest.raises(ValueError, match="bound to 'V2E'"):
+            common.check_neighbor_table(sharer, v2e_type)
+
+    def test_fingerprint_tells_the_declarations_apart(self):
+        from gt4py.next import fingerprinting
+
+        sharer = _declare(
+            """
+            class V2EShared(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = V2E.Local
+            """
+        )["V2EShared"]
+        table = self._v2e_shaped_table()
+        owner_type = common.check_neighbor_table(V2E, table)
+        sharer_type = common.check_neighbor_table(sharer, table)
+        # lenient: `_declare` classes are not importable
+        assert fingerprinting.lenient_fingerprinter(
+            owner_type
+        ) != fingerprinting.lenient_fingerprinter(sharer_type)
+        assert fingerprinting.lenient_fingerprinter(
+            owner_type
+        ) == fingerprinting.lenient_fingerprinter(common.check_neighbor_table(V2E, table))
+
+
 class TestFrontendIntegration:
     def test_from_value_is_an_offset(self):
         # NOTE: pins the `__gt_type__` branch of `from_value` ahead of the dimension branch; a
         # connectivity declaration is a class, like a dimension.
-        assert type_translation.from_value(V2E) == ts.OffsetType(
-            source=Edge, target=(Vertex, V2E.Local), tag=V2E.Local.tag
+        assert type_translation.from_value(V2E) == ts.ShiftType(
+            codomain=Edge, domain=(Vertex, V2E.Local), tag=V2E.Local.tag
         )
+
+    def test_shift_type_str(self):
+        assert str(V2E.__gt_type__()) == (
+            f"Shift[{V2E.Local.tag}: {Edge} -> ({Vertex}, {V2E.Local})]"
+        )
+        assert str(ts.ShiftType(codomain=KDim, domain=(KDim,))) == f"Shift[{KDim} -> {KDim}]"
 
     def test_field_offset_is_derived_once(self):
         assert V2E.__gt_field_offset__() is V2E.__gt_field_offset__()
@@ -406,11 +496,13 @@ class TestFrontendIntegration:
         from gt4py.next.ffront.func_to_foast import FieldOperatorParser
         from gt4py.next import Dims, Field
 
-        def origin_of(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
-            return a(V2E.origin)
+        def domain_of(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
+            return a(V2E.domain)
 
-        with pytest.raises(errors.DSLError, match="has no attribute 'origin'"):
-            FieldOperatorParser.apply_to_function(origin_of)
+        # NOTE: `V2E` is typed as a `ts.ShiftType`, whose `domain` is a field of the type, not a
+        # value in DSL code
+        with pytest.raises(errors.DSLError, match="has no attribute 'domain'"):
+            FieldOperatorParser.apply_to_function(domain_of)
 
     def test_fingerprint_covers_the_declaration(self):
         from gt4py.next import fingerprinting
@@ -493,7 +585,7 @@ def test_local_dimension_of():
 
 class TestConnectivityKeyOver:
     def _type(self, connectivity):
-        return _table_type(domain=(connectivity.origin, common.local_dimension_of(connectivity)))
+        return _table_type(domain=(connectivity.domain, common.local_dimension_of(connectivity)))
 
     def test_owner_is_preferred(self):
         ns = _declare(

@@ -462,7 +462,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         cls,
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
-        offset_provider_type: common.OffsetProviderType | None = None,
+        offset_provider_type: common.TableTypes | None = None,
         *,
         uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:

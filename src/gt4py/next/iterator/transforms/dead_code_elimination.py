@@ -17,7 +17,7 @@ def dead_code_elimination(
     program: itir.Program,
     *,
     uids: utils.IDGeneratorPool,
-    offset_provider_type: common.OffsetProviderType,
+    offset_provider_type: common.TableTypes,
 ) -> itir.Program:
     """
     Perform dead code elimination on a program by simplifying or removing

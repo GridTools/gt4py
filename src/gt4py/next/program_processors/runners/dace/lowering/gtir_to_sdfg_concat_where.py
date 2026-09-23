@@ -257,7 +257,7 @@ def translate_concat_where(
         offset_provider_type = sdfg_builder.get_offset_provider_type(
             sdfg_builder.connectivity_key_over(local_dim)
         )
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
         local_idx = gtx_common.order_dimensions([*output_dims, local_dim]).index(local_dim)
         output_shape.insert(local_idx, offset_provider_type.max_neighbors)
 

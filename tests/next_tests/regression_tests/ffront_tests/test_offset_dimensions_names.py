@@ -137,7 +137,7 @@ def test_shift_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
     """
     Ensure a shift works with an offset tag that differs from the local dimension's name.
 
-    If `NeighborConnectivityType.neighbor_dim` did not match the `FieldOffset` value,
+    If the local dimension of the `NeighborTableType` did not match the `FieldOffset` value,
     gtfn would silently ignore the neighbor index, see
     https://github.com/GridTools/gridtools/pull/1814.
     """

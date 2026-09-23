@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-21
-- **Updated**: 2026-09-21
+- **Updated**: 2026-09-24
 
 A neighbor connectivity is declared as a **class**, and its local dimension as a
 class **nested** in it:
@@ -43,9 +43,10 @@ and skip values were never checked against the `FieldOffset` declaration.
 
 ### The declaration
 
-- `NeighborConnectivity[Origin, Codomain]` is a PEP 695 generic whose subclasses
-  are declarations: for each `Origin` element, a list of `Codomain` neighbors. Its
-  metaclass, `ConnectivityMeta`, forbids instantiation.
+- `NeighborConnectivity[Domain, Codomain]` is a PEP 695 generic whose subclasses
+  are declarations: for each `Domain` element, a list of `Codomain` neighbors. Its
+  metaclass, `ConnectivityMeta`, forbids instantiation. The two dimensions are
+  the class attributes `V2E.domain` and `V2E.codomain`.
 - The local dimension is the nested class `Local`, a subclass of
   `LocalDimensionIndex`. Declaring it is required, and `NeighborConnectivity`
   sets `Local.owner` to the connectivity when the class is created. A local
@@ -60,21 +61,59 @@ and skip values were never checked against the `FieldOffset` declaration.
   `Local: TypeAlias = C2E.Local`.
   This is the flattened sparse pattern, e.g. cell-to-cell-edge (`C2CE: Cell -> CellEdge`) indexing the same neighbor axis as `C2E`, so that its results
   combine with `C2E`-shaped sparse fields. The owner stays `C2E`, and the
-  neighbor counts and skip-value structure are the owner's.
+  neighbor counts and skip-value structure are the owner's. A sharer must have
+  the owner's domain; its codomain is free. The local dimension records its
+  sharers (`Local.sharers`) as it records its owner.
 - `max_neighbors` and `min_neighbors` are optional class keywords, not type
   parameters: Python has no integer type parameters, and nothing static needs
   the count. A declared count is a constraint on the bound table; an undeclared
   one is taken from the table. `min_neighbors < max_neighbors` means that the
   table must use skip values.
 - `common.check_neighbor_table(V2E, table)` checks a table, or just its type
-  (which is all an ahead-of-time compilation has), against the declaration:
-  the domain is `(Origin, V2E.Local)`, the codomain is `Codomain`, the dtype is
-  integral, and the neighbor counts and skip values agree. Skip values are
-  checked on the table's type: a table with a `skip_value` counts as having skip
-  values whether or not an entry uses it. The check is explicit for as long as
-  offset providers are keyed by tag strings, since nothing then connects a
-  provider entry to a declaration; it becomes automatic with class-keyed
-  providers.
+  (which is all an ahead-of-time compilation has), against the declaration, and
+  returns the table's `NeighborTableType` (below): the domain is
+  `(Domain, V2E.Local)`, the codomain is `Codomain`, the dtype is integral, and
+  the neighbor counts and skip values agree. Skip values are checked on the
+  table's type: a table with a `skip_value` counts as having skip values whether
+  or not an entry uses it.
+
+`Domain` and `Codomain` name the two index spaces the declaration maps between.
+A bound table is a field over `(Domain, Local)` with values in `Codomain`: the
+table's domain is the declaration's domain extended by the local axis, which is
+the same use of the word as `Connectivity.domain` and
+`CartesianConnectivity.domain_dim`. "Origin" would have been the other natural
+name for the first dimension, but gt4py already uses it for the start of a
+buffer (`__gt_origin__`).
+
+### The type of a bound table
+
+Transformations and code generation see types, never tables (ADR 0019). The type
+of a table bound to a declaration is a `common.NeighborTableType`:
+`connectivity` (the declaration), `dtype`, `skip_value` and `max_neighbors`. Its
+`domain` and `codomain` are derived from the declaration,
+`(connectivity.domain, local_dimension_of(connectivity))` and
+`connectivity.codomain`, so they cannot disagree with it. The mapping from
+offset-provider keys to these records is `common.TableTypes`, and it can be
+given instead of the tables for ahead-of-time compilation.
+
+A table cannot tell which declaration it is bound to: the table of a sharer
+(`C2CE`) has the same domain as its owner's (`C2E`), with another codomain. So a
+`NeighborTableType` is built where a table is bound, from its offset-provider key:
+`check_neighbor_table(C2CE, table)`, or `offset_provider_to_type`, which finds
+the declaration whose `offset_tag` is the key among the owner and the sharers of
+the table's local dimension. `NeighborTable.__gt_type__()` returns only what the
+table knows, the structural `common.ConnectivityType` (domain, codomain, dtype,
+skip value).
+
+A table bound under a key that no declaration answers to -- hand-written IR
+names its offsets by plain strings -- has no declaration. Its
+`NeighborTableType` then has the table's structural `ConnectivityType` as its
+`connectivity`, and `domain` and `codomain` are read from that. This keeps the
+IR level, which does not know declarations, working unchanged.
+
+A `NeighborTableType` is fingerprinted through its fields, so the declaration
+takes part in the fingerprint of everything compiled for it: the owner's and a
+sharer's tables, identical as tables, produce different artifact keys.
 
 ### `NeighborConnectivity` is not a `Connectivity`
 
@@ -91,7 +130,7 @@ A separate root would force every `type[DimensionIndex]` annotation in the tree
 would then accept local dimensions wherever a primary one is meant anyway. The
 tree already distinguishes local dimensions by a runtime `kind` check, so it
 keeps doing so; generic constructors whose parameter must be a primary dimension
-(`NeighborConnectivity[Origin, Codomain]`, `Staggered[D]`) check it at runtime.
+(`NeighborConnectivity[Domain, Codomain]`, `Staggered[D]`) check it at runtime.
 
 ### `Local` is not annotated anywhere
 
@@ -115,8 +154,10 @@ treating it as a type.
 ### Frontend integration
 
 A declaration is typed like the `FieldOffset` it replaces: `V2E.__gt_type__()`
-is the `ts.OffsetType` of the derived offset `(Codomain -> (Origin, Local))`,
-whose tag is the connectivity's `offset_tag`:
+is a `ts.ShiftType`, which takes a field over the codomain to one over the
+domain, `Shift[<tag>: Edge -> (Vertex, V2E.Local)]`. `V2E[i]` has the domain
+`(Vertex,)`, and so does a Cartesian shift `KDim + 1`, over `KDim` and without a
+tag. The tag is the connectivity's `offset_tag`:
 
 - **the local dimension's tag**, `V2E.Local.tag`, for the connectivity that
   declares it. This is the single string that shifts, neighbor reductions and
@@ -129,8 +170,7 @@ whose tag is the connectivity's `offset_tag`:
   over it (`common.connectivity_key_over`): the owner's if bound, else the
   sharer with the smallest tag. Connectivities sharing a local dimension must
   therefore have the same neighbor *structure* — the same count, and a skip value
-  at the same positions — which is what sharing a neighbor axis means;
-  `check_offset_provider` enforces it for the tables it is given.
+  at the same positions — which is what sharing a neighbor axis means.
 
 `V2E.Local` inside DSL code types as that local dimension, and
 `FieldOffset.Local` names the same thing on a legacy offset, so the spelling
@@ -144,8 +184,10 @@ metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, 
 - An unstructured connectivity is spelled once. The provider key, the offset tag
   and the local dimension are all derived from the declaration.
 - A table bound to a connectivity can be checked against its declaration.
-- `V2E.Local` in DSL code is resolved from the offset type, because the type of
+- `V2E.Local` in DSL code is resolved from the shift type, because the type of
   `V2E` is not the class.
+- Code generation sees which declaration a table is bound to, not only its
+  shape; a table without a declaration is typed by its structure.
 - A declaration is fingerprinted by its name *and* its declared dimensions and
   counts, so redefining it under the same name (e.g. re-running a notebook
   cell) does not reuse artifacts compiled for the old declaration.
