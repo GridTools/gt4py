@@ -436,16 +436,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         new_value = self.visit(node.value, **kwargs)
         match new_value.type:
             # `V2E.Local`: the local dimension of a connectivity declaration, which is the last
-            # target of the offset it is typed as.
-            case ts.OffsetType(target=(_, local)) if node.attr == "Local":
+            # dimension of the domain of the shift it is typed as.
+            case ts.ShiftType(domain=(_, local)) if node.attr == "Local":
                 attr_type: ts.TypeSpec = ts.DimensionType(dim=local)
             case _:
-                try:
-                    attr_type = getattr(new_value.type, node.attr)
-                except AttributeError:
+                # NOTE: only attributes that are types themselves: a type's other fields (the
+                # dimensions of a `ShiftType`, say) are not values in DSL code.
+                if not isinstance(
+                    type_attr := getattr(new_value.type, node.attr, None), ts.TypeSpec
+                ):
                     raise errors.DSLError(
                         node.location, f"'{new_value.type}' has no attribute '{node.attr}'."
-                    ) from None
+                    )
+                attr_type = type_attr
         return foast.Attribute(
             value=new_value, attr=node.attr, location=node.location, type=attr_type
         )
@@ -465,20 +468,21 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
-            case ts.OffsetType(source=source, target=(target1, target2), tag=tag):
-                if not target2.kind == DimensionKind.LOCAL:
+            case ts.ShiftType(codomain=codomain, domain=(domain, local), tag=tag):
+                if not local.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
-                new_type = ts.OffsetType(source=source, target=(target1,), tag=tag)
-            case ts.OffsetType(source=source, target=(target,), tag=tag):
+                new_type = ts.ShiftType(codomain=codomain, domain=(domain,), tag=tag)
+            case ts.ShiftType(codomain=codomain, domain=(domain,), tag=tag):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
-                #  but does not change the target type.
-                if source != target:
+                #  but does not change the domain.
+                if codomain != domain:
                     raise errors.DSLError(
                         new_value.location,
-                        "Source and target must be equal for offsets with a single target.",
+                        "Codomain and domain must be equal for a shift with a single domain"
+                        " dimension.",
                     )
                 if tag is None:
                     raise errors.DSLError(
@@ -492,7 +496,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                             )
                         ],
                         hints=[
-                            f"Write the displacement directly, e.g. '{source.__qualname__} + 1'."
+                            f"Write the displacement directly, e.g. '{codomain.__qualname__} + 1'."
                         ],
                     )
                 new_type = new_value.type
@@ -634,7 +638,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_binop_type(
         self, node: foast.BinOp, *, left: foast.Expr, right: foast.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
-        if isinstance(left.type, ts.OffsetType):
+        if isinstance(left.type, ts.ShiftType):
             raise errors.DSLError(
                 node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
             )
@@ -730,7 +734,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     ],
                 )
             conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
-            return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
+            return ts.ShiftType(codomain=conn.codomain, domain=(conn.domain_dim,))
         else:
             raise errors.DSLError(node.location, err_msg)
 
@@ -799,8 +803,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 # meaningful unsubscripted, as the neighbor access `field(Off)`.
                 if (
                     isinstance(arg, (foast.Name, foast.Attribute))
-                    and isinstance(arg.type, ts.OffsetType)
-                    and len(arg.type.target) == 1
+                    and isinstance(arg.type, ts.ShiftType)
+                    and len(arg.type.domain) == 1
                 ):
                     raise errors.DSLError(
                         arg.location,
@@ -997,15 +1001,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_as_offset(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
-        assert isinstance(arg_0, ts.OffsetType)
+        assert isinstance(arg_0, ts.ShiftType)
         assert isinstance(arg_1, ts.FieldType)
         if not fbuiltins.is_cartesian_offset(arg_0):
-            target_dims = ", ".join(d.__qualname__ for d in arg_0.target)  # for the diagnostic
+            domain_dims = ", ".join(d.__qualname__ for d in arg_0.domain)  # for the diagnostic
             raise errors.DSLError(
                 node.location,
                 f"'as_offset' is only supported for Cartesian offsets "
-                f"(single target dimension equal to source dimension); "
-                f"got source '{arg_0.source.__qualname__}' and target ({target_dims}).",
+                f"(a single domain dimension equal to the codomain); "
+                f"got codomain '{arg_0.codomain.__qualname__}' and domain ({domain_dims}).",
             )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
@@ -1015,11 +1019,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"{node.location}",
             )
 
-        if arg_0.source not in arg_1.dims:
+        if arg_0.codomain not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
                 f"Incompatible argument in call to '{node.func!s}': "
-                f"'{arg_0.source}' not in list of offset field dimensions '{arg_1.dims}'. "
+                f"'{arg_0.codomain}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
 

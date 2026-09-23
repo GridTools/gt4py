@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_specifications as ts
 def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
-    offset_provider_type: common.OffsetProviderType,
+    offset_provider_type: common.TableTypes,
     disable_field_origin_on_program_arguments: bool,
     unstructured_horizontal_has_unit_stride: bool,
 ) -> dict[str, int]:
@@ -57,13 +57,13 @@ def find_constant_symbols(
         # Same for connectivity tables, for which the first dimension is always horizontal
         for offset, conn_type in offset_provider_type.items():
             if (
-                isinstance(conn_type, common.NeighborConnectivityType)
+                isinstance(conn_type, common.NeighborTableType)
                 and (conn_id := gtx_dace_args.connectivity_identifier(offset)) in sdfg.arrays
             ):
                 assert not sdfg.arrays[conn_id].transient
-                assert conn_type.source_dim.kind == common.DimensionKind.HORIZONTAL
+                assert conn_type.domain[0].kind == common.DimensionKind.HORIZONTAL
                 sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(
-                    conn_id, conn_type.source_dim, offset_provider_type
+                    conn_id, conn_type.domain[0], offset_provider_type
                 )
                 constant_symbols[sdfg_stride_symbol.name] = 1
 

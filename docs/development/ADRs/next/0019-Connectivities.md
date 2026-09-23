@@ -31,7 +31,7 @@ We update and introduce the following concepts
 
 **NeighborTable** is a _GatherConnectivity_ that is a 2D mapping of the N neighbors of a Location A to a Location B, backed by a buffer.
 
-**ConnectivityType**, **NeighborConnectivityType** contains all information that is needed for compilation.
+**ConnectivityType**, **NeighborTableType** contain all information that is needed for compilation. A `NeighborTableType` is the type of a table bound to a `NeighborConnectivity` declaration (ADR 0029).
 
 ### Full definitions
 
@@ -48,7 +48,7 @@ Embedded execution of iterator (local) view supports only `NeighborTable`s.
 
 ### IR transformations and compiled backends
 
-All transformations and code-generation should use `ConnectivityType`, not the `Connectivity` which contains the runtime mapping.
+All transformations and code-generation should use `ConnectivityType` / `NeighborTableType`, not the `Connectivity` which contains the runtime mapping.
 
 Note, currently the `global_tmps` pass uses runtime information, therefore this is not strictly enforced.
 
@@ -60,3 +60,7 @@ The only supported `Connectivity`s in compiled backends (currently) are `Neighbo
 
 - Removed the abstract `NeighborConnectivity` concept; `NeighborTable` is now the single neighbor-connectivity concept (there is no non-buffer-backed neighbor connectivity in use).
 - Added `GatherConnectivity` (a `Connectivity` whose `premap` rearranges data via a gather), which the embedded field-view `premap` dispatches on. It replaces the former `ConnectivityKind` flag and unifies the previous reshuffling/remapping `premap` implementations into a single advanced-index gather.
+
+### 2026-09-24
+
+- `NeighborConnectivityType` is renamed `NeighborTableType` and typed by the `NeighborConnectivity` declaration its table is bound to; a `NeighborTable`'s own `__gt_type__()` is the structural `ConnectivityType` (ADR 0029).

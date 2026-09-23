@@ -52,18 +52,18 @@ def _get_partial_local_dims(reduce_args: Iterable[itir.Expr]) -> Iterable[common
 
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
-    offset_provider_type: common.OffsetProviderType,
-) -> common.NeighborConnectivityType:
+    offset_provider_type: common.TableTypes,
+) -> common.NeighborTableType:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not cpm.is_applied_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
-    connectivities: list[common.NeighborConnectivityType] = []
+    connectivities: list[common.NeighborTableType] = []
     for local_dim in _get_partial_local_dims(applied_reduce_node.args):
         conn = common.get_offset_type(
             offset_provider_type, common.connectivity_key_over(offset_provider_type, local_dim)
         )
-        assert isinstance(conn, common.NeighborConnectivityType)
+        assert isinstance(conn, common.NeighborTableType)
         connectivities.append(conn)
 
     if not connectivities:
@@ -87,13 +87,13 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     def apply(
         cls,
         node: itir.Node,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
 
     def _visit_reduce(
-        self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
+        self, node: itir.FunCall, offset_provider_type: common.TableTypes
     ) -> itir.Expr:
         connectivity_type = _get_connectivity(node, offset_provider_type)
         max_neighbors = connectivity_type.max_neighbors

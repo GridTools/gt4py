@@ -1241,20 +1241,44 @@ class ConnectivityType:  # TODO(havogt): would better live in type_specification
 
 
 @dataclasses.dataclass(frozen=True)
-class NeighborConnectivityType(ConnectivityType):
-    # NOTE: partly encoded in the local dimension since ADR 0029: a `LocalDimensionIndex` carries
-    # `max_neighbors` / `min_neighbors` where the declaration states them, and this record is
-    # checked against them (`check_neighbor_table`). It stays the *bound* count, which a
-    # declaration may leave to the table.
+class NeighborTableType:
+    """
+    The type of a neighbor table bound to a connectivity: what transformations and code generation
+    see instead of the table (ADR 0019).
+
+    `connectivity` is the `NeighborConnectivity` declaration the table is bound to. It determines
+    the table's `domain` -- the declaration's domain extended by its local dimension -- and its
+    `codomain`. A table alone cannot name its declaration: one sharing another connectivity's
+    local dimension has a table over the same domain as the owner's, with another codomain. So the
+    record is built where a table is bound, from its offset-provider key (`offset_provider_to_type`,
+    `check_neighbor_table`), or given directly for ahead-of-time compilation.
+
+    A table bound under a name that no declaration answers to, as hand-written IR binds them, has
+    no declaration: `connectivity` is then the table's own structural `ConnectivityType`, which is
+    also what `NeighborTable.__gt_type__()` returns.
+    """
+
+    connectivity: type[NeighborConnectivity] | ConnectivityType
+    dtype: core_defs.DType
+    skip_value: Optional[core_defs.IntegralScalar]
+    #: The table's number of entries per element. A declaration may leave it to the table; where
+    #: it states one, `check_neighbor_table` checks the table against it.
     max_neighbors: int
 
     @property
-    def source_dim(self) -> Dimension:
-        return self.domain[0]
+    def domain(self) -> tuple[Dimension, Dimension]:
+        if isinstance(self.connectivity, ConnectivityType):
+            first, second = self.connectivity.domain
+            return (first, second)
+        return (self.connectivity.domain, local_dimension_of(self.connectivity))
 
     @property
-    def neighbor_dim(self) -> Dimension:
-        return self.domain[1]
+    def codomain(self) -> Dimension:
+        return self.connectivity.codomain
+
+    @property
+    def has_skip_values(self) -> bool:
+        return self.skip_value is not None
 
 
 @runtime_checkable
@@ -1273,21 +1297,14 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
         """
 
     def __gt_type__(self) -> ConnectivityType:
-        if is_neighbor_table(self):
-            return NeighborConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-                max_neighbors=self.ndarray.shape[1],
-            )
-        else:
-            return ConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
-                dtype=self.dtype,
-                skip_value=self.skip_value,
-            )
+        # NOTE: structural, also for a neighbor table: the table cannot tell which declaration it
+        # is bound to, so its `NeighborTableType` is built from its offset-provider key.
+        return ConnectivityType(
+            domain=self.domain.dims,
+            codomain=self.codomain,
+            dtype=self.dtype,
+            skip_value=self.skip_value,
+        )
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -1418,8 +1435,7 @@ def _connectivity(
 
 @runtime_checkable
 class NeighborTable(Connectivity, Protocol):
-    # TODO(havogt): work towards encoding this properly in the type
-    def __gt_type__(self) -> NeighborConnectivityType: ...
+    def __gt_type__(self) -> ConnectivityType: ...
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -1441,11 +1457,12 @@ def is_neighbor_table(obj: Any) -> TypeGuard[NeighborTable]:
 
 
 OffsetProviderElem: TypeAlias = NeighborTable
-OffsetProviderTypeElem: TypeAlias = NeighborConnectivityType
-# Note: `OffsetProvider` and `OffsetProviderType` should not be accessed directly,
+# Note: `OffsetProvider` and `TableTypes` should not be accessed directly,
 # use the `get_offset` and `get_offset_type` functions instead.
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
-OffsetProviderType: TypeAlias = Mapping[Tag, OffsetProviderTypeElem]
+#: The types of an offset provider's tables, under the same keys: what transformations and code
+#: generation see instead of the tables (ADR 0019).
+TableTypes: TypeAlias = Mapping[Tag, NeighborTableType]
 
 
 def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
@@ -1454,25 +1471,54 @@ def is_offset_provider(obj: Any) -> TypeGuard[OffsetProvider]:
     return all(isinstance(el, OffsetProviderElem) for el in obj.values())
 
 
-def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
+def is_table_types(obj: Any) -> TypeGuard[TableTypes]:
     if not isinstance(obj, Mapping):
         return False
-    return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
+    return all(isinstance(el, NeighborTableType) for el in obj.values())
 
 
-def offset_provider_to_type(
-    offset_provider: OffsetProvider | OffsetProviderType,
-) -> OffsetProviderType:
+def offset_provider_to_type(offset_provider: OffsetProvider | TableTypes) -> TableTypes:
+    """The types of an offset provider's tables, each typed by the declaration its key names."""
     return {
-        k: v.__gt_type__() if isinstance(v, Connectivity) else v for k, v in offset_provider.items()
+        key: value if isinstance(value, NeighborTableType) else _neighbor_table_type(key, value)
+        for key, value in offset_provider.items()
     }
+
+
+def _unbound_table_type(table: NeighborTable) -> NeighborTableType:
+    structure = table.__gt_type__()
+    return NeighborTableType(
+        connectivity=structure,
+        dtype=structure.dtype,
+        skip_value=structure.skip_value,
+        max_neighbors=len(table.domain[1].unit_range),
+    )
+
+
+def _neighbor_table_type(key: Tag, table: NeighborTable) -> NeighborTableType:
+    """
+    The type of `table` bound under `key`: typed by the declaration `key` is the `offset_tag` of.
+
+    The declaration is found through the table's local dimension, which knows its owner and the
+    connectivities sharing it; a key none of them answers to leaves the table undeclared.
+    """
+    table_type = _unbound_table_type(table)
+    local = table_type.domain[1]
+    if not (isinstance(local, DimensionMeta) and issubclass(local, LocalDimensionIndex)):
+        return table_type
+    # NOTE: the most recent sharer first: a redefined declaration (a re-run notebook cell) is
+    # appended again under the same tag.
+    for connectivity in (local.owner, *reversed(local.sharers)):
+        if connectivity is not None and connectivity.offset_tag == key:
+            return check_neighbor_table(connectivity, table_type)
+    return table_type
 
 
 def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProviderElem:
     """
-    Get the `OffsetProviderElem` or `OffsetProviderTypeElem` for the given `offset` string.
+    Get the `OffsetProviderElem` or `NeighborTableType` for the given `offset` string.
 
-    Note: All accesses of `OffsetProvider` or `OffsetProviderType` should go through this function.
+    Note: All accesses of `OffsetProvider` or `TableTypes` should go through this function.
     """
     # TODO(havogt): Once we have a custom class for `OffsetProvider`, we can absorb this functionality into it.
     if offset_tag not in offset_provider:
@@ -1480,11 +1526,11 @@ def get_offset(offset_provider: OffsetProvider, offset_tag: str) -> OffsetProvid
     return offset_provider[offset_tag]  # TODO return a valid dimension
 
 
-get_offset_type: Callable[[OffsetProviderType, str], OffsetProviderTypeElem] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and OffsetProviderType overlap
+get_offset_type: Callable[[TableTypes, str], NeighborTableType] = get_offset  # type: ignore[assignment] # overload not possible since OffsetProvider and TableTypes overlap
 
 
 def connectivity_key_over(
-    offset_provider: OffsetProvider | OffsetProviderType, local_dim: Dimension | Tag
+    offset_provider: OffsetProvider | TableTypes, local_dim: Dimension | Tag
 ) -> str:
     """
     The key of a bound connectivity whose local dimension is `local_dim` (a dimension or its tag).
@@ -1494,7 +1540,7 @@ def connectivity_key_over(
     tag, i.e. its owner's, if bound. Otherwise it is one of the connectivities *sharing* the local
     dimension (see `NeighborConnectivity`), each keyed by its own tag; the smallest key is taken,
     so the choice does not depend on the order of the provider. Connectivities sharing a local
-    dimension have the same neighbor structure (see `check_offset_provider`), so which one does
+    dimension have the same neighbor structure (see `NeighborConnectivity`), so which one does
     not matter.
 
     Raises:
@@ -1518,14 +1564,14 @@ def connectivity_key_over(
 
 
 def _neighbor_dim_of(connectivity: Any) -> Optional[Dimension]:
-    if isinstance(connectivity, NeighborConnectivityType):
-        return connectivity.neighbor_dim
+    if isinstance(connectivity, NeighborTableType):
+        return connectivity.domain[1]
     if is_neighbor_table(connectivity):
         return connectivity.domain.dims[1]
     return None
 
 
-def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag: str) -> bool:
+def has_offset(offset_provider: OffsetProvider | TableTypes, offset_tag: str) -> bool:
     """Determine if offset provider has an element for the given offset tag."""
     try:
         get_offset(offset_provider, offset_tag)  # type: ignore[arg-type]  # implementation is shared with `get_offset_type`, no need to duplicate the function
@@ -1953,6 +1999,10 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
     #: The connectivity this dimension is the local axis of, or `None` if it indexes no table.
     #: Set by `NeighborConnectivity` when the connectivity is declared.
     owner: ClassVar[Optional[type[NeighborConnectivity]]] = None
+    #: The connectivities sharing this dimension with its owner, in declaration order. Kept so that
+    #: a table bound under a sharer's `offset_tag` can be typed by its declaration: the table alone
+    #: looks like the owner's (see `NeighborTableType`).
+    sharers: ClassVar[tuple[type[NeighborConnectivity], ...]] = ()
     #: Number of entries per element, i.e. the table's second extent, if declared.
     max_neighbors: ClassVar[Optional[int]] = None
     #: Least number of *valid* neighbors of any element, if declared. Fewer than
@@ -1977,6 +2027,7 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
         # NOTE: reset rather than inherited: a subclass of an owned local dimension is a
         # different dimension, and does not index its parent's table.
         cls.owner = None
+        cls.sharers = ()
         cls.declared_size = _check_neighbor_count(cls, "size", size)
         cls.max_neighbors = cls.min_neighbors = cls.declared_size
 
@@ -2018,7 +2069,7 @@ class ConnectivityMeta(type):
     # annotated `Local` makes every declaration's nested class a *variable* for the checkers, so
     # `Field[Dims[V, V2E.Local]]` is rejected (pyright) or "not valid as a type" (mypy, for the
     # assigned form). Library code reads it through `local_dimension_of`.
-    origin: Dimension
+    domain: Dimension
     codomain: Dimension
 
     @property
@@ -2044,7 +2095,7 @@ class ConnectivityMeta(type):
         if (local := cls.__dict__.get("Local")) is None:
             raise TypeError(
                 f"'{cls.__qualname__}' is not a connectivity declaration; declare one by"
-                " subclassing 'NeighborConnectivity[Origin, Codomain]'."
+                " subclassing 'NeighborConnectivity[Domain, Codomain]'."
             )
         return cast(type[LocalDimensionIndex], local)
 
@@ -2089,17 +2140,17 @@ class ConnectivityMeta(type):
 
         if (field_offset := cls.__dict__.get("_field_offset")) is None:
             field_offset = fbuiltins.FieldOffset(
-                cls.offset_tag, source=cls.codomain, target=(cls.origin, cls._local())
+                cls.offset_tag, source=cls.codomain, target=(cls.domain, cls._local())
             )
             type.__setattr__(cls, "_field_offset", field_offset)
         return field_offset
 
 
-class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
+class NeighborConnectivity[Domain: DimensionIndex, Codomain: DimensionIndex](
     metaclass=ConnectivityMeta
 ):
     """
-    Declare a neighbor connectivity: for each `Origin` element, a list of `Codomain` neighbors.
+    Declare a neighbor connectivity: for each `Domain` element, a list of `Codomain` neighbors.
 
     The declaration names the connectivity's local dimension -- its nested `Local` class --
     and optionally its neighbor counts. It holds no data: the neighbor table is bound at call
@@ -2111,7 +2162,7 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         >>> class Edge(DimensionIndex): ...
         >>> class V2E(NeighborConnectivity[Vertex, Edge], max_neighbors=6, min_neighbors=5):
         ...     class Local(LocalDimensionIndex): ...
-        >>> V2E.origin is Vertex, V2E.codomain is Edge
+        >>> V2E.domain is Vertex, V2E.codomain is Edge
         (True, True)
         >>> V2E.Local.owner is V2E, V2E.Local.max_neighbors, V2E.Local.min_neighbors
         (True, 6, 5)
@@ -2119,7 +2170,7 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
 
     # NOTE: `Local` is not annotated (see `ConnectivityMeta`); every subclass declares it, as a
     # nested class or as `Local: TypeAlias = <a local dimension>`.
-    origin: ClassVar[Dimension]
+    domain: ClassVar[Dimension]
     codomain: ClassVar[Dimension]
 
     def __init_subclass__(
@@ -2144,11 +2195,11 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         ]
         if len(params) != 1 or len(params[0]) != 2:
             raise TypeError(
-                f"'{name}' must derive from 'NeighborConnectivity[Origin, Codomain]' directly,"
+                f"'{name}' must derive from 'NeighborConnectivity[Domain, Codomain]' directly,"
                 " with both dimensions given."
             )
-        origin, codomain = params[0]
-        for role, dim in (("Origin", origin), ("Codomain", codomain)):
+        domain, codomain = params[0]
+        for role, dim in (("Domain", domain), ("Codomain", codomain)):
             if not isinstance(dim, DimensionMeta) or dim.kind is DimensionKind.LOCAL:
                 raise TypeError(f"'{name}': '{role}' must be a non-local dimension, got '{dim}'.")
 
@@ -2174,11 +2225,11 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
             # Sharing another connectivity's local dimension: the neighbor structure is the
             # owner's, including its counts, and the sharing connectivity is named by its own tag.
             owner_name = local.owner.__qualname__
-            if origin is not local.owner.origin:
+            if domain is not local.owner.domain:
                 raise TypeError(
-                    f"'{name}' cannot share the local dimension of '{owner_name}': it has origin"
-                    f" '{origin}', but the neighbors of '{owner_name}' are those of"
-                    f" '{local.owner.origin}'."
+                    f"'{name}' cannot share the local dimension of '{owner_name}': it has domain"
+                    f" '{domain}', but the neighbors of '{owner_name}' are those of"
+                    f" '{local.owner.domain}'."
                 )
             for count_name, count in (
                 ("max_neighbors", max_neighbors),
@@ -2190,7 +2241,8 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                         f" shares with '{owner_name}', which declares"
                         f" {count_name}={getattr(local, count_name)}."
                     )
-            cls.origin, cls.codomain = origin, codomain
+            cls.domain, cls.codomain = domain, codomain
+            local.sharers = (*local.sharers, cls)
             return
         for count_name, count in (
             ("max_neighbors", max_neighbors),
@@ -2219,7 +2271,7 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                 f" ({max_neighbors})."
             )
 
-        cls.origin, cls.codomain = origin, codomain
+        cls.domain, cls.codomain = domain, codomain
         local.owner = cls
         local.max_neighbors, local.min_neighbors = max_neighbors, min_neighbors
 
@@ -2240,8 +2292,8 @@ def local_dimension_of(connectivity: type[NeighborConnectivity]) -> type[LocalDi
 
 def check_neighbor_table(
     connectivity: type[NeighborConnectivity],
-    table: NeighborTable | NeighborConnectivityType,
-) -> None:
+    table: NeighborTable | NeighborTableType,
+) -> NeighborTableType:
     """
     Check that a neighbor table matches the connectivity declaration it is bound to.
 
@@ -2252,19 +2304,29 @@ def check_neighbor_table(
         connectivity: The declaration.
         table: The bound table, or its type (which is all an ahead-of-time compilation has).
 
+    Returns:
+        The type of the table bound to `connectivity`.
+
     Raises:
         ValueError: On the first mismatch, naming the connectivity and the mismatch.
     """
-    table_type = table if isinstance(table, NeighborConnectivityType) else table.__gt_type__()
     name = connectivity.__qualname__
     local = local_dimension_of(connectivity)
 
     def fail(reason: str) -> NoReturn:
         raise ValueError(f"The table bound to '{name}' does not match its declaration: {reason}.")
 
-    if not isinstance(table_type, NeighborConnectivityType):
-        fail(f"expected a neighbor table, got '{table_type}'")
-    expected_domain = (connectivity.origin, local)
+    if isinstance(table, NeighborTableType):
+        table_type = table
+    elif is_neighbor_table(table):
+        table_type = _unbound_table_type(table)
+    else:
+        fail(f"expected a neighbor table, got '{table}'")
+    if isinstance(table_type.connectivity, ConnectivityMeta) and (
+        table_type.connectivity is not connectivity
+    ):
+        fail(f"its type is bound to '{table_type.connectivity.__qualname__}'")
+    expected_domain = (connectivity.domain, local)
     if tuple(table_type.domain) != expected_domain:
         fail(
             f"its domain is '({', '.join(map(str, table_type.domain))})',"
@@ -2296,3 +2358,4 @@ def check_neighbor_table(
                 f"min_neighbors == max_neighbors == {max_neighbors} means every element has all"
                 f" its neighbors, but the table has skip value {table_type.skip_value}"
             )
+    return dataclasses.replace(table_type, connectivity=connectivity)

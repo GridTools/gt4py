@@ -123,15 +123,6 @@ class StridedConnectivityField(common.Connectivity):
     def __gt_origin__(self) -> xtyping.Never:
         raise NotImplementedError
 
-    def __gt_type__(self) -> common.NeighborConnectivityType:
-        return common.NeighborConnectivityType(
-            domain=self.domain_dims,
-            codomain=self.codomain_dim,
-            max_neighbors=self._max_neighbors,
-            skip_value=self.skip_value,
-            dtype=self.dtype,
-        )
-
     @property
     def domain(self) -> common.Domain:
         return common.Domain(
@@ -579,7 +570,7 @@ def execute_shift(
                         common.connectivity_key_over(offset_provider, tag),
                     )
                     assert common.is_neighbor_table(offset_implementation)
-                    source_dim = offset_implementation.__gt_type__().source_dim
+                    source_dim = offset_implementation.__gt_type__().domain[0]
                     cur_index = pos[source_dim.tag]
                     assert common.is_int_index(cur_index)
                     if offset_implementation[cur_index, index].as_scalar() in [
@@ -601,7 +592,7 @@ def execute_shift(
         return new_pos
     offset_implementation = common.get_offset(offset_provider, tag)
     if common.is_neighbor_table(offset_implementation):
-        source_dim = offset_implementation.__gt_type__().source_dim
+        source_dim = offset_implementation.__gt_type__().domain[0]
         assert source_dim.tag in pos
         new_pos = pos.copy()
         new_pos.pop(source_dim.tag)
@@ -1439,7 +1430,7 @@ class _List(Generic[DT]):
         assert offset_provider is not None
         connectivity = common.get_offset(offset_provider, offset_tag)
         assert common.is_neighbor_table(connectivity)
-        return connectivity.__gt_type__().neighbor_dim
+        return connectivity.__gt_type__().domain[1]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1469,7 +1460,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
     return _List(
         values=tuple(
             shifted.deref()
-            for i in range(connectivity.__gt_type__().max_neighbors)
+            for i in range(len(connectivity.domain[1].unit_range))
             if (shifted := it.shift(offset_str, i)).can_deref()
         ),
         offset=offset,
@@ -1552,7 +1543,7 @@ class SparseListIterator:
         return _List(
             values=tuple(
                 shifted.deref()
-                for i in range(connectivity.__gt_type__().max_neighbors)
+                for i in range(len(connectivity.domain[1].unit_range))
                 if (
                     shifted := self.it.shift(*self.offsets, SparseTag(self.list_offset), i)
                 ).can_deref()
@@ -1688,9 +1679,9 @@ def _dimension_to_tag(
     return {k.tag: v for k, v in domain.items()}
 
 
-def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProviderType) -> None:
+def _validate_domain(domain: Domain, offset_provider_type: common.TableTypes) -> None:
     if isinstance(domain, runtime.CartesianDomain):
-        if any(isinstance(o, common.ConnectivityType) for o in offset_provider_type.values()):
+        if any(isinstance(o, common.NeighborTableType) for o in offset_provider_type.values()):
             raise RuntimeError(
                 "Got a 'CartesianDomain', but found a 'Connectivity' in 'offset_provider', expected 'UnstructuredDomain'."
             )
@@ -1810,7 +1801,7 @@ def _fieldspec_list_to_value(
             assert common.is_neighbor_table(connectivity)
             return domain.insert(
                 len(domain),
-                common.named_range((offset_type, connectivity.__gt_type__().max_neighbors)),
+                common.named_range((offset_type, len(connectivity.domain[1].unit_range))),
             ), type_.element_type
     return domain, type_
 

@@ -33,14 +33,14 @@ def _dynamic_shift_args(node: itir.Expr) -> list[bool] | None:
 
 @dataclasses.dataclass
 class InlineDynamicShifts(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
-    offset_provider_type: common.OffsetProviderType
+    offset_provider_type: common.TableTypes
     uids: utils.IDGeneratorPool
 
     @classmethod
     def apply(
         cls,
         node: itir.Program,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         uids: utils.IDGeneratorPool,
     ):
         return cls(offset_provider_type=offset_provider_type, uids=uids).visit(node)

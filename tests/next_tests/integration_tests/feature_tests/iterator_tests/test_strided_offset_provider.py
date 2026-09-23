@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain, as_fieldop
 from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
@@ -53,7 +54,10 @@ def test_strided_offset_provider(program_processor):
     program_processor, validate = program_processor
 
     LocA_size = 2
-    max_neighbors = LocA2LocAB_offset_provider.__gt_type__().max_neighbors
+    # the table's type as bound under its key: a table's own `__gt_type__()` is only structural
+    max_neighbors = common.offset_provider_to_type({"O": LocA2LocAB_offset_provider})[
+        "O"
+    ].max_neighbors
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()

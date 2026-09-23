@@ -29,12 +29,14 @@ def test_local_dimension_size():
 
     from next_tests.toy_connectivity import V2EDim, Vertex, Edge
 
-    def conn_type(max_neighbors: int) -> common.NeighborConnectivityType:
-        return common.NeighborConnectivityType(
-            domain=(Vertex, V2EDim),
-            codomain=Edge,
+    def conn_type(max_neighbors: int) -> common.NeighborTableType:
+        dtype = core_defs.dtype(np.int32)
+        return common.NeighborTableType(
+            connectivity=common.ConnectivityType(
+                domain=(Vertex, V2EDim), codomain=Edge, skip_value=None, dtype=dtype
+            ),
             skip_value=None,
-            dtype=core_defs.dtype(np.int32),
+            dtype=dtype,
             max_neighbors=max_neighbors,
         )
 

@@ -34,10 +34,15 @@ class Dim2(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
-    return common.NeighborConnectivityType(
-        domain=[dummy_origin, dummy_neighbor],
-        codomain=dummy_codomain,
-        skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
+    skip_value = common._DEFAULT_SKIP_VALUE if has_skip_values else None
+    return common.NeighborTableType(
+        connectivity=common.ConnectivityType(
+            domain=(dummy_origin, dummy_neighbor),
+            codomain=dummy_codomain,
+            skip_value=skip_value,
+            dtype=None,
+        ),
+        skip_value=skip_value,
         dtype=None,
         max_neighbors=max_neighbors,
     )

@@ -160,9 +160,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
     def compile(
         self,
-        offset_provider: common.OffsetProviderType
+        offset_provider: common.TableTypes
         | common.OffsetProvider
-        | list[common.OffsetProviderType | common.OffsetProvider]
+        | list[common.TableTypes | common.OffsetProvider]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
@@ -186,9 +186,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             )
 
         if self.compilation_options.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
+            raise ValueError("Cannot compile a program without connectivities / TableTypes.")
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists."
@@ -201,8 +199,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
 
         assert all(
-            common.is_offset_provider(op) or common.is_offset_provider_type(op)
-            for op in offset_provider
+            common.is_offset_provider(op) or common.is_table_types(op) for op in offset_provider
         )
 
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
@@ -488,9 +485,9 @@ class ProgramWithBoundArgs(Program):
     @override
     def compile(
         self,
-        offset_provider: common.OffsetProviderType
+        offset_provider: common.TableTypes
         | common.OffsetProvider
-        | list[common.OffsetProviderType | common.OffsetProvider]
+        | list[common.TableTypes | common.OffsetProvider]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:

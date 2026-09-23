@@ -32,7 +32,7 @@ class CompilationOptions:
     #: when jitting is enabled, or on a call to `compile`.
     static_params: Sequence[str] | None = None
 
-    # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    # TODO(ricoh): replace with common.TableTypes once the temporary pass doesn't require the runtime information
     #: A dictionary holding static/compile-time information about the offset providers.
     #: For now, it is used for ahead of time compilation in DaCe orchestrated programs,
     #: i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.

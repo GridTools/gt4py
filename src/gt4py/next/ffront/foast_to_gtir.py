@@ -298,7 +298,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 # `field(Off[idx])`
                 # (matched on the type, not the node, to also accept `mod.Off[idx]`)
                 case foast.Subscript(
-                    value=foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag)),
+                    value=foast.LocatedNode(type=ts.ShiftType(tag=str() as offset_tag)),
                     index=index,
                 ):
                     # Constant folding to a `Literal` ensures that `index` becomes an `OffsetLiteral`,
@@ -332,8 +332,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
                     offset_type = func_args.args[0].type
-                    assert isinstance(offset_type, ts.OffsetType)
-                    dim = offset_type.source
+                    assert isinstance(offset_type, ts.ShiftType)
+                    dim = offset_type.codomain
                     offset_field = self.visit(func_args.args[1], **kwargs)
                     current_expr = im.as_fieldop(
                         im.lambda_("__it", "__offset")(
@@ -343,7 +343,7 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         )
                     )(current_expr, offset_field)
                 # `field(Off)`
-                case foast.LocatedNode(type=ts.OffsetType(tag=str() as offset_tag, target=(_, _))):
+                case foast.LocatedNode(type=ts.ShiftType(tag=str() as offset_tag, domain=(_, _))):
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.
                     assert len(node.args) == 1
