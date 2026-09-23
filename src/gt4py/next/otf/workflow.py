@@ -15,7 +15,7 @@ import pathlib
 import typing
 from typing import Any, Callable, Generic, Protocol, Self, TypeVar
 
-from gt4py._core import filecache
+from gt4py._core import definitions as core_defs, filecache
 from gt4py.eve.xtyping import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
 
@@ -359,3 +359,37 @@ class CachedStep(
 
     def cache_key(self, inp: StartT) -> str:
         return self.step_fingerprinter((self._step_fingerprint, self.input_fingerprinter(inp)))
+
+
+@typing.runtime_checkable
+class DeviceConfigurable(Protocol):
+    """A step that records the device it was configured for."""
+
+    device_type: core_defs.DeviceType
+
+
+def check_device_agreement(step: Any, device_type: core_defs.DeviceType, what: str) -> None:
+    """
+    Raise if a step is configured for a different device than its pipeline.
+
+    Toolchain builders create every step from one configuration, but a step
+    builder can be replaced by arbitrary user code, which may ignore the
+    configured device. Without this check a mismatch would silently produce a
+    pipeline whose steps disagree about the target device, which surfaces much
+    later as a confusing compilation or runtime failure. The check never
+    modifies the step.
+
+    Args:
+        step: The step to check. Steps that do not record a device are accepted.
+        device_type: The device the surrounding pipeline is built for.
+        what: Name of the step, used in the error message.
+
+    Raises:
+        ValueError: If `step` records a device other than `device_type`.
+    """
+    if isinstance(step, DeviceConfigurable) and step.device_type is not device_type:
+        raise ValueError(
+            f"The {what} is configured for device '{step.device_type.name}', but the"
+            f" toolchain is being built for '{device_type.name}'. A custom step builder"
+            " must configure the step with the 'device_type' of the config it receives."
+        )
