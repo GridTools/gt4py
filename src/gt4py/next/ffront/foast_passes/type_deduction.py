@@ -462,7 +462,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
                 new_type = ts.OffsetType(source=source, target=(target1,), tag=tag)
-            case ts.OffsetType(source=source, target=(target,)):
+            case ts.OffsetType(source=source, target=(target,), tag=tag):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
@@ -470,6 +470,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     raise errors.DSLError(
                         new_value.location,
                         "Source and target must be equal for offsets with a single target.",
+                    )
+                if tag is None:
+                    raise errors.DSLError(
+                        new_value.location,
+                        "Cannot index a dimension shift.",
+                        notes=[
+                            (
+                                "A shift written as 'Dim + offset' already contains its"
+                                " displacement, unlike a 'FieldOffset', which is indexed to"
+                                " choose one."
+                            )
+                        ],
+                        hints=[f"Write the displacement directly, e.g. '{source.value} + 1'."],
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
@@ -769,7 +782,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
-            pass
+            for arg in new_args:
+                # A Cartesian `FieldOffset` shifts by the index it is subscripted with, so it
+                # carries no displacement on its own. Only an offset with a local dimension is
+                # meaningful unsubscripted, as the neighbor access `field(Off)`.
+                if (
+                    isinstance(arg, (foast.Name, foast.Attribute))
+                    and isinstance(arg.type, ts.OffsetType)
+                    and len(arg.type.target) == 1
+                ):
+                    raise errors.DSLError(
+                        arg.location,
+                        f"Cannot shift by the Cartesian offset '{arg!s}' without an index.",
+                        hints=[f"Give the displacement, e.g. '{arg!s}[1]'."],
+                    )
         elif isinstance(new_func.type, ts.DimensionType):
             assert new_func.type.dim.kind == DimensionKind.LOCAL
             return foast.Call(

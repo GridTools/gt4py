@@ -28,6 +28,7 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
 IDim = gtx.Dimension("IDim")
+IOff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 # A PEP 695 alias whose value raises when it is evaluated, standing in for the
 # common case of a typo'd dtype ('np.foat64') inside an alias definition.
@@ -356,3 +357,29 @@ def test_broken_type_alias_annotation_is_located():
     assert err.location.line == err.location.end_line
     assert err.location.end_column - err.location.column == len("a: BrokenFieldAlias")
     assert re.search(r"\| +\^{19}(?!\^)", str(err)), str(err)
+
+
+def test_unindexed_cartesian_offset_names_the_offset_as_written():
+    # The tag of 'IOff' is 'Ioff'; the message has to quote what the user wrote.
+    def unindexed(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a(IOff)
+
+    err = parse_error(unindexed)
+
+    assert err.message == "Cannot shift by the Cartesian offset 'IOff' without an index."
+    assert err.hints == ["Give the displacement, e.g. 'IOff[1]'."]
+    rendered = str(err)
+    assert "return a(IOff)" in rendered
+    assert re.search(r"\| +\^{4}(?!\^)", rendered), rendered
+
+
+def test_indexed_dimension_shift_is_rejected_with_a_hint():
+    def indexed_shift(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a((IDim + 1)[0])
+
+    err = parse_error(indexed_shift)
+
+    assert err.message == "Cannot index a dimension shift."
+    assert err.hints == ["Write the displacement directly, e.g. 'IDim + 1'."]
+    assert any("already contains its displacement" in note for note in err.notes)
+    assert "return a((IDim + 1)[0])" in str(err)
