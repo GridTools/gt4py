@@ -318,7 +318,7 @@
           takes_v2e(a)
     out: |
       main:17:15: error: Argument 1 to "takes_v2e" has incompatible type "Field[Dims[Vertex, main.V2C.Local], float]"; expected "Field[Dims[Vertex, main.V2E.Local], float]"  [arg-type]
-      main:17:15: note: "Field[Dims[Vertex, Local], float].__call__" has type "def __call__(self, index_field: Connectivity[Any, Any] | FieldOffset | type[NeighborConnectivity[Any, Any]], *args: Connectivity[Any, Any] | FieldOffset | type[NeighborConnectivity[Any, Any]]) -> Field[Any, Any]"
+      main:17:15: note: "Field[Dims[Vertex, Local], float].__call__" has type "def __call__(self, index_field: Connectivity[Any, Any] | type[NeighborConnectivity[Any, Any]], *args: Connectivity[Any, Any] | type[NeighborConnectivity[Any, Any]]) -> Field[Any, Any]"
 
   - case: neighbor_connectivity_generic_local
     main: |

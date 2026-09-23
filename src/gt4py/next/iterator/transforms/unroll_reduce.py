@@ -52,7 +52,7 @@ def _get_partial_local_dims(reduce_args: Iterable[itir.Expr]) -> Iterable[common
 
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> common.NeighborTableType:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not cpm.is_applied_reduce(applied_reduce_node):
@@ -61,7 +61,7 @@ def _get_connectivity(
     connectivities: list[common.NeighborTableType] = []
     for local_dim in _get_partial_local_dims(applied_reduce_node.args):
         conn = common.get_offset_type(
-            offset_provider_type, common.connectivity_key_over(offset_provider_type, local_dim)
+            table_types, common.connectivity_key_over(table_types, local_dim)
         )
         assert isinstance(conn, common.NeighborTableType)
         connectivities.append(conn)
@@ -87,15 +87,13 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     def apply(
         cls,
         node: itir.Node,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         uids: utils.IDGeneratorPool,
     ) -> itir.Node:
-        return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
+        return cls(uids=uids).visit(node, table_types=table_types)
 
-    def _visit_reduce(
-        self, node: itir.FunCall, offset_provider_type: common.TableTypes
-    ) -> itir.Expr:
-        connectivity_type = _get_connectivity(node, offset_provider_type)
+    def _visit_reduce(self, node: itir.FunCall, table_types: common.TableTypes) -> itir.Expr:
+        connectivity_type = _get_connectivity(node, table_types)
         max_neighbors = connectivity_type.max_neighbors
         has_skip_values = connectivity_type.has_skip_values
 

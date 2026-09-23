@@ -19,8 +19,6 @@ from next_tests.integration_tests.cases import (
     cartesian_case,
 )
 from next_tests.integration_tests.cases_utils import (
-    Ioff,
-    Koff,
     exec_alloc_descriptor,
 )
 
@@ -62,10 +60,10 @@ def test_offset_field(cartesian_case):
 
     @gtx.field_operator
     def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
-        a_i = a(as_offset(Ioff, offset_field))
+        a_i = a(as_offset(IDim, offset_field))
         # note: this leads to an access to offset_field in
         # IDim: (0, out.size[I]), KDim: (0, out.size[K]+1)
-        a_i_k = a_i(as_offset(Koff, offset_field))
+        a_i_k = a_i(as_offset(KDim, offset_field))
         b_i = a(IDim + 1)
         b_i_k = b_i(KDim + 1)
         return a_i_k == b_i_k
@@ -97,7 +95,7 @@ def test_offset_field_of_chained_ops(cartesian_case):
     def testee(a: cases.IKField, offset_field: cases.IKField) -> cases.IKField:
         b = a + 1
         c = b * 2
-        return c(as_offset(Koff, offset_field))
+        return c(as_offset(KDim, offset_field))
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
     a = cases.allocate(cartesian_case, testee, "a").extend({KDim: (0, 1)})()

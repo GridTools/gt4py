@@ -48,7 +48,8 @@ string equality and are never checked against each other at declaration time: th
 name, and the `offset_provider` key. Whichever one reaches
 `common.get_offset` depends on the execution path and the operation. Making a
 dimension's identity its Python type is the prerequisite for collapsing those
-names into one declaration (a follow-up ADR covers the connectivity half).
+names into one declaration ([ADR 0029](0029-Connectivities_As_Types.md) covers the
+connectivity half).
 
 ## Decision
 
@@ -77,10 +78,11 @@ disappears.
 
 1. **Reconstruction from the IR is an import.** `common.resolve(tag)` imports the
    module and walks the qualname; nested declarations resolve naturally. The IR
-   references a Python type exactly the way `pickle` references a class. It is
-   memoized, because type inference calls it once per `AxisLiteral`. An
-   `AxisLiteral` stores only the tag: its `kind` is the resolved dimension's, so the
-   two cannot disagree.
+   references a Python type exactly the way `pickle` references a class. Where the
+   module path ends is memoized, because type inference calls it once per
+   `AxisLiteral`; the attribute walk is repeated, so a redefined declaration is
+   found. An `AxisLiteral` stores only the tag: its `kind` is the resolved
+   dimension's, so the two cannot disagree.
 
    A purely dotted tag does not record where the module path ends and the
    qualname begins, so `resolve` tries the *longest importable prefix* and walks

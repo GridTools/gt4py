@@ -254,12 +254,10 @@ def translate_concat_where(
         local_dim = node.type.dtype.offset_type
         assert local_dim is not None
         dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
-        offset_provider_type = sdfg_builder.get_offset_provider_type(
-            sdfg_builder.connectivity_key_over(local_dim)
-        )
-        assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
+        table_type = sdfg_builder.get_table_type(sdfg_builder.connectivity_key_over(local_dim))
+        assert isinstance(table_type, gtx_common.NeighborTableType)
         local_idx = gtx_common.order_dimensions([*output_dims, local_dim]).index(local_dim)
-        output_shape.insert(local_idx, offset_provider_type.max_neighbors)
+        output_shape.insert(local_idx, table_type.max_neighbors)
 
     output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
     output_node = ctx.state.add_access(output)

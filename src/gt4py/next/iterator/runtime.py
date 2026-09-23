@@ -78,7 +78,11 @@ class FendefDispatcher:
         offset_provider=None,
         column_axis=None,
     ):
-        offset_provider = offset_provider or self.offset_provider
+        # NOTE: not strict: iterator IR names offsets by arbitrary strings.
+        offset_provider = common.as_tag_keyed_offset_provider(
+            offset_provider or self.offset_provider, strict=False
+        )
+        common.check_offset_provider(offset_provider)
         column_axis = column_axis or self.column_axis
 
         if backend is not None:
@@ -133,7 +137,7 @@ def fendef(
     )
 
 
-def _deduce_domain(domain: dict[common.Dimension, range], offset_provider_type: common.TableTypes):
+def _deduce_domain(domain: dict[common.Dimension, range], table_types: common.TableTypes):
     if isinstance(domain, UnstructuredDomain):
         domain_builtin = builtins.unstructured_domain
     elif isinstance(domain, CartesianDomain):
@@ -141,7 +145,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider_type: 
     else:
         domain_builtin = (
             builtins.unstructured_domain
-            if any(isinstance(o, common.NeighborTableType) for o in offset_provider_type.values())
+            if any(isinstance(o, common.NeighborTableType) for o in table_types.values())
             else builtins.cartesian_domain
         )
 

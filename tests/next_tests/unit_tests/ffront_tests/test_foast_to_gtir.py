@@ -49,24 +49,19 @@ class Edge(gtx.DimensionIndex): ...
 class Vertex(gtx.DimensionIndex): ...
 
 
-class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class V2E(gtx.NeighborConnectivity[Vertex, Edge]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
+V2EDim = V2E.Local
 
 
 class TDim(gtx.DimensionIndex): ...
 
 
-TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
-
-
-#: An offset whose tag differs from the name of the Python variable it is bound to, and
-#: from the name of its local dimension. Lowering must emit the *tag*.
-class RenamedV2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
-
-
-renamed_v2e = gtx.FieldOffset("RenamedTag", source=Edge, target=(Vertex, RenamedV2EDim))
+#: A connectivity reached through a name other than its declaration's. Lowering must emit the
+#: local dimension's tag, not the variable name.
+renamed_v2e = V2E
 
 
 class UDim(gtx.DimensionIndex): ...
@@ -166,7 +161,7 @@ def test_premap_cartesian_syntax():
 
 def test_as_offset():
     def foo(inp: gtx.Field[[TDim], float64], offset: gtx.Field[[TDim], int]):
-        return inp(as_offset(TOff, offset))
+        return inp(as_offset(TDim, offset))
 
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
@@ -802,7 +797,7 @@ def test_premap_to_local_field():
 
 
 def test_unstructured_shift_lowering_emits_offset_tag_not_variable_name():
-    """The IR shift tag is the offset's tag, not the variable the offset is bound to."""
+    """The IR shift tag is the local dimension's tag, not the variable it is reached through."""
 
     def foo(edge_f: gtx.Field[[Edge], float64]):
         return edge_f(renamed_v2e[1])
@@ -810,7 +805,7 @@ def test_unstructured_shift_lowering_emits_offset_tag_not_variable_name():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift("RenamedTag", 1)("__it"))))(
+    reference = im.as_fieldop(im.lambda_("__it")(im.deref(im.shift(V2EDim.tag, 1)("__it"))))(
         "edge_f"
     )
 
@@ -824,7 +819,7 @@ def test_unstructured_neighbors_lowering_emits_offset_tag_not_variable_name():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop_neighbors("RenamedTag", "edge_f")
+    reference = im.as_fieldop_neighbors(V2EDim.tag, "edge_f")
 
     assert lowered.expr == reference
 

@@ -24,7 +24,7 @@ class I(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
 
 
 @pytest.fixture
-def offset_provider_type(request):
+def table_types(request):
     return {"I": I}
 
 
@@ -154,7 +154,7 @@ def test_lambda_redef_same_arg_scope(uids: utils.IDGeneratorPool):
     assert actual == expected
 
 
-def test_if_can_deref_no_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
+def test_if_can_deref_no_extraction(table_types, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -175,12 +175,12 @@ def test_if_can_deref_no_extraction(offset_provider_type, uids: utils.IDGenerato
     )
 
     actual = CommonSubexpressionElimination.apply(
-        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+        testee, table_types=table_types, within_stencil=True, uids=uids
     )
     assert actual == expected
 
 
-def test_if_can_deref_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
+def test_if_can_deref_eligible_extraction(table_types, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
     # if statement. A case using `can_deref` is used here as it is common.
 
@@ -198,12 +198,12 @@ def test_if_can_deref_eligible_extraction(offset_provider_type, uids: utils.IDGe
     )
 
     actual = CommonSubexpressionElimination.apply(
-        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+        testee, table_types=table_types, within_stencil=True, uids=uids
     )
     assert actual == expected
 
 
-def test_if_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPool):
+def test_if_eligible_extraction(table_types, uids: utils.IDGeneratorPool):
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
 
@@ -213,7 +213,7 @@ def test_if_eligible_extraction(offset_provider_type, uids: utils.IDGeneratorPoo
     expected = im.let("_cs_0", im.and_("a", "b"))(im.if_(im.and_("_cs_0", "_cs_0"), "c", "d"))
 
     actual = CommonSubexpressionElimination.apply(
-        testee, offset_provider_type=offset_provider_type, within_stencil=True, uids=uids
+        testee, table_types=table_types, within_stencil=True, uids=uids
     )
     assert actual == expected
 

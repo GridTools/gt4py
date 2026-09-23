@@ -375,7 +375,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         ),
     )
 
-    SIMPLE_MESH = cases_utils.simple_mesh(None)
+    SIMPLE_MESH = cases_utils.ir_level(cases_utils.simple_mesh(None))
     offset_provider = SIMPLE_MESH.offset_provider
 
     test_case = cases.Case.from_mesh_descriptor(SIMPLE_MESH, backend=backend, allocator=backend)

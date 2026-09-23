@@ -154,7 +154,7 @@ class CompileTimeArgs:
     argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
     @property
-    def offset_provider_type(self) -> common.TableTypes:
+    def table_types(self) -> common.TableTypes:
         return common.offset_provider_to_type(self.offset_provider)
 
     @classmethod

@@ -21,22 +21,26 @@ class Edge(gtx.DimensionIndex): ...
 class Cell(gtx.DimensionIndex): ...
 
 
-class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class V2E(gtx.NeighborConnectivity[Vertex, Edge]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class E2V(gtx.NeighborConnectivity[Edge, Vertex]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class C2E(gtx.NeighborConnectivity[Cell, Edge]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-class V2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class V2V(gtx.NeighborConnectivity[Vertex, Vertex]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset(E2VDim.tag, source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
-V2V = gtx.FieldOffset(V2VDim.tag, source=Vertex, target=(Vertex, V2VDim))
+V2EDim = V2E.Local
+E2VDim = E2V.Local
+C2EDim = C2E.Local
+V2VDim = V2V.Local
 
 # 3x3 periodic   edges        cells
 # 0 - 1 - 2 -    0 1 2

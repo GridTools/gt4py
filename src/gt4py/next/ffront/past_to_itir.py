@@ -17,7 +17,6 @@ import devtools
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
-    fbuiltins,
     gtcallable,
     program_ast as past,
     stages as ffront_stages,
@@ -74,7 +73,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
     """
     all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
     offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
-        all_closure_vars, fbuiltins.FieldOffset, common.ConnectivityMeta, common.DimensionMeta
+        all_closure_vars, common.ConnectivityMeta, common.DimensionMeta
     )
     grid_type = transform_utils._deduce_grid_type(
         inp.data.grid_type, offsets_and_dimensions.values()

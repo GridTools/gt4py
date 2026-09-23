@@ -17,7 +17,7 @@ def dead_code_elimination(
     program: itir.Program,
     *,
     uids: utils.IDGeneratorPool,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> itir.Program:
     """
     Perform dead code elimination on a program by simplifying or removing
@@ -74,7 +74,7 @@ def dead_code_elimination(
         program,
         enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
         uids=uids,
-        offset_provider_type=offset_provider_type,
+        table_types=table_types,
     )  # type: ignore[assignment]  # always an itir.Program
 
     return program

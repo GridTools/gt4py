@@ -39,11 +39,7 @@ from gt4py.next.iterator import atlas_utils
 # NOTE: imported, not redeclared. Under nominal identity (ADR 0028) a same-named declaration
 # here would be a different dimension from the one `toy_connectivity` declares, where the old
 # `Dimension("...")` values compared equal -- and tests mix objects from both modules.
-from next_tests.toy_connectivity import E2VDim, Edge, V2EDim, Vertex
-
-
-V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset(E2VDim.tag, source=Vertex, target=(Edge, E2VDim))
+from next_tests.toy_connectivity import E2V, E2VDim, Edge, V2E, V2EDim, Vertex
 
 
 def assert_close(expected, actual):

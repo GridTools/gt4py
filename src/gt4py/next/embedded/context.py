@@ -73,7 +73,7 @@ def get_offset_provider(default: _T = _NO_DEFAULT_SENTINEL) -> common.OffsetProv
 def update(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
-    offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
+    offset_provider: common.OffsetProviderLike | eve.NothingType = eve.NOTHING,
 ) -> Generator[None, None, None]:
     """Context handler updating the current embedded context with the provided values."""
 
@@ -83,7 +83,9 @@ def update(
         closure_token = gtx_embedded.context._closure_column_range.set(closure_column_range)
     if offset_provider is not eve.NOTHING:
         assert not isinstance(offset_provider, eve.NothingType)
-        offset_provider_token = gtx_embedded.context._offset_provider.set(offset_provider)
+        offset_provider_token = gtx_embedded.context._offset_provider.set(
+            common.as_tag_keyed_offset_provider(offset_provider, strict=False)
+        )
 
     try:
         yield None

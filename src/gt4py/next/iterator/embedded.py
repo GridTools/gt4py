@@ -51,7 +51,6 @@ from gt4py.next.embedded import (
     exceptions as embedded_exceptions,
     operators,
 )
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -147,9 +146,7 @@ class StridedConnectivityField(common.Connectivity):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         raise NotImplementedError
 
@@ -167,10 +164,8 @@ class StridedConnectivityField(common.Connectivity):
 
     def __call__(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         raise NotImplementedError()
 
@@ -1150,10 +1145,8 @@ class IndexField(common.Field):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1293,10 +1286,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     def premap(
         self,
-        index_field: common.Connectivity
-        | fbuiltins.FieldOffset
-        | type[common.NeighborConnectivity],
-        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
+        index_field: common.Connectivity | type[common.NeighborConnectivity],
+        *args: common.Connectivity | type[common.NeighborConnectivity],
     ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1391,10 +1382,10 @@ def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None)
 
 @builtins.shift.register(EMBEDDED)
 def shift(
-    *offsets: Union[runtime.Offset, OffsetPart],
+    *offsets: Union[runtime.Offset, type[common.NeighborConnectivity], OffsetPart],
 ) -> Callable[[ItIterator], ItIterator]:
     def impl(it: ItIterator) -> ItIterator:
-        return it.shift(*list(o.value if isinstance(o, runtime.Offset) else o for o in offsets))
+        return it.shift(*list(_as_offset_tag(o) for o in offsets))
 
     return impl
 
@@ -1449,9 +1440,22 @@ class _ConstList(Generic[DT]):
         )
 
 
+def _as_offset_tag(
+    offset: runtime.Offset | type[common.NeighborConnectivity] | OffsetPart,
+) -> OffsetPart:
+    if isinstance(offset, common.ConnectivityMeta):
+        return offset.offset_tag
+    return offset.value if isinstance(offset, runtime.Offset) else offset
+
+
 @builtins.neighbors.register(EMBEDDED)
-def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
-    offset_str = offset.value if isinstance(offset, runtime.Offset) else offset
+def neighbors(offset: runtime.Offset | type[common.NeighborConnectivity], it: ItIterator) -> _List:
+    field_offset: runtime.Offset = (
+        runtime.Offset(value=offset.offset_tag)
+        if isinstance(offset, common.ConnectivityMeta)
+        else offset
+    )
+    offset_str = _as_offset_tag(field_offset)
     assert isinstance(offset_str, str)
     offset_provider = embedded_context.get_offset_provider()
     assert offset_provider is not None
@@ -1463,7 +1467,7 @@ def neighbors(offset: runtime.Offset, it: ItIterator) -> _List:
             for i in range(len(connectivity.domain[1].unit_range))
             if (shifted := it.shift(offset_str, i)).can_deref()
         ),
-        offset=offset,
+        offset=field_offset,
     )
 
 
@@ -1679,9 +1683,9 @@ def _dimension_to_tag(
     return {k.tag: v for k, v in domain.items()}
 
 
-def _validate_domain(domain: Domain, offset_provider_type: common.TableTypes) -> None:
+def _validate_domain(domain: Domain, table_types: common.TableTypes) -> None:
     if isinstance(domain, runtime.CartesianDomain):
-        if any(isinstance(o, common.NeighborTableType) for o in offset_provider_type.values()):
+        if any(isinstance(o, common.NeighborTableType) for o in table_types.values()):
             raise RuntimeError(
                 "Got a 'CartesianDomain', but found a 'Connectivity' in 'offset_provider', expected 'UnstructuredDomain'."
             )

@@ -42,12 +42,12 @@ def program_factory(expr: itir.Expr) -> itir.Program:
 def test_simple():
     testee = program_factory(im.let("a", 1)(im.op_as_fieldop("plus")("inp", "a")))
     expected = program_factory(im.op_as_fieldop("plus")("inp", 1))
-    actual = inline_scalar.InlineScalar.apply(testee, offset_provider_type={})
+    actual = inline_scalar.InlineScalar.apply(testee, table_types={})
     assert actual == expected
 
 
 def test_fo_inline_only():
     scalar_expr = im.let("a", 1)(im.plus("a", "a"))
     testee = program_factory(im.as_fieldop(im.lambda_()(scalar_expr))())
-    actual = inline_scalar.InlineScalar.apply(testee, offset_provider_type={})
+    actual = inline_scalar.InlineScalar.apply(testee, table_types={})
     assert actual == testee

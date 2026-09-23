@@ -44,16 +44,16 @@ class TypeSynthesizer:
      - isinstance checks to determine if an object is actually (meant to be) a type
        synthesizer and not just any callable.
      - writing simple type synthesizers without cluttering the signature with the additional
-       offset_provider_type argument that is only needed by some.
+       table_types argument that is only needed by some.
     """
 
     type_synthesizer: Callable[..., TypeOrTypeSynthesizer]
     cache: bool = False
 
     def __post_init__(self):
-        if "offset_provider_type" not in inspect.signature(self.type_synthesizer).parameters:
+        if "table_types" not in inspect.signature(self.type_synthesizer).parameters:
             synthesizer = self.type_synthesizer
-            self.type_synthesizer = lambda *args, offset_provider_type, **kwargs: synthesizer(
+            self.type_synthesizer = lambda *args, table_types, **kwargs: synthesizer(
                 *args, **kwargs
             )
         if self.cache:
@@ -68,10 +68,10 @@ class TypeSynthesizer:
     def __call__(
         self,
         *args: TypeOrTypeSynthesizer,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         **kwargs,
     ) -> TypeOrTypeSynthesizer:
-        return self.type_synthesizer(*args, offset_provider_type=offset_provider_type, **kwargs)
+        return self.type_synthesizer(*args, table_types=table_types, **kwargs)
 
 
 TypeOrTypeSynthesizer = Union[ts.TypeSpec, TypeSynthesizer]
@@ -313,13 +313,13 @@ def broadcast(
 def neighbors(
     offset_literal: it_ts.OffsetLiteralType,
     it: it_ts.IteratorType,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> ts.ListType:
     assert isinstance(offset_literal, it_ts.OffsetLiteralType) and isinstance(
         offset_literal.value, str
     )
     assert isinstance(it, it_ts.IteratorType)
-    conn_type = common.get_offset_type(offset_provider_type, offset_literal.value)
+    conn_type = common.get_offset_type(table_types, offset_literal.value)
     assert isinstance(conn_type, common.NeighborTableType)
     return ts.ListType(element_type=it.element_type, offset_type=conn_type.domain[1])
 
@@ -327,9 +327,7 @@ def neighbors(
 @_register_builtin_type_synthesizer
 def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
-    def apply_lift(
-        *its: it_ts.IteratorType, offset_provider_type: common.TableTypes
-    ) -> it_ts.IteratorType:
+    def apply_lift(*its: it_ts.IteratorType, table_types: common.TableTypes) -> it_ts.IteratorType:
         assert all(isinstance(it, it_ts.IteratorType) for it in its)
         stencil_args = [
             it_ts.IteratorType(
@@ -340,7 +338,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
             )
             for it in its
         ]
-        stencil_return_type = stencil(*stencil_args, offset_provider_type=offset_provider_type)
+        stencil_return_type = stencil(*stencil_args, table_types=table_types)
         assert isinstance(stencil_return_type, ts.DataType)
 
         position_dims = its[0].position_dims if its else []
@@ -406,7 +404,7 @@ def _canonicalize_nb_fields(
 
     Examples:
     >>> class Vertex(common.DimensionIndex): ...
-    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+    >>> class V2E(common.LocalDimensionIndex): ...
     >>> input_field = ts.FieldType(
     ...     dims=[
     ...         Vertex,
@@ -451,7 +449,7 @@ def _canonicalize_nb_fields(
 def _resolve_dimensions(
     input_dims: list[common.Dimension],
     shift_tuple: tuple[itir.OffsetLiteral | itir.CartesianOffset, ...],
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> list[common.Dimension]:
     """
     Resolves the final dimensions by applying shifts from the given shift tuple.
@@ -459,7 +457,7 @@ def _resolve_dimensions(
     Args:
         - input_dims: A list of initial dimensions to resolve.
         - shift_tuple: A tuple of offset literals defining the shift.
-        - offset_provider_type: Offset provider dictionary.
+        - table_types: Offset provider dictionary.
 
     Returns:
         A list of resolved dimensions after applying the shifts.
@@ -496,11 +494,11 @@ def _resolve_dimensions(
         ...     return common.NeighborTableType(
         ...         connectivity=structure, dtype=None, skip_value=None, max_neighbors=max_neighbors
         ...     )
-        >>> offset_provider_type = {
+        >>> table_types = {
         ...     "C2V": table_type((Cell, C2V), Vertex, 3),
         ...     "V2E": table_type((Vertex, V2E), Edge, 4),
         ... }
-        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
+        >>> _resolve_dimensions(input_dims, shift_tuple, table_types)
         [gt4py.next.iterator.type_system.type_synthesizer.Cell[horizontal], gt4py.next.iterator.type_system.type_synthesizer.K[vertical]]
         >>> from gt4py.next.iterator.ir_utils import ir_makers as im
         >>> class IDim(common.DimensionIndex): ...
@@ -531,7 +529,7 @@ def _resolve_dimensions(
         ...     ),
         ...     itir.OffsetLiteral(value=0),
         ... )
-        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
+        >>> _resolve_dimensions(input_dims, shift_tuple, table_types)
         [gt4py.next.iterator.type_system.type_synthesizer.JDim[horizontal], gt4py.next.iterator.type_system.type_synthesizer.IDim[horizontal]]
 
     """
@@ -549,7 +547,7 @@ def _resolve_dimensions(
                 assert isinstance(off_literal, itir.OffsetLiteral) and isinstance(
                     off_literal.value, str
                 )
-                offset_type = common.get_offset_type(offset_provider_type, off_literal.value)
+                offset_type = common.get_offset_type(table_types, off_literal.value)
                 if isinstance(offset_type, common.NeighborTableType):
                     if resolved_dim == offset_type.codomain:  # Check if input fits to offset
                         resolved_dim = offset_type.domain[0]  # Update input_dim for next iteration
@@ -566,7 +564,7 @@ def as_fieldop(
     stencil: TypeSynthesizer,
     domain: Optional[ts.DomainType] = None,
     *,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> TypeSynthesizer:
     @type_synthesizer
     def applied_as_fieldop(
@@ -588,7 +586,7 @@ def as_fieldop(
         if not domain:
             deduced_domain = None
             output_dims: list[common.Dimension] = []
-            if offset_provider_type is not None and shift_sequences_per_param is not None:
+            if table_types is not None and shift_sequences_per_param is not None:
                 for field, shift_sequences in zip(
                     new_fields, shift_sequences_per_param, strict=True
                 ):
@@ -597,9 +595,7 @@ def as_fieldop(
                         for shift_sequence in shift_sequences:
                             output_dims = common.promote_dims(
                                 output_dims,
-                                _resolve_dimensions(
-                                    input_dims, shift_sequence, offset_provider_type
-                                ),
+                                _resolve_dimensions(input_dims, shift_sequence, table_types),
                             )
 
                         assert all(isinstance(dim, common.DimensionMeta) for dim in output_dims)
@@ -612,7 +608,7 @@ def as_fieldop(
 
         stencil_return = stencil(
             *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
         )
 
         assert isinstance(stencil_return, ts.DataType)
@@ -641,10 +637,8 @@ def scan(
     assert isinstance(direction, ts.ScalarType) and direction.kind == ts.ScalarKind.BOOL
 
     @type_synthesizer
-    def apply_scan(
-        *its: it_ts.IteratorType, offset_provider_type: common.TableTypes
-    ) -> ts.DataType:
-        result = scan_pass(init, *its, offset_provider_type=offset_provider_type)
+    def apply_scan(*its: it_ts.IteratorType, table_types: common.TableTypes) -> ts.DataType:
+        result = scan_pass(init, *its, table_types=table_types)
         assert isinstance(result, ts.DataType)
         return result
 
@@ -654,11 +648,11 @@ def scan(
 @_register_builtin_type_synthesizer
 def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     @type_synthesizer
-    def applied_map(*args: ts.ListType, offset_provider_type: common.TableTypes) -> ts.ListType:
+    def applied_map(*args: ts.ListType, table_types: common.TableTypes) -> ts.ListType:
         assert len(args) > 0
         assert all(isinstance(arg, ts.ListType) for arg in args)
         arg_el_types = [arg.element_type for arg in args]
-        el_type = op(*arg_el_types, offset_provider_type=offset_provider_type)
+        el_type = op(*arg_el_types, table_types=table_types)
         assert isinstance(el_type, ts.DataType)
         offset_types = [arg.offset_type for arg in args if arg.offset_type is not None]
         offset_type = offset_types[0]
@@ -675,13 +669,13 @@ def _make_tuple_map_synthesizer(
 
     def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
-        def applied_map(arg: ts.TupleType, offset_provider_type: common.TableTypes) -> ts.TupleType:
+        def applied_map(arg: ts.TupleType, table_types: common.TableTypes) -> ts.TupleType:
             if not isinstance(arg, ts.TupleType):
                 raise TypeError(
                     f"'{builtin_name}' requires a 'TupleType' argument, got '{type(arg).__name__}'."
                 )
 
-            bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
+            bound_op = functools.partial(op, table_types=table_types)
 
             if recursive:
                 return utils.tree_map(  # type: ignore[return-value]
@@ -709,20 +703,18 @@ map_tuple = _register_builtin_type_synthesizer(
 @_register_builtin_type_synthesizer
 def reduce(op: TypeSynthesizer, init: ts.TypeSpec) -> TypeSynthesizer:
     @type_synthesizer
-    def applied_reduce(*args: ts.ListType, offset_provider_type: common.TableTypes):
+    def applied_reduce(*args: ts.ListType, table_types: common.TableTypes):
         assert all(isinstance(arg, ts.ListType) for arg in args)
         assert any(
             arg.offset_type is not None for arg in args
         )  # we only have `make_const_list`s in the reduce which is not allowed
-        return op(
-            init, *(arg.element_type for arg in args), offset_provider_type=offset_provider_type
-        )
+        return op(init, *(arg.element_type for arg in args), table_types=table_types)
 
     return applied_reduce
 
 
 @_register_builtin_type_synthesizer
-def shift(*offset_literals, offset_provider_type: common.TableTypes) -> TypeSynthesizer:
+def shift(*offset_literals, table_types: common.TableTypes) -> TypeSynthesizer:
     @type_synthesizer
     def apply_shift(
         it: it_ts.IteratorType | ts.DeferredType,
@@ -733,7 +725,7 @@ def shift(*offset_literals, offset_provider_type: common.TableTypes) -> TypeSynt
         if it.position_dims == "unknown":  # nothing to do here
             return it
         new_position_dims: list[common.Dimension] | str
-        if offset_provider_type:
+        if table_types:
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
@@ -744,7 +736,7 @@ def shift(*offset_literals, offset_provider_type: common.TableTypes) -> TypeSynt
                 else:
                     assert isinstance(offset_axis, it_ts.OffsetLiteralType)
                     assert isinstance(offset_axis.value, str)
-                    type_ = common.get_offset_type(offset_provider_type, offset_axis.value)
+                    type_ = common.get_offset_type(table_types, offset_axis.value)
                     assert isinstance(type_, common.NeighborTableType)
                     source_dim, target_dim = type_.domain[0], type_.codomain
 

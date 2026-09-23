@@ -10,7 +10,6 @@ import collections
 from typing import Any, Iterable, Optional
 
 from gt4py.next import common
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.gtcallable import GTCallable
 
 
@@ -47,9 +46,7 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
 
 def _deduce_grid_type(
     requested_grid_type: Optional[common.GridType],
-    offsets_and_dimensions: Iterable[
-        fbuiltins.FieldOffset | type[common.NeighborConnectivity] | common.Dimension
-    ],
+    offsets_and_dimensions: Iterable[type[common.NeighborConnectivity] | common.Dimension],
 ) -> common.GridType:
     """
     Derive grid type from actually occurring dimensions and check against optional user request.
@@ -61,9 +58,7 @@ def _deduce_grid_type(
 
     deduced_grid_type = common.GridType.CARTESIAN
     for o in offsets_and_dimensions:
-        if isinstance(o, common.ConnectivityMeta) or (
-            isinstance(o, fbuiltins.FieldOffset) and not fbuiltins.is_cartesian_offset(o)
-        ):
+        if isinstance(o, common.ConnectivityMeta):
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
         if isinstance(o, common.DimensionMeta) and o.kind == common.DimensionKind.LOCAL:
@@ -75,7 +70,7 @@ def _deduce_grid_type(
         and deduced_grid_type == common.GridType.UNSTRUCTURED
     ):
         raise ValueError(
-            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
+            "'grid_type == GridType.CARTESIAN' was requested, but a 'NeighborConnectivity' or a local dimension was found."
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type

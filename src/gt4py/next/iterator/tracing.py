@@ -153,6 +153,8 @@ def make_node(o):
         #  it, see `execute_shift`); decide whether to fold it into the shift value or forbid it.
         assert o.offset == 0
         return im.cartesian_offset(o.domain_dim, o.codomain)
+    if isinstance(o, common.ConnectivityMeta):
+        return OffsetLiteral(value=o.offset_tag)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)

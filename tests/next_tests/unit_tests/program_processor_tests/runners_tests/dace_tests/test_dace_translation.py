@@ -29,6 +29,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 )
 from gt4py.next.type_system import type_specifications as ts
 
+from next_tests.integration_tests import cases_utils
 from next_tests.integration_tests.cases_utils import (
     V2E,
     Edge,
@@ -80,7 +81,7 @@ def _translate_gtir_to_sdfg(
 @pytest.mark.parametrize("has_unit_stride", [False, True])
 @pytest.mark.parametrize("disable_field_origin", [False, True])
 def test_find_constant_symbols(has_unit_stride, disable_field_origin):
-    SKIP_VALUE_MESH = skip_value_mesh(None)
+    SKIP_VALUE_MESH = cases_utils.ir_level(skip_value_mesh(None))
 
     ir = itir.Program(
         id="find_constant_symbols_sdfg",
@@ -94,7 +95,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
             itir.SetAt(
                 expr=im.as_fieldop(
                     im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it")))
-                )(im.as_fieldop_neighbors(V2E.value, "x")),
+                )(im.as_fieldop_neighbors(V2E.Local.tag, "x")),
                 domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "y", VFTYPE.dims),
                 target=itir.SymRef(id="y"),
             )
@@ -112,7 +113,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     constant_symbols = dace_wf_translation.find_constant_symbols(
         ir=ir,
         sdfg=sdfg,
-        offset_provider_type=SKIP_VALUE_MESH.offset_provider_type,
+        table_types=SKIP_VALUE_MESH.table_types,
         disable_field_origin_on_program_arguments=disable_field_origin,
         unstructured_horizontal_has_unit_stride=has_unit_stride,
     )

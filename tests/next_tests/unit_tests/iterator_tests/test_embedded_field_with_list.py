@@ -30,10 +30,11 @@ class E(gtx.DimensionIndex): ...
 class V(gtx.DimensionIndex): ...
 
 
-class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class E2V(gtx.NeighborConnectivity[E, V]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-E2V = gtx.FieldOffset(E2VDim.tag, source=V, target=(E, E2VDim))
+E2VDim = E2V.Local
 
 
 # 0 --0-- 1 --1-- 2
