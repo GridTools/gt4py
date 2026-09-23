@@ -71,7 +71,9 @@ class IndexType(TypeSpec):
 
 
 class OffsetType(TypeSpec):
-    # TODO(havogt): replace by ConnectivityType
+    # NOTE: kept, against the TODO that stood here: since ADR 0029 this types a connectivity
+    # declaration (`V2E.__gt_type__()`) and the result of `as_offset`, and a `ConnectivityType`
+    # is what the *bound table* produces. Renaming it would be churn with no user-visible gain.
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
     #: The offset-provider key; `None` for the untagged Cartesian `Dim + offset`.
