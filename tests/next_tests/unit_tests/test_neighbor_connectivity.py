@@ -55,6 +55,7 @@ def _declare(source: str) -> dict:
     """
     namespace = {
         "__name__": __name__,
+        "typing": typing,
         "DimensionIndex": DimensionIndex,
         "DimensionKind": DimensionKind,
         "LocalDimensionIndex": LocalDimensionIndex,
@@ -63,6 +64,7 @@ def _declare(source: str) -> dict:
         "Edge": Edge,
         "KDim": KDim,
         "V2E": V2E,
+        "ConstListDim": common.ConstListDim,
     }
     exec(textwrap.dedent(source), namespace)
     return namespace
@@ -142,7 +144,7 @@ class TestDeclarationErrors:
             (
                 """
                 class C(NeighborConnectivity[Vertex, Edge], max_neighbors=5):
-                    Local = V2E.Local
+                    Local: typing.TypeAlias = V2E.Local
                 """,
                 "counts are declared by its owner",
             ),
@@ -221,7 +223,7 @@ class TestDeclarationErrors:
             class Coeff(LocalDimensionIndex, size=3): ...
 
             class C(NeighborConnectivity[Vertex, Edge]):
-                Local = Coeff
+                Local: typing.TypeAlias = Coeff
             """
         )
         assert ns["Coeff"].owner is ns["C"]
@@ -231,7 +233,7 @@ class TestDeclarationErrors:
         ns = _declare(
             """
             class V2EShared(NeighborConnectivity[Vertex, Edge]):
-                Local = V2E.Local
+                Local: typing.TypeAlias = V2E.Local
             """
         )
         shared = ns["V2EShared"]
@@ -253,7 +255,7 @@ class TestDeclarationErrors:
         with pytest.raises(TypeError, match="module level"):
 
             class C(NeighborConnectivity[Vertex, Edge]):
-                Local = LsqCoeff
+                Local: typing.TypeAlias = LsqCoeff
 
     def test_subclass_of_owned_local_is_ownerless(self):
         ns = _declare(
@@ -428,3 +430,46 @@ class TestFrontendIntegration:
         )
         with pytest.raises(ValueError, match="CARTESIAN"):
             transform_utils._deduce_grid_type(common.GridType.CARTESIAN, [V2E])
+
+
+def test_redefined_declaration_with_an_adopted_local(monkeypatch):
+    """Re-running a cell must re-own the adopted local dimension, not become a sharer."""
+    import sys
+    import types as pytypes
+
+    module = pytypes.ModuleType("_readopted_connectivity_module")
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    source = textwrap.dedent(
+        """
+        import typing
+
+        from gt4py.next.common import DimensionIndex, LocalDimensionIndex, NeighborConnectivity
+
+        class V(DimensionIndex): ...
+        class E(DimensionIndex): ...
+        class V2EDim(LocalDimensionIndex, size={n}): ...
+        class V2E(NeighborConnectivity[V, E], max_neighbors={n}):
+            Local: typing.TypeAlias = V2EDim
+        """
+    )
+    exec(source.format(n=4), module.__dict__)
+    assert module.V2E.offset_tag == module.V2EDim.tag
+
+    # the redefinition takes ownership over again, and its counts are checked against `size=`
+    exec(source.format(n=2), module.__dict__)
+    assert module.V2EDim.owner is module.V2E
+    assert module.V2E.offset_tag == module.V2EDim.tag
+    assert module.V2EDim.max_neighbors == 2
+
+
+def test_local_dimension_of():
+    shared = _declare(
+        """
+        class V2EShared(NeighborConnectivity[Vertex, Edge]):
+            Local: typing.TypeAlias = V2E.Local
+        """
+    )["V2EShared"]
+    assert common.local_dimension_of(V2E) is V2E.Local
+    assert common.local_dimension_of(shared) is V2E.Local
+    with pytest.raises(TypeError, match="not a connectivity declaration"):
+        common.local_dimension_of(NeighborConnectivity)

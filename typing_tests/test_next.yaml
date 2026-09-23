@@ -335,7 +335,9 @@
       L = typing.TypeVar("L", bound=gtx.LocalDimensionIndex)
 
       def local_of(conn: type[gtx.NeighborConnectivity]) -> type[gtx.LocalDimensionIndex]:
-          return conn.Local
+          # `conn.Local` is not annotated, so that a declaration's `Local` stays a type; generic
+          # code reads it through the accessor
+          return gtx.local_dimension_of(conn)
 
       def first(a: gtx.Field[gtx.Dims[Vertex, L], gtx.float64]) -> type[L]:
           raise NotImplementedError
@@ -343,4 +345,4 @@
       def caller(a: gtx.Field[gtx.Dims[Vertex, V2E.Local], gtx.float64]) -> None:
           reveal_type(first(a))
     out: |
-      main:20:17: note: Revealed type is "type[main.V2E.Local]"
+      main:22:17: note: Revealed type is "type[main.V2E.Local]"
