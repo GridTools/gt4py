@@ -242,6 +242,8 @@ There are two of them:
 
 Naming the steps buys two things: they can be run in isolation for debugging, and a variant pipeline is one `dataclasses.replace` away, without touching the code that uses it.
 
+The replacement is used exactly as given. If the replaced step was wrapped in a `CachedStep`, the variant is uncached unless you wrap the new step too. `CompilePipeline` and `Toolchain` check on every construction that the steps and the allocator agree on the target device, but only for components that declare one through a `device_type` attribute. The "Alternative Pipeline" section of `HackTheToolchain.md` shows both.
+
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}

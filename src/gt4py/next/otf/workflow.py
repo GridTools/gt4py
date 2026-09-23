@@ -11,8 +11,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import pathlib
-import typing
-from typing import Any, Callable, Generic, Protocol, TypeAlias, TypeVar
+from typing import Any, Callable, Generic, TypeAlias, TypeVar
 
 from gt4py._core import filecache
 from gt4py.eve.xtyping import OpaqueMutableMapping
