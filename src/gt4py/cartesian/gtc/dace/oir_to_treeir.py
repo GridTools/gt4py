@@ -34,7 +34,15 @@ DEFAULT_STORAGE_TYPE = {
 def _resolve_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
     """Optimal kernel schedule type based on target device."""
     if device_type == dtypes.DeviceType.GPU:
-        return dtypes.ScheduleType.GPU_Device
+        match gt_config.DACE_DEFAULT_BLOCK_SIZE:
+            case "gpu_device":
+                return dtypes.ScheduleType.GPU_Device
+            case "gpu_threadblock":
+                return dtypes.ScheduleType.GPU_ThreadBlock
+            case "gpu_threadblock_dynamic":
+                return dtypes.ScheduleType.GPU_ThreadBlock_Dynamic
+            case _:
+                return dtypes.ScheduleType.Sequential
 
     if device_type != dtypes.DeviceType.CPU:
         raise NotImplementedError(f"Schedule Tree bridge does not support {device_type}")

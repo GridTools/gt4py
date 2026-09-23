@@ -323,6 +323,9 @@ class JITCachingStrategy(CachingStrategy):
             fingerprint["dace_version"] = dace_version
             if self.builder.backend.name == "dace:gpu":
                 fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
+                fingerprint["parallel_vertical_loop_schedule"] = (
+                    gt_config.DACE_PARALLEL_VERTICAL_LOOP_SCHEDULE
+                )
 
         # ignore type because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
