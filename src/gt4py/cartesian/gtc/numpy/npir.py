@@ -119,6 +119,10 @@ class VarKOffset(common.VariableKOffset[Expr]):
     pass
 
 
+class ForIndex(common.ForIndex, Expr):
+    pass
+
+
 class KMaskFieldAccess(Expr):
     dtype = common.DataType.INT64
 
@@ -130,14 +134,6 @@ class FieldSlice(VectorLValue):
     k_offset: Union[int, VarKOffset]
     data_index: List[Expr] = eve.field(default_factory=list)
     kind: common.ExprKind = common.ExprKind.FIELD
-
-    @datamodels.validator("data_index")
-    def data_indices_are_scalar(
-        self, attribute: datamodels.Attribute, data_index: List[Expr]
-    ) -> None:
-        for index in data_index:
-            if index.kind != common.ExprKind.SCALAR:
-                raise ValueError("Data indices must be scalars")
 
 
 class ParamAccess(Expr):
@@ -191,6 +187,10 @@ class VectorAssign(common.AssignStmt[VectorLValue, Expr], Stmt):
 
 
 class While(common.While[Stmt, Expr], Stmt):
+    pass
+
+
+class For(common.For[Stmt], Stmt):
     pass
 
 
