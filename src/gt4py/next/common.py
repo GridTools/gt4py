@@ -1911,6 +1911,8 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
     #: Least number of *valid* neighbors of any element, if declared. Fewer than
     #: `max_neighbors` means the table pads with skip values.
     min_neighbors: ClassVar[Optional[int]] = None
+    #: The `size=` of this declaration, kept apart from the counts an owner writes below.
+    declared_size: ClassVar[Optional[int]] = None
 
     def __init_subclass__(
         cls,
@@ -1928,7 +1930,8 @@ class LocalDimensionIndex(DimensionIndex, kind=DimensionKind.LOCAL):
         # NOTE: reset rather than inherited: a subclass of an owned local dimension is a
         # different dimension, and does not index its parent's table.
         cls.owner = None
-        cls.max_neighbors = cls.min_neighbors = _check_neighbor_count(cls, "size", size)
+        cls.declared_size = _check_neighbor_count(cls, "size", size)
+        cls.max_neighbors = cls.min_neighbors = cls.declared_size
 
 
 def _check_neighbor_count(cls: type, name: str, count: Optional[int]) -> Optional[int]:
@@ -1949,7 +1952,10 @@ class ConnectivityMeta(type):
     (`a(V2E)`, `a(V2E[0])`), and it is what the neighbor table bound at call time must match.
     """
 
-    Local: type[LocalDimensionIndex]
+    # NOTE: `Local` is deliberately *not* annotated here, nor on `NeighborConnectivity`: an
+    # annotated `Local` makes every declaration's nested class a *variable* for the checkers, so
+    # `Field[Dims[V, V2E.Local]]` is rejected (pyright) or "not valid as a type" (mypy, for the
+    # assigned form). Library code reads it through `local_dimension_of`.
     origin: Dimension
     codomain: Dimension
 
@@ -1973,12 +1979,12 @@ class ConnectivityMeta(type):
         return local.tag if local.owner is cls else cls.tag
 
     def _local(cls) -> type[LocalDimensionIndex]:
-        if "Local" not in cls.__dict__:
+        if (local := cls.__dict__.get("Local")) is None:
             raise TypeError(
                 f"'{cls.__qualname__}' is not a connectivity declaration; declare one by"
                 " subclassing 'NeighborConnectivity[Origin, Codomain]'."
             )
-        return cls.Local
+        return cast(type[LocalDimensionIndex], local)
 
     def __call__(cls, *args: Any, **kwargs: Any) -> NoReturn:
         raise TypeError(
@@ -2049,9 +2055,8 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         (True, 6, 5)
     """
 
-    # NOTE: an annotation only, never assigned here. A real nested class on the base would be
-    # flagged by pyright as an incompatible override in every declaration.
-    Local: ClassVar[type[LocalDimensionIndex]]
+    # NOTE: `Local` is not annotated (see `ConnectivityMeta`); every subclass declares it, as a
+    # nested class or as `Local: TypeAlias = <a local dimension>`.
     origin: ClassVar[Dimension]
     codomain: ClassVar[Dimension]
 
@@ -2088,12 +2093,17 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         local = cls.__dict__.get("Local")
         if not (isinstance(local, DimensionMeta) and issubclass(local, LocalDimensionIndex)):
             raise TypeError(
-                f"'{name}' must declare its local dimension as a nested class:"
-                " 'class Local(LocalDimensionIndex): ...'."
+                f"'{name}' must declare its local dimension, either as a nested class"
+                " ('class Local(LocalDimensionIndex): ...') or by adopting one"
+                " ('Local: TypeAlias = SomeLocalDim')."
             )
         max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)
         min_neighbors = _check_neighbor_count(cls, "min_neighbors", min_neighbors)
-        if local.owner is not None:
+        # NOTE: a declaration whose tag is the owner's is a *redefinition* of it (a re-run
+        # notebook cell), not a second connectivity sharing the local dimension, so it takes
+        # ownership over again. Ownership of a local dimension that is adopted, rather than
+        # nested, otherwise goes to whoever declares first.
+        if local.owner is not None and local.owner.tag != cls.tag:
             # Sharing another connectivity's local dimension: the neighbor structure is the
             # owner's, including its counts, and the sharing connectivity is named by its own tag.
             if (max_neighbors, min_neighbors) != (None, None) and (
@@ -2110,14 +2120,19 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
             ("max_neighbors", max_neighbors),
             ("min_neighbors", min_neighbors),
         ):
-            declared = getattr(local, count_name)
-            if count is not None and declared is not None and count != declared:
+            # NOTE: against the local dimension's own `size=`, not against counts a previous
+            # owner wrote: a redefinition must be checked against what its `Local` declares.
+            if (
+                count is not None
+                and local.declared_size is not None
+                and count != local.declared_size
+            ):
                 raise TypeError(
                     f"'{name}': '{count_name}={count}' contradicts the size declared by"
-                    f" '{local.__qualname__}' ({declared})."
+                    f" '{local.__qualname__}' ({local.declared_size})."
                 )
-        max_neighbors = max_neighbors if max_neighbors is not None else local.max_neighbors
-        min_neighbors = min_neighbors if min_neighbors is not None else local.min_neighbors
+        max_neighbors = max_neighbors if max_neighbors is not None else local.declared_size
+        min_neighbors = min_neighbors if min_neighbors is not None else local.declared_size
         if (
             max_neighbors is not None
             and min_neighbors is not None
@@ -2131,6 +2146,20 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
         cls.origin, cls.codomain = origin, codomain
         local.owner = cls
         local.max_neighbors, local.min_neighbors = max_neighbors, min_neighbors
+
+
+def local_dimension_of(connectivity: type[NeighborConnectivity]) -> type[LocalDimensionIndex]:
+    """
+    The local dimension a connectivity declares, adopts or shares.
+
+    Library code reads `V2E.Local` through this accessor: the attribute is intentionally not
+    annotated, so that a declaration's `Local` stays a *type* for the type checkers (see
+    `ConnectivityMeta`).
+
+    Raises:
+        TypeError: If `connectivity` declares no local dimension.
+    """
+    return cast(ConnectivityMeta, connectivity)._local()
 
 
 def check_neighbor_table(
@@ -2152,7 +2181,7 @@ def check_neighbor_table(
     """
     table_type = table if isinstance(table, NeighborConnectivityType) else table.__gt_type__()
     name = connectivity.__qualname__
-    local = connectivity.Local
+    local = local_dimension_of(connectivity)
 
     def fail(reason: str) -> NoReturn:
         raise ValueError(f"The table bound to '{name}' does not match its declaration: {reason}.")
