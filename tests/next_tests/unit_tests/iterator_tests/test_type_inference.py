@@ -309,11 +309,11 @@ def expression_test_cases():
 @pytest.mark.parametrize("test_case", expression_test_cases())
 def test_expression_type(test_case):
     mesh = simple_mesh(None)
-    offset_provider_type = mesh.offset_provider_type
+    table_types = mesh.table_types
 
     testee, expected_type = test_case
     result = itir_type_inference.infer(
-        testee, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
+        testee, table_types=table_types, allow_undeclared_symbols=True
     )
     assert result.type == expected_type
 
@@ -324,17 +324,17 @@ def test_expression_type(test_case):
 )
 def test_expression_type_as_fieldop_no_domain(test_case):
     mesh = simple_mesh(None)
-    offset_provider_type = mesh.offset_provider_type
+    table_types = mesh.table_types
 
     testee_with_domain, expected_type = test_case
     result_with_domain = itir_type_inference.infer(
-        testee_with_domain, offset_provider_type=offset_provider_type, allow_undeclared_symbols=True
+        testee_with_domain, table_types=table_types, allow_undeclared_symbols=True
     )
     # testee stays as is, but we remove the domain
     testee_without_domain = im.as_fieldop(testee_with_domain.fun.args[0])(*testee_with_domain.args)
     result_without_domain = itir_type_inference.infer(
         testee_without_domain,
-        offset_provider_type=offset_provider_type,
+        table_types=table_types,
         allow_undeclared_symbols=True,
     )
     assert result_with_domain.type == result_without_domain.type == expected_type
@@ -344,9 +344,7 @@ def test_adhoc_polymorphism():
     func = im.lambda_("a")(im.lambda_("b")(im.make_tuple("a", "b")))
     testee = im.call(im.call(func)(im.ref("a_", bool_type)))(im.ref("b_", int_type))
 
-    result = itir_type_inference.infer(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    result = itir_type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
     assert result.type == ts.TupleType(types=[bool_type, int_type])
 
@@ -355,9 +353,7 @@ def test_binary_lambda():
     func = im.lambda_("a", "b")(im.make_tuple("a", "b"))
     testee = im.call(func)(im.ref("a_", bool_type), im.ref("b_", int_type))
 
-    result = itir_type_inference.infer(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    result = itir_type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
     expected_type = ts.TupleType(types=[bool_type, int_type])
     assert result.type == expected_type
@@ -373,7 +369,7 @@ def test_binary_lambda():
 
 def test_aliased_function():
     testee = im.let("f", im.lambda_("x")("x"))(im.call("f")(1))
-    result = itir_type_inference.infer(testee, offset_provider_type={})
+    result = itir_type_inference.infer(testee, table_types={})
 
     assert result.args[0].type == ts.FunctionType(
         pos_only_args=[int_type], pos_or_kw_args={}, kw_only_args={}, returns=int_type
@@ -389,7 +385,7 @@ def test_late_offset_axis():
     testee = im.call(func)(im.ensure_offset(V2EDim.tag))
 
     result = itir_type_inference.infer(
-        testee, offset_provider_type=mesh.offset_provider_type, allow_undeclared_symbols=True
+        testee, table_types=mesh.table_types, allow_undeclared_symbols=True
     )
     assert result.type == it_on_e_of_e_type
 
@@ -399,9 +395,7 @@ def test_cast_first_arg_inference():
     # easy to forget inferring the types of the first argument and its children. Simply check
     # if the first argument has a type inferred correctly here.
     testee = im.cast_(im.plus(im.literal_from_value(1), im.literal_from_value(2)), "float64")
-    result = itir_type_inference.infer(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    result = itir_type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
     assert result.args[0].type == int_type
     assert result.type == float64_type
@@ -426,7 +420,7 @@ def test_cartesian_fencil_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={})
+    result = itir_type_inference.infer(testee, table_types={})
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
@@ -459,7 +453,7 @@ def test_unstructured_fencil_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
+    result = itir_type_inference.infer(testee, table_types=mesh.table_types)
 
     program_type = it_ts.ProgramType(
         params={"inp": float_edge_k_field, "out": float_vertex_k_field}
@@ -493,7 +487,7 @@ def test_function_definition():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={})
+    result = itir_type_inference.infer(testee, table_types={})
 
     program_type = it_ts.ProgramType(params={"inp": float_i_field, "out": float_i_field})
     assert result.type == program_type
@@ -525,7 +519,7 @@ def test_fencil_with_nb_field_input():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type=mesh.offset_provider_type)
+    result = itir_type_inference.infer(testee, table_types=mesh.table_types)
     stencil = result.body[0].expr.fun.args[0]
     assert stencil.expr.args[0].type == float64_list_type
     assert stencil.type.returns == float64_type
@@ -550,7 +544,7 @@ def test_program_tuple_setat_short_target():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={})
+    result = itir_type_inference.infer(testee, table_types={})
 
     assert (
         isinstance(result.body[0].expr.type, ts.TupleType)
@@ -581,7 +575,7 @@ def test_program_setat_without_domain():
         ],
     )
 
-    result = itir_type_inference.infer(testee, offset_provider_type={})
+    result = itir_type_inference.infer(testee, table_types={})
 
     assert result.body[0].expr.type, ts.FieldType(dims=[IDim], dtype=float64_type)
 
@@ -603,9 +597,7 @@ def test_if_stmt():
         false_branch=[],
     )
 
-    result = itir_type_inference.infer(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    result = itir_type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
     assert result.cond.type == bool_type
     assert result.true_branch[0].expr.type == float_i_field
 
@@ -615,7 +607,7 @@ def test_as_fieldop_without_domain_nb_field_input():
 
     testee = im.as_fieldop(stencil)(im.ref("inp1", float_vertex_v2e_field))
     result = itir_type_inference.infer(
-        testee, offset_provider_type={V2EDim.tag: V2E}, allow_undeclared_symbols=True
+        testee, table_types={V2EDim.tag: V2E}, allow_undeclared_symbols=True
     )
     assert result.type == ts.FieldType(dims=[Vertex], dtype=float64_list_type)
     assert result.fun.args[0].type.pos_only_args[0] == it_ts.IteratorType(
@@ -632,7 +624,7 @@ def test_as_fieldop_without_domain_nb_field_input():
 def test_comparison_with_non_scalar_rhs(rhs_type):
     testee = im.less(im.ref("a", int_type), im.ref("b", rhs_type))
     with pytest.raises(AssertionError):
-        itir_type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
+        itir_type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
 
 def test_reinference():

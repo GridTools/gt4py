@@ -454,7 +454,7 @@ def test_with_local_field(unstructured_case, static_domains: bool):
         t = concat_where(Vertex < 2, a(V2E), b(V2E))
         return neighbor_sum(t, axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
@@ -477,7 +477,7 @@ def test_with_local_field_3d(unstructured_case_3d, static_domains: bool):
         t = concat_where(KDim < 2, a(V2E), b(V2E))
         return neighbor_sum(t, axis=V2EDim)
 
-    v2e_table = unstructured_case_3d.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case_3d.offset_provider[V2E].asnumpy()
     k_mask = np.arange(unstructured_case_3d.default_sizes[KDim]) < 2
     cases.verify_with_default_data(
         unstructured_case_3d,
@@ -497,7 +497,7 @@ def test_with_local_and_nonlocal_field(unstructured_case, static_domains: bool):
     def testee(a: cases.EField, b: cases.VField) -> cases.VField:
         return neighbor_sum(concat_where(Vertex < 2, a(V2E), b), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
@@ -524,7 +524,7 @@ def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
         t = concat_where(Vertex < 2, (a(V2E), b(V2E)), (c(V2E), d(V2E)))
         return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
@@ -557,7 +557,7 @@ def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
             neighbor_sum(concat_where(Vertex < 2, 3, a(V2E)), axis=V2EDim),
         )
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,
@@ -590,7 +590,7 @@ def test_with_tuples_of_local_and_nonlocal_leaves(unstructured_case, static_doma
         t = concat_where(Vertex < 2, (a(V2E), c), (3, b(V2E)))
         return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,

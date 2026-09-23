@@ -336,7 +336,7 @@ def create_global_tmps(
         keep_existing_domains=True,
     )
     program = type_inference.infer(
-        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        program, table_types=common.offset_provider_to_type(offset_provider)
     )
 
     declarations = program.declarations.copy()

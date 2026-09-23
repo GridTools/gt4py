@@ -9,6 +9,10 @@ tags: []
 - **Created**: 2024-11-08
 - **Updated**: 2026-05-27
 
+> The `FieldOffset` part of this record is superseded by
+> [ADR 0029](0029-Connectivities_As_Types.md): connectivities are declared as
+> `NeighborConnectivity` classes, and offset providers are keyed by them.
+
 The representation of Connectivities (neighbor tables, `NeighborTableOffsetProvider`) and their identifier (offset tag, `FieldOffset`, etc.) was extended and modified based on the needs of different parts of the toolchain. Here we outline the ideas for consolidating the different closely-related concepts.
 
 ## History

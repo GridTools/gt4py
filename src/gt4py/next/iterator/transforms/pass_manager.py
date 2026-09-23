@@ -151,7 +151,7 @@ def apply_common_transforms(
     #  relies on static information or `symbolic_domain_sizes`.
     assert common.is_offset_provider(offset_provider)
 
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
+    table_types = common.offset_provider_to_type(offset_provider)
 
     symbolic_domain_sizes = _process_symbolic_domains_option(
         ir, offset_provider, symbolic_domain_sizes, use_max_domain_range_on_unstructured_shift
@@ -169,15 +169,13 @@ def apply_common_transforms(
     #  test_can_deref. We didn't notice previously as FieldOpFusion did this implicitly everywhere.
     ir = inline_lifts.InlineLifts().visit(ir)
 
-    ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
-    ir = expand_tuple_maps.ExpandTupleMaps.apply(
-        ir, uids=uids, offset_provider_type=offset_provider_type
-    )
+    ir = concat_where.expand_tuple_args(ir, table_types=table_types)  # type: ignore[assignment]  # always an itir.Program
+    ir = expand_tuple_maps.ExpandTupleMaps.apply(ir, uids=uids, table_types=table_types)
     ir = dead_code_elimination.dead_code_elimination(
-        ir, uids=uids, offset_provider_type=offset_provider_type
+        ir, uids=uids, table_types=table_types
     )  # domain inference does not support dead-code
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir, offset_provider_type=offset_provider_type, uids=uids
+        ir, table_types=table_types, uids=uids
     )  # domain inference does not support dynamic offsets yet
     ir = infer_domain_ops.InferDomainOps.apply(ir)
     ir = concat_where.canonicalize_domain_argument(ir)
@@ -205,17 +203,15 @@ def apply_common_transforms(
             inlined,
             enabled_transformations=~CollapseTuple.Transformation.PROPAGATE_TO_IF_ON_TUPLES,
             uids=uids,
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
         )  # type: ignore[assignment]  # always an itir.Program
-        inlined = InlineScalar.apply(inlined, offset_provider_type=offset_provider_type)
+        inlined = InlineScalar.apply(inlined, table_types=table_types)
 
         # This pass is required to run after CollapseTuple as otherwise we can not inline
         # expressions like `tuple_get(make_tuple(as_fieldop(stencil)(...)))` where stencil returns
         # a list. Such expressions must be inlined however because no backend supports such
         # field operators right now.
-        inlined = fuse_as_fieldop.FuseAsFieldOp.apply(
-            inlined, uids=uids, offset_provider_type=offset_provider_type
-        )
+        inlined = fuse_as_fieldop.FuseAsFieldOp.apply(inlined, uids=uids, table_types=table_types)
 
         if inlined == ir:
             break
@@ -225,14 +221,12 @@ def apply_common_transforms(
 
     # breaks in test_zero_dim_tuple_arg as trivial tuple_get is not inlined
     if common_subexpression_elimination:
-        ir = CommonSubexpressionElimination.apply(
-            ir, offset_provider_type=offset_provider_type, uids=uids
-        )
+        ir = CommonSubexpressionElimination.apply(ir, table_types=table_types, uids=uids)
         ir = MergeLet().visit(ir)
         ir = InlineLambdas.apply(ir, opcount_preserving=True)
 
     if extract_temporaries:
-        ir = infer(ir, inplace=True, offset_provider_type=offset_provider_type)
+        ir = infer(ir, inplace=True, table_types=table_types)
         ir = global_tmps.create_global_tmps(
             ir,
             offset_provider=offset_provider,
@@ -247,7 +241,7 @@ def apply_common_transforms(
 
     if unroll_reduce:
         for _ in range(10):
-            unrolled = UnrollReduce.apply(ir, offset_provider_type=offset_provider_type, uids=uids)
+            unrolled = UnrollReduce.apply(ir, table_types=table_types, uids=uids)
             unrolled = CollapseListGet().visit(unrolled)
             unrolled = NormalizeShifts().visit(unrolled)
             # this is required as nested neighbor reductions can contain lifts, e.g.,
@@ -276,7 +270,7 @@ def apply_fieldview_transforms(
     #  to work with / translate domains.
     use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
 ) -> itir.Program:
-    offset_provider_type = common.offset_provider_to_type(offset_provider)
+    table_types = common.offset_provider_to_type(offset_provider)
 
     uids = utils.IDGeneratorPool()
 
@@ -287,16 +281,12 @@ def apply_fieldview_transforms(
     ir = inline_fundefs.InlineFundefs().visit(ir)
     ir = inline_fundefs.prune_unreferenced_fundefs(ir)
     # required for dead-code-elimination and `prune_empty_concat_where` pass
-    ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
-    ir = expand_tuple_maps.ExpandTupleMaps.apply(
-        ir, uids=uids, offset_provider_type=offset_provider_type
-    )
+    ir = concat_where.expand_tuple_args(ir, table_types=table_types)  # type: ignore[assignment]  # always an itir.Program
+    ir = expand_tuple_maps.ExpandTupleMaps.apply(ir, uids=uids, table_types=table_types)
 
-    ir = dead_code_elimination.dead_code_elimination(
-        ir, offset_provider_type=offset_provider_type, uids=uids
-    )
+    ir = dead_code_elimination.dead_code_elimination(ir, table_types=table_types, uids=uids)
     ir = inline_dynamic_shifts.InlineDynamicShifts.apply(
-        ir, offset_provider_type=offset_provider_type, uids=uids
+        ir, table_types=table_types, uids=uids
     )  # domain inference does not support dynamic offsets yet
 
     ir = infer_domain_ops.InferDomainOps.apply(ir)

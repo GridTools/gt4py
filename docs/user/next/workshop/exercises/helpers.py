@@ -15,9 +15,9 @@ from gt4py.next import (
     CartesianAxisIndex,
     Dimension,
     DimensionIndex,
-    LocalDimensionIndex,
     DimensionKind,
-    FieldOffset,
+    LocalDimensionIndex,
+    NeighborConnectivity,
 )
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.program_processors.runners.gtfn import (
@@ -396,31 +396,36 @@ class E(DimensionIndex): ...
 class K(CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
-class C2EDim(LocalDimensionIndex): ...
+class C2E(NeighborConnectivity[C, E]):
+    class Local(LocalDimensionIndex): ...
 
 
-C2E = FieldOffset(C2EDim.tag, source=E, target=(C, C2EDim))
+C2EDim = C2E.Local
 
 
-class V2EDim(LocalDimensionIndex): ...
+class V2E(NeighborConnectivity[V, E]):
+    class Local(LocalDimensionIndex): ...
 
 
-V2E = FieldOffset(V2EDim.tag, source=E, target=(V, V2EDim))
+V2EDim = V2E.Local
 
 
-class E2VDim(LocalDimensionIndex): ...
+class E2V(NeighborConnectivity[E, V]):
+    class Local(LocalDimensionIndex): ...
 
 
-E2V = FieldOffset(E2VDim.tag, source=V, target=(E, E2VDim))
+E2VDim = E2V.Local
 
 
-class E2CDim(LocalDimensionIndex): ...
+class E2C(NeighborConnectivity[E, C]):
+    class Local(LocalDimensionIndex): ...
 
 
-E2C = FieldOffset(E2CDim.tag, source=C, target=(E, E2CDim))
+E2CDim = E2C.Local
 
 
-class E2C2VDim(LocalDimensionIndex): ...
+class E2C2V(NeighborConnectivity[E, V]):
+    class Local(LocalDimensionIndex): ...
 
 
-E2C2V = FieldOffset(E2C2VDim.tag, source=V, target=(E, E2C2VDim))
+E2C2VDim = E2C2V.Local

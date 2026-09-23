@@ -44,9 +44,7 @@ def test_trivial(uids: utils.IDGeneratorPool):
 
     expected = im.make_tuple(im.concat_where(cond, "a", "b"), im.concat_where(cond, "c", "d"))
 
-    actual = concat_where.expand_tuple_args(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    actual = concat_where.expand_tuple_args(testee, table_types={}, allow_undeclared_symbols=True)
 
     actual = collapse_tuple.CollapseTuple.apply(
         actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids
@@ -84,9 +82,7 @@ def test_nested(uids: utils.IDGeneratorPool):
         ),
     )
 
-    actual = concat_where.expand_tuple_args(
-        testee, offset_provider_type={}, allow_undeclared_symbols=True
-    )
+    actual = concat_where.expand_tuple_args(testee, table_types={}, allow_undeclared_symbols=True)
 
     actual = collapse_tuple.CollapseTuple.apply(
         actual, allow_undeclared_symbols=True, within_stencil=False, uids=uids

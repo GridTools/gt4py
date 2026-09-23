@@ -123,7 +123,7 @@ def fuse_as_fieldop(
     expr: itir.Expr,
     eligible_args: list[bool],
     *,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
     enable_cse: bool,
     uids: utils.IDGeneratorPool,
 ) -> itir.Expr:
@@ -192,7 +192,7 @@ def fuse_as_fieldop(
     if enable_cse:
         # TODO(havogt): We should investigate how to keep the tree small without having to run CSE.
         new_node = cse.CommonSubexpressionElimination.apply(
-            new_node, within_stencil=False, uids=uids, offset_provider_type=offset_provider_type
+            new_node, within_stencil=False, uids=uids, table_types=table_types
         )
 
     return new_node
@@ -273,7 +273,7 @@ class FuseAsFieldOp(
     >>> print(
     ...     FuseAsFieldOp.apply(
     ...         nested_as_fieldop,
-    ...         offset_provider_type={},
+    ...         table_types={},
     ...         allow_undeclared_symbols=True,
     ...         uids=utils.IDGeneratorPool(),
     ...     )
@@ -301,7 +301,7 @@ class FuseAsFieldOp(
     enabled_transformations = Transformation.all()
 
     uids: utils.IDGeneratorPool
-    offset_provider_type: common.TableTypes
+    table_types: common.TableTypes
     enable_cse: bool  # option to disable is mainly for testing purposes
 
     @classmethod
@@ -309,7 +309,7 @@ class FuseAsFieldOp(
         cls,
         node: itir.Program,
         *,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         uids: utils.IDGeneratorPool,
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,
@@ -320,7 +320,7 @@ class FuseAsFieldOp(
 
         node = type_inference.infer(
             node,
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
             allow_undeclared_symbols=allow_undeclared_symbols,
         )
 
@@ -330,7 +330,7 @@ class FuseAsFieldOp(
         new_node = cls(
             uids=uids,
             enabled_transformations=enabled_transformations,
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
             enable_cse=enable_cse,
         ).visit(node, within_set_at_expr=within_set_at_expr)
         # The `FuseAsFieldOp` pass does not fully preserve the type information yet. In particular
@@ -338,7 +338,7 @@ class FuseAsFieldOp(
         # everything here ensuring later passes can use the information.
         new_node = type_inference.infer(
             new_node,
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
             allow_undeclared_symbols=allow_undeclared_symbols,
         )
         return new_node
@@ -421,7 +421,7 @@ class FuseAsFieldOp(
                         node,
                         eligible_els,
                         uids=self.uids,
-                        offset_provider_type=self.offset_provider_type,
+                        table_types=self.table_types,
                         enable_cse=self.enable_cse,
                     ),
                     **{**kwargs, "recurse": False},

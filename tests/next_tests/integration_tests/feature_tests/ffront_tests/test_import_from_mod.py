@@ -60,7 +60,7 @@ def test_import_offset_module_unstructured_shift(unstructured_case):
     def testee(a: cases.EField) -> cases.VField:
         return neighbor_sum(a(cases.V2E), axis=cases.V2EDim)
 
-    v2e_table = unstructured_case.offset_provider[cases.V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[cases.V2E].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         testee,
@@ -77,7 +77,7 @@ def test_import_offset_module_sparse_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: a[unstructured_case.offset_provider[cases.E2VDim.tag].asnumpy()[:, 0]],
+        ref=lambda a: a[unstructured_case.offset_provider[cases.E2V].asnumpy()[:, 0]],
     )
 
 

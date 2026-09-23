@@ -24,6 +24,7 @@ from gt4py.next.common import (
     DimensionIndex,
     LocalDimensionIndex,
     DimensionKind,
+    LocalDimensionIndex,
     Domain,
     Infinity,
     UnitRange,

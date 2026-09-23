@@ -20,7 +20,7 @@ def test_prune_casts_simple():
     x_ref = im.ref("x", ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     y_ref = im.ref("y", ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     testee = im.plus(im.cast_(x_ref, "float64"), im.cast_(y_ref, "float64"))
-    testee = type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
+    testee = type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
     expected = im.plus(im.cast_(x_ref, "float64"), y_ref)
     actual = PruneCasts.apply(testee)
@@ -34,7 +34,7 @@ def test_prune_casts_fieldop():
         im.cast_as_fieldop("float64")(x_ref),
         im.cast_as_fieldop("float64")(y_ref),
     )
-    testee = type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
+    testee = type_inference.infer(testee, table_types={}, allow_undeclared_symbols=True)
 
     expected = im.op_as_fieldop("plus")(
         im.cast_as_fieldop("float64")(x_ref),

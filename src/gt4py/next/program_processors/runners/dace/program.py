@@ -65,7 +65,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             program,
         )
         object.__setattr__(
-            gtir_stage.args, "offset_provider", gtir_stage.args.offset_provider_type
+            gtir_stage.args, "offset_provider", gtir_stage.args.table_types
         )  # TODO(ricoh): currently this is circumventing the frozenness of CompileTimeArgs
         # in order to isolate DaCe from the runtime tables in connectivities.offset_provider.
         # These are needed at the time of writing for mandatory GTIR passes.
@@ -167,27 +167,21 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # Build the closure dictionary
         closure_dict: dict[str, dace.data.Array] = {}
-        offset_provider_type = gtx_common.offset_provider_to_type(
-            self.compilation_options.connectivities
-        )
+        table_types = gtx_common.offset_provider_to_type(self.compilation_options.connectivities)
         for conn_id, conn in used_connectivities.items():
             if conn_id not in self.connectivity_tables_data_descriptors:
                 self.connectivity_tables_data_descriptors[conn_id] = dace.data.Array(
                     dtype=dace.dtypes.dtype_to_typeclass(conn.dtype.dtype.type),
                     shape=[
-                        gtx_dace_args.field_size_symbol(
-                            conn_id, conn.domain.dims[0], offset_provider_type
-                        ),
-                        gtx_dace_args.field_size_symbol(
-                            conn_id, conn.domain.dims[1], offset_provider_type
-                        ),
+                        gtx_dace_args.field_size_symbol(conn_id, conn.domain.dims[0], table_types),
+                        gtx_dace_args.field_size_symbol(conn_id, conn.domain.dims[1], table_types),
                     ],
                     strides=[
                         gtx_dace_args.field_stride_symbol(
-                            conn_id, conn.domain.dims[0], offset_provider_type
+                            conn_id, conn.domain.dims[0], table_types
                         ),
                         gtx_dace_args.field_stride_symbol(
-                            conn_id, conn.domain.dims[1], offset_provider_type
+                            conn_id, conn.domain.dims[1], table_types
                         ),
                     ],
                     storage=Program.connectivity_tables_data_descriptors["storage"],

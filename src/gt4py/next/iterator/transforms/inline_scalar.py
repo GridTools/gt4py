@@ -19,8 +19,8 @@ class InlineScalar(eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
     @classmethod
-    def apply(cls, program: itir.Program, offset_provider_type: common.TableTypes):
-        program = itir_inference.infer(program, offset_provider_type=offset_provider_type)
+    def apply(cls, program: itir.Program, table_types: common.TableTypes):
+        program = itir_inference.infer(program, table_types=table_types)
         return cls().visit(program)
 
     def generic_visit(self, node, **kwargs):

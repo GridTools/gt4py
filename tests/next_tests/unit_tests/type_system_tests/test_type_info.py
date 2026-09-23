@@ -16,6 +16,7 @@ from gt4py.next import (
     DimensionIndex,
     LocalDimensionIndex,
     DimensionKind,
+    LocalDimensionIndex,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.ffront import type_specifications as ts_ffront

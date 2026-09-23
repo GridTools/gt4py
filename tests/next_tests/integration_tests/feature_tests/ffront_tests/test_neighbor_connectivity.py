@@ -42,7 +42,7 @@ class V2EShared(gtx.NeighborConnectivity[V, E]):
 @pytest.fixture
 def case(exec_alloc_descriptor):
     mesh = cases_utils.simple_mesh(exec_alloc_descriptor.allocator)
-    v2e_arr = mesh.offset_provider[cases_utils.V2EDim.tag].asnumpy()
+    v2e_arr = mesh.offset_provider[cases_utils.V2E].asnumpy()
     table = constructors.as_connectivity(
         domain={V: v2e_arr.shape[0], V2E.Local: v2e_arr.shape[1]},
         codomain=E,
@@ -65,9 +65,7 @@ def case(exec_alloc_descriptor):
             if isinstance(exec_alloc_descriptor, test_defs.EmbeddedDummyBackend)
             else exec_alloc_descriptor
         ),
-        # NOTE: still keyed on the local dimension's tag; class keys come with the removal of
-        # `FieldOffset`.
-        offset_provider={V2E.offset_tag: table, V2EShared.offset_tag: shared_table},
+        offset_provider={V2E: table, V2EShared: shared_table},
         default_sizes={V: mesh.num_vertices, E: mesh.num_edges, V2E.Local: v2e_arr.shape[1]},
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=exec_alloc_descriptor.allocator,
@@ -75,7 +73,7 @@ def case(exec_alloc_descriptor):
 
 
 def _table(case: cases.Case, connectivity=V2E) -> np.ndarray:
-    return case.offset_provider[connectivity.offset_tag].asnumpy()
+    return case.offset_provider[connectivity].asnumpy()
 
 
 @pytest.mark.uses_unstructured_shift
@@ -148,9 +146,7 @@ def test_reduction_through_a_shared_local_dimension(case):
 @pytest.fixture
 def case_without_owner(case):
     """Only the sharing connectivity is bound: enough for a shift, which needs only its table."""
-    return dataclasses.replace(
-        case, offset_provider={V2EShared.offset_tag: case.offset_provider[V2EShared.offset_tag]}
-    )
+    return dataclasses.replace(case, offset_provider={V2EShared: case.offset_provider[V2EShared]})
 
 
 @pytest.mark.uses_unstructured_shift
