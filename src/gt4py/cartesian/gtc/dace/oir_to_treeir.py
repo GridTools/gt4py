@@ -34,7 +34,7 @@ DEFAULT_STORAGE_TYPE = {
 def _resolve_map_schedule(device_type: dtypes.DeviceType) -> dtypes.ScheduleType:
     """Optimal kernel schedule type based on target device."""
     if device_type == dtypes.DeviceType.GPU:
-        match gt_config.DACE_DEFAULT_BLOCK_SIZE:
+        match gt_config.DACE_PARALLEL_VERTICAL_LOOP_SCHEDULE:
             case "gpu_device":
                 return dtypes.ScheduleType.GPU_Device
             case "gpu_threadblock":
