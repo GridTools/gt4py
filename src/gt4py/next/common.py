@@ -2114,6 +2114,11 @@ class NeighborConnectivity[Origin: DimensionIndex, Codomain: DimensionIndex](
                 " ('class Local(LocalDimensionIndex): ...') or by adopting one"
                 " ('Local: TypeAlias = SomeLocalDim')."
             )
+        if local is ConstListDim:
+            raise TypeError(
+                f"'{name}' cannot adopt '{ConstListDim.__qualname__}': it is the local dimension"
+                " of 'make_const_list' results and belongs to no connectivity."
+            )
         max_neighbors = _check_neighbor_count(cls, "max_neighbors", max_neighbors)
         min_neighbors = _check_neighbor_count(cls, "min_neighbors", min_neighbors)
         # NOTE: a declaration whose tag is the owner's is a *redefinition* of it (a re-run

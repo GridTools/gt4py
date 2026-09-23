@@ -154,7 +154,7 @@ def make_node(o):
         assert o.offset == 0
         return im.cartesian_offset(o.domain_dim, o.codomain)
     if isinstance(o, common.ConnectivityMeta):
-        return OffsetLiteral(value=o.Local.tag)
+        return OffsetLiteral(value=common.local_dimension_of(o).tag)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)

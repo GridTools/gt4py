@@ -500,3 +500,13 @@ class TestFieldOffsetDeprecation:
         class_ns["C2E"].__gt_field_offset__()
         FieldOffset("Koff", source=KDim, target=(KDim,))
         assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]
+
+
+def test_the_const_list_dimension_cannot_be_adopted():
+    with pytest.raises(TypeError, match="cannot adopt"):
+        _declare(
+            """
+            class C(NeighborConnectivity[Vertex, Edge]):
+                Local: typing.TypeAlias = ConstListDim
+            """
+        )

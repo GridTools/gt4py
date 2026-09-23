@@ -1452,7 +1452,7 @@ def _as_offset_tag(
     offset: runtime.Offset | type[common.NeighborConnectivity] | OffsetPart,
 ) -> OffsetPart:
     if isinstance(offset, common.ConnectivityMeta):
-        return offset.Local.tag
+        return common.local_dimension_of(offset).tag
     return offset.value if isinstance(offset, runtime.Offset) else offset
 
 

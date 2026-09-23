@@ -8,6 +8,8 @@
 
 """A `NeighborConnectivity` declaration used directly in DSL code, on every backend."""
 
+import typing
+
 import numpy as np
 import pytest
 
@@ -33,7 +35,7 @@ class V2E(gtx.NeighborConnectivity[V, E], max_neighbors=4, min_neighbors=4):
 
 #: A second connectivity over the same neighbor axis, bound to a different table.
 class V2EShared(gtx.NeighborConnectivity[V, E]):
-    Local = V2E.Local
+    Local: typing.TypeAlias = V2E.Local
 
 
 @pytest.fixture

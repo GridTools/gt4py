@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import typing
+
 import pytest
 
 import gt4py.next as gtx
@@ -28,7 +30,7 @@ CartesianOffset = gtx.FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
 
 
 class UnstructuredOffset(gtx.NeighborConnectivity[Dim, Dim]):
-    Local = LocalDim
+    Local: typing.TypeAlias = LocalDim
 
 
 def test_domain_deduction_cartesian():
