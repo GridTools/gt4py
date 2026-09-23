@@ -49,12 +49,15 @@ and skip values were never checked against the `FieldOffset` declaration.
 - The local dimension is the nested class `Local`, a subclass of
   `LocalDimensionIndex`. Declaring it is required, and `NeighborConnectivity`
   sets `Local.owner` to the connectivity when the class is created. A local
-  dimension can have at most one owner.
+  dimension can have at most one owner; a declaration redefined under the same
+  name (a re-run notebook cell) takes ownership over again, and for a local
+  dimension adopted rather than nested, the first declaration wins.
 - A local dimension with no table, such as the coefficient axis of a fixed-size
   stencil, is declared on its own: `class LsqCoeff(LocalDimensionIndex, size=3)`.
   Its `owner` is `None`. A declaration can also *adopt* such a module-level local
-  dimension (`Local = LsqCoeff`), which then keeps its own tag.
-- A connectivity can *share* another one's local dimension, `Local = C2E.Local`.
+  dimension, written `Local: TypeAlias = LsqCoeff`, which then keeps its own tag.
+- A connectivity can *share* another one's local dimension,
+  `Local: TypeAlias = C2E.Local`.
   This is the flattened sparse pattern, e.g. cell-to-cell-edge (`C2CE: Cell -> CellEdge`) indexing the same neighbor axis as `C2E`, so that its results
   combine with `C2E`-shaped sparse fields. The owner stays `C2E`, and the
   neighbor counts and skip-value structure are the owner's.
@@ -90,15 +93,24 @@ tree already distinguishes local dimensions by a runtime `kind` check, so it
 keeps doing so; generic constructors whose parameter must be a primary dimension
 (`NeighborConnectivity[Origin, Codomain]`, `Staggered[D]`) check it at runtime.
 
-### How the base reaches `Local`
+### `Local` is not annotated anywhere
 
-The base class declares `Local: ClassVar[type[LocalDimensionIndex]]` as an
-annotation only. A real nested class on the base would be an incompatible
-override for pyright in every declaration. The annotation makes `conn.Local` a
-value of type `type[LocalDimensionIndex]` for library code taking any
-connectivity; it does not make `conn.Local` usable as an *annotation* when
-`conn` is generic, which no checker allows. Code that needs to name a local
-dimension generically uses a `TypeVar` bound to `LocalDimensionIndex`.
+Neither `NeighborConnectivity` nor `ConnectivityMeta` annotates `Local`, and
+that is load-bearing: an annotation makes a declaration's `Local` a *variable*
+for the checkers, so `Field[Dims[Vertex, V2E.Local], float]` is rejected by
+pyright ("Variable not allowed in type expression") for a nested `Local`, and by
+mypy ("not valid as a type") for an adopted or shared one. A real nested `Local`
+on the base is not an option either: pyright reports an incompatible override in
+every declaration. With no annotation, all three spellings are types for both
+checkers, which `typing_tests/pyright_probes.py` pins for pyright and
+`typing_tests/test_next.yaml` for mypy.
+
+The cost is that `conn.Local` is not an attribute the checkers know for a
+*generic* `conn`. Library code reads it through `common.local_dimension_of(conn)`
+instead, and code that has to name a local dimension generically uses a
+`TypeVar` bound to `LocalDimensionIndex`. Writing an adopted or shared local as
+`Local: TypeAlias = ...` (rather than a plain assignment) is what keeps mypy
+treating it as a type.
 
 ### Frontend integration
 

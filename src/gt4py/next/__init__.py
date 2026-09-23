@@ -41,6 +41,7 @@ from .common import (
     domain,
     flip_staggered,
     is_staggered,
+    local_dimension_of,
     resolve,
     unit_range,
 )
@@ -140,6 +141,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "unit_range",
     "UnitRange",
     "is_staggered",
+    "local_dimension_of",
     "flip_staggered",
     "as_non_staggered",
     # from constructors

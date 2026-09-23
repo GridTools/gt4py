@@ -235,14 +235,15 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     # by what it declares: redefining `V2E` under the same name with other dimensions or counts
     # (e.g. re-running a notebook cell) must not reuse artifacts built for the old declaration.
     common.ConnectivityMeta: lambda obj: (
-        # NOTE: the name goes into the state unverified; importability is still enforced by the
-        # strict fingerprinter through `obj.Local`, which is a class nested in `obj`.
+        # NOTE: the name goes into the state unverified; the local dimension is fingerprinted as a
+        # class, so the strict fingerprinter still checks *its* importability (which is the
+        # connectivity's own, for a nested `Local`, and another module's for a shared one).
         Deconstruction.from_pieces(
             obj.origin,
             obj.codomain,
-            obj.Local,
-            obj.Local.max_neighbors,
-            obj.Local.min_neighbors,
+            common.local_dimension_of(obj),
+            common.local_dimension_of(obj).max_neighbors,
+            common.local_dimension_of(obj).min_neighbors,
             state=b"neighbor_connectivity\0" + obj.tag.encode(),
         )
         if "Local" in obj.__dict__
