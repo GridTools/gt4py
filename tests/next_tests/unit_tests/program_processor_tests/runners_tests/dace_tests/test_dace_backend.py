@@ -299,6 +299,33 @@ def test_make_toolchain_uncached_translation():
     assert isinstance(toolchain.backend.translation, dace_wf_translation.DaCeTranslator)
 
 
+@pytest.mark.parametrize(
+    "toolchain",
+    [
+        dace_wf_backend.run_dace_cpu,
+        dace_wf_backend.run_dace_cpu_noopt,
+        dace_wf_backend.run_dace_gpu,
+        dace_wf_backend.run_dace_gpu_noopt,
+    ],
+    ids=lambda t: t.name,
+)
+def test_prebuilt_toolchains_declare_one_device(toolchain):
+    # The construction-time device checks only see steps that declare a device;
+    # this keeps them active for the pre-built toolchains.
+    assert toolchain.backend.device_type is not None
+    assert toolchain.backend.device_type is toolchain.allocator.__gt_device_type__
+
+
+def test_replaced_translation_must_target_the_pipeline_device():
+    pipeline = dace_wf_backend.run_dace_cpu.backend
+    gpu_translation = dataclasses.replace(
+        pipeline.translation.step, device_type=core_defs.DeviceType.CUDA
+    )
+
+    with pytest.raises(ValueError, match="must target the same device"):
+        dataclasses.replace(pipeline, translation=gpu_translation)
+
+
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
     # Helper function to ignore the GPU device initialization code in the generated
     # cuda code, which is not relevant to the test.

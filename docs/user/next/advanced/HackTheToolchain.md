@@ -70,6 +70,33 @@ pure_cpp2_pipeline = gtfn.make_gtfn_compile_workflow(
 )
 ```
 
+An existing pipeline, such as the one of a pre-built toolchain, can also be varied after the fact with `dataclasses.replace`. Unlike a step builder, a step passed this way is used exactly as given, with two consequences:
+
+- **Caching is not carried over.** The builders wrap the translation step in a persistent `CachedStep`. Replacing `translation` replaces that wrapper as well, so the variant does not cache translations unless you wrap the new step yourself. Passing a step builder instead keeps the caching.
+- **Device agreement is checked, but only for steps that declare a device.** If a step has a `device_type` attribute, it must match every other step that declares one, and the toolchain's allocator. `CompilePipeline` and `Toolchain` check this whenever they are constructed, `dataclasses.replace` included, and raise a `ValueError` on a mismatch. Steps without a `device_type`, like `MyCodeGen` above, are not checked, so keeping them consistent is up to you.
+
+```python
+from gt4py.next import fingerprinting
+
+gtfn_pipeline = gtx.program_processors.runners.gtfn.run_gtfn.backend
+cached_translation = gtfn_pipeline.translation  # a `CachedStep` around the translation step
+no_transforms = dataclasses.replace(cached_translation.step, enable_itir_transforms=False)
+
+uncached_variant = dataclasses.replace(gtfn_pipeline, translation=no_transforms)
+cached_variant = dataclasses.replace(
+    gtfn_pipeline,
+    translation=workflow.CachedStep.in_memory(
+        step=no_transforms, input_fingerprinter=fingerprinting.strict_fingerprinter
+    ),
+)
+
+gpu_translation = dataclasses.replace(cached_translation.step, device_type=gtx.DeviceType.CUDA)
+try:
+    dataclasses.replace(gtfn_pipeline, translation=gpu_translation)
+except ValueError as error:
+    print(error)
+```
+
 ## Invent new Pipeline Types
 
 A pipeline is just a frozen dataclass of steps with an explicit, fully typed `__call__`. Nothing else is needed, so a non-linear shape is written the same way as a linear one.

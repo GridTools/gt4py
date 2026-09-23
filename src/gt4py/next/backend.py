@@ -196,6 +196,28 @@ class Transforms:
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
+def _declared_device_type(step: Any) -> core_defs.DeviceType | None:
+    """
+    Return the device a step declares it is configured for, if any.
+
+    A step declares its device through a `device_type` attribute (the
+    `workflow.DeviceConfigurable` protocol); `CachedStep` wrappers are looked
+    through, since caching does not change the device of the wrapped step.
+
+    Args:
+        step: Any step. For a `CompilePipeline` this is the device its steps
+            agree on.
+
+    Returns:
+        The declared device, or `None` if the step declares none.
+    """
+    while isinstance(step, workflow.CachedStep):
+        step = step.step
+    if isinstance(step, CompilePipeline):
+        return step.device_type
+    return step.device_type if isinstance(step, workflow.DeviceConfigurable) else None
+
+
 @dataclasses.dataclass(frozen=True)
 class CompilePipeline:
     """
@@ -204,12 +226,50 @@ class CompilePipeline:
     Turns a `CompilableProgram` into a loadable compilation artifact through
     source-code translation, bindings generation and compilation, emitting
     `stage_hook` after each step. Customization is composition-time: build a
-    variant with `dataclasses.replace(pipeline, translation=...)`.
+    variant with `dataclasses.replace(pipeline, translation=...)`. The
+    replacement is used as given: if the replaced step was wrapped in a
+    `CachedStep`, the variant is uncached unless the new step is wrapped too.
+
+    The steps that declare a device (see `device_type`) must all declare the
+    same one. This is checked on construction, so it holds on every route to a
+    pipeline, `dataclasses.replace` included. Steps that declare no device are
+    not checked.
     """
 
     translation: stages.TranslationStep
     bindings: workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]
     compilation: stages.CompilationStep
+
+    def __post_init__(self) -> None:
+        declared = self._declared_device_types()
+        if len(set(declared.values())) > 1:
+            steps = ", ".join(f"'{name}' for '{device.name}'" for name, device in declared.items())
+            raise ValueError(
+                f"The steps of a 'CompilePipeline' must target the same device, got {steps}."
+            )
+
+    def _declared_device_types(self) -> dict[str, core_defs.DeviceType]:
+        steps = {
+            "translation": self.translation,
+            "bindings": self.bindings,
+            "compilation": self.compilation,
+        }
+        return {
+            name: device
+            for name, step in steps.items()
+            if (device := _declared_device_type(step)) is not None
+        }
+
+    @property
+    def device_type(self) -> core_defs.DeviceType | None:
+        """
+        The device the steps are configured for.
+
+        A step declares its device through a `device_type` attribute (the
+        `workflow.DeviceConfigurable` protocol), looking through `CachedStep`.
+        `None` if no step declares one.
+        """
+        return next(iter(self._declared_device_types().values()), None)
 
     def __call__(self, program: stages.CompilableProgram) -> artifacts.CompilationArtifact:
         """
@@ -244,6 +304,11 @@ class Toolchain(Generic[core_defs.DeviceTypeT]):
     directly-callable program; toolchains needing to inject backend-specific
     runtime data supply their own step here. The `allocator` describes the
     device the compiled program expects its buffers on.
+
+    If both the allocator and the `backend` declare a device (for a
+    `CompilePipeline`, see `CompilePipeline.device_type`), they must be the
+    same. This is checked on construction, so it also holds for a variant built
+    with `dataclasses.replace`.
     """
 
     name: str
@@ -253,6 +318,17 @@ class Toolchain(Generic[core_defs.DeviceTypeT]):
     loading: workflow.Step[artifacts.CompilationArtifact, artifacts.ExecutableProgram] = (
         dataclasses.field(default=artifacts.load_artifact)
     )
+
+    def __post_init__(self) -> None:
+        if not next_allocators.is_field_allocator(self.allocator):
+            return
+        allocator_device = self.allocator.__gt_device_type__
+        backend_device = _declared_device_type(self.backend)
+        if backend_device is not None and allocator_device is not backend_device:
+            raise ValueError(
+                f"Toolchain '{self.name}' allocates buffers on '{allocator_device.name}',"
+                f" but its backend targets '{backend_device.name}'."
+            )
 
     def compile(
         self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
