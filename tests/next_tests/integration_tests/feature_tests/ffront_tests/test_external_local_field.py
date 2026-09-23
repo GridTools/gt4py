@@ -118,14 +118,20 @@ def test_write_local_field(unstructured_case):
     def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
         return inp(V2E)
 
-    out = unstructured_case.as_field(
-        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].asnumpy())
-    )
+    v2e = unstructured_case.offset_provider["V2E"]
+    v2e_table = v2e.asnumpy()
+    out = unstructured_case.as_field([Vertex, V2EDim], np.zeros_like(v2e_table))
     inp = cases.allocate(unstructured_case, testee, "inp")()
+    valid = v2e_table != v2e.skip_value
+
+    def allclose_at_valid_entries(ref, out):
+        return np.allclose(ref[valid], out[valid])
+
     cases.verify(
         unstructured_case,
         testee,
         inp,
         out=out,
-        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].asnumpy()],
+        ref=inp.asnumpy()[v2e_table],
+        comparison=allclose_at_valid_entries,
     )
