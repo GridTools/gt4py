@@ -26,7 +26,9 @@ from gt4py.next import (
     float64,
     int32,
     int64,
+    field_operator,
     neighbor_sum,
+    scan,
     where,
 )
 from gt4py.next.ffront.experimental import concat_where
@@ -798,3 +800,75 @@ def test_concat_where_wrong_structure_nested():
         match="Second and third argument to 'concat_where' must have the same tuple/collection structure",
     ):
         parsed = FieldOperatorParser.apply_to_function(testee)
+
+
+KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+
+
+@field_operator
+def _scan_pass(carry: float, inp: float) -> float:
+    return carry + inp
+
+
+def test_scan_call():
+    def scan_call(a: Field[[TDim, KDim], float64]) -> Field[[TDim, KDim], float64]:
+        return scan(_scan_pass, init=0.0)(a)
+
+    parsed = FieldOperatorParser.apply_to_function(scan_call)
+
+    assert parsed.type.returns == ts.FieldType(
+        dims=[TDim, KDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+
+
+def test_scan_call_not_called():
+    def scan_not_called(a: Field[[TDim, KDim], float64]) -> Field[[TDim, KDim], float64]:
+        op = scan(_scan_pass, axis=KDim)
+        return a
+
+    with pytest.raises(
+        errors.DSLError, match=r"'scan' creates a scan operator which must be called"
+    ):
+        _ = FieldOperatorParser.apply_to_function(scan_not_called)
+
+
+def test_scan_call_axis_not_inferable():
+    def no_vertical_dim(a: Field[[TDim], float64]) -> Field[[TDim, KDim], float64]:
+        return scan(_scan_pass)(a)
+
+    with pytest.raises(errors.DSLError, match=r"Cannot infer the 'axis' of 'scan'"):
+        _ = FieldOperatorParser.apply_to_function(no_vertical_dim)
+
+
+def test_scan_call_non_vertical_axis():
+    def non_vertical_axis(a: Field[[TDim, KDim], float64]) -> Field[[TDim, KDim], float64]:
+        return scan(_scan_pass, axis=TDim)(a)
+
+    with pytest.raises(errors.DSLError, match=r"'axis' to 'scan' must be a vertical dimension"):
+        _ = FieldOperatorParser.apply_to_function(non_vertical_axis)
+
+
+def test_scan_call_non_constant_init():
+    def non_constant_init(
+        a: Field[[TDim, KDim], float64], init: float64
+    ) -> Field[[TDim, KDim], float64]:
+        return scan(_scan_pass, axis=KDim, init=init)(a)
+
+    with pytest.raises(errors.DSLError, match=r"'init' to 'scan' must be a compile-time constant"):
+        _ = FieldOperatorParser.apply_to_function(non_constant_init)
+
+
+def test_scan_call_wrong_init_type():
+    def wrong_init_type(a: Field[[TDim, KDim], float64]) -> Field[[TDim, KDim], float64]:
+        return scan(_scan_pass, axis=KDim, init=0)(a)
+
+    with pytest.raises(errors.DSLError, match=r"Argument 'init' to scan operator '_scan_pass'"):
+        _ = FieldOperatorParser.apply_to_function(wrong_init_type)
+
+
+def test_scan_call_pass_not_a_field_operator():
+    def pass_is_builtin(a: Field[[TDim, KDim], float64]) -> Field[[TDim, KDim], float64]:
+        return scan(where, axis=KDim)(a)
+
+    with pytest.raises(errors.DSLError, match=r"The scan pass must be a field operator"):
+        _ = FieldOperatorParser.apply_to_function(pass_is_builtin)
