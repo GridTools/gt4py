@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import ast
+from enum import IntEnum, StrEnum, Enum
 import inspect
 import functools
 import textwrap
@@ -252,7 +254,7 @@ class TestInlinedExternals:
             "other_call",
             "func",
             "another_const",
-            "test_gtscript_frontend.func_nested.func_deeply_nested",
+            "cartesian_tests.unit_tests.frontend_tests.test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
@@ -1924,10 +1926,6 @@ class TestGlobalTablesWithDataDimensions:
                 module=self.__class__.__name__,
             )
 
-    @pytest.mark.xfail(
-        reason="IR validation expects ddim sizes to be of type `int`",
-        raises=gt_frontend.GTScriptSyntaxError,
-    )
     def test_ddims_with_numpy_type(self) -> None:
         def data_dims_with_numpy_int_type(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
@@ -2480,3 +2478,93 @@ class TestIteratorAccess:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+
+class TestEllipsisNodeDetection:
+    # 'ast.Ellipsis' is removed in Python 3.14 and 'types.EllipsisType' is the type of
+    # the '...' object rather than of its AST node, so this must not go back to being
+    # an 'isinstance()' check against either of them.
+    @pytest.mark.parametrize(
+        "source, expected", [("...", True), ("1", False), ("None", False), ("x", False)]
+    )
+    def test_is_ellipsis_node(self, source, expected):
+        node = ast.parse(source, mode="eval").body
+        assert gt_frontend._is_ellipsis_node(node) is expected
+
+    def test_ellipsis_interval_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b = field_a
+
+        parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_ellipsis_index_does_not_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b[...] = field_a
+
+        with pytest.raises(GTScriptSyntaxError):
+            parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+
+@gtscript.enum
+class LocalEnum(IntEnum):
+    A = 42
+    B = 1000
+
+
+class TestEnum:
+    def setup_method(self):
+        def enum(field: gtscript.Field[float], order: LocalEnum):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                if order > LocalEnum.A:
+                    field[0, 0, 0] = LocalEnum.B
+
+        self.stencil = enum
+
+    @pytest.mark.parametrize("integer_precision", [32, 64])
+    def test_enum_in_stencil(self, integer_precision):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=integer_precision,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].condition.rhs, nodes.ScalarLiteral)
+        assert def_ir.computations[0].body.stmts[0].condition.rhs.value == LocalEnum.A
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].main_body.stmts[0].value, nodes.ScalarLiteral
+        )
+        assert def_ir.computations[0].body.stmts[0].main_body.stmts[0].value.value == LocalEnum.B
+
+    def test_enum_bad_definitions(self):
+
+        @gtscript.enum
+        class MyTestEnum(IntEnum):
+            A = 0
+
+        with pytest.raises(
+            ValueError,
+            match="Enum names must be unique. @gtscript.enum MyTestEnum is already taken*",
+        ):
+
+            @gtscript.enum
+            class MyTestEnum(IntEnum):
+                B = 0
+
+        with pytest.raises(
+            ValueError, match="Enum BadEnumTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadEnumTestEnum(Enum):
+                B = 0.0
+
+        with pytest.raises(
+            ValueError, match="Enum BadStrTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadStrTestEnum(StrEnum):
+                C = "meh"

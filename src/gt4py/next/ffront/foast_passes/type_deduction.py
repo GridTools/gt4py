@@ -155,8 +155,10 @@ def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> d
         ],
         "notes": ["GT4Py does not implicitly convert between datatypes."],
         "hints": [
-            "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
-            "or make the datatypes of the inputs match."
+            (
+                "Convert one operand explicitly, e.g. 'astype(<expr>, float64)', "
+                "or make the datatypes of the inputs match."
+            )
         ],
     }
 
@@ -351,8 +353,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         location=old_target.location,
                     )
                 else:
-                    new_type = values.type.types[index]
-                    assert isinstance(new_type, ts.DataType)
+                    element_type = values.type.types[index]
+                    assert isinstance(element_type, ts.DataType)
+                    new_type = element_type
                     new_target = self.visit(
                         old_target, refine_type=new_type, location=old_target.location, **kwargs
                     )
@@ -453,13 +456,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         f"Tuples need to be indexed with literal integers, got '{node.index}'.",
                     ) from ex
                 new_type = types[index]
-            case ts.OffsetType(source=source, target=(target1, target2)):
+            case ts.OffsetType(source=source, target=(target1, target2), tag=tag):
                 if not target2.kind == DimensionKind.LOCAL:
                     raise errors.DSLError(
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
-                new_type = ts.OffsetType(source=source, target=(target1,))
-            case ts.OffsetType(source=source, target=(target,)):
+                new_type = ts.OffsetType(source=source, target=(target1,), tag=tag)
+            case ts.OffsetType(source=source, target=(target,), tag=tag):
                 # for cartesian axes (e.g. I, J) the index of the subscript only
                 #  signifies the displacement in the respective dimension,
                 #  but does not change the target type.
@@ -467,6 +470,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     raise errors.DSLError(
                         new_value.location,
                         "Source and target must be equal for offsets with a single target.",
+                    )
+                if tag is None:
+                    raise errors.DSLError(
+                        new_value.location,
+                        "Cannot index a dimension shift.",
+                        notes=[
+                            (
+                                "A shift written as 'Dim + offset' already contains its"
+                                " displacement, unlike a 'FieldOffset', which is indexed to"
+                                " choose one."
+                            )
+                        ],
+                        hints=[f"Write the displacement directly, e.g. '{source.value} + 1'."],
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
@@ -632,9 +648,11 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     hints = []
                     if node.op not in logical_ops and type_info.is_logical(arg.type):
                         hints = [
-                            "To select values based on a boolean mask, use 'where(mask, a, b)'. "
-                            "To compute with a boolean field, convert it explicitly, "
-                            "e.g. 'astype(mask, int32)'."
+                            (
+                                "To select values based on a boolean mask, use 'where(mask, a, b)'. "
+                                "To compute with a boolean field, convert it explicitly, "
+                                "e.g. 'astype(mask, int32)'."
+                            )
                         ]
                     raise errors.DSLError(
                         arg.location,
@@ -694,8 +712,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
                     f"'{left.type.dim.value}'.",
                     hints=[
-                        "Use an integer offset to shift within the dimension, or a half-integer "
-                        "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                        (
+                            "Use an integer offset to shift within the dimension, or a half-integer "
+                            "offset such as '0.5' or '-1.5' to shift to the staggered dimension."
+                        )
                     ],
                 )
             conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
@@ -762,7 +782,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
-            pass
+            for arg in new_args:
+                # A Cartesian `FieldOffset` shifts by the index it is subscripted with, so it
+                # carries no displacement on its own. Only an offset with a local dimension is
+                # meaningful unsubscripted, as the neighbor access `field(Off)`.
+                if (
+                    isinstance(arg, (foast.Name, foast.Attribute))
+                    and isinstance(arg.type, ts.OffsetType)
+                    and len(arg.type.target) == 1
+                ):
+                    raise errors.DSLError(
+                        arg.location,
+                        f"Cannot shift by the Cartesian offset '{arg!s}' without an index.",
+                        hints=[f"Give the displacement, e.g. '{arg!s}[1]'."],
+                    )
         elif isinstance(new_func.type, ts.DimensionType):
             assert new_func.type.dim.kind == DimensionKind.LOCAL
             return foast.Call(
@@ -864,8 +897,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             try:
-                return_type = type_info.promote(
-                    *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                return_type = cast(
+                    # a `ListType` only occurs at the ITIR level, never in the frontend
+                    ts.FieldType | ts.ScalarType,
+                    type_info.promote(
+                        *((cast(ts.FieldType | ts.ScalarType, arg.type)) for arg in node.args)
+                    ),
                 )
             except ValueError as ex:
                 raise errors.DSLError(node.location, error_msg_preamble) from ex
@@ -1013,15 +1050,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         def deduce_return_type(
             tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType
         ) -> ts.FieldType:
-            if (t_dtype := type_info.extract_dtype(tb)) != (f_dtype := type_info.extract_dtype(fb)):
+            try:
+                promoted = type_info.promote(tb, fb)
+            except ValueError as ex:
                 raise errors.DSLError(
                     location,
-                    f"Field arguments to '{func_name}' must be of same dtype, got '{t_dtype}' != "
-                    f"'{f_dtype}'.",
-                )
-            return_dims = promote_dims(cond_dims, type_info.extract_dims(type_info.promote(tb, fb)))
-            return_type = ts.FieldType(dims=return_dims, dtype=t_dtype)
-            return return_type
+                    f"Could not promote '{tb}' and '{fb}' to common type in call to '{func_name}'.",
+                ) from ex
+            return ts.FieldType(
+                dims=promote_dims(cond_dims, type_info.extract_dims(promoted)),
+                dtype=type_info.extract_dtype(promoted),
+            )
 
         return deduce_return_type(true_branch, false_branch)
 

@@ -3,7 +3,7 @@ import dataclasses
 import typing
 
 from gt4py import next as gtx
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import workflow
 from gt4py.next.ffront import field_operator_ast as foast, stages as ff_stages
 from gt4py import eve
 ```
@@ -22,7 +22,7 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-DUMMY_FOP = toolchain.ConcreteArtifact(
+DUMMY_FOP = workflow.ConcreteArtifact(
     data=ff_stages.DSLFieldOperatorDef(definition=None), args=None
 )
 ```
@@ -57,11 +57,11 @@ class Cpp2BindingsGen: ...
 
 class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
     translation: workflow.Workflow[
-        gtx.otf.definitions.CompilableProgramDef, gtx.otf.stages.ProgramSource
+        gtx.otf.stages.CompilableProgramDef, gtx.otf.artifacts.ProgramSource
     ] = MyCodeGen()
-    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.ExtensionSource] = (
-        Cpp2BindingsGen()
-    )
+    bindings: workflow.Workflow[
+        gtx.otf.artifacts.ProgramSource, gtx.otf.artifacts.ExtensionSource
+    ] = Cpp2BindingsGen()
 
 
 PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)

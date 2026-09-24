@@ -89,13 +89,13 @@ class Metric:
             object.__setattr__(self, "name", sys.intern(self.name))
 
     @property
-    def mean(self) -> np.floating:
+    def mean(self) -> float:
         if len(self.samples) == 0:
             raise ValueError("Cannot compute mean of empty sample list.")
         return np.mean(self.samples)
 
     @property
-    def std(self) -> np.floating:
+    def std(self) -> float:
         if len(self.samples) == 0:
             raise ValueError("Cannot compute std of empty sample list.")
         return np.std(self.samples, ddof=1)
@@ -133,7 +133,7 @@ class MetricsCollection(utils.CustomDefaultDictBase[str, Metric]):
 
 
 @dataclasses.dataclass(slots=True)
-class Source:  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+class Source:
     """A source of metrics, typically associated with a program."""
 
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -180,7 +180,7 @@ def add_sample_to_current_source(metric_name: str, sample: float) -> None:
 
 
 @dataclasses.dataclass(slots=True)
-class SourceKeySetterAtEnter(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+class SourceKeySetterAtEnter(contextlib.AbstractContextManager):
     """
     A context manager to handle metrics collection source keys.
 
@@ -214,7 +214,7 @@ class SourceKeySetterAtEnter(contextlib.AbstractContextManager):  # type: ignore
 
 
 @dataclasses.dataclass(slots=True)
-class SourceKeyContextManager(SourceKeySetterAtEnter):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+class SourceKeyContextManager(SourceKeySetterAtEnter):
     """
     Another context manager to handle metrics collection source keys.
 
@@ -237,7 +237,7 @@ metrics_source_key_context: TypeAlias = SourceKeyContextManager
 
 
 @dataclasses.dataclass(slots=True)
-class BaseMetricsCollector(contextlib.AbstractContextManager):  # type: ignore[misc]  # Mypy bug fixed by: https://github.com/python/mypy/pull/20573
+class BaseMetricsCollector(contextlib.AbstractContextManager):
     """
     A context manager to handle metrics collection.
 

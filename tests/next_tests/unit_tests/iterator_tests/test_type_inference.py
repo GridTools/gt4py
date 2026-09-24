@@ -89,6 +89,8 @@ def expression_test_cases():
         (im.call("power")(2.0, 2), float64_type),
         (im.plus(1, 2), int_type),
         (im.eq(1, 2), bool_type),
+        (im.less(im.ref("a", int_type), im.axis_literal(IDim)), ts.DomainType(dims=[IDim])),
+        (im.less(im.axis_literal(IDim), im.ref("a", int_type)), ts.DomainType(dims=[IDim])),
         (im.deref(im.ref("it", it_on_e_of_e_type)), it_on_e_of_e_type.element_type),
         (im.can_deref(im.ref("it", it_on_e_of_e_type)), bool_type),
         (im.if_(True, 1, 2), int_type),
@@ -628,6 +630,16 @@ def test_as_fieldop_without_domain_nb_field_input():
         defined_dims=float_vertex_field.dims,
         element_type=float64_list_type,
     )
+
+
+@pytest.mark.parametrize(
+    "rhs_type",
+    [float_i_field, ts.DomainType(dims=[IDim]), ts.TupleType(types=[int_type, int_type])],
+)
+def test_comparison_with_non_scalar_rhs(rhs_type):
+    testee = im.less(im.ref("a", int_type), im.ref("b", rhs_type))
+    with pytest.raises(AssertionError):
+        itir_type_inference.infer(testee, offset_provider_type={}, allow_undeclared_symbols=True)
 
 
 def test_reinference():

@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import numpy as np
 import pytest
 
@@ -28,9 +29,6 @@ from next_tests.integration_tests.multi_feature_tests.ffront_tests.test_laplacia
     lap_ref,
     laplap_program,
 )
-
-
-dace = pytest.importorskip("dace")
 
 
 @pytest.mark.uses_cartesian_shift

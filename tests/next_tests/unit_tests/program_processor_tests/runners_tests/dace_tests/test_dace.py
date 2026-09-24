@@ -12,6 +12,7 @@ import ctypes
 import unittest
 import unittest.mock
 
+import dace
 import numpy as np
 import pytest
 
@@ -29,8 +30,6 @@ from next_tests.integration_tests.cases_utils import (
     mesh_descriptor,  # noqa: F401
 )
 
-dace = pytest.importorskip("dace")
-
 from gt4py.next.program_processors.runners import dace as dace_backends
 
 
@@ -38,10 +37,10 @@ from gt4py.next.program_processors.runners import dace as dace_backends
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture(
     params=[
-        pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.requires_dace),
+        pytest.param(dace_backends.run_dace_cpu, marks=pytest.mark.uses_dace),
         pytest.param(
             dace_backends.run_dace_gpu,
-            marks=(pytest.mark.requires_gpu, pytest.mark.requires_dace),
+            marks=(pytest.mark.requires_gpu, pytest.mark.uses_dace),
         ),
     ]
 )

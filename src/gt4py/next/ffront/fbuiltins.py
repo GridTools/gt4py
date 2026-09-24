@@ -12,6 +12,7 @@ import inspect
 import math
 import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
+from types import UnionType
 from typing import (
     Any,
     Callable,
@@ -23,6 +24,8 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
+    get_origin,
     overload,
 )
 
@@ -138,12 +141,15 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or get_origin(t) is tuple:
         return ts.TupleType
-    elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
-        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
-        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    # 'Union[A, B]' and 'A | B' are different runtime objects: the latter is a
+    # 'types.UnionType', which carries no '__origin__' at all.
+    elif get_origin(t) in (Union, UnionType):
+        member_types = [_type_conversion_helper(e) for e in get_args(t)]
+        assert all(type(m) is type and issubclass(m, ts.TypeSpec) for m in member_types)
+        # `cast` to break the recursion
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(member_types))
     elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
         return ts.NamedCollectionType
     else:
@@ -237,6 +243,16 @@ class WhereBuiltinFunction(
     ) -> Tuple: ...
 
     def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
+        if isinstance(true_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES) or isinstance(
+            false_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES
+        ):
+            if type(true_field) is not type(false_field):
+                raise ValueError(
+                    f"Either both or none can be a named collection of the same type in '{true_field=}' and '{false_field=}'."
+                )
+            return named_collections.tree_map_named_collection(lambda t, f: self(cond, t, f))(  # type: ignore[return-value] # `NamedCollection` is not `_R`
+                true_field, false_field
+            )
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -320,7 +336,7 @@ except ImportError:
 
     def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
         # restore the input scalar type, which `math.gamma` widens to `float`
-        return cast(core_defs.ScalarT, type(value)(math.gamma(value)))
+        return type(value)(math.gamma(value))
 
 
 _UNARY_MATH_FP_BUILTIN_IMPL: Final = {
@@ -464,6 +480,8 @@ assert (diff := actual_export - should_export) == set(), (
 #  guidelines for decision.
 @dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
+    #: The tag, i.e. the offset-provider key.
+    value: str
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
 
@@ -476,7 +494,7 @@ class FieldOffset(runtime.Offset):
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self) -> ts.OffsetType:
-        return ts.OffsetType(source=self.source, target=self.target)
+        return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
 
     def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""

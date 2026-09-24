@@ -68,10 +68,6 @@ class Literal(Expr):
     type: ts.ScalarType
 
 
-class NoneLiteral(Expr):
-    _none_literal: int = 0
-
-
 class InfinityLiteral(Expr):
     # TODO(tehrengruber): self referential `ClassVar` not supported in eve.
     if TYPE_CHECKING:
@@ -162,7 +158,6 @@ class Program(Node, ValidatedSymbolTableTrait):
 Sym.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Expr.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Literal.__hash__ = Node.__hash__  # type: ignore[method-assign]
-NoneLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 AxisLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
 CartesianOffset.__hash__ = Node.__hash__  # type: ignore[method-assign]

@@ -34,6 +34,11 @@ Every false positive fixed in here should have a test in 'typing_tests/test_next
 The documentation for how to write tests in that format is at https://github.com/typeddjango/pytest-mypy-plugins.
 
 The documentation on mypy plugins is at https://mypy.readthedocs.io/en/latest/extending_mypy.html
+
+Known limitation: the fallback hook that rewrites stray 'Dimension' instances in type aliases
+matches on the *variable name* ending in 'Dim' ('fullname.endswith("Dim")'). A dimension bound to
+a name that does not end in 'Dim' -- e.g. 'I = gtx.Dimension("I")' -- silently gets no plugin
+support at all.
 """
 
 from __future__ import annotations

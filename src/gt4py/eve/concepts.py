@@ -16,20 +16,7 @@ from collections.abc import Callable
 
 from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
-from .extended_typing import (
-    Any,
-    ClassVar,
-    Dict,
-    Final,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from .extended_typing import TYPE_CHECKING, Any, ClassVar, Final, Iterable, Optional, TypeVar, Union
 from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
@@ -92,11 +79,11 @@ class SourceLocation:
 class SourceLocationGroup:
     """A group of merged source code locations (with optional info)."""
 
-    locations: Tuple[SourceLocation, ...] = datamodels.field(validator=_validators.non_empty())
-    context: Optional[Union[str, Tuple[str, ...]]]
+    locations: tuple[SourceLocation, ...] = datamodels.field(validator=_validators.non_empty())
+    context: Optional[Union[str, tuple[str, ...]]]
 
     def __init__(
-        self, *locations: SourceLocation, context: Optional[Union[str, Tuple[str, ...]]] = None
+        self, *locations: SourceLocation, context: Optional[Union[str, tuple[str, ...]]] = None
     ) -> None:
         self.__auto_init__(locations=locations, context=context)  # type: ignore[attr-defined]  # __auto_init__ added dynamically
 
@@ -112,11 +99,11 @@ _T = TypeVar("_T")
 
 
 class AnnexManager:
-    register: ClassVar[Dict[str, Any]] = {}
+    register: ClassVar[dict[str, Any]] = {}
 
     @classmethod
     def register_user(
-        cls: Type[AnnexManager],
+        cls: type[AnnexManager],
         key: str,
         type_hint: xtyping.TypeAnnotation,
         *,
@@ -154,7 +141,10 @@ class AnnexManager:
 register_annex_user = AnnexManager.register_user
 
 
-class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
+_NodeParamsT = TypeVar("_NodeParamsT")
+
+
+class Node(datamodels.DataModel, xtyping.Generic[_NodeParamsT], kw_only=True):  # type: ignore[call-arg]
     """Base class representing a node in a syntax tree.
 
     Implemented as a :class:`eve.datamodels.DataModel` with some extra features.
@@ -181,7 +171,7 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     :class:`NodeTranslator` class..
     """
 
-    __slots__ = ()
+    __slots__ = ("__node_annex__",)
 
     @property
     def annex(self) -> utils.Namespace:
@@ -193,7 +183,7 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
         for name in self.__datamodel_fields__.keys():
             yield getattr(self, name)
 
-    def iter_children_items(self) -> Iterable[Tuple[trees.TreeKey, Any]]:
+    def iter_children_items(self) -> Iterable[tuple[trees.TreeKey, Any]]:
         for name in self.__datamodel_fields__.keys():
             yield name, getattr(self, name)
 
@@ -209,23 +199,26 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     walk_items = trees.walk_items
     walk_values = trees.walk_values
 
-    def copy(self: _T, update: Dict[str, Any]) -> _T:
+    def copy(self: _T, update: dict[str, Any]) -> _T:
         new_node = copy.deepcopy(self)
         for k, v in update.items():
             setattr(new_node, k, v)
         return new_node
 
 
+if TYPE_CHECKING:
+    _node_implements_tree: type[trees.Tree] = Node
+
+
 NodeT = TypeVar("NodeT", bound="Node")
 ValueNode = Union[bool, bytes, int, float, str, IntEnum, StrEnum]
 LeafNode = Union[NodeT, ValueNode]
-CollectionNode = Union[List[LeafNode], Dict[Any, LeafNode], Set[LeafNode]]
+CollectionNode = Union[list[LeafNode], dict[Any, LeafNode], set[LeafNode]]
 RootNode = Union[NodeT, CollectionNode]
 
 
-class FrozenNode(Node, frozen=True):  # type: ignore[call-arg]  # frozen from DataModel
-    ...
+class FrozenNode(Node, frozen=True): ...  # type: ignore[call-arg]
 
 
-class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]  # kw_only from DataModel
+class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ignore[call-arg]
     pass

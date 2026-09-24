@@ -137,6 +137,7 @@ storing a reference to the piece of source code which originated the node.
 from __future__ import annotations
 
 import enum
+import numbers
 import operator
 import sys
 from abc import ABC
@@ -356,7 +357,7 @@ class Ref(Expr):
 @attribclass
 class VarRef(Ref):
     name = attribute(of=str)
-    index = attribute(of=int, optional=True)
+    index = attribute(of=numbers.Integral, optional=True)
     loc = attribute(of=Location, optional=True)
 
 
@@ -378,7 +379,7 @@ class IteratorAccess(Ref):
 @attribclass
 class FieldRef(Ref):
     name = attribute(of=str)
-    offset = attribute(of=DictOf[str, UnionOf[int, Expr, AbsoluteKIndex]])
+    offset = attribute(of=DictOf[str, UnionOf[numbers.Integral, Expr, AbsoluteKIndex]])
     data_index = attribute(of=ListOf[Expr], factory=list)
     loc = attribute(of=Location, optional=True)
 
@@ -412,7 +413,7 @@ class AxisPosition(Expr):
 class AxisIndex(Expr):
     axis = attribute(of=str)
     endpt = attribute(of=LevelMarker)
-    offset = attribute(of=int)
+    offset = attribute(of=numbers.Integral)
     data_type = attribute(of=DataType, default=DataType.INT32)
 
 
@@ -652,7 +653,7 @@ class FieldDecl(Decl):
     data_type = attribute(of=DataType)
     axes = attribute(of=ListOf[str])
     is_api = attribute(of=bool)
-    data_dims = attribute(of=ListOf[int], factory=list)
+    data_dims = attribute(of=ListOf[numbers.Integral], factory=list)
     layout_id = attribute(of=str, default="_default_")
     loc = attribute(of=Location, optional=True)
 
@@ -661,7 +662,7 @@ class FieldDecl(Decl):
 class VarDecl(Decl):
     name = attribute(of=str)
     data_type = attribute(of=DataType)
-    length = attribute(of=int)
+    length = attribute(of=numbers.Integral)
     is_api = attribute(of=bool)
     init = attribute(of=Literal, optional=True)
     loc = attribute(of=Location, optional=True)
@@ -731,7 +732,7 @@ class BaseAxisBound(Node, ABC):
 @attribclass
 class AxisBound(BaseAxisBound):
     level = attribute(of=LevelMarker)
-    offset = attribute(of=int, default=0)
+    offset = attribute(of=numbers.Integral, default=0)
     loc = attribute(of=Location, optional=True)
 
 

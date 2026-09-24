@@ -107,6 +107,26 @@ class TestNode:
 
         assert set(sample_node.annex.keys()) >= {"an_int", "a_str"}
 
+    def test_nested_tuple_of_nodes_field(self):
+        # A node holding an arbitrarily nested tuple of other nodes (e.g. the targets of
+        # a tuple comprehension) is annotated with the recursive 'NestedTuple' alias.
+        class Target(eve.Node):
+            name: str
+
+        class Parent(eve.Node):
+            targets: eve.extended_typing.NestedTuple[Target]
+
+        node = Parent(targets=(Target(name="a"), (Target(name="b"), (Target(name="c"),))))
+
+        assert [target.name for target in eve.walk_values(node).if_isinstance(Target)] == [
+            "a",
+            "b",
+            "c",
+        ]
+
+        with pytest.raises((TypeError, ValueError)):
+            Parent(targets=(Target(name="a"), ("b",)))
+
     def test_children(self, sample_node):
         children_names = set(name for name, _ in sample_node.iter_children_items())
 
@@ -119,3 +139,44 @@ class TestNode:
                 sample_node.iter_children_items(), sample_node.iter_children_values()
             )
         )
+
+
+class TestNodeInstanceChecks:
+    # `Node` uses a metaclass that answers `isinstance()`/`issubclass()` nominally, i.e. like
+    #  `type`, instead of the `Protocol` metaclass it inherits from `trees.Tree`.
+
+    def test_instances_and_subclasses(self):
+        class Base(eve.Node):
+            value: int
+
+        class Derived(Base):
+            pass
+
+        assert isinstance(Base(value=1), Base)
+        assert isinstance(Derived(value=1), Base)
+        assert not isinstance(Base(value=1), Derived)
+        assert issubclass(Derived, Base)
+        assert issubclass(Base, eve.Node)
+
+    def test_structural_tree_is_not_a_node(self):
+        class StructuralTree:
+            def iter_children_values(self):
+                return iter(())
+
+            def iter_children_items(self):
+                return iter(())
+
+        assert not isinstance(StructuralTree(), eve.Node)
+        assert not issubclass(StructuralTree, eve.Node)
+
+    def test_node_is_not_an_abc(self):
+        # Nothing can be made a `Node` after the fact: the class is not an ABC, so there is no
+        #  `register()` and `isinstance()` answers the nominal question, at `type`'s speed.
+        assert not hasattr(eve.Node, "register")
+        assert type(eve.Node).__instancecheck__ is type.__instancecheck__
+
+    def test_nodes_are_still_trees(self, sample_node: eve.Node):
+        from gt4py.eve import trees
+
+        assert isinstance(sample_node, trees.TreeLike)
+        assert [id(node) for node in trees.pre_walk_values(sample_node)]

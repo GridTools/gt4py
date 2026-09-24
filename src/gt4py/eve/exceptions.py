@@ -10,7 +10,7 @@
 
 from __future__ import annotations
 
-from .extended_typing import Any, Dict, Optional
+from .extended_typing import Any, Optional
 
 
 class EveError:
@@ -25,7 +25,7 @@ class EveError:
     """
 
     message_template = "Generic Eve error [{info}]"
-    info: Dict[str, Any]
+    info: dict[str, Any]
 
     def __init__(self, message: Optional[str] = None, **kwargs: Any) -> None:
         self.info = kwargs

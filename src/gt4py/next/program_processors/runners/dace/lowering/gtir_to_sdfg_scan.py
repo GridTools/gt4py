@@ -38,10 +38,11 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.program_processors.runners.dace import sdfg_utils as gtx_dace_utils
 from gt4py.next.program_processors.runners.dace.lowering import (
-    gtir_dataflow,
     gtir_domain,
     gtir_to_sdfg,
+    gtir_to_sdfg_lambda,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -53,7 +54,7 @@ def _parse_scan_fieldop_arg(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     field_domain: gtir_domain.FieldopDomain,
-) -> MaybeNestedInTuple[gtir_dataflow.MemletExpr]:
+) -> MaybeNestedInTuple[gtir_to_sdfg_lambda.MemletExpr]:
     """Helper method to visit an expression passed as argument to a scan field operator.
 
     On the innermost level, a scan operator is lowered to a loop region which computes
@@ -65,16 +66,16 @@ def _parse_scan_fieldop_arg(
 
     def _parse_fieldop_arg_impl(
         arg: gtir_to_sdfg_types.FieldopData,
-    ) -> gtir_dataflow.MemletExpr:
+    ) -> gtir_to_sdfg_lambda.MemletExpr:
         arg_expr = arg.get_local_view(field_domain, ctx.sdfg)
-        if isinstance(arg_expr, gtir_dataflow.MemletExpr):
+        if isinstance(arg_expr, gtir_to_sdfg_lambda.MemletExpr):
             return arg_expr
         # In scan field operator, the arguments to the vertical stencil are passed by value.
         # Therefore, the full field shape is passed as `MemletExpr` rather than `IteratorExpr`.
         field_type = ts.FieldType(
             dims=[dim for dim, _ in arg_expr.field_domain], dtype=arg_expr.gt_dtype
         )
-        return gtir_dataflow.MemletExpr(
+        return gtir_to_sdfg_lambda.MemletExpr(
             arg_expr.field, field_type, arg_expr.get_memlet_subset(ctx.sdfg)
         )
 
@@ -90,7 +91,7 @@ def _parse_scan_fieldop_arg(
 def _create_scan_field_operator_impl(
     ctx: gtir_to_sdfg.SubgraphContext,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    output_edge: gtir_dataflow.DataflowOutputEdge | None,
+    output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge | None,
     output_domain: infer_domain.NonTupleDomainAccess,
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit | None,
@@ -190,7 +191,7 @@ def _create_scan_field_operator_impl(
         # function, so we know that its stride is constant. We just need to set it on
         # the inside array, and we do not need to map any stride symbol.
         outside_output_stride = field_desc.strides[scan_dim_index]
-        assert str(outside_output_stride).isdigit()
+        assert gtx_dace_utils.is_compile_time_size(outside_output_stride)
         inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
     else:
         # Special case where we only write the last level of the scan column.
@@ -207,8 +208,8 @@ def _create_scan_field_operator(
     field_domain: gtir_domain.FieldopDomain,
     node_type: ts.FieldType | ts.TupleType,
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    input_edges: Iterable[gtir_dataflow.DataflowInputEdge],
-    output: MaybeNestedInTuple[gtir_dataflow.DataflowOutputEdge | None],
+    input_edges: Iterable[gtir_to_sdfg_lambda.DataflowInputEdge],
+    output: MaybeNestedInTuple[gtir_to_sdfg_lambda.DataflowOutputEdge | None],
     output_domain: infer_domain.DomainAccess,
 ) -> gtir_to_sdfg_types.FieldopResult:
     """
@@ -431,9 +432,9 @@ def _lower_lambda_to_nested_sdfg(
         _parse_scan_fieldop_arg(im.ref(p.id), compute_ctx, sdfg_builder, field_domain)
         for p in lambda_node.params
     ]
-    # stil inside the 'compute' state, generate the dataflow representing the stencil
+    # still inside the 'compute' state, generate the dataflow representing the stencil
     # to be applied on the horizontal domain
-    lambda_input_edges, lambda_result = gtir_dataflow.translate_lambda_to_dataflow(
+    lambda_input_edges, lambda_result = gtir_to_sdfg_lambda.translate_lambda_to_dataflow(
         compute_ctx.sdfg, compute_ctx.state, sdfg_builder, lambda_node, stencil_args
     )
     # connect the dataflow input directly to the source data nodes, without passing through a map node;
@@ -476,7 +477,7 @@ def _lower_lambda_to_nested_sdfg(
     output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_domain.start
 
     def connect_scan_output(
-        scan_output_edge: gtir_dataflow.DataflowOutputEdge,
+        scan_output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
         scan_output_shape: list[dace.symbolic.SymExpr],
         scan_carry_sym: gtir.Sym,
     ) -> gtir_to_sdfg_types.FieldopData:
@@ -540,7 +541,7 @@ def _handle_dataflow_result_of_nested_sdfg(
     outer_ctx: gtir_to_sdfg.SubgraphContext,
     inner_data: gtir_to_sdfg_types.FieldopData,
     output_domain: infer_domain.NonTupleDomainAccess,
-) -> gtir_dataflow.DataflowOutputEdge | None:
+) -> gtir_to_sdfg_lambda.DataflowOutputEdge | None:
     assert isinstance(inner_data.gt_type, ts.FieldType)
     inner_dataname = inner_data.dc_node.data
     inner_desc = inner_ctx.sdfg.data(inner_dataname)
@@ -622,8 +623,8 @@ def _handle_dataflow_result_of_nested_sdfg(
         None,
         dace.Memlet.from_array(outer_dataname, outer_desc),
     )
-    output_expr = gtir_dataflow.ValueExpr(outer_node, inner_data.gt_type.dtype)
-    return gtir_dataflow.DataflowOutputEdge(outer_ctx.state, output_expr)
+    output_expr = gtir_to_sdfg_lambda.ValueExpr(outer_node, inner_data.gt_type.dtype)
+    return gtir_to_sdfg_lambda.DataflowOutputEdge(outer_ctx.state, output_expr)
 
 
 def translate_scan(
@@ -643,12 +644,14 @@ def translate_scan(
 
     Implements the `PrimitiveTranslator` protocol.
     """
-    assert isinstance(node, gtir.FunCall)
-    assert cpm.is_call_to(node.fun, "as_fieldop")
+    assert cpm.is_applied_as_fieldop(node)
     assert isinstance(node.type, (ts.FieldType, ts.TupleType))
 
     fun_node = node.fun
-    assert len(fun_node.args) == 2
+    if len(fun_node.args) != 2:
+        raise ValueError(
+            f"'as_fieldop' expects exactly 2 arguments (expression, domain): '{node}'."
+        )
     scan_expr, scan_domain_expr = fun_node.args
     assert cpm.is_call_to(scan_expr, "scan")
 
@@ -739,7 +742,7 @@ def translate_scan(
     for input_connector, memlet in input_memlets.items():
         src_node = lambda_arg_nodes[input_connector]
         assert src_node is not None
-        input_edge = gtir_dataflow.MemletInputEdge(
+        input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
             ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
         )
         input_edges.append(input_edge)

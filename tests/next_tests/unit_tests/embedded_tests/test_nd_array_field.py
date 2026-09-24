@@ -1758,3 +1758,70 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 
         assert result.domain == expected_domain
         np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_field_arguments():
+    import jax
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    a = common._field(
+        jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
+    )
+    b = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+
+    @jax.jit
+    def add(x, y):
+        return x + y
+
+    result = add(a, b)
+
+    assert isinstance(result, common.Field)
+    assert result.domain == domain
+    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_roundtrip():
+    import jax
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+
+    children, treedef = jax.tree_util.tree_flatten(field)
+
+    assert len(children) == 1
+    assert children[0] is field.ndarray
+
+    restored = jax.tree_util.tree_unflatten(treedef, children)
+    assert restored.domain == domain
+
+    other_field = common._field(
+        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
+    )
+    # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
+    assert jax.tree_util.tree_structure(other_field) != treedef
+
+
+@pytest.mark.requires_jax
+def test_jax_traced_array_dispatch():
+    import jax
+
+    domain = common.domain({D0: (0, 3)})
+    x = jax.numpy.arange(3, dtype=np.float64)
+
+    def loss(arr):
+        field = common._field(arr, domain=domain)
+        assert isinstance(field, nd_array_field.JaxArrayField)
+        return jax.numpy.sum((field * field).ndarray)
+
+    np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())
+    np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
+
+    offsets = jax.numpy.asarray([[2, 0], [1, 2]])
+    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
+
+    def make_connectivity(arr):
+        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
+
+    np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)

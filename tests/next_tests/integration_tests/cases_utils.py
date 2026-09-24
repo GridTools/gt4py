@@ -90,7 +90,6 @@ no_backend = NoBackend(
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
         next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
@@ -105,15 +104,15 @@ no_backend = NoBackend(
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
-            marks=pytest.mark.requires_dace,
+            marks=pytest.mark.uses_dace,
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
-            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+            marks=(pytest.mark.uses_dace, pytest.mark.requires_gpu),
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
-            marks=pytest.mark.requires_dace,
+            marks=pytest.mark.uses_dace,
         ),
     ],
     ids=lambda p: p.short_id(),
@@ -159,6 +158,9 @@ JDim = gtx.Dimension("JDim")
 JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = common.flip_staggered(KDim)
+
+Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")

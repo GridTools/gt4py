@@ -7,10 +7,13 @@ tags: [testing]
 - **Status**: valid
 - **Authors**: Edoardo Paone (@edopao), Enrique G. Paredes (@egparedes)
 - **Created**: 2023-09-21
-- **Updated**: 2024-01-25
+- **Updated**: 2026-09-15
 
 In the context of Field View testing, lacking support for specific ITIR features while a certain backend
 is being developed, we decided to use `pytest` fixtures to exclude unsupported tests.
+
+> [!NOTE]
+> The processor list and the exclusion-matrix example below reflect the state when this ADR was written: `GTFN_CPU_IMPERATIVE` and `GTFN_CPU_WITH_TEMPORARIES` no longer exist. The current processors and their exclusion lists are in `tests/next_tests/definitions.py`. The mechanism described here is unchanged.
 
 ## Context
 

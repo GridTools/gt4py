@@ -10,8 +10,6 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("atlas4py")
-
 import gt4py.next as gtx
 from gt4py.next.iterator import library, embedded
 from gt4py.next.iterator.atlas_utils import AtlasTable

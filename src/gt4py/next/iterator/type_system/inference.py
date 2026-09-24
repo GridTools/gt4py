@@ -336,7 +336,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if isinstance(node, itir.Program):
             assert all(isinstance(param.type, ts.DataType) for param in node.params), (
                 "All parameters in 'itir.Program' must have a type "
-                "defined, as they are the starting point for type propagation.",
+                "defined, as they are the starting point for type propagation."
             )
 
         instance = cls(

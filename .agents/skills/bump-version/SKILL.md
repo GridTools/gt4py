@@ -5,12 +5,20 @@ description: Open a PR in GitHub that bumps the GT4Py version in three files and
 
 # bump-version
 
-Bump the GT4Py version and open a PR. Makes exactly three edits with the same
-new version `X.Y.Z`:
+Bump the GT4Py version and open a PR. For the canonical GT4Py release process,
+including how to publish the release tag, see `docs/development/tools/release.md`.
 
-1. `CHANGELOG.md` — add a new release block at the top.
-2. `pyproject.toml` — bump `tool.versioningit.default-version`.
-3. `src/gt4py/__about__.py` — bump `on_build_version` to match.
+The changelog is edited manually. The remaining version edits are performed by
+running:
+
+```bash
+./scripts/run update package-version X.Y.Z
+```
+
+That script updates both of the following with the same new version `X.Y.Z`:
+
+1. `pyproject.toml` — bump `tool.versioningit.default-version`.
+2. `src/gt4py/__about__.py` — bump `on_build_version` to match.
 
 ## Inputs
 
@@ -98,26 +106,22 @@ Rules:
 - `Next` is always the fixed placeholder above.
 - Use present-tense imperative-ish phrasing for bullets.
 - Keep bullets user-focused, not implementation-focused.
+- Do not include PR or issue numbers in bullets; the commit/PR history already
+  links them.
 - Blank lines separate the header, each section, and the previous release.
 
-## Step 2 — `pyproject.toml`
+## Step 2 — Version files
 
-Under `[tool.versioningit]`, set only the version number; keep the suffix:
+Run the helper script to bump the fallback version in both
+`pyproject.toml` and `src/gt4py/__about__.py`:
 
-```toml
-[tool.versioningit]
-default-version = "X.Y.Z+unknown.version.details"
+```bash
+./scripts/run update package-version X.Y.Z
 ```
 
-## Step 3 — `src/gt4py/__about__.py`
+This preserves the required `+unknown.version.details` local part.
 
-Set the matching value:
-
-```python
-on_build_version: Final = "X.Y.Z+unknown.version.details"
-```
-
-## Step 4 — verify
+## Step 3 — verify
 
 Confirm all three occurrences use the same `X.Y.Z`:
 
@@ -125,7 +129,7 @@ Confirm all three occurrences use the same `X.Y.Z`:
 - `pyproject.toml`: `default-version = "X.Y.Z+unknown.version.details"`
 - `src/gt4py/__about__.py`: `on_build_version: Final = "X.Y.Z+unknown.version.details"`
 
-## Step 5 — branch, commit, push, PR
+## Step 4 — branch, commit, push, PR, and release tag
 
 - **Branch**: `releasing_vX.Y.Z`
 - **Commit / PR title**: `Releasing vX.Y.Z` (note the `v` prefix here only)
@@ -135,11 +139,13 @@ Confirm all three occurrences use the same `X.Y.Z`:
 If `releasing_vX.Y.Z` already exists, commit on that branch and push; do not
 open a duplicate PR.
 
-Stage the three changed files, then run:
+Stage the changed files, then run:
 
 ```
 uv run pre-commit run
 ```
 
 Do not run the full `-a` suite or the test suites for a pure metadata bump.
-Do not create a git tag unless explicitly asked. Do not merge the PR yourself.
+
+After the PR is merged, publish the GitHub release and tag `vX.Y.Z` following
+the instructions in `docs/development/tools/release.md`.

@@ -6,11 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 import numpy as np
 import copy
 
-dace = pytest.importorskip("dace")
 import dace
 from dace.sdfg import nodes as dace_nodes, graph as dace_graph
 from dace import data as dace_data, subsets as dace_sbs
@@ -888,7 +888,7 @@ def _make_concat_where_global_read(
         state.add_edge(c, None, tlet, "__in0", dace.Memlet(f"c[{scalar_access}]"))
         state.add_edge(tlet, "__out", d, None, dace.Memlet("d[5]"))
     else:
-        state.add_edge(c, None, d, None, dace.Memlet(f"c[{scalar_access}]"))
+        state.add_edge(c, None, d, None, dace.Memlet("d[5]", other_subset=str(scalar_access)))
 
     sdfg.validate()
 

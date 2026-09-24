@@ -8,50 +8,66 @@
 
 import numpy as np
 import pytest
-from next_tests.integration_tests.cases import IDim, JDim, KDim, cartesian_case
+from next_tests.integration_tests.cases import (
+    Edge,
+    IDim,
+    JDim,
+    KDim,
+    V2E,
+    V2EDim,
+    Vertex,
+    cartesian_case,
+    unstructured_case,
+    unstructured_case_3d,
+)
 from gt4py import next as gtx
-from gt4py.next import broadcast
+from gt4py.next import broadcast, common, neighbor_sum
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 pytestmark = pytest.mark.uses_concat_where
 
 
-def test_concat_where_simple(cartesian_case):
-    @gtx.field_operator
+@pytest.fixture(params=[False, True], ids=["dynamic_domains", "static_domains"])
+def static_domains(request) -> bool:
+    """Fixture to select compilation with dynamic or statically known domain bounds."""
+    return request.param
+
+
+def test_concat_where_simple(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim > 0, air, ground)
 
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground")()
-    air = cases.allocate(cartesian_case, testee, "air")()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
-    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda ground, air: np.where(k[np.newaxis, np.newaxis, :] == 0, ground, air),
+    )
 
 
-def test_concat_where(cartesian_case):
-    @gtx.field_operator
+def test_concat_where(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    ground = cases.allocate(cartesian_case, testee, "ground")()
-    air = cases.allocate(cartesian_case, testee, "air")()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k[np.newaxis, np.newaxis, :] == 0, ground.asnumpy(), air.asnumpy())
-    cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda ground, air: np.where(k[np.newaxis, np.newaxis, :] == 0, ground, air),
+    )
 
 
-def test_concat_where_non_overlapping(cartesian_case):
+def test_concat_where_non_overlapping(cartesian_case, static_domains: bool):
     """Fields only defined in their respective region in concat_where."""
 
-    @gtx.field_operator
+    @gtx.field_operator(static_domains=static_domains)
     def testee(ground: cases.IJKField, air: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, ground, air)
 
@@ -65,8 +81,8 @@ def test_concat_where_non_overlapping(cartesian_case):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
-def test_concat_where_empty_branch(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_empty_branch(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.IJKField, b: cases.IJKField, N: np.int32) -> cases.IJKField:
         return concat_where(IDim < N, a, b * 2)
 
@@ -79,8 +95,8 @@ def test_concat_where_empty_branch(cartesian_case):
 
 
 @pytest.mark.embedded_concat_where_infinite_domain
-def test_concat_where_scalar_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_scalar_broadcast(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: np.int32, b: cases.IJKField, N: np.int32) -> cases.IJKField:
         return concat_where(KDim < N - 1, a, b)
 
@@ -99,10 +115,10 @@ def test_concat_where_scalar_broadcast(cartesian_case):
 
 
 @pytest.mark.embedded_concat_where_infinite_domain
-def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
+def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
     """Output domain such that the scalar branch is never active."""
 
-    @gtx.field_operator
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: np.int32, b: cases.KField, N: np.int32) -> cases.KField:
         return concat_where(KDim < N, a, b)
 
@@ -114,8 +130,8 @@ def test_concat_where_scalar_broadcast_on_empty_branch(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, 1, out=out, ref=ref)
 
 
-def test_concat_where_single_level_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_single_level_broadcast(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, a, b)
 
@@ -135,8 +151,10 @@ def test_concat_where_single_level_broadcast(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
-    @gtx.field_operator
+def test_concat_where_single_level_restricted_domain_broadcast(
+    cartesian_case, static_domains: bool
+):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.KField, b: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, a, b)
 
@@ -155,8 +173,8 @@ def test_concat_where_single_level_restricted_domain_broadcast(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-def test_boundary_single_layer_3d_bc(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_3d_bc(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
@@ -174,27 +192,23 @@ def test_boundary_single_layer_3d_bc(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_boundary_single_layer_2d_bc(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_2d_bc(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary.asnumpy()[:, :, np.newaxis],
-        interior.asnumpy(),
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where(
+            k[np.newaxis, np.newaxis, :] == 0, boundary[:, :, np.newaxis], interior
+        ),
     )
 
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
-
-def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
-    @gtx.field_operator
+def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
 
@@ -208,26 +222,25 @@ def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_dimension_two_nested_conditions(cartesian_case):
-    @gtx.field_operator
+def test_dimension_two_nested_conditions(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJKField) -> cases.IJKField:
         return concat_where((KDim < 2), boundary, concat_where((KDim >= 5), boundary, interior))
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(
-        (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
-        boundary.asnumpy(),
-        interior.asnumpy(),
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where(
+            (k[np.newaxis, np.newaxis, :] < 2) | (k[np.newaxis, np.newaxis, :] >= 5),
+            boundary,
+            interior,
+        ),
     )
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
 
 
-def test_dimension_two_conditions_and(cartesian_case):
-    @gtx.field_operator
+def test_dimension_two_conditions_and(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
         return concat_where((0 < KDim) & (KDim < (nlev - 1)), interior, boundary)
 
@@ -241,37 +254,101 @@ def test_dimension_two_conditions_and(cartesian_case):
     cases.verify(cartesian_case, testee, interior, boundary, nlev, out=out, ref=ref)
 
 
-def test_dimension_eq_in_middle_of_domain(cartesian_case):
-    @gtx.field_operator
+def test_dimension_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where((KDim == 2), interior, boundary)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where(k == 2, interior.asnumpy(), boundary.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k == 2, interior, boundary)
+    )
 
 
 @pytest.mark.embedded_concat_where_non_contiguous_domain
-def test_dimension_two_conditions_or(cartesian_case):
-    @gtx.field_operator
+def test_dimension_not_eq_in_middle_of_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim != 2), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k != 2, boundary, interior)
+    )
+
+
+def test_dimension_less_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((KDim <= 2), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(k <= 2, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 > KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 > k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_greater_equal(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 >= KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 >= k, boundary, interior)
+    )
+
+
+def test_dimension_reverse_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 == KDim), interior, boundary)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 == k, interior, boundary)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_reverse_not_eq(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
+        return concat_where((2 != KDim), boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case, testee, lambda interior, boundary: np.where(2 != k, boundary, interior)
+    )
+
+
+@pytest.mark.embedded_concat_where_non_contiguous_domain
+def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField) -> cases.KField:
         return concat_where(((KDim < 2) | (KDim >= 5)), boundary, interior)
 
-    interior = cases.allocate(cartesian_case, testee, "interior")()
-    boundary = cases.allocate(cartesian_case, testee, "boundary")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref = np.where((k < 2) | (k >= 5), boundary.asnumpy(), interior.asnumpy())
-    cases.verify(cartesian_case, testee, interior, boundary, out=out, ref=ref)
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda interior, boundary: np.where((k < 2) | (k >= 5), boundary, interior),
+    )
 
 
-def test_lap_like(cartesian_case):
-    @gtx.field_operator
+def test_lap_like(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         inp: cases.IJField, boundary: np.int32, shape: tuple[np.int32, np.int32]
     ) -> cases.IJField:
@@ -304,8 +381,8 @@ def test_lap_like(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
-def test_with_tuples(cartesian_case):
-    @gtx.field_operator
+def test_with_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         interior0: cases.IJKField,
         boundary0: cases.IJField,
@@ -314,38 +391,229 @@ def test_with_tuples(cartesian_case):
     ) -> tuple[cases.IJKField, cases.IJKField]:
         return concat_where(KDim == 0, (boundary0, boundary1), (interior0, interior1))
 
-    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
-    boundary0 = cases.allocate(cartesian_case, testee, "boundary0")()
-    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
-    boundary1 = cases.allocate(cartesian_case, testee, "boundary1")()
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+
+    def ref(interior0, boundary0, interior1, boundary1):
+        return (
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary0[:, :, np.newaxis], interior0),
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary1[:, :, np.newaxis], interior1),
+        )
+
+    cases.verify_with_default_data(cartesian_case, testee, ref)
+
+
+@pytest.mark.uses_tuple_returns
+def test_with_nested_tuples(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        interior0: cases.IJKField,
+        boundary0: cases.IJField,
+        interior1: cases.IJKField,
+        boundary1: cases.IJField,
+        interior2: cases.IJKField,
+        boundary2: cases.IJField,
+    ) -> tuple[cases.IJKField, tuple[cases.IJKField, cases.IJKField]]:
+        return concat_where(
+            KDim == 0,
+            (boundary0, (boundary1, boundary2)),
+            (interior0, (interior1, interior2)),
+        )
+
+    interiors = tuple(cases.allocate(cartesian_case, testee, f"interior{i}")() for i in range(3))
+    boundaries = tuple(cases.allocate(cartesian_case, testee, f"boundary{i}")() for i in range(3))
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref0 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary0.asnumpy()[:, :, np.newaxis],
-        interior0.asnumpy(),
-    )
-    ref1 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary1.asnumpy()[:, :, np.newaxis],
-        interior1.asnumpy(),
+    refs = tuple(
+        np.where(
+            k[np.newaxis, np.newaxis, :] == 0,
+            boundary.asnumpy()[:, :, np.newaxis],
+            interior.asnumpy(),
+        )
+        for boundary, interior in zip(boundaries, interiors)
     )
 
     cases.verify(
         cartesian_case,
         testee,
-        interior0,
-        boundary0,
-        interior1,
-        boundary1,
+        interiors[0],
+        boundaries[0],
+        interiors[1],
+        boundaries[1],
+        interiors[2],
+        boundaries[2],
         out=out,
-        ref=(ref0, ref1),
+        ref=(refs[0], (refs[1], refs[2])),
     )
 
 
-def test_nested_conditions_with_empty_branches(cartesian_case):
-    @gtx.field_operator
+@pytest.mark.uses_unstructured_shift
+def test_with_local_field(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
+        t = concat_where(Vertex < 2, a(V2E), b(V2E))
+        return neighbor_sum(t, axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[v2e_table]),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_with_local_field_3d(unstructured_case_3d, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: gtx.Field[[Edge, KDim], np.int32], b: gtx.Field[[Edge, KDim], np.int32]
+    ) -> gtx.Field[[Vertex, KDim], np.int32]:
+        t = concat_where(KDim < 2, a(V2E), b(V2E))
+        return neighbor_sum(t, axis=V2EDim)
+
+    v2e_table = unstructured_case_3d.offset_provider["V2E"].asnumpy()
+    k_mask = np.arange(unstructured_case_3d.default_sizes[KDim]) < 2
+    cases.verify_with_default_data(
+        unstructured_case_3d,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(k_mask[np.newaxis, np.newaxis, :], a[v2e_table], b[v2e_table]),
+            axis=1,
+            initial=0,
+            where=(v2e_table != common._DEFAULT_SKIP_VALUE)[:, :, np.newaxis],
+        ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_with_local_and_nonlocal_field(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField, b: cases.VField) -> cases.VField:
+        return neighbor_sum(concat_where(Vertex < 2, a(V2E), b), axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b: np.sum(
+            np.where(vertex_mask[:, np.newaxis], a[v2e_table], b[:, np.newaxis]),
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+def test_with_tuples_of_local_fields(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.EField,
+        b: cases.EField,
+        c: cases.EField,
+        d: cases.EField,
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), b(V2E)), (c(V2E), d(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c, d: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], c[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], b[v2e_table], d[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_local_field_and_scalar(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.EField) -> tuple[cases.VField, cases.VField]:
+        return (
+            neighbor_sum(concat_where(Vertex < 2, a(V2E), 3), axis=V2EDim),
+            neighbor_sum(concat_where(Vertex < 2, 3, a(V2E)), axis=V2EDim),
+        )
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], 3, a[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_unstructured_shift
+@pytest.mark.embedded_concat_where_infinite_domain
+def test_with_tuples_of_local_and_nonlocal_leaves(unstructured_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        a: cases.EField, b: cases.EField, c: cases.VField
+    ) -> tuple[cases.VField, cases.VField]:
+        t = concat_where(Vertex < 2, (a(V2E), c), (3, b(V2E)))
+        return neighbor_sum(t[0], axis=V2EDim), neighbor_sum(t[1], axis=V2EDim)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a, b, c: (
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], a[v2e_table], 3),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+            np.sum(
+                np.where(vertex_mask[:, np.newaxis], c[:, np.newaxis], b[v2e_table]),
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            ),
+        ),
+    )
+
+
+def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:
         interior = concat_where(IDim == 0, boundary, interior)
         interior = concat_where((1 <= IDim) & (IDim < N - 1), interior * 2, interior)
@@ -367,8 +635,8 @@ def test_nested_conditions_with_empty_branches(cartesian_case):
 
 
 @pytest.mark.uses_tuple_returns
-def test_with_tuples_different_domain(cartesian_case):
-    @gtx.field_operator
+def test_with_tuples_different_domain(cartesian_case, static_domains: bool):
+    @gtx.field_operator(static_domains=static_domains)
     def testee(
         interior0: cases.IJKField,
         boundary0: cases.IJKField,
@@ -379,31 +647,34 @@ def test_with_tuples_different_domain(cartesian_case):
         # the broadcast is only needed since we can not return fields on different domains yet
         return a, broadcast(b, (IDim, JDim, KDim))
 
-    interior0 = cases.allocate(cartesian_case, testee, "interior0")()
-    boundary0 = cases.allocate(cartesian_case, testee, "boundary0")()
-    interior1 = cases.allocate(cartesian_case, testee, "interior1")()
-    boundary1 = cases.allocate(cartesian_case, testee, "boundary1")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
     k = np.arange(0, cartesian_case.default_sizes[KDim])
-    ref0 = np.where(
-        k[np.newaxis, np.newaxis, :] == 0,
-        boundary0.asnumpy(),
-        interior0.asnumpy(),
-    )
-    ref1 = np.where(
-        k == 0,
-        boundary1.asnumpy(),
-        interior1.asnumpy(),
-    )
 
-    cases.verify(
+    def ref(interior0, boundary0, interior1, boundary1):
+        return (
+            np.where(k[np.newaxis, np.newaxis, :] == 0, boundary0, interior0),
+            np.where(k == 0, boundary1, interior1),
+        )
+
+    cases.verify_with_default_data(cartesian_case, testee, ref)
+
+
+def test_concat_where_field_broadcast_on_empty_branch(cartesian_case, static_domains: bool):
+    """
+    A field branch with fewer dimensions than the expression is implicitly broadcast.
+
+    `b` only has the `K` dimension, but is selected everywhere, so it is broadcast to the
+    three-dimensional result. With `static_domains` this also tests pruning: the domain bounds
+    are statically known, so `prune_empty_concat_where` decides that `a` is never selected and
+    must reintroduce the implicit broadcast of the `concat_where` instead of replacing the
+    three-dimensional expression by a one-dimensional one.
+    """
+
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.IJKField, b: cases.KField) -> cases.IJKField:
+        return concat_where(KDim < 0, a, b)
+
+    cases.verify_with_default_data(
         cartesian_case,
         testee,
-        interior0,
-        boundary0,
-        interior1,
-        boundary1,
-        out=out,
-        ref=(ref0, ref1),
+        lambda a, b: np.broadcast_to(b[np.newaxis, np.newaxis, :], a.shape),
     )
