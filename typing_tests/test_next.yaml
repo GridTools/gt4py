@@ -346,3 +346,21 @@
           reveal_type(first(a))
     out: |
       main:22:17: note: Revealed type is "type[main.V2E.Local]"
+
+  - case: multi_dimension_index
+    main: |
+      from gt4py import next as gtx
+
+      class Vertex(gtx.DimensionIndex): ...
+      class Edge(gtx.DimensionIndex): ...
+
+      class V2E(gtx.NeighborConnectivity[Vertex, Edge]):
+          class Local(gtx.LocalDimensionIndex): ...
+
+      position = gtx.MultiDimensionIndex(Vertex(3), V2E.Local(1))
+      reveal_type(position)
+      vertex, neighbor = position
+      reveal_type(neighbor)
+    out: |
+      main:10:13: note: Revealed type is "tuple[main.Vertex, main.V2E.Local, fallback=gt4py.next.common.MultiDimensionIndex[main.Vertex, main.V2E.Local]]"
+      main:12:13: note: Revealed type is "main.V2E.Local"

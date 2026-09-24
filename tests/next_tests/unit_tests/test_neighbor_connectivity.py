@@ -493,9 +493,8 @@ class TestFrontendIntegration:
             assert np.array_equal(V2E[np.int32(1)].asnumpy(), V2E[1].asnumpy())
 
     def test_attribute_errors_are_dsl_errors(self):
-        from gt4py.next import errors, field_operator
+        from gt4py.next import Dims, Field, errors
         from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-        from gt4py.next import Dims, Field
 
         def domain_of(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
             return a(V2E.domain)
@@ -755,3 +754,47 @@ def test_the_const_list_dimension_cannot_be_adopted():
                 Local: typing.TypeAlias = ConstList
             """
         )
+
+
+class TestMultiDimensionIndex:
+    def test_indexes_a_neighbor_table(self):
+        table = _table()
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        assert position.dims == (Vertex, V2E.Local)
+        assert table[position].as_scalar() == 3
+
+    def test_is_a_tuple_of_indices(self):
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        assert position == (Vertex(1), V2E.Local(2))
+        assert hash(position) == hash((Vertex(1), V2E.Local(2)))
+
+    def test_pickle_and_copy(self):
+        import copy
+
+        position = common.MultiDimensionIndex(Vertex(1), V2E.Local(2))
+        for clone in (
+            pickle.loads(pickle.dumps(position)),
+            copy.copy(position),
+            copy.deepcopy(position),
+        ):
+            assert type(clone) is common.MultiDimensionIndex
+            assert clone == position
+
+    @pytest.mark.parametrize(
+        "indices",
+        [
+            (V2E.Local(0),),
+            (Vertex(0), Edge(1)),
+            (Vertex(0), 1),
+            (0,),
+            (Vertex(0),),  # a position in a product needs a local index
+            (Edge(0), V2E.Local(1)),  # V2E indexes the neighbors of a vertex
+        ],
+    )
+    def test_rejects_other_shapes(self, indices):
+        with pytest.raises(TypeError, match="MultiDimensionIndex"):
+            common.MultiDimensionIndex(*indices)
+
+    def test_accepts_an_owner_less_local_dimension(self):
+        position = common.MultiDimensionIndex(Vertex(1), LsqCoeff(2))
+        assert position.dims == (Vertex, LsqCoeff)

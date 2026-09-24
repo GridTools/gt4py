@@ -221,6 +221,17 @@ had; and `as_offset` takes the dimension to shift along, `as_offset(KDim, k_offs
 rewrites declarations and Cartesian offset uses, and reports the provider keys
 and other sites it cannot rewrite from the source alone.
 
+### Positions in a neighborhood
+
+`MultiDimensionIndex[D, *Ls]` is a position in the product of a primary
+dimension and local dimensions, e.g. `MultiDimensionIndex(Vertex(3), V2E.Local(1))`, the second neighbor of vertex 3. It is a tuple of indices, so it
+indexes a field or a table directly; since a `TypeVarTuple` cannot carry a bound,
+the constructor checks the shape. It is a typed convenience for users; nothing in the toolchain requires it.
+The iterator-level embedded execution keys its
+positions by dimension classes instead of tag strings, and steps along a field's
+local dimension with an explicit `SparseAxis(dim)`. Named offsets still
+arrive as IR strings and find their tables through the tag-keyed provider.
+
 ## Consequences
 
 - An unstructured connectivity is spelled once. The provider key, the offset tag

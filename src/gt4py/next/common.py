@@ -2608,3 +2608,67 @@ def _check_shared_local_dimensions(
                     " local dimension must have the same number of neighbors, and skip values at"
                     " the same positions."
                 )
+
+
+class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
+    """
+    A position in the product of a primary dimension and local dimensions.
+
+    For example the entry `(Vertex(3), V2E.Local(1))` of the table of `V2E`: the second neighbor
+    of vertex 3. It is a tuple of indices, so it indexes a field or a neighbor table directly, and
+    it compares and hashes like the plain tuple; tuple operations such as slicing return plain
+    tuples. A user-facing, typed index: nothing in the toolchain requires it.
+
+    At least one local index is required, and a local dimension owned by a connectivity must be
+    one of the neighbors of the primary index's dimension.
+
+    Examples:
+        >>> class Vertex(DimensionIndex): ...
+        >>> class Edge(DimensionIndex): ...
+        >>> class V2E(NeighborConnectivity[Vertex, Edge]):
+        ...     class Local(LocalDimensionIndex): ...
+        >>> position = MultiDimensionIndex(Vertex(3), V2E.Local(1))
+        >>> position
+        MultiDimensionIndex(Vertex=3, V2E.Local=1)
+        >>> position.dims == (Vertex, V2E.Local)
+        True
+    """
+
+    __slots__ = ()
+
+    def __new__(cls, index: D, *local_indices: *Ls) -> MultiDimensionIndex[D, *Ls]:
+        # NOTE: checked at runtime what a checker cannot: a `TypeVarTuple` has no bound.
+        if not isinstance(index, DimensionIndex) or index.dim.kind is DimensionKind.LOCAL:
+            raise TypeError(
+                f"'MultiDimensionIndex' starts with an index into a non-local dimension, got"
+                f" '{index!r}'."
+            )
+        if not local_indices:
+            raise TypeError(
+                "'MultiDimensionIndex' is a position in a *product*: it needs at least one index"
+                " into a local dimension."
+            )
+        for local_index in local_indices:
+            if not isinstance(local_index, LocalDimensionIndex):
+                raise TypeError(
+                    "'MultiDimensionIndex' continues with indices into local dimensions, got"
+                    f" '{local_index!r}'."
+                )
+            owner = local_index.dim.owner  # type: ignore[attr-defined] # a LocalDimensionIndex
+            if owner is not None and owner.domain is not index.dim:
+                raise TypeError(
+                    f"'MultiDimensionIndex': '{local_index.dim.__qualname__}' indexes the neighbors"
+                    f" of '{owner.domain.__qualname__}', not of '{index.dim.__qualname__}'."
+                )
+        return super().__new__(cls, (index, *local_indices))
+
+    def __getnewargs__(self) -> tuple[Any, ...]:
+        # NOTE: `tuple`'s own passes the elements as one tuple, which `__new__` does not take.
+        return tuple(cast(tuple[Any, ...], self))
+
+    @property
+    def dims(self) -> tuple[Dimension, ...]:
+        return tuple(index.dim for index in cast(tuple[DimensionIndex, ...], self))
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join(map(repr, cast(tuple[Any, ...], self)))})"
