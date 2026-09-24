@@ -133,13 +133,15 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     assert constant_symbols == expected
 
 
-def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
+def _are_streams_set_to_default_stream(sdfg: dace.SDFG, device: core_defs.DeviceType) -> bool:
     if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
         return False
 
+    platform = "cuda" if device == core_defs.DeviceType.CUDA else "hip"
+
     return (
         re.match(
-            r"__dace_gpu_set_all_streams\(__state\s*,\s*(cuda|hip)StreamDefault\);",
+            rf"__dace_gpu_set_all_streams\(__state\s*,\s*{platform}StreamDefault\);",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
@@ -184,10 +186,9 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
         if isinstance(state, dace.SDFGState)
     )
     assert not _are_streams_synchronized(sdfg)
-    assert _are_streams_set_to_default_stream(sdfg)
 
 
-def _check_sdfg_with_sync_call(sdfg: dace.SDFG) -> None:
+def _check_sdfg_with_sync_call(sdfg: dace.SDFG, device: core_defs.DeviceType) -> None:
     states = sdfg.states()
     sink_states = sdfg.sink_nodes()
 
@@ -205,8 +206,15 @@ def _check_sdfg_with_sync_call(sdfg: dace.SDFG) -> None:
     assert sync_tlet.side_effects
     assert sync_tlet.label == "stream_synchronize"
 
-    assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
-    assert _are_streams_set_to_default_stream(sdfg)
+    platform = "cuda" if device == core_defs.DeviceType.CUDA else "hip"
+    assert (
+        sync_tlet.code.as_string
+        == f"""\
+for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {{
+    {platform}StreamSynchronize(__state->gpu_context->streams[__i]);
+}}"""
+    )
+    assert _are_streams_set_to_default_stream(sdfg, device)
 
 
 def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
@@ -252,7 +260,7 @@ def test_generate_sdfg_sync_call(sync_call: bool, device_type: core_defs.DeviceT
     if device_type == core_defs.DeviceType.CPU:
         _check_cpu_sdfg_call(sdfg)
     elif sync_call:
-        _check_sdfg_with_sync_call(sdfg)
+        _check_sdfg_with_sync_call(sdfg, device_type)
     else:
         _check_sdfg_with_async_call(sdfg)
 
@@ -296,6 +304,9 @@ def test_generate_sdfg_external_gpu_stream(
     external_gpu_stream: int | None, device_type: core_defs.DeviceType
 ):
     """Verify that `external_gpu_stream` selects the GPU stream used by the SDFG."""
+    if device_type == core_defs.DeviceType.CPU:
+        pytest.skip("This test is only relevant for GPU execution.")
+
     ir = itir.Program(
         id="field_ir_external_gpu_stream",
         declarations=[],
@@ -321,11 +332,12 @@ def test_generate_sdfg_external_gpu_stream(
         sync_sdfg_call=False,
         external_gpu_stream=external_gpu_stream,
     )
+    _check_sdfg_with_async_call(sdfg)
 
     if device_type == core_defs.DeviceType.CPU:
         assert "cuda" not in sdfg.init_code
     elif external_gpu_stream is None:
-        assert _are_streams_set_to_default_stream(sdfg)
+        assert _are_streams_set_to_default_stream(sdfg, device_type)
     else:
         assert _are_streams_set_to_external_stream(sdfg, external_gpu_stream)
 
@@ -466,7 +478,7 @@ def test_generate_sdfg_async_call_multi_state(
         #   in the generated code. This is plain wrong, but it works as long as
         #   all `Map`s are scheduled on the same GPU stream.
         #   See https://github.com/spcl/dace/issues/2120 for more information.
-        assert _are_streams_set_to_default_stream(sdfg)
+        assert _are_streams_set_to_default_stream(sdfg, device_type)
         assert not _are_streams_synchronized(sdfg)
     else:
         # There is no dependency between the states, so no sync.
