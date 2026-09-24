@@ -1035,9 +1035,15 @@ def test_compile_variants_decorator_static_domains(cartesian_case, precompile):
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, "out")()
     if precompile:
+        static_domain = {cases.IDim: (0, cartesian_case.default_sizes[cases.IDim])}
         testee.compile(
             offset_provider=cartesian_case.offset_provider,
-            static_domains={dim: (0, size) for dim, size in cartesian_case.default_sizes.items()},
+            static_domains={
+                "inp[0]": static_domain,
+                "inp[1]": static_domain,
+                "out[0]": static_domain,
+                "out[1]": static_domain,
+            },
         )
         gtx.wait_for_compilation()
     else:
