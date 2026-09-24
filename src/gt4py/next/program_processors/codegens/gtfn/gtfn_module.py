@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from typing import Any, Final, Optional
 
 import factory
@@ -27,6 +28,31 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
+
+# Device-dependent settings of the generated code. Code specs are stored as factories
+# (called per translation step) since their defaults depend on `config`.
+_DEFAULT_CODE_SPEC_FACTORIES: Final[
+    dict[core_defs.DeviceType, Callable[[], artifacts.HeaderAndSourceCodeSpec]]
+] = {
+    core_defs.DeviceType.CPU: artifacts.CPPCodeSpec,
+    core_defs.DeviceType.CUDA: artifacts.CUDACodeSpec,
+    core_defs.DeviceType.ROCM: artifacts.HIPCodeSpec,
+}
+_BACKEND_HEADERS: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools/fn/backend/naive.hpp",
+    core_defs.DeviceType.CUDA: "gridtools/fn/backend/gpu.hpp",
+    core_defs.DeviceType.ROCM: "gridtools/fn/backend/gpu.hpp",
+}
+_BACKEND_TYPES: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools::fn::backend::naive{}",
+    core_defs.DeviceType.CUDA: "gridtools::fn::backend::gpu<generated::block_sizes_t>{}",
+    core_defs.DeviceType.ROCM: "gridtools::fn::backend::gpu<generated::block_sizes_t>{}",
+}
+_LIBRARY_NAMES: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools_cpu",
+    core_defs.DeviceType.CUDA: "gridtools_gpu",
+    core_defs.DeviceType.ROCM: "gridtools_gpu",
+}
 
 
 def get_param_description(name: str, type_: Any) -> interface.Parameter:
@@ -51,36 +77,15 @@ class GTFNTranslationStep(
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
-    # Device-dependent settings, initialized in `__post_init__`
-    _backend_header: str = dataclasses.field(init=False, repr=False)
-    _backend_type: str = dataclasses.field(init=False, repr=False)
-    _library_name: str = dataclasses.field(init=False, repr=False)
-
     def __post_init__(self) -> None:
-        default_code_spec: artifacts.HeaderAndSourceCodeSpec
-        match self.device_type:
-            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
-                default_code_spec = (
-                    artifacts.CUDACodeSpec()
-                    if self.device_type == core_defs.DeviceType.CUDA
-                    else artifacts.HIPCodeSpec()
-                )
-                backend_header = "gridtools/fn/backend/gpu.hpp"
-                backend_type = "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
-                library_name = "gridtools_gpu"
-            case core_defs.DeviceType.CPU:
-                default_code_spec = artifacts.CPPCodeSpec()
-                backend_header = "gridtools/fn/backend/naive.hpp"
-                backend_type = "gridtools::fn::backend::naive{}"
-                library_name = "gridtools_cpu"
-            case _:
-                raise NotImplementedError(
-                    f"{self.__class__.__name__} is not implemented for device type "
-                    f"{self.device_type.name}"
-                )
-
+        if (code_spec_factory := _DEFAULT_CODE_SPEC_FACTORIES.get(self.device_type)) is None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} is not implemented for device type "
+                f"{self.device_type.name}"
+            )
         # Resolve the default code spec eagerly, so its settings (e.g. `format_source`,
         # which follows `config.FORMAT_SOURCES`) are part of the step and its fingerprint.
+        default_code_spec = code_spec_factory()
         if self.code_spec is None:
             object.__setattr__(self, "code_spec", default_code_spec)
         elif not isinstance(self.code_spec, type(default_code_spec)):
@@ -89,9 +94,6 @@ class GTFNTranslationStep(
                 f"'{self.device_type.name}' (expected '{type(default_code_spec).__name__}'). "
                 "When replacing the device type, pass 'code_spec=None' to use the default spec."
             )
-        object.__setattr__(self, "_backend_header", backend_header)
-        object.__setattr__(self, "_backend_type", backend_type)
-        object.__setattr__(self, "_library_name", library_name)
 
     def _process_regular_arguments(
         self,
@@ -226,7 +228,7 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        backend_arg = self._backend_type
+        backend_arg = _BACKEND_TYPES[self.device_type]
         args_expr: list[str] = [backend_arg, *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
@@ -243,7 +245,7 @@ class GTFNTranslationStep(
         source_code = artifacts.format_source(
             code_spec,
             f"""
-                    #include <{self._backend_header}>
+                    #include <{_BACKEND_HEADERS[self.device_type]}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
@@ -253,7 +255,9 @@ class GTFNTranslationStep(
         module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
             artifacts.ProgramSource(
                 entry_point=function,
-                library_deps=(interface.LibraryDependency(self._library_name, "master"),),
+                library_deps=(
+                    interface.LibraryDependency(_LIBRARY_NAMES[self.device_type], "master"),
+                ),
                 source_code=source_code,
                 code_spec=code_spec,
             )
