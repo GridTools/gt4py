@@ -163,6 +163,64 @@ def _no_implicit_conversion_diagnostic(left: foast.Expr, right: foast.Expr) -> d
     }
 
 
+def _is_scan_builtin(expr: foast.Expr) -> bool:
+    return isinstance(expr, foast.Name) and expr.id == "scan"
+
+
+def _is_literal(expr: foast.Expr) -> bool:
+    match expr:
+        case foast.Constant():
+            return True
+        case foast.TupleExpr():
+            return all(_is_literal(el) for el in expr.elts)
+        case foast.UnaryOp():
+            return _is_literal(expr.operand)
+        case foast.Call(func=foast.Name(type=ts.ConstructorType())):
+            return all(_is_literal(arg) for arg in expr.args)
+    return False
+
+
+def _check_scan_pass(
+    location: eve.SourceLocation,
+    name: str,
+    pass_type: ts.FunctionType,
+    forward_type: ts.TypeSpec,
+    init_type: ts.TypeSpec,
+) -> None:
+    if not (isinstance(forward_type, ts.ScalarType) and forward_type.kind == ts.ScalarKind.BOOL):
+        raise errors.DSLError(
+            location, f"Argument 'forward' to scan operator '{name}' must be a boolean."
+        )
+    if not all(
+        type_info.is_arithmetic(type_) or type_info.is_logical(type_)
+        for type_ in type_info.primitive_constituents(init_type)
+    ):
+        raise errors.DSLError(
+            location,
+            f"Argument 'init' to scan operator '{name}' must "
+            "be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
+        )
+    if not pass_type.pos_or_kw_args:
+        raise errors.DSLError(
+            location,
+            f"Scan operator '{name}' must have at least one argument (the carry).",
+        )
+    carry_arg_name = next(iter(pass_type.pos_or_kw_args.keys()))
+    carry_type = pass_type.pos_or_kw_args[carry_arg_name]
+    if carry_type != pass_type.returns:
+        raise errors.DSLError(
+            location,
+            f"Argument '{carry_arg_name}' to scan operator '{name}' must have same type as its return: "
+            f"expected '{pass_type.returns}', got '{carry_type}'.",
+        )
+    elif init_type != carry_type:
+        raise errors.DSLError(
+            location,
+            f"Argument 'init' to scan operator '{name}' must have same type as '{carry_arg_name}' argument: "
+            f"expected '{carry_type}', got '{init_type}'.",
+        )
+
+
 class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Deduce and check types of FOAST expressions and symbols.
@@ -250,43 +308,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Argument 'axis' to scan operator '{node.id}' must be a vertical dimension.",
             )
         new_forward = self.visit(node.forward, **kwargs)
-        if not new_forward.type.kind == ts.ScalarKind.BOOL:
-            raise errors.DSLError(
-                node.location, f"Argument 'forward' to scan operator '{node.id}' must be a boolean."
-            )
         new_init = self.visit(node.init, **kwargs)
-        if not all(
-            type_info.is_arithmetic(type_) or type_info.is_logical(type_)
-            for type_ in type_info.primitive_constituents(new_init.type)
-        ):
-            raise errors.DSLError(
-                node.location,
-                f"Argument 'init' to scan operator '{node.id}' must "
-                "be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
-            )
         new_definition = self.visit(node.definition, **kwargs)
-        new_def_type = new_definition.type
-        if not new_def_type.pos_or_kw_args:
-            raise errors.DSLError(
-                node.location,
-                f"Scan operator '{node.id}' must have at least one argument (the carry).",
-            )
-        carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
-        carry_type = new_def_type.pos_or_kw_args[carry_arg_name]
-        if carry_type != new_def_type.returns:
-            raise errors.DSLError(
-                node.location,
-                f"Argument '{carry_arg_name}' to scan operator '{node.id}' must have same type as its return: "
-                f"expected '{new_def_type.returns}', got '{carry_type}'.",
-            )
-        elif new_init.type != carry_type:
-            raise errors.DSLError(
-                node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
-                f"expected '{carry_type}', got '{new_init.type}'.",
-            )
+        _check_scan_pass(
+            node.location, node.id, new_definition.type, new_forward.type, new_init.type
+        )
 
-        new_type = ts_ffront.ScanOperatorType(axis=new_axis.type.dim, definition=new_def_type)
+        new_type = ts_ffront.ScanOperatorType(
+            axis=new_axis.type.dim, definition=new_definition.type
+        )
         return foast.ScanOperator(
             id=node.id,
             axis=new_axis,
@@ -295,6 +325,98 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             definition=new_definition,
             type=new_type,
             location=node.location,
+        )
+
+    def _visit_scan_call(
+        self, node: foast.Call, scan_arg_types: list[ts.TypeSpec], **kwargs: Any
+    ) -> foast.Call:
+        """Type `scan(pass, axis=..., forward=..., init=...)`, the callee of a call-site scan."""
+        new_func = self.visit(node.func, **kwargs)
+        if len(node.args) != 1:
+            raise errors.DSLError(
+                node.location,
+                f"'scan' takes exactly one positional argument (the scan pass), got {len(node.args)}.",
+            )
+        if unexpected := set(node.kwargs) - {"axis", "forward", "init"}:
+            raise errors.DSLError(
+                node.location,
+                f"Unexpected keyword argument(s) {', '.join(sorted(unexpected))} to 'scan'.",
+            )
+        new_pass = self.visit(node.args[0], **kwargs)
+        if not isinstance(new_pass.type, ts_ffront.FieldOperatorType):
+            raise errors.DSLError(
+                new_pass.location,
+                f"The scan pass must be a field operator, got '{new_pass.type}'.",
+            )
+        pass_type = new_pass.type.definition
+        pass_name = str(new_pass)
+
+        new_kwargs = {
+            "forward": foast.Constant(value=True, location=node.location),
+            "init": foast.Constant(value=0.0, location=node.location),
+            **node.kwargs,
+        }
+        new_kwargs = {name: self.visit(arg, **kwargs) for name, arg in new_kwargs.items()}
+        for name in ("forward", "init"):
+            if not _is_literal(new_kwargs[name]):
+                raise errors.DSLError(
+                    new_kwargs[name].location,
+                    f"Argument '{name}' to 'scan' must be a compile-time constant.",
+                )
+        _check_scan_pass(
+            node.location, pass_name, pass_type, new_kwargs["forward"].type, new_kwargs["init"].type
+        )
+        if not all(
+            isinstance(t, ts.ScalarType)
+            for param in [*pass_type.pos_or_kw_args.values(), pass_type.returns]
+            for t in type_info.primitive_constituents(param)
+        ):
+            raise errors.DSLError(
+                new_pass.location,
+                f"The scan pass '{pass_name}' must take and return scalars or tuples of scalars.",
+            )
+        if pass_type.pos_only_args or pass_type.kw_only_args:
+            raise errors.DSLError(
+                new_pass.location,
+                f"The scan pass '{pass_name}' must not have positional-only or keyword-only arguments.",
+            )
+
+        if "axis" in new_kwargs:
+            axis_type = new_kwargs["axis"].type
+            if not isinstance(axis_type, ts.DimensionType):
+                raise errors.DSLError(
+                    new_kwargs["axis"].location, "Argument 'axis' to 'scan' must be a dimension."
+                )
+            axis = axis_type.dim
+            if axis.kind != DimensionKind.VERTICAL:
+                raise errors.DSLError(
+                    new_kwargs["axis"].location,
+                    "Argument 'axis' to 'scan' must be a vertical dimension.",
+                )
+        else:
+            vertical_dims = {
+                dim
+                for arg_type in scan_arg_types
+                for el in type_info.primitive_constituents(arg_type)
+                for dim in type_info.extract_dims(el)
+                if dim.kind == DimensionKind.VERTICAL
+            }
+            if len(vertical_dims) != 1:
+                found = ", ".join(sorted(f"'{d.value}'" for d in vertical_dims)) or "none"
+                raise errors.DSLError(
+                    node.location,
+                    "Cannot infer the 'axis' of 'scan' from its arguments, expected exactly one "
+                    f"vertical dimension, found {found}.",
+                    hints=["Pass the axis explicitly, e.g. 'scan(..., axis=KDim)'."],
+                )
+            (axis,) = vertical_dims
+
+        return foast.Call(
+            func=new_func,
+            args=[new_pass],
+            kwargs=new_kwargs,
+            location=node.location,
+            type=ts_ffront.ScanOperatorType(axis=axis, definition=pass_type),
         )
 
     def visit_Name(self, node: foast.Name, **kwargs: Any) -> foast.Name:
@@ -757,9 +879,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return foast.TupleExpr(elts=new_elts, type=new_type, location=node.location)
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        new_func = self.visit(node.func, **kwargs)
+        if _is_scan_builtin(node.func):
+            raise errors.DSLError(
+                node.location,
+                "'scan' creates a scan operator which must be called directly: "
+                "'scan(scan_pass, ...)(args)'.",
+            )
         new_args = self.visit(node.args, **kwargs)
         new_kwargs = self.visit(node.kwargs, **kwargs)
+        if isinstance(node.func, foast.Call) and _is_scan_builtin(node.func.func):
+            new_func = self._visit_scan_call(
+                node.func,
+                scan_arg_types=[arg.type for arg in [*new_args, *new_kwargs.values()]],
+                **kwargs,
+            )
+        else:
+            new_func = self.visit(node.func, **kwargs)
 
         func_type = new_func.type
         arg_types = [arg.type for arg in new_args]
@@ -779,6 +914,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             if not isinstance(
                 new_func,
                 (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator, foast.Name),
+            ) and not (
+                isinstance(new_func, foast.Call)
+                and isinstance(new_func.type, ts_ffront.ScanOperatorType)
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
@@ -811,6 +949,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Expression of type '{new_func.type}' is not callable, must be a 'Function', 'FieldOperator', 'ScanOperator' or 'Field'.",
             )
 
+        assert isinstance(func_type, ts.CallableType)
         # ensure signature is valid
         try:
             type_info.accepts_args(

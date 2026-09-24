@@ -351,7 +351,11 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return current_expr
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
-        if type_info.type_class(node.func.type) is ts.FieldType:
+        if isinstance(node.func, foast.Call) and isinstance(
+            node.func.type, ts_ffront.ScanOperatorType
+        ):
+            return self._visit_scan_call(node, **kwargs)
+        elif type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in fbuiltins.MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
@@ -392,6 +396,26 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
         raise AssertionError(
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
+
+    def _visit_scan_call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
+        # `scan(scan_pass, forward=..., init=...)(*args)`
+        scan_call = node.func
+        assert isinstance(scan_call, foast.Call)
+        assert isinstance(scan_call.type, ts_ffront.ScanOperatorType)
+        scan_pass = self.visit(scan_call.args[0], **kwargs)
+        forward = self.visit(scan_call.kwargs["forward"], **kwargs)
+        init = self.visit(scan_call.kwargs["init"], **kwargs)
+
+        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+            scan_call.type, self.visit(node.args, **kwargs), self.visit(node.kwargs, **kwargs)
+        )
+        stencil_args = [*lowered_args, *lowered_kwargs.values()]
+        carry = next(self.uid_generator["__scan_carry"])
+        params = [next(self.uid_generator["__scan_arg"]) for _ in stencil_args]
+        definition = im.lambda_(carry, *params)(
+            im.call(scan_pass)(carry, *(im.deref(param) for param in params))
+        )
+        return im.as_fieldop(im.scan(definition, forward, init))(*stencil_args)
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         # Note: the type to convert to is uniquely identified by its GT4Py type (`ConstructorType`),
