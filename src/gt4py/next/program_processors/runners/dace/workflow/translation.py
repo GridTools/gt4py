@@ -279,18 +279,10 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
         # are not imported and the SDFG is compiled as plain C++.
         return
 
-    assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
-        f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
-    )
-
-    # If we are using the default stream, things are a bit simpler/harder. For some
-    #  reasons when using the default stream, DaCe seems to skip _all_ synchronization,
-    #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
-    #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e. just
-    #  launches the kernels and then exist. Thus we have to add a synchronization
-    #  at the end to have a synchronous call. We can not use `SDFG.append_exit_code()`
-    #  because that code is only run at the `exit()` stage, not after a call. Thus we
-    #  will generate an SDFGState that contains a Tasklet with the sync call.
+    # We synchronize the GPU streams explicitly at the end of the SDFG. We cannot
+    #  use `SDFG.append_exit_code()` because that code is only run at the `exit()`
+    #  stage, not after a call. Thus we add an `SDFGState` at the end that contains
+    #  a `Tasklet` with the call to GPU stream synchronization.
     sync_state = sdfg.add_state("sync_state")
     for sink_node in sdfg.sink_nodes():
         if sink_node is sync_state:
@@ -308,7 +300,7 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
-        "sync_tlet",
+        "stream_synchronize",
         inputs={},
         outputs={},
         code=f"""\
@@ -413,6 +405,14 @@ class DaCeTranslator(
 
         if self.sync_sdfg_call:
             make_sdfg_call_sync(sdfg, on_gpu)
+        else:
+            # When using the default stream, DaCe seems to skip _all_ synchronization,
+            #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
+            #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e.
+            #  just launches the kernels and exits. This is the default behavior in GT4Py.
+            assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
+                f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+            )
 
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
