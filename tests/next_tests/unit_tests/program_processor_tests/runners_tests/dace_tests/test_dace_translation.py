@@ -466,6 +466,7 @@ def test_generate_sdfg_async_call_multi_state(
         #   in the generated code. This is plain wrong, but it works as long as
         #   all `Map`s are scheduled on the same GPU stream.
         #   See https://github.com/spcl/dace/issues/2120 for more information.
+        assert _are_streams_set_to_default_stream(sdfg)
         assert not _are_streams_synchronized(sdfg)
     else:
         # There is no dependency between the states, so no sync.
