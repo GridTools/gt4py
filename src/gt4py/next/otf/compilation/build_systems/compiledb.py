@@ -262,7 +262,9 @@ def _cc_prototype_program_source(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        code_spec=code_spec,
+        # The compiledb does not depend on source formatting: normalize it so the
+        # cache folder (keyed by the prototype source) is shared across settings.
+        code_spec=dataclasses.replace(code_spec, format_source=False),
     )
 
 

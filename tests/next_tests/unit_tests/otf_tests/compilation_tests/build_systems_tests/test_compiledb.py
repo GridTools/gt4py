@@ -13,6 +13,7 @@ import tempfile
 import pytest
 
 from gt4py.next import config, fingerprinting
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
@@ -91,3 +92,19 @@ def test_compiledb_project_is_relocatable(extension_source_example, clean_compil
         assert hasattr(
             importer.import_from_path(relocated_dir / new_data.module), new_data.entry_point_name
         )
+
+
+def test_compiledb_prototype_ignores_format_source():
+    prototypes = [
+        compiledb._cc_prototype_program_source(
+            deps=(),
+            build_type=config.CMakeBuildType.RELEASE,
+            cmake_flags=[],
+            code_spec=artifacts.CPPCodeSpec(format_source=format_source),
+        )
+        for format_source in (True, False)
+    ]
+
+    assert fingerprinting.strict_fingerprinter(
+        prototypes[0]
+    ) == fingerprinting.strict_fingerprinter(prototypes[1])

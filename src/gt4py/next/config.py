@@ -106,6 +106,13 @@ VERBOSE_EXCEPTIONS: bool = env_flag_to_bool(
 )
 
 
+#: Run source formatters (e.g. black, clang-format) on generated code.
+#: Only affects the readability of the generated code, never its semantics.
+#: The value is captured when a code spec or workflow step is created, so
+#: changing it later does not affect already existing backends.
+FORMAT_SOURCES: bool = env_flag_to_bool("GT4PY_FORMAT_SOURCES", default=DEBUG)
+
+
 #: Where generated code projects should be persisted.
 #: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
 BUILD_CACHE_DIR: pathlib.Path = (

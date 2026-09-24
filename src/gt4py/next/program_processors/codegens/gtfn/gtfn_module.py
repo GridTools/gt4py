@@ -15,7 +15,6 @@ import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
@@ -51,6 +50,19 @@ class GTFNTranslationStep(
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        # Resolve the default code spec eagerly, so its settings (e.g. `format_source`,
+        # which follows `config.FORMAT_SOURCES`) are part of the step and its fingerprint.
+        default_code_spec = self._default_code_spec()
+        if self.code_spec is None:
+            object.__setattr__(self, "code_spec", default_code_spec)
+        elif not isinstance(self.code_spec, type(default_code_spec)):
+            raise ValueError(
+                f"Code spec '{type(self.code_spec).__name__}' does not match device type "
+                f"'{self.device_type.name}' (expected '{type(default_code_spec).__name__}'). "
+                "When replacing the device type, pass 'code_spec=None' to use the default spec."
+            )
 
     def _default_code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
         match self.device_type:
@@ -171,14 +183,15 @@ class GTFNTranslationStep(
             column_axis=column_axis,
         )
 
-        generated_code = GTFNCodegen.apply(gtfn_ir)
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        return GTFNCodegen.apply(gtfn_ir)
 
     def __call__(
         self, inp: stages.CompilableProgramDef
     ) -> artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
+        code_spec = self.code_spec
+        assert code_spec is not None  # resolved in `__post_init__`
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
@@ -210,7 +223,7 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = artifacts.format_source(
-            self._code_spec(),
+            code_spec,
             f"""
                     #include <{self._backend_header()}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
@@ -224,7 +237,7 @@ class GTFNTranslationStep(
                 entry_point=function,
                 library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
                 source_code=source_code,
-                code_spec=self._code_spec(),
+                code_spec=code_spec,
             )
         )
         return module
@@ -246,9 +259,6 @@ class GTFNTranslationStep(
                 return "gridtools::fn::backend::naive{}"
             case _:
                 raise self._not_implemented_for_device_type()
-
-    def _code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
-        return self.code_spec if self.code_spec is not None else self._default_code_spec()
 
     def _library_name(self) -> str:
         match self.device_type:

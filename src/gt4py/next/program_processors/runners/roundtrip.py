@@ -117,6 +117,7 @@ _MODULE_CACHE: dict[str, types.ModuleType] = {}
 def _generate_source(
     ir: itir.Program,
     debug: bool,
+    format_source: bool,
     use_embedded: bool,
     offset_provider: common.OffsetProvider,
     transforms: itir_transforms.GTIRTransform,
@@ -128,7 +129,7 @@ def _generate_source(
         (
             ir,
             transforms,
-            debug,
+            format_source,
             use_embedded,
             tuple(common.offset_provider_to_type(offset_provider).items()),
         )
@@ -142,9 +143,8 @@ def _generate_source(
 
     program = EmbeddedDSL.apply(ir)
 
-    # format output in debug mode for better debuggability
-    # (e.g. line numbers, overview in the debugger).
-    if debug:
+    # format output for better debuggability (e.g. line numbers, overview in the debugger).
+    if format_source:
         program = codegen.format_python_source(program)
 
     offset_literals: Iterable[str] = (
@@ -258,6 +258,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
+    format_source: bool = dataclasses.field(default_factory=lambda: config.FORMAT_SOURCES)
 
     def __call__(self, inp: stages.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
@@ -266,6 +267,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact
             inp.data,
             offset_provider=inp.args.offset_provider,
             debug=debug,
+            format_source=self.format_source,
             use_embedded=self.use_embedded,
             transforms=self.transforms,
         )

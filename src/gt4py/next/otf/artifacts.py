@@ -30,6 +30,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar, runtime_checkable
 
 from gt4py.eve import codegen
+from gt4py.next import config
 from gt4py.next.otf.binding import interface
 
 
@@ -38,15 +39,19 @@ class SourceCodeSpec:
     """
     Basic settings for any source programming language.
 
-    Formatting will happen through ``eve.codegen.format_source``.
-    For available formatting options, check the options of the
-    specific formatter used depending on ``.formatter_key``.
+    Formatting will happen through `eve.codegen.format_source`, only if
+    `.format_source` is true. For available formatting options, check the
+    options of the specific formatter used depending on `.formatter_key`.
+
+    `.format_source` defaults to the value of `config.FORMAT_SOURCES` at
+    creation time, and it is part of the spec (and thus of its fingerprint).
     """
 
     source_language: str
     file_extension: str
     formatter_key: str | None = None
     formatter_options: Mapping[str, Any] | None = None
+    format_source: bool = dataclasses.field(default_factory=lambda: config.FORMAT_SOURCES)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -71,6 +76,8 @@ class SDFGCodeSpec(SourceCodeSpec):
 
     source_language: str = "SDFG"
     file_extension: str = "sdfg"
+    # There is no SDFG formatter: keep the spec independent of `config.FORMAT_SOURCES`
+    format_source: bool = False
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -118,6 +125,9 @@ class HIPCodeSpec(CPPLikeCodeSpec):
 
 
 def format_source(source_code_spec: SourceCodeSpec, source: str) -> str:
+    """Format `source` as configured in `source_code_spec` (no-op if `.format_source` is false)."""
+    if not source_code_spec.format_source:
+        return source
     assert source_code_spec.formatter_key is not None, (
         "No formatter key specified in source code specification."
     )

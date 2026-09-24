@@ -15,7 +15,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next import fingerprinting
+from gt4py.next import config, fingerprinting
 from gt4py.next.otf import arguments, artifacts, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
@@ -84,6 +84,27 @@ def test_codegen(program_example):
     assert module.entry_point.name == fencil.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
     assert isinstance(module.code_spec, artifacts.CPPCodeSpec)
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_code_spec_is_resolved_at_construction(monkeypatch, flag):
+    monkeypatch.setattr(config, "FORMAT_SOURCES", flag)
+    step = gtfn_module.GTFNTranslationStep()
+    monkeypatch.setattr(config, "FORMAT_SOURCES", not flag)
+
+    assert isinstance(step.code_spec, artifacts.CPPCodeSpec)
+    assert step.code_spec.format_source is flag
+    # the formatting setting is part of the step fingerprint, and thus of translation cache keys
+    assert fingerprinting.strict_fingerprinter(step) != fingerprinting.strict_fingerprinter(
+        gtfn_module.GTFNTranslationStep()
+    )
+
+
+def test_code_spec_device_type_mismatch():
+    with pytest.raises(ValueError, match="does not match device type"):
+        gtfn_module.GTFNTranslationStep(
+            device_type=gtx.DeviceType.CUDA, code_spec=artifacts.CPPCodeSpec()
+        )
 
 
 def test_hash_and_diskcache(program_example, tmp_path):
