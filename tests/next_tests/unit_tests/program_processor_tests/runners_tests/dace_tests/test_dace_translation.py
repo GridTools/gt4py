@@ -203,7 +203,7 @@ def _check_sdfg_with_sync_call(sdfg: dace.SDFG) -> None:
     sync_tlet = next(iter(sync_state.nodes()))
     assert isinstance(sync_tlet, dace_nodes.Tasklet)
     assert sync_tlet.side_effects
-    assert sync_tlet.label == "sync_tlet"
+    assert sync_tlet.label == "stream_synchronize"
 
     assert re.match(r"(cuda|hip)StreamSynchronize\(\1StreamDefault\)", sync_tlet.code.as_string)
     assert _are_streams_set_to_default_stream(sdfg)
