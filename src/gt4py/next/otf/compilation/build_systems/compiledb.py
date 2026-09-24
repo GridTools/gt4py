@@ -65,7 +65,9 @@ class CompiledbFactory(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
-            code_spec=source.program_source.code_spec,
+            # The compiledb does not depend on source formatting: normalize it so the
+            # cache folder (keyed by the prototype source) is shared across settings.
+            code_spec=dataclasses.replace(source.program_source.code_spec, format_source=False),
         )
 
         compiledb_template = _cc_get_compiledb(
@@ -262,9 +264,7 @@ def _cc_prototype_program_source(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        # The compiledb does not depend on source formatting: normalize it so the
-        # cache folder (keyed by the prototype source) is shared across settings.
-        code_spec=dataclasses.replace(code_spec, format_source=False),
+        code_spec=code_spec,
     )
 
 

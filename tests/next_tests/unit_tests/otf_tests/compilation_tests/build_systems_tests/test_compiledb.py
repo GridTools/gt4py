@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import pathlib
 import shutil
 import tempfile
@@ -13,7 +14,6 @@ import tempfile
 import pytest
 
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
@@ -94,16 +94,25 @@ def test_compiledb_project_is_relocatable(extension_source_example, clean_compil
         )
 
 
-def test_compiledb_prototype_ignores_format_source():
-    prototypes = [
-        compiledb._cc_prototype_program_source(
-            deps=(),
-            build_type=config.CMakeBuildType.RELEASE,
-            cmake_flags=[],
-            code_spec=artifacts.CPPCodeSpec(format_source=format_source),
+def test_compiledb_prototype_ignores_format_source(monkeypatch, extension_source_example):
+    prototypes = []
+
+    def fake_get_compiledb(renew_compiledb, prototype_program_source, **kwargs):
+        prototypes.append(prototype_program_source)
+        return pathlib.Path("compile_commands.json")
+
+    monkeypatch.setattr(compiledb, "_cc_get_compiledb", fake_get_compiledb)
+
+    program_source = extension_source_example.program_source
+    for format_source in (True, False):
+        code_spec = dataclasses.replace(program_source.code_spec, format_source=format_source)
+        compiledb.CompiledbFactory()(
+            dataclasses.replace(
+                extension_source_example,
+                program_source=dataclasses.replace(program_source, code_spec=code_spec),
+            ),
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
         )
-        for format_source in (True, False)
-    ]
 
     assert fingerprinting.strict_fingerprinter(
         prototypes[0]

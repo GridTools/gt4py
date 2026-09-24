@@ -126,14 +126,14 @@ class HIPCodeSpec(CPPLikeCodeSpec):
 
 def format_source(source_code_spec: SourceCodeSpec, source: str) -> str:
     """Format `source` as configured in `source_code_spec` (no-op if `.format_source` is false)."""
-    if not source_code_spec.format_source:
-        return source
-    assert source_code_spec.formatter_key is not None, (
-        "No formatter key specified in source code specification."
-    )
-    return codegen.format_source(
-        source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
-    )
+    if source_code_spec.format_source:
+        assert source_code_spec.formatter_key is not None, (
+            "No formatter key specified in source code specification."
+        )
+        source = codegen.format_source(
+            source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
+        )
+    return source
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=SourceCodeSpec)
