@@ -191,3 +191,10 @@ def test_step_builder_cannot_override_config_setting():
                 gtfn.make_gtfn_translation, device_type=core_defs.DeviceType.CPU
             ),
         )
+
+
+def test_prebuilt_toolchain_names_are_unique():
+    names = [gtfn.run_gtfn.name, gtfn.run_gtfn_gpu.name, gtfn.run_gtfn_no_transforms.name]
+
+    assert gtfn.run_gtfn_no_transforms.name == "run_gtfn_cpu_no_transforms"
+    assert len(set(names)) == len(names)

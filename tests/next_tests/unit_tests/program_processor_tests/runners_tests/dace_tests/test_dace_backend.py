@@ -267,6 +267,28 @@ def test_make_toolchain_rejects_derived_optimization_args():
         )
 
 
+@pytest.mark.parametrize(
+    "step_builders",
+    [
+        # Each builder ignores the GPU config it receives and targets the CPU.
+        {
+            "translation": lambda cfg: dace_wf_factory.make_dace_translator(
+                dace_wf_factory.DaCeConfig()
+            )
+        },
+        {
+            "compilation": lambda cfg: dace_wf_factory.make_dace_compiler(
+                dace_wf_factory.DaCeConfig()
+            )
+        },
+    ],
+    ids=["translation", "compilation"],
+)
+def test_make_toolchain_rejects_step_builder_ignoring_config_device(step_builders):
+    with pytest.raises(ValueError, match="toolchain is being built for"):
+        dace_wf_backend.make_dace_toolchain(dace_wf_factory.DaCeConfig(gpu=True), **step_builders)
+
+
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
     # Helper function to ignore the GPU device initialization code in the generated
     # cuda code, which is not relevant to the test.

@@ -19,6 +19,7 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
 from gt4py.next.program_processors.runners.dace.workflow.factory import (
     DaCeConfig,
     make_dace_bindings,
+    make_dace_compile_workflow,
     make_dace_compiler,
     make_dace_translator,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "get_sdfg_args",
     "make_dace_backend",
     "make_dace_bindings",
+    "make_dace_compile_workflow",
     "make_dace_compiler",
     "make_dace_toolchain",
     "make_dace_translator",
