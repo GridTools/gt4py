@@ -69,3 +69,17 @@ def test_roundtrip_step_formatting(empty_program, formatter_spy, format_source):
     )
 
     assert len(formatter_spy) == int(format_source)
+
+
+def test_load_module_cache_respects_debug_mode(monkeypatch, tmp_path):
+    monkeypatch.setattr(roundtrip, "_MODULE_CACHE", {})
+    monkeypatch.setattr(roundtrip.tempfile, "tempdir", str(tmp_path))
+    source_code = "x = 1\n"
+
+    roundtrip._load_module(source_code, debug=False)
+    assert not list(tmp_path.glob("*.py"))
+
+    # loading the same source in debug mode must still write the temporary `.py` file
+    debug_module = roundtrip._load_module(source_code, debug=True)
+    assert list(tmp_path.glob("*.py"))
+    assert debug_module.__file__.startswith(str(tmp_path))

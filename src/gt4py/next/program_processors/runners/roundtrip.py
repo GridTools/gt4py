@@ -110,8 +110,9 @@ def ${id}(${','.join(params)}):
 
 # Caches the generated source by IR hash so re-codegen is skipped within a process.
 _SOURCE_CACHE: dict[int, tuple[str, str]] = {}
-# Caches the loaded module by source string so re-exec is skipped within a process.
-_MODULE_CACHE: dict[str, types.ModuleType] = {}
+# Caches the loaded module by source string and debug mode (debug modules are loaded
+# from a temporary file) so re-exec is skipped within a process.
+_MODULE_CACHE: dict[tuple[str, bool], types.ModuleType] = {}
 
 
 def _generate_source(
@@ -187,8 +188,8 @@ def _generate_source(
 
 
 def _load_module(source_code: str, debug: bool) -> types.ModuleType:
-    if source_code in _MODULE_CACHE:
-        return _MODULE_CACHE[source_code]
+    if (cache_key := (source_code, debug)) in _MODULE_CACHE:
+        return _MODULE_CACHE[cache_key]
 
     if debug:
         # Write to a real .py so debuggers/tracebacks have file/line info.
@@ -205,7 +206,7 @@ def _load_module(source_code: str, debug: bool) -> types.ModuleType:
         mod = types.ModuleType("roundtrip_module")
         exec(compile(source_code, "<roundtrip>", "exec"), mod.__dict__)
 
-    _MODULE_CACHE[source_code] = mod
+    _MODULE_CACHE[cache_key] = mod
     return mod
 
 
