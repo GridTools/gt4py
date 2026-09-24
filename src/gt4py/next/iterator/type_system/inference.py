@@ -111,7 +111,7 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
     >>> square_func_type_synthesizer = type_synthesizer.type_synthesizer(
     ...     lambda base: power(base, int_type)
     ... )
-    >>> square_func_type_synthesizer(float_type, offset_provider_type={})
+    >>> square_func_type_synthesizer(float_type, table_types={})
     ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)
 
     Note that without a corresponding call the function itself can not be fully typed and as such
@@ -125,7 +125,7 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
     ...     node=square_func,
     ...     store_inferred_type_in_node=True,
     ... )
-    >>> o_type_synthesizer(float_type, offset_provider_type={})
+    >>> o_type_synthesizer(float_type, table_types={})
     ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None)
     >>> square_func.type == ts.FunctionType(
     ...     pos_only_args=[float_type], pos_or_kw_args={}, kw_only_args={}, returns=float_type
@@ -181,16 +181,14 @@ class ObservableTypeSynthesizer(type_synthesizer.TypeSynthesizer):
     def __call__(
         self,
         *args: type_synthesizer.TypeOrTypeSynthesizer,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         **kwargs,
     ) -> Union[ts.TypeSpec, ObservableTypeSynthesizer]:
         assert all(isinstance(arg, (ts.TypeSpec, ObservableTypeSynthesizer)) for arg in args), (
             "ObservableTypeSynthesizer can only be used with arguments that are TypeSpec or ObservableTypeSynthesizer"
         )
 
-        return_type_or_synthesizer = self.type_synthesizer(
-            *args, offset_provider_type=offset_provider_type, **kwargs
-        )
+        return_type_or_synthesizer = self.type_synthesizer(*args, table_types=table_types, **kwargs)
 
         # return type is a typing rule by itself
         if isinstance(return_type_or_synthesizer, type_synthesizer.TypeSynthesizer):
@@ -255,7 +253,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     PRESERVED_ANNEX_ATTRS = ("domain",)
 
-    offset_provider_type: Optional[common.TableTypes]
+    table_types: Optional[common.TableTypes]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
     #: Reinference-mode skipping already typed nodes.
@@ -266,7 +264,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         cls,
         node: T,
         *,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         inplace: bool = False,
         allow_undeclared_symbols: bool = False,
     ) -> T:
@@ -277,7 +275,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             node: The :class:`itir.Node` to infer the types of.
 
         Keyword Arguments:
-            offset_provider_type: Offset provider dictionary.
+            table_types: Offset provider dictionary.
             inplace: Write types directly to the given ``node`` instead of returning a copy.
             allow_undeclared_symbols: Allow references to symbols that don't have a corresponding
               declaration. This is useful for testing or inference on partially inferred sub-nodes.
@@ -340,7 +338,7 @@ class ITIRTypeInference(eve.NodeTranslator):
             )
 
         instance = cls(
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
             allow_undeclared_symbols=allow_undeclared_symbols,
             reinfer=False,
         )
@@ -350,9 +348,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         return node
 
     @classmethod
-    def apply_reinfer(
-        cls, node: T, *, offset_provider_type: Optional[common.TableTypes] = None
-    ) -> T:
+    def apply_reinfer(cls, node: T, *, table_types: Optional[common.TableTypes] = None) -> T:
         """
         Given a partially typed node infer the type of ``node`` and its sub-nodes.
 
@@ -364,14 +360,12 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         Arguments:
             node: The :class:`itir.Node` to infer the types of.
-            offset_provider_type: Offset provider dictionary.
+            table_types: Offset provider dictionary.
         """
         if node.type:  # already inferred
             return node
 
-        instance = cls(
-            offset_provider_type=offset_provider_type, allow_undeclared_symbols=True, reinfer=True
-        )
+        instance = cls(table_types=table_types, allow_undeclared_symbols=True, reinfer=True)
         instance.visit(node, ctx=_INITIAL_CONTEXT)
         return node
 
@@ -562,7 +556,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-        result = fun(*args, **syntactic_info, offset_provider_type=self.offset_provider_type)
+        result = fun(*args, **syntactic_info, table_types=self.table_types)
 
         if isinstance(result, ObservableTypeSynthesizer):
             assert not result.node

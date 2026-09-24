@@ -160,9 +160,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
     def compile(
         self,
-        offset_provider: common.TableTypes
-        | common.OffsetProvider
-        | list[common.TableTypes | common.OffsetProvider]
+        offset_provider: common.TableTypesLike
+        | common.OffsetProviderLike
+        | list[common.TableTypesLike | common.OffsetProviderLike]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
@@ -196,7 +196,8 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             self.compilation_options.connectivities if offset_provider is None else offset_provider
         )
         if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs table_types
+        offset_provider = [common.as_tag_keyed_offset_provider(op) for op in offset_provider]
 
         assert all(
             common.is_offset_provider(op) or common.is_table_types(op) for op in offset_provider
@@ -373,12 +374,13 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def __call__(
         self,
         *args: Any,
-        offset_provider: common.OffsetProvider | None = None,
+        offset_provider: common.OffsetProviderLike | None = None,
         enable_jit: bool | None = None,
         **kwargs: Any,
     ) -> None:
-        if offset_provider is None:
-            offset_provider = {}
+        offset_provider = (
+            {} if offset_provider is None else common.as_tag_keyed_offset_provider(offset_provider)
+        )
         enable_jit = self.compilation_options.enable_jit if enable_jit is None else enable_jit
 
         with program_call_context(
@@ -409,6 +411,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
+                common.check_offset_provider(offset_provider)
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
@@ -428,7 +431,7 @@ class ProgramWithBoundArgs(Program):
 
     @override
     def __call__(
-        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
+        self, *args: Any, offset_provider: common.OffsetProviderLike | None = None, **kwargs: Any
     ) -> None:
         if offset_provider is None:
             offset_provider = {}
@@ -485,9 +488,9 @@ class ProgramWithBoundArgs(Program):
     @override
     def compile(
         self,
-        offset_provider: common.TableTypes
-        | common.OffsetProvider
-        | list[common.TableTypes | common.OffsetProvider]
+        offset_provider: common.TableTypesLike
+        | common.OffsetProviderLike
+        | list[common.TableTypesLike | common.OffsetProviderLike]
         | None = None,
         **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
     ) -> Self:
@@ -652,7 +655,9 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
-            offset_provider = {**kwargs.pop("offset_provider", {})}
+            offset_provider = {
+                **common.as_tag_keyed_offset_provider(kwargs.pop("offset_provider", {}))
+            }
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
@@ -674,7 +679,10 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         else:
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
-                kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
+                kwargs["offset_provider"] = {
+                    **common.as_tag_keyed_offset_provider(kwargs.pop("offset_provider", {}))
+                }
+                common.check_offset_provider(kwargs["offset_provider"])
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
@@ -718,6 +726,11 @@ class FieldOperatorFromFoast(FieldOperator):
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         assert self.backend is not None
+        if "offset_provider" in kwargs:
+            kwargs["offset_provider"] = common.as_tag_keyed_offset_provider(
+                kwargs["offset_provider"]
+            )
+            common.check_offset_provider(kwargs["offset_provider"])
         compiled_fo = self.backend.compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )

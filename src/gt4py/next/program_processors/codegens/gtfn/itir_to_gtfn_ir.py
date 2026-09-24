@@ -159,10 +159,10 @@ def _collect_dimensions_from_params(
 def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
 ) -> dict[str, TagDefinition]:
     offset_definitions = {}
-    offset_provider_type = {**offset_provider_type}
+    table_types = {**table_types}
 
     cartesian_offsets: OrderedSet[itir.CartesianOffset] = OrderedSet(
         node.walk_values().if_isinstance(itir.CartesianOffset).to_list()
@@ -187,7 +187,7 @@ def _collect_offset_definitions(
                     name=Sym(id=common.codegen_name(dim.tag)), alias=_vertical_dimension
                 )
 
-    for offset_name, connectivity_type in offset_provider_type.items():
+    for offset_name, connectivity_type in table_types.items():
         if isinstance(connectivity_type, common.NeighborTableType):
             assert grid_type == common.GridType.UNSTRUCTURED
             offset_definitions[offset_name] = TagDefinition(
@@ -339,7 +339,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     }
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
-    offset_provider_type: common.TableTypes
+    table_types: common.TableTypes
     column_axis: Optional[common.Dimension]
     grid_type: common.GridType
 
@@ -354,19 +354,19 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         cls,
         node: itir.Program,
         *,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         column_axis: Optional[common.Dimension],
     ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
-        node = itir_type_inference.infer(node, offset_provider_type=offset_provider_type)
+        node = itir_type_inference.infer(node, table_types=table_types)
         grid_type = ir_utils_misc.grid_type_from_program(node)
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
-        return cls(
-            offset_provider_type=offset_provider_type, column_axis=column_axis, grid_type=grid_type
-        ).visit(node)
+        return cls(table_types=table_types, column_axis=column_axis, grid_type=grid_type).visit(
+            node
+        )
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
         return Sym(id=node.id)
@@ -504,8 +504,8 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if "stencil" in kwargs:
             shift_offsets = self._collect_offset_or_axis_node(itir.OffsetLiteral, kwargs["stencil"])
             for o in shift_offsets:
-                if o in self.offset_provider_type and isinstance(
-                    common.get_offset_type(self.offset_provider_type, o),
+                if o in self.table_types and isinstance(
+                    common.get_offset_type(self.table_types, o),
                     common.NeighborTableType,
                 ):
                     # `o` is an offset-provider key, i.e. a qualified tag: mangle it exactly as
@@ -721,7 +721,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         offset_definitions = {
             **_collect_dimensions_from_params(node.params, self.grid_type),
             **_collect_dimensions_from_domain(node.body),
-            **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
+            **_collect_offset_definitions(node, self.grid_type, self.table_types),
         }
         offset_definitions = _add_staggered_aliases(offset_definitions)
         return Program(

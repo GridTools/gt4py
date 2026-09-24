@@ -53,7 +53,5 @@ def test_let_constant_foldable_if(
     input: itir.Expr, expected: itir.Expr, uids: utils.IDGeneratorPool
 ):
     input_program = program_factory(input)
-    inlined = dead_code_elimination.dead_code_elimination(
-        input_program, offset_provider_type={}, uids=uids
-    )
+    inlined = dead_code_elimination.dead_code_elimination(input_program, table_types={}, uids=uids)
     assert inlined == program_factory(expected)

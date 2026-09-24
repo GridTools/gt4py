@@ -10,11 +10,16 @@ from typing import Tuple
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, named_collections
-from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuiltinFunction
+from gt4py.next.ffront.fbuiltins import BuiltInFunction, WhereBuiltinFunction
 
 
 @BuiltInFunction
-def as_offset(offset: FieldOffset, field: common.Field, /) -> common.Connectivity:
+def as_offset(dim: common.Dimension, field: common.Field, /) -> common.Connectivity:
+    """
+    Shift along `dim` by the per-point amounts in the integer `field`.
+
+    `a(as_offset(KDim, k_offsets))` reads `a` at `k + k_offsets[k]` in `KDim`.
+    """
     raise NotImplementedError()
 
 

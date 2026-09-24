@@ -485,9 +485,7 @@ def infer_expr(
     if not revisit_already_inferred and hasattr(expr.annex, "domain"):
         return expr, {}
 
-    itir_type_inference.reinfer(
-        expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
-    )
+    itir_type_inference.reinfer(expr, table_types=common.offset_provider_to_type(offset_provider))
     el_types, domain = gtx_utils.equalize_tuple_structure(
         gtx_utils.tree_map(
             collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
@@ -588,7 +586,7 @@ def infer_program(
     )
 
     program = itir_type_inference.infer(
-        program, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        program, table_types=common.offset_provider_to_type(offset_provider)
     )
 
     return itir.Program(

@@ -83,9 +83,7 @@ def test_verification(testee, exec_alloc_descriptor, mesh_descriptor):
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (
-        mesh_descriptor.offset_provider[E2VDim.tag].asnumpy()[:, i] for i in [0, 1]
-    )
+    first_nbs, second_nbs = (mesh_descriptor.offset_provider[E2V].asnumpy()[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(
@@ -105,7 +103,7 @@ def test_temporary_symbols(testee, mesh_descriptor):
     gtir_with_tmp = apply_common_transforms(
         testee.gtir,
         extract_temporaries=True,
-        offset_provider=mesh_descriptor.offset_provider,
+        offset_provider=common.as_tag_keyed_offset_provider(mesh_descriptor.offset_provider),
     )
 
     params = ["num_vertices", "num_edges", "num_cells"]

@@ -218,28 +218,28 @@ edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 
 +++
 
-You can transform fields (or tuples of fields) over one domain to another domain by using the call operator of the source field with a _field offset_ as argument. This transform uses the connectivity between the source and target domains to find the values of adjacent mesh elements.
+You can transform fields (or tuples of fields) over one domain to another domain by using the call operator of the source field with a _connectivity_ as argument. This transform uses the connectivity between the source and target domains to find the values of adjacent mesh elements.
 
 To understand this transform, you can look at the edge-to-cell connectivity table `edge_to_cell_table` listed above. This table has the same shape as the output of the transform, that is, one dimension over the edges and another _local_ dimension. The table stores indices into a field over cells, the transform essentially gives you another field where the indices have been replaced with the values in the cell field at the corresponding indices.
 
 Another way to look at it is that transform uses the edge-to-cell connectivity to look up all the cell neighbors of edges, and associates the values of those neighbor cells with each edge.
 
-You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
+You can use the connectivity `E2C` declared below to transform a field over cells to a field over edges using the edge-to-cell connectivities. It is declared as a class: for each edge (`EdgeDim`), a list of neighbor cells (`CellDim`), indexed by its nested local dimension `E2C.Local`:
 
 ```{code-cell} ipython3
-class E2CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
-E2C = gtx.FieldOffset(E2CDim.tag, source=CellDim, target=(EdgeDim, E2CDim))
+class E2C(gtx.NeighborConnectivity[EdgeDim, CellDim]):
+    class Local(gtx.LocalDimensionIndex): ...
 ```
 
-The field offset is named by its local dimension's `tag`, and the offset provider below is keyed by the same `tag`, so all three refer to one connectivity. Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
+Note that the declaration does not contain the actual connectivity table, that's provided through an _offset provider_, a dictionary from connectivity declarations to tables:
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2CDim], codomain=CellDim, data=edge_to_cell_table, skip_value=-1)
+E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2C.Local], codomain=CellDim, data=edge_to_cell_table, skip_value=-1)
 ```
 
 The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
 
-Pay attention to the syntax where the field offset `E2C` can be freely accessed in the field operator, but the offset provider `E2C_offset_provider` is passed in a dictionary to the program.
+Pay attention to the syntax where the connectivity `E2C` can be freely accessed in the field operator, but the offset provider `E2C_offset_provider` is passed in a dictionary to the program.
 
 ```{code-cell} ipython3
 @gtx.field_operator
@@ -250,7 +250,7 @@ def nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64]) -> gtx.
 def run_nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     nearest_cell_to_edge(cell_values, out=out)
 
-run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={E2CDim.tag: E2C_offset_provider})
+run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={E2C: E2C_offset_provider})
 
 print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 ```
@@ -265,19 +265,19 @@ Running the above snippet results in the following edge field:
 
 #### Using reductions on connected mesh elements
 
-Similarly to the previous example, the output is once again a field on edges. The difference is that this field operator does not take the first column of the transformed field, but sums the columns. In other words, the result is the sum of all the cells adjacent to an edge. You can achieve this by first transforming the cell field to a field over the cell neighbors of edges (i.e. a field of dimensions Edge × E2CDim) using `cells(E2C)`, then calling the `neighbor_sum` builtin function to sum along the `E2CDim` dimension.
+Similarly to the previous example, the output is once again a field on edges. The difference is that this field operator does not take the first column of the transformed field, but sums the columns. In other words, the result is the sum of all the cells adjacent to an edge. You can achieve this by first transforming the cell field to a field over the cell neighbors of edges (i.e. a field of dimensions Edge × E2C.Local) using `cells(E2C)`, then calling the `neighbor_sum` builtin function to sum along the `E2C.Local` dimension.
 
 ```{code-cell} ipython3
 @gtx.field_operator
 def sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64]) -> gtx.Field[Dims[EdgeDim], float64]:
-    # type of cells(E2C) is gtx.Field[Dims[EdgeDim, E2CDim], float64]
-    return neighbor_sum(cells(E2C), axis=E2CDim)
+    # type of cells(E2C) is gtx.Field[Dims[EdgeDim, E2C.Local], float64]
+    return neighbor_sum(cells(E2C), axis=E2C.Local)
 
 @gtx.program
 def run_sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
 
-run_sum_adjacent_cells(cell_values, edge_values, offset_provider={E2CDim.tag: E2C_offset_provider})
+run_sum_adjacent_cells(cell_values, edge_values, offset_provider={E2C: E2C_offset_provider})
 
 print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 ```
@@ -376,13 +376,13 @@ print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnu
 
 #### Implementing the pseudo-laplacian
 
-As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
+As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to declare the connectivity and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
-C2E = gtx.FieldOffset(C2EDim.tag, source=EdgeDim, target=(CellDim, C2EDim))
+class C2E(gtx.NeighborConnectivity[CellDim, EdgeDim]):
+    class Local(gtx.LocalDimensionIndex): ...
 
-C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)
+C2E_offset_provider = gtx.as_connectivity([CellDim, C2E.Local], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)
 ```
 
 **Weights of edge differences:**
@@ -410,7 +410,7 @@ edge_weights = np.array([
     [0, -1, -1], # cell 5
 ], dtype=np.float64)
 
-edge_weight_field = gtx.as_field([CellDim, C2EDim], edge_weights)
+edge_weight_field = gtx.as_field([CellDim, C2E.Local], edge_weights)
 ```
 
 Now you have everything to implement the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
@@ -422,9 +422,9 @@ The second lines first creates a temporary field using `edge_differences(C2E)`, 
 ```{code-cell} ipython3
 @gtx.field_operator
 def pseudo_lap(cells : gtx.Field[Dims[CellDim], float64],
-               edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64]) -> gtx.Field[Dims[CellDim], float64]:
+               edge_weights : gtx.Field[Dims[CellDim, C2E.Local], float64]) -> gtx.Field[Dims[CellDim], float64]:
     edges = cells(E2C[0]) # type: gtx.Field[Dims[EdgeDim], float64]
-    return neighbor_sum(edges(C2E) * edge_weights, axis=C2EDim)
+    return neighbor_sum(edges(C2E) * edge_weights, axis=C2E.Local)
 ```
 
 The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The significant part is how offset providers for both the edge-to-cell and cell-to-edge connectivities are supplied when the program is called:
@@ -432,7 +432,7 @@ The program itself is just a shallow wrapper over the `pseudo_lap` field operato
 ```{code-cell} ipython3
 @gtx.program
 def run_pseudo_laplacian(cells : gtx.Field[Dims[CellDim], float64],
-                         edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64],
+                         edge_weights : gtx.Field[Dims[CellDim, C2E.Local], float64],
                          out : gtx.Field[Dims[CellDim], float64]):
     pseudo_lap(cells, edge_weights, out=out)
 
@@ -441,7 +441,7 @@ result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
 run_pseudo_laplacian(cell_values,
                      edge_weight_field,
                      result_pseudo_lap,
-                     offset_provider={E2CDim.tag: E2C_offset_provider, C2EDim.tag: C2E_offset_provider})
+                     offset_provider={E2C: E2C_offset_provider, C2E: C2E_offset_provider})
 
 print("pseudo-laplacian: {}".format(result_pseudo_lap.asnumpy()))
 ```
@@ -451,7 +451,7 @@ As a closure, here is an example of chaining field operators, which is very simp
 ```{code-cell} ipython3
 @gtx.field_operator
 def pseudo_laplap(cells : gtx.Field[Dims[CellDim], float64],
-                  edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64]) -> gtx.Field[Dims[CellDim], float64]:
+                  edge_weights : gtx.Field[Dims[CellDim, C2E.Local], float64]) -> gtx.Field[Dims[CellDim], float64]:
     return pseudo_lap(pseudo_lap(cells, edge_weights), edge_weights)
 ```
 

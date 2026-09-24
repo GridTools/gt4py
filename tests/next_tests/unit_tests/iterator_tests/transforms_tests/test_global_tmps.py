@@ -79,7 +79,7 @@ def test_trivial(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -114,7 +114,7 @@ def test_trivial_let(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -210,7 +210,7 @@ def test_top_level_if(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -268,7 +268,7 @@ def test_nested_if(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -336,7 +336,7 @@ def test_tuple_different_domain(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -443,7 +443,7 @@ def test_tuple_different_domain_nested(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
     testee = infer_domain.infer_program(testee, offset_provider=offset_provider)
 
     expected = program_factory(
@@ -530,7 +530,7 @@ def test_domain_preservation(uids: utils.IDGeneratorPool):
             )
         ],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
 
     expected = program_factory(
         params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
@@ -576,7 +576,7 @@ def test_non_scan_projector(uids: utils.IDGeneratorPool):
         ],
         body=[stmt],
     )
-    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+    testee = type_inference.infer(testee, table_types=offset_provider)
 
     # make sure the statement actually has a projector
     projector, expr = ir_utils_misc.extract_projector(stmt.expr)

@@ -74,9 +74,10 @@ class ShiftType(TypeSpec):
     """
     The type of a shift: it takes a field over `codomain` to a field over `domain`.
 
-    `domain` has one dimension for a Cartesian shift (`KDim + 1`) and for a single neighbor
-    (`V2E[i]`), and two -- the connectivity's domain and its local dimension -- for all
-    neighbors (`V2E`).
+    `domain` has one dimension for a Cartesian shift (`KDim + 1`, `as_offset(KDim, offsets)`)
+    and for a single neighbor (`V2E[i]`), and two -- the connectivity's domain and its local
+    dimension -- for all neighbors (`V2E`). The type of the *table* bound to a connectivity is a
+    `common.NeighborTableType`.
     """
 
     codomain: common.Dimension

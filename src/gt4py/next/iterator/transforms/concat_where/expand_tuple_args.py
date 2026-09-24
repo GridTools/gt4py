@@ -27,12 +27,12 @@ class _ExpandTupleArgs(PreserveLocationVisitor, FixedPointTransformation):
         cls,
         node: itir.Node,
         *,
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
         allow_undeclared_symbols: bool = False,
     ) -> itir.Node:
         node = type_inference.infer(
             node,
-            offset_provider_type=offset_provider_type,
+            table_types=table_types,
             allow_undeclared_symbols=allow_undeclared_symbols,
         )
         return cls().visit(node)

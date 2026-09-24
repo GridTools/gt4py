@@ -32,7 +32,7 @@ from gt4py.next.type_system import type_specifications as ts
 def find_constant_symbols(
     ir: itir.Program,
     sdfg: dace.SDFG,
-    offset_provider_type: common.TableTypes,
+    table_types: common.TableTypes,
     disable_field_origin_on_program_arguments: bool,
     unstructured_horizontal_has_unit_stride: bool,
 ) -> dict[str, int]:
@@ -55,7 +55,7 @@ def find_constant_symbols(
                 sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(str(p.id), dim)
                 constant_symbols[sdfg_stride_symbol.name] = 1
         # Same for connectivity tables, for which the first dimension is always horizontal
-        for offset, conn_type in offset_provider_type.items():
+        for offset, conn_type in table_types.items():
             if (
                 isinstance(conn_type, common.NeighborTableType)
                 and (conn_id := gtx_dace_args.connectivity_identifier(offset)) in sdfg.arrays
@@ -63,7 +63,7 @@ def find_constant_symbols(
                 assert not sdfg.arrays[conn_id].transient
                 assert conn_type.domain[0].kind == common.DimensionKind.HORIZONTAL
                 sdfg_stride_symbol = gtx_dace_args.field_stride_symbol(
-                    conn_id, conn_type.domain[0], offset_provider_type
+                    conn_id, conn_type.domain[0], table_types
                 )
                 constant_symbols[sdfg_stride_symbol.name] = 1
 
@@ -382,15 +382,15 @@ class DaCeTranslator(
                 use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
                 offset_provider=offset_provider,
             )
-        offset_provider_type = common.offset_provider_to_type(offset_provider)
+        table_types = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
+        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, table_types, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,
             sdfg,
-            offset_provider_type,
+            table_types,
             self.disable_field_origin_on_program_arguments,
             self.unstructured_horizontal_has_unit_stride,
         )
@@ -449,7 +449,7 @@ class DaCeTranslator(
 
         sdfg = self.generate_sdfg(
             program,
-            inp.args.offset_provider,  # TODO(havogt): should be offset_provider_type once the transformation don't require run-time info
+            inp.args.offset_provider,  # TODO(havogt): should be table_types once the transformation don't require run-time info
             inp.args.column_axis,
         )
 

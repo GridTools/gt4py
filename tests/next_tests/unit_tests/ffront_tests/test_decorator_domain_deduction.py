@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import typing
+
 import pytest
 
 import gt4py.next as gtx
@@ -21,33 +23,28 @@ class VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 class Dim(gtx.DimensionIndex): ...
 
 
-class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class LocalDim(gtx.LocalDimensionIndex): ...
 
 
-CartesianOffset = gtx.FieldOffset("CartesianOffset", source=Dim, target=(Dim,))
-UnstructuredOffset = gtx.FieldOffset(LocalDim.tag, source=Dim, target=(Dim, LocalDim))
+class UnstructuredOffset(gtx.NeighborConnectivity[Dim, Dim]):
+    Local: typing.TypeAlias = LocalDim
 
 
 def test_domain_deduction_cartesian():
-    assert _deduce_grid_type(None, {CartesianOffset}) == gtx.GridType.CARTESIAN
     assert _deduce_grid_type(None, {Dim}) == gtx.GridType.CARTESIAN
+    assert _deduce_grid_type(None, {HDim, VDim}) == gtx.GridType.CARTESIAN
 
 
 def test_domain_deduction_unstructured():
     assert _deduce_grid_type(None, {UnstructuredOffset}) == gtx.GridType.UNSTRUCTURED
     assert _deduce_grid_type(None, {LocalDim}) == gtx.GridType.UNSTRUCTURED
-    # source and target share `.value` but differ in `.kind` -> not Cartesian
-    CrossKindOffset = gtx.FieldOffset("CrossKind", source=HDim, target=(VDim,))
-    assert _deduce_grid_type(None, {CrossKindOffset}) == gtx.GridType.UNSTRUCTURED
-    # LOCAL self-loop is unstructured
-    LocalSelfOffset = gtx.FieldOffset("LocalSelf", source=LocalDim, target=(LocalDim,))
-    assert _deduce_grid_type(None, {LocalSelfOffset}) == gtx.GridType.UNSTRUCTURED
 
 
 def test_domain_complies_with_request_cartesian():
-    assert _deduce_grid_type(gtx.GridType.CARTESIAN, {CartesianOffset}) == gtx.GridType.CARTESIAN
-    with pytest.raises(ValueError, match="unstructured.*FieldOffset.*found"):
+    assert _deduce_grid_type(gtx.GridType.CARTESIAN, {Dim}) == gtx.GridType.CARTESIAN
+    with pytest.raises(ValueError, match="NeighborConnectivity.*local dimension was found"):
         _deduce_grid_type(gtx.GridType.CARTESIAN, {UnstructuredOffset})
+    with pytest.raises(ValueError, match="NeighborConnectivity.*local dimension was found"):
         _deduce_grid_type(gtx.GridType.CARTESIAN, {LocalDim})
 
 
@@ -57,6 +54,4 @@ def test_domain_complies_with_request_unstructured():
         == gtx.GridType.UNSTRUCTURED
     )
     # unstructured is ok, even if we don't have unstructured offsets
-    assert (
-        _deduce_grid_type(gtx.GridType.UNSTRUCTURED, {CartesianOffset}) == gtx.GridType.UNSTRUCTURED
-    )
+    assert _deduce_grid_type(gtx.GridType.UNSTRUCTURED, {Dim}) == gtx.GridType.UNSTRUCTURED

@@ -75,7 +75,8 @@ and skip values were never checked against the `FieldOffset` declaration.
   `(Domain, V2E.Local)`, the codomain is `Codomain`, the dtype is integral, and
   the neighbor counts and skip values agree. Skip values are checked on the
   table's type: a table with a `skip_value` counts as having skip values whether
-  or not an entry uses it.
+  or not an entry uses it. Programs run the check on the tables they are given,
+  see below.
 
 `Domain` and `Codomain` name the two index spaces the declaration maps between.
 A bound table is a field over `(Domain, Local)` with values in `Codomain`: the
@@ -93,8 +94,7 @@ of a table bound to a declaration is a `common.NeighborTableType`:
 `domain` and `codomain` are derived from the declaration,
 `(connectivity.domain, local_dimension_of(connectivity))` and
 `connectivity.codomain`, so they cannot disagree with it. The mapping from
-offset-provider keys to these records is `common.TableTypes`, and it can be
-given instead of the tables for ahead-of-time compilation.
+offset-provider keys to these records is `common.TableTypes`.
 
 A table cannot tell which declaration it is bound to: the table of a sharer
 (`C2CE`) has the same domain as its owner's (`C2E`), with another codomain. So a
@@ -153,11 +153,11 @@ treating it as a type.
 
 ### Frontend integration
 
-A declaration is typed like the `FieldOffset` it replaces: `V2E.__gt_type__()`
-is a `ts.ShiftType`, which takes a field over the codomain to one over the
-domain, `Shift[<tag>: Edge -> (Vertex, V2E.Local)]`. `V2E[i]` has the domain
-`(Vertex,)`, and so does a Cartesian shift `KDim + 1`, over `KDim` and without a
-tag. The tag is the connectivity's `offset_tag`:
+A declaration is typed as a shift: `V2E.__gt_type__()` is a `ts.ShiftType`,
+which takes a field over the codomain to one over the domain,
+`Shift[<tag>: Edge -> (Vertex, V2E.Local)]`. `V2E[i]` has the domain `(Vertex,)`,
+and so do the Cartesian shifts `KDim + 1` and `as_offset(KDim, offsets)`, over
+`KDim` and without a tag. The tag is the connectivity's `offset_tag`:
 
 - **the local dimension's tag**, `V2E.Local.tag`, for the connectivity that
   declares it. This is the single string that shifts, neighbor reductions and
@@ -170,14 +170,56 @@ tag. The tag is the connectivity's `offset_tag`:
   over it (`common.connectivity_key_over`): the owner's if bound, else the
   sharer with the smallest tag. Connectivities sharing a local dimension must
   therefore have the same neighbor *structure* — the same count, and a skip value
-  at the same positions — which is what sharing a neighbor axis means.
+  at the same positions — which is what sharing a neighbor axis means;
+  `check_offset_provider` enforces it for the tables it is given.
 
-`V2E.Local` inside DSL code types as that local dimension, and
-`FieldOffset.Local` names the same thing on a legacy offset, so the spelling
-works for both. The other frontend touch points treat the class like the
-`FieldOffset` it derives: grid-type deduction (`transform_utils`, `past_to_itir`)
-counts it as unstructured, and embedded `premap` accepts it. `V2E[i]` subscripts the
+`V2E.Local` inside DSL code types as that local dimension. The other frontend
+touch points treat a declaration as an unstructured shift: grid-type deduction
+(`transform_utils`, `past_to_itir`) counts it as unstructured, and embedded
+`premap` accepts it. `V2E[i]` subscripts the
 metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, E]`) to `__class_getitem__`, since a metaclass `__getitem__` shadows it.
+
+### Offset providers are keyed by the declaration
+
+Users bind tables to declarations:
+
+```python
+program(..., offset_provider={V2E: v2e_table, C2E: c2e_table})
+```
+
+Every entry point of a program normalizes such a provider to the form the IR
+uses: each declaration is replaced by its `offset_tag`. Everything below the
+entry points — lowering, the backends, compiled-program caching — therefore keeps
+seeing a provider keyed by strings, which is also what hand-written IR uses.
+
+The frontend entry points (`Program.__call__`, `FieldOperator.__call__`,
+`compile`, `CompilationOptions.connectivities`) are *strict*: a string key must
+be a tag, i.e. a qualified name, and a bare name such as `"V2E"` is the removed
+`FieldOffset` spelling, rejected with a message pointing here. The IR-level hooks
+(`embedded.context.update`, the iterator `fendef`, DaCe's `get_sdfg_conn_args`)
+accept any string, because a hand-written program names its offsets itself.
+
+The types of the tables, a `common.TableTypes` under the same keys, are called
+`table_types` throughout: `CompileTimeArgs.table_types`, the IR passes and the code
+generators. Ahead-of-time compilation can take them in place of the tables,
+e.g. `{V2E: NeighborTableType(connectivity=V2E, dtype=int32, skip_value=None, max_neighbors=6)}` (`compile(offset_provider=...)` accepts either), and they are
+keyed and normalized exactly like an offset provider: by declarations, strictly,
+at the frontend; by tags at the IR level.
+
+Tables are checked against their declarations (`check_offset_provider`) at every
+entry point, but the result is remembered per set of bound tables, so repeated
+calls cost one hash. Reading the tables — comparing the skip-value positions of
+two connectivities that share a local dimension — is done only where a program is
+compiled, not on the call path. A tag that
+names no declared connectivity, as in hand-written IR, is not checked.
+
+### `FieldOffset` is removed
+
+`FieldOffset` and its export are gone. An unstructured connectivity is a
+`NeighborConnectivity`; a Cartesian shift is `Dim + i`, which the DSL already
+had; and `as_offset` takes the dimension to shift along, `as_offset(KDim, k_offsets)`, instead of a Cartesian `FieldOffset`. `scripts/python/migrate_connectivities.py`
+rewrites declarations and Cartesian offset uses, and reports the provider keys
+and other sites it cannot rewrite from the source alone.
 
 ## Consequences
 
@@ -191,8 +233,8 @@ metaclass, which forwards type-parameter subscription (`NeighborConnectivity[V, 
 - A declaration is fingerprinted by its name *and* its declared dimensions and
   counts, so redefining it under the same name (e.g. re-running a notebook
   cell) does not reuse artifacts compiled for the old declaration.
-- `FieldOffset` remains during migration; a `FieldOffset` and a
-  `NeighborConnectivity` sharing a local dimension are interchangeable.
+- `FieldOffset` is removed, and offset providers are keyed by declarations: a
+  breaking change for every unstructured program, eased by the migration script.
 
 ## Alternatives considered
 

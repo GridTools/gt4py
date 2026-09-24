@@ -797,20 +797,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
-            for arg in new_args:
-                # A Cartesian `FieldOffset` shifts by the index it is subscripted with, so it
-                # carries no displacement on its own. Only an offset with a local dimension is
-                # meaningful unsubscripted, as the neighbor access `field(Off)`.
-                if (
-                    isinstance(arg, (foast.Name, foast.Attribute))
-                    and isinstance(arg.type, ts.ShiftType)
-                    and len(arg.type.domain) == 1
-                ):
-                    raise errors.DSLError(
-                        arg.location,
-                        f"Cannot shift by the Cartesian offset '{arg!s}' without an index.",
-                        hints=[f"Give the displacement, e.g. '{arg!s}[1]'."],
-                    )
+            # NOTE: no unsubscripted Cartesian offset to reject here: a Cartesian shift is
+            # `a(Dim + i)`, and the only other shift with a one-dimensional domain is the result
+            # of `as_offset`, which is a call, not a name.
+            pass
         elif isinstance(new_func.type, ts.DimensionType):
             assert new_func.type.dim.kind == DimensionKind.LOCAL
             return foast.Call(
@@ -1001,16 +991,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _visit_as_offset(self, node: foast.Call, **kwargs: Any) -> foast.Call:
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
-        assert isinstance(arg_0, ts.ShiftType)
         assert isinstance(arg_1, ts.FieldType)
-        if not fbuiltins.is_cartesian_offset(arg_0):
-            domain_dims = ", ".join(d.__qualname__ for d in arg_0.domain)  # for the diagnostic
+        if not isinstance(arg_0, ts.DimensionType) or arg_0.dim.kind is common.DimensionKind.LOCAL:
             raise errors.DSLError(
                 node.location,
-                f"'as_offset' is only supported for Cartesian offsets "
-                f"(a single domain dimension equal to the codomain); "
-                f"got codomain '{arg_0.codomain.__qualname__}' and domain ({domain_dims}).",
+                f"'as_offset' shifts along a non-local dimension, e.g. 'as_offset(KDim, field)';"
+                f" got '{arg_0}'.",
             )
+        dim = arg_0.dim
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
@@ -1019,16 +1007,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"{node.location}",
             )
 
-        if arg_0.codomain not in arg_1.dims:
+        if dim not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
                 f"Incompatible argument in call to '{node.func!s}': "
-                f"'{arg_0.codomain}' not in list of offset field dimensions '{arg_1.dims}'. "
+                f"'{dim}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
 
         return foast.Call(
-            func=node.func, args=node.args, kwargs=node.kwargs, type=arg_0, location=node.location
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            type=ts.ShiftType(codomain=dim, domain=(dim,)),
+            location=node.location,
         )
 
     def _deduce_where_return_type(

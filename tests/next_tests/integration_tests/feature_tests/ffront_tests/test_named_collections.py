@@ -483,7 +483,7 @@ def test_where_with_local_fields(unstructured_case):
         )
         return neighbor_sum(t.neighbors, axis=V2EDim), t.center
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
     )
@@ -641,7 +641,7 @@ def test_concat_where_with_local_fields(unstructured_case):
         )
         return neighbor_sum(t.neighbors, axis=V2EDim), t.center
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     vertex_mask = np.arange(unstructured_case.default_sizes[Vertex]) < 2
     cases.verify_with_default_data(
         unstructured_case,

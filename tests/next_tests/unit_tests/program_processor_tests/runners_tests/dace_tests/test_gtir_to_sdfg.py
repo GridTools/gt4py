@@ -26,6 +26,7 @@ from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.type_system import type_specifications as ts
 
+from next_tests.integration_tests import cases_utils
 from next_tests.integration_tests.cases_utils import (
     E2VDim,
     C2VDim,
@@ -72,8 +73,8 @@ V2E_FTYPE = ts.FieldType(dims=[Vertex, V2EDim], dtype=EFTYPE.dtype)
 IOff = im.cartesian_offset(IDim, IDim)
 # Cartesian shifts are self-describing (`CartesianOffset`), so no offset provider entry is needed.
 CARTESIAN_OFFSETS: dict = {}
-SIMPLE_MESH: MeshDescriptor = simple_mesh(None)
-SKIP_VALUE_MESH: MeshDescriptor = skip_value_mesh(None)
+SIMPLE_MESH: MeshDescriptor = cases_utils.ir_level(simple_mesh(None))
+SKIP_VALUE_MESH: MeshDescriptor = cases_utils.ir_level(skip_value_mesh(None))
 SIZE_TYPE = ts.ScalarType(ts.ScalarKind.INT32)
 FSYMBOLS = dict(
     **{gtx_dace_args.range_start_symbol("w", IDim).name: 0},
@@ -194,8 +195,8 @@ def build_dace_sdfg(
             offset_provider=offset_provider,
             symbolic_domain_sizes=pass_manager._max_domain_range_sizes(offset_provider),
         )
-    offset_provider_type = gtx_common.offset_provider_to_type(offset_provider)
-    return dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis=KDim)
+    table_types = gtx_common.offset_provider_to_type(offset_provider)
+    return dace_lowering.lower_program_to_sdfg(ir, table_types, column_axis=KDim)
 
 
 def apply_margin_on_field_domain(

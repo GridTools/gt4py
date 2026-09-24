@@ -35,7 +35,17 @@ import next_tests
 # Both modules used to declare their own `Dimension("Vertex")` etc., which compared equal; under
 # nominal identity (ADR 0028) that would be two different dimensions, and tests that mix a
 # `toy_connectivity` connectivity with a `cases_utils` mesh would silently stop matching.
-from next_tests.toy_connectivity import C2EDim, Cell, E2VDim, Edge, V2EDim, Vertex
+from next_tests.toy_connectivity import (
+    C2E,
+    C2EDim,
+    Cell,
+    E2V,
+    E2VDim,
+    Edge,
+    V2E,
+    V2EDim,
+    Vertex,
+)
 
 
 __all__ = [
@@ -52,7 +62,6 @@ __all__ = [
     "Vertex",
     "Edge",
     "Cell",
-    "EdgeOffset",
     "MeshDescriptor",
     "CartesianGridDescriptor",
 ]
@@ -177,20 +186,12 @@ class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 KHalfDim = common.flip_staggered(KDim)
 
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
+
+class C2V(gtx.NeighborConnectivity[Cell, Vertex]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
-
-
-class C2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
-
-
-V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset(E2VDim.tag, source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
-C2V = gtx.FieldOffset(C2VDim.tag, source=Vertex, target=(Cell, C2VDim))
+C2VDim = C2V.Local
 
 size = 10
 
@@ -206,7 +207,7 @@ class CartesianGridDescriptor(Protocol):
     def offset_provider(self) -> common.OffsetProvider: ...
 
     @property
-    def offset_provider_type(self) -> common.TableTypes: ...
+    def table_types(self) -> common.TableTypes: ...
 
 
 def simple_cartesian_grid(
@@ -222,7 +223,10 @@ def simple_cartesian_grid(
         name="simple_cartesian_grid",
         sizes=sizes,
         offset_provider=offset_provider,
-        offset_provider_type=common.offset_provider_to_type(offset_provider),
+        # NOTE: tag-keyed, the form the IR-level APIs (type inference, transformations) take.
+        table_types=common.as_tag_keyed_offset_provider(
+            common.offset_provider_to_type(offset_provider)
+        ),
     )
 
 
@@ -248,7 +252,7 @@ class MeshDescriptor(Protocol):
     def offset_provider(self) -> common.OffsetProvider: ...
 
     @property
-    def offset_provider_type(self) -> common.TableTypes: ...
+    def table_types(self) -> common.TableTypes: ...
 
 
 def simple_mesh(allocator) -> MeshDescriptor:
@@ -308,28 +312,28 @@ def simple_mesh(allocator) -> MeshDescriptor:
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
     offset_provider = {
-        V2E.value: constructors.as_connectivity(
+        V2E: constructors.as_connectivity(
             domain={Vertex: v2e_arr.shape[0], V2EDim: 4},
             codomain=Edge,
             data=v2e_arr,
             skip_value=None,
             allocator=allocator,
         ),
-        E2V.value: constructors.as_connectivity(
+        E2V: constructors.as_connectivity(
             domain={Edge: e2v_arr.shape[0], E2VDim: 2},
             codomain=Vertex,
             data=e2v_arr,
             skip_value=None,
             allocator=allocator,
         ),
-        C2V.value: constructors.as_connectivity(
+        C2V: constructors.as_connectivity(
             domain={Cell: c2v_arr.shape[0], C2VDim: 4},
             codomain=Vertex,
             data=c2v_arr,
             skip_value=None,
             allocator=allocator,
         ),
-        C2E.value: constructors.as_connectivity(
+        C2E: constructors.as_connectivity(
             domain={Cell: c2e_arr.shape[0], C2EDim: 4},
             codomain=Edge,
             data=c2e_arr,
@@ -344,7 +348,10 @@ def simple_mesh(allocator) -> MeshDescriptor:
         num_edges=np.int32(num_edges),
         num_cells=num_cells,
         offset_provider=offset_provider,
-        offset_provider_type=common.offset_provider_to_type(offset_provider),
+        # NOTE: tag-keyed, the form the IR-level APIs (type inference, transformations) take.
+        table_types=common.as_tag_keyed_offset_provider(
+            common.offset_provider_to_type(offset_provider)
+        ),
     )
 
 
@@ -403,28 +410,28 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
     )
 
     offset_provider = {
-        V2E.value: constructors.as_connectivity(
+        V2E: constructors.as_connectivity(
             domain={Vertex: v2e_arr.shape[0], V2EDim: 5},
             codomain=Edge,
             data=v2e_arr,
             skip_value=common._DEFAULT_SKIP_VALUE,
             allocator=allocator,
         ),
-        E2V.value: constructors.as_connectivity(
+        E2V: constructors.as_connectivity(
             domain={Edge: e2v_arr.shape[0], E2VDim: 2},
             codomain=Vertex,
             data=e2v_arr,
             skip_value=None,
             allocator=allocator,
         ),
-        C2V.value: constructors.as_connectivity(
+        C2V: constructors.as_connectivity(
             domain={Cell: c2v_arr.shape[0], C2VDim: 3},
             codomain=Vertex,
             data=c2v_arr,
             skip_value=None,
             allocator=allocator,
         ),
-        C2E.value: constructors.as_connectivity(
+        C2E: constructors.as_connectivity(
             domain={Cell: c2e_arr.shape[0], C2EDim: 3},
             codomain=Edge,
             data=c2e_arr,
@@ -439,7 +446,10 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
         num_edges=num_edges,
         num_cells=num_cells,
         offset_provider=offset_provider,
-        offset_provider_type=common.offset_provider_to_type(offset_provider),
+        # NOTE: tag-keyed, the form the IR-level APIs (type inference, transformations) take.
+        table_types=common.as_tag_keyed_offset_provider(
+            common.offset_provider_to_type(offset_provider)
+        ),
     )
 
 
@@ -452,3 +462,18 @@ def skip_value_mesh(allocator) -> MeshDescriptor:
 )
 def mesh_descriptor(request, exec_alloc_descriptor) -> MeshDescriptor:
     yield request.param(exec_alloc_descriptor.allocator)
+
+
+def ir_level(mesh: MeshDescriptor) -> MeshDescriptor:
+    """
+    A copy of `mesh` whose offset provider is keyed by tags, as the IR-level APIs expect.
+
+    User-facing entry points normalize a class-keyed provider themselves; tests that drive the
+    lowering or the backends directly have to hand them the tag-keyed form.
+    """
+    return types.SimpleNamespace(
+        **{
+            **vars(mesh),
+            "offset_provider": common.as_tag_keyed_offset_provider(mesh.offset_provider),
+        }
+    )

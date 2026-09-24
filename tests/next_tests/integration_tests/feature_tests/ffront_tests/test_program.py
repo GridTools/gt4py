@@ -60,7 +60,7 @@ def test_shift_by_one_execution(cartesian_case):
 
     # direct call to field operator
     # TODO(tehrengruber): slicing located fields not supported currently
-    # shift_by_one(in_field, out=out_field[:-1], offset_provider={"Ioff": IDim})
+    # shift_by_one(in_field, out=out_field[:-1])
 
     @gtx.program
     def shift_by_one_program(in_field: cases.IFloatField, out_field: cases.IFloatField):

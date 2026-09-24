@@ -7,19 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Regression tests for the four independently authored names of one connectivity.
+Regression tests for the names under which one connectivity is used.
 
-Using a single connectivity requires four strings to agree, none of which is
-checked against the others at declaration time:
-
-    N1  the `FieldOffset` tag              `FieldOffset("V2E", ...)`
-    N2  the Python variable it is bound to  `V2E = FieldOffset(...)`
-    N3  the local dimension's name          `Dimension("V2E", kind=LOCAL)`
-    N4  the offset-provider key             `offset_provider={"V2E": ...}`
-
-The `V2EDim = Dimension("V2E")` convention makes all four equal, which hides
-which one each execution path actually uses. These tests break the convention
-deliberately, one name at a time, so the real requirement is visible.
+With `FieldOffset`, using a connectivity required four independently authored strings to
+agree -- the offset tag, the Python variable it was bound to, the local dimension's name and
+the offset-provider key -- and each execution path silently depended on a different subset of
+them. A `NeighborConnectivity` declaration produces all of them (ADR 0029), so what is left to
+pin is that the *Python* name a declaration is reached through does not matter.
 """
 
 import numpy as np
@@ -42,26 +36,22 @@ class V(gtx.DimensionIndex): ...
 class E(gtx.DimensionIndex): ...
 
 
-#: N1 == N3 == N4, but N2 differs: the tag is `TaggedOffDim.tag`, the variable is `off_a`.
-class TaggedOffDim(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+class V2E(gtx.NeighborConnectivity[V, E]):
+    class Local(gtx.LocalDimensionIndex): ...
 
 
-off_a = gtx.FieldOffset(TaggedOffDim.tag, source=E, target=(V, TaggedOffDim))
+#: The declaration, reached through a different Python name.
+off_a = V2E
+#: Its local dimension, likewise.
+Neigh = V2E.Local
 
 
-#: N1 == N2 == N4, but N3 differs: the local dimension is `Neigh`, the tag is `OffB`.
-class Neigh(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
-
-
-OffB = gtx.FieldOffset("OffB", source=E, target=(V, Neigh))
-
-
-def _case(exec_alloc_descriptor, tags: tuple[str, ...], local_dim: common.Dimension) -> cases.Case:
-    """A `Case` binding the same table under each of `tags`."""
+@pytest.fixture
+def case(exec_alloc_descriptor) -> cases.Case:
     mesh = cases_utils.simple_mesh(exec_alloc_descriptor.allocator)
     # NOTE: `.asnumpy()`, not `.ndarray`: under a GPU allocator the latter is a device
     # array, and `simple_mesh` builds the table from NumPy anyway.
-    v2e_arr = mesh.offset_provider[cases_utils.V2EDim.tag].asnumpy()
+    v2e_arr = mesh.offset_provider[cases_utils.V2E].asnumpy()
     return cases.Case(
         (
             None
@@ -69,14 +59,13 @@ def _case(exec_alloc_descriptor, tags: tuple[str, ...], local_dim: common.Dimens
             else exec_alloc_descriptor
         ),
         offset_provider={
-            tag: constructors.as_connectivity(
-                domain={V: v2e_arr.shape[0], local_dim: v2e_arr.shape[1]},
+            off_a: constructors.as_connectivity(
+                domain={V: v2e_arr.shape[0], Neigh: v2e_arr.shape[1]},
                 codomain=E,
                 data=v2e_arr,
                 skip_value=None,
                 allocator=exec_alloc_descriptor.allocator,
             )
-            for tag in tags
         },
         default_sizes={V: mesh.num_vertices, E: mesh.num_edges},
         grid_type=common.GridType.UNSTRUCTURED,
@@ -84,82 +73,29 @@ def _case(exec_alloc_descriptor, tags: tuple[str, ...], local_dim: common.Dimens
     )
 
 
-@pytest.fixture
-def case_tag_vs_variable_name(exec_alloc_descriptor):
-    return _case(exec_alloc_descriptor, (TaggedOffDim.tag,), TaggedOffDim)
+def _neighbor_table(case: cases.Case) -> np.ndarray:
+    return case.offset_provider[V2E].asnumpy()
 
 
-@pytest.fixture
-def case_tag_vs_local_dim(exec_alloc_descriptor):
-    # NOTE: only the offset's table: a reduction over `Neigh` finds it as the table over `Neigh`,
-    # as for a connectivity sharing another one's local dimension.
-    return _case(exec_alloc_descriptor, ("OffB",), Neigh)
-
-
-def _neighbor_table(case: cases.Case, tag: str) -> np.ndarray:
-    return case.offset_provider[tag].asnumpy()
-
-
-# --- N2: the tag differs from the Python variable name ----------------------------
-# Lowering used to emit the *variable* name as the IR shift tag, so embedded and
-# compiled execution of the same program needed different provider keys.
-
-
-def test_shift_tag_differs_from_variable_name(case_tag_vs_variable_name):
+def test_shift_through_an_alias(case):
     @gtx.field_operator
     def foo(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
         return a(off_a[1])
 
-    cases.verify_with_default_data(
-        case_tag_vs_variable_name,
-        foo,
-        lambda a: a[_neighbor_table(case_tag_vs_variable_name, TaggedOffDim.tag)[:, 1]],
-    )
+    cases.verify_with_default_data(case, foo, lambda a: a[_neighbor_table(case)[:, 1]])
 
 
-def test_reduction_tag_differs_from_variable_name(case_tag_vs_variable_name):
+def test_reduction_through_an_alias(case):
     @gtx.field_operator
     def foo(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
-        return neighbor_sum(a(off_a), axis=TaggedOffDim)
+        return neighbor_sum(a(off_a), axis=Neigh)
 
-    cases.verify_with_default_data(
-        case_tag_vs_variable_name,
-        foo,
-        lambda a: np.sum(a[_neighbor_table(case_tag_vs_variable_name, TaggedOffDim.tag)], axis=1),
-    )
+    cases.verify_with_default_data(case, foo, lambda a: np.sum(a[_neighbor_table(case)], axis=1))
 
 
-# --- N3: the tag differs from the local dimension's name --------------------------
-# The shape of a connectivity sharing another one's local dimension.
-
-
-def test_shift_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
-    """
-    Ensure a shift works with an offset tag that differs from the local dimension's name.
-
-    If the local dimension of the `NeighborTableType` did not match the `FieldOffset` value,
-    gtfn would silently ignore the neighbor index, see
-    https://github.com/GridTools/gridtools/pull/1814.
-    """
-
+def test_reduction_over_the_nested_name(case):
     @gtx.field_operator
     def foo(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
-        return a(OffB[1])
+        return neighbor_sum(a(V2E), axis=off_a.Local)
 
-    cases.verify_with_default_data(
-        case_tag_vs_local_dim,
-        foo,
-        lambda a: a[_neighbor_table(case_tag_vs_local_dim, "OffB")[:, 1]],
-    )
-
-
-def test_reduction_tag_differs_from_local_dim_name(case_tag_vs_local_dim):
-    @gtx.field_operator
-    def foo(a: Field[Dims[E], float]) -> Field[Dims[V], float]:
-        return neighbor_sum(a(OffB), axis=Neigh)
-
-    cases.verify_with_default_data(
-        case_tag_vs_local_dim,
-        foo,
-        lambda a: np.sum(a[_neighbor_table(case_tag_vs_local_dim, "OffB")], axis=1),
-    )
+    cases.verify_with_default_data(case, foo, lambda a: np.sum(a[_neighbor_table(case)], axis=1))

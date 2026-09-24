@@ -26,7 +26,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
     unstructured_case_3d,
 )
-from next_tests.integration_tests.cases_utils import Koff, exec_alloc_descriptor, mesh_descriptor
+from next_tests.integration_tests.cases_utils import exec_alloc_descriptor, mesh_descriptor
 
 
 @pytest.mark.uses_cartesian_shift
@@ -156,7 +156,7 @@ def test_cartesian_half_shift_as_offset(cartesian_case):
     def testee(
         a: gtx.Field[[IDim, KHalfDim], np.int32], offset_field: cases.IKField
     ) -> cases.IKField:
-        return a(KDim - 0.5)(as_offset(Koff, offset_field))
+        return a(KDim - 0.5)(as_offset(KDim, offset_field))
 
     ksize = cartesian_case.default_sizes[KDim]
     a = cases.allocate(cartesian_case, testee, "a", sizes={KHalfDim: ksize + 1})()
@@ -180,7 +180,7 @@ def test_cartesian_half_shift_as_offset_of_chained_ops(cartesian_case):
         a: gtx.Field[[IDim, KHalfDim], np.int32], offset_field: cases.IKField
     ) -> cases.IKField:
         b = a + 1
-        return b(KDim - 0.5)(as_offset(Koff, offset_field))
+        return b(KDim - 0.5)(as_offset(KDim, offset_field))
 
     ksize = cartesian_case.default_sizes[KDim]
     a = cases.allocate(cartesian_case, testee, "a", sizes={KHalfDim: ksize + 1})()
@@ -208,7 +208,7 @@ def test_unstructured_shift_half_shift_as_offset(unstructured_case_3d):
         a: gtx.Field[[Vertex, KHalfDim], np.int32],
         offset_field: gtx.Field[[Edge, KDim], np.int32],
     ) -> gtx.Field[[Edge, KDim], np.int32]:
-        return a(E2V[0])(KDim - 0.5)(as_offset(Koff, offset_field))
+        return a(E2V[0])(KDim - 0.5)(as_offset(KDim, offset_field))
 
     nvertices = unstructured_case_3d.default_sizes[Vertex]
     ksize = unstructured_case_3d.default_sizes[KDim]
@@ -223,7 +223,7 @@ def test_unstructured_shift_half_shift_as_offset(unstructured_case_3d):
     )()
     out = cases.allocate(unstructured_case_3d, testee, cases.RETURN)()
 
-    e2v_table = unstructured_case_3d.offset_provider[E2VDim.tag].asnumpy()
+    e2v_table = unstructured_case_3d.offset_provider[E2V].asnumpy()
     cases.verify(
         unstructured_case_3d,
         testee,

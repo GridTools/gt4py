@@ -31,11 +31,11 @@ def test_external_local_field(unstructured_case):
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+        [Vertex, V2EDim], unstructured_case.offset_provider[V2E].asnumpy()
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
-    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2E].asnumpy()
     cases.verify(
         unstructured_case,
         testee,
@@ -55,7 +55,7 @@ def test_index_external_local_field(request, unstructured_case):
         return inp[V2EDim(0)] + inp[V2EDim(1)] + inp[V2EDim(2)] + inp[V2EDim(3)]
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+        [Vertex, V2EDim], unstructured_case.offset_provider[V2E].asnumpy()
     )
 
     cases.verify(
@@ -77,7 +77,7 @@ def test_index_external_local_field_with_cast(request, unstructured_case):
         return inp_64[V2EDim(0)] + inp_64[V2EDim(1)] + inp_64[V2EDim(2)] + inp_64[V2EDim(3)]
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+        [Vertex, V2EDim], unstructured_case.offset_provider[V2E].asnumpy()
     )
 
     cases.verify(
@@ -99,7 +99,7 @@ def test_external_local_field_only(unstructured_case):
         return neighbor_sum(inp, axis=V2EDim)
 
     inp = unstructured_case.as_field(
-        [Vertex, V2EDim], unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+        [Vertex, V2EDim], unstructured_case.offset_provider[V2E].asnumpy()
     )
 
     cases.verify(
@@ -107,7 +107,7 @@ def test_external_local_field_only(unstructured_case):
         testee,
         inp,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(unstructured_case.offset_provider[V2EDim.tag].asnumpy(), axis=1),
+        ref=np.sum(unstructured_case.offset_provider[V2E].asnumpy(), axis=1),
     )
 
 
@@ -119,7 +119,7 @@ def test_write_local_field(unstructured_case):
         return inp(V2E)
 
     out = unstructured_case.as_field(
-        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider[V2EDim.tag].asnumpy())
+        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider[V2E].asnumpy())
     )
     inp = cases.allocate(unstructured_case, testee, "inp")()
     cases.verify(
@@ -127,5 +127,5 @@ def test_write_local_field(unstructured_case):
         testee,
         inp,
         out=out,
-        ref=inp.asnumpy()[unstructured_case.offset_provider[V2EDim.tag].asnumpy()],
+        ref=inp.asnumpy()[unstructured_case.offset_provider[V2E].asnumpy()],
     )

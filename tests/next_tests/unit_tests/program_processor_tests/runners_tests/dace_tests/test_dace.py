@@ -208,7 +208,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    connectivity_E2V = unstructured_case.offset_provider[E2VDim.tag].asnumpy()
+    connectivity_E2V = unstructured_case.offset_provider[E2V].asnumpy()
 
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:

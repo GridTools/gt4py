@@ -87,7 +87,7 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType: ...
+    def get_table_type(self, offset: str) -> gtx_common.NeighborTableType: ...
 
     @abc.abstractmethod
     def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
@@ -560,17 +560,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider_type: gtx_common.TableTypes
+    table_types: gtx_common.TableTypes
     column_axis: Optional[gtx_common.Dimension]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
-    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType:
-        return gtx_common.get_offset_type(self.offset_provider_type, offset)
+    def get_table_type(self, offset: str) -> gtx_common.NeighborTableType:
+        return gtx_common.get_offset_type(self.table_types, offset)
 
     def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
-        return gtx_common.connectivity_key_over(self.offset_provider_type, local_dim)
+        return gtx_common.connectivity_key_over(self.table_types, local_dim)
 
     def make_field(
         self,
@@ -730,7 +730,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         connectivity_arrays = {
             gtx_dace_args.connectivity_identifier(offset)
-            for offset in gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
+            for offset in gtx_dace_args.filter_connectivity_types(self.table_types)
         }
 
         inner_ctx_globals = [
@@ -844,13 +844,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         Returns:
             Two lists of symbols, one for the shape and the other for the strides of the array.
         """
-        neighbor_table_types = gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
+        neighbor_table_types = gtx_dace_args.filter_connectivity_types(self.table_types)
         shape = []
         for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(gtx_dace_args.local_dimension_size(name, dim, neighbor_table_types))
-            elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
+            elif gtx_dace_args.is_connectivity_identifier(name, self.table_types):
                 # we use symbolic size for the global dimension of a connectivity
                 shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))
             else:
@@ -1037,7 +1037,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # add SDFG storage for connectivity tables
         for offset, connectivity_type in gtx_dace_args.filter_connectivity_types(
-            self.offset_provider_type
+            self.table_types
         ).items():
             gt_type = ts.FieldType(
                 dims=[connectivity_type.domain[0], connectivity_type.domain[1]],
@@ -1095,7 +1095,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
-                if gtx_dace_args.is_connectivity_identifier(data, self.offset_provider_type)
+                if gtx_dace_args.is_connectivity_identifier(data, self.table_types)
                 and datadesc.transient
             ]
             for data in unused_connectivities:
@@ -1396,7 +1396,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def lower_program_to_sdfg(
     ir: gtir.Program,
-    offset_provider_type: gtx_common.TableTypes,
+    table_types: gtx_common.TableTypes,
     column_axis: Optional[gtx_common.Dimension] = None,
 ) -> dace.SDFG:
     """
@@ -1407,7 +1407,7 @@ def lower_program_to_sdfg(
 
     Args:
         ir: The GTIR program node to be lowered to SDFG
-        offset_provider_type: The definitions of offset providers used by the program node
+        table_types: The definitions of offset providers used by the program node
         column_axis: Vertical dimension used for column scan expressions.
 
     Returns:
@@ -1419,7 +1419,7 @@ def lower_program_to_sdfg(
     if ir.declarations:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
-    ir = gtir_type_inference.infer(ir, offset_provider_type=offset_provider_type)
+    ir = gtir_type_inference.infer(ir, table_types=table_types)
     ir = ir_prune_casts.PruneCasts().visit(ir)
 
     # DaCe requires C-compatible strings for the names of data containers,
@@ -1428,7 +1428,7 @@ def lower_program_to_sdfg(
     # Here we find new names for invalid symbols present in the IR.
     ir = gtir_to_sdfg_utils.replace_invalid_symbols(ir)
 
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
+    sdfg_genenerator = GTIRToSDFG(table_types, column_axis)
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 

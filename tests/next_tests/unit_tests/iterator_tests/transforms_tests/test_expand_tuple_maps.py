@@ -25,13 +25,13 @@ i_tuple_field = ts.TupleType(types=[i_field, i_field])
 
 
 def _apply(expr: itir.Expr) -> itir.Expr:
-    return ExpandTupleMaps.apply(expr, uids=utils.IDGeneratorPool(), offset_provider_type={})
+    return ExpandTupleMaps.apply(expr, uids=utils.IDGeneratorPool(), table_types={})
 
 
 def _apply_and_collapse(expr: itir.Expr) -> itir.Expr:
     """Expand and then run the regular `CollapseTuple` pass, as happens in the pipeline."""
     uids = utils.IDGeneratorPool()
-    result = ExpandTupleMaps.apply(expr, uids=uids, offset_provider_type={})
+    result = ExpandTupleMaps.apply(expr, uids=uids, table_types={})
     return CollapseTuple.apply(
         result, within_stencil=False, allow_undeclared_symbols=True, uids=uids
     )
@@ -84,7 +84,7 @@ def test_apply_creates_default_uids(_unary_fun):
         im.make_tuple(im.ref("a", i_field), im.ref("b", i_field))
     )
 
-    result = ExpandTupleMaps.apply(expr, uids=None, offset_provider_type={})
+    result = ExpandTupleMaps.apply(expr, uids=None, table_types={})
 
     assert expr.type is None
     assert result == im.let("_etm_0", im.make_tuple("a", "b"))(

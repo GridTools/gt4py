@@ -17,7 +17,6 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen
 from gt4py.next import common
-from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
@@ -67,7 +66,7 @@ class GTFNTranslationStep(
         self,
         program: itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider_type: common.TableTypes,
+        table_types: common.TableTypes,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -81,21 +80,14 @@ class GTFNTranslationStep(
 
             if isinstance(parameter.type_, ts.FieldType):
                 for dim in parameter.type_.dims:
-                    if (
-                        isinstance(
-                            dim, fbuiltins.FieldOffset
-                        )  # TODO(havogt): remove support for FieldOffset as Dimension
-                        or dim.kind is common.DimensionKind.LOCAL
-                    ):
+                    if dim.kind is common.DimensionKind.LOCAL:
                         # translate sparse dimensions to tuple dtype
-                        # NOTE: the tag is the offset-provider key, and its mangled form names the
-                        # `generated::<name>_t` tag type. A legacy `FieldOffset` carries it as `value`.
-                        dim_name = dim.value if isinstance(dim, fbuiltins.FieldOffset) else dim.tag
+                        # NOTE: the local dimension's tag names the `generated::<name>_t` tag type
+                        # (mangled); its table may be keyed by a connectivity sharing it.
+                        dim_name = dim.tag
                         connectivity = common.get_offset_type(
-                            offset_provider_type,
-                            dim_name
-                            if isinstance(dim, fbuiltins.FieldOffset)
-                            else common.connectivity_key_over(offset_provider_type, dim),
+                            table_types,
+                            common.connectivity_key_over(table_types, dim),
                         )
                         assert isinstance(connectivity, common.NeighborTableType)
                         size = connectivity.max_neighbors
@@ -104,12 +96,12 @@ class GTFNTranslationStep(
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider_type: common.TableTypes
+        self, table_types: common.TableTypes
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
-        for name, connectivity_type in offset_provider_type.items():
+        for name, connectivity_type in table_types.items():
             if isinstance(connectivity_type, common.NeighborTableType):
                 if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
@@ -180,7 +172,7 @@ class GTFNTranslationStep(
 
         gtfn_ir = GTFN_lowering.apply(
             new_program,
-            offset_provider_type=common.offset_provider_to_type(offset_provider),
+            table_types=common.offset_provider_to_type(offset_provider),
             column_axis=column_axis,
         )
 
@@ -197,13 +189,13 @@ class GTFNTranslationStep(
         #  the program)
         arg_types = inp.args.args
         regular_parameters, regular_args_expr = self._process_regular_arguments(
-            program, arg_types, inp.args.offset_provider_type
+            program, arg_types, inp.args.table_types
         )
 
         # handle connectivity parameters and arguments (i.e. what the user provided in the offset
         #  provider)
         connectivity_parameters, connectivity_args_expr = self._process_connectivity_args(
-            inp.args.offset_provider_type
+            inp.args.table_types
         )
 
         # combine into a format that is aligned with what the backend expects

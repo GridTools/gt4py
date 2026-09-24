@@ -20,6 +20,7 @@ from gt4py.next.common import (
     Dimension,
     DimensionIndex,
     DimensionKind,
+    LocalDimensionIndex,
     Domain,
     Field,
     DimensionIndex,
@@ -49,10 +50,10 @@ class V(DimensionIndex): ...
 class E(DimensionIndex): ...
 
 
-class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class E2V(LocalDimensionIndex): ...
 
 
-class V2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class V2V(LocalDimensionIndex): ...
 
 
 class C(DimensionIndex): ...
@@ -61,7 +62,7 @@ class C(DimensionIndex): ...
 class K(DimensionIndex): ...
 
 
-class C2E2CO(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class C2E2CO(LocalDimensionIndex): ...
 
 
 class A(DimensionIndex): ...
@@ -76,7 +77,7 @@ class X(DimensionIndex): ...
 class Y(DimensionIndex): ...
 
 
-class L(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class L(LocalDimensionIndex): ...
 
 
 class S(DimensionIndex): ...
@@ -97,7 +98,7 @@ class Vertex(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
 class Edge(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
 
 
-class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class V2EDim(LocalDimensionIndex): ...
 
 
 class C2V(DimensionIndex): ...
@@ -826,7 +827,6 @@ def test_premap_disjoint_inverse_image_raises():
 
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
         np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
@@ -834,7 +834,7 @@ def test_as_offset_1d():
     off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
     off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)))
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
     assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
@@ -842,7 +842,6 @@ def test_as_offset_1d():
 
 def test_as_offset_narrow_offset_dtype_no_wrap():
     # An int8 offset field over a domain larger than 128 must not wrap into the index table.
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     N = 200
     f = common._field(
@@ -851,7 +850,7 @@ def test_as_offset_narrow_offset_dtype_no_wrap():
     off_arr = np.zeros(N, dtype=np.int8)
     off = common._field(off_arr, domain=common.Domain(dims=(I,), ranges=(UnitRange(0, N),)))
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(0, N),))
     assert np.all(result.ndarray == f.ndarray)
@@ -859,7 +858,6 @@ def test_as_offset_narrow_offset_dtype_no_wrap():
 
 def test_as_offset_2d_shift_one_keep_other():
     # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     NI, NJ = 4, 3
     dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
@@ -867,7 +865,7 @@ def test_as_offset_2d_shift_one_keep_other():
     off_arr = np.asarray([[1, 1, 0], [0, 0, 1], [1, -1, 0], [-1, 0, -1]], dtype=int)
     off = common._field(off_arr, domain=dom)
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == dom
     i = np.arange(NI)[:, None]
@@ -877,7 +875,6 @@ def test_as_offset_2d_shift_one_keep_other():
 
 def test_as_offset_boundary_narrows_domain():
     # A uniform out-of-bounds shift narrows the result to the contiguous in-range sub-domain.
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
         np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
@@ -886,7 +883,7 @@ def test_as_offset_boundary_narrows_domain():
         np.full(10, -1, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
     )
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == common.Domain(dims=(I,), ranges=(UnitRange(1, 10),))
     assert np.all(result.ndarray == f.ndarray[0:9])  # out[i] == f[i - 1]
@@ -894,7 +891,6 @@ def test_as_offset_boundary_narrows_domain():
 
 def test_as_offset_scattered_oob_raises():
     # An out-of-bounds shift in the interior cannot yield a contiguous domain.
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
         np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
@@ -905,12 +901,11 @@ def test_as_offset_scattered_oob_raises():
     )
 
     with pytest.raises(ValueError, match="non-contiguous"):
-        f.premap(as_offset(Ioff, off))
+        f.premap(as_offset(I, off))
 
 
 def test_as_offset_introduces_dimension():
     # `off` carries a dim the field lacks: the result gains it, out[i, j] == f[i + off[i, j]].
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
         np.arange(10).astype(float), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
@@ -920,7 +915,7 @@ def test_as_offset_introduces_dimension():
         off_arr, domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
     )
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 3)))
     assert np.all(result.ndarray == f.ndarray[np.arange(10)[:, None] + off_arr])
@@ -928,14 +923,13 @@ def test_as_offset_introduces_dimension():
 
 def test_as_offset_nonzero_origin():
     # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
-    Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
     f = common._field(np.arange(10).astype(float), domain=dom)
     off_arr = np.asarray([1, 0, -1, 0, 1, 0, -1, 0, 1, 0], dtype=int)
     off = common._field(off_arr, domain=dom)
 
-    result = f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(I, off))
 
     assert result.domain == dom
     assert np.all(result.ndarray == f.ndarray[np.arange(10) + off_arr])
@@ -943,7 +937,6 @@ def test_as_offset_nonzero_origin():
 
 def test_as_offset_2d_shift_second_axis():
     # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
-    Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
 
     NI, NJ = 3, 4
     dom = common.Domain(dims=(I, J), ranges=(UnitRange(0, NI), UnitRange(0, NJ)))
@@ -951,7 +944,7 @@ def test_as_offset_2d_shift_second_axis():
     off_arr = np.asarray([[1, 1, 0, -1], [0, 0, 1, -1], [1, -1, 0, 0]], dtype=int)
     off = common._field(off_arr, domain=dom)
 
-    result = f.premap(as_offset(Joff, off))
+    result = f.premap(as_offset(J, off))
 
     assert result.domain == dom
     i = np.arange(NI)[:, None]
@@ -959,25 +952,13 @@ def test_as_offset_2d_shift_second_axis():
     assert np.all(result.ndarray == f.ndarray[i, j + off_arr])
 
 
-def test_as_offset_non_cartesian_offset_raises():
-    # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
-
-    off_I = common._field(
-        np.zeros(3, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 3),))
-    )
+def test_as_offset_local_dimension_raises():
+    # `as_offset` shifts along a non-local dimension.
     off_V = common._field(
         np.zeros(3, dtype=int), domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),))
     )
-
-    # 2-element target (neighbor offset)
-    V2E = fbuiltins.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
-    with pytest.raises(ValueError, match="Cartesian"):
-        as_offset(V2E, off_V)
-
-    # 1-element target but source != target[0] (cross-dim)
-    IfromJ = fbuiltins.FieldOffset("IfromJ", source=I, target=(J,))
-    with pytest.raises(ValueError, match="Cartesian"):
-        as_offset(IfromJ, off_I)
+    with pytest.raises(ValueError, match="non-local dimension"):
+        as_offset(V2EDim, off_V)
 
 
 @pytest.mark.parametrize(

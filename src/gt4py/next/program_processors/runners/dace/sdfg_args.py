@@ -59,32 +59,30 @@ def connectivity_identifier(name: str) -> str:
     return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{gtx_common.codegen_name(name)}"
 
 
-def is_connectivity_identifier(
-    name: str, offset_provider_type: gtx_common.TableTypes | None = None
-) -> bool:
+def is_connectivity_identifier(name: str, table_types: gtx_common.TableTypes | None = None) -> bool:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
         return False
-    elif offset_provider_type is None:
+    elif table_types is None:
         # If no offset provider type is provided, we assume there is a connectivity identifier
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
     else:
-        return gtx_common.has_offset(offset_provider_type, gtx_common.from_codegen_name(m[1]))
+        return gtx_common.has_offset(table_types, gtx_common.from_codegen_name(m[1]))
 
 
 def _field_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
     sym: Literal["size", "stride"],
-    offset_provider_type: gtx_common.TableTypes | None,
+    table_types: gtx_common.TableTypes | None,
 ) -> dace.symbol:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
         name = f"__{field_name}_{gtx_common.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
-        assert offset_provider_type is not None
+        assert table_types is not None
         offset = gtx_common.from_codegen_name(m[1])
-        assert offset in offset_provider_type
-        conn_type = offset_provider_type[offset]
+        assert offset in table_types
+        conn_type = table_types[offset]
         assert isinstance(conn_type, gtx_common.NeighborTableType)
         if dim == conn_type.domain[0]:
             name = f"__{field_name}_source_{sym}"
@@ -98,17 +96,17 @@ def _field_symbol(
 def field_size_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: gtx_common.TableTypes,
+    table_types: gtx_common.TableTypes,
 ) -> dace.symbol:
-    return _field_symbol(field_name, dim, "size", offset_provider_type)
+    return _field_symbol(field_name, dim, "size", table_types)
 
 
 def field_stride_symbol(
     field_name: str,
     dim: gtx_common.Dimension,
-    offset_provider_type: gtx_common.TableTypes | None = None,
+    table_types: gtx_common.TableTypes | None = None,
 ) -> dace.symbol:
-    return _field_symbol(field_name, dim, "stride", offset_provider_type)
+    return _field_symbol(field_name, dim, "stride", table_types)
 
 
 def local_dimension_size(
@@ -151,7 +149,7 @@ def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol
 
 
 def filter_connectivity_types(
-    offset_provider_type: gtx_common.TableTypes,
+    table_types: gtx_common.TableTypes,
 ) -> dict[str, gtx_common.NeighborTableType]:
     """
     Filter offset provider types of type `NeighborTableType`.
@@ -160,6 +158,6 @@ def filter_connectivity_types(
     """
     return {
         offset: conn
-        for offset, conn in offset_provider_type.items()
+        for offset, conn in table_types.items()
         if isinstance(conn, gtx_common.NeighborTableType)
     }
