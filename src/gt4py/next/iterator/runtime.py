@@ -133,9 +133,7 @@ def fendef(
     )
 
 
-def _deduce_domain(
-    domain: dict[common.Dimension, range], offset_provider_type: common.OffsetProviderType
-):
+def _deduce_domain(domain: dict[common.Dimension, range], offset_provider_type: common.TableTypes):
     if isinstance(domain, UnstructuredDomain):
         domain_builtin = builtins.unstructured_domain
     elif isinstance(domain, CartesianDomain):
@@ -143,7 +141,7 @@ def _deduce_domain(
     else:
         domain_builtin = (
             builtins.unstructured_domain
-            if any(isinstance(o, common.ConnectivityType) for o in offset_provider_type.values())
+            if any(isinstance(o, common.NeighborTableType) for o in offset_provider_type.values())
             else builtins.cartesian_domain
         )
 

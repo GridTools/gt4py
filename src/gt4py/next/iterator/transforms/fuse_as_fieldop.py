@@ -123,7 +123,7 @@ def fuse_as_fieldop(
     expr: itir.Expr,
     eligible_args: list[bool],
     *,
-    offset_provider_type: common.OffsetProviderType,
+    offset_provider_type: common.TableTypes,
     enable_cse: bool,
     uids: utils.IDGeneratorPool,
 ) -> itir.Expr:
@@ -301,7 +301,7 @@ class FuseAsFieldOp(
     enabled_transformations = Transformation.all()
 
     uids: utils.IDGeneratorPool
-    offset_provider_type: common.OffsetProviderType
+    offset_provider_type: common.TableTypes
     enable_cse: bool  # option to disable is mainly for testing purposes
 
     @classmethod
@@ -309,7 +309,7 @@ class FuseAsFieldOp(
         cls,
         node: itir.Program,
         *,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         uids: utils.IDGeneratorPool,
         allow_undeclared_symbols=False,
         within_set_at_expr: Optional[bool] = None,

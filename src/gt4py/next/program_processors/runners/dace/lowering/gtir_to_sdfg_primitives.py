@@ -325,8 +325,10 @@ def _construct_if_branch_output(
         assert out_type.dtype.offset_type is not None
         assert isinstance(out_type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_args.as_dace_type(out_type.dtype.element_type)
-        offset_provider_type = sdfg_builder.get_offset_provider_type(out_type.dtype.offset_type.tag)
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        offset_provider_type = sdfg_builder.get_offset_provider_type(
+            sdfg_builder.connectivity_key_over(out_type.dtype.offset_type)
+        )
+        assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
         shape = [*shape, offset_provider_type.max_neighbors]
 
     out, _ = sdfg_builder.add_temp_array(ctx.sdfg, shape, dtype)

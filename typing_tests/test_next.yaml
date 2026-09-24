@@ -275,3 +275,74 @@
     main: |
       import xarray
       a: xarray.NamedArray
+
+  - case: neighbor_connectivity_declaration
+    main: |
+      from __future__ import annotations
+      from gt4py import next as gtx
+
+      class Vertex(gtx.DimensionIndex): ...
+      class Edge(gtx.DimensionIndex): ...
+
+      class V2E(gtx.NeighborConnectivity[Vertex, Edge], max_neighbors=6):
+          class Local(gtx.LocalDimensionIndex): ...
+
+      def sparse(a: gtx.Field[gtx.Dims[Vertex, V2E.Local], gtx.float64]) -> None: ...
+
+      reveal_type(V2E.Local)
+      reveal_type(V2E.Local.owner)
+      reveal_type(V2E[1])
+    out: |
+      main:12:13: note: Revealed type is "def (value: int) -> main.V2E.Local"
+      main:13:13: note: Revealed type is "type[gt4py.next.common.NeighborConnectivity[Any, Any]] | None"
+      main:14:13: note: Revealed type is "gt4py.next.common.Connectivity[Any, Any]"
+
+  - case: neighbor_connectivity_locals_are_distinct
+    main: |
+      from __future__ import annotations
+      from gt4py import next as gtx
+
+      class Vertex(gtx.DimensionIndex): ...
+      class Edge(gtx.DimensionIndex): ...
+      class Cell(gtx.DimensionIndex): ...
+
+      class V2E(gtx.NeighborConnectivity[Vertex, Edge]):
+          class Local(gtx.LocalDimensionIndex): ...
+
+      class V2C(gtx.NeighborConnectivity[Vertex, Cell]):
+          class Local(gtx.LocalDimensionIndex): ...
+
+      def takes_v2e(a: gtx.Field[gtx.Dims[Vertex, V2E.Local], gtx.float64]) -> None: ...
+
+      def caller(a: gtx.Field[gtx.Dims[Vertex, V2C.Local], gtx.float64]) -> None:
+          takes_v2e(a)
+    out: |
+      main:17:15: error: Argument 1 to "takes_v2e" has incompatible type "Field[Dims[Vertex, main.V2C.Local], float]"; expected "Field[Dims[Vertex, main.V2E.Local], float]"  [arg-type]
+      main:17:15: note: "Field[Dims[Vertex, Local], float].__call__" has type "def __call__(self, index_field: Connectivity[Any, Any] | FieldOffset | type[NeighborConnectivity[Any, Any]], *args: Connectivity[Any, Any] | FieldOffset | type[NeighborConnectivity[Any, Any]]) -> Field[Any, Any]"
+
+  - case: neighbor_connectivity_generic_local
+    main: |
+      from __future__ import annotations
+      import typing
+      from gt4py import next as gtx
+
+      class Vertex(gtx.DimensionIndex): ...
+      class Edge(gtx.DimensionIndex): ...
+
+      class V2E(gtx.NeighborConnectivity[Vertex, Edge]):
+          class Local(gtx.LocalDimensionIndex): ...
+
+      L = typing.TypeVar("L", bound=gtx.LocalDimensionIndex)
+
+      def local_of(conn: type[gtx.NeighborConnectivity]) -> type[gtx.LocalDimensionIndex]:
+          # `conn.Local` is not annotated, so that a declaration's `Local` stays a type; generic
+          # code reads it through the accessor
+          return gtx.local_dimension_of(conn)
+
+      def first(a: gtx.Field[gtx.Dims[Vertex, L], gtx.float64]) -> type[L]:
+          raise NotImplementedError
+
+      def caller(a: gtx.Field[gtx.Dims[Vertex, V2E.Local], gtx.float64]) -> None:
+          reveal_type(first(a))
+    out: |
+      main:22:17: note: Revealed type is "type[main.V2E.Local]"

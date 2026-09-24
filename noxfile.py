@@ -349,6 +349,9 @@ def test_typing_exports(session: nox.Session) -> None:
         "typing_tests",
         *session.posargs,
     )
+    # A second checker, on code that must type-check for a downstream user: mypy and pyright
+    # disagree about what counts as a type, which the mypy-only cases above cannot catch.
+    session.run("pyright", "--project", "typing_tests", "typing_tests/pyright_probes.py")
 
 
 # -- DaCe codegen determinism check --

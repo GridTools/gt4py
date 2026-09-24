@@ -145,7 +145,7 @@ class CompileTimeArgs:
 
     args: tuple[ts.TypeSpec, ...]
     kwargs: dict[str, ts.TypeSpec]
-    offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
+    offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.TableTypes once the temporary pass doesn't require the runtime information
     column_axis: Optional[common.Dimension]
     #: A mapping from an argument descriptor type to a context containing the actual descriptors.
     #: If an argument or element of an argument has no descriptor, the respective value is `None`.
@@ -154,7 +154,7 @@ class CompileTimeArgs:
     argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
     @property
-    def offset_provider_type(self) -> common.OffsetProviderType:
+    def offset_provider_type(self) -> common.TableTypes:
         return common.offset_provider_to_type(self.offset_provider)
 
     @classmethod

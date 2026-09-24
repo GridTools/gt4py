@@ -29,11 +29,16 @@ def foo(inp):
     return deref(inp)
 
 
-connectivity = common.ConnectivityType(
-    domain=[dummy_origin, dummy_neighbor],
-    codomain=dummy_codomain,
+connectivity = common.NeighborTableType(
+    connectivity=common.ConnectivityType(
+        domain=(dummy_origin, dummy_neighbor),
+        codomain=dummy_codomain,
+        skip_value=common._DEFAULT_SKIP_VALUE,
+        dtype=None,
+    ),
     skip_value=common._DEFAULT_SKIP_VALUE,
     dtype=None,
+    max_neighbors=1,
 )
 
 

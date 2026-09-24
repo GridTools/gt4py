@@ -91,7 +91,7 @@ def compile_variant_hook(
     key: CompiledProgramsKey,
     backend: gtx_backend.Backend,
     argument_descriptors: ArgStaticDescriptorsByType,
-    offset_provider: common.OffsetProviderType | common.OffsetProvider,
+    offset_provider: common.TableTypes | common.OffsetProvider,
 ) -> None:
     """Callback hook invoked before compiling a program variant."""
 
@@ -627,7 +627,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def _compile_variant(
         self,
         argument_descriptors: ArgStaticDescriptorsByType,
-        offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        offset_provider: common.TableTypes | common.OffsetProvider,
         #: tuple consisting of the types of the positional and keyword arguments.
         arg_specialization_info: tuple[tuple[ts.TypeSpec, ...], dict[str, ts.TypeSpec]]
         | None = None,
@@ -636,9 +636,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
         if not common.is_offset_provider(offset_provider):
-            if common.is_offset_provider_type(offset_provider):
+            if common.is_table_types(offset_provider):
                 raise ValueError(
-                    "Variant compilation of programs with 'OffsetProviderType' is not yet supported."
+                    "Variant compilation of programs with 'TableTypes' is not yet supported."
                 )
             else:
                 raise ValueError(f"Invalid 'offset_provider': {offset_provider}")
@@ -709,11 +709,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #  domains and of scans.
     def compile(
         self,
-        offset_providers: list[common.OffsetProvider | common.OffsetProviderType],
+        offset_providers: list[common.OffsetProvider | common.TableTypes],
         **static_args: list[ScalarOrTupleOfScalars],
     ) -> None:
         """
-        Compiles the program for all combinations of static arguments and the given 'OffsetProviderType'.
+        Compiles the program for all combinations of static arguments and the given 'TableTypes'.
 
         Note: In case you want to compile for specific combinations of static arguments (instead
         of the combinatoral), you can call compile multiples times.

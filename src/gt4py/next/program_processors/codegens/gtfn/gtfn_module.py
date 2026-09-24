@@ -67,7 +67,7 @@ class GTFNTranslationStep(
         self,
         program: itir.Program,
         arg_types: tuple[ts.TypeSpec, ...],
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -91,21 +91,26 @@ class GTFNTranslationStep(
                         # NOTE: the tag is the offset-provider key, and its mangled form names the
                         # `generated::<name>_t` tag type. A legacy `FieldOffset` carries it as `value`.
                         dim_name = dim.value if isinstance(dim, fbuiltins.FieldOffset) else dim.tag
-                        connectivity = common.get_offset_type(offset_provider_type, dim_name)
-                        assert isinstance(connectivity, common.NeighborConnectivityType)
+                        connectivity = common.get_offset_type(
+                            offset_provider_type,
+                            dim_name
+                            if isinstance(dim, fbuiltins.FieldOffset)
+                            else common.connectivity_key_over(offset_provider_type, dim),
+                        )
+                        assert isinstance(connectivity, common.NeighborTableType)
                         size = connectivity.max_neighbors
                         arg = f"gridtools::sid::dimension_to_tuple_like<generated::{common.codegen_name(dim_name)}_t, {size}>({arg})"
             arg_exprs.append(arg)
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self, offset_provider_type: common.OffsetProviderType
+        self, offset_provider_type: common.TableTypes
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
 
         for name, connectivity_type in offset_provider_type.items():
-            if isinstance(connectivity_type, common.NeighborConnectivityType):
+            if isinstance(connectivity_type, common.NeighborTableType):
                 if connectivity_type.dtype.scalar_type not in [np.int32, np.int64]:
                     raise ValueError(
                         "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
@@ -141,7 +146,7 @@ class GTFNTranslationStep(
                 )
             else:
                 raise AssertionError(
-                    f"Expected offset provider type '{name}' to be a 'NeighborConnectivityType', "
+                    f"Expected offset provider type '{name}' to be a 'NeighborTableType', "
                     f"got '{type(connectivity_type).__name__}'."
                 )
 
@@ -150,7 +155,7 @@ class GTFNTranslationStep(
     def _preprocess_program(
         self,
         program: itir.Program,
-        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+        offset_provider: common.OffsetProvider | common.TableTypes,
     ) -> itir.Program:
         return pass_manager.apply_common_transforms(
             program,
@@ -164,7 +169,7 @@ class GTFNTranslationStep(
     def generate_stencil_source(
         self,
         program: itir.Program,
-        offset_provider: common.OffsetProvider | common.OffsetProviderType,
+        offset_provider: common.OffsetProvider | common.TableTypes,
         column_axis: Optional[common.Dimension],
     ) -> str:
         if self.enable_itir_transforms:

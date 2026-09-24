@@ -315,7 +315,7 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
 def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
     # With `symbolic_domain_sizes` the translated range is taken from the provided size
     # expression instead of the connectivity table. This makes `translate` work for a type-only
-    # `OffsetProviderType` (which has no table) as well as a runtime `OffsetProvider`.
+    # `TableTypes` (which has no table) as well as a runtime `OffsetProvider`.
     offset_provider = {
         V2EDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 4), V2EDim: 1},

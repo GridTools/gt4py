@@ -130,9 +130,9 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
     elif t is common.Dimension:
         return ts.DimensionType
     elif t is FieldOffset:
-        return ts.OffsetType
+        return ts.ShiftType
     elif t is common.Connectivity:
-        return ts.OffsetType
+        return ts.ShiftType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is common.Domain:
@@ -493,8 +493,17 @@ class FieldOffset(runtime.Offset):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
-    def __gt_type__(self) -> ts.OffsetType:
-        return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
+    def __gt_type__(self) -> ts.ShiftType:
+        return ts.ShiftType(codomain=self.source, domain=self.target, tag=self.value)
+
+    @property
+    def Local(self) -> common.Dimension:
+        """The local dimension, as `V2E.Local` names it on a `NeighborConnectivity`."""
+        if len(self.target) != 2:
+            raise AttributeError(
+                f"'{self.value}' is a Cartesian offset and has no local dimension."
+            )
+        return self.target[1]
 
     def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
@@ -532,10 +541,11 @@ class FieldOffset(runtime.Offset):
         return connectivity
 
 
-def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
+def is_cartesian_offset(offset: FieldOffset | ts.ShiftType) -> bool:
+    shift_type = offset.__gt_type__() if isinstance(offset, FieldOffset) else offset
     return (
-        len(offset.target) == 1
-        and offset.source == offset.target[0]
-        and offset.source.kind == offset.target[0].kind
-        and offset.target[0].kind != common.DimensionKind.LOCAL
+        len(shift_type.domain) == 1
+        and shift_type.codomain == shift_type.domain[0]
+        and shift_type.codomain.kind == shift_type.domain[0].kind
+        and shift_type.domain[0].kind != common.DimensionKind.LOCAL
     )

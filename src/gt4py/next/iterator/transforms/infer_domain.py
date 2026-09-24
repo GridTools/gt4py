@@ -57,7 +57,7 @@ _Expr_T = TypeVar("_Expr_T", bound=itir.Expr)
 
 
 class InferenceOptions(typing.TypedDict):
-    offset_provider: common.OffsetProvider | common.OffsetProviderType
+    offset_provider: common.OffsetProvider | common.TableTypes
     symbolic_domain_sizes: dict[str, itir.Expr] | None
     allow_uninferred: bool
     keep_existing_domains: bool
@@ -129,7 +129,7 @@ def _extract_accessed_domains(
     stencil: itir.Expr,
     input_ids: list[str],
     target_domain: NonTupleDomainAccess,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
 ) -> dict[str, NonTupleDomainAccess]:
     accessed_domains: dict[str, NonTupleDomainAccess] = {}
@@ -185,7 +185,7 @@ def _infer_as_fieldop(
     applied_fieldop: itir.FunCall,
     target_domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]],
     allow_uninferred: bool,
     keep_existing_domains: bool,
@@ -444,7 +444,7 @@ def infer_expr(
     expr: _Expr_T,
     domain: DomainAccess,
     *,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
@@ -572,7 +572,7 @@ def _infer_stmt(
 def infer_program(
     program: itir.Program,
     *,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,
     allow_uninferred: bool = False,
     keep_existing_domains: bool = False,
