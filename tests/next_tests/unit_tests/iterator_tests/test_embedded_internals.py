@@ -160,3 +160,20 @@ def test_domain_axes_must_be_dimensions():
         iterator_embedded._domain_as_dict(
             iterator_runtime.CartesianDomain([("pkg.IDim", range(3))])
         )
+
+
+def test_sparse_axis_steps_along_a_local_dimension():
+    """`SparseAxis(dim)` is the offset part of a shift along a field's own local dimension."""
+    import gt4py.next as gtx
+
+    from next_tests.toy_connectivity import V2E, V2EDim, Vertex, v2e_arr, v2e_conn
+
+    sparse = gtx.as_field([Vertex, V2EDim], v2e_arr)
+    with embedded_context.update(offset_provider={V2E.offset_tag: v2e_conn}):
+        sparse_iterator = embedded.make_in_iterator(sparse, {Vertex: 0}, column_dimension=None)
+        assert isinstance(sparse_iterator, embedded.SparseListIterator)
+        # `SparseAxis` fills the sparse entry of the position, which is what derefing a
+        # `SparseListIterator` does for each neighbor in turn
+        element = sparse_iterator.it.shift(embedded.SparseAxis(V2EDim), 2)
+        assert element.deref() == v2e_arr[0][2]
+        assert tuple(sparse_iterator.deref().values) == tuple(v2e_arr[0])

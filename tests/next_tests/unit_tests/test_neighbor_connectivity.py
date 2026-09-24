@@ -782,8 +782,19 @@ class TestMultiDimensionIndex:
 
     @pytest.mark.parametrize(
         "indices",
-        [(V2E.Local(0),), (Vertex(0), Edge(1)), (Vertex(0), 1), (0,)],
+        [
+            (V2E.Local(0),),
+            (Vertex(0), Edge(1)),
+            (Vertex(0), 1),
+            (0,),
+            (Vertex(0),),  # a position in a product needs a local index
+            (Edge(0), V2E.Local(1)),  # V2E indexes the neighbors of a vertex
+        ],
     )
     def test_rejects_other_shapes(self, indices):
         with pytest.raises(TypeError, match="MultiDimensionIndex"):
             common.MultiDimensionIndex(*indices)
+
+    def test_accepts_an_owner_less_local_dimension(self):
+        position = common.MultiDimensionIndex(Vertex(1), LsqCoeff(2))
+        assert position.dims == (Vertex, LsqCoeff)

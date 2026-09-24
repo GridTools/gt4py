@@ -2619,6 +2619,9 @@ class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
     it compares and hashes like the plain tuple; tuple operations such as slicing return plain
     tuples. A user-facing, typed index: nothing in the toolchain requires it.
 
+    At least one local index is required, and a local dimension owned by a connectivity must be
+    one of the neighbors of the primary index's dimension.
+
     Examples:
         >>> class Vertex(DimensionIndex): ...
         >>> class Edge(DimensionIndex): ...
@@ -2640,11 +2643,22 @@ class MultiDimensionIndex[D: DimensionIndex, *Ls](tuple[D, *Ls]):
                 f"'MultiDimensionIndex' starts with an index into a non-local dimension, got"
                 f" '{index!r}'."
             )
+        if not local_indices:
+            raise TypeError(
+                "'MultiDimensionIndex' is a position in a *product*: it needs at least one index"
+                " into a local dimension."
+            )
         for local_index in local_indices:
             if not isinstance(local_index, LocalDimensionIndex):
                 raise TypeError(
                     "'MultiDimensionIndex' continues with indices into local dimensions, got"
                     f" '{local_index!r}'."
+                )
+            owner = local_index.dim.owner  # type: ignore[attr-defined] # a LocalDimensionIndex
+            if owner is not None and owner.domain is not index.dim:
+                raise TypeError(
+                    f"'MultiDimensionIndex': '{local_index.dim.__qualname__}' indexes the neighbors"
+                    f" of '{owner.domain.__qualname__}', not of '{index.dim.__qualname__}'."
                 )
         return super().__new__(cls, (index, *local_indices))
 
