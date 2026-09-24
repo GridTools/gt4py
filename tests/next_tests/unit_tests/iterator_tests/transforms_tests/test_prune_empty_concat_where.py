@@ -18,10 +18,18 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
-Edge = common.Dimension(value="Edge", kind=common.DimensionKind.HORIZONTAL)
-V2EDim = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
-K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
+
+class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
+class V2EDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
+class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+
 
 float64 = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 vertex_k_field = ts.FieldType(dims=[Vertex, K], dtype=float64)
@@ -246,13 +254,13 @@ def test_prune_equal_branches_containing_unstructured_shift():
     failing on the `V2E` translation during the re-inference).
     """
     offset_provider = {
-        "V2E": constructors.as_connectivity(
+        V2EDim.tag: constructors.as_connectivity(
             domain={Vertex: 1, V2EDim: 2},
             codomain=Edge,
             data=np.array([[0, 1]], dtype=np.int32),
         )
     }
-    stencil = im.lambda_("it")(im.deref(im.shift("V2E", 0)("it")))
+    stencil = im.lambda_("it")(im.deref(im.shift(V2EDim.tag, 0)("it")))
     branch = im.as_fieldop(stencil)(im.ref("e", edge_field))
     accessed_domain = {Vertex: (0, 1), K: (0, 10)}
 

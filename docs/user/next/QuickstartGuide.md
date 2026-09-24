@@ -51,11 +51,11 @@ from gt4py.next import float64, neighbor_sum, where, Dims
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _Cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two dimensions, `CellDim` and `KDim` -- a dimension is a class -- and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-KDim = gtx.Dimension("K")
+class CellDim(gtx.DimensionIndex): ...
+class KDim(gtx.DimensionIndex): ...
 
 num_cells = 5
 num_layers = 6
@@ -70,8 +70,8 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-I = gtx.Dimension("I")
-J = gtx.Dimension("J")
+class I(gtx.DimensionIndex): ...
+class J(gtx.DimensionIndex): ...
 
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(
@@ -165,11 +165,10 @@ The examples related to unstructured meshes use the mesh below. The edges (in bl
 
 +++
 
-The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. The corresponding named dimensions are thus the following:
+The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. They use the `CellDim` declared above, plus a new dimension for the edges. A dimension is identified by its class, so declaring `CellDim` again here would create a *different* dimension from the one the fields above are defined on:
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-EdgeDim = gtx.Dimension("Edge")
+class EdgeDim(gtx.DimensionIndex): ...
 ```
 
 You can express connectivity between elements (i.e. cells or edges) of the mesh using connectivity (a.k.a. adjacency or neighborhood) tables. The table below, `edge_to_cell_table`, has one row for every edge where it lists the indices of cells adjacent to that edge. For example, this table says that edge #6 connects to cells #0 and #5. Similarly, `cell_to_edge_table` lists the edges that are neighbors to a particular cell.
@@ -228,11 +227,11 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
-E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
+class E2CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+E2C = gtx.FieldOffset(E2CDim.tag, source=CellDim, target=(EdgeDim, E2CDim))
 ```
 
-Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
+The field offset is named by its local dimension's `tag`, and the offset provider below is keyed by the same `tag`, so all three refer to one connectivity. Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
 E2C_offset_provider = gtx.as_connectivity([EdgeDim, E2CDim], codomain=CellDim, data=edge_to_cell_table, skip_value=-1)
@@ -251,7 +250,7 @@ def nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64]) -> gtx.
 def run_nearest_cell_to_edge(cell_values: gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     nearest_cell_to_edge(cell_values, out=out)
 
-run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
+run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={E2CDim.tag: E2C_offset_provider})
 
 print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 ```
@@ -278,7 +277,7 @@ def sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64]) -> gtx.Field[D
 def run_sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64], out : gtx.Field[Dims[EdgeDim], float64]):
     sum_adjacent_cells(cells, out=out)
 
-run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
+run_sum_adjacent_cells(cell_values, edge_values, offset_provider={E2CDim.tag: E2C_offset_provider})
 
 print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 ```
@@ -380,8 +379,8 @@ print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnu
 As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+C2E = gtx.FieldOffset(C2EDim.tag, source=EdgeDim, target=(CellDim, C2EDim))
 
 C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)
 ```
@@ -442,7 +441,7 @@ result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
 run_pseudo_laplacian(cell_values,
                      edge_weight_field,
                      result_pseudo_lap,
-                     offset_provider={"E2C": E2C_offset_provider, "C2E": C2E_offset_provider})
+                     offset_provider={E2CDim.tag: E2C_offset_provider, C2EDim.tag: C2E_offset_provider})
 
 print("pseudo-laplacian: {}".format(result_pseudo_lap.asnumpy()))
 ```

@@ -20,9 +20,12 @@ from gt4py.next.iterator.transforms.cse import (
 )
 
 
+class I(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+
+
 @pytest.fixture
 def offset_provider_type(request):
-    return {"I": common.Dimension("I", kind=common.DimensionKind.HORIZONTAL)}
+    return {"I": I}
 
 
 @pytest.fixture

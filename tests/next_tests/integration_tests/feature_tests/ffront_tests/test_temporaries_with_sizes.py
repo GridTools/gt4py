@@ -16,6 +16,7 @@ from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    E2VDim,
     E2V,
     Case,
     KDim,
@@ -37,9 +38,9 @@ def exec_alloc_descriptor():
         executor=gtfn.GTFNCompileWorkflowFactory(
             translation=gtfn.gtfn_module.GTFNTranslationStepFactory(
                 symbolic_domain_sizes={
-                    "Cell": "num_cells",
-                    "Edge": "num_edges",
-                    "Vertex": "num_vertices",
+                    Cell.tag: "num_cells",
+                    Edge.tag: "num_edges",
+                    Vertex.tag: "num_vertices",
                 }
             )
         ),
@@ -82,7 +83,9 @@ def test_verification(testee, exec_alloc_descriptor, mesh_descriptor):
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].asnumpy()[:, i] for i in [0, 1])
+    first_nbs, second_nbs = (
+        mesh_descriptor.offset_provider[E2VDim.tag].asnumpy()[:, i] for i in [0, 1]
+    )
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(

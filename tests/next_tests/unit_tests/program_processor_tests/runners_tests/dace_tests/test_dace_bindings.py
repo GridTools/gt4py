@@ -9,22 +9,23 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import functools
-import dace
+
 import numpy as np
 import pytest
-from gt4py.eve import codegen
 
 from gt4py import next as gtx
-from gt4py.next import common as gtx_common, int32
+from gt4py.eve import codegen
+from gt4py.next import common as gtx_common, int32, neighbor_sum
 from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners import dace as dace_runner
 from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
-from gt4py.next import neighbor_sum
-from next_tests.integration_tests.cases import E2V, E2VDim, V2E, V2EDim
 
-from next_tests.integration_tests import cases
-from next_tests.integration_tests import cases_utils
-from next_tests.unit_tests.test_common import IDim, JDim, KDim
+from next_tests.integration_tests import cases, cases_utils
+
+# NOTE: from `cases`, not `test_common`: the `cartesian_case` fixture is sized on the `cases`
+# dimensions, and under nominal identity (ADR 0028) another module's same-named `IDim` is a
+# different dimension -- it used to compare equal.
+from next_tests.integration_tests.cases import E2V, V2E, E2VDim, IDim, JDim, KDim, V2EDim
 
 
 _bind_func_name = "update_sdfg_args"
@@ -154,6 +155,12 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     )
 
 
+# The generated binding names each table variable after the *mangled* offset key -- it has to be
+# a valid identifier -- but looks the table up in the offset provider by the real, qualified tag.
+_E2V_TABLE = f"table_{gtx_common.codegen_name(E2VDim.tag)}"
+_V2E_TABLE = f"table_{gtx_common.codegen_name(V2EDim.tag)}"
+
+
 def _binding_source_unstructured(use_metrics: bool) -> str:
     metrics_arg_index = 2
     idx = [0, 4, 5, 1, 6, 7, 8, 2, 10, 9, 3, 12, 11]
@@ -174,14 +181,14 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[4]}] = ctypes.c_int(args_1.domain.ranges[0].start)
     sdfg_call_args[{idx[5]}] = ctypes.c_int(args_1.domain.ranges[0].stop)
     sdfg_call_args[{idx[6]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])
-    table_E2V = offset_provider["E2V"]
-    sdfg_call_args[{idx[7]}].value = table_E2V.__gt_buffer_info__.data_ptr
-    sdfg_call_args[{idx[8]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[9]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[1])
-    table_V2E = offset_provider["V2E"]
-    sdfg_call_args[{idx[10]}].value = table_V2E.__gt_buffer_info__.data_ptr
-    sdfg_call_args[{idx[11]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[12]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])
+    {_E2V_TABLE} = offset_provider["{E2VDim.tag}"]
+    sdfg_call_args[{idx[7]}].value = {_E2V_TABLE}.__gt_buffer_info__.data_ptr
+    sdfg_call_args[{idx[8]}] = ctypes.c_int({_E2V_TABLE}.__gt_buffer_info__.elem_strides[0])
+    sdfg_call_args[{idx[9]}] = ctypes.c_int({_E2V_TABLE}.__gt_buffer_info__.elem_strides[1])
+    {_V2E_TABLE} = offset_provider["{V2EDim.tag}"]
+    sdfg_call_args[{idx[10]}].value = {_V2E_TABLE}.__gt_buffer_info__.data_ptr
+    sdfg_call_args[{idx[11]}] = ctypes.c_int({_V2E_TABLE}.__gt_buffer_info__.elem_strides[0])
+    sdfg_call_args[{idx[12]}] = ctypes.c_int({_V2E_TABLE}.__gt_buffer_info__.elem_strides[1])
 """
     )
 
@@ -204,14 +211,14 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
     sdfg_call_args[{idx[2]}].value = args_1.__gt_buffer_info__.data_ptr
     sdfg_call_args[{idx[3]}] = ctypes.c_int(args_1.domain.ranges[0].stop)
     sdfg_call_args[{idx[4]}] = ctypes.c_int(args_1.__gt_buffer_info__.elem_strides[0])
-    table_E2V = offset_provider["E2V"]
-    sdfg_call_args[{idx[5]}].value = table_E2V.__gt_buffer_info__.data_ptr
-    sdfg_call_args[{idx[6]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[7]}] = ctypes.c_int(table_E2V.__gt_buffer_info__.elem_strides[1])
-    table_V2E = offset_provider["V2E"]
-    sdfg_call_args[{idx[8]}].value = table_V2E.__gt_buffer_info__.data_ptr
-    sdfg_call_args[{idx[9]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[0])
-    sdfg_call_args[{idx[10]}] = ctypes.c_int(table_V2E.__gt_buffer_info__.elem_strides[1])
+    {_E2V_TABLE} = offset_provider["{E2VDim.tag}"]
+    sdfg_call_args[{idx[5]}].value = {_E2V_TABLE}.__gt_buffer_info__.data_ptr
+    sdfg_call_args[{idx[6]}] = ctypes.c_int({_E2V_TABLE}.__gt_buffer_info__.elem_strides[0])
+    sdfg_call_args[{idx[7]}] = ctypes.c_int({_E2V_TABLE}.__gt_buffer_info__.elem_strides[1])
+    {_V2E_TABLE} = offset_provider["{V2EDim.tag}"]
+    sdfg_call_args[{idx[8]}].value = {_V2E_TABLE}.__gt_buffer_info__.data_ptr
+    sdfg_call_args[{idx[9]}] = ctypes.c_int({_V2E_TABLE}.__gt_buffer_info__.elem_strides[0])
+    sdfg_call_args[{idx[10]}] = ctypes.c_int({_V2E_TABLE}.__gt_buffer_info__.elem_strides[1])
 """
     )
 
@@ -238,7 +245,12 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    assert codegen.format_python_source(binding_source_pruned) == binding_source_ref
+    # NOTE: both sides go through the same formatter. The generated side always did; formatting
+    # the reference too makes the comparison independent of where long lines happen to wrap,
+    # which the mangled (qualified) connectivity names in the binding now make them do.
+    assert codegen.format_python_source(binding_source_pruned) == codegen.format_python_source(
+        binding_source_ref
+    )
     return _dace_compile_call(self, inp)
 
 
@@ -372,8 +384,8 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     b = cases.allocate(test_case, testee, "b")()
 
     ref = np.sum(
-        np.sum(a.asnumpy()[offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
-            offset_provider["V2E"].asnumpy()
+        np.sum(a.asnumpy()[offset_provider[E2VDim.tag].asnumpy()], axis=1, initial=0)[
+            offset_provider[V2EDim.tag].asnumpy()
         ],
         axis=1,
     )

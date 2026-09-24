@@ -11,9 +11,10 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common as gtx_common, custom_layout_allocators as gtx_allocators
-
 from gt4py._core import definitions as core_defs
+from gt4py.next import common as gtx_common, custom_layout_allocators as gtx_allocators
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, unstructured_case  # noqa: F401
 from next_tests.integration_tests.cases_utils import (
@@ -80,6 +81,7 @@ def testee(a: gtx.Field[gtx.Dims[Vertex], gtx.float64], b: gtx.Field[gtx.Dims[Ed
 
 @pytest.mark.uses_unstructured_shift
 def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
+    E2V_CONN = gtx_dace_args.connectivity_identifier(E2VDim.tag)
     if not unstructured_case.backend or "dace" not in unstructured_case.backend.name:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
@@ -108,7 +110,9 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         allocator=allocator,
     )
 
-    testee2 = testee.with_backend(backend).with_compilation_options(connectivities={"E2V": e2v})
+    testee2 = testee.with_backend(backend).with_compilation_options(
+        connectivities={E2VDim.tag: e2v}
+    )
 
     @dace.program
     def sdfg(
@@ -122,7 +126,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
         )
         return out
 
-    connectivities = {"E2V": e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
+    connectivities = {E2VDim.tag: e2v}  # replace 'e2v' with 'e2v.__gt_type__()' when GTIR is AOT
     offset_provider = OffsetProvider_t.dtype._typeclass.as_ctypes()(E2V=e2v.data_ptr())
 
     a = gtx.as_field([Vertex], xp.asarray([0.0, 1.0, 2.0]), allocator=allocator)
@@ -146,9 +150,10 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            gt_conn_E2V=e2v,
-            __gt_conn_E2V_source_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __gt_conn_E2V_neighbor_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            # the connectivity argument is named after the mangled offset key (ADR 0028)
+            **{E2V_CONN: e2v},
+            **{f"__{E2V_CONN}_source_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 0)},
+            **{f"__{E2V_CONN}_neighbor_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 1)},
         )
 
         e2v_np = e2v.asnumpy()
@@ -167,9 +172,10 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            gt_conn_E2V=e2v,
-            __gt_conn_E2V_source_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 0),
-            __gt_conn_E2V_neighbor_stride=get_stride_from_numpy_to_dace(e2v.ndarray, 1),
+            # the connectivity argument is named after the mangled offset key (ADR 0028)
+            **{E2V_CONN: e2v},
+            **{f"__{E2V_CONN}_source_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 0)},
+            **{f"__{E2V_CONN}_neighbor_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 1)},
         )
 
         e2v_np = e2v.asnumpy()

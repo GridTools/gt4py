@@ -13,6 +13,9 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
+class IDim(gtx.DimensionIndex): ...
+
+
 def test_prune_casts_simple():
     x_ref = im.ref("x", ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
     y_ref = im.ref("y", ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
@@ -25,7 +28,6 @@ def test_prune_casts_simple():
 
 
 def test_prune_casts_fieldop():
-    IDim = gtx.Dimension("IDim")
     x_ref = im.ref("x", ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     y_ref = im.ref("y", ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)))
     testee = im.op_as_fieldop("plus")(

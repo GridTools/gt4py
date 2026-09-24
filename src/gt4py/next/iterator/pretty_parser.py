@@ -20,7 +20,7 @@ from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
-GRAMMAR = """
+GRAMMAR = r"""
     start: fencil_definition
         | function_definition
         | declaration
@@ -35,8 +35,13 @@ GRAMMAR = """
     TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
-    OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
-    AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
+    // A dimension or offset tag is a qualified Python name (ADR 0028): dotted, and -- for a
+    // parametrized dimension such as `Staggered[pkg.K]` -- with one bracketed dotted name.
+    // Unambiguous here: a tag starts with a letter (a float does not), and the literal's
+    // suffix terminates it.
+    TAG: /[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?:\[[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\])?/
+    OFFSET_LITERAL: ( INT_LITERAL | TAG ) "ₒ"
+    AXIS_LITERAL: TAG ("ᵥ" | "ₕ" | "ₗ")
     INFINITY_LITERAL: "∞" | "-∞"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
@@ -172,9 +177,8 @@ class ToIrTransformer(lark_visitors.Transformer):
         return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        name = value.value[:-1]
-        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
-        return ir.AxisLiteral(value=name, kind=kind)
+        # NOTE: the kind suffix is only for the reader; the kind is the dimension's own.
+        return ir.AxisLiteral(value=value.value[:-1])
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args

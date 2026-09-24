@@ -8,7 +8,7 @@
 import functools
 import inspect
 from collections.abc import Callable, Iterable
-from typing import Any, Iterator, Sequence, cast
+from typing import Any, Final, Iterator, Sequence, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
@@ -163,6 +163,19 @@ def _tree_map_type_constructor_drop_python_type(
     return result
 
 
+class _UnknownDim(common.DimensionIndex):
+    """
+    Placeholder for a dimension that cannot be determined, shown only in a diagnostic.
+
+    Displays as `...` so the resulting error reads `Field[[...], <dtype>]`. It is never lowered
+    or resolved, so the unimportable qualname this gives its `tag` is harmless.
+    """
+
+
+_UnknownDim.__qualname__ = "..."
+_UNKNOWN_DIM: Final = _UnknownDim
+
+
 def _scan_param_promotion(
     param: ts.TypeSpec, arg: ts.TypeSpec
 ) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
@@ -175,13 +188,12 @@ def _scan_param_promotion(
 
     Example:
     --------
+    >>> class I(common.DimensionIndex): ...
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(
-    ...         dims=[common.Dimension("I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ...     ),
+    ...     ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
     ... )
-    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
+    FieldType(dims=[gt4py.next.ffront.type_info.I[horizontal]], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
@@ -198,7 +210,7 @@ def _scan_param_promotion(
             # argument type differ. As such we can not extract the dimensions
             # and just return a generic field shown in the error later on.
             # TODO: we want some generic field type here, but our type system does not support it yet.
-            return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
+            return ts.FieldType(dims=[_UNKNOWN_DIM], dtype=dtype)
 
     # Note: In the promotion of the scalar type to field type we drop the information about
     # the original python type in NamedCollections as we want to be able to express compatibility

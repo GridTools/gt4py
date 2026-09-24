@@ -22,7 +22,7 @@ import gt4py.next.common as gtx_common
 from gt4py.next.ffront.fbuiltins import where
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import E2V
+from next_tests.integration_tests.cases import E2VDim, E2V
 from next_tests.integration_tests.cases_utils import (
     Edge,
     IDim,
@@ -208,7 +208,7 @@ def test_dace_fastcall(cartesian_case, monkeypatch):
 def test_dace_fastcall_with_connectivity(unstructured_case, monkeypatch):
     """Test reuse of SDFG arguments between program calls by means of SDFG fastcall API."""
 
-    connectivity_E2V = unstructured_case.offset_provider["E2V"].asnumpy()
+    connectivity_E2V = unstructured_case.offset_provider[E2VDim.tag].asnumpy()
 
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:

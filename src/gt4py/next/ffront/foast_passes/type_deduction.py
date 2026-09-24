@@ -41,9 +41,8 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(
-    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ... )
+    >>> class I(common.DimensionIndex): ...
+    >>> field_t = ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
     """
@@ -174,7 +173,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> from gt4py.next import Field
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import DimensionIndex
+    >>> class IDim(DimensionIndex): ...
     >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
@@ -482,7 +482,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                                 " choose one."
                             )
                         ],
-                        hints=[f"Write the displacement directly, e.g. '{source.value} + 1'."],
+                        hints=[
+                            f"Write the displacement directly, e.g. '{source.__qualname__} + 1'."
+                        ],
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
@@ -710,7 +712,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     right.location,
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
-                    f"'{left.type.dim.value}'.",
+                    f"'{left.type.dim.__qualname__}'.",
                     hints=[
                         (
                             "Use an integer offset to shift within the dimension, or a half-integer "
@@ -989,12 +991,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
         if not fbuiltins.is_cartesian_offset(arg_0):
-            target_dims = ", ".join(d.value for d in arg_0.target)
+            target_dims = ", ".join(d.__qualname__ for d in arg_0.target)  # for the diagnostic
             raise errors.DSLError(
                 node.location,
                 f"'as_offset' is only supported for Cartesian offsets "
                 f"(single target dimension equal to source dimension); "
-                f"got source '{arg_0.source.value}' and target ({target_dims}).",
+                f"got source '{arg_0.source.__qualname__}' and target ({target_dims}).",
             )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(

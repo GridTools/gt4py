@@ -117,6 +117,10 @@ class ListType(DataType):
     """
 
     element_type: DataType
+    #: The local dimension the list runs along. `None` where type inference does not know it,
+    #: which is how it spells the result of `make_const_list`; embedded execution and the DaCe
+    #: lowering use `common.ConstList` for the same thing.
+    #: TODO(egparedes): use `common.ConstList` in type inference too, and drop `None`.
     offset_type: common.Dimension | None
 
 
@@ -125,7 +129,11 @@ class FieldType(DataType, CallableType):
     dtype: ScalarType | ListType
 
     def __str__(self) -> str:
-        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
+        dims = (
+            "..."
+            if self.dims is Ellipsis
+            else f"[{', '.join(dim.__qualname__ for dim in self.dims)}]"
+        )
         return f"Field[{dims}, {self.dtype}]"
 
     @eve_datamodels.validator("dims")

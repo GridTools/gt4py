@@ -60,11 +60,20 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
                 return f"np.{dtype}(np.nan)"
         return node.value
 
-    OffsetLiteral = as_fmt("{value}")
-    AxisLiteral = as_fmt("{value}")
+    # NOTE: a tag is a qualified Python name, which is not a valid Python *identifier*, so the
+    # emitted program refers to each axis and offset through its mangled name. The header binds
+    # that name to the real object, looked up by the unmangled tag.
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> str:
+        # an integer offset literal is a shift amount, not a name
+        return common.codegen_name(node.value) if isinstance(node.value, str) else str(node.value)
+
+    def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> str:
+        return common.codegen_name(node.value)
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
-        return f"gtx.CartesianConnectivity({node.domain.value}, codomain={node.codomain.value})"
+        domain = common.codegen_name(node.domain.value)
+        codomain = common.codegen_name(node.codomain.value)
+        return f"gtx.CartesianConnectivity({domain}, codomain={codomain})"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
@@ -172,10 +181,13 @@ def _generate_source(
         """
     )
 
-    offset_literals_src = "\n".join(f'{o} = offset("{o}")' for o in offset_literals)
+    offset_literals_src = "\n".join(
+        f'{common.codegen_name(o)} = offset("{o}")' for o in offset_literals
+    )
+    # A dimension is not constructed from its name any more: its tag is its qualified Python
+    # name, so the emitted program imports it (ADR 0028).
     axis_literals_src = "\n".join(
-        f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
-        for o in axis_literals_set
+        f'{common.codegen_name(o.value)} = gtx.resolve("{o.value}")' for o in axis_literals_set
     )
     source_code = f"{header}{offset_literals_src}\n{axis_literals_src}\n{program}"
 

@@ -25,6 +25,15 @@ from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runne
 from next_tests.fixtures import compilation as fixtures_compilation
 
 
+class Vertex(gtx.DimensionIndex): ...
+
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
 @pytest.fixture
 def process_runner(tmp_path):
     runner = runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
@@ -147,12 +156,9 @@ def test_make_compilation_task_is_opaque_for_customized_compile():
 
 
 def test_offloaded_task_ships_connectivities_as_file_refs():
-    Vertex = gtx.Dimension("Vertex")
-    Edge = gtx.Dimension("Edge")
-    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
     compile_time_args = dataclasses.replace(
-        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
+        arguments.CompileTimeArgs.empty(), offset_provider={V2EDim.tag: conn}
     )
     backend = next_backend.Backend(
         name="test_backend",
@@ -166,9 +172,9 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     )
 
     # without refs the original compilable is used as is
-    assert task.construct_compilable(False).args.offset_provider["V2E"] is conn
+    assert task.construct_compilable(False).args.offset_provider[V2EDim.tag] is conn
     shipped = task.construct_compilable(True)
-    ref = shipped.args.offset_provider["V2E"]
+    ref = shipped.args.offset_provider[V2EDim.tag]
     assert isinstance(ref, compilation_tasks._ConnectivityFileRef)
     # task preparation is pure: nothing is dumped until a runner ships the task
     assert id(conn) not in compilation_tasks._connectivity_files
@@ -183,14 +189,11 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     task2 = compilation_tasks.make_compilation_task(
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
-    pickle.dumps(task2.construct_compilable(True).args.offset_provider["V2E"])
+    pickle.dumps(task2.construct_compilable(True).args.offset_provider[V2EDim.tag])
     assert compilation_tasks._connectivity_files[id(conn)][1] == path
 
 
 def test_connectivity_file_registry_prunes_on_gc():
-    Vertex = gtx.Dimension("Vertex")
-    Edge = gtx.Dimension("Edge")
-    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
 
     compilation_tasks._dump_connectivity(conn)
@@ -343,3 +346,38 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
         assert isinstance(runners.get_default_runner(), runners.SerialRunner)
         runners.reset_default_runner()
+
+
+class TestInteractiveMainReference:
+    """
+    A class declared in an interactive `__main__` pickles in the parent but not in a worker.
+
+    Dimensions are classes identified by their qualified name (ADR 0028), so a notebook that
+    declares one would otherwise break the default process-pool compilation.
+    """
+
+    @staticmethod
+    def _main_class(name: str) -> type:
+        cls = type(name, (), {})
+        cls.__module__ = "__main__"
+        return cls
+
+    def test_found_when_main_is_interactive(self, monkeypatch):
+        interactive_main = type(sys)("__main__")  # a notebook / REPL `__main__`: no `__file__`
+        cls = self._main_class("NotebookDim")
+        interactive_main.NotebookDim = cls
+        monkeypatch.setitem(sys.modules, "__main__", interactive_main)
+        assert runners._interactive_main_reference({"nested": [cls]}) == "NotebookDim"
+
+    def test_ignored_when_main_is_a_script(self, monkeypatch):
+        # a spawn worker re-imports a script's `__main__`, so its classes do resolve there
+        script_main = type(sys)("__main__")
+        script_main.__file__ = "/some/script.py"
+        cls = self._main_class("ScriptDim")
+        script_main.ScriptDim = cls
+        monkeypatch.setitem(sys.modules, "__main__", script_main)
+        assert runners._interactive_main_reference(cls) is None
+
+    def test_ignored_for_classes_from_ordinary_modules(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "__main__", type(sys)("__main__"))
+        assert runners._interactive_main_reference([dataclasses.dataclass, int]) is None

@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import abc
 import collections
+import copyreg
 import dataclasses
 import enum
 import functools
+import importlib
 import math
+import re
 import sys
 import types
 from collections.abc import Iterable, Mapping, Sequence
@@ -62,6 +65,62 @@ DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 Tag: TypeAlias = str
 
 
+_CODEGEN_UNESCAPE: Final = {"u": "_", "d": ".", "l": "[", "r": "]"}
+
+
+def codegen_name(tag: Tag) -> str:
+    """
+    Mangle a dimension or offset tag into a valid generated identifier.
+
+    A tag is a qualified Python name, so it contains dots, which are illegal in a C++
+    identifier, in a DaCe symbol, and in `eve`'s `SymbolName` (`^[a-zA-Z_]\\w*$`). Since a
+    generated identifier may only contain `[A-Za-z0-9_]`, the underscore is the only
+    available separator, and escaping it is what makes the mapping reversible.
+
+    The escape is a *prefix* escape. The obvious alternative -- double every underscore,
+    then turn dots into single underscores -- is **not injective**: a dot becomes a single
+    underscore, so `'..'` and `'_'` both map to `'__'`.
+
+    Args:
+        tag: A dimension or offset tag, i.e. a qualified Python name.
+
+    Returns:
+        A valid identifier, unique for each distinct `tag`.
+
+    Examples:
+        >>> codegen_name("mod.V2E.Local")
+        'mod_dV2E_dLocal'
+        >>> codegen_name("a_b.c")
+        'a_ub_dc'
+        >>> from_codegen_name(codegen_name("my__mod.X"))
+        'my__mod.X'
+    """
+    # NOTE: `_` first, so the underscores introduced by the other escapes are not re-escaped.
+    # A tag's alphabet is `[A-Za-z0-9_.[]]`: brackets come from a parametrized tag such as
+    # `Staggered[pkg.K]`, and would otherwise survive into the identifier.
+    return tag.replace("_", "_u").replace(".", "_d").replace("[", "_l").replace("]", "_r")
+
+
+def from_codegen_name(name: str) -> Tag:
+    """
+    Recover a tag from the identifier `codegen_name` produced for it.
+
+    Needed wherever a backend parses a generated name back into the dimension or offset it
+    refers to.
+
+    Args:
+        name: An identifier produced by `codegen_name`.
+
+    Returns:
+        The original tag.
+
+    Examples:
+        >>> from_codegen_name("mod_dV2E_dLocal")
+        'mod.V2E.Local'
+    """
+    return re.sub(r"_([udlr])", lambda m: _CODEGEN_UNESCAPE[m.group(1)], name)
+
+
 @enum.unique
 class DimensionKind(StrEnum):
     HORIZONTAL = "horizontal"
@@ -75,55 +134,99 @@ class DimensionKind(StrEnum):
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
 
 
-@dataclasses.dataclass(frozen=True)
-class Dimension:
-    value: str
-    kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
+class DimensionMeta(type):
+    """
+    Metaclass of all dimension classes.
 
-    def __str__(self) -> str:
-        return f"{self.value}[{self.kind}]"
+    Holds the behaviour that used to live on `Dimension` *instances*, but on the class
+    object itself. Binary operators applied to a class object dispatch through its
+    metaclass, so this is the only place they can live.
+    """
 
-    def __call__(self, val: int) -> NamedIndex:
-        return NamedIndex(self, val)
+    kind: DimensionKind
 
-    def __add__(self, offset: int | float) -> Connectivity:
-        return connectivity_for_cartesian_shift(self, offset)
+    # NOTE: mandatory, not redundant. Python sets `__hash__ = None` on any class body that
+    # defines `__eq__` without it -- metaclasses included -- and `__eq__` below stays for the
+    # `I == 5` overload. Without this every dimension class is unhashable, which breaks
+    # `domain({I: 2})`, dimension-keyed dicts, and eve's validator memoisation on annotation
+    # objects (so `ts.DimensionType` would fail at import).
+    __hash__ = type.__hash__
 
-    def __sub__(self, offset: int | float) -> Connectivity:
-        return self + (-offset)
+    @property
+    def tag(cls) -> Tag:
+        """
+        The dimension's identity: its qualified Python name, and its spelling in the IR.
 
-    def __gt__(self, value: core_defs.IntegralScalar) -> Domain:
-        return Domain(dims=(self,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+        A property rather than a settable attribute, so it cannot drift from the type it
+        names. Use `__qualname__` for display; see `__str__`.
+        """
+        return f"{cls.__module__}.{cls.__qualname__}"
 
-    def __ge__(self, value: core_defs.IntegralScalar) -> Domain:
-        return Domain(dims=(self,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+    @property
+    def value(cls) -> NoReturn:
+        """
+        Reject `SomeDim.value`, which used to be the dimension's name and is now `tag`.
 
-    def __lt__(self, value: core_defs.IntegralScalar) -> Domain:
-        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+        Without this the read silently returns the `value` slot descriptor of the *instance*
+        attribute rather than raising, and the nonsense value only surfaces much later -- as
+        a missing offset-provider key, or an `AxisLiteral` validation failure. Instance
+        access (`SomeDim(0).value`) is unaffected: a metaclass attribute is not on an
+        instance's lookup path.
+        """
+        raise AttributeError(
+            f"'{cls.__qualname__}' is a dimension and has no 'value': its name is '.tag',"
+            f" and an *index* into it -- '{cls.__qualname__}(0)' -- is what has '.value'."
+        )
 
-    def __le__(self, value: core_defs.IntegralScalar) -> Domain:
-        return Domain(dims=(self,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+    def __repr__(cls) -> str:
+        return f"{cls.tag}[{cls.kind}]"
 
-    @overload  # type: ignore[override]  # incompatible with supertype `object.__eq__` which returns `bool`.
-    def __eq__(self, value: Dimension) -> bool: ...
+    def __str__(cls) -> str:
+        # NOTE: the unqualified name, so diagnostics stay readable. `tag` is identity, not a
+        # display name; `repr` carries the module and disambiguates when it matters.
+        return f"{cls.__qualname__}[{cls.kind}]"
+
+    def __add__(cls: Dimension, offset: int | float) -> Connectivity:  # type: ignore[misc]
+        return connectivity_for_cartesian_shift(cls, offset)
+
+    def __sub__(cls: Dimension, offset: int | float) -> Connectivity:  # type: ignore[misc]
+        return cls + (-offset)
+
+    def __gt__(cls: Dimension, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]
+        return Domain(dims=(cls,), ranges=(UnitRange(value + 1, Infinity.POSITIVE),))
+
+    def __ge__(cls: Dimension, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]
+        return Domain(dims=(cls,), ranges=(UnitRange(value, Infinity.POSITIVE),))
+
+    def __lt__(cls: Dimension, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]
+        return Domain(dims=(cls,), ranges=(UnitRange(Infinity.NEGATIVE, value),))
+
+    def __le__(cls: Dimension, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]
+        return Domain(dims=(cls,), ranges=(UnitRange(Infinity.NEGATIVE, value + 1),))
+
+    @overload  # type: ignore[override]  # incompatible with `type.__eq__`, which returns `bool`.
+    def __eq__(cls, value: DimensionMeta) -> bool: ...
     @overload
-    def __eq__(self, value: core_defs.IntegralScalar) -> Domain: ...
-    def __eq__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
-        if isinstance(value, Dimension):
-            return self.value == value.value and self.kind == value.kind
+    def __eq__(cls, value: core_defs.IntegralScalar) -> Domain: ...
+    def __eq__(  # type: ignore[misc]
+        cls: Dimension, value: DimensionMeta | core_defs.IntegralScalar
+    ) -> bool | Domain:
+        # NOTE: dimension-vs-dimension comparison is deliberately *not* handled here. A
+        # dimension's identity is its type, so `type.__eq__` (identity) is the correct
+        # answer; overriding it with `(tag, kind)` equality is what ADR 0028 rejects.
+        if isinstance(value, DimensionMeta):
+            return NotImplemented  # both sides decline, so Python falls back to identity
         if isinstance(value, core_defs.INTEGRAL_TYPES):
-            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
-        # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
-        # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
+            return Domain(dims=(cls,), ranges=(UnitRange(value, value + 1),))
         return NotImplemented
 
-    @overload  # type: ignore[override]  # incompatible with supertype `object.__ne__` which returns `bool`.
-    def __ne__(self, value: Dimension) -> bool: ...
+    @overload  # type: ignore[override]  # incompatible with `type.__ne__`, which returns `bool`.
+    def __ne__(cls, value: DimensionMeta) -> bool: ...
     @overload
-    def __ne__(self, value: core_defs.IntegralScalar) -> Domain: ...
-    def __ne__(self, value: Dimension | core_defs.IntegralScalar) -> bool | Domain:
-        if isinstance(value, Dimension):
-            return self.value != value.value or self.kind != value.kind
+    def __ne__(cls, value: core_defs.IntegralScalar) -> Domain: ...
+    def __ne__(  # type: ignore[misc]
+        cls: Dimension, value: DimensionMeta | core_defs.IntegralScalar
+    ) -> bool | Domain:
         if isinstance(value, core_defs.INTEGRAL_TYPES):
             raise NotImplementedError(
                 "'Dimension.__ne__' with an integer value produces two disjoint domains, "
@@ -133,26 +236,192 @@ class Dimension:
         return NotImplemented
 
 
-if TYPE_CHECKING:
-    # These exist as on-the fly replacements for Dimension instances
-    # (which are not types) during typechecking (with mypy). We can
-    # track up to four distinct dimensions at a time, everything beyond
-    # becomes AnyDim
+class DimensionIndex(metaclass=DimensionMeta):
+    """
+    A dimension. A concrete dimension is a *subclass*; an index along it an *instance*.
 
-    @dataclasses.dataclass(frozen=True)
-    class _DimA(Dimension): ...
+    This is the shape `enum.Enum` uses: the class is the collection, the instances are its
+    members. A dimension's identity is its type, and `tag` -- its qualified Python name --
+    is how it is spelled in the IR. `value` is an index position along it.
 
-    @dataclasses.dataclass(frozen=True)
-    class _DimB(Dimension): ...
+    Examples:
+        >>> class I(DimensionIndex): ...
+        >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+        >>> str(I), K.kind
+        ('I[horizontal]', <DimensionKind.VERTICAL: 'vertical'>)
 
-    @dataclasses.dataclass(frozen=True)
-    class _DimC(Dimension): ...
+        >>> I(0)
+        I=0
+        >>> I(0).dim is I, I(0).value
+        (True, 0)
 
-    @dataclasses.dataclass(frozen=True)
-    class _DimD(Dimension): ...
+        Two dimension classes are the same dimension only if they are the same class:
 
-    @dataclasses.dataclass(frozen=True)
-    class _AnyDim(Dimension): ...
+        >>> class I2(DimensionIndex): ...
+        >>> I == I2
+        False
+    """
+
+    kind: ClassVar[DimensionKind] = DimensionKind.HORIZONTAL
+
+    __slots__ = ("value",)
+
+    #: Index position along the dimension. The dimension's *name* is `tag`, on the class.
+    value: int
+
+    def __init_subclass__(cls, /, kind: Optional[DimensionKind] = None, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if "tag" in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}' sets 'tag' in its class body, which has no effect:"
+                " a dimension's tag is its qualified Python name. Rename the class instead."
+            )
+        if "<locals>" in cls.__qualname__:
+            raise TypeError(
+                f"'{cls.__qualname__}' must be declared at module level: a dimension is"
+                " referenced from the IR by its qualified name, which has to be importable."
+            )
+        if kind is not None:
+            cls.kind = kind
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __repr__(self) -> str:
+        return f"{type(self).__qualname__}={self.value}"
+
+    __str__ = __repr__
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, DimensionIndex):
+            # NOTE: `is`, not `==`: a dimension's identity is its type (ADR 0028).
+            return type(self) is type(other) and self.value == other.value
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.value))
+
+    @property
+    def dim(self) -> Dimension:
+        """The dimension this index runs along, i.e. its own class."""
+        return type(self)
+
+
+#: A concrete dimension, i.e. the *class* itself rather than an index into it.
+#:
+#: NOTE: a PEP 695 `type` statement, not a plain `TypeAlias`, so that the removed
+#: `Dimension("I")` spelling fails loudly. A plain alias for `type[X]` is a
+#: `types.GenericAlias`, and calling one forwards to its `__origin__` while discarding the
+#: arguments -- so `Dimension("I")` would evaluate to `type("I")`, i.e. `str`, with no error
+#: at all. A `TypeAliasType` is simply not callable.
+#:
+#: The cost is that `get_origin()` of a PEP 695 alias is `None` rather than the aliased
+#: origin, so a site dispatching on an annotation's shape must resolve it first (see
+#: `xtyping.resolve_annotation`). `eve.datamodels` stores annotations *unresolved*, so this
+#: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0028.
+type Dimension = type[DimensionIndex]
+
+
+_STAGGERED_TAG_RE: Final = re.compile(r"^(?P<owner>[^\[\]]+)\[(?P<base>.+)\]$")
+
+
+def staggered_base_tag(tag: Tag) -> Optional[Tag]:
+    """
+    Return the base dimension's tag if `tag` names a staggered dimension, else `None`.
+
+    Reads the `<owner>[<base>]` grammar that `Staggered[D]` produces and `resolve` parses, so it
+    works on a bare tag without importing anything. That matters where tags of dimensions and
+    of offsets are mixed in one collection: an offset tag is not a dimension and cannot be
+    resolved, but it simply does not match.
+
+    Examples:
+        >>> staggered_base_tag("gt4py.next.common.Staggered[pkg.KDim]")
+        'pkg.KDim'
+        >>> staggered_base_tag("pkg.KDim") is None
+        True
+    """
+    return match["base"] if (match := _STAGGERED_TAG_RE.match(tag)) is not None else None
+
+
+@functools.cache
+def resolve(tag: Tag) -> Dimension:
+    """
+    Return the dimension class a tag names, by importing it.
+
+    The counterpart of `DimensionMeta.tag`, for the IR boundaries that rebuild a dimension
+    from its name. A tag is a qualified Python name, so this is an import followed by an
+    attribute walk -- the same way `pickle` references a class.
+
+    A purely dotted tag does not record where the module path ends and the qualname begins,
+    so the longest importable prefix wins and the remainder is walked as attributes. A
+    collision would need a module path and an attribute chain to have the same spelling.
+
+    Parametrized dimensions such as `Staggered[K]` have no importable qualname; their tag
+    has the form `<owner tag>[<base tag>]` and is resolved by subscripting the owner, which
+    goes through its intern table and so returns the identical class.
+
+    Args:
+        tag: A dimension tag, as produced by `DimensionMeta.tag`.
+
+    Returns:
+        The dimension class.
+
+    Raises:
+        ValueError: If no prefix of `tag` is importable, or the attribute walk fails.
+
+    Examples:
+        >>> resolve("gt4py.next.common.DimensionIndex") is DimensionIndex
+        True
+    """
+    if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
+        owner = resolve(match["owner"])
+        if not isinstance(owner, StaggeredMeta):
+            raise ValueError(
+                f"Cannot resolve tag '{tag}': '{match['owner']}' is not a parametrized dimension."
+            )
+        return owner[resolve(match["base"])]  # type: ignore[index] # a StaggeredMeta, checked
+
+    parts = tag.split(".")
+    for split in range(len(parts), 0, -1):
+        try:
+            obj: Any = importlib.import_module(".".join(parts[:split]))
+        except ImportError:
+            continue
+        for attr in parts[split:]:
+            try:
+                obj = getattr(obj, attr)
+            except AttributeError as ex:
+                raise ValueError(
+                    f"Cannot resolve dimension tag '{tag}': '{'.'.join(parts[:split])}' has"
+                    f" no attribute '{attr}'."
+                ) from ex
+        if not isinstance(obj, DimensionMeta):
+            raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
+        return cast(Dimension, obj)
+    raise ValueError(
+        f"Cannot resolve dimension tag '{tag}': no importable module prefix. A dimension"
+        " referenced from the IR must be declared at module level in an importable module."
+    )
+
+
+def resolve_loaded(tag: Tag) -> Optional[Dimension]:
+    """
+    Return the dimension a tag names if its module is already loaded, else `None`.
+
+    Like `resolve`, but never imports: for code that must not have import side effects, such as
+    printing IR.
+    """
+    if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
+        owner, base = resolve_loaded(match["owner"]), resolve_loaded(match["base"])
+        return owner[base] if owner is not None and base is not None else None  # type: ignore[index] # parametrized dimension
+    parts = tag.split(".")
+    for split in range(len(parts) - 1, 0, -1):
+        if (obj := sys.modules.get(".".join(parts[:split]))) is None:
+            continue
+        for attr in parts[split:]:
+            obj = getattr(obj, attr, None)
+        return obj if isinstance(obj, DimensionMeta) else None
+    return None
 
 
 class Infinity(enum.Enum):
@@ -366,20 +635,12 @@ class NamedRange(NamedTuple, Generic[_Rng]):
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 
 
-class NamedIndex(NamedTuple):
-    dim: Dimension
-    value: IntIndex
-
-    def __str__(self) -> str:
-        return f"{self.dim}={self.value}"
-
-
 FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
+NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[DimensionIndex, DimensionIndex, Literal[1]], see https://peps.python.org/pep-0696/
+AbsoluteIndexElement: TypeAlias = DimensionIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
-AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
+AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | DimensionIndex]
 RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
@@ -399,16 +660,16 @@ def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
 
 def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
     return isinstance(obj, slice) and (
-        isinstance(obj.start, NamedIndex) and isinstance(obj.stop, NamedIndex)
+        isinstance(obj.start, DimensionIndex) and isinstance(obj.stop, DimensionIndex)
     )
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
-    return is_int_index(v) or isinstance(v, (NamedRange, NamedIndex, slice)) or v is Ellipsis
+    return is_int_index(v) or isinstance(v, (NamedRange, DimensionIndex, slice)) or v is Ellipsis
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, NamedIndex)) for e in v)
+    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, DimensionIndex)) for e in v)
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -450,7 +711,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 )
 
             assert dims is not None and ranges is not None  # for mypy
-            if not all(isinstance(dim, Dimension) for dim in dims):
+            if not all(isinstance(dim, DimensionMeta) for dim in dims):
                 raise ValueError(
                     f"'dims' argument needs to be a 'tuple[Dimension, ...]', got '{dims}'."
                 )
@@ -505,7 +766,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def __getitem__(self, index: Dimension) -> NamedRange: ...
 
     def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
-        if isinstance(index, Dimension):
+        if isinstance(index, DimensionMeta):
             try:
                 index = self.dims.index(index)
             except ValueError as ex:
@@ -524,16 +785,16 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Intersect `Domain`s, missing `Dimension`s are considered infinite.
 
         Examples:
-            >>> I = Dimension("I")
-            >>> J = Dimension("J")
+            >>> class I(DimensionIndex): ...
+            >>> class J(DimensionIndex): ...
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+            Domain(dims=(gt4py.next.common.I[horizontal],), ranges=(UnitRange(1, 3),))
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
             ...     NamedRange(I, UnitRange(1, 6))
             ... )
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
@@ -581,10 +842,11 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Create a new domain by slicing the domain ranges at the provided relative slices.
 
         Examples:
-            >>> I, J = Dimension("I"), Dimension("J")
+            >>> class I(DimensionIndex): ...
+            >>> class J(DimensionIndex): ...
             >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
             >>> domain.slice_at[2:3, 2:5]
-            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
+            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
         """
 
         def _domain_slicer(*args: slice) -> Domain:
@@ -634,7 +896,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
         assert all(isinstance(nr, NamedRange) for nr in named_ranges)
-        if isinstance(index, Dimension):
+        if isinstance(index, DimensionMeta):
             dim_index = self.dim_index(index)
             if dim_index is None:
                 raise ValueError(f"Dimension '{index}' not found in Domain.")
@@ -672,20 +934,20 @@ def domain(domain_like: DomainLike) -> Domain:
     Construct `Domain` from `DomainLike` object.
 
     Examples:
-        >>> I = Dimension("I")
-        >>> J = Dimension("J")
+        >>> class I(DimensionIndex): ...
+        >>> class J(DimensionIndex): ...
 
         >>> domain(((I, (2, 4)), (J, (3, 5))))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain({I: (2, 4), J: (3, 5)})
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain(((I, 2), (J, 4)))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
 
         >>> domain({I: 2, J: 4})
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
@@ -741,7 +1003,10 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
 
     @property
     def __gt_dims__(self) -> tuple[str, ...]:
-        return tuple(d.value for d in self.__gt_domain__.dims)
+        # NOTE: the unqualified name, not the `tag`. This is the interop protocol with
+        # `gt4py.cartesian`, which identifies axes by their bare names (`"I"`, `"J"`, `"K"`); a
+        # qualified tag would not match and the axes would be transposed wrongly (ADR 0028).
+        return tuple(d.__qualname__ for d in self.__gt_domain__.dims)
 
 
 @runtime_checkable
@@ -1335,11 +1600,17 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
     """Find the canonical ordering of the dimensions in `dims`."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+    # NOTE: `__qualname__`, not `tag`. The tag is qualified, so ordering by it would make a
+    # field's canonical dimension order depend on *which module* each dimension is declared in --
+    # moving a declaration would silently reorder a field's dimensions. The unqualified name keeps
+    # the ordering a property of the dimensions themselves; `tag` only breaks ties between
+    # same-named dimensions from different modules, so the order stays total.
     return sorted(
         dims,
         key=lambda dim: (
             _DIM_KIND_ORDER[dim.kind],
-            as_non_staggered(dim).value,
+            as_non_staggered(dim).__qualname__,
+            as_non_staggered(dim).tag,
         ),
     )
 
@@ -1369,15 +1640,15 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     The resulting list contains all unique dimensions from the input lists,
     sorted first by dims_kind_order, i.e., `Dimension.kind` (`HORIZONTAL` < `LOCAL` < `VERTICAL`) and then
-    lexicographically by `Dimension.value`.
+    lexicographically by `Dimension.tag`.
 
     Examples:
         >>> from gt4py.next.common import Dimension
-        >>> I = Dimension("I", DimensionKind.HORIZONTAL)
-        >>> J = Dimension("J", DimensionKind.HORIZONTAL)
-        >>> K = Dimension("K", DimensionKind.VERTICAL)
-        >>> E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-        >>> E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
+        >>> class I(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class J(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+        >>> class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+        >>> class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
         >>> promote_dims([J, K], [I, K]) == [I, J, K]
         True
         >>> promote_dims([K, J], [I, K])
@@ -1441,20 +1712,157 @@ class FieldBuiltinFuncRegistry:
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
 _DEFAULT_SKIP_VALUE: Final[int] = -1
-_STAGGERED_PREFIX = "_Staggered"
+#: Interned staggered dimensions, keyed by their *base dimension class*.
+#:
+#: NOTE: this is not the name-keyed dimension registry ADR 0028 rejects. It is memoization of
+#: a type constructor -- keyed by identity, populated only by `StaggeredMeta.__getitem__`, and
+#: never consulted to turn a user-authored name into a class. `typing`'s own subscription cache
+#: plays the same role for generic aliases.
+_STAGGERED_CACHE: dict[Dimension, Dimension] = {}
+
+
+class StaggeredMeta(DimensionMeta):
+    """
+    Metaclass of `Staggered`, whose subscription builds and interns a *real* class.
+
+    A PEP 695 generic cannot be used here: `Staggered[K]` would be a `typing._GenericAlias`,
+    not a class, so it would fail `issubclass` and eve's `type[DimensionIndex]` validation,
+    and its `tag` could not name the base dimension. See ADR 0028.
+    """
+
+    #: Set by `__getitem__` on each parametrization. Its presence is what distinguishes a
+    #: staggered dimension from the bare `Staggered` base, which is also a `StaggeredMeta`.
+    base: Dimension
+
+    @property
+    def tag(cls) -> Tag:
+        # NOTE: overridden so that `__qualname__` can stay the short, readable form used in
+        # diagnostics while the tag carries the base's *full* tag, which `resolve` needs to find
+        # a base declared in another module. Display is `__qualname__` and identity is `tag`,
+        # for staggered dimensions exactly as for any other.
+        if "base" in cls.__dict__:
+            return f"{cls.__module__}.Staggered[{cls.base.tag}]"
+        return super().tag
+
+    def __getitem__(cls, base: Dimension) -> Dimension:
+        if "base" in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}' is already staggered; a dimension cannot be staggered twice."
+            )
+        if not isinstance(base, DimensionMeta):
+            raise TypeError(f"'Staggered' expects a dimension, got '{base!r}'.")
+        if is_staggered(base):
+            raise TypeError(
+                f"'{base.__qualname__}' is already staggered; a dimension cannot be staggered twice."
+            )
+        if (staggered := _STAGGERED_CACHE.get(base)) is None:
+            staggered = cast(
+                Dimension,
+                StaggeredMeta(
+                    f"Staggered[{base.__qualname__}]",
+                    # NOTE: deliberately not `(cls, base)`. A staggered dimension is a
+                    # *different* dimension, so `issubclass(Staggered[K], K)` must be false,
+                    # or a staggered field would be accepted wherever a base one is required.
+                    (cls,),
+                    {
+                        "_staggered_base": base,
+                        "base": base,
+                        "kind": base.kind,
+                        "__slots__": (),
+                        "__module__": cls.__module__,
+                        "__qualname__": f"{cls.__qualname__}[{base.__qualname__}]",
+                    },
+                ),
+            )
+            # NOTE: `setdefault`, not an assignment: compilation runs in threads, and two of them
+            # building `Staggered[K]` at once must still see one class (identity is the dimension).
+            staggered = _STAGGERED_CACHE.setdefault(base, staggered)
+        return staggered
+
+
+if TYPE_CHECKING:
+    # Checkers see an ordinary generic dimension, so `Staggered[K]` works in an annotation and
+    # inside `Field[Dims[Staggered[K]], ...]`. The runtime form below builds a real, interned
+    # class so that `issubclass` and eve's `type[...]` validation work. Verified clean under
+    # `mypy --strict` and pyright.
+    class Staggered[D: DimensionIndex](DimensionIndex):
+        base: ClassVar[Dimension]
+
+else:
+
+    class Staggered(DimensionIndex, metaclass=StaggeredMeta):
+        """
+        A dimension sitting at the half-integer positions of a base dimension (ADR 0026).
+
+        `Staggered[K]` is a real, interned dimension class: subscripting the same base twice
+        returns the identical object, so it round-trips through the IR by identity.
+        """
+
+        __slots__ = ()
+
+        def __init_subclass__(cls, /, **kwargs: Any) -> None:
+            # NOTE: gate on the namespace marker the metaclass sets, not on a module-level
+            # "currently building" flag -- compilation runs in worker processes and threads.
+            if "_staggered_base" not in cls.__dict__:
+                raise TypeError(
+                    f"'{cls.__qualname__}' cannot subclass a staggered dimension directly;"
+                    " write 'Staggered[BaseDim]'."
+                )
+            super().__init_subclass__(**kwargs)
+
+
+class ConstList(DimensionIndex, kind=DimensionKind.LOCAL):
+    """
+    The local dimension of a list of one repeated value (`make_const_list`).
+
+    The value is broadcast against the neighbor lists it is combined with, and a materialized
+    constant list has extent 1 along it. It indexes no table, so it is never in an offset provider.
+
+    Declared here, once: it used to be built independently in `iterator/embedded.py` and in the
+    DaCe lowering, which only worked while dimensions compared by `(name, kind)`.
+    """
+
+    __slots__ = ()
+
+
+def _reduce_staggered(cls: StaggeredMeta) -> Any:
+    """
+    Pickle a staggered dimension through its base, falling back to by-reference.
+
+    `Staggered[K].__qualname__` contains brackets, which `pickle.save_global` cannot look up,
+    and `copyreg` is the only hook consulted before `save_global` for a class. Reconstruction
+    goes through `StaggeredMeta.__getitem__`, so identity is preserved.
+
+    The bare `Staggered` base is also a `StaggeredMeta` instance but has no `base`, so it must
+    fall through to ordinary by-reference pickling.
+    """
+    if "base" not in cls.__dict__:
+        return cls.__qualname__
+    return (_make_staggered, (cls.base,))
+
+
+def _make_staggered(base: Dimension) -> Dimension:
+    return Staggered[base]  # type: ignore[valid-type] # runtime subscription, see StaggeredMeta
+
+
+copyreg.pickle(StaggeredMeta, _reduce_staggered)
 
 
 def is_staggered(dim: Dimension) -> bool:
-    """Return whether `dim` is a staggered dimension."""
-    return dim.value.startswith(_STAGGERED_PREFIX)
+    """
+    Return whether `dim` is a staggered dimension.
+
+    Checks for the marker the metaclass sets, not `issubclass(dim, Staggered)`: the latter is
+    also true of the bare `Staggered` base, which has no base dimension to recover.
+    """
+    return "base" in dim.__dict__
 
 
 def flip_staggered(dim: Dimension) -> Dimension:
     """Return the staggered counterpart of `dim`."""
     if is_staggered(dim):
-        return Dimension(dim.value[len(_STAGGERED_PREFIX) :], dim.kind)
-    else:
-        return Dimension(f"{_STAGGERED_PREFIX}{dim.value}", dim.kind)
+        return cast(Dimension, dim.base)  # type: ignore[attr-defined] # guarded by is_staggered
+    return Staggered[dim]  # type: ignore[valid-type] # runtime subscription
 
 
 def as_non_staggered(dim: Dimension) -> Dimension:

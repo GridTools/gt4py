@@ -63,7 +63,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
     Example:
         >>> from gt4py import next as gtx
         >>> from gt4py.next.otf import arguments, workflow
-        >>> IDim = gtx.Dimension("I")
+        >>> class IDim(gtx.DimensionIndex): ...
 
         >>> @gtx.field_operator
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:

@@ -25,7 +25,9 @@ from gt4py.next.iterator.runtime import fendef, fundef, set_at
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = gtx.Dimension("I")
+class I(gtx.DimensionIndex): ...
+
+
 Ioff = gtx.CartesianConnectivity(I)
 
 

@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded, runtime
 from gt4py.next.iterator.builtins import (
@@ -23,10 +24,16 @@ from gt4py.next.iterator.builtins import (
 )
 
 
-E = gtx.Dimension("E")
-V = gtx.Dimension("V")
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-E2V = gtx.FieldOffset("E2V", source=V, target=(E, E2VDim))
+class E(gtx.DimensionIndex): ...
+
+
+class V(gtx.DimensionIndex): ...
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+E2V = gtx.FieldOffset(E2VDim.tag, source=V, target=(E, E2VDim))
 
 
 # 0 --0-- 1 --1-- 2
@@ -44,7 +51,7 @@ def test_write_neighbors():
         return as_fieldop(lambda it: neighbors(E2V, it), domain)(inp)
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp)
 
     ref = e2v_arr
@@ -62,7 +69,7 @@ def test_write_const_list():
     ref = np.asarray([[42.0], [42.0]])
 
     assert result.domain.dims[0] == E
-    assert result.domain.dims[1] == embedded._CONST_DIM  # this is implementation detail
+    assert result.domain.dims[1] == common.ConstList  # this is implementation detail
     assert result.shape[1] == 1  # this is implementation detail
     np.testing.assert_array_equal(result.asnumpy(), ref)
 
@@ -76,7 +83,7 @@ def test_write_map_neighbors_and_const_list():
         )
 
     inp = gtx.as_field([V], np.arange(3))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp)
 
     ref = e2v_arr + 42.0
@@ -94,7 +101,7 @@ def test_write_map_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)
@@ -122,7 +129,7 @@ def test_write_non_mapped_conditional_neighbors_and_const_list():
 
     inp = gtx.as_field([V], np.arange(3))
     mask_field = gtx.as_field([E], np.array([True, False]))
-    with embedded_context.update(offset_provider={"E2V": e2v_conn}):
+    with embedded_context.update(offset_provider={E2VDim.tag: e2v_conn}):
         result = testee(inp, mask_field)
 
     ref = np.empty_like(e2v_arr, dtype=float)
@@ -145,6 +152,6 @@ def test_write_map_const_list_and_const_list():
     ref = np.asarray([[43.0], [43.0]])
 
     assert result.domain.dims[0] == E
-    assert result.domain.dims[1] == embedded._CONST_DIM  # this is implementation detail
+    assert result.domain.dims[1] == common.ConstList  # this is implementation detail
     assert result.shape[1] == 1  # this is implementation detail
     np.testing.assert_array_equal(result.asnumpy(), ref)

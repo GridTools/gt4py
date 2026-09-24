@@ -30,13 +30,22 @@ from gt4py.next.program_processors.runners import dace as gtx_dace
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-IDim = gtx.Dimension("I")
+class IDim(gtx.DimensionIndex): ...
+
+
 I_SIZE = 8
 
-Cell = gtx.Dimension("Cell")
-Edge = gtx.Dimension("Edge")
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
+
+class Cell(gtx.DimensionIndex): ...
+
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
 
 C2E_TABLE = np.array(
     [
@@ -213,7 +222,7 @@ def test_write_back_buffer_elimination_from_lowering_with_reduction(
     survived until the transformation runs.
     """
     offset_provider = {
-        "C2E": constructors.as_connectivity(
+        C2EDim.tag: constructors.as_connectivity(
             domain={Cell: N_CELLS, C2EDim: 4},
             codomain=Edge,
             data=C2E_TABLE,

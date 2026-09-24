@@ -15,6 +15,7 @@ import sympy
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
+from gt4py.next import common as gtx_common
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
@@ -135,7 +136,10 @@ class PythonCodegen(codegen.TemplatedGenerator):
     Literal = as_fmt("{value}")
 
     def visit_AxisLiteral(self, node: gtir.AxisLiteral, **kwargs: Any) -> str:
-        return node.value
+        # NOTE: mangled, because the result becomes part of a DaCe symbol name. A qualified tag
+        # there contains dots, which DaCe re-parses as attribute access, leaving plain sympy
+        # symbols (with no `dtype`) among an array's free symbols.
+        return gtx_common.codegen_name(node.value)
 
     def visit_FunCall(self, node: gtir.FunCall, args_map: dict[str, gtir.Node]) -> str:
         if cpm.is_let(node):

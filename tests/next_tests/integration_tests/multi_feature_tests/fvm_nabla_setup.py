@@ -10,6 +10,7 @@ import math
 
 import numpy as np
 
+
 try:
     from atlas4py import (
         Config,
@@ -35,14 +36,14 @@ else:
 from gt4py import next as gtx
 from gt4py.next.iterator import atlas_utils
 
+# NOTE: imported, not redeclared. Under nominal identity (ADR 0028) a same-named declaration
+# here would be a different dimension from the one `toy_connectivity` declares, where the old
+# `Dimension("...")` values compared equal -- and tests mix objects from both modules.
+from next_tests.toy_connectivity import E2VDim, Edge, V2EDim, Vertex
 
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
 
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset(E2VDim.tag, source=Vertex, target=(Edge, E2VDim))
 
 
 def assert_close(expected, actual):

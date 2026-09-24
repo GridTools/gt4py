@@ -13,6 +13,7 @@ from __future__ import annotations
 import atexit
 import concurrent.futures
 import dataclasses
+import io
 import multiprocessing
 import os
 import pathlib
@@ -180,15 +181,50 @@ def _run_compilation_task_in_worker(
     return executor(compilable)
 
 
+def _interactive_main_reference(obj: object) -> str | None:
+    """
+    Return the name of a class from an interactive `__main__` that `obj` references, if any.
+
+    A spawn worker re-imports a *script's* `__main__` (as `__mp_main__`), so classes declared
+    there resolve in the worker. An interactive `__main__` -- a notebook kernel, the REPL,
+    `python -c` -- has no `__file__` to re-import, so a class declared there pickles fine in the
+    parent (which has it) and then fails to unpickle in the worker. Dimensions are classes
+    identified by their qualified name (ADR 0028), which makes this the common case in
+    notebooks.
+
+    Only scans when `__main__` is interactive, so ordinary scripts pay nothing.
+    """
+    main = sys.modules.get("__main__")
+    if main is None or getattr(main, "__file__", None):
+        return None
+    found: list[str] = []
+
+    class _Scanner(pickle.Pickler):
+        # `reducer_override` is consulted for classes too, before the by-reference default
+        def reducer_override(self, o: object) -> Any:
+            if not found and isinstance(o, type) and o.__module__ == "__main__":
+                found.append(o.__qualname__)
+            return NotImplemented
+
+    try:
+        _Scanner(io.BytesIO()).dump(obj)
+    except Exception:
+        # An object that cannot be pickled at all: not this check's business. It surfaces when
+        # the pool pickles the task, which is where an unpicklable job is reported.
+        return None
+    return found[0] if found else None
+
+
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
     The worker runs the task's executor (post-lowering compile) and returns
     the picklable ``CompilationArtifact``.
 
-    Tasks that cannot be offloaded — a known ``no_offload_reason`` or an executor
-    that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
-    instead (with a warning), so they behave as under ``SerialRunner``.
+    Tasks that cannot be offloaded — a known ``no_offload_reason``, an executor
+    that stdlib ``pickle`` cannot serialize, or a reference to a class declared in an
+    interactive ``__main__`` — are compiled in the calling thread instead (with a
+    warning), so they behave as under ``SerialRunner``.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
@@ -218,7 +254,16 @@ class ProcessRunner:
                 executor_blob = pickle.dumps(task.executor)
             except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
                 reason = f"its executor is not picklable ({error!s})"
-        if executor_blob is None:
+        compilable = task.construct_compilable(True)
+        if (
+            reason is None
+            and (name := _interactive_main_reference((task.executor, compilable))) is not None
+        ):
+            reason = (
+                f"it references '{name}', declared in an interactive '__main__' (a notebook, the"
+                " REPL or 'python -c'), which a worker process cannot import"
+            )
+        if reason is not None:
             warnings.warn(
                 f"Compiling '{task.name}' in the calling thread instead of a worker process "
                 f"because {reason}.",
@@ -226,10 +271,11 @@ class ProcessRunner:
             )
             return _run_in_calling_thread(task)
 
+        assert executor_blob is not None  # set whenever no reason to fall back was found
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.construct_compilable(True),
+            compilable=compilable,
             config_overrides=_config_snapshot(),
             recursion_limit=sys.getrecursionlimit(),
         )

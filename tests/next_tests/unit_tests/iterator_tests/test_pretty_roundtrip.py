@@ -72,19 +72,8 @@ ROUNDTRIP_CASES = [
         im.tuple_get(im.literal("42", builtins.INTEGER_INDEX_BUILTIN), "x"), id="tuple_get"
     ),
     pytest.param(im.make_tuple("x", "y"), id="make_tuple"),
-    pytest.param(
-        ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL), id="axis_literal_horizontal"
-    ),
-    pytest.param(
-        ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL), id="axis_literal_vertical"
-    ),
-    pytest.param(
-        im.named_range(ir.AxisLiteral(value="IDim"), "x", "y"), id="named_range_horizontal"
-    ),
-    pytest.param(
-        im.named_range(ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL), "x", "y"),
-        id="named_range_vertical",
-    ),
+    pytest.param(ir.AxisLiteral(value="I"), id="axis_literal"),
+    pytest.param(im.named_range(ir.AxisLiteral(value="IDim"), "x", "y"), id="named_range"),
     pytest.param(im.call("cartesian_domain")("x"), id="cartesian_domain"),
     pytest.param(im.call("unstructured_domain")("x"), id="unstructured_domain"),
     pytest.param(im.if_("x", "y", "z"), id="if_short"),
@@ -161,7 +150,7 @@ ROUNDTRIP_CASES = [
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(
         im.named_range(
-            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.AxisLiteral(value="KDim"),
             ir.InfinityLiteral.NEGATIVE,
             im.literal("5", "int32"),
         ),

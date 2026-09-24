@@ -54,8 +54,11 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
 
     Example:
         >>> from gt4py import next as gtx
-        >>> KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
-        >>> Vertex = common.Dimension(value="Vertex", kind=common.DimensionKind.HORIZONTAL)
+        >>> class KDim(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+        >>> class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+        >>> import sys  # register the dimensions where their tags point, as a module would
+        >>> sys.modules[__name__].KDim = KDim
+        >>> sys.modules[__name__].Vertex = Vertex
 
         >>> sizes = {
         ...     "out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)}),
@@ -89,7 +92,8 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
         >>> result = ReplaceGetDomainRangeWithConstants.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
-          out @ u⟨ Vertexₕ: [{0, 10}[0], {0, 10}[1][, KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩ ← (⇑deref)(inp);
+          out @ u⟨ gt4py.next.iterator.transforms.replace_get_domain_range_with_constants.Vertexₕ: [{0, 10}[0], {0, 10}[1][, gt4py.next.iterator.transforms.replace_get_domain_range_with_constants.KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩
+               ← (⇑deref)(inp);
         }
     """
 
@@ -114,7 +118,10 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
                 f"'{field}'."
             )
 
-        index = next((i for i, d in enumerate(domain.dims) if d.value == dim.value), None)
-        assert index is not None, f"Dimension {dim.value} not found in {domain.dims}"
+        # NOTE: `dim` is the IR argument -- an `AxisLiteral` whose `value` is the dimension's tag
+        # -- while `domain.dims` holds dimension classes, so the tag is what they share.
+        assert isinstance(dim, itir.AxisLiteral)
+        index = next((i for i, d in enumerate(domain.dims) if d.tag == dim.value), None)
+        assert index is not None, f"Dimension '{dim.value}' not found in {domain.dims}"
 
         return im.make_tuple(domain.ranges[index].start, domain.ranges[index].stop)

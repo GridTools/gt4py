@@ -55,7 +55,7 @@ from unittest import mock
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
-from gt4py.next import utils as next_utils
+from gt4py.next import common, utils as next_utils
 
 
 _T = TypeVar("_T")
@@ -221,6 +221,15 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     enum.EnumMeta: lambda obj: Deconstruction.from_pieces(
         *((member.name, member.value) for member in obj),
         state=b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
+    ),
+    # A parametrized dimension such as `Staggered[K]` has no importable qualified name (its
+    # `__qualname__` contains brackets), so the by-reference `type` deconstruction rejects it.
+    # It is fully determined by its base dimension, which *is* importable -- the same reduction
+    # its `copyreg` registration uses. The bare `Staggered` base is an ordinary class. See ADR 0028.
+    common.StaggeredMeta: lambda obj: (
+        Deconstruction.from_pieces(obj.base, state=b"staggered_dimension")
+        if "base" in obj.__dict__
+        else EmptyDeconstruction.from_reference(obj)
     ),
     type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
     bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
