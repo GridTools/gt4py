@@ -31,6 +31,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     common as dace_wf_common,
     decoration as dace_wf_decoration,
     factory as dace_wf_factory,
+    translation as dace_wf_translation,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -287,6 +288,14 @@ def test_make_toolchain_rejects_derived_optimization_args():
 def test_make_toolchain_rejects_step_builder_ignoring_config_device(step_builders):
     with pytest.raises(ValueError, match="toolchain is being built for"):
         dace_wf_backend.make_dace_toolchain(dace_wf_factory.DaCeConfig(gpu=True), **step_builders)
+
+
+def test_make_toolchain_uncached_translation():
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(cached_translation=False)
+    )
+
+    assert isinstance(backend.executor.translation, dace_wf_translation.DaCeTranslator)
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
