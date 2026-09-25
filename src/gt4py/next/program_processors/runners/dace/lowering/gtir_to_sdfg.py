@@ -571,8 +571,20 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     ) -> gtir_to_sdfg_types.FieldopData:
         local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
         if len(local_dims) == 0:
-            # do nothing: the field domain consists of all global dimensions
-            field_type = data_type
+            if isinstance(data_type.dtype, ts.ListType) and data_type.dtype.offset_type is None:
+                # A field of constant lists (as produced by 'make_const_list') carries a
+                # list dtype without offset provider. We tag it with the magic local
+                # dimension so that it is handled like any other neighbor-list field.
+                field_type = ts.FieldType(
+                    dims=data_type.dims,
+                    dtype=ts.ListType(
+                        element_type=data_type.dtype.element_type,
+                        offset_type=gtir_to_sdfg_utils.CONST_DIM,
+                    ),
+                )
+            else:
+                # do nothing: the field domain consists of all global dimensions
+                field_type = data_type
         elif len(local_dims) == 1:
             local_dim = local_dims[0]
             # the local dimension is converted into `ListType` data element
@@ -912,6 +924,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         elif isinstance(gt_type, ts.FieldType):
             if len(gt_type.dims) == 0:
+                if isinstance(gt_type.dtype, ts.ListType):
+                    # A zero-dimensional field with list dtype represents a field of
+                    # constant lists (as produced by 'make_const_list'), which holds a
+                    # single value broadcast over the local dimension. We store it as a
+                    # single-element 1D array, consistent with the representation of
+                    # constant-list value expressions (see '_make_value' with 'use_array').
+                    assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
+                    dc_dtype = gtx_dace_args.as_dace_type(gt_type.dtype.element_type)
+                    sdfg.add_array(name, (1,), dc_dtype, transient=transient)
+                    return [(name, gt_type)]
                 # represent zero-dimensional fields as scalar arguments
                 return self._add_storage(
                     sdfg=sdfg,

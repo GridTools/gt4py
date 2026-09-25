@@ -69,6 +69,7 @@ def _translate_gtir_to_sdfg(
         # we use the SDFG hash in build cache to avoid clashes between CPU and GPU SDFGs
         return dace_wf_translation.DaCeTranslator(
             device_type=device_type,
+            apply_common_transform=False,
             auto_optimize=auto_optimize,
             auto_optimize_args=None,
             async_sdfg_call=async_sdfg_call,
@@ -483,6 +484,7 @@ def test_translation_source_code_invariant_under_guid_change():
 
     translator = dace_wf_translation.DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
+        apply_common_transform=False,
         auto_optimize=False,
         auto_optimize_args=None,
         async_sdfg_call=False,
