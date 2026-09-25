@@ -29,7 +29,10 @@ Writing a new ADR is simple:
 
 ### Iterator IR #iterator
 
+- [0029 - Bounded Scan-Input Fusion](0029-Scan_Input_Fusion.md)
+
 - [0003 - Iterator View Tuple Support for Fields](0003-Iterator_View_Tuple_Support_for_Fields.md)
+
 - [0004 - Lifted Stencils with Tuple Return](0004-Lifted_Stencils_with_Tuple_Return.md)
 
 ### Embedded Execution

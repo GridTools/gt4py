@@ -22,6 +22,7 @@ from gt4py.next.otf import code_specs, definitions, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
+    scan_fusion as gtx_scan_fusion,
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
 )
@@ -373,6 +374,25 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
+        # This backend option acts on iterator IR before SDFG optimization.
+        auto_optimize_args = dict(self.auto_optimize_args or {})
+        fuse_scan_inputs = auto_optimize_args.pop("fuse_scan_inputs", False)
+        if not isinstance(fuse_scan_inputs, bool):
+            raise ValueError("'fuse_scan_inputs' must be a boolean.")
+        scan_input_selector = auto_optimize_args.pop("scan_input_selector", None)
+        if scan_input_selector is not None and not callable(scan_input_selector):
+            raise ValueError("'scan_input_selector' must be callable or None.")
+        scan_fusion_scope = auto_optimize_args.pop("scan_fusion_scope", "immediate")
+        if scan_fusion_scope not in ("immediate", "field_operator"):
+            raise ValueError("'scan_fusion_scope' must be 'immediate' or 'field_operator'.")
+        if (
+            self.auto_optimize
+            and fuse_scan_inputs
+            and not self.disable_itir_transforms
+            and scan_fusion_scope == "field_operator"
+        ):
+            ir = gtx_scan_fusion.normalize_scan_producers(ir, offset_provider=offset_provider)
+
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(
                 ir,
@@ -381,6 +401,14 @@ class DaCeTranslator(
             )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
+
+        if self.auto_optimize and fuse_scan_inputs:
+            ir = gtx_scan_fusion.fuse_scan_inputs(
+                ir,
+                input_selector=scan_input_selector,
+                offset_provider=offset_provider,
+                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            )
 
         sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
 
@@ -393,8 +421,6 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
-
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
