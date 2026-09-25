@@ -106,14 +106,14 @@ class DataflowBuilder(Protocol):
 
     def add_temp_array(
         self, sdfg: dace.SDFG, shape: Sequence[Any], dtype: dace.dtypes.typeclass
-    ) -> tuple[str, dace.data.Scalar]:
+    ) -> tuple[str, dace.data.Array]:
         """Add a temporary array to the SDFG."""
         temp_name = self.unique_temp_name()
         return sdfg.add_transient(temp_name, shape, dtype)
 
     def add_temp_array_like(
         self, sdfg: dace.SDFG, datadesc: dace.data.Array
-    ) -> tuple[str, dace.data.Scalar]:
+    ) -> tuple[str, dace.data.Array]:
         """Add a temporary array to the SDFG."""
         temp_name = self.unique_temp_name()
         return sdfg.add_temp_transient_like(datadesc, name=temp_name)
@@ -432,7 +432,11 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         data_args: Mapping[str, gtir_to_sdfg_types.FieldopData | None],
         inner_result: gtir_to_sdfg_types.FieldopResult,
         capture_outer_data: bool,
-    ) -> tuple[dace_nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+    ) -> tuple[
+        dace_nodes.NestedSDFG,
+        Mapping[str, dace.Memlet],
+        dict[str, dace.symbolic.SymbolicType],
+    ]:
         """
         Helper function that prepares the input connections and symbol mapping before
         calling `SDFG.add_nestd_sdfg()` to add the given SDFG as a nested SDFG node
@@ -449,9 +453,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
             capture_outer_data: Allow capturing scalars and arrays defined in the parent SDFG.
 
         Returns:
-            A tuple of two elements:
+            A tuple of three elements:
             - The nested SDFG graph node.
             - The mapping from input connectors to data memlets.
+            - The full symbol mapping from the nested SDFG to this context. Note that
+              this is not the same as `NestedSDFG.symbol_mapping`, which only retains
+              the entries that dace did not already apply inside the nested SDFG.
         """
         ...
 
@@ -701,7 +708,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_args: Mapping[str, gtir_to_sdfg_types.FieldopData | None],
         inner_result: gtir_to_sdfg_types.FieldopResult,
         capture_outer_data: bool,
-    ) -> tuple[dace_nodes.NestedSDFG, Mapping[str, dace.Memlet]]:
+    ) -> tuple[
+        dace_nodes.NestedSDFG,
+        Mapping[str, dace.Memlet],
+        dict[str, dace.symbolic.SymbolicType],
+    ]:
         assert data_args.keys().isdisjoint(symbolic_args.keys())
 
         # Collect the names of all output data, by flattening any tuple structure.
@@ -800,7 +811,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             debuginfo=gtir_to_sdfg_utils.debug_info(node, default=outer_ctx.sdfg.debuginfo),
         )
 
-        return nsdfg_node, input_memlets
+        return nsdfg_node, input_memlets, nsdfg_symbols_mapping
 
     def unique_nsdfg_name(self, prefix: str) -> str:
         return next(self.uids[prefix])
@@ -1284,7 +1295,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # A let-lambda is allowed to capture GTIR-symbols from the outer scope,
         # therefore we call `add_nested_sdfg()` with `capture_outer_data=True`.
-        nsdfg_node, input_memlets = self.add_nested_sdfg(
+        nsdfg_node, input_memlets, nsdfg_symbols_mapping = self.add_nested_sdfg(
             node=node,
             inner_ctx=lambda_ctx,
             outer_ctx=ctx,
@@ -1351,11 +1362,17 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the corresponding data container inside the nested SDFG has to be changed to non-transient,
             # that is externally allocated, as required by the SDFG IR. An output edge will write the result
             # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
+            # NOTE: We use the symbol mapping returned by `add_nested_sdfg()` rather than
+            #   `nsdfg_node.symbol_mapping`: dace applies the mapping of the symbols that
+            #   the nested SDFG uses directly inside it, and only keeps the remaining
+            #   entries on the node. The field origin is not visible to dace, because it
+            #   is not part of any data descriptor, so it has to be translated here with
+            #   the full mapping.
             outer_data = ctx.map_nsdfg_field(
                 sdfg_builder=self,
                 nsdfg_field=inner_data,
                 nsdfg=lambda_ctx.sdfg,
-                symbol_mapping=nsdfg_node.symbol_mapping,
+                symbol_mapping=nsdfg_symbols_mapping,
             )
             ctx.state.add_edge(
                 nsdfg_node,
