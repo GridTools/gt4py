@@ -922,8 +922,8 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a9"
-source = { registry = "https://pypi.org/simple" }
+version = "2.0.0a8"
+source = { git = "https://github.com/spcl/dace.git?branch=nested-sdfg#7bc8159a945185a3b723d04261534965d1ae95f3" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -943,7 +943,6 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/34/a6e66f329ea94167c1c0da89dfaf053b1d90836ccab7161176dd12f10f9e/dace-2.0.0a9.tar.gz", hash = "sha256:ee9cd2a40c16fb09d559556433bb4f51b71fa88760fbc04306d54552775b5c4a", size = 6572070, upload-time = "2026-09-17T09:31:23.155Z" }
 
 [[package]]
 name = "debugpy"
@@ -1466,7 +1465,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = "==2.0.0a9" },
+    { name = "dace", git = "https://github.com/spcl/dace.git?branch=nested-sdfg" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
