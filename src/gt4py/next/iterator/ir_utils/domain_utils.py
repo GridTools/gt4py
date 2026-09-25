@@ -118,7 +118,7 @@ def _unstructured_translate_range_statically(
             UserWarning(
                 f"Translating '{expr}' using '{tag}' requires "
                 f"computations on many additional points "
-                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
+                f"({round(float((1 - fraction_accessed) * 100))}%) in order to get a contiguous "
                 f"domain. Please consider reordering your mesh."
             ),
             stacklevel=2,
