@@ -50,6 +50,7 @@ from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
+    gtir_to_sdfg_scan,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
 )
@@ -1243,7 +1244,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         if cpm.is_let(node):
             return self._visit_let(node, ctx)
         if cpm.is_applied_as_fieldop(node):
-            return gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
+            return (
+                gtir_to_sdfg_scan.translate_scan_fieldop(node, ctx, self)
+                if cpm.is_call_to(node.fun.args[0], "scan")
+                else gtir_to_sdfg_primitives.translate_as_fieldop(node, ctx, self)
+            )
         # Name-matched builtins
         if isinstance(node.fun, gtir.SymRef):
             name = str(node.fun.id)
