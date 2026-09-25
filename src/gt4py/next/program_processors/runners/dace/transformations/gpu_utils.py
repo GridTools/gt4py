@@ -215,6 +215,7 @@ def gt_gpu_transform_non_standard_memlet(
         ],
         validate=False,
         validate_all=validate_all,
+        order_by_transformation=False,
     )
 
     # This is a gross hack, but it is needed, for the following reasons:
@@ -851,6 +852,7 @@ def gt_remove_trivial_gpu_maps(
         ],
         validate=False,
         validate_all=validate_all,
+        order_by_transformation=False,
     )
 
     if validate and (not validate_all):

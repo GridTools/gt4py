@@ -148,6 +148,7 @@ def gt_horizontal_map_split_fusion(
         transformations,
         validate=False,
         validate_all=validate_all,
+        order_by_transformation=False,
     )
 
     if run_simplify:
@@ -244,6 +245,7 @@ def gt_vertical_map_split_fusion(
         transformations,
         validate=False,
         validate_all=validate_all,
+        order_by_transformation=False,
     )
 
     if run_simplify:
