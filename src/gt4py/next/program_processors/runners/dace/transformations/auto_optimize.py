@@ -598,6 +598,7 @@ def _gt_auto_process_top_level_maps(
             [horizontal_map_fusion, vertical_map_fusion],
             validate=False,
             validate_all=validate_all,
+            order_by_transformation=False,
         )
 
         # Now do some cleanup task, that may enable further fusion opportunities.
@@ -620,6 +621,7 @@ def _gt_auto_process_top_level_maps(
                 ],
                 validate=False,
                 validate_all=validate_all,
+                order_by_transformation=False,
             )
             # TODO(phimuell): Find out how to skip the propagation and integrating it
             #   into the split transformation.
