@@ -48,6 +48,11 @@ def test_sdfg_code_spec_ignores_format_sources_config(monkeypatch, flag):
     assert artifacts.SDFGCodeSpec().format_source is False
 
 
+def test_sdfg_code_spec_rejects_format_source():
+    with pytest.raises(TypeError):
+        artifacts.SDFGCodeSpec(format_source=True)
+
+
 def test_format_source_follows_code_spec():
     source = "x=( 1 )"
 

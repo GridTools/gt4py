@@ -76,8 +76,8 @@ class SDFGCodeSpec(SourceCodeSpec):
 
     source_language: str = "SDFG"
     file_extension: str = "sdfg"
-    # There is no SDFG formatter: keep the spec independent of `config.FORMAT_SOURCES`
-    format_source: bool = False
+    # There is no SDFG formatter: pin to `False`, independent of `config.FORMAT_SOURCES`
+    format_source: bool = dataclasses.field(default=False, init=False)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
