@@ -26,6 +26,7 @@ import copy
 from typing import Iterable, Sequence
 
 import dace
+import sympy
 from dace import nodes as dace_nodes, subsets as dace_subsets
 
 from gt4py import eve
@@ -38,7 +39,6 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
-from gt4py.next.program_processors.runners.dace import sdfg_utils as gtx_dace_utils
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg,
@@ -136,13 +136,14 @@ def _create_scan_field_operator_impl(
             raise TypeError(
                 f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
             )
-        # the scan field operator computes a column of scalar values
-        assert len(outer_output_desc.shape) == 1
+        # the scan nested SDFG writes a column of scalar values into an array with
+        # the shape of the full field (see `_lower_lambda_to_nested_sdfg()`)
+        assert len(outer_output_desc.shape) == len(field_domain)
     else:
         raise NotImplementedError("scan with list output is not supported")
 
     # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+    field_dims, field_origin, _field_shape = gtir_domain.get_field_layout(field_domain)
     field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     # the vertical dimension used as scan column is computed by the `LoopRegion`
@@ -152,14 +153,12 @@ def _create_scan_field_operator_impl(
     # The map scope writes the full-shape dimension corresponding to the scan column.
     field_subset = (
         dace_subsets.Range(field_subset[:scan_dim_index])
-        + dace_subsets.Range.from_string(f"0:{outer_output_desc.shape[0]}")
+        + dace_subsets.Range.from_string(f"0:{outer_output_desc.shape[scan_dim_index]}")
         + dace_subsets.Range(field_subset[scan_dim_index + 1 :])
     )
 
     # Create the final data storage, that is outside of the surrounding Map.
-    field_name, field_desc = sdfg_builder.add_temp_array(
-        ctx.sdfg, field_shape, outer_output_desc.dtype
-    )
+    field_name, _field_desc = sdfg_builder.add_temp_array_like(ctx.sdfg, outer_output_desc)
     field_node = ctx.state.add_access(field_name)
 
     # Now connect the output connector on the nested SDFG with the result field
@@ -171,32 +170,6 @@ def _create_scan_field_operator_impl(
     inner_map_output_temporary_removed = output_edge.connect(map_exit, field_node, field_subset)
     if not inner_map_output_temporary_removed:
         raise ValueError("The scan nested SDFG is expected to write directly to the result field.")
-
-    assert ctx.state.in_degree(field_node) == 1
-    field_node_path = ctx.state.memlet_path(next(iter(ctx.state.in_edges(field_node))))
-    assert field_node_path[-1].dst is field_node
-
-    # The temporary node which the nested SDFG was writing to has been deleted,
-    #  and the nested SDFG will write directly to the result field. Thus, we have
-    #  to modify the stride of the scan column array inside the nested SDFG to match
-    #  the stride outside in the corresponding field dimension.
-    nsdfg_scan = field_node_path[0].src
-    assert isinstance(nsdfg_scan, dace_nodes.NestedSDFG)
-    inner_output_name = field_node_path[0].src_conn
-    inner_output_desc = nsdfg_scan.sdfg.arrays[inner_output_name]
-    assert len(inner_output_desc.shape) == 1
-
-    if isinstance(inner_output_desc, dace.data.Array):
-        # The result field on the outside is a transient array, allocated inside this
-        # function, so we know that its stride is constant. We just need to set it on
-        # the inside array, and we do not need to map any stride symbol.
-        outside_output_stride = field_desc.strides[scan_dim_index]
-        assert gtx_dace_utils.is_compile_time_size(outside_output_stride)
-        inner_output_desc.set_shape(inner_output_desc.shape, strides=(outside_output_stride,))
-    else:
-        # Special case where we only write the last level of the scan column.
-        assert isinstance(inner_output_desc, dace.data.Scalar)
-        assert bool(field_shape[scan_dim_index] == 1)
 
     return gtir_to_sdfg_types.FieldopData(
         field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
@@ -369,7 +342,12 @@ def _lower_lambda_to_nested_sdfg(
     init_state = lambda_ctx.state
 
     # use the vertical dimension in the domain as scan dimension
-    scan_domain = next(r for r in field_domain if sdfg_builder.is_column_axis(r.dim))
+    scan_dim_index = [sdfg_builder.is_column_axis(r.dim) for r in field_domain].index(True)
+    scan_domain = field_domain[scan_dim_index]
+
+    # extract the field layout and subset, to be used for the output of the scan operator
+    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
+    field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
 
     # extract the scan loop range
     scan_loop_var = gtir_to_sdfg_utils.get_map_variable(scan_domain.dim)
@@ -377,17 +355,20 @@ def _lower_lambda_to_nested_sdfg(
     # in case the scan operator computes a list (not a scalar), we need to add an extra dimension
     def get_scan_output_shape(
         scan_init_data: gtir_to_sdfg_types.FieldopData,
-    ) -> list[dace.symbolic.SymExpr]:
-        scan_column_size = scan_domain.stop - scan_domain.start
+    ) -> list[dace.symbolic.SymbolicType]:
         if isinstance(scan_init_data.gt_type, ts.ScalarType):
-            return [scan_column_size]
+            return field_shape
         assert isinstance(scan_init_data.gt_type, ts.ListType)
         assert scan_init_data.gt_type.offset_type
         offset_type = scan_init_data.gt_type.offset_type
         offset_provider_type = sdfg_builder.get_offset_provider_type(offset_type.value)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         list_size = offset_provider_type.max_neighbors
-        return [scan_column_size, dace.symbolic.SymExpr(list_size)]
+        return [
+            *field_shape[:scan_dim_index],
+            sympy.Integer(list_size),
+            *field_shape[scan_dim_index + 1 :],
+        ]
 
     if isinstance(init_data, tuple):
         lambda_result_shape = gtx_utils.tree_map(get_scan_output_shape)(init_data)
@@ -473,22 +454,27 @@ def _lower_lambda_to_nested_sdfg(
     else:
         init_scan_carry(scan_carry_input)
 
-    # connect the dataflow output nodes, called 'scan_result' below, to a global field called 'output'
-    output_column_index = dace.symbolic.pystr_to_symbolic(scan_loop_var) - scan_domain.start
-
     def connect_scan_output(
         scan_output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
         scan_output_shape: list[dace.symbolic.SymExpr],
         scan_carry_sym: gtir.Sym,
     ) -> gtir_to_sdfg_types.FieldopData:
         scan_result = scan_output_edge.result
-        if isinstance(scan_result.gt_dtype, ts.ScalarType):
-            assert scan_result.gt_dtype == scan_carry_sym.type
-            # the scan field operator computes a column of scalar values
-            assert len(scan_output_shape) == 1
-            output_subset = dace_subsets.Range.from_string(str(output_column_index))
+        assert scan_result.gt_dtype == scan_carry_sym.type
+        if isinstance(scan_result.gt_dtype, ts.ListType):
+            assert len(scan_output_shape) == len(field_subset) + 1
+            output_subset = [
+                dace_subsets.Range(field_subset[:scan_dim_index]),
+                dace_subsets.Range([(0, scan_output_shape[scan_dim_index] - 1, 1)]),
+                dace_subsets.Range(field_subset[scan_dim_index:]),
+            ]
         else:
-            raise NotImplementedError("scan with list output is not supported.")
+            assert isinstance(scan_result.gt_dtype, ts.ScalarType)
+            assert len(scan_output_shape) == len(field_subset)
+            # This function is called once per field of a tuple result, so the subset
+            # has to be copied: DaCe rejects an SDFG where two memlets refer to the
+            # same subset object.
+            output_subset = copy.deepcopy(field_subset)
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(lambda_ctx.sdfg)
         scan_result_subset = dace_subsets.Range.from_array(scan_result_desc)
@@ -557,7 +543,7 @@ def _handle_dataflow_result_of_nested_sdfg(
 
     # The field is used outside the nested SDFG, therefore it needs to be copied
     # to a temporary array in the parent SDFG (outer context).
-    field_dims, _, field_shape = gtir_domain.get_field_layout(
+    field_dims, _field_origin, field_shape = gtir_domain.get_field_layout(
         gtir_domain.get_field_domain(output_domain)
     )
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
@@ -612,10 +598,9 @@ def _handle_dataflow_result_of_nested_sdfg(
     else:
         inner_desc.transient = False
 
-    outer_dataname, outer_desc = sdfg_builder.add_temp_array(
-        outer_ctx.sdfg, (scan_column_size,), inner_desc.dtype
-    )
+    outer_dataname, outer_desc = sdfg_builder.add_temp_array_like(outer_ctx.sdfg, inner_desc)
     outer_node = outer_ctx.state.add_access(outer_dataname)
+
     outer_ctx.state.add_edge(
         nsdfg_node,
         inner_dataname,
@@ -717,7 +702,7 @@ def translate_scan(
 
     # The lambda expression of a scan field operator should never capture symbols
     # from the ouside scope, therefore we call `add_nested_sdfg()` with `capture_outer_data=False`.
-    nsdfg_node, input_memlets = sdfg_builder.add_nested_sdfg(
+    nsdfg_node, input_memlets, _ = sdfg_builder.add_nested_sdfg(
         node=stencil_expr,
         inner_ctx=lambda_ctx,
         outer_ctx=ctx,
