@@ -2009,6 +2009,26 @@ def test_jax_jit_premap_with_connectivity_argument(num_field_vertices):
 
 
 @pytest.mark.requires_jax
+def test_jax_jit_premap_with_closed_over_restricted_connectivity():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+    conn = common._connectivity(
+        jax.numpy.asarray(table),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.arange(3, dtype=np.float64), domain=common.domain({V: (0, 3)}))
+
+    result = jax.jit(lambda field: field.premap(conn[common.NamedIndex(E2VDim, 1)]))(field)
+
+    np.testing.assert_array_equal(result.asnumpy(), table[:, 1])
+
+
+@pytest.mark.requires_jax
 def test_jax_jit_retraces_per_connectivity_buffer():
     import jax
 

@@ -1170,12 +1170,18 @@ if jnp:
             self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence
         ) -> JaxArrayConnectivityField:
             handle = None
-            if self._table_handle is not None and isinstance(self._ndarray, jax.core.Tracer):
+            if isinstance(self._ndarray, jax.core.Tracer):
+                if self._table_handle is not None:
+                    with jax.ensure_compile_time_eval():
+                        handle = _TableHandle(self._table_handle.table[buffer_slice])
+                new_buffer = jnp.asarray(self._ndarray[buffer_slice])
+            else:
+                # a concrete table must stay concrete under a trace: domain inference reads it
                 with jax.ensure_compile_time_eval():
-                    handle = _TableHandle(self._table_handle.table[buffer_slice])
+                    new_buffer = jnp.asarray(self._ndarray[buffer_slice])
             return JaxArrayConnectivityField(
                 new_domain,
-                jnp.asarray(self._ndarray[buffer_slice]),
+                new_buffer,
                 self.codomain,
                 self.skip_value,
                 handle,
