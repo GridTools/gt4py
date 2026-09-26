@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from typing import Any, Final, Optional
 
 import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
@@ -28,6 +28,31 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
+
+# Device-dependent settings of the generated code. Code specs are stored as factories
+# (called per translation step) since their defaults depend on `config`.
+_DEFAULT_CODE_SPEC_FACTORIES: Final[
+    dict[core_defs.DeviceType, Callable[[], artifacts.HeaderAndSourceCodeSpec]]
+] = {
+    core_defs.DeviceType.CPU: artifacts.CPPCodeSpec,
+    core_defs.DeviceType.CUDA: artifacts.CUDACodeSpec,
+    core_defs.DeviceType.ROCM: artifacts.HIPCodeSpec,
+}
+_BACKEND_HEADERS: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools/fn/backend/naive.hpp",
+    core_defs.DeviceType.CUDA: "gridtools/fn/backend/gpu.hpp",
+    core_defs.DeviceType.ROCM: "gridtools/fn/backend/gpu.hpp",
+}
+_BACKEND_TYPES: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools::fn::backend::naive{}",
+    core_defs.DeviceType.CUDA: "gridtools::fn::backend::gpu<generated::block_sizes_t>{}",
+    core_defs.DeviceType.ROCM: "gridtools::fn::backend::gpu<generated::block_sizes_t>{}",
+}
+_LIBRARY_NAMES: Final[dict[core_defs.DeviceType, str]] = {
+    core_defs.DeviceType.CPU: "gridtools_cpu",
+    core_defs.DeviceType.CUDA: "gridtools_gpu",
+    core_defs.DeviceType.ROCM: "gridtools_gpu",
+}
 
 
 def get_param_description(name: str, type_: Any) -> interface.Parameter:
@@ -52,16 +77,23 @@ class GTFNTranslationStep(
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
-    def _default_code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA:
-                return artifacts.CUDACodeSpec()
-            case core_defs.DeviceType.ROCM:
-                return artifacts.HIPCodeSpec()
-            case core_defs.DeviceType.CPU:
-                return artifacts.CPPCodeSpec()
-            case _:
-                raise self._not_implemented_for_device_type()
+    def __post_init__(self) -> None:
+        if (code_spec_factory := _DEFAULT_CODE_SPEC_FACTORIES.get(self.device_type)) is None:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} is not implemented for device type "
+                f"{self.device_type.name}"
+            )
+        # Resolve the default code spec eagerly, so its settings (e.g. `format_source`,
+        # which follows `config.FORMAT_SOURCES`) are part of the step and its fingerprint.
+        default_code_spec = code_spec_factory()
+        if self.code_spec is None:
+            object.__setattr__(self, "code_spec", default_code_spec)
+        elif not isinstance(self.code_spec, type(default_code_spec)):
+            raise ValueError(
+                f"Code spec '{type(self.code_spec).__name__}' does not match device type "
+                f"'{self.device_type.name}' (expected '{type(default_code_spec).__name__}'). "
+                "When replacing the device type, pass 'code_spec=None' to use the default spec."
+            )
 
     def _process_regular_arguments(
         self,
@@ -171,14 +203,15 @@ class GTFNTranslationStep(
             column_axis=column_axis,
         )
 
-        generated_code = GTFNCodegen.apply(gtfn_ir)
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        return GTFNCodegen.apply(gtfn_ir)
 
     def __call__(
         self, inp: stages.CompilableProgramDef
     ) -> artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
+        code_spec = self.code_spec
+        assert code_spec is not None  # resolved in `__post_init__`
 
         # handle regular parameters and arguments of the program (i.e. what the user defined in
         #  the program)
@@ -195,7 +228,7 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        backend_arg = self._backend_type()
+        backend_arg = _BACKEND_TYPES[self.device_type]
         args_expr: list[str] = [backend_arg, *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
@@ -210,9 +243,9 @@ class GTFNTranslationStep(
             inp.args.column_axis,
         )
         source_code = artifacts.format_source(
-            self._code_spec(),
+            code_spec,
             f"""
-                    #include <{self._backend_header()}>
+                    #include <{_BACKEND_HEADERS[self.device_type]}>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
                     {decl_src}
@@ -222,47 +255,14 @@ class GTFNTranslationStep(
         module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
             artifacts.ProgramSource(
                 entry_point=function,
-                library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
+                library_deps=(
+                    interface.LibraryDependency(_LIBRARY_NAMES[self.device_type], "master"),
+                ),
                 source_code=source_code,
-                code_spec=self._code_spec(),
+                code_spec=code_spec,
             )
         )
         return module
-
-    def _backend_header(self) -> str:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
-                return "gridtools/fn/backend/gpu.hpp"
-            case core_defs.DeviceType.CPU:
-                return "gridtools/fn/backend/naive.hpp"
-            case _:
-                raise self._not_implemented_for_device_type()
-
-    def _backend_type(self) -> str:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
-                return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
-            case core_defs.DeviceType.CPU:
-                return "gridtools::fn::backend::naive{}"
-            case _:
-                raise self._not_implemented_for_device_type()
-
-    def _code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
-        return self.code_spec if self.code_spec is not None else self._default_code_spec()
-
-    def _library_name(self) -> str:
-        match self.device_type:
-            case core_defs.DeviceType.CUDA | core_defs.DeviceType.ROCM:
-                return "gridtools_gpu"
-            case core_defs.DeviceType.CPU:
-                return "gridtools_cpu"
-            case _:
-                raise self._not_implemented_for_device_type()
-
-    def _not_implemented_for_device_type(self) -> NotImplementedError:
-        return NotImplementedError(
-            f"{self.__class__.__name__} is not implemented for device type {self.device_type.name}"
-        )
 
 
 class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):

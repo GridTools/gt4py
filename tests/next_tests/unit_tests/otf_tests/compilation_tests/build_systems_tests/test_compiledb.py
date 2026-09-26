@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import pathlib
 import shutil
 import tempfile
@@ -91,3 +92,28 @@ def test_compiledb_project_is_relocatable(extension_source_example, clean_compil
         assert hasattr(
             importer.import_from_path(relocated_dir / new_data.module), new_data.entry_point_name
         )
+
+
+def test_compiledb_prototype_ignores_format_source(monkeypatch, extension_source_example):
+    prototypes = []
+
+    def fake_get_compiledb(renew_compiledb, prototype_program_source, **kwargs):
+        prototypes.append(prototype_program_source)
+        return pathlib.Path("compile_commands.json")
+
+    monkeypatch.setattr(compiledb, "_cc_get_compiledb", fake_get_compiledb)
+
+    program_source = extension_source_example.program_source
+    for format_source in (True, False):
+        code_spec = dataclasses.replace(program_source.code_spec, format_source=format_source)
+        compiledb.CompiledbFactory()(
+            dataclasses.replace(
+                extension_source_example,
+                program_source=dataclasses.replace(program_source, code_spec=code_spec),
+            ),
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
+        )
+
+    assert fingerprinting.strict_fingerprinter(
+        prototypes[0]
+    ) == fingerprinting.strict_fingerprinter(prototypes[1])

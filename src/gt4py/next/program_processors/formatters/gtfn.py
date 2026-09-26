@@ -8,6 +8,7 @@
 
 from typing import Any
 
+from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import program_formatter
 from gt4py.next.program_processors.codegens.gtfn.gtfn_module import GTFNTranslationStep
@@ -18,8 +19,10 @@ from gt4py.next.program_processors.runners import gtfn
 def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
     gtfn_translation = gtfn.GTFNCompileWorkflowFactory(cached_translation=False).translation
     assert isinstance(gtfn_translation, GTFNTranslationStep)
-    return gtfn_translation.generate_stencil_source(
+    generated_code = gtfn_translation.generate_stencil_source(
         program,
         offset_provider=kwargs.get("offset_provider", {}),
         column_axis=kwargs.get("column_axis", None),
     )
+    # The purpose of this formatter is producing human-readable code, so always format it
+    return codegen.format_source("cpp", generated_code, style="LLVM")
