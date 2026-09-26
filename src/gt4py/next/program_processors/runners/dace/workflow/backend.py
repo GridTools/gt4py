@@ -9,16 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
-import warnings
-from typing import Any, Final
+import functools
+from collections.abc import Callable
+from typing import Any
 
-import factory
-
-import gt4py.next.custom_layout_allocators as next_allocators
-from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config
-from gt4py.next.otf import artifacts
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next import backend, config
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -40,41 +36,53 @@ class DaCeBackend(backend.Backend[Any]):
         return program
 
 
-class DaCeBackendFactory(factory.Factory):
+def make_dace_toolchain(
+    cfg: gtx_wfdfactory.DaCeConfig | None = None,
+    /,
+    *,
+    name_postfix: str = "",
+    translation: Callable[
+        [gtx_wfdfactory.DaCeConfig], stages.TranslationStep
+    ] = gtx_wfdfactory.make_dace_translator,
+    bindings: Callable[
+        [gtx_wfdfactory.DaCeConfig],
+        workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource],
+    ] = gtx_wfdfactory.make_dace_bindings,
+    compilation: Callable[
+        [gtx_wfdfactory.DaCeConfig],
+        workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact],
+    ] = gtx_wfdfactory.make_dace_compiler,
+) -> DaCeBackend:
     """
-    Workflow factory for the GTIR-DaCe backend.
-
-    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
+    Build a DaCe toolchain.
 
     Args:
-        auto_optimize: Enables the SDFG transformation pipeline.
+        cfg: The toolchain configuration. Defaults to `DaCeConfig()`.
+        name_postfix: Appended to the toolchain name, which must stay unique.
+        translation: Builder of the translation step, see
+            `make_dace_compile_workflow`.
+        bindings: Builder of the bindings step.
+        compilation: Builder of the compilation step.
+
+    Returns:
+        The configured toolchain.
+
+    Raises:
+        ValueError: If a step builder returns a step configured for a device
+            other than `cfg.device_type`.
     """
+    if cfg is None:
+        cfg = gtx_wfdfactory.DaCeConfig()
 
-    class Meta:
-        model = DaCeBackend
-
-    class Params:
-        name_device = "cpu"
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
-        device_type = core_defs.DeviceType.CPU
-        otf_workflow = factory.SubFactory(
-            gtx_wfdfactory.DaCeWorkflowFactory,
-            cached_translation=True,
-            device_type=factory.SelfAttribute("..device_type"),
-            auto_optimize=factory.SelfAttribute("..auto_optimize"),
-        )
-        auto_optimize = factory.Trait(name_postfix="_opt")
-
-    name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
-    external_workspace = None
+    return DaCeBackend(
+        name=f"run_dace_{cfg.device_name}{'_opt' if cfg.auto_optimize else ''}{name_postfix}",
+        executor=gtx_wfdfactory.make_dace_compile_workflow(
+            cfg, translation=translation, bindings=bindings, compilation=compilation
+        ),
+        allocator=cfg.make_allocator(),
+        transforms=backend.DEFAULT_TRANSFORMS,
+        external_workspace=cfg.external_workspace,
+    )
 
 
 def make_dace_backend(
@@ -87,8 +95,12 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
+
+    A flat-keyword front end for `make_dace_toolchain`, kept for existing
+    callers: it builds the `DaCeConfig` and the translation step builder from
+    its arguments.
 
     Args:
         gpu: Enable GPU transformations and code generation.
@@ -106,85 +118,39 @@ def make_dace_backend(
         use_zero_origin: Can be set to `True` when all fields passed as program
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
+        use_max_domain_range_on_unstructured_shift: See `DaCeTranslator`.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
-    cannot be overriden, and therefore cannot appear here. Thus, this function will
-    throw an exception if called with any argument included in `gt_optimization_args`.
+    cannot be overriden, and therefore cannot appear in `optimization_args`.
 
     Returns:
         A dace backend with custom configuration for the target device.
+
+    Raises:
+        ValueError: If `optimization_args` sets a parameter derived from the
+            configuration, or requests the `EXTERNAL` transient memory mode
+            without an `external_workspace`.
     """
-
-    # The `gt_optimization_args` set contains the parameters of `gt_auto_optimize()`
-    # that are derived from the gt4py configuration, and therefore cannot be customized.
-    gt_optimization_args: Final[set[str]] = {"gpu", "constant_symbols", "unit_strides_kind"}
-
-    if optimization_args is None:
-        optimization_args = {}
-    elif optimization_args and not auto_optimize:
-        warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
-    elif intersect_args := gt_optimization_args.intersection(optimization_args.keys()):
-        raise ValueError(
-            f"The following optimization arguments cannot be overriden: {intersect_args}."
-        )
-
-    # Set `unit_strides_kind` based on the gt4py env configuration.
-    optimization_args = optimization_args | {
-        "unit_strides_kind": common.DimensionKind.HORIZONTAL
-        if unstructured_horizontal_has_unit_stride
-        else None
-    }
-
-    if external_workspace is None:
-        if (
-            optimization_args.get("transient_memory_mode")
-            is gtx_transformations.TransientMemoryMode.EXTERNAL
-        ):
-            raise ValueError(
-                "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
-            )
-    elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
-        if transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
-            warnings.warn(
-                f"External memory workspace provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
-                stacklevel=2,
-            )
-    else:
-        optimization_args["transient_memory_mode"] = (
-            gtx_transformations.TransientMemoryMode.EXTERNAL
-        )
-
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
-        gpu=gpu,
-        auto_optimize=auto_optimize,
-        external_workspace=external_workspace,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-        otf_workflow__bare_translation__use_metrics=use_metrics,
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
-        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    return make_dace_toolchain(
+        gtx_wfdfactory.DaCeConfig(
+            gpu=gpu,
+            auto_optimize=auto_optimize,
+            external_workspace=external_workspace,
+            unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+        ),
+        translation=functools.partial(
+            gtx_wfdfactory.make_dace_translator,
+            optimization_args=optimization_args,
+            async_sdfg_call=async_sdfg_call,
+            use_metrics=use_metrics,
+            use_zero_origin=use_zero_origin,
+            use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+        ),
     )
 
 
-run_dace_cpu = make_dace_backend(
-    gpu=False,
-    auto_optimize=True,
-    async_sdfg_call=False,
-)
-run_dace_cpu_noopt = make_dace_backend(
-    gpu=False,
-    auto_optimize=False,
-    async_sdfg_call=False,
-)
+run_dace_cpu = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(auto_optimize=True))
+run_dace_cpu_noopt = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(auto_optimize=False))
 
-run_dace_gpu = make_dace_backend(
-    gpu=True,
-    auto_optimize=True,
-    async_sdfg_call=True,
-)
-run_dace_gpu_noopt = make_dace_backend(
-    gpu=True,
-    auto_optimize=False,
-    async_sdfg_call=True,
-)
+run_dace_gpu = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(gpu=True, auto_optimize=True))
+run_dace_gpu_noopt = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(gpu=True, auto_optimize=False))

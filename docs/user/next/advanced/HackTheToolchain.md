@@ -46,7 +46,30 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow
+
+A toolchain is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
+which holds the settings all steps must agree on: the device, the build type,
+the cache lifetime, the data layout. Each step is created by a step builder
+that receives that configuration. To change a single setting of one step, pass
+a `functools.partial` of its default builder; the other settings still come
+from the configuration.
+
+```python
+import functools
+
+gtfn = gtx.program_processors.runners.gtfn
+
+debug_gpu_no_transforms = gtfn.make_gtfn_toolchain(
+    gtfn.GTFNConfig(gpu=True, cmake_build_type=gtx.config.CMakeBuildType.DEBUG),
+    name_postfix="_debug_no_transforms",
+    translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
+)
+```
+
+To replace a step, pass any callable that takes the configuration and returns
+the step. It is still wrapped in the translation cache, and a step that
+records a device other than the configured one is rejected.
 
 ```python
 class MyCodeGen: ...
@@ -55,16 +78,11 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.stages.CompilableProgramDef, gtx.otf.artifacts.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[
-        gtx.otf.artifacts.ProgramSource, gtx.otf.artifacts.ExtensionSource
-    ] = Cpp2BindingsGen()
-
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+pure_cpp2_workflow = gtfn.make_gtfn_compile_workflow(
+    gtfn.GTFNConfig(cmake_build_type=gtx.config.CMakeBuildType.DEBUG, cached_translation=False),
+    translation=lambda cfg: MyCodeGen(),
+    bindings=lambda cfg: Cpp2BindingsGen(),
+)
 ```
 
 ## Invent new Workflow Types

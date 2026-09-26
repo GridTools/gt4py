@@ -19,19 +19,23 @@ Because monkey patching the config variables is not enough, as
 other variables are computed at import time based on them.
 """
 
+import functools
 import pathlib
 import unittest.mock
+
+import pytest
 
 import gt4py._core.definitions as core_defs
 from gt4py.next import config, custom_layout_allocators
 from gt4py.next.otf import workflow
 from gt4py.next.otf.compilation import build_data, cache, compiler, importer
+from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 
 
-def test_backend_factory_trait_device():
-    cpu_version = gtfn.GTFNBackendFactory(gpu=False)
-    gpu_version = gtfn.GTFNBackendFactory(gpu=True)
+def test_make_gtfn_toolchain_device():
+    cpu_version = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=False))
+    gpu_version = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=True))
 
     assert cpu_version.name == "run_gtfn_cpu"
     assert isinstance(cpu_version.executor.translation, workflow.CachedStep)
@@ -52,11 +56,11 @@ def test_backend_factory_trait_device():
     )
 
 
-def test_backend_factory_build_cache_config(monkeypatch):
+def test_make_gtfn_toolchain_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
-    session_version = gtfn.GTFNBackendFactory()
+    session_version = gtfn.make_gtfn_toolchain()
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
-    persistent_version = gtfn.GTFNBackendFactory()
+    persistent_version = gtfn.make_gtfn_toolchain()
 
     assert session_version.executor.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
@@ -65,11 +69,11 @@ def test_backend_factory_build_cache_config(monkeypatch):
     )
 
 
-def test_backend_factory_build_type_config(monkeypatch):
+def test_make_gtfn_toolchain_build_type_config(monkeypatch):
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
+    release_version = gtfn.make_gtfn_toolchain()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
-    min_size_version = gtfn.GTFNBackendFactory()
+    min_size_version = gtfn.make_gtfn_toolchain()
 
     assert (
         release_version.executor.compilation.builder_factory.cmake_build_type
@@ -90,9 +94,9 @@ def test_cmake_build_type_changes_build_folder(monkeypatch, tmp_path):
     land in different cache folders.
     """
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.GTFNBackendFactory()
+    release_version = gtfn.make_gtfn_toolchain()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.DEBUG)
-    debug_version = gtfn.GTFNBackendFactory()
+    debug_version = gtfn.make_gtfn_toolchain()
 
     release_compiler = release_version.executor.compilation
     debug_compiler = debug_version.executor.compilation
@@ -126,3 +130,71 @@ def test_cmake_build_type_changes_build_folder(monkeypatch, tmp_path):
 
     assert len(build_context_ids) == 2
     assert build_context_ids[0] != build_context_ids[1]
+
+
+def test_step_builder_partial_keeps_config_settings():
+    """A partial of a default step builder changes a step-local setting only."""
+    cfg = gtfn.GTFNConfig(gpu=True, cmake_build_type=config.CMakeBuildType.DEBUG)
+
+    toolchain = gtfn.make_gtfn_toolchain(
+        cfg,
+        translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
+        compilation=functools.partial(
+            gtfn.make_gtfn_compiler,
+            build_system=functools.partial(
+                gtfn.make_gtfn_build_system, cmake_extra_flags=["-DEXTRA=ON"]
+            ),
+        ),
+    )
+
+    translation = toolchain.executor.translation
+    assert isinstance(translation, workflow.CachedStep)
+    assert translation.step.enable_itir_transforms is False
+    assert translation.step.device_type is cfg.device_type
+    compilation = toolchain.executor.compilation
+    assert compilation.device_type is cfg.device_type
+    assert compilation.builder_factory.cmake_extra_flags == ["-DEXTRA=ON"]
+    assert compilation.builder_factory.cmake_build_type is config.CMakeBuildType.DEBUG
+
+
+def test_custom_step_builder_output_is_cached():
+    """The cache wraps whatever the translation step builder returns."""
+    custom_step = gtfn_module.GTFNTranslationStep(
+        device_type=core_defs.DeviceType.CPU, use_max_domain_range_on_unstructured_shift=True
+    )
+
+    toolchain = gtfn.make_gtfn_toolchain(translation=lambda cfg: custom_step)
+
+    assert isinstance(toolchain.executor.translation, workflow.CachedStep)
+    assert toolchain.executor.translation.step is custom_step
+
+
+def test_uncached_translation():
+    toolchain = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(cached_translation=False))
+
+    assert isinstance(toolchain.executor.translation, gtfn_module.GTFNTranslationStep)
+
+
+def test_step_builder_ignoring_config_device_raises():
+    def cpu_only_translation(cfg: gtfn.GTFNConfig) -> gtfn_module.GTFNTranslationStep:
+        return gtfn_module.GTFNTranslationStep(device_type=core_defs.DeviceType.CPU)
+
+    with pytest.raises(ValueError, match="toolchain is being built for 'CUDA'"):
+        gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=True), translation=cpu_only_translation)
+
+
+def test_step_builder_cannot_override_config_setting():
+    with pytest.raises(TypeError, match="device_type"):
+        gtfn.make_gtfn_toolchain(
+            gtfn.GTFNConfig(gpu=True),
+            translation=functools.partial(
+                gtfn.make_gtfn_translation, device_type=core_defs.DeviceType.CPU
+            ),
+        )
+
+
+def test_prebuilt_toolchain_names_are_unique():
+    names = [gtfn.run_gtfn.name, gtfn.run_gtfn_gpu.name, gtfn.run_gtfn_no_transforms.name]
+
+    assert gtfn.run_gtfn_no_transforms.name == "run_gtfn_cpu_no_transforms"
+    assert len(set(names)) == len(names)

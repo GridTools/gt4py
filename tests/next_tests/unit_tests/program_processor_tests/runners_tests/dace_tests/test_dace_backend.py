@@ -9,6 +9,7 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import dataclasses
+import functools
 import re
 import unittest.mock as mock
 from typing import Any
@@ -29,6 +30,8 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
     decoration as dace_wf_decoration,
+    factory as dace_wf_factory,
+    translation as dace_wf_translation,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -234,6 +237,65 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         == gtx_transformations.TransientMemoryMode.POOL
     )
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+
+
+def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
+    """The toolchain and its translation step read the workspace from one config."""
+    workspace = _RecordingWorkspace()
+    cfg = dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace})
+
+    backend = dace_wf_backend.make_dace_toolchain(
+        cfg, translation=functools.partial(dace_wf_factory.make_dace_translator, use_metrics=False)
+    )
+
+    translator = backend.executor.translation.step
+    assert translator.use_metrics is False
+    assert (
+        translator.auto_optimize_args["transient_memory_mode"]
+        == gtx_transformations.TransientMemoryMode.EXTERNAL
+    )
+    assert backend.external_workspace is cfg.external_workspace
+    assert backend.executor.compilation.bind_func_name == cfg.bind_func_name
+
+
+def test_make_toolchain_rejects_derived_optimization_args():
+    with pytest.raises(ValueError, match="cannot be overriden"):
+        dace_wf_backend.make_dace_toolchain(
+            translation=functools.partial(
+                dace_wf_factory.make_dace_translator,
+                optimization_args={"unit_strides_kind": None},
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "step_builders",
+    [
+        # Each builder ignores the GPU config it receives and targets the CPU.
+        {
+            "translation": lambda cfg: dace_wf_factory.make_dace_translator(
+                dace_wf_factory.DaCeConfig()
+            )
+        },
+        {
+            "compilation": lambda cfg: dace_wf_factory.make_dace_compiler(
+                dace_wf_factory.DaCeConfig()
+            )
+        },
+    ],
+    ids=["translation", "compilation"],
+)
+def test_make_toolchain_rejects_step_builder_ignoring_config_device(step_builders):
+    with pytest.raises(ValueError, match="toolchain is being built for"):
+        dace_wf_backend.make_dace_toolchain(dace_wf_factory.DaCeConfig(gpu=True), **step_builders)
+
+
+def test_make_toolchain_uncached_translation():
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(cached_translation=False)
+    )
+
+    assert isinstance(backend.executor.translation, dace_wf_translation.DaCeTranslator)
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:

@@ -11,7 +11,6 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Final, Optional
 
-import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -48,7 +47,9 @@ class GTFNTranslationStep(
     code_spec: Optional[artifacts.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    # No default: the device must agree with the other steps of the pipeline, so
+    # forgetting to pass it must fail instead of silently targeting the CPU.
+    device_type: core_defs.DeviceType = dataclasses.field(kw_only=True)
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
@@ -265,13 +266,10 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
-    class Meta:
-        model = GTFNTranslationStep
+translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStep(
+    device_type=core_defs.DeviceType.CPU
+)
 
-
-translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
-
-translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStep(
     device_type=core_defs.DeviceType.CUDA
 )
