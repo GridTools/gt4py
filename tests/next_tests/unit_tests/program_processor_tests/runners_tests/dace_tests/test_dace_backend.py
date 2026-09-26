@@ -197,7 +197,7 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
         external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
-    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_backend_infers_external_mode_when_workspace_is_provided():
@@ -211,10 +211,10 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     )
 
     assert (
-        backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
+        backend.backend.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.EXTERNAL
     )
-    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_backend_warns_external_workspace_without_external_mode():
@@ -233,10 +233,10 @@ def test_make_backend_warns_external_workspace_without_external_mode():
 
     # Explicit mode stays as requested by the caller; backend only warns.
     assert (
-        backend.executor.translation.step.auto_optimize_args["transient_memory_mode"]
+        backend.backend.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.POOL
     )
-    assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
@@ -248,14 +248,14 @@ def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
         cfg, translation=functools.partial(dace_wf_factory.make_dace_translator, use_metrics=False)
     )
 
-    translator = backend.executor.translation.step
+    translator = backend.backend.translation.step
     assert translator.use_metrics is False
     assert (
         translator.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.EXTERNAL
     )
-    assert backend.external_workspace is cfg.external_workspace
-    assert backend.executor.compilation.bind_func_name == cfg.bind_func_name
+    assert backend.loading.external_workspace is cfg.external_workspace
+    assert backend.backend.compilation.bind_func_name == cfg.bind_func_name
 
 
 def test_make_toolchain_rejects_derived_optimization_args():
@@ -291,11 +291,11 @@ def test_make_toolchain_rejects_step_builder_ignoring_config_device(step_builder
 
 
 def test_make_toolchain_uncached_translation():
-    backend = dace_wf_backend.make_dace_toolchain(
+    toolchain = dace_wf_backend.make_dace_toolchain(
         dace_wf_factory.DaCeConfig(cached_translation=False)
     )
 
-    assert isinstance(backend.executor.translation, dace_wf_translation.DaCeTranslator)
+    assert isinstance(toolchain.backend.translation, dace_wf_translation.DaCeTranslator)
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -380,9 +380,9 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     out = cases.allocate(test_case, testee, "out")()
 
     captured_sdfg: dace.SDFG | None = None
-    translation_step = custom_backend.executor.translation.step
+    translation_step = custom_backend.backend.translation.step
 
-    def mocked_translator(inp: stages.CompilableProgramDef) -> dace.SDFG:
+    def mocked_translator(inp: stages.CompilableProgram) -> dace.SDFG:
         nonlocal captured_sdfg
         result = translation_step(inp)
         captured_sdfg = dace.SDFG.from_json(result.source_code)
@@ -390,8 +390,8 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
 
     custom_backend = dataclasses.replace(
         custom_backend,
-        executor=dataclasses.replace(
-            custom_backend.executor,
+        backend=dataclasses.replace(
+            custom_backend.backend,
             translation=mocked_translator,
         ),
     )
@@ -430,7 +430,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             assert all(
                 tdesc.lifetime == dace.AllocationLifetime.External for _, tdesc in transient_arrays
             )
-            # load_artifact injected the backend-level workspace onto the program wrapper.
+            # The loading step injected the toolchain-level workspace onto the program wrapper.
             assert (
                 decorated_program._fun.external_workspace[device_type]
                 is external_workspace[device_type]
