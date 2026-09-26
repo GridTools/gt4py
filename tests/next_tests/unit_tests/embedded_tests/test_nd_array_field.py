@@ -2029,6 +2029,41 @@ def test_jax_jit_premap_with_closed_over_restricted_connectivity():
 
 
 @pytest.mark.requires_jax
+def test_jax_jit_premap_with_as_offset_computed_in_trace():
+    import jax
+
+    from gt4py.next.ffront import experimental
+
+    C = Dimension("C")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({C: (0, 2), K: (0, 4)})
+    values = np.arange(8, dtype=np.float64).reshape(2, 4)
+    offsets = np.asarray([[1, 1, 0, -1], [0, 2, 1, 0]], dtype=np.int32)
+
+    def shifted(field, offset_field):
+        return field.premap(experimental.as_offset(Koff, offset_field + 0))
+
+    field = common._field(jax.numpy.asarray(values), domain=domain)
+    offset_field = common._field(jax.numpy.asarray(offsets), domain=domain)
+    expected = shifted(field, offset_field)
+
+    result = jax.jit(shifted)(field, offset_field)
+
+    assert result.domain == domain
+    np.testing.assert_array_equal(result.asnumpy(), expected.asnumpy())
+    np.testing.assert_array_equal(
+        result.asnumpy(), np.take_along_axis(values, np.arange(4) + offsets, axis=1)
+    )
+
+    # out-of-range targets read the boundary value under a trace
+    beyond = common._field(jax.numpy.asarray(np.full((2, 4), 3, dtype=np.int32)), domain=domain)
+    np.testing.assert_array_equal(
+        jax.jit(shifted)(field, beyond).asnumpy(), np.repeat(values[:, -1:], 4, axis=1)
+    )
+
+
+@pytest.mark.requires_jax
 def test_jax_jit_retraces_per_connectivity_buffer():
     import jax
 

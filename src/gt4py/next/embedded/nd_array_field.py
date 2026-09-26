@@ -596,6 +596,11 @@ class NdArrayConnectivityField(
         # the jax subclass answers with the concrete table behind the tracer
         return self._ndarray
 
+    @property
+    def _image_unknown(self) -> bool:
+        """Whether the table's values are not available for domain inference."""
+        return False
+
     def __setitem__(
         self,
         index: common.AnyIndexSpec,
@@ -721,7 +726,13 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
             return _identity_index_array(new_domain, dim, xp) - start
         # skip entries read the domain start instead of wrapping around to an arbitrary element;
         # what is gathered there, and its cotangent, is left to the reduction mask to discard
-        return _connectivity_index_array(conn, new_domain, xp, skip_value_replacement=start) - start
+        index = (
+            _connectivity_index_array(conn, new_domain, xp, skip_value_replacement=start) - start
+        )
+        if getattr(conn, "_image_unknown", False):
+            # the output domain assumed all targets inside the field; out-of-range ones read its boundary
+            index = xp.clip(index, 0, len(data.domain[dim].unit_range) - 1)
+        return index
 
     new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
@@ -1162,7 +1173,14 @@ if jnp:
                 return self._table_handle.table
             return self._ndarray
 
+        @property
+        def _image_unknown(self) -> bool:
+            return self._table_handle is None and isinstance(self._ndarray, jax.core.Tracer)
+
         def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
+            if self._image_unknown:
+                # values computed inside a trace: assume every target lies in `image_range`
+                return tuple(slice(0, n) for n in self._ndarray.shape)
             with jax.ensure_compile_time_eval():
                 return super()._image_slices(image_range)
 
