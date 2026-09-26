@@ -7,7 +7,7 @@ tags: [backend, otf, toolchain, workflows, naming, observability]
 - **Status**: valid
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-07-30
-- **Updated**: 2026-07-30
+- **Updated**: 2026-09-23
 
 In the context of the on-the-fly compilation toolchain, facing a root object
 whose names (`Backend`, `transforms`, `executor`) no longer match the
@@ -109,7 +109,7 @@ Named pipelines become frozen dataclasses with an explicit, fully typed
 customization stays composition-time via `dataclasses.replace`. The
 combinator framework (both mixins, `NamedStepSequence`, `MultiWorkflow`,
 `StepSequence`, `make_step`, `.chain`, the three adapters) is deleted;
-`CachedStep` is kept unchanged.
+`CachedStep` is kept, minus the mixin-provided `.replace` / `.chain`.
 
 What ADR 0011's decisions become:
 
@@ -120,6 +120,34 @@ What ADR 0011's decisions become:
 | Customization at composition, not via flags | `dataclasses.replace` on frozen pipelines                               |
 | Steps compose across backends               | `Step[S, T]` is a `Callable` — every existing step already satisfies it |
 | Linear workflows                            | unchanged (`Transforms` keeps its input-dependent step *selection*)     |
+
+Static checking covers the stage types a step consumes and produces; it does
+not yet cover which language their code is in. The `CompilePipeline` fields use
+unparameterized `ProgramSource` / `ExtensionSource`, so mypy accepts a pipeline
+that mixes C++ and SDFG steps. Parameterizing `CompilePipeline` over the code
+spec only helps once the builders return parameterized pipelines, so it is left
+to a follow-up.
+
+### Cross-step agreement is checked on construction
+
+Because `dataclasses.replace` is the customization route, a pipeline can be
+assembled without a builder, so the builder-level device check of
+[0028](0028-Plain-Builders-Instead-of-Factories.md) no longer sees every
+route. The objects that assemble steps therefore check agreement
+themselves, in `__post_init__`. `dataclasses.replace` re-runs that, so the
+check covers builders, direct construction and variants alike:
+
+- `CompilePipeline`: all steps that declare a device (the
+  `workflow.DeviceConfigurable` protocol, looking through `CachedStep`) declare
+  the same one, which is exposed as `CompilePipeline.device_type`.
+- `Toolchain`: the allocator's `__gt_device_type__` matches the device the
+  backend declares.
+
+As in ADR 0028, these checks never mutate. They only see components that
+declare a device: a custom step without `device_type` is not checked.
+Settings shared by the steps of one backend family, such as the DaCe external
+workspace and its `transient_memory_mode`, are that family's responsibility and
+are not checked here.
 
 ### Stage observability
 
@@ -135,16 +163,16 @@ needing a variant step builds a variant pipeline with `dataclasses.replace`.
 
 ### Phasing
 
-The decisions in this ADR land as a stack of PRs. The naming decisions above
-land first, except the `OTFCompileWorkflow` → `CompilePipeline` rename, which
-lands with the pipeline PR; the "Pipeline, not combinators" and "Stage
-observability" decisions are implemented in follow-up PRs of the same stack.
+The decisions in this ADR landed as a stack of PRs: the naming decisions first
+(#2741), then stage observability (#2742), then the pipeline simplification
+together with the deferred `OTFCompileWorkflow` → `CompilePipeline` rename
+(this stack's final PR).
 
 ## Consequences
 
 - The dace `__sdfg__` reach-in (duck-typing through `executor.translation`
-  and mutating frozen stages) will be replaced by a dace-owned translate-only
-  step built with `dataclasses.replace`.
+  and mutating frozen stages) was replaced by a dace-owned translate-only
+  toolchain built with `dataclasses.replace`.
 - Downstream code subclassing the deleted combinators or overriding
   `Transforms.step_order` must migrate to explicit `__call__` composition.
 - Downstream code must migrate to the new names in the same release: the old

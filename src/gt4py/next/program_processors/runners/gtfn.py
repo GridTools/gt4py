@@ -20,7 +20,7 @@ from gt4py.next import backend, common, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -160,13 +160,9 @@ def make_gtfn_translation(
 
 def make_gtfn_bindings(
     cfg: GTFNConfig, /
-) -> workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]:
+) -> workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]:
     """Build the step generating the nanobind bindings of the translated program."""
-    # `OTFCompileWorkflow` is not parameterized over the code spec, so its
-    # `bindings` field is typed for `ProgramSource[Any]` while
-    # `ExtensionGenerator` accepts only C++-like specs. Parameterizing the
-    # pipeline is the real fix and belongs with the pipeline rework.
-    return nanobind.ExtensionGenerator(  # type: ignore[return-value] # see comment above
+    return nanobind.ExtensionGenerator(
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride
     )
 
@@ -230,12 +226,12 @@ def make_gtfn_compile_workflow(
     *,
     translation: Callable[[GTFNConfig], stages.TranslationStep] = make_gtfn_translation,
     bindings: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+        [GTFNConfig], workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]
     ] = make_gtfn_bindings,
     compilation: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+        [GTFNConfig], workflow.Step[artifacts.ExtensionSource, artifacts.CompilationArtifact]
     ] = make_gtfn_compiler,
-) -> recipes.OTFCompileWorkflow:
+) -> backend.CompilePipeline:
     """
     Build the GTFN translation -> bindings -> compilation workflow.
 
@@ -282,7 +278,7 @@ def make_gtfn_compile_workflow(
             ),
         )
 
-    return recipes.OTFCompileWorkflow(
+    return backend.CompilePipeline(
         translation=translation_step, bindings=bindings(cfg), compilation=compilation_step
     )
 
@@ -294,10 +290,10 @@ def make_gtfn_toolchain(
     name_postfix: str = "",
     translation: Callable[[GTFNConfig], stages.TranslationStep] = make_gtfn_translation,
     bindings: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+        [GTFNConfig], workflow.Step[artifacts.ProgramSource, artifacts.ExtensionSource]
     ] = make_gtfn_bindings,
     compilation: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+        [GTFNConfig], workflow.Step[artifacts.ExtensionSource, artifacts.CompilationArtifact]
     ] = make_gtfn_compiler,
 ) -> backend.Toolchain:
     """
