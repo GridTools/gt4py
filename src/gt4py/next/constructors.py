@@ -25,7 +25,7 @@ from gt4py._core import (
     ndarray_utils as core_ndarray_utils,
     types as core_types,
 )
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import xtyping
 
 
 """

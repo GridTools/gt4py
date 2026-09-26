@@ -6,172 +6,238 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-Typing definitions working across different Python versions (via `typing_extensions`).
+"""Typing definitions that `typing` and `typing_extensions` do not provide.
 
-Definitions in 'typing_extensions' take priority over those in 'typing'.
+This module is **not** a replacement for `typing`: it does not re-export it.
+Import the standard names from `typing`, `typing_extensions` or
+`collections.abc` directly, and take only GT4Py's own definitions from here.
+
+`Protocol`, `runtime_checkable` and `get_type_hints` are deliberately taken from
+`typing_extensions` even though `typing` has them: on Python 3.12 the
+implementations differ, so ruff's `UP035` must not move them.
 """
 
 from __future__ import annotations
 
-# ruff: noqa: F401, F405
-import abc as _abc
-import array as _array
-import builtins as _builtins
-import collections.abc as _collections_abc
-import dataclasses as _dataclasses
-import functools as _functools
-import inspect as _inspect
-import mmap as _mmap
-import pickle as _pickle
-import sys as _sys
-import types as _types
-import typing as _typing
-from typing import *  # noqa: F403 [undefined-local-with-import-star]
-from typing import overload
+import abc
+import array
+import collections
+import collections.abc
+import contextlib
+import dataclasses
+import functools
+import inspect
+import mmap
+import pickle
+import re
+import types
+import typing
+from collections.abc import (
+    Buffer,
+    Callable,
+    Generator,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    ClassVar,
+    Final,
+    ForwardRef,
+    Generic,
+    Literal,
+    Never,
+    NotRequired,
+    Optional,
+    ParamSpec,
+    Self,
+    SupportsBytes,
+    TypeAlias,
+    TypeAliasType,
+    TypedDict,
+    TypeGuard,
+    TypeVar,
+    Union,
+    final,
+    get_args,
+    get_origin,
+    overload,
+)
 
 import numpy.typing as npt
-import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
+import typing_extensions
+from typing_extensions import Protocol, TypeIs, get_type_hints, runtime_checkable
 
 
-# Re-export the standard collection types under the names the star imports above bind to
-# their deprecated 'typing' counterparts, so that e.g. 'Sequence' is
-# 'collections.abc.Sequence' rather than 'typing.Sequence'. This block must stay *below*
-# the star imports, since it deliberately rebinds names those imports also define; the
-# 'isort: split' marker keeps the import sorter from hoisting it. The builtin generics
-# are deliberately not re-exported under their old 'typing' spellings; see
-# '_DEPRECATED_TYPING_ALIASES' below.
-# isort: split
-from collections import (
-    ChainMap as ChainMap,
-    Counter as Counter,
-    OrderedDict as OrderedDict,
-    defaultdict as defaultdict,
-    deque as deque,
-)
-from collections.abc import (
-    AsyncGenerator as AsyncGenerator,
-    AsyncIterable as AsyncIterable,
-    AsyncIterator as AsyncIterator,
-    Awaitable as Awaitable,
-    ByteString as ByteString,
-    Callable as Callable,
-    Collection as Collection,
-    Container as Container,
-    Coroutine as Coroutine,
-    Generator as Generator,
-    ItemsView as ItemsView,
-    Iterable as Iterable,
-    Iterator as Iterator,
-    KeysView as KeysView,
-    Mapping as Mapping,
-    MappingView as MappingView,
-    MutableMapping as MutableMapping,
-    MutableSequence as MutableSequence,
-    MutableSet as MutableSet,
-    Reversible as Reversible,
-    Sequence as Sequence,
-    Set as AbstractSet,
-    ValuesView as ValuesView,
-)
-from contextlib import (
-    AbstractAsyncContextManager as AsyncContextManager,
-    AbstractContextManager as ContextManager,
-)
-from re import Match as Match, Pattern as Pattern
+__all__ = [
+    "ArgsOnlyCallable",
+    "ArrayInterface",
+    "ArrayInterfaceTypedDict",
+    "CUDAArrayInterface",
+    "CUDAArrayInterfaceTypedDict",
+    "CallableKwargsInfo",
+    "DLPackBuffer",
+    "DLPackDevice",
+    "DataDescriptor",
+    "DataclassABC",
+    "DevToolsPrettyPrintable",
+    "FrozenDataclass",
+    "HasCustomHash",
+    "HashlibAlgorithm",
+    "MaybeNested",
+    "MaybeNestedInList",
+    "MaybeNestedInSequence",
+    "MaybeNestedInTuple",
+    "MultiStreamDLPackBuffer",
+    "NestedList",
+    "NestedSequence",
+    "NestedTuple",
+    "NoArgsCallable",
+    "NonDataDescriptor",
+    "OpaqueMutableMapping",
+    "ReadOnlyBuffer",
+    "ReadableBuffer",
+    "SingleDispatchCallable",
+    "SingleStreamDLPackBuffer",
+    "SingleTypeAnnotation",
+    "SolvedTypeAnnotation",
+    "SourceTypeAnnotation",
+    "StdGenericAliasType",
+    "StrictArrayInterface",
+    "StrictCUDAArrayInterface",
+    "SupportsArray",
+    "TypeAnnotation",
+    "TypedNamedTupleABC",
+    "WriteableBuffer",
+    "eval_forward_ref",
+    "eval_type_alias",
+    "get_actual_type",
+    "get_partial_type_hints",
+    "get_represented_types",
+    "has_type_parameters",
+    "infer_type",
+    "is_Any",
+    "is_actual_type",
+    "is_maybe_nested_in_tuple_of",
+    "is_nested_tuple_of",
+    "is_single_dispatch_callable",
+    "is_type_alias",
+    "is_type_with_custom_hash",
+    "normalize_union",
+    "resolve_annotation",
+    "strip_annotated",
+    "supports_array",
+    "supports_array_interface",
+    "supports_cuda_array_interface",
+    "supports_dlpack",
+]
 
 
-# The 'typing' aliases of the builtin generics are deprecated since PEP 585 and are no
-# longer re-exported: use the builtin spelling instead. They are not simply absent from
-# this module -- the star imports above bind them, and '__getattr__' below would happily
-# forward them to 'typing' -- so they are dropped from the namespace here and rejected
-# explicitly. Without this, removing them would silently downgrade every use site from
-# the builtin to the deprecated 'typing' object. Note that this is a runtime guarantee
-# only: a type checker still resolves the names through the star imports.
-_DEPRECATED_TYPING_ALIASES: Final[Mapping[str, str]] = {
-    "Dict": "dict",
-    "FrozenSet": "frozenset",
-    "List": "list",
-    "Set": "set",
-    "Tuple": "tuple",
-    "Type": "type",
-}
+# -- Forward-reference resolution --
+#
+# A forward reference is a string, so resolving it needs a namespace to evaluate it
+# in. When the caller provides none, 'eval_forward_ref' uses the one built below.
 
-for _alias in _DEPRECATED_TYPING_ALIASES:
-    globals().pop(_alias, None)
-del _alias
-
-# The names are still valid in user-written annotations, and resolving a forward
-# reference through this module has always normalized them to the builtin generic
-# ('typing.List[int]' -> 'list[int]'). Keep that mapping available to the forward-ref
-# machinery below, which would otherwise either raise or hand back the deprecated
-# 'typing' object.
+#: The 'typing' aliases of the builtin generics are deprecated by PEP 585, but they
+#: stay valid in user-written annotations, and resolving one through this module has
+#: always normalized it to the builtin generic ('typing.List[int]' -> 'list[int]').
 _DEPRECATED_ALIAS_REPLACEMENTS: Final[Mapping[str, Any]] = {
-    name: getattr(_builtins, replacement)
-    for name, replacement in _DEPRECATED_TYPING_ALIASES.items()
+    "Dict": dict,
+    "FrozenSet": frozenset,
+    "List": list,
+    "Set": set,
+    "Tuple": tuple,
+    "Type": type,
 }
+
+#: Names that a forward reference may use and that must resolve to the
+#: 'collections.abc' / 'collections' / 'contextlib' / 're' object rather than to the
+#: deprecated 'typing' alias of the same name.
+_NON_TYPING_ALIASES: Final[Mapping[str, Any]] = {
+    **{
+        name: getattr(collections.abc, name)
+        for name in (
+            "AsyncGenerator",
+            "AsyncIterable",
+            "AsyncIterator",
+            "Awaitable",
+            "ByteString",
+            "Callable",
+            "Collection",
+            "Container",
+            "Coroutine",
+            "Generator",
+            "ItemsView",
+            "Iterable",
+            "Iterator",
+            "KeysView",
+            "Mapping",
+            "MappingView",
+            "MutableMapping",
+            "MutableSequence",
+            "MutableSet",
+            "Reversible",
+            "Sequence",
+            "ValuesView",
+        )
+    },
+    "AbstractSet": collections.abc.Set,
+    "ChainMap": collections.ChainMap,
+    "Counter": collections.Counter,
+    "OrderedDict": collections.OrderedDict,
+    "defaultdict": collections.defaultdict,
+    "deque": collections.deque,
+    "AsyncContextManager": contextlib.AbstractAsyncContextManager,
+    "ContextManager": contextlib.AbstractContextManager,
+    "Match": re.Match,
+    "Pattern": re.Pattern,
+}
+
+
+@functools.cache
+def _forward_ref_namespace() -> dict[str, Any]:
+    """Namespace used to resolve a forward reference when the caller provides none.
+
+    Later entries win, so the precedence is: the public names of 'typing', then those
+    of 'typing_extensions', then the non-'typing' spellings of the container
+    protocols, then this module's own definitions ('__all__'), then the builtin
+    generics standing in for the deprecated 'typing' aliases.
+    """
+    namespace: dict[str, Any] = {name: getattr(typing, name) for name in typing.__all__}
+    namespace.update((name, getattr(typing_extensions, name)) for name in typing_extensions.__all__)
+    namespace.update(_NON_TYPING_ALIASES)
+    namespace.update((name, globals()[name]) for name in __all__)
+    namespace.update(_DEPRECATED_ALIAS_REPLACEMENTS)
+    return namespace
 
 
 class _ForwardRefTypingNamespace:
     """Namespace bound to the name 'typing' while evaluating forward references.
 
-    Annotations resolve through this module, so that 'typing_extensions' definitions
-    take priority and the standard collection types are used. The deprecated builtin
-    aliases are not re-exported here, but they stay valid in user-written annotations,
-    so 'typing.List[int]' resolves to 'list[int]' rather than raising.
+    A reference spelled 'typing.Sequence[int]' resolves through this object, so that
+    'typing_extensions' definitions take priority, the container protocols come from
+    'collections.abc', and the deprecated builtin aliases give back the builtin
+    generic instead of the deprecated 'typing' object.
     """
 
     def __getattr__(self, name: str) -> Any:
-        if (replacement := _DEPRECATED_ALIAS_REPLACEMENTS.get(name)) is not None:
-            return replacement
-        return getattr(_sys.modules[__name__], name)
+        namespace = _forward_ref_namespace()
+        if name in namespace:
+            return namespace[name]
+        # Like the real modules, 'typing.X' also reaches names outside '__all__'.
+        if not (name.startswith("__") and name.endswith("__")):
+            for module in (typing_extensions, typing):
+                if hasattr(module, name):
+                    return getattr(module, name)
+        raise AttributeError(f"Module 'typing' has no attribute '{name}'.")
 
 
 _FORWARD_REF_TYPING_NS: Final = _ForwardRefTypingNamespace()
-
-
-# These fallbacks are useful for public symbols not exported by default.
-# Again, definitions in 'typing_extensions' take priority over those in 'typing'
-def __getattr__(name: str) -> Any:
-    import sys
-
-    import typing_extensions
-
-    if (replacement := _DEPRECATED_TYPING_ALIASES.get(name)) is not None:
-        raise AttributeError(
-            f"'{name}' is a deprecated 'typing' alias (PEP 585) and is not exported by"
-            f" '{__name__}'. Use '{replacement}' instead."
-        )
-
-    result = SENTINEL = object()
-    if not (name.startswith("__") and name.endswith("__")):
-        result = getattr(typing_extensions, name, SENTINEL)
-        if result is SENTINEL:
-            import typing
-
-            result = getattr(typing, name, SENTINEL)
-
-    if result is SENTINEL:
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
-
-    setattr(sys.modules[__name__], name, result)  # cache result
-
-    return result
-
-
-def __dir__() -> list[str]:
-    if not hasattr(self_func := (globals()["__dir__"]), "__cached_dir"):
-        import typing
-
-        import typing_extensions
-
-        # Everything reachable through '__getattr__' plus this module's own definitions,
-        # minus the aliases '__getattr__' explicitly rejects.
-        names = {*typing.__dir__(), *typing_extensions.__dir__(), *globals()}
-        self_func.__cached_dir = sorted(names - _DEPRECATED_TYPING_ALIASES.keys())
-
-    return self_func.__cached_dir
 
 
 # -- Common type aliases --
@@ -215,14 +281,14 @@ def is_maybe_nested_in_tuple_of(
 # -- Typing annotations --
 SingleTypeAnnotation = Union[
     type[Any],
-    _types.GenericAlias,
-    _typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
+    types.GenericAlias,
+    typing._BaseGenericAlias,  # type: ignore[name-defined]  # _BaseGenericAlias is not exported in stub
     # Both PEP 695 type alias implementations, for the same reason as in `_TypeAliasTypes`
-    _typing.TypeAliasType,
-    _typing_extensions.TypeAliasType,
+    typing.TypeAliasType,
+    typing_extensions.TypeAliasType,
 ]
 
-SolvedTypeAnnotation = Union[SingleTypeAnnotation, _typing._SpecialForm]
+SolvedTypeAnnotation = Union[SingleTypeAnnotation, typing._SpecialForm]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
 SourceTypeAnnotation = Union[str, TypeAnnotation]
@@ -230,10 +296,10 @@ SourceTypeAnnotation = Union[str, TypeAnnotation]
 StdGenericAliasType: Final[type[Any]] = type(list[int])
 
 if TYPE_CHECKING:
-    StdGenericAlias: TypeAlias = _types.GenericAlias
+    StdGenericAlias: TypeAlias = types.GenericAlias
 
-_TypingSpecialFormType: Final[type[Any]] = _typing._SpecialForm
-_TypingGenericAliasType: Final[type[Any]] = _typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
+_TypingSpecialFormType: Final[type[Any]] = typing._SpecialForm
+_TypingGenericAliasType: Final[type[Any]] = typing._BaseGenericAlias  # type: ignore[attr-defined]  # _BaseGenericAlias / _GenericAlias are not exported in stub
 
 
 # -- Standard Python protocols --
@@ -274,7 +340,7 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
 # -- Based on typeshed definitions --
 ReadOnlyBuffer: TypeAlias = Union[bytes, SupportsBytes]
 WriteableBuffer: TypeAlias = Union[
-    bytearray, memoryview, _array.array, _mmap.mmap, _pickle.PickleBuffer
+    bytearray, memoryview, array.array, mmap.mmap, pickle.PickleBuffer
 ]
 ReadableBuffer: TypeAlias = Union[ReadOnlyBuffer, WriteableBuffer]
 
@@ -440,7 +506,7 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-_ArtefactTypes: Final[tuple[type, ...]] = (_types.GenericAlias, _typing.Any)
+_ArtefactTypes: Final[tuple[type, ...]] = (types.GenericAlias, typing.Any)
 
 
 def is_actual_type(obj: Any) -> TypeGuard[type[Any]]:
@@ -478,12 +544,12 @@ def normalize_union(annotation: Any) -> Any:
         >>> normalize_union(int) is int
         True
     """
-    if isinstance(annotation, _types.UnionType) and get_origin(annotation) is not _typing.Union:
+    if isinstance(annotation, types.UnionType) and get_origin(annotation) is not typing.Union:
         # The second test matters only on 3.14, where 'typing.Union' *is*
         # 'types.UnionType': every union passes the 'isinstance' there, so without it
         # an already-normalized annotation would be rebuilt into an equal but not
         # identical object, breaking the ``is`` check this function promises.
-        return _typing.Union[annotation.__args__]
+        return typing.Union[annotation.__args__]
     return annotation
 
 
@@ -534,8 +600,8 @@ def strip_annotated(annotation: Any) -> Any:
 #: not equivalent -- ``MyGenericAlias[int]`` proxies attribute lookups to its origin and
 #: passes it without being an alias.
 _TypeAliasTypes: Final[tuple[type, ...]] = (
-    _typing.TypeAliasType,
-    _typing_extensions.TypeAliasType,
+    typing.TypeAliasType,
+    typing_extensions.TypeAliasType,
 )
 
 #: Upper bound for the number of resolution steps in `eval_type_alias`. True cycles are
@@ -679,12 +745,12 @@ def is_Any(obj: Any) -> bool:
     """Check if an object is the ``Any`` special form."""
     # 'typing_extensions' re-exports 'typing.Any' on every supported version, so the
     # two implementations that used to exist below the 3.11 floor are now one object.
-    return obj is _typing.Any
+    return obj is typing.Any
 
 
 def has_type_parameters(cls: type[Any]) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
-    return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
+    return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0
 
 
 def get_actual_type(obj: _T) -> type[_T]:
@@ -699,10 +765,10 @@ def get_represented_types(
     localns: Optional[dict[str, Any]] = None,
 ) -> tuple[type, ...]:
     """Return a tuple with all the actual types contained in a type annotation."""
-    recurse = _functools.partial(get_represented_types, globalns=globalns, localns=localns)
+    recurse = functools.partial(get_represented_types, globalns=globalns, localns=localns)
 
     def recurse_all(annotations: Iterable[TypeAnnotation]) -> tuple[type, ...]:
-        return _functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
+        return functools.reduce(lambda acc, c: acc + recurse(c), annotations, ())
 
     # PEP 695 aliases are opaque objects which no other branch below matches, so an
     # unresolved one would silently yield an empty tuple, and the 'Annotated' special
@@ -736,7 +802,7 @@ def get_represented_types(
         # into: the type each one represents is its own type.
         return tuple(dict.fromkeys(type(arg) for arg in type_args))
 
-    if origin_type in [Union, _types.UnionType]:
+    if origin_type in [Union, types.UnionType]:
         return recurse_all(t for t in type_args)
 
     if origin_type is not None:
@@ -757,80 +823,80 @@ class HasCustomHash(Hashable):
         return is_type_with_custom_hash(candidate_cls)
 
 
-class TypedNamedTupleABC(_abc.ABC, Generic[_T_co]):
-    """ABC for `tuple` subclasses created with `collections.abc.namedtuple()`."""
+class TypedNamedTupleABC(abc.ABC, Generic[_T_co]):
+    """ABC for `tuple` subclasses created with `collections.namedtuple()`."""
 
     # Replicate the standard tuple API
     @overload
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __getitem__(self, index: int) -> _T_co: ...
 
     @overload
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __getitem__(self, index: slice) -> Self: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __getitem__(self, index: Union[int, slice]) -> Union[_T_co, Self]: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __len__(self) -> int: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __contains__(self, value: object) -> bool: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __iter__(self) -> Iterator[_T_co]: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __add__(self, other: Self) -> Self: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __mul__(self, other: int) -> Self: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __rmul__(self, other: int) -> Self: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def index(self, value: Any, start: int = 0, stop: Optional[int] = None) -> int: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def count(self, value: Any) -> int: ...
 
     # Add specific namedtuple methods
     _fields: ClassVar[tuple[str, ...]]
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def _make(self, iterable: Iterable) -> Self: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def _asdict(self) -> dict[str, Any]: ...
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def _replace(self, **kwargs: Any) -> Self: ...
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
         return (
             issubclass(subclass, tuple)
-            and (_typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
+            and (typing.NamedTuple in getattr(subclass, "__orig_bases__", ()))
         ) or (
             (field_names := getattr(subclass, "_fields", None)) is not None
-            and {*field_names} <= _typing.get_type_hints(subclass).keys()
+            and {*field_names} <= typing.get_type_hints(subclass).keys()
         )
 
 
-class DataclassABC(_abc.ABC):
+class DataclassABC(abc.ABC):
     """ABC for data classes."""
 
-    __dataclass_fields__: ClassVar[dict[str, _dataclasses.Field]]
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field]]
     __dataclass_params__: ClassVar[_DataclassParamsABC]
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
-        return _dataclasses.is_dataclass(subclass)
+        return dataclasses.is_dataclass(subclass)
 
 
-class _DataclassParamsABC(_abc.ABC):
+class _DataclassParamsABC(abc.ABC):
     init: bool
     repr: bool
     eq: bool
@@ -848,13 +914,13 @@ class FrozenDataclass(DataclassABC):
 
     __dataclass_params__: ClassVar[_FrozenDataclassParamsABC]
 
-    @_abc.abstractmethod
+    @abc.abstractmethod
     def __setattr__(self, name: str, value: Any) -> Never: ...
 
     @classmethod
     def __subclasshook__(cls, subclass: type) -> bool:
         try:
-            return _dataclasses.is_dataclass(subclass) and (
+            return dataclasses.is_dataclass(subclass) and (
                 subclass.__dataclass_params__.frozen is True  # type: ignore[attr-defined]  # subclass.__dataclass_params__ is ok after check
             )
         except AttributeError:
@@ -881,20 +947,17 @@ class OpaqueMutableMapping(Protocol[_KT, _VT]):
     def __delitem__(self, key: _KT) -> None: ...
 
 
-is_protocol = _typing_extensions.is_protocol
-
-
 def get_partial_type_hints(
     obj: Union[
         object,
         Callable,
-        _types.FunctionType,
-        _types.BuiltinFunctionType,
-        _types.MethodType,
-        _types.ModuleType,
-        _types.WrapperDescriptorType,
-        _types.MethodWrapperType,
-        _types.MethodDescriptorType,
+        types.FunctionType,
+        types.BuiltinFunctionType,
+        types.MethodType,
+        types.ModuleType,
+        types.WrapperDescriptorType,
+        types.MethodWrapperType,
+        types.MethodDescriptorType,
     ],
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
@@ -928,7 +991,7 @@ def get_partial_type_hints(
                 # the fix applied in bpo-41370. Check:
                 # https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
                 hints[name] = ForwardRef(hint)
-            elif isinstance(hint, (ForwardRef, _typing.ForwardRef)):
+            elif isinstance(hint, (ForwardRef, typing.ForwardRef)):
                 hints[name] = hint
             else:
                 raise error
@@ -969,11 +1032,11 @@ def eval_forward_ref(
     safe_localns.setdefault("NoneType", type(None))
 
     if globalns is None:
-        # Without an explicit 'globalns' the reference is resolved in this module's
-        # namespace, which used to spell the deprecated aliases as the builtin generics.
-        # They are no longer defined here, so re-add them for this evaluation only; a
-        # caller-provided 'globalns' is left untouched, exactly as before.
-        globalns = {**globals(), **_DEPRECATED_ALIAS_REPLACEMENTS}
+        # No caller-provided namespace: resolve against the explicit one, which spells
+        # the container protocols as their 'collections.abc' objects and the deprecated
+        # 'typing' aliases as the builtin generics. A caller-provided 'globalns' is left
+        # untouched.
+        globalns = _forward_ref_namespace()
 
     actual_type = get_type_hints(f, globalns, safe_localns, include_extras=include_extras)["return"]
     assert not isinstance(actual_type, ForwardRef)
@@ -989,7 +1052,7 @@ def _collapse_type_args(*args: Any) -> tuple[bool, tuple]:
 
 
 @final
-@_dataclasses.dataclass
+@dataclasses.dataclass
 class CallableKwargsInfo:
     data: dict[str, Any]
 
@@ -1056,7 +1119,7 @@ def infer_type(
         <class 'float'>
 
     """
-    _infer = _functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
+    _infer = functools.partial(infer_type, annotate_callable_kwargs=annotate_callable_kwargs)
 
     # Annotations are returned unchanged rather than described: PEP 585 generics,
     # bare special forms, parametrized 'typing' aliases ('Optional[int]'), PEP 604
@@ -1099,25 +1162,25 @@ def infer_type(
         vt = values[0] if unique_value_type else Any
         return StdGenericAliasType(dict, (kt, vt))
 
-    if isinstance(value, _types.FunctionType):
+    if isinstance(value, types.FunctionType):
         try:
             annotations = get_type_hints(value)
             return_type = annotations.get("return", Any)
 
-            sig = _inspect.signature(value)
+            sig = inspect.signature(value)
             arg_types: list = []
             kwonly_arg_types: dict[str, Any] = {}
             for p in sig.parameters.values():
                 if p.kind in (
-                    _inspect.Parameter.POSITIONAL_ONLY,
-                    _inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 ):
                     arg_types.append(annotations.get(p.name, None) or Any)
-                elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
+                elif p.kind == inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
                 elif p.kind in (
-                    _inspect.Parameter.VAR_POSITIONAL,
-                    _inspect.Parameter.VAR_KEYWORD,
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
                 ):
                     raise TypeError("Variadic callables are not supported")
 

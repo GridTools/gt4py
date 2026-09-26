@@ -16,7 +16,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import utils as eve_utils, xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors

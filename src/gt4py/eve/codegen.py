@@ -21,28 +21,16 @@ import subprocess
 import sys
 import textwrap
 import types
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
+from typing import Any, ClassVar, Optional, TypeVar, Union, overload
 
 import black
 import jinja2
 from mako import template as mako_tpl
+from typing_extensions import Protocol, runtime_checkable
 
 from . import exceptions, utils
 from .concepts import CollectionNode, LeafNode, Node, RootNode
-from .extended_typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Collection,
-    Iterator,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeVar,
-    Union,
-    overload,
-    runtime_checkable,
-)
 from .visitors import NodeVisitor
 
 
