@@ -256,7 +256,7 @@ def add_configurable_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None
         )
     else:
         sdfg.append_init_code(
-            f"__dace_gpu_set_all_streams(__state, {external_gpu_stream});",
+            f"__dace_gpu_set_all_streams(__state, reinterpret_cast<gpuStream_t>({external_gpu_stream}));",
             location="cuda",
         )
 
