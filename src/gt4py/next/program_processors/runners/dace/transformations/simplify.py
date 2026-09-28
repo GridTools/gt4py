@@ -531,6 +531,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     - There is a `dest_storage` access node, that has an output degree larger
         than one.
 
+    Furthermore, the relocation will not happen if the state where `temp_storage`
+    is defined is nested inside a loop region. There the write back would be
+    executed in every iteration, potentially on data that the loop has only
+    written partially.
+
     Note:
         - Essentially this transformation removes the double buffering of
             `dest_storage`. Because we ensure that that `dest_storage` is non
@@ -655,6 +660,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                     continue
                 if state.out_degree(temp_storage) != 1:
                     continue
+                # The write-back node must not be written to in this state (see
+                #  the class description), which excludes transients receiving
+                #  partial writes from multiple states, e.g. `concat_where`.
+                if state.in_degree(temp_storage) != 0:
+                    continue
                 dst_candidate: dace_nodes.AccessNode = next(
                     iter(edge.dst for edge in state.out_edges(temp_storage))
                 )
@@ -681,6 +691,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
             temp_storage_node, temp_storage_state = temp_storage
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(temp_storage_state):
+                if self._is_inside_loop(sdfg, upstream_state):
+                    # The definition of `temp_storage` is inside a loop. Moving the
+                    #  write back there would execute it in every iteration, thus
+                    #  on data that has potentially only been written partially.
+                    continue
                 if self._is_written_to_in_state(
                     data=temp_storage_node.data,
                     state=upstream_state,
@@ -763,6 +778,28 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 result.append((wb_location, def_locations))
 
         return result
+
+    def _is_inside_loop(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+    ) -> bool:
+        """Checks if `state` is located inside a loop region.
+
+        Args:
+            sdfg: The SDFG on which we operate.
+            state: The state that should be examined.
+
+        Returns:
+            `True` if `state` is nested inside a `LoopRegion`, at any depth,
+            `False` otherwise.
+        """
+        scope = state.parent_graph
+        while scope is not None and scope is not sdfg:
+            if isinstance(scope, dace.sdfg.state.LoopRegion):
+                return True
+            scope = scope.parent_graph
+        return False
 
     def _is_written_to_in_state(
         self,
@@ -1130,6 +1167,13 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         - Rule 3 of ADR18 should guarantee that any valid GT4Py program meets the
             point wise dependency in `G`, for that reason it is possible to disable
             this test by specifying `assume_pointwise`.
+        - If the Map also reads `G`, the rewrite moves the write into the Map body,
+            and all reads of `G` inside the Map must be dataflow-ordered before
+            the branch that produces the written value. Independent branches
+            inside a Map scope can be scheduled in any order, so a read that is
+            not ordered before the write may observe the new value instead of the
+            old one (WAR hazard inside the Map body), see
+            `_map_reads_glob_before_write()`.
 
     Todo:
         - Implement a real pointwise test.
@@ -1244,6 +1288,7 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
 
         # First we check if `G` is also an input to this map.
         conflicting_inputs: set[dace_nodes.AccessNode] = set()
+        conflicting_connectors: set[str] = set()
         for in_edge in state.in_edges(map_entry):
             if not isinstance(in_edge.src, dace_nodes.AccessNode):
                 continue
@@ -1258,11 +1303,20 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             #  actual node that is adjacent.
             if src_node.data == glob_data:
                 conflicting_inputs.add(in_edge.src)
+                if in_edge.dst_conn is not None:
+                    conflicting_connectors.add(in_edge.dst_conn)
 
         # If there are no conflicting inputs, then we are point wise.
         #  This is an implementation detail that make life simpler.
         if len(conflicting_inputs) == 0:
             return True
+
+        # The rewrite moves the write to `G` into the Map body. This is only
+        #  valid if all reads of `G` inside the Map are dataflow-ordered before
+        #  the branch that produces the written value, see the class
+        #  documentation.
+        if not self._map_reads_glob_before_write(state, map_entry, conflicting_connectors):
+            return False
 
         # If we can assume pointwise computations, then we do not have to do
         #  anything.
@@ -1273,6 +1327,68 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
         #  are not point wise.
         # TODO(phimuell): Improve/implement this.
         return any(gtx_transformations.utils.is_view(node, sdfg) for node in conflicting_inputs)
+
+    def _map_reads_glob_before_write(
+        self,
+        state: dace.SDFGState,
+        map_entry: dace_nodes.MapEntry,
+        glob_read_connectors: set[str],
+    ) -> bool:
+        """Tests if all reads of `glob` inside the Map happen before the write.
+
+        The write to the global data is performed by the branch of the Map that
+        produces the connector matched by this transformation. Because
+        independent branches inside a Map scope may be scheduled in any
+        (insertion) order, a read of the global data that is not dataflow
+        upstream of the producing branch may observe the newly written value
+        instead of the value present when the Map was entered (WAR hazard inside
+        the Map body).
+
+        Note that a read that feeds the producing branch — e.g. an in-place
+        update of the form `G[i] = f(G[i], ...)` produced by a single branch —
+        is ordered before the write by construction and is therefore admissible.
+
+        Args:
+            state: The state in which we operate.
+            map_entry: Entry of the Map whose output is rewritten.
+            glob_read_connectors: The `IN_*` scope connectors of `map_entry`
+                through which `glob` is read.
+
+        """
+        map_exit: dace_nodes.MapExit = self.map_exit
+
+        # The producing branch of the written value: the in-edges of the
+        #  MapExit connector that corresponds to the matched out edge.
+        map_to_tmp_edge = next(iter(state.in_edges(self.tmp_ac)))
+        written_conn = map_to_tmp_edge.src_conn
+        assert written_conn is not None and written_conn.startswith("OUT_")
+        inner_producer_edges = state.in_edges_by_connector(map_exit, "IN_" + written_conn[4:])
+        producer_nodes = {edge.src for edge in inner_producer_edges}
+
+        # Compute the producing branch and everything dataflow upstream of it.
+        #  Reads in this set complete before the write is performed.
+        scope_nodes = set(state.all_nodes_between(map_entry, map_exit))
+        ordered_before_write = set(producer_nodes)
+        to_visit = list(producer_nodes)
+        while to_visit:
+            node = to_visit.pop()
+            for in_edge in state.in_edges(node):
+                src = in_edge.src
+                if src in scope_nodes and src not in ordered_before_write:
+                    ordered_before_write.add(src)
+                    to_visit.append(src)
+
+        # The direct consumers of the reads of `glob` inside the Map are the
+        #  nodes attached to the `OUT_<name>` scope connectors of the MapEntry
+        #  that correspond to the `IN_<name>` connectors reading `glob`. Each of
+        #  them must be ordered before the write.
+        for in_conn in glob_read_connectors:
+            out_conn = "OUT_" + in_conn[3:]
+            for out_edge in state.out_edges_by_connector(map_entry, out_conn):
+                dst = out_edge.dst
+                if dst in scope_nodes and dst not in ordered_before_write:
+                    return False
+        return True
 
     def apply(
         self,

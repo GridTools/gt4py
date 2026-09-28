@@ -634,7 +634,14 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
 
         # End recursion if we found some successor edges or we have reached the top.
-        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+        #  Note that if `graph` is the root region (e.g. for a terminal state at
+        #  the top level of the SDFG) its `parent_graph` is `None`, not the SDFG
+        #  itself, so that case must be handled explicitly.
+        if (
+            len(curr_out_edges) > 0
+            or graph.parent_graph is state.sdfg
+            or graph.parent_graph is None
+        ):
             return curr_out_edges
         elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
             # For conditional we go two levels up, because there is nothing
