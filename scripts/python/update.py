@@ -17,10 +17,10 @@ import re
 import subprocess
 import tomllib
 
-import packaging
 import rich
 import typer
 from helpers import common
+from packaging.version import InvalidVersion, Version
 
 
 class ExitCode(enum.IntEnum):
@@ -86,8 +86,8 @@ def precommit() -> None:
 def package_version(new_version_number: str) -> None:
     """Hardcode a new version-in-git default version, for cases when git is not available."""
     try:
-        packaging.version.Version(new_version_number)  # Validate version string
-    except packaging.InvalidVersion as e:
+        Version(new_version_number)  # Validate version string
+    except InvalidVersion as e:
         rich.print(f"[red]Error:[/red] '{new_version_number}' is not a valid version string.")
         raise typer.Exit(ExitCode.INVALID_NEW_VERSION_STRING) from e
 
