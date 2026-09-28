@@ -34,6 +34,14 @@ SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
+SDFG_ARG_EXTERNAL_GPU_STREAM: Final[str] = "gt_external_gpu_stream"
+"""Name of SDFG argument to input an external GPU stream to GT4Py."""
+
+
+SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE: Final[dace.dtypes.typeclass] = dace.int64
+"""DaCe datatype of `SDFG_ARG_EXTERNAL_GPU_STREAM` argument, the stream handle as integer."""
+
+
 ExternalWorkspace: TypeAlias = dict[
     core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
 ]
@@ -149,7 +157,7 @@ def set_dace_config(
     # Use the experimental CUDA codegen: unlike the legacy one, it launches kernels
     #  and copies on the streams stored in `__state->gpu_context->streams`, even
     #  when `max_concurrent_streams` is `-1`. This allows to replace the default
-    #  stream with an external stream, see `set_sdfg_gpu_stream()`.
+    #  stream with an external stream, see `add_external_gpu_stream_arg()`.
     dace.Config.set("compiler.cuda.implementation", value="experimental")
 
     # The experimental CUDA codegen synchronizes the GPU streams at the end of

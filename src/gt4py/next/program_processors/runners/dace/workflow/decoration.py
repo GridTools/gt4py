@@ -34,7 +34,9 @@ class DaCeDecoratedProgram:
     program. External workspace memory (when the SDFG uses
     ``TransientMemoryMode.EXTERNAL``) is installed onto the underlying
     ``CompiledDaceProgram`` before the first call via `set_external_workspace`;
-    its lifetime is owned by the caller, not by this wrapper.
+    its lifetime is owned by the caller, not by this wrapper. Similarly, an external
+    GPU stream can be set before the first call via `set_external_gpu_stream`; it
+    is passed as argument to the SDFG and applied on SDFG initialization.
     """
 
     def __init__(
@@ -43,6 +45,7 @@ class DaCeDecoratedProgram:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
     ) -> None:
         self._fun = fun
+        self._external_gpu_stream: int | None = None
         # Retrieve metrics level from GT4Py environment variable.
         self._collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
         self._collect_time_arg = np.array(
@@ -85,6 +88,11 @@ class DaCeDecoratedProgram:
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
             }
+            if gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM in self._fun.sdfg_program.sdfg.symbols:
+                # The value `0` selects the default stream.
+                this_call_args[gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM] = (
+                    self._external_gpu_stream or 0
+                )
             self._fun.construct_arguments(**this_call_args)
 
         # Perform the call to the SDFG.
@@ -101,3 +109,15 @@ class DaCeDecoratedProgram:
         This method should be called before the first call to the program.
         """
         self._fun.external_workspace = external_workspace
+
+    def set_external_gpu_stream(self, external_gpu_stream: int | None) -> None:
+        """Set the external GPU stream used by the underlying compiled program.
+
+        This method should be called before the first call to the program, because
+        the stream is applied on SDFG initialization. `None` selects the default stream.
+        """
+        if self._fun.csdfg_argv is not None:
+            raise RuntimeError(
+                "The external GPU stream must be set before the first call to the program."
+            )
+        self._external_gpu_stream = external_gpu_stream
