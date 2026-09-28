@@ -261,28 +261,33 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
     sdfg.validate()
 
 
-def set_sdfg_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None) -> None:
-    """Set the GPU stream used for all GPU work of the SDFG.
+def add_external_gpu_stream_arg(sdfg: dace.SDFG) -> None:
+    """Add an SDFG argument to set the GPU stream used for all GPU work of the SDFG.
 
     Running the SDFG on an external GPU stream allows to synchronize the execution
     of GPU kernels with external workload and to share the stream memory pool.
-    The stream is written into the SDFG init code, thus it is fixed at compile time.
+    The stream handle is a pointer, which in general changes from run to run of
+    the application, therefore it cannot be a compile-time value. Instead, it is
+    passed as the SDFG argument `SDFG_ARG_EXTERNAL_GPU_STREAM` and applied in the
+    SDFG init code, which runs once on the first SDFG call. The value `0` selects
+    the default stream.
 
     Args:
         sdfg: The SDFG to process, modified in place.
-        external_gpu_stream: The handle of the external GPU stream, as an integer
-            value. If `None`, the default stream is used.
     """
-    gpu_stream = (
-        "nullptr"  # The default stream.
-        if external_gpu_stream is None
-        else f"reinterpret_cast<gpuStream_t>({external_gpu_stream})"
+    # NOTE: The argument has to be an SDFG symbol, not a scalar data container,
+    #  because DaCe only passes the symbols to the SDFG init functions.
+    stream_arg = sdfg.add_symbol(
+        gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM,
+        gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE,
     )
 
     # NOTE: The experimental DaCe CUDA codegen does not provide the helper function
     #  `__dace_gpu_set_all_streams()`, therefore we write the stream array directly.
+    #  The stream handle `0` is cast to `nullptr`, that is the default stream.
     sdfg.append_init_code(
-        _for_each_sdfg_gpu_stream(f"__stream = {gpu_stream};") + "\n",
+        _for_each_sdfg_gpu_stream(f"__stream = reinterpret_cast<gpuStream_t>({stream_arg});")
+        + "\n",
         location="cuda",
     )
 
@@ -348,7 +353,6 @@ class DaCeTranslator(
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     sync_sdfg_call: bool
-    external_gpu_stream: int | None
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
@@ -444,7 +448,7 @@ class DaCeTranslator(
             add_instrumentation(sdfg, on_gpu)
 
         if on_gpu:
-            set_sdfg_gpu_stream(sdfg, self.external_gpu_stream)
+            add_external_gpu_stream_arg(sdfg)
 
         return sdfg
 
