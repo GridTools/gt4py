@@ -2530,6 +2530,37 @@ def test_invert_domain(domain, expected):
     assert result == expected
 
 
+@pytest.mark.parametrize("false_range", [(0, 6), (2, 6)], ids=["covering", "partial"])
+def test_concat_where_select_matches_concatenation(false_range):
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    true_values = np.arange(6, dtype=np.float64)
+    false_values = -np.arange(*false_range, dtype=np.float64)
+    true_field = common._field(true_values, domain=common.domain({K: (0, 6)}))
+    false_field = common._field(false_values, domain=common.domain({K: false_range}))
+
+    result = concat_where(common.domain({K: (0, 3)}), true_field, false_field)
+
+    assert result.domain == common.domain({K: (0, 6)})
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_concat_where_on_covering_branches_is_a_select():
+    import jax
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    domain = common.domain({K: (0, 6)})
+    true_field = common._field(jax.numpy.arange(6, dtype=np.float64), domain=domain)
+    false_field = common._field(-jax.numpy.arange(6, dtype=np.float64), domain=domain)
+
+    select = jax.jit(lambda t, f: concat_where(common.domain({K: (0, 3)}), t, f))
+
+    assert "concatenate(" not in select.lower(true_field, false_field).compile().as_text()
+    np.testing.assert_array_equal(
+        select(true_field, false_field).asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0]
+    )
+
+
 @pytest.mark.uses_concat_where
 @pytest.mark.parametrize(
     "fields_data, dim, expected_data, expect_error",

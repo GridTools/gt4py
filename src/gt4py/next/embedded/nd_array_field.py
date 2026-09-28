@@ -979,7 +979,46 @@ def _concat_where(
         # no data to concatenate, return an empty field
         like = next(f for f in (true_field, false_field) if isinstance(f, NdArrayField))
         return _size0_field(like, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
+    if t_slices and f_slices:
+        pieces = (*t_slices, *f_slices)
+        result_range = common.UnitRange(
+            min(p.domain[domain_dim].unit_range.start for p in pieces),
+            max(p.domain[domain_dim].unit_range.stop for p in pieces),
+        )
+        if all(
+            f.domain[domain_dim].unit_range.start <= result_range.start
+            and result_range.stop <= f.domain[domain_dim].unit_range.stop
+            for f in (t_broadcasted, f_broadcasted)
+        ):
+            return _where_on_range(
+                cast(NdArrayField, t_broadcasted),
+                cast(NdArrayField, f_broadcasted),
+                domain,
+                result_range,
+            )
     return _concat(*f_slices, *t_slices, dim=domain_dim)
+
+
+def _where_on_range(
+    true_field: NdArrayField,
+    false_field: NdArrayField,
+    condition: common.Domain,
+    result_range: common.UnitRange,
+) -> NdArrayField:
+    """`concat_where` for branches that both cover `result_range`: a select instead of a concatenation."""
+    (dim,) = condition.dims
+    result_domain = true_field.domain.replace(dim, common.NamedRange(dim, result_range))
+    xp = true_field.array_ns
+    axis = result_domain.dim_index(dim, allow_missing=False)
+    coords = xp.arange(result_range.start, result_range.stop)
+    mask = (coords >= max(condition[dim].unit_range.start, result_range.start)) & (
+        coords < min(condition[dim].unit_range.stop, result_range.stop)
+    )
+    mask = xp.reshape(mask, tuple(-1 if i == axis else 1 for i in range(result_domain.ndim)))
+    new_buffer = xp.where(
+        mask, true_field[result_domain].ndarray, false_field[result_domain].ndarray
+    )
+    return true_field.__class__.from_array(new_buffer, domain=result_domain)
 
 
 _register_builtin(experimental.concat_where, _concat_where)
