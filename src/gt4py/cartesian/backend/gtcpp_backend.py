@@ -45,15 +45,11 @@ class GTExtGenerator(BackendCodegen):
         )
         oir_node = oir_pipeline.run(base_oir)
         gtcpp_ir = OIRToGTCpp().visit(oir_node)
-        format_source = self.backend.builder.options.format_source
         implementation = gtcpp_codegen.GTCppCodegen.apply(
-            gtcpp_ir, gt_backend_t=self.backend.GT_BACKEND_T, format_source=format_source
+            gtcpp_ir, gt_backend_t=self.backend.GT_BACKEND_T
         )
         bindings = GTCppBindingsCodegen.apply(
-            gtcpp_ir,
-            module_name=self.module_name,
-            backend=self.backend,
-            format_source=format_source,
+            gtcpp_ir, module_name=self.module_name, backend=self.backend
         )
         bindings_ext = ".cu" if self.backend.GT_BACKEND_T == "gpu" else ".cpp"
         return {
@@ -115,11 +111,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
 
     @classmethod
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
-        generated_code = cls(kwargs.get("backend")).visit(root, module_name=module_name, **kwargs)
-        if kwargs.get("format_source", True):
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
-
-        return generated_code
+        return cls(kwargs.get("backend")).visit(root, module_name=module_name, **kwargs)
 
 
 class GTBaseBackend(BaseGTBackend):

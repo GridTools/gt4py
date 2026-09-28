@@ -324,8 +324,4 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             raise ValueError("apply() requires gtcpp.Progam root node")
         if "gt_backend_t" not in kwargs:
             raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
-        generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
-        if kwargs.get("format_source", True):
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
-
-        return generated_code
+        return super().apply(root, offset_limit=_offset_limit(root), **kwargs)

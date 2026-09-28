@@ -15,7 +15,6 @@ import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
@@ -171,8 +170,7 @@ class GTFNTranslationStep(
             column_axis=column_axis,
         )
 
-        generated_code = GTFNCodegen.apply(gtfn_ir)
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        return GTFNCodegen.apply(gtfn_ir)
 
     def __call__(
         self, inp: stages.CompilableProgramDef
@@ -209,14 +207,13 @@ class GTFNTranslationStep(
             inp.args.offset_provider,
             inp.args.column_axis,
         )
-        source_code = artifacts.format_source(
-            self._code_spec(),
-            f"""
-                    #include <{self._backend_header()}>
-                    #include <gridtools/sid/dimension_to_tuple_like.hpp>
-                    {stencil_src}
-                    {decl_src}
-                    """.strip(),
+        source_code = "\n".join(
+            [
+                f"#include <{self._backend_header()}>",
+                "#include <gridtools/sid/dimension_to_tuple_like.hpp>",
+                stencil_src,
+                decl_src,
+            ]
         )
 
         module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
