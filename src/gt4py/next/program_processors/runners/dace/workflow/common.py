@@ -149,7 +149,7 @@ def set_dace_config(
     # Use the experimental CUDA codegen: unlike the legacy one, it launches kernels
     #  and copies on the streams stored in `__state->gpu_context->streams`, even
     #  when `max_concurrent_streams` is `-1`. This allows to replace the default
-    #  stream with an external stream, see `add_configurable_gpu_stream()`.
+    #  stream with an external stream, see `set_sdfg_gpu_stream()`.
     dace.Config.set("compiler.cuda.implementation", value="experimental")
 
     # The experimental CUDA codegen synchronizes the GPU streams at the end of

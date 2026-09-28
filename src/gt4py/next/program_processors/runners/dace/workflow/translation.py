@@ -122,6 +122,29 @@ def _make_if_region_for_metrics_collection(
     return if_region, then_state
 
 
+def _get_gpu_backend() -> str:
+    """Return the GPU backend, either 'cuda' or 'hip', configured in DaCe."""
+    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
+    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
+    return dace_gpu_backend
+
+
+def _for_each_sdfg_gpu_stream(statement: str) -> str:
+    """Return C++ code that applies `statement` to every GPU stream of the SDFG.
+
+    Args:
+        statement: C++ statement, which refers to the current GPU stream as `__stream`.
+
+    Returns:
+        A C++ loop over the streams in `__state->gpu_context->streams`.
+    """
+    return f"""\
+for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {{
+    gpuStream_t& __stream = __state->gpu_context->streams[__i];
+    {statement}
+}}"""
+
+
 def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     """
     Instrument SDFG with measurement of total execution time.
@@ -139,18 +162,18 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
         gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL, gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL_DTYPE
     )
 
-    #### 1. Synchronize the CUDA device, in order to wait for kernels completion.
+    #### 1. Synchronize the SDFG GPU streams, in order to wait for kernels completion.
+    # We synchronize only the streams used by the SDFG, not the entire device, so
+    # that the measurement does not wait for unrelated work on other streams, e.g.
+    # external workload when the SDFG runs on an external GPU stream.
     # Even when the target device is GPU, it can happen that dace emits code without
     # GPU kernels. In this case, the cuda headers are not imported and the SDFG is
     # compiled as plain C++. Therefore, we also check here the schedule of SDFG maps.
     if gpu and _has_gpu_schedule(sdfg):
-        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-        assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
-
-        # NOTE: We should actually wrap the `DeviceSynchronize` function inside a
+        # NOTE: We should actually wrap the `StreamSynchronize` function inside a
         #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
         #   here we are in CPU context. Thus we cannot do it.
-        sync_code = f"{dace_gpu_backend}DeviceSynchronize();"
+        sync_code = _for_each_sdfg_gpu_stream(f"{_get_gpu_backend()}StreamSynchronize(__stream);")
         has_side_effects = True
 
     else:
@@ -238,28 +261,28 @@ duration = static_cast<double>(run_cpp_end_time - run_cpp_start_time) * 1.e-9;
     sdfg.validate()
 
 
-def add_configurable_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None) -> None:
-    """Use an external GPU stream for the SDFG.
+def set_sdfg_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None) -> None:
+    """Set the GPU stream used for all GPU work of the SDFG.
 
-    This allows to set the stream used for all GPU work, which allows to
-    synchronize the execution of GPU kernels with external workload and to share
-    the stream memory pool.
+    Running the SDFG on an external GPU stream allows to synchronize the execution
+    of GPU kernels with external workload and to share the stream memory pool.
+    The stream is written into the SDFG init code, thus it is fixed at compile time.
 
-    If the stream argument is not provided, the default stream is used.
+    Args:
+        sdfg: The SDFG to process, modified in place.
+        external_gpu_stream: The handle of the external GPU stream, as an integer
+            value. If `None`, the default stream is used.
     """
-    if external_gpu_stream is None:
-        dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-        assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
-        gpu_stream = f"{dace_gpu_backend}StreamDefault"
-    else:
-        gpu_stream = f"reinterpret_cast<gpuStream_t>({external_gpu_stream})"
+    gpu_stream = (
+        "nullptr"  # The default stream.
+        if external_gpu_stream is None
+        else f"reinterpret_cast<gpuStream_t>({external_gpu_stream})"
+    )
 
     # NOTE: The experimental DaCe CUDA codegen does not provide the helper function
     #  `__dace_gpu_set_all_streams()`, therefore we write the stream array directly.
     sdfg.append_init_code(
-        "for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {\n"
-        f"    __state->gpu_context->streams[__i] = {gpu_stream};\n"
-        "}\n",
+        _for_each_sdfg_gpu_stream(f"__stream = {gpu_stream};") + "\n",
         location="cuda",
     )
 
@@ -300,16 +323,11 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     # NOTE: We should actually wrap the `StreamSynchronize` function inside a
     #   `DACE_GPU_CHECK()` macro. However, this only works in GPU context, but
     #   here we are in CPU context. Thus we can not do it.
-    dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
-    assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "stream_synchronize",
         inputs={},
         outputs={},
-        code=f"""\
-for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {{
-    {dace_gpu_backend}StreamSynchronize(__state->gpu_context->streams[__i]);
-}}""",
+        code=_for_each_sdfg_gpu_stream(f"{_get_gpu_backend()}StreamSynchronize(__stream);"),
         language=dace.dtypes.Language.CPP,
         side_effects=True,
     )
@@ -408,20 +426,25 @@ class DaCeTranslator(
 
         if self.sync_sdfg_call:
             make_sdfg_call_sync(sdfg, on_gpu)
-        else:
-            # When using the default stream, DaCe seems to skip _all_ synchronization,
-            #  for more see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
-            #  Thus the `CompiledSDFG.fast_call()` call is truly asynchronous, i.e.
-            #  just launches the kernels and exits. This is the default behavior in GT4Py.
+        elif on_gpu:
+            # All GPU work is scheduled on a single stream and, since we disable the
+            #  synchronization of the GPU stream at the SDFG exit, the call to
+            #  `CompiledSDFG.fast_call()` is asynchronous, i.e. it just launches the
+            #  kernels and exits. This is the default behavior in GT4Py. Note that DaCe
+            #  still synchronizes the stream before the host reads data computed on GPU,
+            #  see [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
             assert dace.Config.get("compiler.cuda.max_concurrent_streams") == -1, (
                 f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
+            )
+            assert dace.Config.get("compiler.cuda.synchronize_on_exit") is False, (
+                "Expected `synchronize_on_exit == False` but it was `True`."
             )
 
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
 
         if on_gpu:
-            add_configurable_gpu_stream(sdfg, self.external_gpu_stream)
+            set_sdfg_gpu_stream(sdfg, self.external_gpu_stream)
 
         return sdfg
 
