@@ -250,15 +250,18 @@ def add_configurable_gpu_stream(sdfg: dace.SDFG, external_gpu_stream: int | None
     if external_gpu_stream is None:
         dace_gpu_backend = dace.Config.get("compiler.cuda.backend")
         assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
-        sdfg.append_init_code(
-            f"__dace_gpu_set_all_streams(__state, {dace_gpu_backend}StreamDefault);",
-            location="cuda",
-        )
+        gpu_stream = f"{dace_gpu_backend}StreamDefault"
     else:
-        sdfg.append_init_code(
-            f"__dace_gpu_set_all_streams(__state, reinterpret_cast<gpuStream_t>({external_gpu_stream}));",
-            location="cuda",
-        )
+        gpu_stream = f"reinterpret_cast<gpuStream_t>({external_gpu_stream})"
+
+    # NOTE: The experimental DaCe CUDA codegen does not provide the helper function
+    #  `__dace_gpu_set_all_streams()`, therefore we write the stream array directly.
+    sdfg.append_init_code(
+        "for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {\n"
+        f"    __state->gpu_context->streams[__i] = {gpu_stream};\n"
+        "}\n",
+        location="cuda",
+    )
 
 
 def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
