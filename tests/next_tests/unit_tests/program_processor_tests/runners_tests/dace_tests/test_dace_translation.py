@@ -154,7 +154,7 @@ def _are_streams_set_to_external_stream(sdfg: dace.SDFG, external_gpu_stream: in
 
     return (
         re.match(
-            rf"__dace_gpu_set_all_streams\(__state\s*,\s*{external_gpu_stream}\);",
+            rf"__dace_gpu_set_all_streams\(__state\s*,\s*reinterpret_cast<gpuStream_t>\({external_gpu_stream}\)\);",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
