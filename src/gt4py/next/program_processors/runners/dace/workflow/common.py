@@ -146,6 +146,18 @@ def set_dace_config(
     #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
+    # Use the experimental CUDA codegen: unlike the legacy one, it launches kernels
+    #  and copies on the streams stored in `__state->gpu_context->streams`, even
+    #  when `max_concurrent_streams` is `-1`. This allows to replace the default
+    #  stream with an external stream, see `add_configurable_gpu_stream()`.
+    dace.Config.set("compiler.cuda.implementation", value="experimental")
+
+    # The experimental CUDA codegen synchronizes the GPU streams at the end of
+    #  the SDFG by default, which makes the SDFG call synchronous. We disable it
+    #  because, when a synchronous call is requested, gt4py adds the stream
+    #  synchronization itself, see `make_sdfg_call_sync()`.
+    dace.Config.set("compiler.cuda.synchronize_on_exit", value=False)
+
     # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:
         dace.Config.set("compiler.cuda.backend", value="hip")

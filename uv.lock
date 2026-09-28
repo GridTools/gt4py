@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a10"
-source = { git = "https://github.com/spcl/dace.git?branch=main#6cdee42594c9f82f1b6768a97fe6076db5bfe6cb" }
+source = { git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev#afbf399b5f6c1de2be52c2a28e7428acad740164" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1468,7 +1468,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/spcl/dace.git?branch=main" },
+    { name = "dace", git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
