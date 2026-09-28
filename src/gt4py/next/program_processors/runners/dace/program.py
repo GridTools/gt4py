@@ -86,11 +86,14 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
         # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
         # the other parts of the workaround when possible.
+        # The SDFG is nested in the SDFG of the orchestrated program, which owns the GPU streams,
+        # therefore we do not add the argument to select an external GPU stream.
         sdfg = dace.SDFG.from_json(
             otf_workflow_translation.replace(  # type: ignore[union-attr]
                 disable_itir_transforms=True,
                 disable_field_origin_on_program_arguments=True,
                 use_metrics=False,
+                use_external_gpu_stream=False,
             )(gtir_stage).source_code
         )
 
