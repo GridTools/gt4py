@@ -927,9 +927,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         """Rewire the edges inside the scope defined by the outer map.
 
         The function assumes that the outer and inner map were obtained by a call
-        to `_prepare_inner_outer_maps()`. The function will now rewire the connections of these
-        nodes such that the dependent nodes are inside the scope of the inner map,
-        while the independent nodes remain outside.
+        to `_prepare_inner_outer_maps()`. The function will now rewire the connections
+        of these nodes such that the dependent nodes are inside the scope of the inner
+        map, while the independent nodes remain outside.
 
         Args:
             outer_entry: The entry node of the outer map.
@@ -1065,7 +1065,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         #  in that they _after_ the new inner map entry. Thus, we have to modify
         #  their incoming edges.
         for dependent_node in self._dependent_nodes:
-            for in_edge in state.in_edges(dependent_node):
+            for in_edge in list(state.in_edges(dependent_node)):
                 edge_src: dace_nodes.Node = in_edge.src
 
                 # The incoming edge of a dependent node (before any processing) either
@@ -1097,6 +1097,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 elif edge_src is outer_entry:
                     # This dependent node originated at the outer map. Thus we have to
                     #  split the edge, such that it now passes through the inner map.
+                    #  Note that the subset of the Memlet connecting the outer to the
+                    #  inner entry node might be bigger than the subset of the Memlet
+                    #  leaving the inner entry node (which is also the original Memlet).
                     new_map_conn = inner_entry.next_connector(try_name=in_edge.src_conn[4:])
                     new_in_conn = "IN_" + new_map_conn
                     new_out_conn = "OUT_" + new_map_conn
@@ -1115,12 +1118,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                         new_out_conn,
                         in_edge.dst,
                         in_edge.dst_conn,
-                        dace.Memlet(
-                            data=in_edge.data.data,
-                            subset=dace_subsets.Range(
-                                in_edge.data.get_src_subset(in_edge, state).ndrange()
-                            ),
-                        ),
+                        copy.deepcopy(in_edge.data),
                     )
                     inner_entry.add_scope_connectors(new_map_conn)
                     state.remove_edge(in_edge)
@@ -1140,15 +1138,36 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
             )
 
         # Handle the Map exits
-        #  This is simple reconnecting, there would be possibilities for improvements
-        #  but we do not use them for now.
-        for in_edge in state.in_edges(outer_exit):
+        #  Essentially we insert the `inner_exit` in the middle of `in_edge`.
+        for in_edge in list(state.in_edges(outer_exit)):
+            assert in_edge.data.wcr is None
+
             edge_conn = inner_exit.next_connector(in_edge.dst_conn[3:])
-            dace_helpers.redirect_edge(
-                state=state,
-                edge=in_edge,
-                new_dst=inner_exit,
-                new_dst_conn="IN_" + edge_conn,
+
+            # For the first part of the edge, i.e. the part going to `inner_exit`, we will
+            #  reuse the original Memlet, but we do not copy it, but just extract the parts
+            #  that we need. We do this to defeat possible caching issues in DaCe.
+            state.add_edge(
+                in_edge.src,
+                in_edge.src_conn,
+                inner_exit,
+                "IN_" + edge_conn,
+                dace.Memlet(
+                    data=in_edge.data.data,
+                    subset=copy.deepcopy(in_edge.data.subset),
+                    other_subset=copy.deepcopy(in_edge.data.other_subset),
+                ),
+            )
+
+            # The Memlet of the second part, i.e. connecting the inner with the outer
+            #  exit, we are using the edge that _leaves_ from `outer_exit`, because it
+            #  will reference outside data (not in scope of the outer Map). Note that
+            #  might overestimate the write range.
+            assert len(
+                list(state.out_edges_by_connector(outer_exit, "OUT_" + in_edge.dst_conn[3:]))
+            )
+            outside_edge = next(
+                state.out_edges_by_connector(outer_exit, "OUT_" + in_edge.dst_conn[3:])
             )
             state.add_edge(
                 inner_exit,
@@ -1156,18 +1175,20 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 outer_exit,
                 in_edge.dst_conn,
                 dace.Memlet(
-                    data=in_edge.data.data,
-                    subset=dace_subsets.Range(
-                        in_edge.data.get_dst_subset(in_edge, state).ndrange()
-                    ),
+                    data=outside_edge.data.data,
+                    subset=copy.deepcopy(outside_edge.data.subset),
                 ),
             )
             inner_exit.add_scope_connectors(edge_conn)
+            state.remove_edge(in_edge)
 
-        # There is an invalid cache state in the SDFG, that makes the memlet
-        #  propagation fail, to clear the cache we call the hash function.
-        #  See: https://github.com/spcl/dace/issues/1703
-        _ = sdfg.reset_cfg_list()
+        # There is again an [invalid cache problem](https://github.com/spcl/dace/issues/1703).
+        #  Before `sdfg.reset_cfg_list()` was used to clear it, but when we switched to
+        #  [DaCe Alpha7 (PR#2852)](https://github.com/GridTools/gt4py/pull/2852) this stopped
+        #  working. However, the solution proposed by that PR was incomplete and instead
+        #  we needed to switch to `hash_sdfg()`. However, it was later discovered that
+        #  `to_json()` on the state was enough.
+        _ = state.to_json()
         dace_sdutils.canonicalize_memlet_trees_for_map(state=state, map_node=outer_entry)
         dace_propagation.propagate_memlets_map_scope(sdfg, state, outer_entry)
 
