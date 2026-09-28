@@ -13,7 +13,7 @@ import pytest
 
 import re
 import uuid
-from typing import Callable
+from typing import Callable, Literal
 from unittest import mock
 
 from gt4py._core import definitions as core_defs
@@ -133,28 +133,26 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     assert constant_symbols == expected
 
 
-def _are_streams_set_to_default_stream(sdfg: dace.SDFG, device: core_defs.DeviceType) -> bool:
+def _gpu_platform(device: core_defs.DeviceType) -> str:
+    return "cuda" if device == core_defs.DeviceType.CUDA else "hip"
+
+
+def _are_streams_set_to(sdfg: dace.SDFG, external_gpu_stream: int | None) -> bool:
+    """Check that the SDFG init code sets all GPU streams to the given stream.
+
+    If `external_gpu_stream` is `None`, the streams should be set to the default stream.
+    """
     if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
         return False
 
-    platform = "cuda" if device == core_defs.DeviceType.CUDA else "hip"
-
-    return (
-        re.search(
-            rf"__state->gpu_context->streams\[__i\]\s*=\s*{platform}StreamDefault;",
-            sdfg.init_code["cuda"].as_string,
-        )
-        is not None
+    gpu_stream = (
+        "nullptr"
+        if external_gpu_stream is None
+        else rf"reinterpret_cast<gpuStream_t>\({external_gpu_stream}\)"
     )
-
-
-def _are_streams_set_to_external_stream(sdfg: dace.SDFG, external_gpu_stream: int) -> bool:
-    if "cuda" not in sdfg.init_code:  # Here 'cuda' equals 'GPU backend'.
-        return False
-
     return (
         re.search(
-            rf"__state->gpu_context->streams\[__i\]\s*=\s*reinterpret_cast<gpuStream_t>\({external_gpu_stream}\);",
+            rf"\b__stream\s*=\s*{gpu_stream};",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
@@ -209,15 +207,15 @@ def _check_sdfg_with_sync_call(sdfg: dace.SDFG, device: core_defs.DeviceType) ->
     assert sync_tlet.side_effects
     assert sync_tlet.label == "stream_synchronize"
 
-    platform = "cuda" if device == core_defs.DeviceType.CUDA else "hip"
     assert (
         sync_tlet.code.as_string
         == f"""\
 for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {{
-    {platform}StreamSynchronize(__state->gpu_context->streams[__i]);
+    gpuStream_t& __stream = __state->gpu_context->streams[__i];
+    {_gpu_platform(device)}StreamSynchronize(__stream);
 }}"""
     )
-    assert _are_streams_set_to_default_stream(sdfg, device)
+    assert _are_streams_set_to(sdfg, None)
 
 
 def _check_cpu_sdfg_call(sdfg: dace.SDFG) -> None:
@@ -303,7 +301,7 @@ def test_generate_sdfg_async_call_no_map(device_type: core_defs.DeviceType):
 
 
 def _are_gpu_operations_on_sdfg_streams(
-    sdfg: dace.SDFG, device: core_defs.DeviceType, gpu_operation: str
+    sdfg: dace.SDFG, device: core_defs.DeviceType, gpu_operation: Literal["kernel", "copy"]
 ) -> bool:
     """Check that the GPU operations are scheduled on the streams of the SDFG state.
 
@@ -312,7 +310,7 @@ def _are_gpu_operations_on_sdfg_streams(
     `__state->gpu_context->streams`, which is the one set by the init code, instead
     of using the default stream (`nullptr`).
     """
-    platform = "cuda" if device == core_defs.DeviceType.CUDA else "hip"
+    platform = _gpu_platform(device)
     re_gpu_operation = {
         "kernel": re.compile(r"\b__dace_runkernel_\w+\(__state\b.*,\s*(\w+)\);"),
         "copy": re.compile(rf"\b{platform}Memcpy\w*Async\(.*,\s*(\w+)\);"),
@@ -342,7 +340,9 @@ def _are_gpu_operations_on_sdfg_streams(
 @pytest.mark.parametrize("gpu_operation", ["kernel", "copy"])
 @pytest.mark.parametrize("external_gpu_stream", [None, 0x1234])
 def test_generate_sdfg_external_gpu_stream(
-    external_gpu_stream: int | None, gpu_operation: str, device_type: core_defs.DeviceType
+    external_gpu_stream: int | None,
+    gpu_operation: Literal["kernel", "copy"],
+    device_type: core_defs.DeviceType,
 ):
     """Verify that `external_gpu_stream` selects the GPU stream used by the SDFG."""
     if device_type == core_defs.DeviceType.CPU:
@@ -378,14 +378,7 @@ def test_generate_sdfg_external_gpu_stream(
         external_gpu_stream=external_gpu_stream,
     )
     _check_sdfg_with_async_call(sdfg, device_type)
-
-    if device_type == core_defs.DeviceType.CPU:
-        assert "cuda" not in sdfg.init_code
-    elif external_gpu_stream is None:
-        assert _are_streams_set_to_default_stream(sdfg, device_type)
-    else:
-        assert _are_streams_set_to_external_stream(sdfg, external_gpu_stream)
-
+    assert _are_streams_set_to(sdfg, external_gpu_stream)
     assert _are_gpu_operations_on_sdfg_streams(sdfg, device_type, gpu_operation)
 
 
@@ -512,7 +505,7 @@ def test_generate_sdfg_async_call_multi_state(
     # NOTE: Here we should use a configuration context. But because of
     #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
     with dace_wf_common.dace_context(device_type=device_type):
-        dace_wf_translation.add_configurable_gpu_stream(sdfg, external_gpu_stream=None)
+        dace_wf_translation.set_sdfg_gpu_stream(sdfg, external_gpu_stream=None)
 
     # No synchronization state is added.
     assert sdfg.number_of_nodes() == 2
@@ -529,7 +522,7 @@ def test_generate_sdfg_async_call_multi_state(
         #  used either on the InterState edge or inside the first state. Thus, the
         #  GPU stream has to be synchronized after the device-to-host copy.
         #  See https://github.com/spcl/dace/issues/2120 for more information.
-        assert _are_streams_set_to_default_stream(sdfg, device_type)
+        assert _are_streams_set_to(sdfg, None)
         assert _are_streams_synchronized(sdfg, device_type)
     else:
         # There is no dependency between the states, so no sync.
