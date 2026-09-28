@@ -63,6 +63,7 @@ def _translate_gtir_to_sdfg(
     auto_optimize: bool,
     sync_sdfg_call: bool,
     use_metrics: bool = False,
+    use_external_gpu_stream: bool = True,
 ) -> dace.SDFG:
     with dace.config.set_temporary("cache", value="hash"):
         # we use the SDFG hash in build cache to avoid clashes between CPU and GPU SDFGs
@@ -73,6 +74,7 @@ def _translate_gtir_to_sdfg(
             sync_sdfg_call=sync_sdfg_call,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=use_metrics,
+            use_external_gpu_stream=use_external_gpu_stream,
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
 
@@ -376,6 +378,40 @@ def test_generate_sdfg_external_gpu_stream(
     _check_sdfg_with_async_call(sdfg, device_type)
     assert _are_streams_set_by_external_gpu_stream_arg(sdfg)
     assert _are_gpu_operations_on_sdfg_streams(sdfg, device_type, gpu_operation)
+
+
+def test_generate_sdfg_without_external_gpu_stream(device_type: core_defs.DeviceType):
+    """Verify that the external GPU stream argument is not added when disabled.
+
+    This is the case of orchestration, where the SDFG is nested in another SDFG.
+    """
+    ir = itir.Program(
+        id="field_ir_without_external_gpu_stream",
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=device_type,
+        auto_optimize=False,
+        sync_sdfg_call=False,
+        use_external_gpu_stream=False,
+    )
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM not in sdfg.arglist()
+    assert "cuda" not in sdfg.init_code
 
 
 def _make_multi_state_sdfg_0(

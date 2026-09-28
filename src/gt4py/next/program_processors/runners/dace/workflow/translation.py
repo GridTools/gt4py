@@ -365,6 +365,7 @@ class DaCeTranslator(
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+    use_external_gpu_stream: bool = True
 
     def __post_init__(self) -> None:
         if self.auto_optimize_args and (
@@ -466,7 +467,7 @@ class DaCeTranslator(
         if self.use_metrics:
             add_instrumentation(sdfg, on_gpu)
 
-        if on_gpu:
+        if on_gpu and self.use_external_gpu_stream:
             add_external_gpu_stream_arg(sdfg)
 
         return sdfg
