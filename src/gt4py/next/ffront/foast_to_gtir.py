@@ -8,10 +8,9 @@
 
 
 import dataclasses
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Never, Optional
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Never
 from gt4py.next import common, utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
