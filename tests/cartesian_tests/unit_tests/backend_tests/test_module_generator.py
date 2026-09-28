@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import types
+
 import numpy as np
 import pytest
 
@@ -60,6 +62,14 @@ def test_initialized_builder(sample_builder, sample_args_data):
 
     source = generator(args_data=sample_args_data)
     assert source
+
+
+def test_generate_sources_is_verbatim():
+    unformatted = "def  f( x ):\n  return x+1\n"
+    builder = types.SimpleNamespace(gtir=types.SimpleNamespace(sources={"f": unformatted}))
+    generator = SampleModuleGenerator(builder=builder)
+
+    assert generator.generate_sources() == {"f": unformatted}
 
 
 def sample_stencil_with_args(
