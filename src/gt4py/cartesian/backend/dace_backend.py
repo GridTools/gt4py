@@ -44,6 +44,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations import caches
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
+from gt4py.eve import formatting
 from gt4py.eve.codegen import MakoTemplate as as_mako
 from gt4py.storage.cartesian import layout, layout_registry
 
@@ -509,7 +510,7 @@ class DaCeExtGenerator(BackendCodegen):
 
         implementation = DaCeComputationCodegen.apply(self.backend.builder, sdfg)
 
-        bindings = DaCeBindingsCodegen(self.backend).generate_sdfg_bindings(sdfg, self.module_name)
+        bindings = DaCeBindingsCodegen.apply(sdfg, self.module_name, backend=self.backend)
 
         bindings_ext = "cu" if self.backend.storage_info["device"] == "gpu" else "cpp"
         return {
@@ -663,7 +664,7 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             state_suffix=config.Config.get("compiler.codegen_state_struct_suffix"),
         )
         computations = cls._postprocess_dace_code(code_objects, is_gpu)
-        return f"""\
+        generated_code = f"""\
 #include <gridtools/sid/sid_shift_origin.hpp>
 #include <gridtools/sid/allocator.hpp>
 #include <gridtools/stencil/cartesian.hpp>
@@ -674,6 +675,11 @@ namespace gt = gridtools;
 
 {interface}
 """
+
+        if builder.options.format_source:
+            generated_code = formatting.format_cpp_source(generated_code)
+
+        return generated_code
 
     def generate_dace_args(self, stencil_ir: gtir.Stencil, sdfg: SDFG) -> list[str]:
         oir = GTIRToOIR().visit(stencil_ir)
@@ -850,6 +856,13 @@ class DaCeBindingsCodegen:
             entry_params=self.generate_entry_params(sdfg),
             sid_params=self.generate_sid_params(sdfg),
         )
+
+    @classmethod
+    def apply(cls, sdfg: SDFG, module_name: str, *, backend: BaseDaceBackend) -> str:
+        generated_code = cls(backend).generate_sdfg_bindings(sdfg, module_name)
+        if backend.builder.options.format_source:
+            generated_code = formatting.format_cpp_source(generated_code)
+        return generated_code
 
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):

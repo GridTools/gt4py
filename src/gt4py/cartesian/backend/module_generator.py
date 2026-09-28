@@ -107,6 +107,7 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 
 
 class BaseModuleGenerator(abc.ABC):
+    SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
     TEMPLATE_RESOURCE = "stencil_module.py.in"
 
@@ -148,8 +149,10 @@ class BaseModuleGenerator(abc.ABC):
             post_run=self.generate_post_run(),
             implementation=self.generate_implementation(),
         )
-        if self.builder.options.format_source:
-            module_source = formatting.format_python_source(module_source)
+        if self.builder.options.as_dict()["format_source"]:
+            module_source = formatting.format_python_source(
+                module_source, line_length=self.SOURCE_LINE_LENGTH
+            )
 
         return module_source
 
@@ -199,11 +202,16 @@ class BaseModuleGenerator(abc.ABC):
 
     def generate_sources(self) -> dict[str, str]:
         """
-        Return the source code of the stencil definition verbatim, in string format.
+        Return the source code of the stencil definition in string format.
 
         This is unlikely to require overriding.
         """
-        return dict(self.builder.gtir.sources or {})
+        if self.builder.gtir.sources is not None:
+            return {
+                key: formatting.format_python_source(value, line_length=self.SOURCE_LINE_LENGTH)
+                for key, value in self.builder.gtir.sources.items()
+            }
+        return {}
 
     def generate_constants(self) -> dict[str, str]:
         """

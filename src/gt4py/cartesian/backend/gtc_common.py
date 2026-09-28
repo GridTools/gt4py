@@ -19,7 +19,7 @@ from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir, utils as gtc_utils
 from gt4py.cartesian.gtc.passes.oir_pipeline import OirPipeline
-from gt4py.eve import codegen, formatting
+from gt4py.eve import codegen
 
 
 if TYPE_CHECKING:
@@ -273,10 +273,6 @@ class BaseGTBackend(gt_backend.BasePyExtBackend):
         )
         gt_pyext_generator = self.PYEXT_GENERATOR_CLASS(class_name, module_name, self)
         gt_pyext_sources = gt_pyext_generator()
-        if self.builder.options.format_source:
-            for sources in gt_pyext_sources.values():
-                for file_name, source in sources.items():
-                    sources[file_name] = formatting.format_cpp_source(source)
         final_ext = ".cu" if self.languages and self.languages["computation"] == "cuda" else ".cpp"
         comp_src = gt_pyext_sources["computation"]
         for key in [k for k in comp_src.keys() if k.endswith(".src")]:

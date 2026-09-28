@@ -26,6 +26,15 @@ def test_format_python_source():
     )
 
 
+def test_format_python_source_line_length():
+    pytest.importorskip("black")
+    source = "result = function_name(first_argument, second_argument)\n"
+    assert formatting.format_python_source(source) == source
+    assert formatting.format_python_source(source, line_length=40) == (
+        "result = function_name(\n    first_argument, second_argument\n)\n"
+    )
+
+
 def test_format_python_source_invalid_input():
     pytest.importorskip("black")
     source = "def f(:\n"

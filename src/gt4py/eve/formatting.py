@@ -12,17 +12,22 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 
 
-def format_python_source(source: str) -> str:
+def format_python_source(source: str, *, line_length: int = 100) -> str:
     """Format Python source code with `black`.
+
+    The target Python version is pinned to the running interpreter.
 
     Args:
         source: Python source code.
+        line_length: Maximum line length of the formatted code.
 
     Returns:
         The formatted source code, or `source` unchanged if `black` is not
-        installed or formatting fails.
+        installed, does not support the running interpreter, or formatting
+        fails.
     """
     try:
         # Lazy import: `black` is an optional dependency and slow to import.
@@ -31,7 +36,16 @@ def format_python_source(source: str) -> str:
         return source
 
     try:
-        return black.format_str(source, mode=black.Mode(line_length=100))
+        target_version = black.TargetVersion[  # type: ignore[attr-defined]  # .TargetVersion implicitly exported
+            f"PY{sys.version_info.major}{sys.version_info.minor}"
+        ]
+    except KeyError:  # `black` is too old to know the running interpreter
+        return source
+
+    try:
+        return black.format_str(
+            source, mode=black.Mode(line_length=line_length, target_versions={target_version})
+        )
     except ValueError:  # `black.InvalidInput` for unparsable source
         return source
 
