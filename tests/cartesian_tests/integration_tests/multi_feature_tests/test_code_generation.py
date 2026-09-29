@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtscript import (
@@ -1813,7 +1814,18 @@ def test_reset_mask_2d(backend: str) -> None:
     [
         "debug",
         pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
-        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
+        pytest.param(
+            "dace:gpu",
+            marks=[
+                pytest.mark.uses_dace,
+                pytest.mark.requires_gpu,
+                pytest.mark.xfail(
+                    condition=core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM,
+                    raises=SystemExit,
+                    reason="DaCe issue: the global sync inside nested SDFG uses 'cub::GridBarrier', which is not available with HIP.",
+                ),
+            ],
+        ),
         pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
     ],
 )
