@@ -334,3 +334,16 @@ def test_as_field_torch_allocator(device, expected_device_type):
     assert field.ndarray.device.type == expected_device_type
     assert field.dtype == core_defs.dtype(np.float64)
     np.testing.assert_array_equal(field.asnumpy(), np.arange(3.0))
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_gpu
+def test_torch_allocator_follows_default_device():
+    import torch
+
+    with torch.device("cuda"):
+        field = gtx.as_field([I], np.arange(3.0), allocator=torch)
+        zeros = gtx.zeros({I: 3}, allocator=torch)
+
+    assert field.ndarray.device.type == "cuda"
+    assert zeros.ndarray.device.type == "cuda"
