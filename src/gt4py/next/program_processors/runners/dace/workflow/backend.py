@@ -153,12 +153,6 @@ def make_dace_backend(
             raise ValueError(
                 "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
             )
-        if gpu and core_defs.CUPY_DEVICE_TYPE is core_defs.DeviceType.ROCM:
-            # If the GPU backend is used with ROCM, we need to set the transient memory mode
-            # to SCOPED because the new gpu codegen has no support yet for ROCM memory pool.
-            optimization_args["transient_memory_mode"] = (
-                gtx_transformations.TransientMemoryMode.SCOPED
-            )
     elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
         if transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
             warnings.warn(
