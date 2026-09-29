@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a9"
-source = { git = "https://github.com/edopao/dace?branch=fix-experimental-cuda-gpu-copy-fallback#d8bdd498d2ad824e477843357522012c265a9def" }
+source = { git = "https://github.com/edopao/dace?branch=fix-experimental-cuda-gpu-copy-fallback#3e45bcbaf77f32bdf7a40d2c4cdd7c5bc57ddac3" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
