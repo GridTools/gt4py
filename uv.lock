@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a9"
-source = { git = "https://github.com/edopao/dace?branch=fix-experimental-cuda-gpu-copy-fallback#d4214f3e5756cd5f571bf19a093476ce51c40cf4" }
+source = { git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev#da7f2e3039f3df4e00368c208437657010c396ac" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1465,7 +1465,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/edopao/dace?branch=fix-experimental-cuda-gpu-copy-fallback" },
+    { name = "dace", git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "factory-boy", specifier = ">=3.3.3" },
