@@ -146,12 +146,13 @@ def set_dace_config(
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator
-    #  generated wrong code. The current approach is to use the default stream, i.e.
-    #  setting `max_concurrent_streams` to `-1`. However, the draw back is, that
-    #  apparently then all synchronization is disabled, even the one at the very
-    #  end of the SDFG call. To correct for that we are using either
-    #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
-    #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
+    #  generated wrong code. The current approach is to use a single stream, i.e.
+    #  setting `max_concurrent_streams` to `-1`. With the experimental CUDA codegen
+    #  (see below), all GPU work is then scheduled on the streams stored in
+    #  `__state->gpu_context->streams`, which are all set to the same stream: the
+    #  default stream or an external stream, see `add_external_gpu_stream_arg()`.
+    #  The synchronization at the end of the SDFG call is controlled by gt4py, see
+    #  `make_sdfg_call_sync()` and [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
 
     # Use the experimental CUDA codegen: unlike the legacy one, it launches kernels

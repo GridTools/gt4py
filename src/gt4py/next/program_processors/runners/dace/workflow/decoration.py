@@ -114,7 +114,14 @@ class DaCeDecoratedProgram:
         """Set the external GPU stream used by the underlying compiled program.
 
         This method should be called before the first call to the program, because
-        the stream is applied on SDFG initialization. `None` selects the default stream.
+        the stream is applied on SDFG initialization.
+
+        Args:
+            external_gpu_stream: The handle of the external GPU stream, as an integer
+                value. `None` selects the default stream.
+
+        Raises:
+            RuntimeError: If the program was already called.
         """
         if self._fun.csdfg_argv is not None:
             raise RuntimeError(

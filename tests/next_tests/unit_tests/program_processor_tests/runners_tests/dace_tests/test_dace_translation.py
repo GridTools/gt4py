@@ -159,7 +159,7 @@ def _are_streams_set_by_external_gpu_stream_arg(sdfg: dace.SDFG) -> bool:
         return False
     return (
         re.search(
-            rf"\b__stream\s*=\s*reinterpret_cast<gpuStream_t>\({stream_arg}\);",
+            rf"\b__dace_gpu_set_all_streams\(\s*__state\s*,\s*reinterpret_cast<gpuStream_t>\({stream_arg}\)\s*\);",
             sdfg.init_code["cuda"].as_string,
         )
         is not None
@@ -180,13 +180,14 @@ def _are_streams_synchronized(sdfg: dace.SDFG, device: core_defs.DeviceType) -> 
 
 
 def _check_sdfg_with_async_call(sdfg: dace.SDFG, device: core_defs.DeviceType) -> None:
-    # Because we are using the default stream, the launch is asynchronous. Thus we
-    #  have to check if there is no synchronization state. However, we will do a
-    #  stronger test. Instead we will make sure that there are no synchronization
-    #  calls in the _entire_ generated code.
-    # NOTE: Even in asynchronous launch, there might be some need for synchronization,
-    #   for example if something is computed in a kernel and used on an interstate
-    #   edge. However, we do not have that case.
+    # The GPU work is launched on the SDFG streams and, since the synchronization at
+    #  the SDFG exit is disabled, the call is asynchronous. Thus we have to check that
+    #  there is no synchronization state. However, we will do a stronger test: we make
+    #  sure that there are no synchronization calls in the _entire_ generated code.
+    # NOTE: Even in asynchronous launch, DaCe synchronizes the stream if something is
+    #   computed in a kernel and read on the host, for example on an interstate edge,
+    #   see `test_generate_sdfg_async_call_multi_state`. The SDFGs checked here do not
+    #   have that case.
 
     assert not any(
         state.label == "sync_state"
@@ -214,13 +215,8 @@ def _check_sdfg_with_sync_call(sdfg: dace.SDFG, device: core_defs.DeviceType) ->
     assert sync_tlet.side_effects
     assert sync_tlet.label == "stream_synchronize"
 
-    assert (
-        sync_tlet.code.as_string
-        == f"""\
-for (int __i = 0; __i < __state->gpu_context->num_streams; ++__i) {{
-    gpuStream_t& __stream = __state->gpu_context->streams[__i];
-    {_gpu_platform(device)}StreamSynchronize(__stream);
-}}"""
+    assert sync_tlet.code.as_string == dace_wf_translation._for_each_sdfg_gpu_stream(
+        f"{_gpu_platform(device)}StreamSynchronize(__stream);"
     )
     assert _are_streams_set_by_external_gpu_stream_arg(sdfg)
 
@@ -531,8 +527,11 @@ def test_generate_sdfg_async_call_multi_state(
     multi_state_config: tuple[bool, Callable], device_type: core_defs.DeviceType
 ):
     """
-    Verify that states are not made async when a data descriptor is accessed
-    on an outgoing InterState edge.
+    Verify the synchronization of an asynchronous SDFG call with multiple states.
+
+    The GPU streams of the SDFG have to be synchronized when the result of a
+    device-to-host copy is used on an outgoing InterState edge or on the host,
+    otherwise there should be no synchronization.
     """
     if device_type == core_defs.DeviceType.CPU:
         pytest.skip("This test is only relevant for GPU execution.")
@@ -540,17 +539,16 @@ def test_generate_sdfg_async_call_multi_state(
     expect_sync_after_first_map, make_multi_state_sdfg = multi_state_config
     sdfg, first_state, second_state = make_multi_state_sdfg()
 
-    # NOTE: Here we should use a configuration context. But because of
-    #   [DaCe issue#2125](https://github.com/spcl/dace/issues/2125) this is not possible.
     with dace_wf_common.dace_context(device_type=device_type):
         dace_wf_translation.add_external_gpu_stream_arg(sdfg)
+    assert _are_streams_set_by_external_gpu_stream_arg(sdfg)
 
     # No synchronization state is added.
     assert sdfg.number_of_nodes() == 2
     assert sdfg.out_degree(first_state) == 1 and sdfg.in_degree(first_state) == 0
     assert sdfg.out_degree(second_state) == 0 and sdfg.in_degree(second_state) == 1
 
-    # We do never a sync.
+    # The states are not marked as `nosync`.
     assert first_state.nosync == False
     assert second_state.nosync == False
 
@@ -560,7 +558,6 @@ def test_generate_sdfg_async_call_multi_state(
         #  used either on the InterState edge or inside the first state. Thus, the
         #  GPU stream has to be synchronized after the device-to-host copy.
         #  See https://github.com/spcl/dace/issues/2120 for more information.
-        assert _are_streams_set_by_external_gpu_stream_arg(sdfg)
         assert _are_streams_synchronized(sdfg, device_type)
     else:
         # There is no dependency between the states, so no sync.

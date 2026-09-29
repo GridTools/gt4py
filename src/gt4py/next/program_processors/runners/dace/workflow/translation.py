@@ -282,12 +282,11 @@ def add_external_gpu_stream_arg(sdfg: dace.SDFG) -> None:
         gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE,
     )
 
-    # NOTE: The experimental DaCe CUDA codegen does not provide the helper function
-    #  `__dace_gpu_set_all_streams()`, therefore we write the stream array directly.
+    # NOTE: `__dace_gpu_set_all_streams()` is defined by DaCe in the GPU code, it
+    #  writes the given stream into every entry of `__state->gpu_context->streams`.
     #  The stream handle `0` is cast to `nullptr`, that is the default stream.
     sdfg.append_init_code(
-        _for_each_sdfg_gpu_stream(f"__stream = reinterpret_cast<gpuStream_t>({stream_arg});")
-        + "\n",
+        f"__dace_gpu_set_all_streams(__state, reinterpret_cast<gpuStream_t>({stream_arg}));\n",
         location="cuda",
     )
 
@@ -297,7 +296,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
 
     This means that `CompiledSDFG.fast_call()` will return only after all computations
     have _finished_ and the results are available. This function only has an effect for
-    work that runs on the GPU. Furthermore, all work is scheduled on the default stream.
+    work that runs on the GPU: it synchronizes all GPU streams of the SDFG, which by
+    default are the default stream, or an external stream, see `add_external_gpu_stream_arg()`.
     """
 
     if not gpu:
@@ -442,7 +442,7 @@ class DaCeTranslator(
                 f"Expected `max_concurrent_streams == -1` but it was `{dace.Config.get('compiler.cuda.max_concurrent_streams')}`."
             )
             assert dace.Config.get("compiler.cuda.synchronize_on_exit") is False, (
-                "Expected `synchronize_on_exit == False` but it was `True`."
+                f"Expected `synchronize_on_exit == False` but it was `{dace.Config.get('compiler.cuda.synchronize_on_exit')}`."
             )
 
         if self.use_metrics:
