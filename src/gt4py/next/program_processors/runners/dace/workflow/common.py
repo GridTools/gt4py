@@ -11,6 +11,7 @@ import os
 from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
+from typing_extensions import Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
@@ -34,6 +35,14 @@ SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
 
 
+SDFG_ARG_EXTERNAL_GPU_STREAM: Final[str] = "gt_external_gpu_stream"
+"""Name of SDFG argument to input an external GPU stream to GT4Py."""
+
+
+SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE: Final[dace.dtypes.typeclass] = dace.int64
+"""DaCe datatype of `SDFG_ARG_EXTERNAL_GPU_STREAM` argument, see `GPUStreamHandle`."""
+
+
 ExternalWorkspace: TypeAlias = dict[
     core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
 ]
@@ -43,6 +52,56 @@ ExternalWorkspace: TypeAlias = dict[
     as a workspace: a host array exposing `gt4py.eve.xtyping.ArrayInterface`
     or a device array exposing `gt4py.eve.xtyping.CUDAArrayInterface`.
 """
+
+
+@runtime_checkable
+class GPUStream(Protocol):
+    """A GPU stream object that exposes its handle, for example `cupy.cuda.Stream`."""
+
+    @property
+    def ptr(self) -> int:
+        """The pointer value of the stream (`cudaStream_t` or `hipStream_t`)."""
+        ...
+
+
+GPUStreamHandle: TypeAlias = int | GPUStream
+""" Handle of a GPU stream (`cudaStream_t` or `hipStream_t`).
+
+    Either the pointer value of the stream as an integer, or a stream object that
+    exposes it as the `ptr` attribute, for example `cupy.cuda.Stream`. It is passed
+    to the SDFG at runtime as an integer, see `SDFG_ARG_EXTERNAL_GPU_STREAM` and
+    `get_gpu_stream_ptr()`.
+"""
+
+
+DEFAULT_GPU_STREAM: Final[int] = 0
+"""The pointer value of the default GPU stream, i.e. `nullptr`."""
+
+
+def get_gpu_stream_ptr(stream: GPUStreamHandle | None) -> int:
+    """Return the pointer value of a GPU stream, as an integer.
+
+    Args:
+        stream: The GPU stream handle. `None` selects the default stream.
+
+    Returns:
+        The pointer value of the stream, `DEFAULT_GPU_STREAM` for the default stream.
+
+    Raises:
+        TypeError: If `stream` is neither an integer nor a stream object that exposes
+            the `ptr` attribute.
+    """
+    if stream is None:
+        return DEFAULT_GPU_STREAM
+    # NOTE: `bool` is a subclass of `int`, but it is not a valid stream handle.
+    if isinstance(stream, int) and not isinstance(stream, bool):
+        return stream
+    if isinstance(stream, GPUStream) and isinstance(stream.ptr, int):
+        return stream.ptr
+    raise TypeError(
+        f"Invalid GPU stream: should be of type 'int' or a stream object with an integer "
+        f"'ptr' attribute, for example 'cupy.cuda.Stream', got '{type(stream).__name__}'."
+    )
 
 
 def set_dace_config(
@@ -138,13 +197,26 @@ def set_dace_config(
     # In some stencils, for example `apply_diffusion_to_w`, the cuda codegen messes
     #  up with the cuda streams, i.e. it allocates N streams but uses N+1. The first
     #  idea was to use just one stream. However, even in that case the generator
-    #  generated wrong code. The current approach is to use the default stream, i.e.
-    #  setting `max_concurrent_streams` to `-1`. However, the draw back is, that
-    #  apparently then all synchronization is disabled, even the one at the very
-    #  end of the SDFG call. To correct for that we are using either
-    #  `make_sdfg_call_sync()` or `make_sdfg_call_async()`, see there or in
-    #  [DaCe issue#2120](https://github.com/spcl/dace/issues/2120) for more.
+    #  generated wrong code. The current approach is to use a single stream, i.e.
+    #  setting `max_concurrent_streams` to `-1`. With the experimental CUDA codegen
+    #  (see below), all GPU work is then scheduled on the streams stored in
+    #  `__state->gpu_context->streams`, which are all set to the same stream: the
+    #  default stream or an external stream, see `add_external_gpu_stream_arg()`.
+    #  The synchronization at the end of the SDFG call is controlled by gt4py, see
+    #  `make_sdfg_call_sync()` and [DaCe issue#2120](https://github.com/spcl/dace/issues/2120).
     dace.Config.set("compiler.cuda.max_concurrent_streams", value=-1)
+
+    # Use the experimental CUDA codegen: unlike the legacy one, it launches kernels
+    #  and copies on the streams stored in `__state->gpu_context->streams`, even
+    #  when `max_concurrent_streams` is `-1`. This allows to replace the default
+    #  stream with an external stream, see `add_external_gpu_stream_arg()`.
+    dace.Config.set("compiler.cuda.implementation", value="experimental")
+
+    # The experimental CUDA codegen synchronizes the GPU streams at the end of
+    #  the SDFG by default, which makes the SDFG call synchronous. We disable it
+    #  because, when a synchronous call is requested, gt4py adds the stream
+    #  synchronization itself, see `make_sdfg_call_sync()`.
+    dace.Config.set("compiler.cuda.synchronize_on_exit", value=False)
 
     # This assumes that a process will only use one type of GPU.
     if device_type == core_defs.DeviceType.ROCM:

@@ -104,7 +104,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=auto_optimize,
-        async_sdfg_call=True,
+        sync_sdfg_call=False,
         optimization_args=optimization_args,
         unstructured_horizontal_has_unit_stride=on_gpu,
         use_metrics=True,
@@ -187,7 +187,7 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         optimization_args={
             "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
         },
@@ -203,7 +203,7 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     backend = dace_wf_backend.make_dace_backend(
         gpu=False,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         external_workspace={core_defs.DeviceType.CPU: workspace},
     )
 
@@ -221,7 +221,7 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         backend = dace_wf_backend.make_dace_backend(
             gpu=False,
             auto_optimize=True,
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             optimization_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
             },
@@ -234,6 +234,107 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         == gtx_transformations.TransientMemoryMode.POOL
     )
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+
+
+def _make_mocked_decorated_program(
+    sdfg_symbols: dict[str, dace.dtypes.typeclass],
+) -> tuple[dace_wf_decoration.DaCeDecoratedProgram, mock.MagicMock]:
+    """Return a decorated program wrapping a mocked compiled program, and the mock."""
+    sdfg = dace.SDFG("mocked_program")
+    for name, dtype in sdfg_symbols.items():
+        sdfg.add_symbol(name, dtype)
+
+    compiled_program = mock.MagicMock()
+    compiled_program.sdfg_program.sdfg = sdfg
+    compiled_program.csdfg_argv = None
+    compiled_program.csdfg_init_argv = None
+
+    def construct_arguments(**kwargs: Any) -> None:
+        compiled_program.csdfg_argv = []
+        compiled_program.csdfg_init_argv = []
+
+    compiled_program.construct_arguments.side_effect = construct_arguments
+    # Simulate the first call, where the argument vector is not yet constructed.
+    compiled_program.update_sdfg_ctype_arglist.side_effect = TypeError
+
+    return dace_wf_decoration.DaCeDecoratedProgram(compiled_program), compiled_program
+
+
+@dataclasses.dataclass(frozen=True)
+class _GPUStream:
+    """Minimal stand-in for a stream object such as `cupy.cuda.Stream`."""
+
+    ptr: Any
+
+
+@pytest.mark.parametrize(
+    "stream, expected_ptr",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
+)
+def test_get_gpu_stream_ptr(stream, expected_ptr):
+    assert dace_wf_common.get_gpu_stream_ptr(stream) == expected_ptr
+
+
+@pytest.mark.parametrize(
+    "stream",
+    ["0x1234", True, 1.0, _GPUStream(None), object()],
+    ids=["str", "bool", "float", "stream_object_without_int_ptr", "object"],
+)
+def test_get_gpu_stream_ptr_rejects_invalid_stream(stream):
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_common.get_gpu_stream_ptr(stream)
+
+
+def test_make_backend_rejects_invalid_external_gpu_stream():
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_backend.make_dace_backend(gpu=True, auto_optimize=False, external_gpu_stream="0")
+
+
+@pytest.mark.parametrize(
+    "external_gpu_stream, expected_arg",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
+)
+def test_decorated_program_passes_external_gpu_stream_arg(external_gpu_stream, expected_arg):
+    program, compiled_program = _make_mocked_decorated_program(
+        {
+            dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM: dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE
+        }
+    )
+    program.set_external_gpu_stream(external_gpu_stream)
+
+    with mock.patch.object(dace_wf_decoration.sdfg_callable, "get_sdfg_args", return_value={}):
+        program(offset_provider={})
+
+    compiled_program.construct_arguments.assert_called_once()
+    call_kwargs = compiled_program.construct_arguments.call_args.kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM] == expected_arg
+    compiled_program.fast_call.assert_called_once()
+
+    # The stream is applied on SDFG initialization, it cannot be changed later.
+    with pytest.raises(RuntimeError, match="before the first call"):
+        program.set_external_gpu_stream(0x5678)
+
+
+def test_decorated_program_skips_external_gpu_stream_arg_on_cpu():
+    # A CPU SDFG does not have the external GPU stream argument.
+    program, compiled_program = _make_mocked_decorated_program({})
+    program.set_external_gpu_stream(0x1234)
+
+    with mock.patch.object(dace_wf_decoration.sdfg_callable, "get_sdfg_args", return_value={}):
+        program(offset_provider={})
+
+    call_kwargs = compiled_program.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM not in call_kwargs
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -292,7 +393,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     custom_backend = dace_wf_backend.make_dace_backend(
         gpu=on_gpu,
         auto_optimize=True,
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         optimization_args={
             "transient_memory_mode": transient_memory_mode,
         },
