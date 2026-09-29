@@ -27,7 +27,7 @@ class DaCeBackend(backend.Backend[Any]):
     """DaCe backend with support for injecting an external workspace and GPU stream at load time."""
 
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
-    external_gpu_stream: int | None = None
+    external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None = None
 
     def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
         program = super().load_artifact(artifact)
@@ -82,7 +82,7 @@ def make_dace_backend(
     auto_optimize: bool = True,
     sync_sdfg_call: bool = False,
     optimization_args: dict[str, Any] | None = None,
-    external_gpu_stream: int | None = None,
+    external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None = None,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
     unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
     use_metrics: bool = True,
@@ -105,9 +105,11 @@ def make_dace_backend(
             the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_gpu_stream: An external GPU stream to be used for the SDFG call,
             which allows to synchronize the execution of GPU kernels with external
-            workload and to share the stream memory pool. The stream handle is
-            passed to the SDFG at runtime, on the first call, thus it does not
-            affect the generated code. If not provided, the default stream is used.
+            workload and to share the stream memory pool. It can be the pointer
+            value of the stream, as an integer, or a stream object such as
+            `cupy.cuda.Stream`, see `GPUStreamHandle`. The stream handle is passed
+            to the SDFG at runtime, on the first call, thus it does not affect the
+            generated code. If not provided, the default stream is used.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride

@@ -46,7 +46,7 @@ class DaCeConfig(next_backend.ToolchainConfig):
     #: GPU stream allocated outside the SDFG. The toolchain injects it into the
     #: loaded programs, and the translation step then passes it to the SDFG as an
     #: argument. The stream is an integer, so a config holding one is hashable.
-    external_gpu_stream: int | None = None
+    external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None = None
 
     #: Name of the function that binds the SDFG arguments. The bindings and the
     #: compilation steps must agree on it.
