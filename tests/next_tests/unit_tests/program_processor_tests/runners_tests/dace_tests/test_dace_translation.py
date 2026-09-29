@@ -13,7 +13,7 @@ import pytest
 
 import re
 import uuid
-from typing import Callable, Literal
+from typing import Callable, Iterator, Literal
 from unittest import mock
 
 from gt4py._core import definitions as core_defs
@@ -52,8 +52,14 @@ VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
         pytest.param(core_defs.DeviceType.ROCM, id="ROCM"),
     ]
 )
-def device_type(request) -> str:
-    return request.param
+def device_type(request) -> Iterator[core_defs.DeviceType]:
+    # DaCe caches the GPU backend (`cuda` or `hip`) on first use, see `get_gpu_backend()`,
+    #  because it assumes that a process only targets one type of GPU. These tests generate
+    #  code for both CUDA and ROCm in the same process, so we clear the cache on each test,
+    #  otherwise the code would be generated for the backend of a previous test.
+    dace.codegen.common.get_gpu_backend.cache_clear()
+    yield request.param
+    dace.codegen.common.get_gpu_backend.cache_clear()
 
 
 def _translate_gtir_to_sdfg(
