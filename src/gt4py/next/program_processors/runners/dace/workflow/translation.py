@@ -269,8 +269,9 @@ def add_external_gpu_stream_arg(sdfg: dace.SDFG) -> None:
     The stream handle is a pointer, which in general changes from run to run of
     the application, therefore it cannot be a compile-time value. Instead, it is
     passed as the SDFG argument `SDFG_ARG_EXTERNAL_GPU_STREAM` and applied in the
-    SDFG init code, which runs once on the first SDFG call. The value `0` selects
-    the default stream.
+    SDFG init code, which runs once on the first SDFG call. The value of the
+    argument is the pointer value of the stream, see `get_gpu_stream_ptr()`, where
+    `DEFAULT_GPU_STREAM` selects the default stream.
 
     Args:
         sdfg: The SDFG to process, modified in place.
@@ -284,7 +285,8 @@ def add_external_gpu_stream_arg(sdfg: dace.SDFG) -> None:
 
     # NOTE: `__dace_gpu_set_all_streams()` is defined by DaCe in the GPU code, it
     #  writes the given stream into every entry of `__state->gpu_context->streams`.
-    #  The stream handle `0` is cast to `nullptr`, that is the default stream.
+    #  The handle `DEFAULT_GPU_STREAM`, i.e. `0`, is cast to `nullptr`, that is
+    #  the default stream.
     sdfg.append_init_code(
         f"__dace_gpu_set_all_streams(__state, reinterpret_cast<gpuStream_t>({stream_arg}));\n",
         location="cuda",

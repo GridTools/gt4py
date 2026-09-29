@@ -11,6 +11,7 @@ import os
 from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
+from typing_extensions import Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
@@ -39,7 +40,7 @@ SDFG_ARG_EXTERNAL_GPU_STREAM: Final[str] = "gt_external_gpu_stream"
 
 
 SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE: Final[dace.dtypes.typeclass] = dace.int64
-"""DaCe datatype of `SDFG_ARG_EXTERNAL_GPU_STREAM` argument, the stream handle as integer."""
+"""DaCe datatype of `SDFG_ARG_EXTERNAL_GPU_STREAM` argument, see `GPUStreamHandle`."""
 
 
 ExternalWorkspace: TypeAlias = dict[
@@ -51,6 +52,56 @@ ExternalWorkspace: TypeAlias = dict[
     as a workspace: a host array exposing `gt4py.eve.xtyping.ArrayInterface`
     or a device array exposing `gt4py.eve.xtyping.CUDAArrayInterface`.
 """
+
+
+@runtime_checkable
+class GPUStream(Protocol):
+    """A GPU stream object that exposes its handle, for example `cupy.cuda.Stream`."""
+
+    @property
+    def ptr(self) -> int:
+        """The pointer value of the stream (`cudaStream_t` or `hipStream_t`)."""
+        ...
+
+
+GPUStreamHandle: TypeAlias = int | GPUStream
+""" Handle of a GPU stream (`cudaStream_t` or `hipStream_t`).
+
+    Either the pointer value of the stream as an integer, or a stream object that
+    exposes it as the `ptr` attribute, for example `cupy.cuda.Stream`. It is passed
+    to the SDFG at runtime as an integer, see `SDFG_ARG_EXTERNAL_GPU_STREAM` and
+    `get_gpu_stream_ptr()`.
+"""
+
+
+DEFAULT_GPU_STREAM: Final[int] = 0
+"""The pointer value of the default GPU stream, i.e. `nullptr`."""
+
+
+def get_gpu_stream_ptr(stream: GPUStreamHandle | None) -> int:
+    """Return the pointer value of a GPU stream, as an integer.
+
+    Args:
+        stream: The GPU stream handle. `None` selects the default stream.
+
+    Returns:
+        The pointer value of the stream, `DEFAULT_GPU_STREAM` for the default stream.
+
+    Raises:
+        TypeError: If `stream` is neither an integer nor a stream object that exposes
+            the `ptr` attribute.
+    """
+    if stream is None:
+        return DEFAULT_GPU_STREAM
+    # NOTE: `bool` is a subclass of `int`, but it is not a valid stream handle.
+    if isinstance(stream, int) and not isinstance(stream, bool):
+        return stream
+    if isinstance(stream, GPUStream) and isinstance(stream.ptr, int):
+        return stream.ptr
+    raise TypeError(
+        f"Invalid GPU stream: should be of type 'int' or a stream object with an integer "
+        f"'ptr' attribute, for example 'cupy.cuda.Stream', got '{type(stream).__name__}'."
+    )
 
 
 def set_dace_config(

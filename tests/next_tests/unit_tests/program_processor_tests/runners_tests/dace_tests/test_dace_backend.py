@@ -260,8 +260,49 @@ def _make_mocked_decorated_program(
     return dace_wf_decoration.DaCeDecoratedProgram(compiled_program), compiled_program
 
 
+@dataclasses.dataclass(frozen=True)
+class _GPUStream:
+    """Minimal stand-in for a stream object such as `cupy.cuda.Stream`."""
+
+    ptr: Any
+
+
 @pytest.mark.parametrize(
-    "external_gpu_stream, expected_arg", [(None, 0), (0x1234, 0x1234)], ids=["default", "external"]
+    "stream, expected_ptr",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
+)
+def test_get_gpu_stream_ptr(stream, expected_ptr):
+    assert dace_wf_common.get_gpu_stream_ptr(stream) == expected_ptr
+
+
+@pytest.mark.parametrize(
+    "stream",
+    ["0x1234", True, 1.0, _GPUStream(None), object()],
+    ids=["str", "bool", "float", "stream_object_without_int_ptr", "object"],
+)
+def test_get_gpu_stream_ptr_rejects_invalid_stream(stream):
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_common.get_gpu_stream_ptr(stream)
+
+
+def test_make_backend_rejects_invalid_external_gpu_stream():
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_backend.make_dace_backend(gpu=True, auto_optimize=False, external_gpu_stream="0")
+
+
+@pytest.mark.parametrize(
+    "external_gpu_stream, expected_arg",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
 )
 def test_decorated_program_passes_external_gpu_stream_arg(external_gpu_stream, expected_arg):
     program, compiled_program = _make_mocked_decorated_program(
