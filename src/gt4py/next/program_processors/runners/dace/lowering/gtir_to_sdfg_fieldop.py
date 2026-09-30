@@ -97,6 +97,7 @@ def _create_field_operator_impl(
     output_type: ts.FieldType,
     map_exit: dace_nodes.MapExit | None,
     inner_dims: Sequence[gtx_common.Dimension],
+    is_zero_dim: bool,
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -119,6 +120,8 @@ def _create_field_operator_impl(
             the dataflow computes all dimensions of the domain by itself.
         inner_dims: The dimensions that the dataflow computes by itself, therefore
             written in full shape rather than element-wise.
+        is_zero_dim: The field operator has an empty domain, thus it computes a
+            zero-dimensional field regardless of `output_domain`.
 
     Returns:
         The field data descriptor, which includes the field access node in the
@@ -130,7 +133,10 @@ def _create_field_operator_impl(
         assert output_domain == infer_domain.DomainAccessDescriptor.NEVER
         return None
     assert isinstance(output_domain, domain_utils.SymbolicDomain)
-    field_domain = gtir_domain.get_field_domain(output_domain)
+    # A zero-dimensional field operator is lowered to a trivial map, therefore its
+    #  result is a zero-dimensional field even when domain inference has assigned it
+    #  a domain, e.g. `make_const_list` of a scalar value used as `concat_where` branch.
+    field_domain = [] if is_zero_dim else gtir_domain.get_field_domain(output_domain)
 
     dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
 
@@ -283,6 +289,6 @@ def create_field_operator(
 
     return gtx_utils.tree_map(
         lambda edge, field_domain, sym: _create_field_operator_impl(
-            ctx, sdfg_builder, edge, field_domain, sym.type, map_exit, inner_dims
+            ctx, sdfg_builder, edge, field_domain, sym.type, map_exit, inner_dims, len(domain) == 0
         )
     )(output, output_domain, output_symbols)

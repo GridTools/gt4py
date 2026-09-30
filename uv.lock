@@ -922,8 +922,8 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a8"
-source = { git = "https://github.com/spcl/dace.git?branch=nested-sdfg#7bc8159a945185a3b723d04261534965d1ae95f3" }
+version = "2.0.0a9"
+source = { git = "https://github.com/spcl/dace.git?branch=nested-sdfg#a3f0a421831fa07cdcd1dcc89a03fadb56c69eba" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },

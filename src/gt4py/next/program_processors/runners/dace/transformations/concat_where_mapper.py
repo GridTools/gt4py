@@ -8,8 +8,6 @@
 
 import copy
 import dataclasses
-import functools
-import warnings
 from typing import Any, Collection, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
@@ -21,14 +19,12 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.sdfg.replace import replace_datadesc_names as dace_replace_datadesc_names
 from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
 from gt4py.next import config as gtx_config
-from gt4py.next.program_processors.runners.dace import (
-    sdfg_utils as gtx_dace_utils,
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 @dace_properties.make_properties
@@ -370,10 +366,10 @@ _ConsumerPartition: TypeAlias = tuple[list[_FinalConsumerSpec], list[_FinalConsu
 It is a pair of `list`s. The first `list` contains the "genuine consumers", this are
 the consumers that only read one element from the concat where node. Essentially,
 these consumers can be handled by `_replace_single_read()`.
-The second `list` contains the "descending points", these are essentially nested SDFGs,
-that consume the entire data from the concat where node (a nested SDFG that just
-consumes a single element is classified as a "genuine consumer"). These are the nodes
-that needs further processing.
+The second `list` contains the "descending points", these are the nested SDFGs that
+consume the concat where node. Since the connector of a nested SDFG is equivalent to
+the data connected to it, a nested SDFG always accesses the whole data, even if it
+only reads a single element. These are the nodes that needs further processing.
 """
 
 
@@ -722,72 +718,68 @@ def _configure_descending_point(
         parent: nested for nested, parent in nested_to_parent_name_mapping.items()
     }
 
+    # Symbols that the nested SDFG assigns itself, e.g. on an interstate edge or as a
+    #  loop variable. They are not necessarily listed in `nsdfg.symbols`.
+    reassigned_symbols: set[str] = set()
+    for isedge in nsdfg.all_interstate_edges():
+        reassigned_symbols.update(isedge.data.assignments.keys())
+    for region in nsdfg.all_control_flow_regions():
+        reassigned_symbols.update(region.new_symbols(nsdfg.symbols).keys())
+
     nested_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, _ProducerSpec] = {}
-    full_repl_dict: dict[str, str] = {}  # All known replacements.
     for parent_prod_spec in parent_producer_specs:
         parent_data_name = parent_prod_spec.data_name
 
-        # Compute the replacement mapping for symbols.
-        repl_dict: dict[str, str] = {}  # For this producer.
+        # The symbols used by the producer are mapped 1:1 into the nested SDFG. The
+        #  data descriptors mapped into the nested SDFG have to be equivalent to the
+        #  ones in the parent SDFG (see `NestedSDFG.validate()`), so the symbols they
+        #  use, e.g. in the shape, must have the same name and meaning inside. If the
+        #  nested SDFG uses the name of the symbol for something else, either a data
+        #  container or a symbol, including one it assigns itself, it is renamed there.
         for psym in sorted(parent_prod_spec.free_symbols):
+            if psym in nsdfg.arrays:
+                _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
             ptype = state.sdfg.symbols[psym]
-            if psym in full_repl_dict:
-                # The symbol was already handled in a previous producer, so we reuse it.
-                nested_symbol = full_repl_dict[psym]
-                assert nested_symbol in nsdfg.symbols and nsdfg.symbols[nested_symbol] == ptype
-
-            elif (
-                psym in symbol_mapping
+            if (
+                psym not in reassigned_symbols
+                and psym in symbol_mapping
                 and psym == str(symbol_mapping[psym])
                 and psym in nsdfg.symbols
                 and nsdfg.symbols[psym] == ptype
             ):
                 # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
-                nested_symbol = psym
-                assert nested_symbol not in repl_dict
+                continue
 
-            else:
-                # The symbol is either not known or it is not mapped 1:1 or has the wrong type,
-                #  in either case we have to create a new symbol inside the nested SDFG.
-                nested_symbol = nsdfg.add_symbol(psym, ptype, find_new_name=True)
-                assert nested_symbol not in symbol_mapping
-                symbol_mapping[nested_symbol] = psym
-
-            if psym != nested_symbol:
-                repl_dict[psym] = nested_symbol
-                if psym not in full_repl_dict:
-                    full_repl_dict[psym] = nested_symbol
+            if psym in nsdfg.symbols or psym in symbol_mapping or psym in reassigned_symbols:
+                renamed_symbol = _find_new_nested_symbol(nsdfg, psym, reassigned_symbols)
+                nsdfg.replace_dict({psym: renamed_symbol})
+                if psym in symbol_mapping:
+                    symbol_mapping[renamed_symbol] = symbol_mapping.pop(psym)
+                if psym in reassigned_symbols:
+                    reassigned_symbols.discard(psym)
+                    reassigned_symbols.add(renamed_symbol)
+            nsdfg.add_symbol(psym, ptype)
+            symbol_mapping[psym] = psym
 
         # Compute the nested data descriptor.
         if parent_data_name in handled_data:
             # The data has already been handled before. So we can simply reuse it.
-            #  Symbol renaming has already been handled.
             already_handled_prod_spec = handled_data[parent_data_name]
             nested_desc = already_handled_prod_spec.desc.clone()
 
         elif parent_data_name in parent_to_nested_name_mapping:
             # We have not handled the data, but it is already mapped into the nested
             #  SDFG, for other reasons. Thus we will reuse this data descriptor.
-            #  The symbol renaming is already done and not necessarily described
-            #  through `repl_dict`.
             nested_data_name = parent_to_nested_name_mapping[parent_data_name]
             nested_desc = nsdfg.arrays[nested_data_name].clone()
             assert not nested_desc.transient
 
         else:
             # The data is not yet mapped into the nested SDFG, so we have to create
-            #  a new one. And we have to apply symbol renaming on it. In addition
-            #  we have to make sure that it is a global.
+            #  a new one, and we have to make sure that it is a global.
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
-            if repl_dict:
-                dace_sym.safe_replace(
-                    mapping=repl_dict,
-                    replace_callback=functools.partial(
-                        dace.sdfg.replace_properties_dict, nested_desc
-                    ),
-                )
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
 
             # We also need to map it into the nested SDFG.
@@ -807,21 +799,11 @@ def _configure_descending_point(
                 nested_data_name, dtype=dace.pointer(nested_desc.dtype)
             )
 
-        # Apply symbol renaming on offset and subset; descriptor was handled above.
-        nested_offset = copy.deepcopy(parent_prod_spec.offset)
-        nested_subset = copy.deepcopy(parent_prod_spec.subset)
-        if repl_dict:
-            for nested_set in [nested_offset, nested_subset]:
-                dace_sym.safe_replace(  # Performs inplace replacement
-                    mapping=repl_dict,
-                    replace_callback=nested_set.replace,
-                )
-
         nested_initial_producer_specs.append(
             _ProducerSpec(
                 data_name=nested_data_name,
-                offset=nested_offset,
-                subset=nested_subset,
+                offset=copy.deepcopy(parent_prod_spec.offset),
+                subset=copy.deepcopy(parent_prod_spec.subset),
                 desc=nested_desc,
                 data_source={},  # Intentionally empty.
             )
@@ -831,6 +813,64 @@ def _configure_descending_point(
     nsdfg_node.symbol_mapping = symbol_mapping
 
     return nested_initial_producer_specs
+
+
+def _find_new_nested_symbol(nsdfg: dace.SDFG, name: str, reserved: Collection[str]) -> str:
+    """Returns a name, different from `name`, that is unused in `nsdfg` and not in `reserved`.
+
+    `reserved` is needed because symbols that are only assigned inside `nsdfg`, e.g.
+    on an interstate edge, are not necessarily known to `nsdfg.is_name_free()`.
+    """
+    taken = set(reserved) | {name}
+    while True:
+        new_name = dace_data.find_new_name(name, taken)
+        if nsdfg.is_name_free(new_name):
+            return new_name
+        taken.add(new_name)
+
+
+def _rename_nested_data(
+    state: dace.SDFGState,
+    nsdfg_node: dace_nodes.NestedSDFG,
+    data_name: str,
+    parent_to_nested_name_mapping: dict[str, str],
+) -> None:
+    """Renames the data container `data_name` inside the nested SDFG `nsdfg_node`.
+
+    If the data is mapped into the nested SDFG, the connector of `nsdfg_node` is
+    renamed as well. The edges in `state` are modified in place, thus references to
+    them, such as `_FinalConsumerSpec.edge`, remain valid. `parent_to_nested_name_mapping`
+    is updated in place.
+
+    Args:
+        state: The state containing `nsdfg_node`.
+        nsdfg_node: The nested SDFG in which the data should be renamed.
+        data_name: The name of the data inside the nested SDFG.
+        parent_to_nested_name_mapping: Maps the names of the data in the parent SDFG
+            to the names of the data inside the nested SDFG.
+    """
+    nsdfg: dace.SDFG = nsdfg_node.sdfg
+    new_data_name = nsdfg.find_new_symbol(data_name)
+    dace_replace_datadesc_names(nsdfg, {data_name: new_data_name})
+
+    for parent_data_name, nested_data_name in parent_to_nested_name_mapping.items():
+        if nested_data_name == data_name:
+            parent_to_nested_name_mapping[parent_data_name] = new_data_name
+
+    if data_name in nsdfg_node.in_connectors:
+        conn_type = nsdfg_node.in_connectors[data_name]
+        nsdfg_node.remove_in_connector(data_name)
+        nsdfg_node.add_in_connector(new_data_name, dtype=conn_type)
+        for iedge in state.in_edges(nsdfg_node):
+            if iedge.dst_conn == data_name:
+                iedge.dst_conn = new_data_name
+    if data_name in nsdfg_node.out_connectors:
+        conn_type = nsdfg_node.out_connectors[data_name]
+        nsdfg_node.remove_out_connector(data_name)
+        nsdfg_node.add_out_connector(new_data_name, dtype=conn_type)
+        for oedge in state.out_edges(nsdfg_node):
+            if oedge.src_conn == data_name:
+                oedge.src_conn = new_data_name
 
 
 def _map_data_into_nested_scopes(
@@ -1302,27 +1342,20 @@ def _find_consumer_specs_single_source_single_level(
                 return None
             raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
 
-    # Now wet and partition the consumer. Most importantly test if they only read
-    #  a single element, in which case they are genuine consumers this applies to
-    #  _all_ nodes, even nested SDFGs. Otherwise it might open up a "new level".
-    #  For this the consumer must be a nested SDFG that reads the _whole_ concat
-    #  where node.
-    concat_where_shape = dace_sbs.Range.from_array(concat_node.desc(state.sdfg))
+    # Now wet and partition the consumer. A nested SDFG always opens up a "new level":
+    #  its connector is equivalent to the concat where data (see `NestedSDFG.validate()`),
+    #  so the nested SDFG accesses the data with the same indices as here, even if it
+    #  only reads a single element. Thus, the accesses have to be replaced inside it.
+    #  All other consumers have to read a single element, which makes them genuine
+    #  consumers.
     stairs_to_deeper_levels: list[_FinalConsumerSpec] = []  # Better name appreciated.
     consumer_specs: list[_FinalConsumerSpec] = []
     for consumer_spec in all_consumers:
-        consumed_subset = consumer_spec.consumed_subset(state)
-        if consumed_subset.num_elements() == 1:  # Real consumer
+        if isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG):
+            stairs_to_deeper_levels.append(consumer_spec)
+        elif consumer_spec.consumed_subset(state).num_elements() == 1:  # Real consumer
             if not for_check:
                 consumer_specs.append(consumer_spec)
-        elif isinstance(consumer_spec.consumer, dace_nodes.NestedSDFG) and (
-            consumed_subset.covers(concat_where_shape)
-            or _handle_special_case_of_gt4py_scan_point(
-                state, consumer_spec, concat_node, consumed_subset
-            )
-        ):
-            # The whole array is mapped into the nested SDFG.
-            stairs_to_deeper_levels.append(consumer_spec)
         else:
             if for_check:
                 return None
@@ -1331,101 +1364,6 @@ def _find_consumer_specs_single_source_single_level(
     if for_check:
         return stairs_to_deeper_levels
     return sorted(consumer_specs), sorted(stairs_to_deeper_levels)
-
-
-def _handle_special_case_of_gt4py_scan_point(
-    state: dace.SDFGState,
-    descending_point: _FinalConsumerSpec,
-    concat_node: dace_nodes.AccessNode,
-    consumed_subset: dace_sbs.Range,
-) -> bool:
-    """Performs special checking for cases where data is not properly mapped into a nested SDFG.
-
-    In certain cases, especially for scans, DaCe Memlet propagation (or related) will
-    fail to properly annotate the consumer Memlet that maps the data inside a nested
-    SDFG. This function applies some heuristic checks if the nested SDFG can be
-    processed or not.
-
-    The pathological case is a nested SDFG inside a Map scope, which is used for the
-    scan expressions. By construction, the scan nested SDFG does access to a single
-    point in the horizontal domain. However, for unknown reason, DaCe replaces the
-    point access with a subset, as an example `[i_Cell_gtx_horizontal, 0:3]` becomes
-    `[0:i_Cell_gtx_horizontal + 1, 0:3]`. Thus, `consumed_subset` is not a point
-    nor the full shape either, but we know that it is safe to apply the transformation.
-    """
-    assert isinstance(descending_point.consumer, dace_nodes.NestedSDFG)
-    nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
-
-    if _handle_special_case_of_gt4py_scan_point_impl(
-        state, descending_point, concat_node, consumed_subset
-    ):
-        warnings.warn(
-            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}`.",
-            stacklevel=1,
-        )
-        return True
-    else:
-        warnings.warn(
-            f"Special rule applied to `concat_where`-inline `{concat_node.data}` into `{nsdfg.label}` was rejected.",
-            stacklevel=1,
-        )
-        return False
-
-
-def _handle_special_case_of_gt4py_scan_point_impl(
-    state: dace.SDFGState,
-    descending_point: _FinalConsumerSpec,
-    concat_node: dace_nodes.AccessNode,
-    consumed_subset: dace_sbs.Range,
-) -> bool:
-    # There must be one node in the nested SDFG that is not a state.
-    # TODO(phimuell): Come up with a better test.
-    nsdfg: dace_nodes.NestedSDFG = descending_point.consumer
-    if all(isinstance(node, dace.SDFGState) for node in nsdfg.sdfg.nodes()):
-        return False
-
-    # At this point `state` should be in a valid state so that it is safe to
-    #  compute the scope dict.
-    scope_dict = state.scope_dict()
-    if scope_dict[nsdfg] is None:
-        return False
-
-    parent_desc = concat_node.desc(state.sdfg)
-    nested_desc = nsdfg.sdfg.arrays[descending_point.edge.dst_conn]
-
-    if type(parent_desc) is not type(nested_desc):
-        return False
-    # TODO(phimuell): Make the test involving the shape a bit smarter.
-    if len(parent_desc.shape) != len(nested_desc.shape):
-        return False
-
-    if not all((start == 0) == True for start in consumed_subset.min_element()):  # noqa: E712 [true-false-comparison]  # SymPy comparison
-        return False
-
-    # Find all map parameters.
-    edge = descending_point.edge
-    map_params: set[str] = set()
-    while isinstance(edge.src, dace_nodes.MapEntry):
-        assert edge.src_conn.startswith("OUT")
-        map_params.update(edge.src.map.params)
-        edge = next(
-            iter(e for e in state.in_edges_by_connector(edge.src, "IN_" + edge.src_conn[4:]))
-        )
-
-    assert scope_dict[edge.dst] is None  # really strange case.
-
-    for i, end in enumerate(consumed_subset.max_element()):
-        if gtx_dace_utils.is_compile_time_size(end):
-            if (int(end) + 1) != parent_desc.shape[i]:  # `+1` because of storage format.
-                return False
-        # In case of a symbol, we only check for the pathological case, i.e. a Map
-        #  parameter is the end value. We also allow only one symbol value.
-        elif (end_str := str(end)) in map_params:
-            map_params.discard(end_str)
-        else:
-            return False
-
-    return True
 
 
 def _cleanup_memlet_path(state: dace.SDFGState, consumer_spec: _FinalConsumerSpec) -> None:
