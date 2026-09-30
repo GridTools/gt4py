@@ -8,9 +8,10 @@
 
 import dataclasses
 from collections import Counter
+from collections.abc import Iterable
+from typing import Literal, Optional, cast, overload
 
 import gt4py.eve as eve
-from gt4py.eve.extended_typing import Iterable, Literal, Optional, cast, overload
 from gt4py.next.iterator import ir as itir
 
 
