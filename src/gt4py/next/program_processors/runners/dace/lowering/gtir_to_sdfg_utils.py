@@ -24,6 +24,10 @@ from gt4py.next.type_system import type_specifications as ts
 _TASKLET_CONNECTOR_PREFIX: Final[str] = "__tlet_"
 """Prefix string to be used for tasklet connectors."""
 
+CONST_DIM: Final = gtx_common.Dimension(value="_CONST_DIM", kind=gtx_common.DimensionKind.LOCAL)
+"""Magic local dimension used for a list of values with length known at compile-time,
+as produced by 'make_const_list'."""
+
 
 def debug_info(
     node: gtir.Node, *, default: Optional[dace.dtypes.DebugInfo] = None
