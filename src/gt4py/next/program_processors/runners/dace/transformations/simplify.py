@@ -1329,9 +1329,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
-        # Recursively visit the nested SDFGs for mapping of strides from inner to outer array
-        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
-
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(
@@ -1369,3 +1366,12 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
                 curr_edge.data.data = glob_data
             if curr_dst_subset is not None:
                 curr_dst_subset.offset(correcting_offset, negative=False)
+            # A NestedSDFG inside the Map now writes into `G`, thus its connector,
+            #  which has to be equivalent to the data connected to it, is restated.
+            if isinstance(curr_edge.src, dace_nodes.NestedSDFG):
+                gtx_transformations.utils.restate_nested_sdfg_connector(
+                    nsdfg_node=curr_edge.src,
+                    connector=curr_edge.src_conn,
+                    new_desc=glob_ac.desc(sdfg),
+                    ss_offset=correcting_offset.min_element(),
+                )

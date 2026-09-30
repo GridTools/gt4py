@@ -36,16 +36,34 @@ def _make_if_block(
     b1_type: dace.typeclass = dace.float64,
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
+    b1_shape: Optional[tuple[int, ...]] = None,
+    b2_shape: Optional[tuple[int, ...]] = None,
+    output_shape: Optional[tuple[int, ...]] = None,
 ) -> dace_nodes.NestedSDFG:
+    """Create an if block that selects between its arguments `b1_name` and `b2_name`.
+
+    By default, the arguments and the output are scalars. If `b{1,2}_shape` or
+    `output_shape` is given, the corresponding connector is instead connected to an
+    array element `a[__i]` inside a Map with iteration variable `__i`. Because a nested
+    SDFG connector has to be equivalent to the data it is connected to, the connector
+    is then the full array, accessed at `[__i]`.
+    """
     inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
+    shapes = {b1_name: b1_shape, b2_name: b2_shape, output_name: output_shape}
     for name in {b1_name, b2_name, cond_name, output_name}:
-        inner_sdfg.add_scalar(
-            name,
-            dtype=types[name],
-            transient=False,
-        )
+        if shapes.get(name) is None:
+            inner_sdfg.add_scalar(name, dtype=types[name], transient=False)
+        else:
+            inner_sdfg.add_array(name, shape=shapes[name], dtype=types[name], transient=False)
+    symbol_mapping = None
+    if any(shape is not None for shape in shapes.values()):
+        inner_sdfg.add_symbol("__i", stype=dace.int32)
+        symbol_mapping = {"__i": "__i"}
+    b1_index = "0" if b1_shape is None else "__i"
+    b2_index = "0" if b2_shape is None else "__i"
+    output_index = "0" if output_shape is None else "__i"
 
     if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
@@ -55,7 +73,7 @@ def _make_if_block(
     tstate.add_nedge(
         tstate.add_access(b1_name),
         tstate.add_access(output_name),
-        dace.Memlet(f"{b1_name}[0] -> [0]"),
+        dace.Memlet(f"{b1_name}[{b1_index}] -> [{output_index}]"),
     )
 
     else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
@@ -63,7 +81,7 @@ def _make_if_block(
     fstate.add_nedge(
         fstate.add_access(b2_name),
         fstate.add_access(output_name),
-        dace.Memlet(f"{b2_name}[0] -> [0]"),
+        dace.Memlet(f"{b2_name}[{b2_index}] -> [{output_index}]"),
     )
 
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
@@ -73,7 +91,61 @@ def _make_if_block(
         sdfg=inner_sdfg,
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
+        symbol_mapping=symbol_mapping,
     )
+
+
+def _write_if_output(
+    state: dace.SDFGState,
+    if_block: dace_nodes.NestedSDFG,
+    connector: str,
+    map_exit: dace_nodes.MapExit,
+    outer_data: str,
+) -> str:
+    """Write the scalar output `connector` of `if_block` to `outer_data[__i]`.
+
+    The value passes through a scalar transient, because the connector of a nested
+    SDFG has to be equivalent to the data it is connected to, so it cannot write
+    into an element of the outer array directly. This is also how the lowering
+    writes the result of an if-expression.
+
+    Returns:
+        The name of the scalar transient.
+    """
+    sdfg = state.sdfg
+    tmp = f"{outer_data}_if_out"
+    sdfg.add_scalar(tmp, dtype=sdfg.arrays[outer_data].dtype, transient=True)
+    tmp_node = state.add_access(tmp)
+    state.add_edge(if_block, connector, tmp_node, None, dace.Memlet(f"{tmp}[0]"))
+    state.add_edge(tmp_node, None, map_exit, f"IN_{outer_data}", dace.Memlet(f"{outer_data}[__i]"))
+    return tmp
+
+
+def _read_if_cond(
+    state: dace.SDFGState,
+    map_entry: dace_nodes.MapEntry,
+    if_block: dace_nodes.NestedSDFG,
+    outer_data: str,
+    connector: str = "__cond",
+) -> str:
+    """Pass the condition `outer_data[__i]` to the scalar `connector` of `if_block`.
+
+    The value passes through a scalar transient for the same reason as in
+    `_write_if_output()`. This is also how the lowering passes a condition that
+    is read from a field.
+
+    Returns:
+        The name of the scalar transient.
+    """
+    sdfg = state.sdfg
+    tmp = f"{outer_data}_if_cond"
+    sdfg.add_scalar(tmp, dtype=dace.bool_, transient=True)
+    tmp_node = state.add_access(tmp)
+    state.add_edge(
+        map_entry, f"OUT_{outer_data}", tmp_node, None, dace.Memlet(f"{outer_data}[__i]")
+    )
+    state.add_edge(tmp_node, None, if_block, connector, dace.Memlet(f"{tmp}[0]"))
+    return tmp
 
 
 def _make_if_block_with_different_number_of_outputs_in_branches(
@@ -332,7 +404,7 @@ def test_if_mover_independent_branches():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
@@ -347,7 +419,7 @@ def test_if_mover_independent_branches():
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "d_if_out"])
     assert len(sdfg.arrays) == len(top_ac)
 
     top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
@@ -452,7 +524,7 @@ def test_if_mover_invalid_if_block():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
@@ -565,7 +637,7 @@ def test_if_mover_dependent_branch_1():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
@@ -580,7 +652,7 @@ def test_if_mover_dependent_branch_1():
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1", "d_if_out"])
     assert len(sdfg.arrays) == len(top_ac)
 
     top_tlet: list[dace_nodes.Tasklet] = util.count_nodes(state, dace_nodes.Tasklet, True)
@@ -677,7 +749,7 @@ def test_if_mover_dependent_branch_2():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
@@ -691,7 +763,7 @@ def test_if_mover_dependent_branch_2():
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "d_if_out"])
     assert len(sdfg.arrays) == len(top_ac)
 
     assert set(if_block.in_connectors.keys()) == set(input_names).union(["__cond"]).difference(
@@ -775,13 +847,13 @@ def test_if_mover_dependent_branch_3():
     imx2.add_scope_connectors("t2")
 
     state.add_edge(cond, None, me, "IN_cond", dace.Memlet("cond[0:10]"))
-    state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
+    _read_if_cond(state, me, if_block, "cond")
     me.add_scope_connectors("cond")
 
     state.add_edge(t1, None, if_block, "__arg1", dace.Memlet("t1[0]"))
     state.add_edge(t2, None, if_block, "__arg2", dace.Memlet("t2[0]"))
 
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
     mx.add_scope_connectors("d")
 
@@ -791,7 +863,7 @@ def test_if_mover_dependent_branch_3():
     assert len(me.in_connectors) == 5
     assert util.count_nodes(state, dace_nodes.Tasklet) == 2
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 7
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 9
 
     _perform_test(sdfg, expected_applies=1)
 
@@ -801,8 +873,8 @@ def test_if_mover_dependent_branch_3():
     assert len(me.in_connectors) == 4
     assert util.count_nodes(state, dace_nodes.Tasklet) == 0
     assert util.count_nodes(state, dace_nodes.MapEntry) == 1
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 5
-    assert set(gnames) == sdfg.arrays.keys()
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 7
+    assert set(gnames).union(["cond_if_cond", "d_if_out"]) == sdfg.arrays.keys()
 
 
 def test_if_mover_dependent_branch_4():
@@ -926,8 +998,8 @@ def test_if_mover_dependent_branch_4():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output1", mx, "IN_d", dace.Memlet("d[__i]"))
-    state.add_edge(if_block, "__output2", mx, "IN_f", dace.Memlet("f[__i]"))
+    _write_if_output(state, if_block, "__output1", mx, "d")
+    _write_if_output(state, if_block, "__output2", mx, "f")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
     state.add_edge(mx, "OUT_f", state.add_access("f"), None, dace.Memlet("f[0:10]"))
 
@@ -944,7 +1016,9 @@ def test_if_mover_dependent_branch_4():
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(
+        ["c1", "s1", "d_if_out", "f_if_out"]
+    )
     assert len(sdfg.arrays) == len(top_ac)
     assert all(state.out_degree(ac) == 1 for ac in [s1, c1])
     assert all(oedge.dst_conn == "__arg4" for oedge in state.out_edges(s1))
@@ -1108,8 +1182,8 @@ def test_if_mover_dependent_branch_5():
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output1", mx, "IN_d", dace.Memlet("d[__i]"))
-    state.add_edge(if_block, "__output2", mx, "IN_f", dace.Memlet("f[__i]"))
+    _write_if_output(state, if_block, "__output1", mx, "d")
+    _write_if_output(state, if_block, "__output2", mx, "f")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
     state.add_edge(mx, "OUT_f", state.add_access("f"), None, dace.Memlet("f[0:10]"))
 
@@ -1126,7 +1200,9 @@ def test_if_mover_dependent_branch_5():
 
     # Examine the structure of the SDFG.
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "s1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(
+        ["c1", "s1", "d_if_out", "f_if_out"]
+    )
     assert len(sdfg.arrays) == len(top_ac)
     assert all(state.out_degree(ac) == 1 for ac in [s1, c1])
     assert all(oedge.dst_conn == "__arg4" for oedge in state.out_edges(s1))
@@ -1258,15 +1334,15 @@ def test_if_mover_dependent_branch_6():
     state.add_edge(tlet3, "__out", t3, None, dace.Memlet("t3[0]"))
 
     state.add_edge(cond, None, me, "IN_cond", dace.Memlet("cond[0:10]"))
-    state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
+    _read_if_cond(state, me, if_block, "cond")
     me.add_scope_connectors("cond")
 
     state.add_edge(t1, None, if_block, "__arg1", dace.Memlet("t1[0]"))
     state.add_edge(t2, None, if_block, "__arg2", dace.Memlet("t2[0]"))
     state.add_edge(t3, None, if_block, "__arg3", dace.Memlet("t3[0]"))
 
-    state.add_edge(if_block, "__output1", mx, "IN_d", dace.Memlet("d[__i]"))
-    state.add_edge(if_block, "__output2", mx, "IN_e", dace.Memlet("e[__i]"))
+    _write_if_output(state, if_block, "__output1", mx, "d")
+    _write_if_output(state, if_block, "__output2", mx, "e")
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
     state.add_edge(mx, "OUT_e", e, None, dace.Memlet("e[0:10]"))
     mx.add_scope_connectors("d")
@@ -1278,7 +1354,7 @@ def test_if_mover_dependent_branch_6():
     assert len(me.in_connectors) == 5
     assert util.count_nodes(state, dace_nodes.Tasklet) == 3
     assert util.count_nodes(state, dace_nodes.MapEntry) == 2
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 9
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 12
 
     _perform_test(sdfg, expected_applies=1)
     # Simplify the SDFG to remove double `b` AccessNode in the false branch.
@@ -1289,8 +1365,8 @@ def test_if_mover_dependent_branch_6():
     assert len(me.in_connectors) == 4
     assert util.count_nodes(state, dace_nodes.Tasklet) == 0
     assert util.count_nodes(state, dace_nodes.MapEntry) == 1
-    assert util.count_nodes(state, dace_nodes.AccessNode) == 6
-    assert set(gnames) == sdfg.arrays.keys()
+    assert util.count_nodes(state, dace_nodes.AccessNode) == 9
+    assert set(gnames).union(["cond_if_cond", "d_if_out", "e_if_out"]) == sdfg.arrays.keys()
     expected_access_nodes_in_false_branch = [
         "a",
         "b",
@@ -1359,7 +1435,7 @@ def test_if_mover_no_ops():
         me.add_scope_connectors(name)
         state.add_edge(state.add_access(name), None, me, f"IN_{name}", dace.Memlet(f"{name}[0:10]"))
 
-    if_block = _make_if_block(state, sdfg)
+    if_block = _make_if_block(state, sdfg, b1_shape=(10,), b2_shape=(10,))
 
     state.add_edge(me, "OUT_a", if_block, "__arg1", dace.Memlet("a[__i]"))
     state.add_edge(me, "OUT_b", if_block, "__arg2", dace.Memlet("b[__i]"))
@@ -1374,7 +1450,7 @@ def test_if_mover_no_ops():
 
     # The output.
     mx.add_scope_connectors("d")
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
     sdfg.validate()
 
@@ -1443,13 +1519,13 @@ def test_if_mover_one_branch_is_nothing():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = _make_if_block(state=state, outer_sdfg=sdfg)
+    if_block = _make_if_block(state=state, outer_sdfg=sdfg, b2_shape=(10,))
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(me, "OUT_b", if_block, "__arg2", dace.Memlet("b[__i]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
 
     # Now handle the output.
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     # Now add the connectors to the Map*
@@ -1463,7 +1539,7 @@ def test_if_mover_one_branch_is_nothing():
     _perform_test(sdfg, expected_applies=1)
 
     top_ac: list[dace_nodes.AccessNode] = util.count_nodes(state, dace_nodes.AccessNode, True)
-    assert {ac.data for ac in top_ac} == set(input_names).union(["c1"])
+    assert {ac.data for ac in top_ac} == set(input_names).union(["c1", "d_if_out"])
 
 
 def test_if_mover_chain():
@@ -1565,7 +1641,7 @@ def test_if_mover_chain():
     state.add_edge(cc1, None, bot_if_block, "__cond", dace.Memlet("cc1[0]"))
 
     # Generate the output
-    state.add_edge(bot_if_block, "__output", mx, "IN_e", dace.Memlet("e[__i]"))
+    _write_if_output(state, bot_if_block, "__output", mx, "e")
     state.add_edge(mx, "OUT_e", state.add_access("e"), None, dace.Memlet("e[0:10]"))
 
     # Now add the connectors to the Map*
@@ -1668,7 +1744,7 @@ def test_if_mover_symbolic_tasklet():
     # Connect the inputs to the if block.
     state.add_edge(tmp1, None, if_block, "__arg1", dace.Memlet("tmp1[0]"))
     state.add_edge(tmp2, None, if_block, "__arg2", dace.Memlet("tmp2[0]"))
-    state.add_edge(me, "OUT_cond", if_block, "__cond", dace.Memlet("cond[__i]"))
+    _read_if_cond(state, me, if_block, "cond")
 
     # Connect the output.
     state.add_edge(if_block, "__output", output, None, dace.Memlet("output[0]"))
@@ -1784,7 +1860,7 @@ def test_if_mover_access_node_between():
     state.add_edge(c2, None, bot_if_block, "__cond", dace.Memlet("c2[0]"))
 
     # Generate the output
-    state.add_edge(bot_if_block, "__output", mx, "IN_f", dace.Memlet("f[__i]"))
+    _write_if_output(state, bot_if_block, "__output", mx, "f")
     state.add_edge(mx, "OUT_f", state.add_access("f"), None, dace.Memlet("f[0:10]"))
 
     # Now add the connectors to the Map*
@@ -1807,7 +1883,7 @@ def test_if_mover_access_node_between():
         expected_applies=2,
     )
 
-    expected_top_level_data: set[str] = {"a", "b", "c", "d", "e", "f", "c2"}
+    expected_top_level_data: set[str] = {"a", "b", "c", "d", "e", "f", "c2", "f_if_out"}
     assert set(dnode.data for dnode in state.data_nodes()) == expected_top_level_data
     assert sdfg.arrays.keys() == expected_top_level_data
     assert set(tlet for tlet in state.nodes() if isinstance(tlet, dace_nodes.Tasklet)) == {
@@ -1930,7 +2006,7 @@ def test_if_mover_symbol_aliasing():
     state.add_edge(false_ac, None, if_block, "__arg2", dace.Memlet(f"{false_ac}[0]"))
     state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet(f"{cond_ac}[0]"))
 
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
     mx.add_scope_connectors("d")
 
@@ -1946,13 +2022,21 @@ def test_if_mover_symbol_aliasing():
 
 @pytest.mark.parametrize("outer_slice_variable", [True, False])
 def test_if_mover_slice_input(outer_slice_variable: bool):
-    def _make_nested_sdfg(cond_name: str, iter_name: str) -> dace.SDFG:
+    def _make_nested_sdfg(cond_name: str, iter_name: str, outer_slice_variable: bool) -> dace.SDFG:
         sdfg = dace.SDFG("If_block")
 
         sdfg.add_scalar("arg1", dtype=dace.float64, transient=False)
         sdfg.add_scalar("out", dtype=dace.float64, transient=False)
         sdfg.add_scalar(cond_name, dtype=dace.bool_, transient=False)
-        sdfg.add_array("arg2", shape=(10,), dtype=dace.float64, transient=False)
+        if outer_slice_variable:
+            sdfg.add_array("arg2", shape=(10,), dtype=dace.float64, transient=False)
+            arg2_index = iter_name
+        else:
+            # The connector is connected to a slice of `b`: it has to be equivalent to
+            #  `b`, therefore it is the full array and it is accessed with the same
+            #  indices as `b` on the outside.
+            sdfg.add_array("arg2", shape=(10, 10), dtype=dace.float64, transient=False)
+            arg2_index = f"{iter_name}, {iter_name}"
         sdfg.add_symbol(iter_name, stype=dace.int32)
 
         then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=sdfg)
@@ -1971,7 +2055,7 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
             "f_tasklet", inputs={"__in"}, outputs={"__out"}, code="__out = __in + 1.0"
         )
         fstate.add_edge(
-            fstate.add_access("arg2"), None, f_tasklet, "__in", dace.Memlet(f"arg2[{iter_name}]")
+            fstate.add_access("arg2"), None, f_tasklet, "__in", dace.Memlet(f"arg2[{arg2_index}]")
         )
         fstate.add_edge(f_tasklet, "__out", fstate.add_access("out"), None, dace.Memlet("out[0]"))
 
@@ -2054,7 +2138,11 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
 
         # Nested SDFG
         nsdfg = state.add_nested_sdfg(
-            sdfg=_make_nested_sdfg(cond_name=cond_name, iter_name=iter_name),
+            sdfg=_make_nested_sdfg(
+                cond_name=cond_name,
+                iter_name=iter_name,
+                outer_slice_variable=outer_slice_variable,
+            ),
             inputs={"arg1", "arg2", cond_name},
             outputs={"out"},
             symbol_mapping={iter_name: iter_name},
@@ -2068,7 +2156,7 @@ def test_if_mover_slice_input(outer_slice_variable: bool):
             state.add_edge(me, "OUT_b", nsdfg, "arg2", dace.Memlet(f"b[{iter_name}, 0:10]"))
 
         mx.add_scope_connectors("d")
-        state.add_edge(nsdfg, "out", mx, "IN_d", dace.Memlet(f"d[{iter_name}]"))
+        _write_if_output(state, nsdfg, "out", mx, "d")
         state.add_edge(
             mx, "OUT_d", state.add_access("d"), None, dace.Memlet(data="d", subset="0:10")
         )
@@ -2167,9 +2255,13 @@ def test_if_mover_symbol_clashes_with_inner_data():
     # The two input connectors are named `my_var` (true branch) and `other_var`
     # (false branch).
     inner_sdfg = dace.SDFG("if_body_with_my_var")
-    for name in ["my_var", "other_var", "__output"]:
+    for name in ["my_var", "__output"]:
         inner_sdfg.add_scalar(name, dtype=dace.float64, transient=False)
     inner_sdfg.add_scalar("__cond", dtype=dace.bool_, transient=False)
+    # `other_var` is connected to `b[__i]`: a nested SDFG connector has to be
+    #  equivalent to the data it is connected to, so it is the full array `b`.
+    inner_sdfg.add_array("other_var", shape=(10,), dtype=dace.float64, transient=False)
+    inner_sdfg.add_symbol("__i", stype=dace.int32)
 
     if_region = dace.sdfg.state.ConditionalBlock("if_region")
     inner_sdfg.add_node(if_region, is_start_block=True)
@@ -2187,7 +2279,7 @@ def test_if_mover_symbol_clashes_with_inner_data():
     fstate.add_nedge(
         fstate.add_access("other_var"),
         fstate.add_access("__output"),
-        dace.Memlet("other_var[0] -> [0]"),
+        dace.Memlet("other_var[__i] -> [0]"),
     )
 
     if_region.add_branch(dace.sdfg.state.CodeBlock("__cond"), then_body)
@@ -2197,6 +2289,7 @@ def test_if_mover_symbol_clashes_with_inner_data():
         sdfg=inner_sdfg,
         inputs={"my_var", "other_var", "__cond"},
         outputs={"__output"},
+        symbol_mapping={"__i": "__i"},
     )
 
     # Tasklet with no input connectors that reads the outer symbol `my_var` as a
@@ -2232,7 +2325,7 @@ def test_if_mover_symbol_clashes_with_inner_data():
     state.add_edge(cond_ac, None, if_block, "__cond", dace.Memlet("cond[0]"))
 
     # Output path.
-    state.add_edge(if_block, "__output", mx, "IN_out", dace.Memlet("out[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "out")
     state.add_edge(mx, "OUT_out", state.add_access("out"), None, dace.Memlet("out[0:10]"))
     mx.add_scope_connectors("out")
 
@@ -2345,7 +2438,7 @@ def test_if_mover_two_accessnodes_same_outer_data():
     state.add_edge(cond_an, None, if_block, "__cond", dace.Memlet("cond_val[0]"))
 
     mx.add_scope_connectors("d")
-    state.add_edge(if_block, "__output", mx, "IN_d", dace.Memlet("d[__i]"))
+    _write_if_output(state, if_block, "__output", mx, "d")
     state.add_edge(mx, "OUT_d", state.add_access("d"), None, dace.Memlet("d[0:10]"))
 
     sdfg.validate()
