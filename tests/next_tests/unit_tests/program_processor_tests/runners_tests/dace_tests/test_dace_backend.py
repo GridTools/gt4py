@@ -29,6 +29,7 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
     decoration as dace_wf_decoration,
+    factory as dace_wf_factory,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -259,6 +260,36 @@ def test_make_backend_rejects_derived_optimization_args():
         dace_wf_backend.make_dace_backend(
             gpu=False, translation={"auto_optimize_args": {"unit_strides_kind": None}}
         )
+
+
+def test_compile_workflow_rejects_derived_optimization_args():
+    # The translation step validates its own settings, so the check also covers
+    # workflows built without `make_dace_backend`.
+    with pytest.raises(ValueError, match="cannot be overriden"):
+        dace_wf_factory.make_dace_compile_workflow(
+            auto_optimize=True, translation={"auto_optimize_args": {"gpu": True}}
+        )
+
+
+def test_compile_workflow_warns_on_unused_optimization_args():
+    with pytest.warns(UserWarning, match="auto-optimize is disabled"):
+        dace_wf_factory.make_dace_compile_workflow(
+            auto_optimize=False, translation={"auto_optimize_args": {"blocking_size": 10}}
+        )
+
+
+def test_compile_workflow_matches_backend_translation():
+    """Building the workflow directly gives the translation step of the backend."""
+    workflow = dace_wf_factory.make_dace_compile_workflow(
+        device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
+        auto_optimize=True,
+        unstructured_horizontal_has_unit_stride=True,
+    )
+    backend = dace_wf_backend.make_dace_backend(
+        gpu=True, unstructured_horizontal_has_unit_stride=True, cached_translation=False
+    )
+
+    assert workflow.translation == backend.executor.translation
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:

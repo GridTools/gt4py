@@ -11,9 +11,9 @@ from __future__ import annotations
 import functools
 from typing import Any, Final, TypedDict
 
-from gt4py._core import definitions as core_defs, filecache
-from gt4py.next import config, fingerprinting
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py._core import definitions as core_defs
+from gt4py.next import config
+from gt4py.next.otf import recipes, stages
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace.workflow import bindings as bindings_step
 from gt4py.next.program_processors.runners.dace.workflow.compilation import DaCeCompiler
@@ -46,7 +46,7 @@ class DaCeCompilationOptions(TypedDict, total=False):
 
 #: Defaults of the `DaCeTranslator` fields that have no dataclass default.
 _DEFAULT_TRANSLATION_OPTIONS: Final[DaCeTranslationOptions] = DaCeTranslationOptions(
-    auto_optimize_args=None, async_sdfg_call=False, use_metrics=True
+    auto_optimize_args=None, async_sdfg_call=True, use_metrics=True
 )
 
 
@@ -96,17 +96,7 @@ def make_dace_compile_workflow(
         **(_DEFAULT_TRANSLATION_OPTIONS | (translation or DaCeTranslationOptions())),
     )
     if cached_translation:
-        translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
-        ].persistent(
-            translation_step,
-            input_fingerprinter=fingerprinting.strict_fingerprinter,
-            cache=filecache.FileCache(
-                cache.get_translation_cache_folder(
-                    cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "dace"
-                )
-            ),
-        )
+        translation_step = cache.persistent_translation_cache(translation_step, "dace")
 
     return recipes.OTFCompileWorkflow(
         translation=translation_step,

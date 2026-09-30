@@ -10,11 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from typing import Any, Final
+from typing import Any
 
-import gt4py.next.custom_layout_allocators as next_allocators
-from gt4py._core import definitions as core_defs
-from gt4py.next import backend, common, config
+from gt4py.next import backend, config
 from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -66,75 +64,49 @@ def make_dace_backend(
         cached_translation: Wrap the translation step in a persistent cache.
         cmake_build_type: Build type of the generated project. Defaults to the
             value in `config`.
-        translation: Step-local settings of the translation step. Its
-            `auto_optimize_args` configure the SDFG auto-optimize pipeline, see
-            `gt_auto_optimize()`; `async_sdfg_call` is only effective on GPU.
+        translation: Step-local settings of the translation step, see
+            `DaCeTranslator`. When an `external_workspace` is given and
+            `auto_optimize_args` sets no `transient_memory_mode`, it defaults to
+            `EXTERNAL`.
         compilation: Step-local settings of the compilation step.
-
-    Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
-    cannot be overriden, and therefore cannot appear in `auto_optimize_args`.
 
     Returns:
         A dace backend with custom configuration for the target device.
 
     Raises:
-        ValueError: If `auto_optimize_args` sets a parameter derived from the
-            configuration, or requests the `EXTERNAL` transient memory mode
-            without an `external_workspace`.
+        ValueError: If `auto_optimize_args` requests the `EXTERNAL` transient
+            memory mode without an `external_workspace`, or sets a parameter the
+            translation step derives itself.
     """
     if unstructured_horizontal_has_unit_stride is None:
         unstructured_horizontal_has_unit_stride = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
     if translation is None:
         translation = gtx_wfdfactory.DaCeTranslationOptions()
 
-    # The `gt_optimization_args` set contains the parameters of `gt_auto_optimize()`
-    # that are derived from the gt4py configuration, and therefore cannot be customized.
-    gt_optimization_args: Final[set[str]] = {"gpu", "constant_symbols", "unit_strides_kind"}
-
-    optimization_args = translation.get("auto_optimize_args")
-    if optimization_args is None:
-        optimization_args = {}
-    elif optimization_args and not auto_optimize:
-        warnings.warn("Optimizations args given, but auto-optimize is disabled.", stacklevel=2)
-    elif intersect_args := gt_optimization_args.intersection(optimization_args.keys()):
-        raise ValueError(
-            f"The following optimization arguments cannot be overriden: {intersect_args}."
-        )
-
-    # Set `unit_strides_kind` based on the gt4py env configuration.
-    optimization_args = optimization_args | {
-        "unit_strides_kind": common.DimensionKind.HORIZONTAL
-        if unstructured_horizontal_has_unit_stride
-        else None
-    }
-
+    # The external workspace belongs to the backend, which injects it at load
+    # time, so the backend owns its coupling to the transient memory mode.
+    optimization_args = dict(translation.get("auto_optimize_args") or {})
+    transient_memory_mode = optimization_args.get("transient_memory_mode")
     if external_workspace is None:
-        if (
-            optimization_args.get("transient_memory_mode")
-            is gtx_transformations.TransientMemoryMode.EXTERNAL
-        ):
+        if transient_memory_mode is gtx_transformations.TransientMemoryMode.EXTERNAL:
             raise ValueError(
                 "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
             )
-    elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
-        if transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
-            warnings.warn(
-                f"External memory workspace provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
-                stacklevel=2,
+    elif transient_memory_mode is None:
+        if auto_optimize:
+            optimization_args["transient_memory_mode"] = (
+                gtx_transformations.TransientMemoryMode.EXTERNAL
             )
-    else:
-        optimization_args["transient_memory_mode"] = (
-            gtx_transformations.TransientMemoryMode.EXTERNAL
+            translation = translation | gtx_wfdfactory.DaCeTranslationOptions(
+                auto_optimize_args=optimization_args
+            )
+    elif transient_memory_mode is not gtx_transformations.TransientMemoryMode.EXTERNAL:
+        warnings.warn(
+            f"External memory workspace provided but 'transient_memory_mode' is '{transient_memory_mode}', it requires '{gtx_transformations.TransientMemoryMode.EXTERNAL}'.",
+            stacklevel=2,
         )
 
-    allocator: next_allocators.FieldBufferAllocatorProtocol
-    device_type: core_defs.DeviceType
-    if gpu:
-        allocator = next_allocators.StandardGPUFieldBufferAllocator()
-        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
-    else:
-        allocator = next_allocators.StandardCPUFieldBufferAllocator()
-        device_type = core_defs.DeviceType.CPU
+    device_type, allocator = backend.select_device(gpu)
 
     return DaCeBackend(
         name=f"run_dace_{'gpu' if gpu else 'cpu'}{'_opt' if auto_optimize else ''}",
@@ -144,11 +116,7 @@ def make_dace_backend(
             cached_translation=cached_translation,
             cmake_build_type=cmake_build_type,
             unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-            translation=translation
-            | gtx_wfdfactory.DaCeTranslationOptions(
-                auto_optimize_args=optimization_args,
-                async_sdfg_call=translation.get("async_sdfg_call", True) and gpu,
-            ),
+            translation=translation,
             compilation=compilation,
         ),
         allocator=allocator,

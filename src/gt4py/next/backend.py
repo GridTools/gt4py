@@ -140,6 +140,22 @@ class Transforms(
 DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
+def select_device(
+    gpu: bool,
+) -> tuple[core_defs.DeviceType, next_allocators.FieldBufferAllocatorProtocol]:
+    """
+    Return the device type and default field allocator of a CPU or GPU backend.
+
+    The GPU is the one CuPy was built for, or CUDA if CuPy is not available.
+    """
+    if gpu:
+        return (
+            core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
+            next_allocators.StandardGPUFieldBufferAllocator(),
+        )
+    return core_defs.DeviceType.CPU, next_allocators.StandardCPUFieldBufferAllocator()
+
+
 # TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
 #  `Backend` -> `Toolchain`
 #  `transforms` -> `frontend_transforms`

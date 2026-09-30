@@ -10,10 +10,11 @@
 
 import pathlib
 import tempfile
-from typing import Final
+from typing import Final, TypeVar
 
+from gt4py._core import filecache
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import artifacts
+from gt4py.next.otf import artifacts, workflow
 
 
 #: Regex describing the folder names produced by `get_cache_folder` (use
@@ -47,6 +48,9 @@ TRANSLATION_CACHE_DIR_NAME: Final[str] = "translation_cache"
 #: workflow factory enables the `cached_translation` trait.
 TRANSLATION_CACHE_BACKENDS: Final[tuple[str, ...]] = ("dace", "gtfn")
 
+StartT = TypeVar("StartT")
+EndT = TypeVar("EndT")
+
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
@@ -60,6 +64,29 @@ def get_translation_cache_folder(cache_base: pathlib.Path, backend: str) -> path
     create it — which tools that only inspect a cache rely on.
     """
     return cache_base / TRANSLATION_CACHE_DIR_NAME / backend
+
+
+def persistent_translation_cache(
+    step: workflow.Workflow[StartT, EndT], backend: str
+) -> workflow.CachedStep[StartT, EndT, str]:
+    """
+    Wrap a translation step in the persistent translation cache of `backend`.
+
+    Args:
+        step: The translation step to cache.
+        backend: Name of the backend family, which selects the cache folder.
+
+    Returns:
+        The step, cached in the translation cache folder of `backend` under the
+        cache base path of the configured build-cache lifetime.
+    """
+    return workflow.CachedStep[StartT, EndT, str].persistent(
+        step,
+        input_fingerprinter=fingerprinting.strict_fingerprinter,
+        cache=filecache.FileCache(
+            get_translation_cache_folder(get_cache_base_path(config.BUILD_CACHE_LIFETIME), backend)
+        ),
+    )
 
 
 def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:

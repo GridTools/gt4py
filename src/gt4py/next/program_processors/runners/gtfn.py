@@ -13,13 +13,11 @@ from typing import Any, TypedDict
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.next.custom_layout_allocators as next_allocators
-from gt4py._core import filecache
-from gt4py.next import backend, common, config, field_utils, fingerprinting
+from gt4py.next import backend, common, config, field_utils
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import artifacts, recipes, stages, workflow
+from gt4py.next.otf import artifacts, recipes, stages
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -188,17 +186,7 @@ def make_gtfn_compile_workflow(
         device_type=device_type, **(translation or GTFNTranslationOptions())
     )
     if cached_translation:
-        translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
-        ].persistent(
-            translation_step,
-            input_fingerprinter=fingerprinting.strict_fingerprinter,
-            cache=filecache.FileCache(
-                cache.get_translation_cache_folder(
-                    cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "gtfn"
-                )
-            ),
-        )
+        translation_step = cache.persistent_translation_cache(translation_step, "gtfn")
 
     return recipes.OTFCompileWorkflow(
         translation=translation_step,
@@ -246,14 +234,7 @@ def make_gtfn_backend(
     Returns:
         The configured backend.
     """
-    allocator: next_allocators.FieldBufferAllocatorProtocol
-    device_type: core_defs.DeviceType
-    if gpu:
-        allocator = next_allocators.StandardGPUFieldBufferAllocator()
-        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
-    else:
-        allocator = next_allocators.StandardCPUFieldBufferAllocator()
-        device_type = core_defs.DeviceType.CPU
+    device_type, allocator = backend.select_device(gpu)
 
     return backend.Backend(
         name=f"run_gtfn_{'gpu' if gpu else 'cpu'}{name_postfix}",
