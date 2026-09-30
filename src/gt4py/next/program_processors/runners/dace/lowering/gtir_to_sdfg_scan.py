@@ -351,9 +351,15 @@ def _handle_dataflow_result_of_nested_sdfg(
 
     if bool(scan_column_size == 1):
         # Special case where we only write the last level of the scan column.
-        # We represent the inner result as a single value and let the scan loop override it.
-        inner_desc = dace.data.Scalar(inner_desc.dtype, transient=False)
-        inner_ctx.sdfg.arrays[inner_dataname] = inner_desc
+        # The inner result keeps the layout of the field operator domain, but with
+        # a single level on the column dimension, and the scan loop overrides it.
+        # It remains an array, so that the nested-SDFG connector is equivalent to
+        # the outer data connected to it.
+        assert isinstance(inner_desc, dace.data.Array)
+        inner_desc.set_shape(
+            [*inner_desc.shape[:scan_dim_index], 1, *inner_desc.shape[scan_dim_index + 1 :]]
+        )
+        inner_desc.transient = False
         # We write the result to the output field after the loop region has ended.
         if len(inner_ctx.sdfg.states()) == 3:
             assert sorted(st.label for st in inner_ctx.sdfg.states()) == [
@@ -377,7 +383,8 @@ def _handle_dataflow_result_of_nested_sdfg(
             last_level_state = next(
                 s for s in inner_ctx.sdfg.states() if s.label == "scan_last_level"
             )
-        # Update the write edge inside the scan nested SDFG to write into a scalar rather than a 1D array.
+        # Move the write of the result from the scan loop to the state after the loop,
+        #  so that only the last level is written.
         scan_compute_state = next(s for s in inner_ctx.sdfg.states() if s.label == "scan_compute")
         inner_output_node = next(
             n for n in scan_compute_state.data_nodes() if n.data == inner_dataname
@@ -389,11 +396,16 @@ def _handle_dataflow_result_of_nested_sdfg(
         inner_write_edge = scan_compute_state.in_edges(inner_output_node)[0]
         assert isinstance(inner_write_edge.src, dace_nodes.AccessNode)
         assert isinstance(inner_write_edge.src.desc(inner_ctx.sdfg), dace.data.Scalar)
+        # Same element subset as the write inside the loop, but on the single level.
+        last_level_subset = copy.deepcopy(
+            inner_write_edge.data.get_dst_subset(inner_write_edge, scan_compute_state)
+        )
+        last_level_subset[scan_dim_index] = (0, 0, 1)
         scan_compute_state.remove_node(inner_output_node)
         last_level_state.add_nedge(
             last_level_state.add_access(inner_write_edge.src.data),
             last_level_state.add_access(inner_dataname),
-            dace.Memlet(data=inner_dataname, subset="0", other_subset="0"),
+            dace.Memlet(data=inner_dataname, subset=last_level_subset, other_subset="0"),
         )
     else:
         inner_desc.transient = False
@@ -549,7 +561,7 @@ def translate_scan_fieldop(
     # The column dimension is excluded from the map range, because it is traversed by
     # the `LoopRegion` inside the stencil dataflow.
     scan_dim = next(r.dim for r in field_domain if sdfg_builder.is_column_axis(r.dim))
-    return gtir_to_sdfg_fieldop.create_field_operator(
+    result = gtir_to_sdfg_fieldop.create_field_operator(
         ctx,
         field_domain,
         node.type,
@@ -559,3 +571,9 @@ def translate_scan_fieldop(
         node.annex.domain,
         inner_dims=(scan_dim,),
     )
+
+    # Now that the nested SDFG is connected, its connectors are made equivalent to
+    #  the data connected to them, by applying the symbol mapping inside it.
+    nsdfg_node.integrate_into_parent()
+
+    return result

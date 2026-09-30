@@ -1343,15 +1343,16 @@ def test_concat_where_multi_level_nesting():
 def _make_concat_where_nested_single_element_consumer() -> tuple[
     dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.NestedSDFG, dace_nodes.NestedSDFG
 ]:
-    def make_single_element_consumer(name) -> dace.SDFG:
+    def make_single_element_consumer(name: str, in_index: str, out_index: str) -> dace.SDFG:
+        # The nested SDFG reads a single element of `c` and writes a single element of
+        #  `d`. Since a nested SDFG connector has to be equivalent to the data it is
+        #  connected to, the connectors are the full arrays and they are accessed with
+        #  the same indices as on the outside.
         sdfg = dace.SDFG(name)
         state = sdfg.add_state()
         for aname in "ab":
-            sdfg.add_scalar(
-                aname,
-                dtype=dace.float64,
-                transient=False,
-            )
+            sdfg.add_array(aname, shape=(10,), dtype=dace.float64, transient=False)
+        sdfg.add_symbol("__i", dace.int32)
 
         tlet = state.add_tasklet(
             f"single_element_consumer_{name}",
@@ -1359,8 +1360,8 @@ def _make_concat_where_nested_single_element_consumer() -> tuple[
             outputs={"__out"},
             code="__out = __in + 1.9",
         )
-        state.add_edge(state.add_access("a"), None, tlet, "__in", dace.Memlet("a[0]"))
-        state.add_edge(tlet, "__out", state.add_access("b"), None, dace.Memlet("b[0]"))
+        state.add_edge(state.add_access("a"), None, tlet, "__in", dace.Memlet(f"a[{in_index}]"))
+        state.add_edge(tlet, "__out", state.add_access("b"), None, dace.Memlet(f"b[{out_index}]"))
         sdfg.validate()
         return sdfg
 
@@ -1378,7 +1379,7 @@ def _make_concat_where_nested_single_element_consumer() -> tuple[
     state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
 
     top_level_nsdfg = state.add_nested_sdfg(
-        make_single_element_consumer("top_level"),
+        make_single_element_consumer("top_level", in_index="0", out_index="9"),
         inputs={"a"},
         outputs={"b"},
         symbol_mapping={},
@@ -1387,10 +1388,10 @@ def _make_concat_where_nested_single_element_consumer() -> tuple[
     state.add_edge(top_level_nsdfg, "b", d, None, dace.Memlet("d[9]"))
 
     nested_nsdfg = state.add_nested_sdfg(
-        make_single_element_consumer("nested"),
+        make_single_element_consumer("nested", in_index="__i + 1", out_index="__i"),
         inputs={"a"},
         outputs={"b"},
-        symbol_mapping={},
+        symbol_mapping={"__i": "__i"},
     )
     me, mx = state.add_map("map", ndrange={"__i": "0:9"})
 
@@ -1434,20 +1435,14 @@ def test_concat_where_nested_single_element_consumer():
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
 
-    # Since the nested SDFG only consumed a single element they are not manipulated in
-    #  any way, essentially they are a big Tasklet. But their surrounding has changed.
-    assert state.in_degree(nested_nsdfg) == 1
-    assert nested_nsdfg.sdfg.arrays.keys() == {"a", "b"}
-    assert all(
-        isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src not in access_nodes_before
-        for iedge in state.in_edges(nested_nsdfg)
-    )
-    assert state.in_degree(top_level_nsdfg)
-    assert top_level_nsdfg.sdfg.arrays.keys() == {"a", "b"}
-    assert all(
-        isinstance(iedge.src, dace_nodes.AccessNode) and iedge.src not in access_nodes_before
-        for iedge in state.in_edges(top_level_nsdfg)
-    )
+    # A nested SDFG accesses the whole data connected to it, even if it only reads a
+    #  single element. Thus the replacement was performed inside of it: the concat
+    #  where node is no longer read and its producers are mapped into the nested SDFG.
+    for nsdfg in [top_level_nsdfg, nested_nsdfg]:
+        assert "a" not in nsdfg.in_connectors
+        assert "a" not in nsdfg.sdfg.arrays
+        assert state.in_degree(nsdfg) == 2
+        assert {iedge.data.data for iedge in state.in_edges(nsdfg)} == {"a", "b"}
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
@@ -1548,15 +1543,17 @@ def test_concat_where_nested_symbolic_bound(
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
     assert state.in_degree(nested_sdfg) == 2
-    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
 
     if has_blocking_symbol:
+        # `split_sym` is mapped 1:1 into the nested SDFG, so the symbol that the nested
+        #  SDFG used under this name, for the increment, has been renamed.
         assert len(nested_sdfg.symbol_mapping) == 2
+        assert str(nested_sdfg.symbol_mapping[split_sym]) == split_sym
 
-        nested_split_sym = next(
-            iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != nested_inc_symb)
+        renamed_inc_symb = next(
+            iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != split_sym)
         )
-        assert str(nested_sdfg.symbol_mapping[nested_split_sym]) == split_sym
+        assert str(nested_sdfg.symbol_mapping[renamed_inc_symb]) == inc_symb
 
     else:
         assert nested_sdfg.symbol_mapping.keys() == {nested_inc_symb, split_sym}
@@ -1661,15 +1658,145 @@ def test_concat_where_with_symbolic_top_size():
     assert concat_node not in access_nodes_after
     assert concat_node.data not in sdfg.arrays
     assert state.in_degree(nested_sdfg) == 2
-    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
 
+    # `symbolic_size` is mapped 1:1 into the nested SDFG, so the symbol that the nested
+    #  SDFG used under this name, for the increment, has been renamed.
     assert len(nested_sdfg.symbol_mapping) == 2
-    nested_symbolic_size = next(
-        iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != nested_inc_symb)
+    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
+
+    renamed_inc_symb = next(
+        iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != symbolic_size)
     )
-    assert str(nested_sdfg.symbol_mapping[nested_symbolic_size]) == symbolic_size
+    assert str(nested_sdfg.symbol_mapping[renamed_inc_symb]) == inc_symb
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_concat_where_with_symbolic_size_clashing_with_nested_data():
+    # The symbol `n`, that defines the size of the producer `a`, has to be mapped into
+    #  the nested SDFG, which uses `n` as the name of its output connector.
+    symbolic_size = "n"
+
+    nested = dace.SDFG("nested")
+    nested_state = nested.add_state()
+    for aname in ["a", symbolic_size]:
+        nested.add_array(aname, shape=(10,), dtype=dace.float64, transient=False)
+    nested_state.add_mapped_tasklet(
+        "nested_map",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        outputs={"__out": dace.Memlet(f"{symbolic_size}[__i]")},
+        code="__out = __in + 1.0",
+        external_edges=True,
+    )
+    nested.validate()
+
+    sdfg = dace.SDFG(util.unique_name("concat_where_symbolic_size_clashing_with_nested_data"))
+    state = sdfg.add_state()
+    sdfg.add_symbol(symbolic_size, dace.int32)
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=((10,) if aname != "a" else (dace.symbolic.pystr_to_symbolic(symbolic_size),)),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    nested_sdfg = state.add_nested_sdfg(
+        sdfg=nested, inputs={"a"}, outputs={symbolic_size}, symbol_mapping={}
+    )
+    state.add_edge(c, None, nested_sdfg, "a", dace.Memlet("c[0:10]"))
+    state.add_edge(nested_sdfg, symbolic_size, d, None, dace.Memlet("d[0:10]"))
+    sdfg.validate()
+
+    ref, res = util.make_sdfg_args(sdfg, symbols={symbolic_size: 10})
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(state=state, sdfg=sdfg, concat_node=c)
+    sdfg.validate()
+
+    assert c.data not in sdfg.arrays
+    assert state.in_degree(nested_sdfg) == 2
+    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
+    assert symbolic_size in nested_sdfg.sdfg.symbols
+
+    # The output connector, and the data inside the nested SDFG, has been renamed.
+    assert symbolic_size not in nested_sdfg.sdfg.arrays
+    assert symbolic_size not in nested_sdfg.out_connectors
+    oedge = next(iter(state.out_edges(nested_sdfg)))
+    assert oedge.dst is d
+    assert oedge.src_conn in nested_sdfg.out_connectors
+    assert oedge.src_conn in nested_sdfg.sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_concat_where_with_symbolic_size_clashing_with_nested_assignment():
+    # The symbol `n`, that defines the size of the producer `a`, has to be mapped into
+    #  the nested SDFG, which assigns its own value to `n` on an interstate edge.
+    symbolic_size = "n"
+
+    nested = dace.SDFG("nested")
+    for aname in "ab":
+        nested.add_array(aname, shape=(10,), dtype=dace.float64, transient=False)
+    init_state = nested.add_state(is_start_block=True)
+    comp_state = nested.add_state_after(init_state, assignments={symbolic_size: "7"})
+    comp_state.add_mapped_tasklet(
+        "nested_map",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("a[__i]")},
+        outputs={"__out": dace.Memlet("b[__i]")},
+        code=f"__out = __in + {symbolic_size}",
+        external_edges=True,
+    )
+    nested.validate()
+    assert symbolic_size not in nested.symbols
+
+    sdfg = dace.SDFG(util.unique_name("concat_where_symbolic_size_clashing_with_nested_assignment"))
+    state = sdfg.add_state()
+    sdfg.add_symbol(symbolic_size, dace.int32)
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=((10,) if aname != "a" else (dace.symbolic.pystr_to_symbolic(symbolic_size),)),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    nested_sdfg = state.add_nested_sdfg(sdfg=nested, inputs={"a"}, outputs={"b"}, symbol_mapping={})
+    state.add_edge(c, None, nested_sdfg, "a", dace.Memlet("c[0:10]"))
+    state.add_edge(nested_sdfg, "b", d, None, dace.Memlet("d[0:10]"))
+    sdfg.validate()
+
+    ref, res = util.make_sdfg_args(sdfg, symbols={symbolic_size: 10})
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(state=state, sdfg=sdfg, concat_node=c)
+    sdfg.validate()
+
+    assert c.data not in sdfg.arrays
+    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
+
+    # The symbol assigned inside the nested SDFG has been renamed.
+    (assignments,) = [
+        isedge.data.assignments
+        for isedge in nested_sdfg.sdfg.all_interstate_edges()
+        if isedge.data.assignments
+    ]
+    assert symbolic_size not in assignments
+    assert list(assignments.values()) == ["7"]
+
+    util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 

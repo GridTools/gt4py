@@ -442,6 +442,8 @@ def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
         external_edges=True,
     )
 
+    # The scalar connectors of the if block can not be connected to an element of an
+    #  array directly, thus the values pass through scalar transients, as in the lowering.
     map_entry, map_exit = st.add_map("map2", ndrange={"__i": f"1:{N}"})
     nsdfg = _make_if_block(st)
     for conn, node, data, subset in [
@@ -451,9 +453,19 @@ def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
     ]:
         map_entry.add_scope_connectors(conn)
         st.add_edge(node, None, map_entry, f"IN_{conn}", dace.Memlet(data=data, subset=subset))
-        st.add_edge(map_entry, f"OUT_{conn}", nsdfg, conn, dace.Memlet(data=data, subset="__i"))
+        scalar, _ = sdfg.add_scalar(
+            f"{conn}_val", dtype=sdfg.arrays[data].dtype, transient=True, find_new_name=True
+        )
+        scalar_node = st.add_access(scalar)
+        st.add_edge(
+            map_entry, f"OUT_{conn}", scalar_node, None, dace.Memlet(data=data, subset="__i")
+        )
+        st.add_edge(scalar_node, None, nsdfg, conn, dace.Memlet(data=scalar, subset="0"))
     map_exit.add_scope_connectors("B")
-    st.add_edge(nsdfg, "__output", map_exit, "IN_B", dace.Memlet(data=B, subset="__i"))
+    output, _ = sdfg.add_scalar("__output_val", dtype=dace.float64, transient=True)
+    output_node = st.add_access(output)
+    st.add_edge(nsdfg, "__output", output_node, None, dace.Memlet(data=output, subset="0"))
+    st.add_edge(output_node, None, map_exit, "IN_B", dace.Memlet(data=B, subset="__i"))
     st.add_edge(map_exit, "OUT_B", B_node, None, dace.Memlet(data=B, subset=f"1:{N}"))
 
     sdfg.validate()

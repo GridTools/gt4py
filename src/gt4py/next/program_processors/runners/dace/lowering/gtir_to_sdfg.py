@@ -1368,11 +1368,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # that is externally allocated, as required by the SDFG IR. An output edge will write the result
             # from the nested-SDFG to a new intermediate data container allocated in the parent SDFG.
             # NOTE: We use the symbol mapping returned by `add_nested_sdfg()` rather than
-            #   `nsdfg_node.symbol_mapping`: dace applies the mapping of the symbols that
-            #   the nested SDFG uses directly inside it, and only keeps the remaining
-            #   entries on the node. The field origin is not visible to dace, because it
-            #   is not part of any data descriptor, so it has to be translated here with
-            #   the full mapping.
+            #   `nsdfg_node.symbol_mapping`: the mapping of the symbols that the nested
+            #   SDFG uses is applied inside it, when it is integrated below, and only the
+            #   remaining entries are kept on the node. The field origin is not visible to
+            #   dace, because it is not part of any data descriptor, so it has to be
+            #   translated here with the full mapping.
             outer_data = ctx.map_nsdfg_field(
                 sdfg_builder=self,
                 nsdfg_field=inner_data,
@@ -1389,7 +1389,13 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
             return outer_data
 
-        return gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
+        result = gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
+
+        # Now that the nested SDFG is connected, its connectors are made equivalent to
+        #  the data connected to them, by applying the symbol mapping inside it.
+        nsdfg_node.integrate_into_parent()
+
+        return result
 
     def visit_Literal(
         self,

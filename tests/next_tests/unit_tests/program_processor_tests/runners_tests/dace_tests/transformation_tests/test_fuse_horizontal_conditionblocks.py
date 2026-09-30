@@ -10,6 +10,8 @@ import dace
 import pytest
 import sympy
 
+from typing import Optional
+
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import utils as gtx_utils
@@ -34,16 +36,21 @@ def _make_if_block_with_tasklet(
     b1_type: dace.typeclass = dace.float64,
     b2_type: dace.typeclass = dace.float64,
     output_type: dace.typeclass = dace.float64,
+    output_shape: Optional[tuple[int, ...]] = None,
 ) -> dace_nodes.NestedSDFG:
+    """Create an if block, see `_make_if_block()` for the meaning of `output_shape`."""
     inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
-    for name in {b1_name, b2_name, cond_name, output_name}:
-        inner_sdfg.add_scalar(
-            name,
-            dtype=types[name],
-            transient=False,
-        )
+    for name in {b1_name, b2_name, cond_name}:
+        inner_sdfg.add_scalar(name, dtype=types[name], transient=False)
+    if output_shape is None:
+        inner_sdfg.add_scalar(output_name, dtype=output_type, transient=False)
+        output_index = "0"
+    else:
+        inner_sdfg.add_array(output_name, shape=output_shape, dtype=output_type, transient=False)
+        inner_sdfg.add_symbol("__i", stype=dace.int32)
+        output_index = "__i"
 
     if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
     inner_sdfg.add_node(if_region, is_start_block=True)
@@ -70,7 +77,7 @@ def _make_if_block_with_tasklet(
         "__tasklet_out",
         tstate.add_access(output_name),
         None,
-        dace.Memlet(f"{output_name}[0]"),
+        dace.Memlet(f"{output_name}[{output_index}]"),
     )
 
     if with_false_branch or with_else_branch:
@@ -79,7 +86,7 @@ def _make_if_block_with_tasklet(
         fstate.add_nedge(
             fstate.add_access(b2_name),
             fstate.add_access(output_name),
-            dace.Memlet(f"{b2_name}[0] -> [0]"),
+            dace.Memlet(f"{b2_name}[0] -> [{output_index}]"),
         )
 
     if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
@@ -94,6 +101,7 @@ def _make_if_block_with_tasklet(
         sdfg=inner_sdfg,
         inputs={b1_name, b2_name, cond_name},
         outputs={output_name},
+        symbol_mapping=(None if output_shape is None else {"__i": "__i"}),
     )
     # TODO(edoapo): The typecast to sympy is needed because the constructor of the `symbol_mapping`
     # dict property converts the values to symbolic expressions, but the assignment of entries
@@ -173,11 +181,19 @@ def _make_map_with_conditional_blocks(
     state.add_edge(tmp_a, None, tasklet_cond, "__in", dace.Memlet("tmp_a[0]"))
     state.add_edge(tasklet_cond, "__out", cond_var, None, dace.Memlet("cond_var"))
 
+    # When the output is not written through a temporary, the if block writes directly
+    #  into an element of the array, which it only does in the branches that write it.
+    #  Since a nested SDFG connector has to be equivalent to the data it is connected
+    #  to, the output of the if block is then the full array.
+    output_shape_0 = None if create_temporary_c else (10,)
     if_block_0 = (
-        _make_if_block(state=state, outer_sdfg=sdfg)
+        _make_if_block(state=state, outer_sdfg=sdfg, output_shape=output_shape_0)
         if not both_ifs_with_taklets
         else _make_if_block_with_tasklet(
-            state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
+            state=state,
+            with_false_branch=with_false_branch,
+            with_else_branch=with_else_branch,
+            output_shape=output_shape_0,
         )
     )
     state.add_edge(cond_var, None, if_block_0, "__cond", dace.Memlet("cond_var"))
@@ -191,7 +207,10 @@ def _make_map_with_conditional_blocks(
         new_edge.data.allow_oob = True
 
     if_block_1 = _make_if_block_with_tasklet(
-        state=state, with_false_branch=with_false_branch, with_else_branch=with_else_branch
+        state=state,
+        with_false_branch=with_false_branch,
+        with_else_branch=with_else_branch,
+        output_shape=(None if create_temporary_d else (10,)),
     )
     state.add_edge(cond_var, None, if_block_1, "__cond", dace.Memlet("cond_var"))
     state.add_edge(tmp_a, None, if_block_1, "__arg1", dace.Memlet("tmp_a[0]"))
@@ -265,9 +284,8 @@ def test_fuse_horizontal_condition_blocks_single_false(uids: gtx_utils.IDGenerat
     ]
     assert len(new_conditional_blocks) == 1
     conditional_block = new_conditional_blocks[0]
-    assert (
-        len(conditional_block.sdfg.symbols) == 1 and "multiplier" in conditional_block.sdfg.symbols
-    )
+    # `__i` is used to write the outputs in place, see `_make_map_with_conditional_blocks()`.
+    assert conditional_block.sdfg.symbols.keys() == {"multiplier", "__i"}
 
     true_branch_state = conditional_block.sdfg.states()[0]
     false_branch_state = conditional_block.sdfg.states()[1]
