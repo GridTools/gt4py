@@ -26,7 +26,7 @@ from typing import Iterable, Sequence
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.xtyping import MaybeNestedInTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
