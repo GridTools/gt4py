@@ -113,8 +113,11 @@ def test_dace_cpu_loop_structure():
     state = sdfg.states()[0]
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
-    assert loop_indices[0] == ["__k"]
-    assert loop_indices[1] == ["__i", "__j"]
+    assert loop_indices[0] == [
+        Axis.K.iteration_symbol(),
+        Axis.I.iteration_symbol(),
+        Axis.J.iteration_symbol(),
+    ]
 
 
 def test_dace_cpu_kfirst_loop_structure():
@@ -125,8 +128,11 @@ def test_dace_cpu_kfirst_loop_structure():
     state = sdfg.states()[0]
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
-    assert loop_indices[0] == ["__i", "__j"]
-    assert loop_indices[1] == ["__k"]
+    assert loop_indices[0] == [
+        Axis.I.iteration_symbol(),
+        Axis.J.iteration_symbol(),
+        Axis.K.iteration_symbol(),
+    ]
 
     builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_kfirst")
     manager = SDFGManager(builder)
@@ -164,8 +170,11 @@ def test_dace_cpu_KJI_loop_structure():
         loop_indices = [
             node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)
         ]
-        assert loop_indices[0] == ["__k"]
-        assert loop_indices[1] == ["__j", "__i"]
+        assert loop_indices[0] == [
+            Axis.K.iteration_symbol(),
+            Axis.J.iteration_symbol(),
+            Axis.I.iteration_symbol(),
+        ]
 
         builder = StencilBuilder(copy_forward_stencil, backend="dace:cpu_KJI")
         manager = SDFGManager(builder)
@@ -174,12 +183,12 @@ def test_dace_cpu_KJI_loop_structure():
 
         # Expect LoopRegion for K outside
         loop_region: LoopRegion = list(sdfg.all_control_flow_blocks())[0]
-        assert loop_region.loop_variable == "__k"
+        assert loop_region.loop_variable == Axis.K.iteration_symbol()
 
         # Expect JI Map and in loop_body state (#2)
         state = loop_region.start_block
         assert [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)] == [
-            ["__j", "__i"]
+            [Axis.J.iteration_symbol(), Axis.I.iteration_symbol()],
         ]
 
 
@@ -199,7 +208,10 @@ def test_dace_cpu_KJI_loop_structure_parallel():
         # Expect a Map for IJ outside
         map_entry_nodes = [node for node in state.nodes() if isinstance(node, nodes.MapEntry)]
         assert len(map_entry_nodes) == 1, "expect one MapEntry node"
-        assert map_entry_nodes[0].map.params == ["__j", "__i"]
+        assert map_entry_nodes[0].map.params == [
+            Axis.J.iteration_symbol(),
+            Axis.I.iteration_symbol(),
+        ]
 
         # Expect LoopRegion for K inside map
         nsdfg_nodes = [node for node in state.nodes() if isinstance(node, nodes.NestedSDFG)]
@@ -208,4 +220,4 @@ def test_dace_cpu_KJI_loop_structure_parallel():
         assert len(for_nested_nodes) == 1
         loop_region = for_nested_nodes[0]
         assert isinstance(loop_region, LoopRegion)
-        assert loop_region.loop_variable == "__k"
+        assert loop_region.loop_variable == Axis.K.iteration_symbol()

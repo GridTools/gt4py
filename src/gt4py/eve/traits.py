@@ -11,9 +11,9 @@
 from __future__ import annotations
 
 import collections
+from typing import Any, no_type_check
 
 from . import concepts, datamodels, exceptions, visitors
-from .extended_typing import Any, no_type_check
 
 
 # ---  Node Traits ---

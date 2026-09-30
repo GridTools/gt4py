@@ -441,7 +441,7 @@ class SDFGManager:
             #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
             skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
-        sdfg.apply_transformations_repeated(MapCollapse, progress=False, validate=validate)
+        sdfg.apply_transformations_repeated(MapCollapse, progress=False, validate=False)
 
         if do_cache:
             self._save_sdfg(sdfg, path)

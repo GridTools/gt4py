@@ -13,7 +13,7 @@ from typing import Any, Final, Generator, Optional, TypeAlias
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import xtyping
 from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
@@ -40,8 +40,8 @@ ExternalWorkspace: TypeAlias = dict[
 """ Mapping from device types to array-like objects.
 
     The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
-    as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
-    or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
+    as a workspace: a host array exposing `gt4py.eve.xtyping.ArrayInterface`
+    or a device array exposing `gt4py.eve.xtyping.CUDAArrayInterface`.
 """
 
 
