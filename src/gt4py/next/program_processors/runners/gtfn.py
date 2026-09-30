@@ -126,6 +126,7 @@ class GTFNCompiler(compiler.CPPCompiler):
 class GTFNTranslationOptions(TypedDict, total=False):
     """Step-local settings of `GTFNTranslationStep`; the device comes from the builder."""
 
+    code_spec: artifacts.HeaderAndSourceCodeSpec | None
     enable_itir_transforms: bool
     symbolic_domain_sizes: dict[str, itir.Expr] | None
     use_max_domain_range_on_unstructured_shift: bool | None
@@ -141,6 +142,7 @@ class GTFNBuildSystemOptions(TypedDict, total=False):
 class GTFNCompilationOptions(TypedDict, total=False):
     """Step-local settings of `GTFNCompiler`; device and cache lifetime come from the builder."""
 
+    fingerprint_builder_factory: bool
     force_recompile: bool
 
 

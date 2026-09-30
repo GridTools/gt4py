@@ -68,9 +68,6 @@ Compile workflows are plain frozen dataclasses, so a whole step is replaced on
 one the builders produced. The replacement is used as given.
 
 ```python
-import dataclasses
-
-
 class MyCodeGen: ...
 
 

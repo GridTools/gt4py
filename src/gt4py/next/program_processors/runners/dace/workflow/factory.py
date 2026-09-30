@@ -56,7 +56,7 @@ def make_dace_compile_workflow(
     auto_optimize: bool = False,
     cached_translation: bool = False,
     cmake_build_type: config.CMakeBuildType | None = None,
-    unstructured_horizontal_has_unit_stride: bool = False,
+    unstructured_horizontal_has_unit_stride: bool | None = None,
     translation: DaCeTranslationOptions | None = None,
     compilation: DaCeCompilationOptions | None = None,
 ) -> recipes.OTFCompileWorkflow:
@@ -76,7 +76,8 @@ def make_dace_compile_workflow(
         cmake_build_type: Build type of the generated project. Defaults to the
             value in `config`.
         unstructured_horizontal_has_unit_stride: Replace the field stride
-            symbol with '1' in the horizontal dimension.
+            symbol with '1' in the horizontal dimension. Defaults to the value
+            in `config`.
         translation: Step-local settings of the translation step.
         compilation: Step-local settings of the compilation step.
 
@@ -85,6 +86,8 @@ def make_dace_compile_workflow(
     """
     if cmake_build_type is None:
         cmake_build_type = config.CMAKE_BUILD_TYPE
+    if unstructured_horizontal_has_unit_stride is None:
+        unstructured_horizontal_has_unit_stride = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
 
     translation_step: stages.TranslationStep = DaCeTranslator(
         device_type=device_type,

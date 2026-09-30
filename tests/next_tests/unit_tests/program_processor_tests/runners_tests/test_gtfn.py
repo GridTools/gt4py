@@ -31,6 +31,9 @@ from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.program_processors.runners import gtfn
 
 
+_GPU_DEVICE_TYPE = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+
+
 def test_make_gtfn_backend_trait_device():
     cpu_version = gtfn.make_gtfn_backend(gpu=False)
     gpu_version = gtfn.make_gtfn_backend(gpu=True)
@@ -40,18 +43,16 @@ def test_make_gtfn_backend_trait_device():
     assert cpu_version.executor.translation.step.device_type is core_defs.DeviceType.CPU
     assert gpu_version.name == "run_gtfn_gpu"
     assert isinstance(gpu_version.executor.translation, workflow.CachedStep)
-    assert gpu_version.executor.translation.step.device_type is core_defs.DeviceType.CUDA
+    assert gpu_version.executor.translation.step.device_type is _GPU_DEVICE_TYPE
 
     # The compilation step now also carries device_type so it can stamp the artifact.
     assert cpu_version.executor.compilation.device_type is core_defs.DeviceType.CPU
-    assert gpu_version.executor.compilation.device_type is core_defs.DeviceType.CUDA
+    assert gpu_version.executor.compilation.device_type is _GPU_DEVICE_TYPE
 
     assert custom_layout_allocators.is_field_allocator_for(
         cpu_version.allocator, core_defs.DeviceType.CPU
     )
-    assert custom_layout_allocators.is_field_allocator_for(
-        gpu_version.allocator, core_defs.DeviceType.CUDA
-    )
+    assert custom_layout_allocators.is_field_allocator_for(gpu_version.allocator, _GPU_DEVICE_TYPE)
 
 
 def test_make_gtfn_backend_build_cache_config(monkeypatch):
@@ -142,10 +143,10 @@ def test_step_options_reach_their_step_with_shared_settings():
     translation = toolchain.executor.translation
     assert isinstance(translation, workflow.CachedStep)
     assert translation.step.enable_itir_transforms is False
-    assert translation.step.device_type is core_defs.DeviceType.CUDA
+    assert translation.step.device_type is _GPU_DEVICE_TYPE
     compilation = toolchain.executor.compilation
     assert compilation.force_recompile is True
-    assert compilation.device_type is core_defs.DeviceType.CUDA
+    assert compilation.device_type is _GPU_DEVICE_TYPE
     assert compilation.builder_factory.cmake_extra_flags == ["-DEXTRA=ON"]
     assert compilation.builder_factory.cmake_build_type is config.CMakeBuildType.DEBUG
 

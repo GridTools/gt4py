@@ -17,7 +17,6 @@ jupyter:
 import dataclasses
 import re
 
-
 import gt4py.next as gtx
 
 import devtools
