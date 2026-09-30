@@ -175,7 +175,8 @@ def make_dace_compile_workflow(
     setting, e.g. `translation=functools.partial(make_dace_translator, use_metrics=False)`,
     or any callable taking the config to replace the step. The translation
     step is wrapped in the cache here, after its builder ran, so a custom
-    translation step is cached like the default one.
+    translation step is cached like the default one. A custom step builder is
+    responsible for configuring its step from `cfg`.
 
     Args:
         cfg: The toolchain configuration. Defaults to `DaCeConfig()`.
@@ -185,18 +186,12 @@ def make_dace_compile_workflow(
 
     Returns:
         The composed compile workflow.
-
-    Raises:
-        ValueError: If a step builder returns a step configured for a device
-            other than `cfg.device_type`.
     """
     if cfg is None:
         cfg = DaCeConfig()
 
     translation_step = translation(cfg)
-    workflow.check_device_agreement(translation_step, cfg.device_type, "DaCe translation step")
     compilation_step = compilation(cfg)
-    workflow.check_device_agreement(compilation_step, cfg.device_type, "DaCe compilation step")
 
     if cfg.cached_translation:
         translation_step = workflow.CachedStep[

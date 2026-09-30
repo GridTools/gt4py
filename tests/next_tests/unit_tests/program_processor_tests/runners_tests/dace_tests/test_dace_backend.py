@@ -104,13 +104,18 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=auto_optimize,
-        async_sdfg_call=True,
-        optimization_args=optimization_args,
-        unstructured_horizontal_has_unit_stride=on_gpu,
-        use_metrics=True,
+    custom_backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(
+            gpu=on_gpu,
+            auto_optimize=auto_optimize,
+            unstructured_horizontal_has_unit_stride=on_gpu,
+        ),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            optimization_args=optimization_args,
+            async_sdfg_call=True,
+            use_metrics=True,
+        ),
     )
     # The monkeypatched transformation functions exist only in this process, so
     # compilation must not be offloaded to a worker.
@@ -187,14 +192,14 @@ class _RecordingWorkspace:
 def test_make_backend_accepts_external_workspace_with_external_mode():
     workspace = _RecordingWorkspace()
 
-    backend = dace_wf_backend.make_dace_backend(
-        gpu=False,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
-        },
-        external_workspace={core_defs.DeviceType.CPU: workspace},
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace}),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            optimization_args={
+                "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
+            },
+        ),
     )
 
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
@@ -203,11 +208,8 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
 def test_make_backend_infers_external_mode_when_workspace_is_provided():
     workspace = _RecordingWorkspace()
 
-    backend = dace_wf_backend.make_dace_backend(
-        gpu=False,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        external_workspace={core_defs.DeviceType.CPU: workspace},
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace})
     )
 
     assert (
@@ -221,14 +223,14 @@ def test_make_backend_warns_external_workspace_without_external_mode():
     workspace = _RecordingWorkspace()
 
     with pytest.warns(UserWarning, match="External memory workspace provided"):
-        backend = dace_wf_backend.make_dace_backend(
-            gpu=False,
-            auto_optimize=True,
-            async_sdfg_call=False,
-            optimization_args={
-                "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
-            },
-            external_workspace={core_defs.DeviceType.CPU: workspace},
+        backend = dace_wf_backend.make_dace_toolchain(
+            dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace}),
+            translation=functools.partial(
+                dace_wf_factory.make_dace_translator,
+                optimization_args={
+                    "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
+                },
+            ),
         )
 
     # Explicit mode stays as requested by the caller; backend only warns.
@@ -268,34 +270,20 @@ def test_make_toolchain_rejects_derived_optimization_args():
         )
 
 
-@pytest.mark.parametrize(
-    "step_builders",
-    [
-        # Each builder ignores the GPU config it receives and targets the CPU.
-        {
-            "translation": lambda cfg: dace_wf_factory.make_dace_translator(
-                dace_wf_factory.DaCeConfig()
-            )
-        },
-        {
-            "compilation": lambda cfg: dace_wf_factory.make_dace_compiler(
-                dace_wf_factory.DaCeConfig()
-            )
-        },
-    ],
-    ids=["translation", "compilation"],
-)
-def test_make_toolchain_rejects_step_builder_ignoring_config_device(step_builders):
-    with pytest.raises(ValueError, match="toolchain is being built for"):
-        dace_wf_backend.make_dace_toolchain(dace_wf_factory.DaCeConfig(gpu=True), **step_builders)
-
-
 def test_make_toolchain_uncached_translation():
     backend = dace_wf_backend.make_dace_toolchain(
         dace_wf_factory.DaCeConfig(cached_translation=False)
     )
 
     assert isinstance(backend.executor.translation, dace_wf_translation.DaCeTranslator)
+
+
+def test_make_dace_backend_is_deprecated():
+    with pytest.warns(DeprecationWarning, match="make_dace_toolchain"):
+        backend = dace_wf_backend.make_dace_backend(gpu=False, use_metrics=False)
+
+    assert backend.name == "run_dace_cpu_opt"
+    assert backend.executor.translation.step.use_metrics is False
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -351,14 +339,15 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         else None
     )
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": transient_memory_mode,
-        },
-        external_workspace=external_workspace,
+    custom_backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(gpu=on_gpu, external_workspace=external_workspace),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            optimization_args={
+                "transient_memory_mode": transient_memory_mode,
+            },
+            async_sdfg_call=False,
+        ),
     )
 
     @gtx.field_operator

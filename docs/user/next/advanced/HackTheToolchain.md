@@ -68,8 +68,9 @@ debug_gpu_no_transforms = gtfn.make_gtfn_toolchain(
 ```
 
 To replace a step, pass any callable that takes the configuration and returns
-the step. It is still wrapped in the translation cache, and a step that
-records a device other than the configured one is rejected.
+the step. It is still wrapped in the translation cache. Configuring it
+consistently with the configuration it receives (the device, for instance) is
+up to the callable.
 
 ```python
 class MyCodeGen: ...

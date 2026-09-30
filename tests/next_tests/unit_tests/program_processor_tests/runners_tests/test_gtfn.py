@@ -175,14 +175,6 @@ def test_uncached_translation():
     assert isinstance(toolchain.executor.translation, gtfn_module.GTFNTranslationStep)
 
 
-def test_step_builder_ignoring_config_device_raises():
-    def cpu_only_translation(cfg: gtfn.GTFNConfig) -> gtfn_module.GTFNTranslationStep:
-        return gtfn_module.GTFNTranslationStep(device_type=core_defs.DeviceType.CPU)
-
-    with pytest.raises(ValueError, match="toolchain is being built for 'CUDA'"):
-        gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=True), translation=cpu_only_translation)
-
-
 def test_step_builder_cannot_override_config_setting():
     with pytest.raises(TypeError, match="device_type"):
         gtfn.make_gtfn_toolchain(

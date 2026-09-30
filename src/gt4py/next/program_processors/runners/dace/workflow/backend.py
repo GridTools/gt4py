@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -66,10 +67,6 @@ def make_dace_toolchain(
 
     Returns:
         The configured toolchain.
-
-    Raises:
-        ValueError: If a step builder returns a step configured for a device
-            other than `cfg.device_type`.
     """
     if cfg is None:
         cfg = gtx_wfdfactory.DaCeConfig()
@@ -98,8 +95,9 @@ def make_dace_backend(
 ) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
 
-    A flat-keyword front end for `make_dace_toolchain`, kept for existing
-    callers: it builds the `DaCeConfig` and the translation step builder from
+    Deprecated: use `make_dace_toolchain` with a `DaCeConfig` for the shared
+    settings and `functools.partial(make_dace_translator, ...)` for the
+    translation settings. This flat-keyword front end builds exactly that from
     its arguments.
 
     Args:
@@ -131,6 +129,12 @@ def make_dace_backend(
             configuration, or requests the `EXTERNAL` transient memory mode
             without an `external_workspace`.
     """
+    warnings.warn(
+        "'make_dace_backend' is deprecated, use 'make_dace_toolchain' with a 'DaCeConfig' and"
+        " 'functools.partial(make_dace_translator, ...)' instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return make_dace_toolchain(
         gtx_wfdfactory.DaCeConfig(
             gpu=gpu,
