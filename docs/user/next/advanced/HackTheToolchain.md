@@ -46,25 +46,42 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow
+
+The builders take the settings shared by several steps (the device, the build
+type, translation caching) as keyword arguments, and the settings of a single
+step as a dict. The keys of that dict are the step's own fields, so a typo is a
+type error.
 
 ```python
+gtfn = gtx.program_processors.runners.gtfn
+
+debug_gpu_no_transforms = gtfn.make_gtfn_backend(
+    gpu=True,
+    cmake_build_type=gtx.config.CMakeBuildType.DEBUG,
+    name_postfix="_debug_no_transforms",
+    translation={"enable_itir_transforms": False},
+)
+```
+
+Compile workflows are plain frozen dataclasses, so a whole step is replaced on
+one the builders produced. The replacement is used as given.
+
+```python
+import dataclasses
+
+
 class MyCodeGen: ...
 
 
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.stages.CompilableProgramDef, gtx.otf.artifacts.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[
-        gtx.otf.artifacts.ProgramSource, gtx.otf.artifacts.ExtensionSource
-    ] = Cpp2BindingsGen()
-
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+pure_cpp2_workflow = dataclasses.replace(
+    gtfn.make_gtfn_compile_workflow(cmake_build_type=gtx.config.CMakeBuildType.DEBUG),
+    translation=MyCodeGen(),
+    bindings=Cpp2BindingsGen(),
+)
 ```
 
 ## Invent new Workflow Types

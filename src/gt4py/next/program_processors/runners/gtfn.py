@@ -8,9 +8,8 @@
 
 import dataclasses
 import pathlib
-from typing import Any
+from typing import Any, TypedDict
 
-import factory
 import numpy as np
 
 import gt4py._core.definitions as core_defs
@@ -19,7 +18,8 @@ from gt4py._core import filecache
 from gt4py.next import backend, common, config, field_utils, fingerprinting
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
-from gt4py.next.otf import artifacts, recipes, workflow
+from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import artifacts, recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -123,91 +123,156 @@ class GTFNCompiler(compiler.CPPCompiler):
         )
 
 
-class GTFNCompilerFactory(factory.Factory):
-    class Meta:
-        model = GTFNCompiler
+class GTFNTranslationOptions(TypedDict, total=False):
+    """Step-local settings of `GTFNTranslationStep`; the device comes from the builder."""
+
+    enable_itir_transforms: bool
+    symbolic_domain_sizes: dict[str, itir.Expr] | None
+    use_max_domain_range_on_unstructured_shift: bool | None
 
 
-class GTFNCompileWorkflowFactory(factory.Factory):
-    class Meta:
-        model = recipes.OTFCompileWorkflow
+class GTFNBuildSystemOptions(TypedDict, total=False):
+    """Step-local settings of `CompiledbFactory`; the build type comes from the builder."""
 
-    class Params:
-        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.CMAKE_BUILD_TYPE
-        )
-        unstructured_horizontal_has_unit_stride: bool = factory.LazyFunction(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
-        )
-        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
-        )
+    cmake_extra_flags: list[str]
+    renew_compiledb: bool
 
-        cached_translation = factory.Trait(
-            translation=factory.LazyAttribute(
-                lambda o: workflow.CachedStep.persistent(
-                    o.bare_translation,
-                    input_fingerprinter=fingerprinting.strict_fingerprinter,
-                    cache=filecache.FileCache(
-                        cache.get_translation_cache_folder(
-                            cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "gtfn"
-                        )
-                    ),
+
+class GTFNCompilationOptions(TypedDict, total=False):
+    """Step-local settings of `GTFNCompiler`; device and cache lifetime come from the builder."""
+
+    force_recompile: bool
+
+
+def make_gtfn_compile_workflow(
+    *,
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
+    cached_translation: bool = False,
+    cmake_build_type: config.CMakeBuildType | None = None,
+    unstructured_horizontal_has_unit_stride: bool | None = None,
+    translation: GTFNTranslationOptions | None = None,
+    build_system: GTFNBuildSystemOptions | None = None,
+    compilation: GTFNCompilationOptions | None = None,
+) -> recipes.OTFCompileWorkflow:
+    """
+    Build the GTFN translation -> bindings -> compilation workflow.
+
+    Settings shared by several steps are keyword arguments, forwarded to every
+    step that needs them. The step-local settings of each step are passed as a
+    dict, unpacked into the step's constructor; the shared settings are not
+    part of these dicts, so they cannot be set for one step alone. To replace a
+    whole step, use `dataclasses.replace` on the returned workflow.
+
+    Args:
+        device_type: The device the compiled program targets.
+        cached_translation: Wrap the translation step in a persistent cache.
+        cmake_build_type: Build type of the generated CMake project. Defaults
+            to the value in `config`.
+        unstructured_horizontal_has_unit_stride: Layout assumption of the
+            bindings. Defaults to the value in `config`.
+        translation: Step-local settings of the translation step.
+        build_system: Step-local settings of the build system.
+        compilation: Step-local settings of the compilation step.
+
+    Returns:
+        The composed compile workflow.
+    """
+    if cmake_build_type is None:
+        cmake_build_type = config.CMAKE_BUILD_TYPE
+    if unstructured_horizontal_has_unit_stride is None:
+        unstructured_horizontal_has_unit_stride = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+
+    translation_step: stages.TranslationStep = gtfn_module.GTFNTranslationStep(
+        device_type=device_type, **(translation or GTFNTranslationOptions())
+    )
+    if cached_translation:
+        translation_step = workflow.CachedStep[
+            stages.CompilableProgramDef, artifacts.ProgramSource, str
+        ].persistent(
+            translation_step,
+            input_fingerprinter=fingerprinting.strict_fingerprinter,
+            cache=filecache.FileCache(
+                cache.get_translation_cache_folder(
+                    cache.get_cache_base_path(config.BUILD_CACHE_LIFETIME), "gtfn"
                 )
             ),
         )
 
-        bare_translation = factory.SubFactory(
-            gtfn_module.GTFNTranslationStepFactory,
-            device_type=factory.SelfAttribute("..device_type"),
-        )
-
-    translation = factory.LazyAttribute(lambda o: o.bare_translation)
-    bindings: workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource] = (
-        factory.LazyAttribute(  # type: ignore[assignment] # factory-boy typing not precise enough
-            lambda o: nanobind.ExtensionGenerator(
-                unstructured_horizontal_has_unit_stride=o.unstructured_horizontal_has_unit_stride
-            )
-        )
-    )
-    compilation = factory.SubFactory(
-        GTFNCompilerFactory,
-        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
-        builder_factory=factory.SelfAttribute("..builder_factory"),
-        device_type=factory.SelfAttribute("..device_type"),
+    return recipes.OTFCompileWorkflow(
+        translation=translation_step,
+        # `OTFCompileWorkflow` is not parameterized over the code spec, so its
+        # `bindings` field is typed for `ProgramSource[Any]` while
+        # `ExtensionGenerator` accepts only C++-like specs.
+        bindings=nanobind.ExtensionGenerator(  # type: ignore[arg-type] # see comment above
+            unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride
+        ),
+        compilation=GTFNCompiler(
+            cache_lifetime=config.BUILD_CACHE_LIFETIME,
+            builder_factory=compiledb.CompiledbFactory(
+                cmake_build_type=cmake_build_type, **(build_system or GTFNBuildSystemOptions())
+            ),
+            device_type=device_type,
+            **(compilation or GTFNCompilationOptions()),
+        ),
     )
 
 
-class GTFNBackendFactory(factory.Factory):
-    class Meta:
-        model = backend.Backend
+def make_gtfn_backend(
+    *,
+    gpu: bool = False,
+    name_postfix: str = "",
+    cached_translation: bool = True,
+    cmake_build_type: config.CMakeBuildType | None = None,
+    unstructured_horizontal_has_unit_stride: bool | None = None,
+    translation: GTFNTranslationOptions | None = None,
+    build_system: GTFNBuildSystemOptions | None = None,
+    compilation: GTFNCompilationOptions | None = None,
+) -> backend.Backend:
+    """
+    Build a GTFN backend.
 
-    class Params:
-        name_device = "cpu"
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
+    Args:
+        gpu: Target the GPU instead of the CPU.
+        name_postfix: Appended to the backend name, which must stay unique.
+        cached_translation: Wrap the translation step in a persistent cache.
+        cmake_build_type: See `make_gtfn_compile_workflow`.
+        unstructured_horizontal_has_unit_stride: See `make_gtfn_compile_workflow`.
+        translation: Step-local settings of the translation step.
+        build_system: Step-local settings of the build system.
+        compilation: Step-local settings of the compilation step.
+
+    Returns:
+        The configured backend.
+    """
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    device_type: core_defs.DeviceType
+    if gpu:
+        allocator = next_allocators.StandardGPUFieldBufferAllocator()
+        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+    else:
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
         device_type = core_defs.DeviceType.CPU
-        otf_workflow = factory.SubFactory(
-            GTFNCompileWorkflowFactory,
-            cached_translation=True,
-            device_type=factory.SelfAttribute("..device_type"),
-        )
 
-    name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
+    return backend.Backend(
+        name=f"run_gtfn_{'gpu' if gpu else 'cpu'}{name_postfix}",
+        executor=make_gtfn_compile_workflow(
+            device_type=device_type,
+            cached_translation=cached_translation,
+            cmake_build_type=cmake_build_type,
+            unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+            translation=translation,
+            build_system=build_system,
+            compilation=compilation,
+        ),
+        allocator=allocator,
+        transforms=backend.DEFAULT_TRANSFORMS,
+    )
 
 
-run_gtfn = GTFNBackendFactory()
+run_gtfn = make_gtfn_backend()
 
-run_gtfn_gpu = GTFNBackendFactory(gpu=True)
+run_gtfn_gpu = make_gtfn_backend(gpu=True)
 
-run_gtfn_no_transforms = GTFNBackendFactory(
-    otf_workflow__bare_translation__enable_itir_transforms=False
+run_gtfn_no_transforms = make_gtfn_backend(
+    name_postfix="_no_transforms", translation={"enable_itir_transforms": False}
 )

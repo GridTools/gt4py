@@ -12,8 +12,6 @@ import dataclasses
 import warnings
 from typing import Any, Final
 
-import factory
-
 import gt4py.next.custom_layout_allocators as next_allocators
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common, config
@@ -40,85 +38,60 @@ class DaCeBackend(backend.Backend[Any]):
         return program
 
 
-class DaCeBackendFactory(factory.Factory):
-    """
-    Workflow factory for the GTIR-DaCe backend.
-
-    Several parameters are inherithed from `backend.Backend`, see below the specific ones.
-
-    Args:
-        auto_optimize: Enables the SDFG transformation pipeline.
-    """
-
-    class Meta:
-        model = DaCeBackend
-
-    class Params:
-        name_device = "cpu"
-        name_postfix = ""
-        gpu = factory.Trait(
-            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-            device_type=core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA,
-            name_device="gpu",
-        )
-        device_type = core_defs.DeviceType.CPU
-        otf_workflow = factory.SubFactory(
-            gtx_wfdfactory.DaCeWorkflowFactory,
-            cached_translation=True,
-            device_type=factory.SelfAttribute("..device_type"),
-            auto_optimize=factory.SelfAttribute("..auto_optimize"),
-        )
-        auto_optimize = factory.Trait(name_postfix="_opt")
-
-    name = factory.LazyAttribute(lambda o: f"run_dace_{o.name_device}{o.name_postfix}")
-    executor = factory.LazyAttribute(lambda o: o.otf_workflow)
-    allocator = next_allocators.StandardCPUFieldBufferAllocator()
-    transforms = backend.DEFAULT_TRANSFORMS
-    external_workspace = None
-
-
 def make_dace_backend(
     gpu: bool,
     auto_optimize: bool = True,
-    async_sdfg_call: bool = True,
-    optimization_args: dict[str, Any] | None = None,
+    *,
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None,
-    unstructured_horizontal_has_unit_stride: bool = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE,
-    use_metrics: bool = True,
-    use_zero_origin: bool = False,
-    use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Backend:
+    unstructured_horizontal_has_unit_stride: bool | None = None,
+    cached_translation: bool = True,
+    cmake_build_type: config.CMakeBuildType | None = None,
+    translation: gtx_wfdfactory.DaCeTranslationOptions | None = None,
+    compilation: gtx_wfdfactory.DaCeCompilationOptions | None = None,
+) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
+
+    Settings shared by several steps are keyword arguments; the step-local
+    settings of the translation and compilation steps are passed as dicts, see
+    `make_dace_compile_workflow`.
 
     Args:
         gpu: Enable GPU transformations and code generation.
         auto_optimize: Enable the SDFG auto-optimize pipeline.
-        async_sdfg_call: Make an asynchronous SDFG call on GPU to allow overlapping
-            of GPU kernel execution with the Python driver code.
-        optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
         external_workspace: Workspace memory externally allocated, which is used
             for SDFG's transient arrays when `transient_memory_mode` is `EXTERNAL`.
         unstructured_horizontal_has_unit_stride: When the memory layout has unit stride
             in the horizontal dimension, replace the field stride symbol with '1'.
-        use_metrics: Add SDFG instrumentation to collect the metric for stencil
-            compute time.
-        use_zero_origin: Can be set to `True` when all fields passed as program
-            arguments have zero-based origin. This setting will skip generation
-            of range start-symbols `_range_0` since they can be assumed to be zero.
+            Defaults to the value in `config`.
+        cached_translation: Wrap the translation step in a persistent cache.
+        cmake_build_type: Build type of the generated project. Defaults to the
+            value in `config`.
+        translation: Step-local settings of the translation step. Its
+            `auto_optimize_args` configure the SDFG auto-optimize pipeline, see
+            `gt_auto_optimize()`; `async_sdfg_call` is only effective on GPU.
+        compilation: Step-local settings of the compilation step.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
-    cannot be overriden, and therefore cannot appear here. Thus, this function will
-    throw an exception if called with any argument included in `gt_optimization_args`.
+    cannot be overriden, and therefore cannot appear in `auto_optimize_args`.
 
     Returns:
         A dace backend with custom configuration for the target device.
+
+    Raises:
+        ValueError: If `auto_optimize_args` sets a parameter derived from the
+            configuration, or requests the `EXTERNAL` transient memory mode
+            without an `external_workspace`.
     """
+    if unstructured_horizontal_has_unit_stride is None:
+        unstructured_horizontal_has_unit_stride = config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+    if translation is None:
+        translation = gtx_wfdfactory.DaCeTranslationOptions()
 
     # The `gt_optimization_args` set contains the parameters of `gt_auto_optimize()`
     # that are derived from the gt4py configuration, and therefore cannot be customized.
     gt_optimization_args: Final[set[str]] = {"gpu", "constant_symbols", "unit_strides_kind"}
 
+    optimization_args = translation.get("auto_optimize_args")
     if optimization_args is None:
         optimization_args = {}
     elif optimization_args and not auto_optimize:
@@ -154,37 +127,38 @@ def make_dace_backend(
             gtx_transformations.TransientMemoryMode.EXTERNAL
         )
 
-    return DaCeBackendFactory(  # type: ignore[return-value] # factory-boy typing not precise enough
-        gpu=gpu,
-        auto_optimize=auto_optimize,
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    device_type: core_defs.DeviceType
+    if gpu:
+        allocator = next_allocators.StandardGPUFieldBufferAllocator()
+        device_type = core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+    else:
+        allocator = next_allocators.StandardCPUFieldBufferAllocator()
+        device_type = core_defs.DeviceType.CPU
+
+    return DaCeBackend(
+        name=f"run_dace_{'gpu' if gpu else 'cpu'}{'_opt' if auto_optimize else ''}",
+        executor=gtx_wfdfactory.make_dace_compile_workflow(
+            device_type=device_type,
+            auto_optimize=auto_optimize,
+            cached_translation=cached_translation,
+            cmake_build_type=cmake_build_type,
+            unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
+            translation=translation
+            | gtx_wfdfactory.DaCeTranslationOptions(
+                auto_optimize_args=optimization_args,
+                async_sdfg_call=translation.get("async_sdfg_call", True) and gpu,
+            ),
+            compilation=compilation,
+        ),
+        allocator=allocator,
+        transforms=backend.DEFAULT_TRANSFORMS,
         external_workspace=external_workspace,
-        otf_workflow__bare_translation__async_sdfg_call=(async_sdfg_call if gpu else False),
-        otf_workflow__bare_translation__auto_optimize_args=optimization_args,
-        otf_workflow__bare_translation__unstructured_horizontal_has_unit_stride=unstructured_horizontal_has_unit_stride,
-        otf_workflow__bare_translation__use_metrics=use_metrics,
-        otf_workflow__bare_translation__disable_field_origin_on_program_arguments=use_zero_origin,
-        otf_workflow__bare_translation__use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
 
-run_dace_cpu = make_dace_backend(
-    gpu=False,
-    auto_optimize=True,
-    async_sdfg_call=False,
-)
-run_dace_cpu_noopt = make_dace_backend(
-    gpu=False,
-    auto_optimize=False,
-    async_sdfg_call=False,
-)
+run_dace_cpu = make_dace_backend(gpu=False, auto_optimize=True)
+run_dace_cpu_noopt = make_dace_backend(gpu=False, auto_optimize=False)
 
-run_dace_gpu = make_dace_backend(
-    gpu=True,
-    auto_optimize=True,
-    async_sdfg_call=True,
-)
-run_dace_gpu_noopt = make_dace_backend(
-    gpu=True,
-    auto_optimize=False,
-    async_sdfg_call=True,
-)
+run_dace_gpu = make_dace_backend(gpu=True, auto_optimize=True)
+run_dace_gpu_noopt = make_dace_backend(gpu=True, auto_optimize=False)

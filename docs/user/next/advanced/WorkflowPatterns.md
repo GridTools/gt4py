@@ -17,7 +17,6 @@ jupyter:
 import dataclasses
 import re
 
-import factory
 
 import gt4py.next as gtx
 
@@ -199,7 +198,7 @@ Let's say we want to make our calculation workflow compatible with string input.
 
 ```python editable=true slideshow={"slide_type": ""}
 # A plain conversion step turning a string into an int, chained into the
-# workflow below and reused by `StrToIntFactory(cached=True)`.
+# workflow below and reused by `make_str_to_int(cached=True)`.
 def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
@@ -214,9 +213,9 @@ str_calc("1")
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-### Step with factory (builder)
+### Step with a builder
 
-If a step can be useful with different combinations of parameters and wrappers, it should have a factory. In this case we will add a neutral wrapper around it, so we can put any combination of wrappers into that:
+If a step is useful with different combinations of parameters and wrappers, give it a **builder function**: a plain function taking the cross-cutting options and returning the assembled step. Steps are frozen dataclasses, so the builder is ordinary code — no factory framework involved, and the result is fully type-checked.
 
 <!-- #endregion -->
 
@@ -229,32 +228,23 @@ class AnyStrToInt(gtx.otf.workflow.ChainableWorkflowMixin[str | int, int]):
         return self.inner_step(inp)
 
 
-class StrToIntFactory(factory.Factory):
-    class Meta:
-        model = AnyStrToInt
-
-    class Params:
-        default_step = to_int
-        cached = factory.Trait(
-            inner_step=factory.LazyAttribute(
-                lambda o: gtx.otf.workflow.CachedStep.in_memory(
-                    step=o.default_step, input_fingerprinter=str
-                )
-            )
-        )
-
-    inner_step = factory.LazyAttribute(lambda o: o.default_step)
+def make_str_to_int(
+    *, cached: bool = False, step: gtx.otf.workflow.Workflow[str, int] = to_int
+) -> AnyStrToInt:
+    if cached:
+        step = gtx.otf.workflow.CachedStep.in_memory(step=step, input_fingerprinter=str)
+    return AnyStrToInt(inner_step=step)
 
 
-cached = StrToIntFactory(cached=True)
-uncached = StrToIntFactory()
+cached = make_str_to_int(cached=True)
+uncached = make_str_to_int()
 uncached.inner_step
 ```
 
 ### Example in the Wild
 
 ```python
-gtx.ffront.past_passes.linters.LinterFactory??
+gtx.ffront.past_passes.linters.linter_factory??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
@@ -413,5 +403,5 @@ gtx.program_processors.runners.gtfn.run_gtfn_gpu.executor.otf_workflow??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.GTFNBackendFactory??
+gtx.program_processors.runners.gtfn.make_gtfn_backend??
 ```

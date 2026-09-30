@@ -296,8 +296,10 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+        translation={
+            "use_metrics": use_metrics,
+            "disable_field_origin_on_program_arguments": use_zero_origin,
+        },
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,
@@ -350,8 +352,10 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
 
     backend = dace_runner.make_dace_backend(
         gpu=False,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+        translation={
+            "use_metrics": use_metrics,
+            "disable_field_origin_on_program_arguments": use_zero_origin,
+        },
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,

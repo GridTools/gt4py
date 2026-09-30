@@ -34,14 +34,14 @@ def exec_alloc_descriptor():
     return backend.Backend(
         name="run_gtfn_with_temporaries_and_sizes",
         transforms=backend.DEFAULT_TRANSFORMS,
-        executor=gtfn.GTFNCompileWorkflowFactory(
-            translation=gtfn.gtfn_module.GTFNTranslationStepFactory(
-                symbolic_domain_sizes={
+        executor=gtfn.make_gtfn_compile_workflow(
+            translation={
+                "symbolic_domain_sizes": {
                     "Cell": "num_cells",
                     "Edge": "num_edges",
                     "Vertex": "num_vertices",
                 }
-            )
+            }
         ),
         allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     )
