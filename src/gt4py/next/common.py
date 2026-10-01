@@ -2588,7 +2588,7 @@ def _check_tag_keys(offset_provider: Mapping[Any, Any]) -> None:
             raise TypeError(
                 f"Invalid offset-provider key {key!r}: offset providers are keyed by"
                 " 'NeighborConnectivity' declarations, e.g. '{V2E: v2e_table}'. A bare name is the"
-                " spelling of the removed 'FieldOffset' (see ADR 0029)."
+                " spelling of the removed 'FieldOffset' (see ADR 0030)."
             )
 
 

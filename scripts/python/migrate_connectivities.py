@@ -9,7 +9,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Migrate gt4py.next user code to dimension and connectivity classes (ADRs 0028, 0029).
+Migrate gt4py.next user code to dimension and connectivity classes (ADRs 0028, 0030).
 
 Rewrites module-level declarations and the uses of Cartesian offsets:
 
@@ -169,7 +169,7 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
             text = (
                 f"class {name}({prefix}NeighborConnectivity[{domain}, {module.segment(source)}]):\n"
                 # NOTE: `TypeAlias`, not a plain assignment: it is what keeps the adopted local
-                # dimension a *type* for mypy (see ADR 0029).
+                # dimension a *type* for mypy (see ADR 0030).
                 f"    Local: typing.TypeAlias = {local}\n"
             )
             module.needed_typing = True

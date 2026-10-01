@@ -12,7 +12,7 @@ Regression tests for the names under which one connectivity is used.
 With `FieldOffset`, using a connectivity required four independently authored strings to
 agree -- the offset tag, the Python variable it was bound to, the local dimension's name and
 the offset-provider key -- and each execution path silently depended on a different subset of
-them. A `NeighborConnectivity` declaration produces all of them (ADR 0029), so what is left to
+them. A `NeighborConnectivity` declaration produces all of them (ADR 0030), so what is left to
 pin is that the *Python* name a declaration is reached through does not matter.
 """
 

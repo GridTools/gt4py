@@ -53,7 +53,7 @@ string equality and are never checked against each other at declaration time: th
 name, and the `offset_provider` key. Whichever one reaches
 `common.get_offset` depends on the execution path and the operation. Making a
 dimension's identity its Python type is the prerequisite for collapsing those
-names into one declaration ([ADR 0029](0029-Connectivities_As_Types.md) covers the
+names into one declaration ([ADR 0030](0030-Connectivities_As_Types.md) covers the
 connectivity half).
 
 ## Decision
