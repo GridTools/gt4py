@@ -56,7 +56,7 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
         returns=True,
     )
     # NOTE: the tag types are named after the *mangled* dimension tags, which is what the
-    # generated bindings reference; a dimension's tag is its qualified Python name (ADR 0028).
+    # generated bindings reference; a dimension's tag is its qualified Python name (ADR 0029).
     i_t, j_t = (common.codegen_name(d.tag) for d in (I, J))
     func = cpp_interface.render_function_declaration(
         entry_point,

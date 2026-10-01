@@ -895,7 +895,7 @@ class TestCodegenName:
 def test_gt_dims_are_unqualified_names():
     """
     `__gt_dims__` is the interop protocol with `gt4py.cartesian`, which names axes by their bare
-    names (`"I"`, `"J"`, `"K"`). A dimension's `tag` is its qualified name (ADR 0028), which
+    names (`"I"`, `"J"`, `"K"`). A dimension's `tag` is its qualified name (ADR 0029), which
     cartesian would not recognize, and would then transpose the array wrongly.
     """
     field = gtx.as_field([IDim, JDim], np.zeros((2, 3)))

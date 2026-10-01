@@ -146,7 +146,7 @@ def _default_dim(i: int) -> Dimension:
     Return the `i`-th default dimension, `D<i>`, creating it on first use.
 
     The dimensions must be *stable across calls*: two domains built by separate calls are
-    compared by the tests, and under nominal identity (ADR 0028) a fresh class per call would
+    compared by the tests, and under nominal identity (ADR 0029) a fresh class per call would
     be a different dimension. Each is bound as a module attribute, so it is also importable
     by its qualified name like any other dimension.
     """

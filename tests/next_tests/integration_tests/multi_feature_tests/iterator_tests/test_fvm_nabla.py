@@ -31,7 +31,7 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 # NOTE: the dimensions are imported, not redeclared. The connectivities come from
-# `nabla_setup` and are built on *its* dimension classes; under nominal identity (ADR 0028) a
+# `nabla_setup` and are built on *its* dimension classes; under nominal identity (ADR 0029) a
 # same-named redeclaration here would be a different dimension, where it used to compare equal.
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     E2VDim,

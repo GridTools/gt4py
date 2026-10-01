@@ -36,7 +36,7 @@ else:
 from gt4py import next as gtx
 from gt4py.next.iterator import atlas_utils
 
-# NOTE: imported, not redeclared. Under nominal identity (ADR 0028) a same-named declaration
+# NOTE: imported, not redeclared. Under nominal identity (ADR 0029) a same-named declaration
 # here would be a different dimension from the one `toy_connectivity` declares, where the old
 # `Dimension("...")` values compared equal -- and tests mix objects from both modules.
 from next_tests.toy_connectivity import E2VDim, Edge, V2EDim, Vertex

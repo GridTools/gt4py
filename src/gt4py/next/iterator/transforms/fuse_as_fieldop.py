@@ -252,7 +252,7 @@ class FuseAsFieldOp(
     >>> from gt4py.next import utils
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
     >>> class IDim(gtx.DimensionIndex): ...
-    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0028), and a
+    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
     >>> # class declared in a doctest is not an attribute of the real module:
     >>> import sys
     >>> sys.modules[__name__].IDim = IDim

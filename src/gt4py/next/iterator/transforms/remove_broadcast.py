@@ -26,7 +26,7 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> from gt4py.next import Dimension, common
     >>> from gt4py.next.common import DimensionIndex
     >>> class IDim(DimensionIndex): ...
-    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0028), and a
+    >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
     >>> # class declared in a doctest is not an attribute of the real module:
     >>> class JDim(DimensionIndex): ...
     >>> import sys

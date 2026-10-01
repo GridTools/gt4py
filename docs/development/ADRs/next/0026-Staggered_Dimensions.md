@@ -10,7 +10,7 @@ tags: []
 - **Updated**: 2026-09-23
 
 > The *encoding* of this record is superseded by
-> [ADR 0028](0028-Dimensions_As_Nominal_Types.md): a staggered dimension is the
+> [ADR 0029](0029-Dimensions_As_Nominal_Types.md): a staggered dimension is the
 > real, interned class `Staggered[D]`, not a name prefix. The semantics below --
 > half-integer positions, the shift convention, and the gtfn and DaCe treatment
 > -- are unchanged.
@@ -66,7 +66,7 @@ index arithmetic is encoded in `common.connectivity_for_cartesian_shift`.
 
 A staggered dimension was encoded as its base dimension's name with the internal
 `_Staggered` prefix, rather than as a new attribute on `Dimension`. Since
-[ADR 0028](0028-Dimensions_As_Nominal_Types.md) it is the class
+[ADR 0029](0029-Dimensions_As_Nominal_Types.md) it is the class
 `common.Staggered[D]`, whose identity is the class itself; the helpers
 `is_staggered`, `flip_staggered` and `as_non_staggered` are unchanged in meaning
 and now read the class's `base`.

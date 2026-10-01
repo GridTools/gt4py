@@ -225,7 +225,7 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
     # A parametrized dimension such as `Staggered[K]` has no importable qualified name (its
     # `__qualname__` contains brackets), so the by-reference `type` deconstruction rejects it.
     # It is fully determined by its base dimension, which *is* importable -- the same reduction
-    # its `copyreg` registration uses. The bare `Staggered` base is an ordinary class. See ADR 0028.
+    # its `copyreg` registration uses. The bare `Staggered` base is an ordinary class. See ADR 0029.
     common.StaggeredMeta: lambda obj: (
         Deconstruction.from_pieces(obj.base, state=b"staggered_dimension")
         if "base" in obj.__dict__

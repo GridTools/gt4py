@@ -185,7 +185,7 @@ def _generate_source(
         f'{common.codegen_name(o)} = offset("{o}")' for o in offset_literals
     )
     # A dimension is not constructed from its name any more: its tag is its qualified Python
-    # name, so the emitted program imports it (ADR 0028).
+    # name, so the emitted program imports it (ADR 0029).
     axis_literals_src = "\n".join(
         f'{common.codegen_name(o.value)} = gtx.resolve("{o.value}")' for o in axis_literals_set
     )

@@ -35,7 +35,7 @@ GRAMMAR = r"""
     TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
-    // A dimension or offset tag is a qualified Python name (ADR 0028): dotted, and -- for a
+    // A dimension or offset tag is a qualified Python name (ADR 0029): dotted, and -- for a
     // parametrized dimension such as `Staggered[pkg.K]` -- with one bracketed dotted name.
     // Unambiguous here: a tag starts with a letter (a float does not), and the literal's
     // suffix terminates it.

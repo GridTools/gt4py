@@ -33,7 +33,7 @@ import next_tests
 
 # NOTE: the unstructured dimensions are declared once, in `toy_connectivity`, and imported here.
 # Both modules used to declare their own `Dimension("Vertex")` etc., which compared equal; under
-# nominal identity (ADR 0028) that would be two different dimensions, and tests that mix a
+# nominal identity (ADR 0029) that would be two different dimensions, and tests that mix a
 # `toy_connectivity` connectivity with a `cases_utils` mesh would silently stop matching.
 from next_tests.toy_connectivity import C2EDim, Cell, E2VDim, Edge, V2EDim, Vertex
 

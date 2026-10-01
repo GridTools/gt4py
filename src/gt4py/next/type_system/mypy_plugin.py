@@ -32,7 +32,7 @@ The documentation on mypy plugins is at https://mypy.readthedocs.io/en/latest/ex
 
 Dimensions no longer need plugin support: a concrete dimension is a class
 ('class IDim(gtx.DimensionIndex): ...'), which is a valid annotation for any type checker. See ADR
-0028. Only the mixed-precision hooks below remain; this plugin is scheduled for removal once
+0029. Only the mixed-precision hooks below remain; this plugin is scheduled for removal once
 dtype-generic fields land.
 """
 

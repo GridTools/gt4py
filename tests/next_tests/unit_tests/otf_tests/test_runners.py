@@ -352,7 +352,7 @@ class TestInteractiveMainReference:
     """
     A class declared in an interactive `__main__` pickles in the parent but not in a worker.
 
-    Dimensions are classes identified by their qualified name (ADR 0028), so a notebook that
+    Dimensions are classes identified by their qualified name (ADR 0029), so a notebook that
     declares one would otherwise break the default process-pool compilation.
     """
 

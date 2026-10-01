@@ -189,7 +189,7 @@ def _interactive_main_reference(obj: object) -> str | None:
     there resolve in the worker. An interactive `__main__` -- a notebook kernel, the REPL,
     `python -c` -- has no `__file__` to re-import, so a class declared there pickles fine in the
     parent (which has it) and then fails to unpickle in the worker. Dimensions are classes
-    identified by their qualified name (ADR 0028), which makes this the common case in
+    identified by their qualified name (ADR 0029), which makes this the common case in
     notebooks.
 
     Only scans when `__main__` is interactive, so ordinary scripts pay nothing.

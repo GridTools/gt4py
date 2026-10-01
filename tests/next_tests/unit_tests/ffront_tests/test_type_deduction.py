@@ -39,7 +39,7 @@ from gt4py.next.type_system import type_specifications as ts
 from next_tests.artifacts import custom_named_collections as cnc
 
 # NOTE: the named collections in the artifact are annotated with *its* `TDim`, and the expected
-# types below are compared against them. Under nominal identity (ADR 0028) a redeclared `TDim`
+# types below are compared against them. Under nominal identity (ADR 0029) a redeclared `TDim`
 # here would be a different dimension, where the old `Dimension("TDim")` compared equal.
 TDim = cnc.TDim
 

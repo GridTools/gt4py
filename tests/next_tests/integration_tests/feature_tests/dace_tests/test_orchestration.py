@@ -150,7 +150,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            # the connectivity argument is named after the mangled offset key (ADR 0028)
+            # the connectivity argument is named after the mangled offset key (ADR 0029)
             **{E2V_CONN: e2v},
             **{f"__{E2V_CONN}_source_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 0)},
             **{f"__{E2V_CONN}_neighbor_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 1)},
@@ -172,7 +172,7 @@ def test_sdfgConvertible_connectivities(unstructured_case):  # noqa: F811
             offset_provider,
             rows=3,
             cols=2,
-            # the connectivity argument is named after the mangled offset key (ADR 0028)
+            # the connectivity argument is named after the mangled offset key (ADR 0029)
             **{E2V_CONN: e2v},
             **{f"__{E2V_CONN}_source_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 0)},
             **{f"__{E2V_CONN}_neighbor_stride": get_stride_from_numpy_to_dace(e2v.ndarray, 1)},

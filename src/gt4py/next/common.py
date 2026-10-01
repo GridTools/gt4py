@@ -211,7 +211,7 @@ class DimensionMeta(type):
     ) -> bool | Domain:
         # NOTE: dimension-vs-dimension comparison is deliberately *not* handled here. A
         # dimension's identity is its type, so `type.__eq__` (identity) is the correct
-        # answer; overriding it with `(tag, kind)` equality is what ADR 0028 rejects.
+        # answer; overriding it with `(tag, kind)` equality is what ADR 0029 rejects.
         if isinstance(value, DimensionMeta):
             return NotImplemented  # both sides decline, so Python falls back to identity
         if isinstance(value, core_defs.INTEGRAL_TYPES):
@@ -292,7 +292,7 @@ class DimensionIndex(metaclass=DimensionMeta):
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, DimensionIndex):
-            # NOTE: `is`, not `==`: a dimension's identity is its type (ADR 0028).
+            # NOTE: `is`, not `==`: a dimension's identity is its type (ADR 0029).
             return type(self) is type(other) and self.value == other.value
         return NotImplemented
 
@@ -316,7 +316,7 @@ class DimensionIndex(metaclass=DimensionMeta):
 #: The cost is that `get_origin()` of a PEP 695 alias is `None` rather than the aliased
 #: origin, so a site dispatching on an annotation's shape must resolve it first (see
 #: `xtyping.resolve_annotation`). `eve.datamodels` stores annotations *unresolved*, so this
-#: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0028.
+#: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0029.
 type Dimension = type[DimensionIndex]
 
 
@@ -1003,7 +1003,7 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
     def __gt_dims__(self) -> tuple[str, ...]:
         # NOTE: the unqualified name, not the `tag`. This is the interop protocol with
         # `gt4py.cartesian`, which identifies axes by their bare names (`"I"`, `"J"`, `"K"`); a
-        # qualified tag would not match and the axes would be transposed wrongly (ADR 0028).
+        # qualified tag would not match and the axes would be transposed wrongly (ADR 0029).
         return tuple(d.__qualname__ for d in self.__gt_domain__.dims)
 
 
@@ -1712,7 +1712,7 @@ class FieldBuiltinFuncRegistry:
 _DEFAULT_SKIP_VALUE: Final[int] = -1
 #: Interned staggered dimensions, keyed by their *base dimension class*.
 #:
-#: NOTE: this is not the name-keyed dimension registry ADR 0028 rejects. It is memoization of
+#: NOTE: this is not the name-keyed dimension registry ADR 0029 rejects. It is memoization of
 #: a type constructor -- keyed by identity, populated only by `StaggeredMeta.__getitem__`, and
 #: never consulted to turn a user-authored name into a class. `typing`'s own subscription cache
 #: plays the same role for generic aliases.
@@ -1725,7 +1725,7 @@ class StaggeredMeta(DimensionMeta):
 
     A PEP 695 generic cannot be used here: `Staggered[K]` would be a `typing._GenericAlias`,
     not a class, so it would fail `issubclass` and eve's `type[DimensionIndex]` validation,
-    and its `tag` could not name the base dimension. See ADR 0028.
+    and its `tag` could not name the base dimension. See ADR 0029.
     """
 
     #: Set by `__getitem__` on each parametrization. Its presence is what distinguishes a

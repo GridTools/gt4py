@@ -23,7 +23,7 @@ from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 from next_tests.integration_tests import cases, cases_utils
 
 # NOTE: from `cases`, not `test_common`: the `cartesian_case` fixture is sized on the `cases`
-# dimensions, and under nominal identity (ADR 0028) another module's same-named `IDim` is a
+# dimensions, and under nominal identity (ADR 0029) another module's same-named `IDim` is a
 # different dimension -- it used to compare equal.
 from next_tests.integration_tests.cases import E2V, V2E, E2VDim, IDim, JDim, KDim, V2EDim
 

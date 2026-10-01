@@ -511,7 +511,7 @@ def _resolve_dimensions(
         >>> class IDim(common.DimensionIndex): ...
         >>> IHalfDim = common.flip_staggered(IDim)
         >>> class JDim(common.DimensionIndex): ...
-        >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0028), and a
+        >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
         >>> # class declared in a doctest is not an attribute of the real module:
         >>> import sys
         >>> sys.modules[__name__].Edge = Edge

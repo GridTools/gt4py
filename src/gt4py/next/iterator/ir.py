@@ -90,7 +90,7 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
-    #: The dimension's tag, its qualified Python name (ADR 0028).
+    #: The dimension's tag, its qualified Python name (ADR 0029).
     value: str
 
     @property
