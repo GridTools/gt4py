@@ -23,7 +23,7 @@ def f(a: Field[Dims[Edge], float]) -> Field[Dims[Vertex], float]:
 ```
 
 The declaration is written in DSL code, owns its local dimension, and states the
-constraints a neighbor table bound to it has to satisfy. It holds no data. It builds on [ADR 0028](0028-Dimensions_As_Nominal_Types.md): the
+constraints a neighbor table bound to it has to satisfy. It holds no data. It builds on [ADR 0029](0029-Dimensions_As_Nominal_Types.md): the
 connectivity, like a dimension, is identified by its type, and `V2E.Local` is an
 ordinary dimension class with the tag `<module>.V2E.Local`.
 
