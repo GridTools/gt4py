@@ -161,3 +161,11 @@ def test_prebuilt_backend_names_are_unique():
 
     assert gtfn.run_gtfn_no_transforms.name == "run_gtfn_cpu_no_transforms"
     assert len(set(names)) == len(names)
+
+
+def test_compile_workflow_unit_stride_default_follows_config(monkeypatch):
+    monkeypatch.setattr(config, "UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", True)
+
+    workflow = gtfn.make_gtfn_compile_workflow()
+
+    assert workflow.bindings.unstructured_horizontal_has_unit_stride is True

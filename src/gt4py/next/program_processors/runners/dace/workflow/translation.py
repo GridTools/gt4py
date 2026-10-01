@@ -377,14 +377,14 @@ class DaCeTranslator(
     def __post_init__(self) -> None:
         if not self.auto_optimize_args:
             return
+        if derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS:
+            raise ValueError(
+                f"The following optimization arguments cannot be overriden: {derived_args}."
+            )
         if not self.auto_optimize:
             warnings.warn(
                 "Optimizations args given, but auto-optimize is disabled.",
                 skip_file_prefixes=(_GT4PY_SOURCE_PREFIX,),
-            )
-        elif derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS:
-            raise ValueError(
-                f"The following optimization arguments cannot be overriden: {derived_args}."
             )
 
     def generate_sdfg(

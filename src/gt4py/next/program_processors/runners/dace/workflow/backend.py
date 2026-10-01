@@ -65,9 +65,10 @@ def make_dace_backend(
         cmake_build_type: Build type of the generated project. Defaults to the
             value in `config`.
         translation: Step-local settings of the translation step, see
-            `DaCeTranslator`. When an `external_workspace` is given and
-            `auto_optimize_args` sets no `transient_memory_mode`, it defaults to
-            `EXTERNAL`.
+            `DaCeTranslator`. When an `external_workspace` is given,
+            `auto_optimize` is enabled and `auto_optimize_args` sets no
+            `transient_memory_mode`, it defaults to `EXTERNAL`; without
+            auto-optimize the transient memory mode is not used.
         compilation: Step-local settings of the compilation step.
 
     Returns:

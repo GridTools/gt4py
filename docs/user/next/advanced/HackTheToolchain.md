@@ -64,8 +64,9 @@ debug_gpu_no_transforms = gtfn.make_gtfn_backend(
 )
 ```
 
-Compile workflows are plain frozen dataclasses, so a whole step is replaced on
-one the builders produced. The replacement is used as given.
+Compile workflows are plain frozen dataclasses, so a whole step is replaced
+with `dataclasses.replace` on the workflow a builder returned. The replacement
+is used as given.
 
 ```python
 class MyCodeGen: ...

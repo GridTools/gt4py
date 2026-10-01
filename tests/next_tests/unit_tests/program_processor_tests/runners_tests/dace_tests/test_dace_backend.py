@@ -271,6 +271,23 @@ def test_compile_workflow_rejects_derived_optimization_args():
         )
 
 
+def test_compile_workflow_rejects_derived_optimization_args_without_auto_optimize():
+    with pytest.raises(ValueError, match="cannot be overriden"):
+        dace_wf_factory.make_dace_compile_workflow(
+            auto_optimize=False, translation={"auto_optimize_args": {"gpu": True}}
+        )
+
+
+def test_compile_workflow_defaults_follow_config(monkeypatch):
+    monkeypatch.setattr(config, "UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE", True)
+    monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.DEBUG)
+
+    workflow = dace_wf_factory.make_dace_compile_workflow()
+
+    assert workflow.translation.unstructured_horizontal_has_unit_stride is True
+    assert workflow.compilation.cmake_build_type is config.CMakeBuildType.DEBUG
+
+
 def test_compile_workflow_warns_on_unused_optimization_args():
     with pytest.warns(UserWarning, match="auto-optimize is disabled"):
         dace_wf_factory.make_dace_compile_workflow(
