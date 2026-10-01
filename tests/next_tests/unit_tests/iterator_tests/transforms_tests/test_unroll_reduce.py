@@ -26,7 +26,7 @@ class dummy_neighbor(common.DimensionIndex): ...
 
 #: The local dimensions of the neighbor lists under test. Each one's `tag` is also its IR offset
 #: string and its offset-provider key: `UnrollReduce` looks a connectivity up by the local
-#: dimension of the list it reduces, so those three names must be a single string (ADR 0028).
+#: dimension of the list it reduces, so those three names must be a single string (ADR 0029).
 class Dim(common.LocalDimensionIndex): ...
 
 

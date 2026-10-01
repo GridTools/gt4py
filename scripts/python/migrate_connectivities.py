@@ -9,7 +9,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-Migrate gt4py.next user code to dimension and connectivity classes (ADRs 0028, 0030).
+Migrate gt4py.next user code to dimension and connectivity classes (ADRs 0029, 0030).
 
 Rewrites module-level declarations and the uses of Cartesian offsets:
 
