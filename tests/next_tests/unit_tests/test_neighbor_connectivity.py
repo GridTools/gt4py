@@ -659,6 +659,12 @@ class TestLocality:
     def test_is_local_dimension_of_a_non_dimension(self, value):
         assert common.is_local_dimension(value) is False
 
+    @pytest.mark.parametrize("local", [V2E.Local, LsqCoeff, LocalDimensionIndex])
+    def test_a_local_dimension_cannot_be_staggered(self, local):
+        # what keeps `is_local_dimension` total: there is no staggered local dimension
+        with pytest.raises(TypeError, match="not a declared Cartesian axis"):
+            common.Staggered[local]
+
     def test_display(self):
         assert str(LsqCoeff) == "LsqCoeff[local]"
         assert repr(LsqCoeff) == f"{LsqCoeff.tag}[local]"
