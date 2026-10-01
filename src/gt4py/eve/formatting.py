@@ -46,7 +46,7 @@ def format_python_source(source: str, *, line_length: int = 100) -> str:
         return black.format_str(
             source, mode=black.Mode(line_length=line_length, target_versions={target_version})
         )
-    except ValueError:  # `black.InvalidInput` for unparsable source
+    except Exception:  # e.g. `black.InvalidInput` for unparsable source, or internal `black` errors
         return source
 
 

@@ -41,6 +41,23 @@ def test_format_python_source_invalid_input():
     assert formatting.format_python_source(source) == source
 
 
+def test_format_python_source_black_failure(monkeypatch):
+    black = pytest.importorskip("black")
+
+    def failing_format_str(*args, **kwargs):
+        raise RuntimeError("internal black error")
+
+    monkeypatch.setattr(black, "format_str", failing_format_str)
+    assert formatting.format_python_source(UNFORMATTED_PYTHON) == UNFORMATTED_PYTHON
+
+
+def test_format_python_source_unsupported_interpreter(monkeypatch):
+    black = pytest.importorskip("black")
+    # Simulate a `black` version that does not know the running interpreter.
+    monkeypatch.setattr(black, "TargetVersion", {})
+    assert formatting.format_python_source(UNFORMATTED_PYTHON) == UNFORMATTED_PYTHON
+
+
 def test_format_python_source_without_black(monkeypatch):
     monkeypatch.setitem(sys.modules, "black", None)
     assert formatting.format_python_source(UNFORMATTED_PYTHON) == UNFORMATTED_PYTHON
