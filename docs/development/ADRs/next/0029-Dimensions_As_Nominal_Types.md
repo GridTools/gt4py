@@ -120,7 +120,10 @@ disappears.
 
 4. **Cache fingerprints depend on module paths.** A dimension is fingerprinted by
    qualified name, so moving a declaration between modules invalidates compiled
-   artifacts. This is a consequence for the build cache of ADR 0023, not a
+   artifacts. Its `kind` is fingerprinted too: it decides a field's layout order and
+   the scan axis, so a dimension redefined under the same name with another `kind`
+   (a re-run notebook cell) does not reuse artifacts. A staggered dimension is
+   fingerprinted through its base, and its base is fixed by interning. This is a consequence for the build cache of ADR 0023, not a
    reversal of it. The generic `type` deconstructor is correct for the *lenient*
    fingerprint variant; the STRICT variant rejects a parametrized dimension,
    which is not importable under its qualified name.

@@ -335,8 +335,18 @@ def object_deconstruct_fallback(obj: Any) -> Deconstruction:
     )
 
 
+def _dimension_deconstruction(obj: common.DimensionMeta, *, strict: bool = True) -> Deconstruction:
+    # NOTE: by reference, like any class, plus the declaration-time `kind`. It decides a field's
+    # layout order (`order_dimensions`) and the scan axis, so a dimension redefined under the same
+    # name with another `kind` (a re-run notebook cell) must not reuse compiled artifacts. A
+    # staggered dimension goes through its base (see above), so it inherits this. See ADR 0029.
+    reference = Deconstruction.from_reference(obj, strict=strict).state
+    return Deconstruction.from_pieces(obj.kind, state=b"dimension\0" + reference)
+
+
 #: Strict deconstructors map used by `strict_fingerprinter`
 STRICT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = _COMMON_DECONSTRUCTORS | {
+    common.DimensionMeta: _dimension_deconstruction,
     type: EmptyDeconstruction.from_reference,
     types.FunctionType: EmptyDeconstruction.from_reference,
     types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
@@ -396,6 +406,7 @@ _lenient_reference = functools.partial(Deconstruction.from_reference, strict=Fal
 
 #: Tolerant deconstructors map used by `lenient_fingerprinter`
 LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    common.DimensionMeta: functools.partial(_dimension_deconstruction, strict=False),
     types.FunctionType: _lenient_function_deconstruction,
     types.BuiltinFunctionType: _lenient_reference,
     types.ModuleType: _lenient_reference,

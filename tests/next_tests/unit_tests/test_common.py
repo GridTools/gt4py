@@ -968,5 +968,27 @@ class TestCartesianAxisIndex:
 
     def test_comparisons_stay_on_every_dimension(self):
         # `concat_where(EdgeDim < n, ...)` over a mesh location must keep working
-        assert (ECDim < 5) == Domain(dims=(ECDim,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),))
+        assert (ECDim < 5) == Domain(
+            dims=(ECDim,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)
+        )
         assert (ECDim == 3) == Domain(dims=(ECDim,), ranges=(UnitRange(3, 4),))
+
+
+def test_a_dimension_fingerprint_includes_its_kind():
+    # `kind` sets the layout order, so a dimension redefined under the same name with another kind
+    # (a re-run notebook cell) must not reuse artifacts; a staggered dimension follows its base.
+    from gt4py.next import fingerprinting
+
+    def declare(source: str) -> type:
+        namespace = {"__name__": __name__, "common": common}
+        exec(source, namespace)
+        return namespace["Redefined"]
+
+    horizontal = declare("class Redefined(common.CartesianAxisIndex): ...")
+    vertical = declare(
+        "class Redefined(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ..."
+    )
+    fingerprint = fingerprinting.lenient_fingerprinter
+    assert fingerprint(horizontal) != fingerprint(vertical)
+    assert fingerprint(common.Staggered[horizontal]) != fingerprint(common.Staggered[vertical])
+    assert fingerprinting.strict_fingerprinter(KDim) == fingerprinting.strict_fingerprinter(KDim)
