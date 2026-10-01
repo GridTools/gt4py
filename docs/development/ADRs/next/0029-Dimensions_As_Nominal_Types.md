@@ -205,11 +205,11 @@ Both levels sit *below* `DimensionIndex`, so `Staggered[K]` stays a `DimensionIn
 and no annotation or `issubclass` guard in the tree widens. The bound is on the
 *declared* level, and `Staggered[K]` is only an `AnyCartesianAxisIndex`, so:
 
-| Rejected | Statically (mypy, pyright) | At runtime |
-| --- | --- | --- |
-| `Staggered[Staggered[K]]` | `[type-var]` | `TypeError` |
-| `Staggered[Cell]`, staggering a local dimension | `[type-var]` | `TypeError` |
-| `Cell + 1`, `Cell - 1` | `[operator]` | `TypeError`; a `DSLError` in a field operator |
+| Rejected                                        | Statically (mypy, pyright) | At runtime                                    |
+| ----------------------------------------------- | -------------------------- | --------------------------------------------- |
+| `Staggered[Staggered[K]]`                       | `[type-var]`               | `TypeError`                                   |
+| `Staggered[Cell]`, staggering a local dimension | `[type-var]`               | `TypeError`                                   |
+| `Cell + 1`, `Cell - 1`                          | `[operator]`               | `TypeError`; a `DSLError` in a field operator |
 
 The last row needs `DimensionMeta.__add__` / `__sub__` declared with the self-type
 `cls: type[AnyCartesianAxisIndex]`. Both checkers bind it correctly at every call
