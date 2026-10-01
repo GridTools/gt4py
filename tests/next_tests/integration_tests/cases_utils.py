@@ -184,7 +184,7 @@ Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 
-class C2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class C2VDim(gtx.LocalDimensionIndex): ...
 
 
 V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))

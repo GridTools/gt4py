@@ -1,5 +1,6 @@
 {
   "typeCheckingMode": "standard",
   "reportMissingImports": "error",
-  "reportMissingTypeStubs": "none"
+  "reportMissingTypeStubs": "none",
+  "reportUnnecessaryTypeIgnoreComment": "error"
 }

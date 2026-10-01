@@ -227,7 +227,7 @@ Another way to look at it is that transform uses the edge-to-cell connectivity t
 You can use the field offset `E2C` below to transform a field over cells to a field over edges using the edge-to-cell connectivities:
 
 ```{code-cell} ipython3
-class E2CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class E2CDim(gtx.LocalDimensionIndex): ...
 E2C = gtx.FieldOffset(E2CDim.tag, source=CellDim, target=(EdgeDim, E2CDim))
 ```
 
@@ -379,7 +379,7 @@ print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnu
 As explained in the section outline, the pseudo-laplacian needs the cell-to-edge connectivities as well in addition to the edge-to-cell connectivities. Though the connectivity table has been filled in above, you still need to define the local dimension, the field offset, and the offset provider that describe how to use the connectivity table. The procedure is identical to the edge-to-cell connectivity from before:
 
 ```{code-cell} ipython3
-class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class C2EDim(gtx.LocalDimensionIndex): ...
 C2E = gtx.FieldOffset(C2EDim.tag, source=EdgeDim, target=(CellDim, C2EDim))
 
 C2E_offset_provider = gtx.as_connectivity([CellDim, C2EDim], codomain=EdgeDim, data=cell_to_edge_table, skip_value=-1)

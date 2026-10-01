@@ -577,7 +577,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         data_node: dace_nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
-        local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
+        local_dims = [dim for dim in data_type.dims if gtx_common.is_local_dimension(dim)]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
             field_type = data_type
@@ -847,7 +847,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         neighbor_table_types = gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
         shape = []
         for dim in dims:
-            if dim.kind == gtx_common.DimensionKind.LOCAL:
+            if gtx_common.is_local_dimension(dim):
                 # for local dimension, the size is taken from the associated connectivity type
                 shape.append(gtx_dace_args.local_dimension_size(name, dim, neighbor_table_types))
             elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
@@ -935,7 +935,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 all_dims = gt_type.dims
             else:  # for 'ts.ListType' use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
-                assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
+                assert gtx_common.is_local_dimension(gt_type.dtype.offset_type)
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_args.as_dace_type(gt_type.dtype.element_type)
                 all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])

@@ -469,7 +469,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     ) from ex
                 new_type = types[index]
             case ts.ShiftType(codomain=codomain, domain=(domain, local), tag=tag):
-                if not local.kind == DimensionKind.LOCAL:
+                if not common.is_local_dimension(local):
                     raise errors.DSLError(
                         new_value.location, "Second dimension in offset must be a local dimension."
                     )
@@ -824,7 +824,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         hints=[f"Give the displacement, e.g. '{arg!s}[1]'."],
                     )
         elif isinstance(new_func.type, ts.DimensionType):
-            assert new_func.type.dim.kind == DimensionKind.LOCAL
+            assert common.is_local_dimension(new_func.type.dim)
             return foast.Call(
                 func=new_func,
                 args=new_args,

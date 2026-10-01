@@ -80,7 +80,7 @@ class ValueExpr:
     def __post_init__(self) -> None:
         if isinstance(self.gt_dtype, ts.ListType):
             assert self.gt_dtype.offset_type is not None
-            assert self.gt_dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
+            assert gtx_common.is_local_dimension(self.gt_dtype.offset_type)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -106,7 +106,7 @@ class MemletExpr:
     def __post_init__(self) -> None:
         if isinstance(self.gt_dtype, ts.ListType):
             assert self.gt_dtype.offset_type is not None
-            assert self.gt_dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
+            assert gtx_common.is_local_dimension(self.gt_dtype.offset_type)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -146,7 +146,7 @@ class IteratorExpr:
         gtx_common.check_dims([dim for dim, _ in self.field_domain])
         if isinstance(self.gt_dtype, ts.ListType):
             assert self.gt_dtype.offset_type is not None
-            assert self.gt_dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
+            assert gtx_common.is_local_dimension(self.gt_dtype.offset_type)
             assert all(dim != self.gt_dtype.offset_type for dim, _ in self.field_domain)
 
     def get_field_type(self) -> ts.FieldType:
@@ -769,7 +769,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
             # find position of the local dimension in the field layout
             assert isinstance(arg_desc, dace.data.Array)
-            assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
+            assert all(not gtx_common.is_local_dimension(dim) for dim in field_dims)
             extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
             local_dim_pos = extended_dims.index(local_dim)
             inner_desc = dace.data.Array(
@@ -1130,7 +1130,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         )
         # The layout of connectivity tables is known.
         assert len(conn_type.domain) == 2
-        assert conn_type.domain[1].kind == gtx_common.DimensionKind.LOCAL
+        assert gtx_common.is_local_dimension(conn_type.domain[1])
         conn_slice = self._construct_local_view(
             MemletExpr(
                 dc_node=self.state.add_access(conn_data),
@@ -1383,7 +1383,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
             # The layout of connectivity tables is known.
             assert len(conn_type.domain) == 2
-            assert conn_type.domain[1].kind == gtx_common.DimensionKind.LOCAL
+            assert gtx_common.is_local_dimension(conn_type.domain[1])
             conn_slice = self._construct_local_view(
                 MemletExpr(
                     dc_node=self.state.add_access(conn_data),

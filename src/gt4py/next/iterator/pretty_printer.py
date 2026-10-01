@@ -138,8 +138,8 @@ DEFAULT_WIDTH: Final = 100
 _AXIS_KIND_SUFFIX: Final = {
     common.DimensionKind.HORIZONTAL: "ₕ",
     common.DimensionKind.VERTICAL: "ᵥ",
-    common.DimensionKind.LOCAL: "ₗ",
 }
+_LOCAL_AXIS_SUFFIX: Final = "ₗ"
 
 
 class PrettyPrinter(NodeTranslator):
@@ -240,7 +240,13 @@ class PrettyPrinter(NodeTranslator):
             dim: Optional[common.Dimension] = node.type.dim
         else:
             dim = common.resolve_loaded(node.value)
-        kind = _AXIS_KIND_SUFFIX[dim.kind] if dim is not None else "ₕ"
+        if dim is None:
+            kind = "ₕ"
+        elif common.is_local_dimension(dim):
+            kind = _LOCAL_AXIS_SUFFIX
+        else:
+            assert dim.kind is not None
+            kind = _AXIS_KIND_SUFFIX[dim.kind]
         return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:

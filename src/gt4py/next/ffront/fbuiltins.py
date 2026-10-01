@@ -490,7 +490,7 @@ class FieldOffset(runtime.Offset):
         return {}
 
     def __post_init__(self) -> None:
-        if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
+        if len(self.target) == 2 and not common.is_local_dimension(self.target[1]):
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self) -> ts.ShiftType:
@@ -547,5 +547,5 @@ def is_cartesian_offset(offset: FieldOffset | ts.ShiftType) -> bool:
         len(shift_type.domain) == 1
         and shift_type.codomain == shift_type.domain[0]
         and shift_type.codomain.kind == shift_type.domain[0].kind
-        and shift_type.domain[0].kind != common.DimensionKind.LOCAL
+        and not common.is_local_dimension(shift_type.domain[0])
     )

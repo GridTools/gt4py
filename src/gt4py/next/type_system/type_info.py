@@ -409,7 +409,7 @@ def is_local_field(type_: ts.FieldType) -> bool:
 
     Examples:
         >>> class V(common.DimensionIndex): ...
-        >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+        >>> class V2E(common.LocalDimensionIndex): ...
         >>> is_local_field(
         ...     ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
         ... )
@@ -417,7 +417,7 @@ def is_local_field(type_: ts.FieldType) -> bool:
         >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
         False
     """
-    return any(dim.kind == common.DimensionKind.LOCAL for dim in type_.dims)
+    return any(common.is_local_dimension(dim) for dim in type_.dims)
 
 
 def contains_local_field(type_: ts.TypeSpec) -> bool:
@@ -587,7 +587,7 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+    >>> class V2E(common.LocalDimensionIndex): ...
     >>> list_dtype = ts.ListType(element_type=dtype, offset_type=V2E)
     >>> promote(
     ...     ts.FieldType(dims=[I], dtype=list_dtype),

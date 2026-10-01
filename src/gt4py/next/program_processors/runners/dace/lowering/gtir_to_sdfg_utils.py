@@ -50,8 +50,9 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     # fusion and map splitting rely on the names of the map variables to match the field
     # dimensions and decide whether two maps have the same iteration space.
     dim = gtx_common.as_non_staggered(dim)
-    suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
-    return f"i_{gtx_common.codegen_name(dim.tag)}_gtx_{dim.kind}{suffix}"
+    # NOTE: a local dimension has no `kind`; it keeps the name it had when `LOCAL` was a kind.
+    kind = "localdim" if gtx_common.is_local_dimension(dim) else str(dim.kind)
+    return f"i_{gtx_common.codegen_name(dim.tag)}_gtx_{kind}"
 
 
 def make_tasklet_connector_for(name: str) -> str:

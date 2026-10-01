@@ -913,7 +913,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[common.Dime
     return [
         axis
         for axis in axes
-        if isinstance(axis, common.DimensionMeta) and axis.kind == common.DimensionKind.LOCAL
+        if isinstance(axis, common.DimensionMeta) and common.is_local_dimension(axis)
     ]
 
 

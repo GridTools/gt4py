@@ -11,7 +11,14 @@ import numpy as np
 import gt4py.next as gtx
 from gt4py.next.iterator.embedded import MutableLocatedField
 from gt4py.next import neighbor_sum, where, Dims
-from gt4py.next import CartesianAxisIndex, Dimension, DimensionIndex, DimensionKind, FieldOffset
+from gt4py.next import (
+    CartesianAxisIndex,
+    Dimension,
+    DimensionIndex,
+    LocalDimensionIndex,
+    DimensionKind,
+    FieldOffset,
+)
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.program_processors.runners.gtfn import (
     run_gtfn as gtfn_cpu,
@@ -389,31 +396,31 @@ class E(DimensionIndex): ...
 class K(CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
-class C2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class C2EDim(LocalDimensionIndex): ...
 
 
 C2E = FieldOffset(C2EDim.tag, source=E, target=(C, C2EDim))
 
 
-class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class V2EDim(LocalDimensionIndex): ...
 
 
 V2E = FieldOffset(V2EDim.tag, source=E, target=(V, V2EDim))
 
 
-class E2VDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class E2VDim(LocalDimensionIndex): ...
 
 
 E2V = FieldOffset(E2VDim.tag, source=V, target=(E, E2VDim))
 
 
-class E2CDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class E2CDim(LocalDimensionIndex): ...
 
 
 E2C = FieldOffset(E2CDim.tag, source=C, target=(E, E2CDim))
 
 
-class E2C2VDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+class E2C2VDim(LocalDimensionIndex): ...
 
 
 E2C2V = FieldOffset(E2C2VDim.tag, source=V, target=(E, E2C2VDim))

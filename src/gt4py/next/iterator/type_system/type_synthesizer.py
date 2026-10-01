@@ -406,7 +406,7 @@ def _canonicalize_nb_fields(
 
     Examples:
     >>> class Vertex(common.DimensionIndex): ...
-    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+    >>> class V2E(common.LocalDimensionIndex): ...
     >>> input_field = ts.FieldType(
     ...     dims=[
     ...         Vertex,
@@ -434,7 +434,7 @@ def _canonicalize_nb_fields(
             defined_dims = []
             neighbor_dim = None
             for dim in input_dims:
-                if dim.kind == common.DimensionKind.LOCAL:
+                if common.is_local_dimension(dim):
                     assert neighbor_dim is None
                     neighbor_dim = dim
                 else:

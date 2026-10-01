@@ -66,7 +66,7 @@ def _deduce_grid_type(
         ):
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
-        if isinstance(o, common.DimensionMeta) and o.kind == common.DimensionKind.LOCAL:
+        if isinstance(o, common.DimensionMeta) and common.is_local_dimension(o):
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
 

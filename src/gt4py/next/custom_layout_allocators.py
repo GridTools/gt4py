@@ -160,7 +160,7 @@ def horizontal_first_layout_mapper(
 
     horizontals = pos_of_kind(common.DimensionKind.HORIZONTAL)
     verticals = pos_of_kind(common.DimensionKind.VERTICAL)
-    locals_ = pos_of_kind(common.DimensionKind.LOCAL)
+    locals_ = [i for i, dim in enumerate(dims) if common.is_local_dimension(dim)]
 
     layout_map = [0] * len(dims)
     for i, pos in enumerate(horizontals + verticals + locals_):

@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-21
-- **Updated**: 2026-09-24
+- **Updated**: 2026-10-02
 
 A neighbor connectivity is declared as a **class**, and its local dimension as a
 class **nested** in it:
@@ -128,9 +128,29 @@ accepted a `FieldOffset`, which is not a `Connectivity` either.
 A separate root would force every `type[DimensionIndex]` annotation in the tree
 (`ts.FieldType.dims`, `Domain`, `ConnectivityType.domain`, ...) to widen, and
 would then accept local dimensions wherever a primary one is meant anyway. The
-tree already distinguishes local dimensions by a runtime `kind` check, so it
-keeps doing so; generic constructors whose parameter must be a primary dimension
-(`NeighborConnectivity[Domain, Codomain]`, `Staggered[D]`) check it at runtime.
+tree tells local dimensions apart at runtime, and constructors whose parameter
+must be a primary dimension (`NeighborConnectivity[Domain, Codomain]`) check it;
+`Staggered[D]` rejects a local dimension statically too, through its bound on a
+declared Cartesian axis (ADR 0029).
+
+### Localness is the class, and `DimensionKind.LOCAL` is removed
+
+A dimension is local if and only if it subclasses `LocalDimensionIndex`
+(`common.is_local_dimension(dim)`), so `DimensionKind.LOCAL` is removed and
+`DimensionKind` is `HORIZONTAL | VERTICAL`. A local dimension's `kind` is `None`,
+and declaring one with `kind=` is a `TypeError`. `None` rather than `HORIZONTAL`
+keeps every `kind == HORIZONTAL` / `kind != VERTICAL` comparison in the backends
+meaning what it meant: with `HORIZONTAL`, a sparse field would silently count its
+local axis as horizontal. Two consequences:
+
+- `None` does not order against the enum, so `order_dimensions` sorts by an
+  explicit rank — horizontal, then local, then vertical — the order `kind` used to
+  encode. It must not move, or the memory layout of sparse fields changes with it.
+- Displays derive the label from the class: `str(V2E.Local)` is still
+  `Local[local]`, the IR pretty printer still marks a local axis with `ₗ`, and DaCe
+  map variables of a local dimension keep their `_gtx_localdim` suffix.
+
+What remains of `kind` is the layout sort key and the scan axis.
 
 ### `Local` is not annotated anywhere
 

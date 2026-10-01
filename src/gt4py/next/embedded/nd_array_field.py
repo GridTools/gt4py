@@ -967,11 +967,11 @@ def _make_reduction(
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
         xp = field.array_ns
 
-        if not axis.kind == common.DimensionKind.LOCAL:
+        if not common.is_local_dimension(axis):
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
-        if len([d for d in field.domain.dims if d.kind is common.DimensionKind.LOCAL]) > 1:
+        if len([d for d in field.domain.dims if common.is_local_dimension(d)]) > 1:
             raise NotImplementedError(
                 "Reducing a field with more than one local dimension is not supported."
             )

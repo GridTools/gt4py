@@ -34,7 +34,7 @@ class Cell(gtx.DimensionIndex): ...
 class CellEdge(gtx.DimensionIndex): ...
 
 
-class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
 class V2E(gtx.NeighborConnectivity[Vertex, Edge], max_neighbors=6, min_neighbors=5):
@@ -109,3 +109,36 @@ def shift_by_a_dimension(
     a: gtx.Field[gtx.Dims[KDim], gtx.float64],
 ) -> gtx.Field[gtx.Dims[KDim], gtx.float64]:
     return a(KDim + 1)
+
+
+# -- Cartesian axis levels (ADR 0029). Each rejection carries a targeted ignore, and
+#    `reportUnnecessaryTypeIgnoreComment` turns any rejection that stops firing into an error.
+
+
+def any_dimension(dim: gtx.Dimension) -> None: ...
+
+
+def any_axis(dim: type[gtx.AnyCartesianAxisIndex]) -> None: ...
+
+
+def declared_axis(dim: type[gtx.CartesianAxisIndex]) -> None: ...
+
+
+def staggered_field(a: gtx.Field[gtx.Dims[Cell, gtx.Staggered[KDim]], gtx.float64]) -> None: ...
+
+
+any_dimension(gtx.Staggered[KDim])  # a staggered dimension is still a dimension
+any_dimension(V2E.Local)  # local dimensions keep their place below the root
+any_axis(gtx.Staggered[KDim])
+declared_axis(KDim)
+_shift_staggered = gtx.Staggered[KDim] + 1
+_shift_half = KDim + 0.5
+
+any_axis(Cell)  # pyright: ignore[reportArgumentType]
+any_axis(V2E.Local)  # pyright: ignore[reportArgumentType]
+declared_axis(gtx.Staggered[KDim])  # pyright: ignore[reportArgumentType]
+_doubly: typing.TypeAlias = gtx.Staggered[gtx.Staggered[KDim]]  # pyright: ignore[reportInvalidTypeArguments]
+_location: typing.TypeAlias = gtx.Staggered[Cell]  # pyright: ignore[reportInvalidTypeArguments]
+_local: typing.TypeAlias = gtx.Staggered[V2E.Local]  # pyright: ignore[reportInvalidTypeArguments]
+_shift_location = Cell + 1  # pyright: ignore[reportOperatorIssue]
+_shift_local = V2E.Local - 1  # pyright: ignore[reportOperatorIssue]

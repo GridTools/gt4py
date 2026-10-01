@@ -16,6 +16,7 @@ import pytest
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import (
+    CartesianAxisIndex,
     DimensionIndex,
     DimensionKind,
     LocalDimensionIndex,
@@ -32,7 +33,7 @@ class Vertex(DimensionIndex): ...
 class Edge(DimensionIndex): ...
 
 
-class KDim(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+class KDim(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
 
 
 class V2E(NeighborConnectivity[Vertex, Edge], max_neighbors=4, min_neighbors=3):
@@ -75,7 +76,8 @@ class TestDeclaration:
         assert V2E.Local.owner is V2E
         assert V2E.domain is Vertex
         assert V2E.codomain is Edge
-        assert V2E.Local.kind is DimensionKind.LOCAL
+        assert common.is_local_dimension(V2E.Local)
+        assert V2E.Local.kind is None
         assert issubclass(V2E.Local, DimensionIndex)
 
     def test_counts(self):
@@ -85,7 +87,8 @@ class TestDeclaration:
     def test_ownerless_local(self):
         assert LsqCoeff.owner is None
         assert (LsqCoeff.max_neighbors, LsqCoeff.min_neighbors) == (3, 3)
-        assert LsqCoeff.kind is DimensionKind.LOCAL
+        assert common.is_local_dimension(LsqCoeff)
+        assert LsqCoeff.kind is None
 
     def test_counts_from_local_size(self):
         ns = _declare(
@@ -137,7 +140,7 @@ class TestDeclarationErrors:
             (
                 """
                 class C(NeighborConnectivity[Vertex, Edge]):
-                    class Local(DimensionIndex, kind=DimensionKind.LOCAL): ...
+                    class Local(DimensionIndex): ...
                 """,
                 "must declare its local dimension",
             ),
@@ -201,7 +204,7 @@ class TestDeclarationErrors:
                 """
                 class L(LocalDimensionIndex, kind=DimensionKind.HORIZONTAL): ...
                 """,
-                "cannot have kind",
+                "is a local dimension and has no kind",
             ),
             (
                 """
@@ -631,3 +634,36 @@ def test_the_const_list_dimension_cannot_be_adopted():
                 Local: typing.TypeAlias = ConstList
             """
         )
+
+
+class TestLocality:
+    """`DimensionKind.LOCAL` is gone: localness is the class, and a local dimension has no kind."""
+
+    def test_no_local_kind(self):
+        assert set(DimensionKind.__members__) == {"HORIZONTAL", "VERTICAL"}
+
+    @pytest.mark.parametrize(
+        "dim, expected",
+        [
+            (V2E.Local, True),
+            (LsqCoeff, True),
+            (common.ConstList, True),
+            (Vertex, False),
+            (KDim, False),
+        ],
+    )
+    def test_is_local_dimension(self, dim, expected):
+        assert common.is_local_dimension(dim) is expected
+
+    @pytest.mark.parametrize("value", [None, "V2E", V2E, LocalDimensionIndex(0)])
+    def test_is_local_dimension_of_a_non_dimension(self, value):
+        assert common.is_local_dimension(value) is False
+
+    def test_display(self):
+        assert str(LsqCoeff) == "LsqCoeff[local]"
+        assert repr(LsqCoeff) == f"{LsqCoeff.tag}[local]"
+
+    def test_layout_order_is_horizontal_local_vertical(self):
+        assert common.order_dimensions([KDim, LsqCoeff, Vertex]) == [Vertex, LsqCoeff, KDim]
+        with pytest.raises(ValueError, match="more than one local dimension"):
+            common.order_dimensions([Vertex, LsqCoeff, V2E.Local])

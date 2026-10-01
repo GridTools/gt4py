@@ -86,7 +86,7 @@ class GTFNTranslationStep(
                         isinstance(
                             dim, fbuiltins.FieldOffset
                         )  # TODO(havogt): remove support for FieldOffset as Dimension
-                        or dim.kind is common.DimensionKind.LOCAL
+                        or common.is_local_dimension(dim)
                     ):
                         # translate sparse dimensions to tuple dtype
                         # NOTE: the tag is the offset-provider key, and its mangled form names the

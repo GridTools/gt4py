@@ -99,9 +99,10 @@ class AxisLiteral(Expr):
         return common.resolve(self.value)
 
     @property
-    def kind(self) -> common.DimensionKind:
+    def kind(self) -> Optional[common.DimensionKind]:
         # NOTE: derived, not stored: the dimension class carries its kind, so a stored copy could
-        # only disagree with it (it used to, for local dimensions printed as vertical).
+        # only disagree with it (it used to, for local dimensions printed as vertical). `None` for a
+        # local dimension, see `common.is_local_dimension`.
         return self.dim.kind
 
 

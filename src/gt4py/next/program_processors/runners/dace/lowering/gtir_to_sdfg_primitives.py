@@ -134,7 +134,7 @@ def _create_field_operator_impl(
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
-        assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
+        assert all(not gtx_common.is_local_dimension(dim) for dim in field_dims)
         assert output_edge.result.gt_dtype.offset_type is not None
         local_dim = output_edge.result.gt_dtype.offset_type
         # construct the full subset according to the canonical field domain
