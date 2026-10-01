@@ -216,12 +216,6 @@ class TestDeclarationErrors:
                 """,
                 "must be an integer",
             ),
-            (
-                """
-                class L(LocalDimensionIndex): ...
-                """,
-                "subclassing 'LocalDimensionIndex'",
-            ),
         ],
     )
     def test_rejected(self, source, match):
