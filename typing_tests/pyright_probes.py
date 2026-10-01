@@ -12,7 +12,7 @@ Client code that has to type-check under *pyright*, checked by `nox -s test_typi
 The cases in `test_next.yaml` run under mypy only, and the two checkers disagree about what
 counts as a type: an annotated `Local` on a connectivity or its metaclass makes every
 declaration's local dimension a *variable* for pyright, so `Field[Dims[V, V2E.Local], float]`
-is rejected there while mypy accepts it (see ADR 0029). Everything here must be error-free.
+is rejected there while mypy accepts it (see ADR 0030). Everything here must be error-free.
 """
 
 from __future__ import annotations

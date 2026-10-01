@@ -31,7 +31,7 @@ We update and introduce the following concepts
 
 **NeighborTable** is a _GatherConnectivity_ that is a 2D mapping of the N neighbors of a Location A to a Location B, backed by a buffer.
 
-**ConnectivityType**, **NeighborTableType** contain all information that is needed for compilation. A `NeighborTableType` is the type of a table bound to a `NeighborConnectivity` declaration (ADR 0029).
+**ConnectivityType**, **NeighborTableType** contain all information that is needed for compilation. A `NeighborTableType` is the type of a table bound to a `NeighborConnectivity` declaration (ADR 0030).
 
 ### Full definitions
 
@@ -63,4 +63,4 @@ The only supported `Connectivity`s in compiled backends (currently) are `Neighbo
 
 ### 2026-09-24
 
-- `NeighborConnectivityType` is renamed `NeighborTableType` and typed by the `NeighborConnectivity` declaration its table is bound to; a `NeighborTable`'s own `__gt_type__()` is the structural `ConnectivityType` (ADR 0029).
+- `NeighborConnectivityType` is renamed `NeighborTableType` and typed by the `NeighborConnectivity` declaration its table is bound to; a `NeighborTable`'s own `__gt_type__()` is the structural `ConnectivityType` (ADR 0030).
