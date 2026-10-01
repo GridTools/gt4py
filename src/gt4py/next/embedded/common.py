@@ -103,7 +103,7 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
     Return the intersection of the given domains.
 
     Example:
-        >>> class I(common.DimensionIndex): ...
+        >>> class I(common.CartesianAxisIndex): ...
         >>> domain_intersection(
         ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
         ... )  # doctest: +ELLIPSIS
@@ -120,8 +120,8 @@ def restrict_to_intersection(
     Return the with each other intersected domains, ignoring 'ignore_dims' dimensions for the intersection.
 
     Example:
-        >>> class I(common.DimensionIndex): ...
-        >>> class J(common.DimensionIndex): ...
+        >>> class I(common.CartesianAxisIndex): ...
+        >>> class J(common.CartesianAxisIndex): ...
         >>> res = restrict_to_intersection(
         ...     common.domain({I: (0, 5), J: (1, 2)}),
         ...     common.domain({I: (1, 3), J: (0, 3)}),

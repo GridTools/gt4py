@@ -13,7 +13,7 @@ from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 def test_prune_casts_simple():

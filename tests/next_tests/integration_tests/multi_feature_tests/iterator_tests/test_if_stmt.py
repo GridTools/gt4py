@@ -22,7 +22,7 @@ def multiply(alpha, inp):
     return deref(alpha) * deref(inp)
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 @pytest.mark.uses_ir_if_stmts

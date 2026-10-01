@@ -36,12 +36,12 @@ def field_from_typespec(
     The tuple structure and dtype is taken from a type_specifications.DataType,
     which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
 
-    >>> class I(common.DimensionIndex): ...
+    >>> class I(common.CartesianAxisIndex): ...
     >>> field_from_typespec(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({I: 1}), np
     ... )  # doctest: +ELLIPSIS
     NumPyArrayField(... dtype=int32...)
-    >>> class I(common.DimensionIndex): ...
+    >>> class I(common.CartesianAxisIndex): ...
     >>> field_from_typespec(
     ...     ts.TupleType(
     ...         types=[

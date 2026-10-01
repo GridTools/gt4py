@@ -16,6 +16,7 @@ import pytest
 import gt4py.next.ffront.type_specifications
 from gt4py.next import (
     Dimension,
+    CartesianAxisIndex,
     DimensionIndex,
     DimensionKind,
     Field,
@@ -44,22 +45,22 @@ from next_tests.artifacts import custom_named_collections as cnc
 TDim = cnc.TDim
 
 
-class X(DimensionIndex): ...
+class X(CartesianAxisIndex): ...
 
 
-class Y(DimensionIndex): ...
+class Y(CartesianAxisIndex): ...
 
 
 class Y2XDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
 
 
-class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+class K(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
 
 
-class ADim(DimensionIndex): ...
+class ADim(CartesianAxisIndex): ...
 
 
-class BDim(DimensionIndex): ...
+class BDim(CartesianAxisIndex): ...
 
 
 class CDim(DimensionIndex): ...
@@ -74,14 +75,14 @@ class Edge(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
 class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
 
 
-class IDim(DimensionIndex): ...
+class IDim(CartesianAxisIndex): ...
 
 
-class JDim(DimensionIndex): ...
+class JDim(CartesianAxisIndex): ...
 
 
 # Meaningless dimensions, used for tests.
-class SDim(DimensionIndex): ...
+class SDim(CartesianAxisIndex): ...
 
 
 def test_unpack_assign():
@@ -582,6 +583,15 @@ def test_as_offset_non_cartesian():
 
     with pytest.raises(errors.DSLError, match="Cartesian"):
         _ = FieldOperatorParser.apply_to_function(as_offset_cross_dim)
+
+
+@pytest.mark.parametrize("offset", [1, -1, 0.5])
+def test_cartesian_shift_off_an_axis(offset):
+    def shift_along_mesh_location(a: Field[[Edge], float]):
+        return a(Edge + offset)
+
+    with pytest.raises(errors.DSLError, match="'Edge' is not a Cartesian axis"):
+        _ = FieldOperatorParser.apply_to_function(shift_along_mesh_location)
 
 
 vpfloat: TypeAlias = float32

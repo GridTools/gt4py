@@ -24,11 +24,11 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
 
     Example:
     >>> from gt4py.next import Dimension, common
-    >>> from gt4py.next.common import DimensionIndex
-    >>> class IDim(DimensionIndex): ...
+    >>> from gt4py.next.common import CartesianAxisIndex, DimensionIndex
+    >>> class IDim(CartesianAxisIndex): ...
     >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
     >>> # class declared in a doctest is not an attribute of the real module:
-    >>> class JDim(DimensionIndex): ...
+    >>> class JDim(CartesianAxisIndex): ...
     >>> import sys
     >>> sys.modules[__name__].IDim, sys.modules[__name__].JDim = IDim, JDim
     >>> domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 10)})

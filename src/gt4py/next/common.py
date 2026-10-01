@@ -184,10 +184,26 @@ class DimensionMeta(type):
         # display name; `repr` carries the module and disambiguates when it matters.
         return f"{cls.__qualname__}[{cls.kind}]"
 
-    def __add__(cls: Dimension, offset: int | float) -> Connectivity:  # type: ignore[misc]
+    # NOTE: the self-type restricts index arithmetic to a Cartesian axis for the type checkers:
+    # both bind it correctly at every call site (`C + 1` is an error for a mesh location `C`),
+    # and both reject it at the definition site, each with its own diagnostic -- mypy `[misc]`
+    # ("self" parameter missing) and pyright `reportGeneralTypeIssues` ("must be a supertype of
+    # its class") -- hence the two suppressions. The runtime check covers unannotated code.
+    def __add__(  # type: ignore[misc]
+        cls: type[AnyCartesianAxisIndex],  # pyright: ignore[reportGeneralTypeIssues]
+        offset: int | float,
+    ) -> Connectivity:
+        if not issubclass(cls, AnyCartesianAxisIndex):
+            raise TypeError(
+                f"'{cls.__qualname__}' is not a Cartesian axis: only a dimension declared as"
+                " 'CartesianAxisIndex' (or its 'Staggered[...]' partner) has index arithmetic."
+            )
         return connectivity_for_cartesian_shift(cls, offset)
 
-    def __sub__(cls: Dimension, offset: int | float) -> Connectivity:  # type: ignore[misc]
+    def __sub__(  # type: ignore[misc]
+        cls: type[AnyCartesianAxisIndex],  # pyright: ignore[reportGeneralTypeIssues]
+        offset: int | float,
+    ) -> Connectivity:
         return cls + (-offset)
 
     def __gt__(cls: Dimension, value: core_defs.IntegralScalar) -> Domain:  # type: ignore[misc]
@@ -243,8 +259,8 @@ class DimensionIndex(metaclass=DimensionMeta):
     is how it is spelled in the IR. `value` is an index position along it.
 
     Examples:
-        >>> class I(DimensionIndex): ...
-        >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+        >>> class I(CartesianAxisIndex): ...
+        >>> class K(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
         >>> str(I), K.kind
         ('I[horizontal]', <DimensionKind.VERTICAL: 'vertical'>)
 
@@ -255,7 +271,7 @@ class DimensionIndex(metaclass=DimensionMeta):
 
         Two dimension classes are the same dimension only if they are the same class:
 
-        >>> class I2(DimensionIndex): ...
+        >>> class I2(CartesianAxisIndex): ...
         >>> I == I2
         False
     """
@@ -318,6 +334,52 @@ class DimensionIndex(metaclass=DimensionMeta):
 #: `xtyping.resolve_annotation`). `eve.datamodels` stores annotations *unresolved*, so this
 #: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0029.
 type Dimension = type[DimensionIndex]
+
+
+class AnyCartesianAxisIndex(DimensionIndex):
+    """
+    Either cell class of a Cartesian axis: a declared `CartesianAxisIndex` or its `Staggered[...]`.
+
+    One axis of a Cartesian grid has exactly two cell classes, and a declared axis and its
+    staggered partner name them (ADR 0029). Only Cartesian shifts need this level -- `D + n`,
+    `D - n` and `as_offset` -- while comparisons (`D == n`, `D < n`, which build a `Domain`) stay
+    available on every dimension, mesh locations included.
+
+    Annotate with this level where any cell class of an axis is accepted; declare axes with
+    `CartesianAxisIndex`.
+    """
+
+    __slots__ = ()
+
+
+class CartesianAxisIndex(AnyCartesianAxisIndex):
+    """
+    A declared Cartesian axis: integer index arithmetic and exactly one staggered partner.
+
+    Subclass it to declare an axis; mesh locations (vertices, edges, cells) and index spaces without
+    geometry subclass `DimensionIndex` directly. Only a declared axis can be staggered, so
+    `Staggered[Staggered[K]]`, `Staggered[C]` for a mesh location `C` and staggering a local
+    dimension are errors for the type checkers and at runtime.
+
+    Examples:
+        >>> class I(CartesianAxisIndex): ...
+        >>> (I + 1).codomain is I, (I + 0.5).codomain is Staggered[I]
+        (True, True)
+
+        A mesh location is not an axis:
+
+        >>> class Cell(DimensionIndex): ...
+        >>> Cell + 1  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+            ...
+        TypeError: 'Cell' is not a Cartesian axis: ...
+        >>> Staggered[Cell]  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+            ...
+        TypeError: 'Cell' is not a declared Cartesian axis and cannot be staggered: ...
+    """
+
+    __slots__ = ()
 
 
 _STAGGERED_TAG_RE: Final = re.compile(r"^(?P<owner>[^\[\]]+)\[(?P<base>.+)\]$")
@@ -783,8 +845,8 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Intersect `Domain`s, missing `Dimension`s are considered infinite.
 
         Examples:
-            >>> class I(DimensionIndex): ...
-            >>> class J(DimensionIndex): ...
+            >>> class I(CartesianAxisIndex): ...
+            >>> class J(CartesianAxisIndex): ...
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
             Domain(dims=(gt4py.next.common.I[horizontal],), ranges=(UnitRange(1, 3),))
@@ -840,8 +902,8 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Create a new domain by slicing the domain ranges at the provided relative slices.
 
         Examples:
-            >>> class I(DimensionIndex): ...
-            >>> class J(DimensionIndex): ...
+            >>> class I(CartesianAxisIndex): ...
+            >>> class J(CartesianAxisIndex): ...
             >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
             >>> domain.slice_at[2:3, 2:5]
             Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
@@ -932,8 +994,8 @@ def domain(domain_like: DomainLike) -> Domain:
     Construct `Domain` from `DomainLike` object.
 
     Examples:
-        >>> class I(DimensionIndex): ...
-        >>> class J(DimensionIndex): ...
+        >>> class I(CartesianAxisIndex): ...
+        >>> class J(CartesianAxisIndex): ...
 
         >>> domain(((I, (2, 4)), (J, (3, 5))))
         Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
@@ -1642,9 +1704,9 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
     Examples:
         >>> from gt4py.next.common import Dimension
-        >>> class I(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
-        >>> class J(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
-        >>> class K(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+        >>> class I(CartesianAxisIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class J(CartesianAxisIndex, kind=DimensionKind.HORIZONTAL): ...
+        >>> class K(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
         >>> class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
         >>> class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
         >>> promote_dims([J, K], [I, K]) == [I, J, K]
@@ -1753,6 +1815,11 @@ class StaggeredMeta(DimensionMeta):
             raise TypeError(
                 f"'{base.__qualname__}' is already staggered; a dimension cannot be staggered twice."
             )
+        if not issubclass(base, CartesianAxisIndex):
+            raise TypeError(
+                f"'{base.__qualname__}' is not a declared Cartesian axis and cannot be staggered:"
+                " only a dimension declared as 'CartesianAxisIndex' has a staggered partner."
+            )
         if (staggered := _STAGGERED_CACHE.get(base)) is None:
             staggered = cast(
                 Dimension,
@@ -1781,14 +1848,16 @@ class StaggeredMeta(DimensionMeta):
 if TYPE_CHECKING:
     # Checkers see an ordinary generic dimension, so `Staggered[K]` works in an annotation and
     # inside `Field[Dims[Staggered[K]], ...]`. The runtime form below builds a real, interned
-    # class so that `issubclass` and eve's `type[...]` validation work. Verified clean under
-    # `mypy --strict` and pyright.
-    class Staggered[D: DimensionIndex](DimensionIndex):
-        base: ClassVar[Dimension]
+    # class so that `issubclass` and eve's `type[...]` validation work. The bound names the
+    # *declared* level, and `Staggered[K]` is only an `AnyCartesianAxisIndex`, so a doubly
+    # staggered dimension, a staggered mesh location and a staggered local dimension are all
+    # `[type-var]` errors. Verified under `mypy --strict` and pyright.
+    class Staggered[D: CartesianAxisIndex](AnyCartesianAxisIndex):
+        base: ClassVar[type[CartesianAxisIndex]]
 
 else:
 
-    class Staggered(DimensionIndex, metaclass=StaggeredMeta):
+    class Staggered(AnyCartesianAxisIndex, metaclass=StaggeredMeta):
         """
         A dimension sitting at the half-integer positions of a base dimension (ADR 0026).
 

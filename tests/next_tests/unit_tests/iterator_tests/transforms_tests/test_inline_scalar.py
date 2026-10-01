@@ -14,7 +14,7 @@ from gt4py.next.iterator.transforms import inline_scalar
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-class TDim(common.DimensionIndex): ...
+class TDim(common.CartesianAxisIndex): ...
 
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)

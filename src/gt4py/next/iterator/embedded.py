@@ -723,7 +723,7 @@ def _get_axes(
     In case all arguments are zero-dimensional return an empty sequence.
 
     >>> from gt4py import next as gtx
-    >>> class IDim(gtx.DimensionIndex): ...
+    >>> class IDim(gtx.CartesianAxisIndex): ...
     >>> i_field: LocatedField = _wrap_field(
     ...     gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )
@@ -731,7 +731,7 @@ def _get_axes(
     >>> _get_axes((i_field, i_field))
     (gt4py.next.iterator.embedded.IDim[horizontal],)
 
-    >>> class JDim(gtx.DimensionIndex): ...
+    >>> class JDim(gtx.CartesianAxisIndex): ...
     >>> j_field: LocatedField = _wrap_field(
     ...     gtx.empty({JDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )

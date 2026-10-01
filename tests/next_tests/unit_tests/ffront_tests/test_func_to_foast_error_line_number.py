@@ -20,7 +20,7 @@ from gt4py.next.ffront.foast_passes import type_deduction
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
 
 
-class TDim(gtx.DimensionIndex): ...
+class TDim(gtx.CartesianAxisIndex): ...
 
 
 def test_invalid_syntax_error_empty_return():

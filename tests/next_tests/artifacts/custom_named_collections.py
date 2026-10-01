@@ -18,6 +18,7 @@ from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import (
     common,
     Dimension,
+    CartesianAxisIndex,
     DimensionIndex,
     Field,
     float32,
@@ -28,7 +29,7 @@ from gt4py.next import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-class TDim(DimensionIndex): ...
+class TDim(CartesianAxisIndex): ...
 
 
 class SingleElementNamedTupleNamedCollection(NamedTuple):

@@ -160,19 +160,19 @@ DimsType = TypeVar("DimsType")
 DType = TypeVar("DType")
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 IHalfDim = common.flip_staggered(IDim)
 
 
-class JDim(gtx.DimensionIndex): ...
+class JDim(gtx.CartesianAxisIndex): ...
 
 
 JHalfDim = common.flip_staggered(JDim)
 
 
-class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
 KHalfDim = common.flip_staggered(KDim)

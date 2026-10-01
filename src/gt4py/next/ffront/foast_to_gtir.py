@@ -80,8 +80,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
     >>> from gt4py.next import Field, Dimension, float64
     >>>
-    >>> from gt4py.next.common import DimensionIndex
-    >>> class IDim(DimensionIndex): ...
+    >>> from gt4py.next.common import CartesianAxisIndex, DimensionIndex
+    >>> class IDim(CartesianAxisIndex): ...
     >>> def fieldop(inp: Field[[IDim], "float64"]):
     ...     return inp
     >>>

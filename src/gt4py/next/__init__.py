@@ -22,6 +22,8 @@ module in question is a submodule, defines `__all__` and exports many public API
 from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
+    AnyCartesianAxisIndex,
+    CartesianAxisIndex,
     CartesianConnectivity,
     Connectivity,
     Dimension,
@@ -119,6 +121,8 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # from common
     "Dimension",
     "DimensionIndex",
+    "AnyCartesianAxisIndex",
+    "CartesianAxisIndex",
     "DimensionKind",
     "Staggered",
     "resolve",

@@ -51,11 +51,11 @@ from gt4py.next import float64, neighbor_sum, where, Dims
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two dimensions, `CellDim` and `KDim` -- a dimension is a class -- and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two dimensions, `CellDim` and `KDim` -- a dimension is a class. `CellDim` is a mesh location and subclasses `gtx.DimensionIndex`; `KDim` is a Cartesian axis, which supports index arithmetic such as `KDim + 1` and staggering, and subclasses `gtx.CartesianAxisIndex`. The snippet then creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 class CellDim(gtx.DimensionIndex): ...
-class KDim(gtx.DimensionIndex): ...
+class KDim(gtx.CartesianAxisIndex): ...
 
 num_cells = 5
 num_layers = 6
@@ -70,8 +70,8 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-class I(gtx.DimensionIndex): ...
-class J(gtx.DimensionIndex): ...
+class I(gtx.CartesianAxisIndex): ...
+class J(gtx.CartesianAxisIndex): ...
 
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(

@@ -54,10 +54,10 @@ from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
 
-class ADim(gtx.DimensionIndex): ...
+class ADim(gtx.CartesianAxisIndex): ...
 
 
-class BDim(gtx.DimensionIndex): ...
+class BDim(gtx.CartesianAxisIndex): ...
 
 
 DEREF = itir.SymRef(id=itb.deref.fun.__name__)
@@ -78,7 +78,7 @@ XOR = itir.SymRef(id=itb.xor_.fun.__name__)
 LIFT = itir.SymRef(id=itb.lift.fun.__name__)
 
 
-class TDim(gtx.DimensionIndex): ...
+class TDim(gtx.CartesianAxisIndex): ...
 
 
 # PEP 695 type alias, used to check that aliases are accepted as DSL annotations.

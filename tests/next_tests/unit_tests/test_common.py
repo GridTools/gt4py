@@ -20,6 +20,7 @@ from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
+    CartesianAxisIndex,
     DimensionIndex,
     DimensionKind,
     Domain,
@@ -33,28 +34,28 @@ from gt4py.next.common import (
 )
 
 
-class X(DimensionIndex): ...
+class X(CartesianAxisIndex): ...
 
 
-class Y(DimensionIndex): ...
+class Y(CartesianAxisIndex): ...
 
 
-class Z(DimensionIndex): ...
+class Z(CartesianAxisIndex): ...
 
 
 class Foo(DimensionIndex): ...
 
 
-class J(DimensionIndex): ...
+class J(CartesianAxisIndex): ...
 
 
-class K(DimensionIndex): ...
+class K(CartesianAxisIndex): ...
 
 
-class I(common.DimensionIndex): ...
+class I(common.CartesianAxisIndex): ...
 
 
-class I_half(common.DimensionIndex): ...
+class I_half(common.CartesianAxisIndex): ...
 
 
 class C2E(DimensionIndex, kind=DimensionKind.LOCAL): ...
@@ -75,13 +76,13 @@ class E2C2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
 class ECDim(DimensionIndex): ...
 
 
-class IDim(DimensionIndex): ...
+class IDim(CartesianAxisIndex): ...
 
 
-class JDim(DimensionIndex): ...
+class JDim(CartesianAxisIndex): ...
 
 
-class KDim(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+class KDim(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
 
 
 IHalfDim = common.flip_staggered(IDim)
@@ -914,6 +915,24 @@ class TestStaggered:
         with pytest.raises(TypeError, match="is already staggered"):
             common.Staggered[KDim][KDim]
 
+    @pytest.mark.parametrize(
+        "dim, match",
+        [
+            (ECDim, "is not a declared Cartesian axis"),  # a mesh location
+            (V2E, "is not a declared Cartesian axis"),  # a local dimension
+            (DimensionIndex, "is not a declared Cartesian axis"),
+            (common.AnyCartesianAxisIndex, "is not a declared Cartesian axis"),
+        ],
+    )
+    def test_only_a_declared_axis_can_be_staggered(self, dim, match):
+        with pytest.raises(TypeError, match=match):
+            common.Staggered[dim]
+
+    def test_a_staggered_dimension_is_an_axis_but_not_a_declared_one(self):
+        assert issubclass(common.Staggered[KDim], common.AnyCartesianAxisIndex)
+        assert not issubclass(common.Staggered[KDim], common.CartesianAxisIndex)
+        assert not issubclass(common.Staggered[KDim], KDim)
+
     def test_resolve_rejects_a_bracketed_tag_of_another_owner(self):
         with pytest.raises(ValueError, match="not a parametrized dimension"):
             common.resolve(f"{KDim.tag}[{KDim.tag}]")
@@ -926,3 +945,28 @@ def test_resolve_loaded():
     assert common.resolve_loaded("not_imported_anywhere.IDim") is None
     assert common.resolve_loaded(f"{__name__}.does_not_exist") is None
     assert common.resolve_loaded(f"{__name__}.test_resolve_loaded") is None  # not a dimension
+
+
+class TestCartesianAxisIndex:
+    def test_axis_levels(self):
+        assert issubclass(IDim, common.CartesianAxisIndex)
+        assert issubclass(common.CartesianAxisIndex, common.AnyCartesianAxisIndex)
+        assert issubclass(common.AnyCartesianAxisIndex, DimensionIndex)
+        assert not issubclass(ECDim, common.AnyCartesianAxisIndex)
+
+    @pytest.mark.parametrize("dim", [IDim, IHalfDim])
+    def test_shift_along_an_axis(self, dim):
+        assert (dim + 1).codomain is dim
+        assert (dim - 1).codomain is dim
+        assert (dim + 0.5).codomain is common.flip_staggered(dim)
+
+    @pytest.mark.parametrize("dim", [ECDim, V2E])
+    @pytest.mark.parametrize("op", [lambda d: d + 1, lambda d: d - 1, lambda d: d + 0.5])
+    def test_no_index_arithmetic_off_an_axis(self, dim, op):
+        with pytest.raises(TypeError, match="is not a Cartesian axis"):
+            op(dim)
+
+    def test_comparisons_stay_on_every_dimension(self):
+        # `concat_where(EdgeDim < n, ...)` over a mesh location must keep working
+        assert (ECDim < 5) == Domain(dims=(ECDim,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),))
+        assert (ECDim == 3) == Domain(dims=(ECDim,), ranges=(UnitRange(3, 4),))

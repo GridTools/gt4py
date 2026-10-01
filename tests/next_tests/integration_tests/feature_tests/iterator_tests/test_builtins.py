@@ -73,7 +73,7 @@ def array_maker(*lists):
     return res
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 def field_maker(*arrays):

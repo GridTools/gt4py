@@ -12,7 +12,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors, field_utils
 
 
-class X(common.DimensionIndex): ...
+class X(common.CartesianAxisIndex): ...
 
 
 @pytest.mark.parametrize(

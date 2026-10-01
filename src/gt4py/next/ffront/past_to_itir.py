@@ -42,7 +42,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
     Example:
         >>> from gt4py import next as gtx
         >>> from gt4py.next.otf import arguments, workflow
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
 
         >>> @gtx.field_operator
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
@@ -247,8 +247,8 @@ class ProgramLowering(
     >>> from gt4py.next import Dimension, Field
     >>>
     >>> float64 = float
-    >>> from gt4py.next.common import DimensionIndex
-    >>> class IDim(DimensionIndex): ...
+    >>> from gt4py.next.common import CartesianAxisIndex, DimensionIndex
+    >>> class IDim(CartesianAxisIndex): ...
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):

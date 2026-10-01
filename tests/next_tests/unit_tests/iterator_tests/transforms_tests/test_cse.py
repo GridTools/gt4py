@@ -20,7 +20,7 @@ from gt4py.next.iterator.transforms.cse import (
 )
 
 
-class I(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+class I(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
 
 
 @pytest.fixture

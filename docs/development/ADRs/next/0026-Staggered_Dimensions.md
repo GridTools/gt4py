@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Till Ehrengruber (@tehrengruber)
 - **Created**: 2026-07-08
-- **Updated**: 2026-09-23
+- **Updated**: 2026-10-02
 
 > The *encoding* of this record is superseded by
 > [ADR 0029](0029-Dimensions_As_Nominal_Types.md): a staggered dimension is the
@@ -69,7 +69,9 @@ A staggered dimension was encoded as its base dimension's name with the internal
 [ADR 0029](0029-Dimensions_As_Nominal_Types.md) it is the class
 `common.Staggered[D]`, whose identity is the class itself; the helpers
 `is_staggered`, `flip_staggered` and `as_non_staggered` are unchanged in meaning
-and now read the class's `base`.
+and now read the class's `base`. Only a declared Cartesian axis
+(`CartesianAxisIndex`) can be staggered, which makes a doubly staggered dimension
+and a staggered mesh location type errors.
 
 Dimensions are identified by their **name** and appear throughout the toolchain
 in more than one form: as a `common.Dimension` instance, but also as an

@@ -188,7 +188,7 @@ def _scan_param_promotion(
 
     Example:
     --------
-    >>> class I(common.DimensionIndex): ...
+    >>> class I(common.CartesianAxisIndex): ...
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
     ...     ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),

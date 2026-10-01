@@ -12,7 +12,7 @@ from gt4py.next.iterator.transforms import inline_dynamic_shifts
 from gt4py.next.type_system import type_specifications as ts
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))

@@ -21,7 +21,7 @@ from gt4py.next.type_system import type_specifications as ts
 _SAFE_INPUT = {"arccosh": 2.0}
 
 
-class IDim(common.DimensionIndex): ...
+class IDim(common.CartesianAxisIndex): ...
 
 
 @dataclasses.dataclass

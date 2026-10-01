@@ -27,7 +27,7 @@ from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 IOff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))

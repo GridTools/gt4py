@@ -7,17 +7,20 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-18
-- **Updated**: 2026-09-24
+- **Updated**: 2026-10-02
 
 A concrete dimension becomes a **class**, and an index along it an **instance** of
 that class — the shape `enum.Enum` uses, where the class is the collection and
 the instances are its members:
 
 ```python
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
-class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class Cell(gtx.DimensionIndex): ...  # a mesh location: not a Cartesian axis
 
 
 IDim  # the dimension    -- annotated `gtx.Dimension`
@@ -29,7 +32,9 @@ no gt4py mypy plugin.
 
 A dimension's **identity is the Python type**, and its `tag` — the string that
 crosses into the IR and the generated code — is its **qualified Python name**,
-`f"{cls.__module__}.{cls.__qualname__}"`.
+`f"{cls.__module__}.{cls.__qualname__}"`. A Cartesian axis — a dimension with
+index arithmetic and a staggered partner — is a subclass of `CartesianAxisIndex`;
+mesh locations subclass `DimensionIndex` directly.
 
 ## Context
 
@@ -157,6 +162,8 @@ disappears.
    - bases are `(Staggered,)` and deliberately **not** `(Staggered, base)`:
      a staggered dimension is a *different* dimension, so
      `issubclass(Staggered[KDim], KDim)` must be false. Only `kind` is inherited.
+     `Staggered` itself derives from `AnyCartesianAxisIndex`, and its parameter is
+     bounded on `CartesianAxisIndex` (see *Cartesian axes* below).
    - `is_staggered(dim)` is `"base" in dim.__dict__` and
      `as_non_staggered(dim)` is `dim.base` — structural, no string sniffing.
      `issubclass(dim, Staggered)` would be wrong, because it is also true of the
@@ -172,6 +179,48 @@ disappears.
      `pickle.save_global` cannot look up, so `copyreg` is registered on the
      staggered metaclass. It must fall back to by-reference pickling for the bare
      base, which is also an instance of that metaclass.
+
+### Cartesian axes are a level of the hierarchy
+
+A **Cartesian axis** is an index space with integer index arithmetic and exactly one
+staggered partner — the dimensions `CartesianConnectivity` acts on. One axis of a
+Cartesian grid is a 1-dimensional cell complex with exactly two cell classes; a
+declared axis and its `Staggered[...]` name those two, and `Staggered` is the
+involution that swaps them. Mesh locations are not axes: an unstructured mesh does
+not factor into per-axis cell classes, so it has no half cells and no index
+arithmetic. Two levels below the root encode this:
+
+```
+DimensionIndex                            # the root; every `type[DimensionIndex]` keeps its meaning
+├── AnyCartesianAxisIndex                 # either cell class of a Cartesian axis
+│   ├── CartesianAxisIndex                # a declared axis: what users subclass
+│   └── Staggered[D: CartesianAxisIndex]  # its derived partner
+└── (direct subclasses)                   # mesh locations, and index spaces without geometry
+```
+
+Both levels sit *below* `DimensionIndex`, so `Staggered[K]` stays a `DimensionIndex`
+and no annotation or `issubclass` guard in the tree widens. The bound is on the
+*declared* level, and `Staggered[K]` is only an `AnyCartesianAxisIndex`, so:
+
+| Rejected | Statically (mypy, pyright) | At runtime |
+| --- | --- | --- |
+| `Staggered[Staggered[K]]` | `[type-var]` | `TypeError` |
+| `Staggered[Cell]`, staggering a local dimension | `[type-var]` | `TypeError` |
+| `Cell + 1`, `Cell - 1` | `[operator]` | `TypeError`; a `DSLError` in a field operator |
+
+The last row needs `DimensionMeta.__add__` / `__sub__` declared with the self-type
+`cls: type[AnyCartesianAxisIndex]`. Both checkers bind it correctly at every call
+site and both reject it at the definition site, with different diagnostics (mypy
+`[misc]`, pyright `reportGeneralTypeIssues`), so it costs two separately spelled
+suppressions. The runtime check covers unannotated code; hand-written iterator IR,
+which names dimensions by tag, is not checked. Comparisons are deliberately *not* restricted: `D == n`
+and `D < n` build a `Domain` on every dimension, as `concat_where` over a mesh
+location requires.
+
+Whether a dimension is an axis or a mesh location is a decision per declaration —
+`IDim` and `Cell` are both `HORIZONTAL`, and only the first is an axis — so it cannot
+be derived from `kind`. `CartesianAxisIndex` and `AnyCartesianAxisIndex` are both
+exported as `gtx.*`.
 
 ### `Dimension` is annotation-only
 
@@ -216,10 +265,22 @@ declaration would silently reorder a field's dimensions. It is therefore keyed o
 the unqualified name, with `tag` only breaking ties between same-named dimensions
 from different modules so the order stays total.
 
+### Equality between dimensions is identity
+
+`DimensionMeta.__eq__` stays, for the `I == 5` → `Domain` overload that
+`concat_where` uses, but it does not compare dimensions: for a dimension operand it
+returns `NotImplemented`, the reflected call does the same, and Python falls back to
+identity. So `I == J` is always a `bool`, and it is `True` only for the same class —
+"equality is `is`" holds for every dimension operand. The one non-`bool` result is
+`dim == <integer>`, which builds a `Domain`, and `Domain.__bool__` raises. A dict
+lookup reaches that path only if an integer key and a dimension-class key share a
+hash bucket in one dict; class-keyed mappings in the tree (domains, offset
+providers) mix classes with strings at most, and `str` against a class compares
+`False`. That residual hazard is accepted.
+
 `DimensionMeta` must declare `__hash__ = type.__hash__` explicitly: Python sets
-`__hash__ = None` on any class body defining `__eq__` without it, and `__eq__`
-stays for the `I == 5` → `Domain` overload. Without it every dimension class is
-unhashable and `ts.DimensionType` fails at *import*.
+`__hash__ = None` on any class body defining `__eq__` without it. Without it every
+dimension class is unhashable and `ts.DimensionType` fails at *import*.
 
 ## Consequences
 
@@ -249,6 +310,20 @@ unhashable and `ts.DimensionType` fails at *import*.
   remove `resolve` from the type-inference hot path, but changes IR node shape in
   the same step as the dimension rewrite. Deferred.
 - **`Staggered` as a PEP 695 generic.** Does not produce a class; see Decision 6.
+- **A sibling root above `DimensionIndex`** for the staggered dimensions. Gives the
+  same static ban on double staggering, but `Staggered[K]` stops being a
+  `DimensionIndex`, so every annotation and `issubclass` guard that must accept a
+  staggered dimension widens. The axis levels sit below the root instead.
+- **A structural discriminator** (a `Protocol` with a `Literal[False]` class
+  variable the staggered class overrides). Needs a suppressed incompatible
+  override, gives an opaque diagnostic, and buys only the double-staggering ban:
+  with no axis concept, `Cell + 1` and `Staggered[Cell]` stay unchecked.
+- **`Staggered[D: AnyCartesianAxisIndex]`**, bounding on either cell class. Readmits
+  `Staggered[Staggered[K]]`; the bound has to name the declared level.
+- **A second partner constructor** for the other alignment (`i + 1/2` instead of
+  `i - 1/2`). Gives three cell classes per axis where an axis has two and makes
+  `flip_staggered` partial. Either alignment is already reachable by choosing which
+  member of the pair to declare.
 
 ## References
 
@@ -260,5 +335,6 @@ unhashable and `ts.DimensionType` fails at *import*.
   [ADR 0026](0026-Staggered_Dimensions.md); the indexing convention there is
   unchanged.
 - Consequence for the build cache of [ADR 0023](0023-Fingerprinting.md).
-- An alternative to #2844, which implements the same class-shaped dimension with
-  value identity.
+- The Cartesian axis levels follow the specification in gt4py_knowledge#36.
+- An alternative to #2844 (closed, superseded), which implemented the same
+  class-shaped dimension with value identity.

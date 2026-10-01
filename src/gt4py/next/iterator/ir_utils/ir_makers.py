@@ -454,8 +454,8 @@ def domain(
     ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
-    >>> class IDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-    >>> class JDim(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
+    >>> class IDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
+    >>> class JDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
     >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
     'c⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
@@ -592,7 +592,7 @@ def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
 
     Examples
     --------
-    >>> class IDim(common.DimensionIndex): ...
+    >>> class IDim(common.CartesianAxisIndex): ...
     >>> str(broadcast("a", (IDim,)))
     'broadcast(a, {gt4py.next.iterator.ir_utils.ir_makers.IDimₕ})'
     """

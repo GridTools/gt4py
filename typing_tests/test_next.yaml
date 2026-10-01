@@ -4,7 +4,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -16,7 +16,7 @@
     main: |
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None, backend=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -26,7 +26,7 @@
     main: |
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -36,7 +36,7 @@
     main: |
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -49,7 +49,7 @@
     main: |
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
       def somescanop(
@@ -64,7 +64,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -85,7 +85,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -106,7 +106,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -128,7 +128,7 @@
       from gt4py import next as gtx
 
       class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
 
@@ -146,7 +146,7 @@
       from gt4py import next as gtx
 
       class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
       CKTuple: typing.TypeAlias = tuple[CellKField[T], CellKField[T]]
@@ -164,7 +164,7 @@
       from gt4py.next import where
 
       class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim], T]
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
@@ -205,7 +205,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -218,7 +218,7 @@
     main: |
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -236,7 +236,7 @@
       import typing
       from gt4py import next as gtx
 
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -261,7 +261,7 @@
       from gt4py import next as gtx
 
       class CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
-      class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(
@@ -275,3 +275,30 @@
     main: |
       import xarray
       a: xarray.NamedArray
+
+  - case: cartesian_axis_levels
+    main: |
+      from gt4py import next as gtx
+
+      class K(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class C(gtx.DimensionIndex): ...
+
+      def any_dimension(d: gtx.Dimension) -> None: ...
+      def any_axis(d: type[gtx.AnyCartesianAxisIndex]) -> None: ...
+
+      any_dimension(gtx.Staggered[K])
+      any_axis(gtx.Staggered[K])
+      ok_dims: gtx.Field[gtx.Dims[C, gtx.Staggered[K]], float] | None = None
+      ok_shift = K + 1
+      ok_half = gtx.Staggered[K] - 0.5
+      any_axis(C)
+      bad_doubly: gtx.Field[gtx.Dims[gtx.Staggered[gtx.Staggered[K]]], float] | None = None
+      bad_location: gtx.Field[gtx.Dims[gtx.Staggered[C]], float] | None = None
+      bad_shift = C + 1
+      bad_shift_back = C - 1
+    out: |
+      main:14:10: error: Argument 1 to "any_axis" has incompatible type "type[C]"; expected "type[AnyCartesianAxisIndex]"  [arg-type]
+      main:15:46: error: Type argument "Staggered[K]" of "Staggered" must be a subtype of "CartesianAxisIndex"  [type-var]
+      main:16:48: error: Type argument "C" of "Staggered" must be a subtype of "CartesianAxisIndex"  [type-var]
+      main:17:13: error: Unsupported operand types for + ("type[C]" and "int")  [operator]
+      main:18:18: error: Unsupported operand types for - ("type[C]" and "int")  [operator]

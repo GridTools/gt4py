@@ -16,7 +16,7 @@ from gt4py.next.iterator.runtime import fundef
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-class I(gtx.DimensionIndex): ...
+class I(gtx.CartesianAxisIndex): ...
 
 
 _isize = 10

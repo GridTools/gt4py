@@ -17,7 +17,7 @@ from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded
 
 
-class K(common.DimensionIndex, kind=common.DimensionKind.VERTICAL): ...
+class K(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
 
 
 def test_column_ufunc():

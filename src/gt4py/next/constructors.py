@@ -431,7 +431,7 @@ def empty(
         Initialize a field in one dimension with a backend and a range domain:
 
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
         >>> a.shape
         (7,)
@@ -440,7 +440,7 @@ def empty(
 
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> a = gtx.empty({IDim: range(3, 10)}, allocator=np)
         >>> a.shape
         (7,)
@@ -448,7 +448,7 @@ def empty(
         Initialize with a device and an integer domain. It works like a shape with named dimensions:
 
         >>> from gt4py._core import definitions as core_defs
-        >>> class JDim(gtx.DimensionIndex): ...
+        >>> class JDim(gtx.CartesianAxisIndex): ...
         >>> b = gtx.empty(
         ...     {IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0)
         ... )
@@ -476,7 +476,7 @@ def zeros(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
@@ -501,7 +501,7 @@ def ones(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
@@ -532,7 +532,7 @@ def full(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
@@ -577,7 +577,7 @@ def as_field(
     Examples:
         >>> import numpy as np
         >>> from gt4py import next as gtx
-        >>> class IDim(gtx.DimensionIndex): ...
+        >>> class IDim(gtx.CartesianAxisIndex): ...
         >>> xdata = np.array([1, 2, 3])
 
         Automatic domain from just dimensions:

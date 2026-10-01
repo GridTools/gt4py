@@ -16,7 +16,7 @@ from gt4py.next.iterator.runtime import set_at, fendef, fundef
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 @fundef

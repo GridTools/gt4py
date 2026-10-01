@@ -13,6 +13,7 @@ import pytest
 
 from gt4py.next import (
     Dimension,
+    CartesianAxisIndex,
     DimensionIndex,
     DimensionKind,
     Field,
@@ -26,10 +27,10 @@ from gt4py.next.ffront.foast_pretty_printer import pretty_format
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
 
-class I(DimensionIndex): ...
+class I(CartesianAxisIndex): ...
 
 
-class KDim(DimensionIndex, kind=DimensionKind.VERTICAL): ...
+class KDim(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
 
 
 @pytest.mark.parametrize(

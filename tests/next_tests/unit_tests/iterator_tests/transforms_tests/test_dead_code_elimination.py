@@ -15,7 +15,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import dead_code_elimination
 
 
-class TDim(common.DimensionIndex): ...
+class TDim(common.CartesianAxisIndex): ...
 
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)

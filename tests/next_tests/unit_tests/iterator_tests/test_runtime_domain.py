@@ -37,7 +37,7 @@ connectivity = common.ConnectivityType(
 )
 
 
-class I(gtx.DimensionIndex): ...
+class I(gtx.CartesianAxisIndex): ...
 
 
 def test_deduce_domain():

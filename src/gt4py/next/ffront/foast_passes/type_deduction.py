@@ -41,7 +41,7 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> class I(common.DimensionIndex): ...
+    >>> class I(common.CartesianAxisIndex): ...
     >>> field_t = ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
@@ -173,8 +173,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> from gt4py.next import Field
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> from gt4py.next.common import DimensionIndex
-    >>> class IDim(DimensionIndex): ...
+    >>> from gt4py.next.common import CartesianAxisIndex, DimensionIndex
+    >>> class IDim(CartesianAxisIndex): ...
     >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
@@ -699,6 +699,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and type_info.is_arithmetic(right.type)
         ):
             # e.g. `IDim+1` or `IDim+0.5`
+            if not issubclass(left.type.dim, common.AnyCartesianAxisIndex):
+                raise errors.DSLError(
+                    left.location,
+                    f"'{left.type.dim.__qualname__}' is not a Cartesian axis, so it has no index "
+                    f"arithmetic and '{node.op}' cannot shift along it.",
+                    hints=[
+                        (
+                            "Declare a Cartesian axis as 'class IDim(gtx.CartesianAxisIndex): ...';"
+                            " shift along a mesh location with a connectivity instead."
+                        )
+                    ],
+                )
             if not isinstance(right, foast.Constant):
                 raise errors.DSLError(
                     right.location,

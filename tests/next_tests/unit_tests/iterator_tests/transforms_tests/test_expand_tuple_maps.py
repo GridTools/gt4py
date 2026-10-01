@@ -16,7 +16,7 @@ from gt4py.next.iterator.transforms.expand_tuple_maps import ExpandTupleMaps
 from gt4py.next.type_system import type_specifications as ts
 
 
-class IDim(common.DimensionIndex): ...
+class IDim(common.CartesianAxisIndex): ...
 
 
 T = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)

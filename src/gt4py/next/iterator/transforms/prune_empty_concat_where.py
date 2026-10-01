@@ -84,7 +84,7 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     `gt4py.next.iterator.transforms.concat_where.expand_tuple_args` before to prune them.
 
     >>> from gt4py.next import common
-    >>> class IDim(common.DimensionIndex): ...
+    >>> class IDim(common.CartesianAxisIndex): ...
     >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
     >>> # class declared in a doctest is not an attribute of the real module:
     >>> import sys

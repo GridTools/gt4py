@@ -30,7 +30,7 @@ from gt4py.next.program_processors.runners import dace as gtx_dace
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 I_SIZE = 8

@@ -30,7 +30,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
-class IDim(gtx.DimensionIndex): ...
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 @pytest.fixture
