@@ -373,7 +373,7 @@ class DaCeTranslator(
             derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS
         ):
             raise ValueError(
-                f"The following optimization arguments cannot be overriden: {derived_args}."
+                f"The following optimization arguments cannot be overridden: {derived_args}."
             )
 
     def generate_sdfg(

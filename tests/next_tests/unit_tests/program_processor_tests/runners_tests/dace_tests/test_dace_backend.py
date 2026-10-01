@@ -22,6 +22,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import runners, stages
+from gt4py.next.otf import workflow as gtx_workflow
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
@@ -261,7 +262,7 @@ def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
 
 
 def test_make_toolchain_rejects_derived_optimization_args():
-    with pytest.raises(ValueError, match="cannot be overriden"):
+    with pytest.raises(ValueError, match="cannot be overridden"):
         dace_wf_backend.make_dace_toolchain(
             translation=functools.partial(
                 dace_wf_factory.make_dace_translator,
@@ -318,7 +319,7 @@ def test_make_dace_backend_is_deprecated():
 
 
 def test_translator_rejects_derived_optimization_args_on_every_route():
-    with pytest.raises(ValueError, match="cannot be overriden"):
+    with pytest.raises(ValueError, match="cannot be overridden"):
         dace_wf_translation.DaCeTranslator(
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=False,
@@ -328,7 +329,7 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
             use_metrics=False,
         )
     translator = dace_wf_backend.run_dace_cpu.executor.translation.step
-    with pytest.raises(ValueError, match="cannot be overriden"):
+    with pytest.raises(ValueError, match="cannot be overridden"):
         dataclasses.replace(translator, auto_optimize_args={"constant_symbols": {}})
 
 
@@ -356,6 +357,13 @@ def test_unused_optimization_args_warning_points_at_the_caller():
         )
 
     assert record[0].filename == __file__
+
+
+def test_compile_workflow_without_config_caches_translation():
+    workflow = dace_wf_factory.make_dace_compile_workflow()
+
+    assert isinstance(workflow.translation, gtx_workflow.CachedStep)
+    assert isinstance(workflow.translation.step, dace_wf_translation.DaCeTranslator)
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:

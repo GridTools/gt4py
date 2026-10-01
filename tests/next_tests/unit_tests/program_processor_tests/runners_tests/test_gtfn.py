@@ -190,3 +190,17 @@ def test_prebuilt_toolchain_names_are_unique():
 
     assert gtfn.run_gtfn_no_transforms.name == "run_gtfn_cpu_no_transforms"
     assert len(set(names)) == len(names)
+
+
+def test_translation_step_requires_device_type():
+    # A step that silently defaulted to the CPU could disagree with the rest of
+    # a GPU pipeline, so the device has no default.
+    with pytest.raises(TypeError, match="device_type"):
+        gtfn_module.GTFNTranslationStep()
+
+
+def test_compile_workflow_without_config_caches_translation():
+    workflow_ = gtfn.make_gtfn_compile_workflow()
+
+    assert isinstance(workflow_.translation, workflow.CachedStep)
+    assert isinstance(workflow_.translation.step, gtfn_module.GTFNTranslationStep)

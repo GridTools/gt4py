@@ -110,7 +110,7 @@ def make_dace_backend(
         use_max_domain_range_on_unstructured_shift: See `DaCeTranslator`.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
-    cannot be overriden, and therefore cannot appear in `optimization_args`.
+    cannot be overridden, and therefore cannot appear in `optimization_args`.
 
     Returns:
         A dace backend with custom configuration for the target device.
