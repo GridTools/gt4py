@@ -42,14 +42,24 @@ def _snapshot(root: pathlib.Path) -> dict[pathlib.Path, str]:
     return {p: p.read_text() for p in root.rglob("*") if p.is_file()}
 
 
-def test_package_version_rejects_invalid_version(fake_repo: pathlib.Path):
+@pytest.mark.parametrize(
+    ("new_version", "message"),
+    [
+        ("not-a-version", "not a valid version string"),
+        # The local part is appended by the script, so a second one would be invalid.
+        ("1.2.3+cuda", "must not have a local version segment"),
+    ],
+)
+def test_package_version_rejects_invalid_version(
+    fake_repo: pathlib.Path, new_version: str, message: str
+):
     before = _snapshot(fake_repo)
 
-    result = CliRunner().invoke(cli, ["package-version", "not-a-version"])
+    result = CliRunner().invoke(cli, ["package-version", new_version])
 
     assert result.exit_code == ExitCode.INVALID_NEW_VERSION_STRING, result.output
     assert not isinstance(result.exception, AttributeError)
-    assert "not a valid version string" in result.output
+    assert message in result.output
     assert _snapshot(fake_repo) == before
 
 
