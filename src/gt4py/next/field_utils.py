@@ -13,7 +13,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import NestedTuple
 from gt4py.next import common, named_collections, utils
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 try:
@@ -61,10 +61,7 @@ def field_from_typespec(
             return named_collections.make_named_collection_constructor_from_type_spec(type_)(elems)
         return tuple(elems)
 
-    @utils.tree_map(
-        collection_type=ts.COLLECTION_TYPE_SPECS,
-        result_collection_constructor=_constructor,
-    )
+    @type_info.tree_map_type(result_collection_constructor=_constructor)
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
             xp.empty(domain.shape, dtype=xp.dtype(type_translation.as_dtype(type_).scalar_type)),

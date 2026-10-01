@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Iterator, Optional, Sequence, TypeVar
+from typing import Final, Optional, Sequence, TypeVar
 
 from gt4py.eve import (
     datamodels as eve_datamodels,
@@ -141,12 +141,6 @@ class TupleType(DataType):
     def __str__(self) -> str:
         return f"tuple[{', '.join(map(str, self.types))}]"
 
-    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
-        yield from self.types
-
-    def __len__(self) -> int:
-        return len(self.types)
-
 
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
@@ -189,13 +183,6 @@ class NamedCollectionType(DataType):
 
     def __str__(self) -> str:
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
-
-    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
-        # Note: Unlike `Mapping`s, we iterate the values (not the keys) by default.
-        yield from self.types
-
-    def __len__(self) -> int:
-        return len(self.types)
 
 
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
