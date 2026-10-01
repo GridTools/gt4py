@@ -14,11 +14,14 @@ from gt4py.next.ffront.fbuiltins import BuiltInFunction, WhereBuiltinFunction
 
 
 @BuiltInFunction
-def as_offset(dim: common.Dimension, field: common.Field, /) -> common.Connectivity:
+def as_offset(
+    dim: type[common.AnyCartesianAxisIndex], field: common.Field, /
+) -> common.Connectivity:
     """
-    Shift along `dim` by the per-point amounts in the integer `field`.
+    Shift along the Cartesian axis `dim` by the per-point amounts in the integer `field`.
 
-    `a(as_offset(KDim, k_offsets))` reads `a` at `k + k_offsets[k]` in `KDim`.
+    `a(as_offset(KDim, k_offsets))` reads `a` at `k + k_offsets[k]` in `KDim`. Like `KDim + 1`,
+    it needs index arithmetic, so `dim` must be a Cartesian axis (or its staggered partner).
     """
     raise NotImplementedError()
 

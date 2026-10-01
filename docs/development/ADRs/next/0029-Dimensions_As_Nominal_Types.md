@@ -218,7 +218,8 @@ The last row needs `DimensionMeta.__add__` / `__sub__` declared with the self-ty
 site and both reject it at the definition site, with different diagnostics (mypy
 `[misc]`, pyright `reportGeneralTypeIssues`), so it costs two separately spelled
 suppressions. The runtime check covers unannotated code; hand-written iterator IR,
-which names dimensions by tag, is not checked. Comparisons are deliberately *not* restricted: `D == n`
+which names dimensions by tag, is not checked. `as_offset(dim, field)` needs index
+arithmetic too and takes an `AnyCartesianAxisIndex`. Comparisons are deliberately *not* restricted: `D == n`
 and `D < n` build a `Domain` on every dimension, as `concat_where` over a mesh
 location requires.
 

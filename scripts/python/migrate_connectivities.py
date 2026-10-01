@@ -21,11 +21,22 @@ Rewrites module-level declarations and the uses of Cartesian offsets:
 
 becomes
 
-    class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+    class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
     class E2CDim(gtx.LocalDimensionIndex): ...
     class E2C(gtx.NeighborConnectivity[EdgeDim, CellDim]):
         Local: typing.TypeAlias = E2CDim
     ... a(KDim + 1) ... as_offset(KDim, k_field) ...
+
+Whether a dimension is a Cartesian axis (`CartesianAxisIndex`: index arithmetic, a staggered
+partner) or a mesh location (`DimensionIndex`) is decided per declaration, from the evidence in
+all the given modules, in this order:
+
+1. a Cartesian axis if it is `kind=VERTICAL`, is the source of a Cartesian `FieldOffset`, is
+   used with `as_offset` or in index arithmetic (`K + 1`), or has a staggered counterpart
+   (`flip_staggered(K)`, or a `"_Staggered<name>"` string under the old encoding);
+2. a mesh location if it is the source or the target dimension of a neighbor `FieldOffset`;
+3. otherwise a `DimensionIndex`, reported: nothing in the source tells a structured horizontal
+   axis from a mesh location. A dimension with evidence for both is reported as a conflict.
 
 A connectivity adopts its existing local dimension (`Local: TypeAlias = E2CDim`), so the names already used
 for local dimensions keep working, and so do offsets that share a local dimension (`C2CE`
@@ -141,20 +152,108 @@ def _replace(module: Module, statement: ast.stmt, text: str) -> None:
     module.edits.append(Edit(statement.lineno - 1, statement.end_lineno, text))
 
 
-def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
+def _is_local_kind(module: Module, call: ast.Call) -> bool:
+    kind = _keyword(call, "kind", 1)
+    return kind is not None and module.segment(kind).split(".")[-1] == "LOCAL"
+
+
+def _dimension_name(node: ast.expr) -> str | None:
+    """`KDim` for `KDim` and `dims.KDim`."""
+    match node:
+        case ast.Name(id=name) | ast.Attribute(attr=name):
+            return name
+    return None
+
+
+@dataclasses.dataclass
+class _Evidence:
+    """Why a dimension looks like a Cartesian axis, and why like a mesh location."""
+
+    axis: list[str] = dataclasses.field(default_factory=list)
+    location: list[str] = dataclasses.field(default_factory=list)
+
+
+def _classify_dimensions(modules: list[Module]) -> dict[str, _Evidence]:
+    """Collect, per non-local dimension name, the evidence for axis and for mesh location."""
+    evidence: dict[str, _Evidence] = {}
+    tags: dict[str, str] = {}  # the old `Dimension("K")` value, for `"_StaggeredK"`
+    for module in modules:
+        for _, name, call, _, kind_of_call in _declarations(module):
+            if kind_of_call == "Dimension" and not _is_local_kind(module, call):
+                found = evidence.setdefault(name, _Evidence())
+                if (kind := _keyword(call, "kind", 1)) is not None and module.segment(
+                    kind
+                ).endswith("VERTICAL"):
+                    found.axis.append("kind=VERTICAL")
+                if call.args and isinstance(tag := call.args[0], ast.Constant):
+                    tags[str(tag.value)] = name
+
+    def add(node: ast.expr | None, role: str, reason: str) -> None:
+        if node is not None and (name := _dimension_name(node)) in evidence:
+            getattr(evidence[name], role).append(reason)
+
+    for module in modules:
+        for _, name, call, _, kind_of_call in _declarations(module):
+            if kind_of_call != "FieldOffset":
+                continue
+            source, target = _keyword(call, "source", 1), _keyword(call, "target", 2)
+            if not isinstance(target, ast.Tuple) or source is None:
+                continue
+            if len(target.elts) == 1 and module.segment(target.elts[0]) == module.segment(source):
+                add(source, "axis", f"Cartesian offset '{name}'")
+            elif len(target.elts) == 2:
+                add(source, "location", f"neighbor offset '{name}'")
+                add(target.elts[0], "location", f"neighbor offset '{name}'")
+        for node in ast.walk(module.tree):
+            match node:
+                case ast.Call(func=func, args=[first, *_]) if _dimension_name(func) in (
+                    "as_offset",
+                    "flip_staggered",
+                ):
+                    add(first, "axis", f"'{_dimension_name(func)}'")
+                case ast.BinOp(
+                    left=left, op=ast.Add() | ast.Sub(), right=ast.Constant(value=int() | float())
+                ):
+                    add(left, "axis", "index arithmetic")
+                case ast.Constant(value=str() as text) if text.startswith("_Staggered"):
+                    if (name := tags.get(text.removeprefix("_Staggered"))) is not None:
+                        evidence[name].axis.append(f"staggered counterpart '{text}'")
+    return evidence
+
+
+def _migrate_declarations(
+    module: Module, cartesian: dict[str, str], evidence: dict[str, _Evidence]
+) -> None:
     for statement, name, call, prefix, kind_of_call in _declarations(module):
         if kind_of_call == "Dimension":
             kind = _keyword(call, "kind", 1)
             kind_src = module.segment(kind) if kind is not None else None
-            if kind_src is not None and kind_src.split(".")[-1] == "LOCAL":
+            if _is_local_kind(module, call):
                 base = "LocalDimensionIndex"
                 text = f"class {name}({prefix}{base}): ...\n"
-            elif kind_src is None:
-                base = "DimensionIndex"
-                text = f"class {name}({prefix}{base}): ...\n"
             else:
-                base = "DimensionIndex"
-                text = f"class {name}({prefix}{base}, kind={kind_src}): ...\n"
+                found = evidence.get(name, _Evidence())
+                if found.axis and found.location:
+                    base = "DimensionIndex"
+                    module.note(
+                        statement,
+                        f"'{name}': conflicting evidence, decide by hand -- a Cartesian axis"
+                        f" ({', '.join(found.axis)}) and a mesh location"
+                        f" ({', '.join(found.location)}); declared as 'DimensionIndex'.",
+                    )
+                elif found.axis:
+                    base = "CartesianAxisIndex"
+                else:
+                    base = "DimensionIndex"
+                    if not found.location:
+                        module.note(
+                            statement,
+                            f"'{name}': declared as 'DimensionIndex'; declare it as"
+                            " 'CartesianAxisIndex' if it is a Cartesian axis (index arithmetic,"
+                            " 'Staggered').",
+                        )
+                kind_arg = f", kind={kind_src}" if kind_src is not None else ""
+                text = f"class {name}({prefix}{base}{kind_arg}): ...\n"
             if not prefix:
                 module.needed.add(base)
             _replace(module, statement, text)
@@ -182,6 +281,53 @@ def _migrate_declarations(module: Module, cartesian: dict[str, str]) -> None:
             _replace(module, statement, "")
         else:
             module.note(statement, f"'{name}': a cross-dimension offset has no class equivalent.")
+
+
+def _is_local_kind_member(node: ast.expr) -> bool:
+    """`DimensionKind.LOCAL`, however `DimensionKind` is qualified."""
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == "LOCAL"
+        and _dimension_name(node.value) == "DimensionKind"
+    )
+
+
+def _migrate_local_kind(module: Module) -> None:
+    """
+    Drop module-level aliases of the removed `DimensionKind.LOCAL`; report its other uses.
+
+    A local dimension is a `LocalDimensionIndex` subclass now, and its `kind` is `None`, so
+    `DimensionKind` has no `LOCAL` member left to name.
+    """
+    in_declarations = {
+        id(node) for _, _, call, _, _ in _declarations(module) for node in ast.walk(call)
+    }
+    aliases = set()
+    for statement in module.tree.body:
+        if (
+            isinstance(statement, ast.Assign)
+            and len(statement.targets) == 1
+            and isinstance(statement.targets[0], ast.Name)
+            and _is_local_kind_member(statement.value)
+        ):
+            aliases.add(id(statement.value))
+            _replace(module, statement, "")
+            module.note(
+                statement,
+                f"'{statement.targets[0].id}' removed: 'DimensionKind' has no 'LOCAL' member any"
+                " more; any other use of it has to test 'common.is_local_dimension(dim)'.",
+            )
+    for node in ast.walk(module.tree):
+        if (
+            _is_local_kind_member(node)
+            and id(node) not in in_declarations
+            and id(node) not in aliases
+        ):
+            module.note(
+                node,
+                "'DimensionKind.LOCAL' is removed: a local dimension is a 'LocalDimensionIndex'"
+                " subclass; test 'common.is_local_dimension(dim)' instead of its kind.",
+            )
 
 
 def _migrate_imports(module: Module) -> None:
@@ -463,6 +609,7 @@ def migrate(sources: dict[pathlib.Path, str]) -> tuple[dict[pathlib.Path, str], 
     #: offset-provider keys that name a `FieldOffset`: its variable name and its tag, if different
     offset_keys: dict[str, str] = {}
     dimension_names: set[str] = set()
+    evidence = _classify_dimensions(modules)
     for module in modules:
         for _, name, call, _, kind_of_call in _declarations(module):
             if kind_of_call == "Dimension":
@@ -471,7 +618,8 @@ def migrate(sources: dict[pathlib.Path, str]) -> tuple[dict[pathlib.Path, str], 
             offset_keys[name] = name
             if call.args and isinstance(tag := call.args[0], ast.Constant):
                 offset_keys[str(tag.value)] = name
-        _migrate_declarations(module, cartesian)
+        _migrate_declarations(module, cartesian, evidence)
+        _migrate_local_kind(module)
         _migrate_imports(module)
 
     results: dict[pathlib.Path, str] = {}

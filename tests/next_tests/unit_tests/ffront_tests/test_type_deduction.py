@@ -582,8 +582,14 @@ def test_as_offset_non_dimension():
     def as_offset_local_dim(a: Field[[Vertex, V2EDim], float], b: Field[[Vertex, V2EDim], int]):
         return a(as_offset(V2EDim, b))
 
-    with pytest.raises(errors.DSLError, match="non-local dimension"):
+    with pytest.raises(errors.DSLError, match="shifts along a Cartesian axis"):
         _ = FieldOperatorParser.apply_to_function(as_offset_local_dim)
+
+    def as_offset_mesh_location(a: Field[[Edge], float], b: Field[[Edge], int]):
+        return a(as_offset(Edge, b))
+
+    with pytest.raises(errors.DSLError, match="shifts along a Cartesian axis"):
+        _ = FieldOperatorParser.apply_to_function(as_offset_mesh_location)
 
 
 @pytest.mark.parametrize("offset", [1, -1, 0.5])

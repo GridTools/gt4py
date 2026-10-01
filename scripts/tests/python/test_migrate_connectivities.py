@@ -71,7 +71,7 @@ def test_declarations():
         import typing
         import gt4py.next as gtx
 
-        class KDim(gtx.DimensionIndex, kind=gtx.DimensionKind.VERTICAL): ...
+        class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
         class EdgeDim(gtx.DimensionIndex): ...
         class CellDim(gtx.DimensionIndex): ...
         class CEDim(gtx.DimensionIndex): ...
@@ -210,3 +210,58 @@ def test_table_types_rename():
     # the keyword may be the user's own parameter: left alone, and noted
     assert results["own_function"] == own_function
     assert any("'offset_provider_type='" in note for note in notes)
+
+
+AXES = textwrap.dedent(
+    """\
+    import gt4py.next as gtx
+    from gt4py.next.ffront.experimental import as_offset
+
+    IDim = gtx.Dimension("I")
+    JDim = gtx.Dimension("J")
+    HDim = gtx.Dimension("H")
+    XDim = gtx.Dimension("X")
+    Cell = gtx.Dimension("Cell")
+    Odd = gtx.Dimension("Odd")
+    Unknown = gtx.Dimension("Unknown")
+    C2ODim = gtx.Dimension("C2O", gtx.DimensionKind.LOCAL)
+    C2O = gtx.FieldOffset("C2O", source=Odd, target=(Cell, C2ODim))
+    Ooff = gtx.FieldOffset("Ooff", source=Odd, target=(Odd,))
+
+    IHalf = gtx.Dimension("_StaggeredI")
+
+
+    def f(a, b, k):
+        return a(JDim + 1), b(as_offset(HDim, k)), gtx.flip_staggered(XDim)
+    """
+)
+
+
+def test_axis_or_mesh_location_is_decided_per_declaration():
+    results, notes = _migrate(axes=AXES)
+    migrated = results["axes"]
+
+    # Cartesian axes: a staggered counterpart, index arithmetic, `as_offset`, `flip_staggered`
+    for axis in ("IDim", "JDim", "HDim", "XDim"):
+        assert f"class {axis}(gtx.CartesianAxisIndex): ..." in migrated
+    # a mesh location: the target dimension of a neighbor offset
+    assert "class Cell(gtx.DimensionIndex): ..." in migrated
+    # evidence for both is reported, not decided
+    assert "class Odd(gtx.DimensionIndex): ..." in migrated
+    assert any("'Odd': conflicting evidence" in note for note in notes)
+    # no evidence: a `DimensionIndex`, reported
+    assert "class Unknown(gtx.DimensionIndex): ..." in migrated
+    assert any(
+        "'Unknown': declared as 'DimensionIndex'; declare it as 'CartesianAxisIndex'" in note
+        for note in notes
+    )
+    assert not any("'Cell'" in note or "'IDim'" in note for note in notes)
+
+
+def test_local_kind_aliases_are_removed_and_other_uses_reported():
+    source = BARE + "is_local = Vertex.kind == DimensionKind.LOCAL\n"
+    results, notes = _migrate(bare=source)
+
+    assert "LOCAL = DimensionKind.LOCAL" not in results["bare"]
+    assert any("'LOCAL' removed" in note for note in notes)
+    assert any("bare:8: 'DimensionKind.LOCAL' is removed" in note for note in notes)

@@ -1004,10 +1004,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         arg_0 = node.args[0].type
         arg_1 = node.args[1].type
         assert isinstance(arg_1, ts.FieldType)
-        if not isinstance(arg_0, ts.DimensionType) or common.is_local_dimension(arg_0.dim):
+        if not isinstance(arg_0, ts.DimensionType) or not issubclass(
+            arg_0.dim, common.AnyCartesianAxisIndex
+        ):
             raise errors.DSLError(
                 node.location,
-                f"'as_offset' shifts along a non-local dimension, e.g. 'as_offset(KDim, field)';"
+                f"'as_offset' shifts along a Cartesian axis, e.g. 'as_offset(KDim, field)';"
                 f" got '{arg_0}'.",
             )
         dim = arg_0.dim

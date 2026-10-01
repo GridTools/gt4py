@@ -125,7 +125,13 @@ _R = TypeVar("_R")
 def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSpec], ...]:
     if t is common.Field:
         return ts.FieldType
-    elif t is common.Dimension:
+    elif t is common.Dimension or (
+        # e.g. `type[AnyCartesianAxisIndex]`: a dimension narrowed to a level of the hierarchy,
+        # whose restriction the builtin's own type deduction checks
+        get_origin(t) is type
+        and isinstance(arg := get_args(t)[0], type)
+        and issubclass(arg, common.DimensionIndex)
+    ):
         return ts.DimensionType
     elif t is common.Connectivity:
         return ts.ShiftType

@@ -954,13 +954,14 @@ def test_as_offset_2d_shift_second_axis():
     assert np.all(result.ndarray == f.ndarray[i, j + off_arr])
 
 
-def test_as_offset_local_dimension_raises():
-    # `as_offset` shifts along a non-local dimension.
+@pytest.mark.parametrize("dim", [V2EDim, Vertex])
+def test_as_offset_off_an_axis_raises(dim):
+    # `as_offset` shifts along a Cartesian axis: not a local dimension, nor a mesh location.
     off_V = common._field(
         np.zeros(3, dtype=int), domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),))
     )
-    with pytest.raises(ValueError, match="non-local dimension"):
-        as_offset(V2EDim, off_V)
+    with pytest.raises(TypeError, match="shifts along a Cartesian axis"):
+        as_offset(dim, off_V)
 
 
 @pytest.mark.parametrize(

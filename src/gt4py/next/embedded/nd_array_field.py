@@ -932,11 +932,11 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 
 def _as_offset(source_dim: common.Dimension, offset_field: NdArrayField) -> common.Connectivity:
-    if (
-        not isinstance(source_dim, common.DimensionMeta)
-        or common.is_local_dimension(source_dim)
+    if not (
+        isinstance(source_dim, common.DimensionMeta)
+        and issubclass(source_dim, common.AnyCartesianAxisIndex)
     ):
-        raise ValueError(f"'as_offset' shifts along a non-local dimension, got '{source_dim}'.")
+        raise TypeError(f"'as_offset' shifts along a Cartesian axis, got '{source_dim}'.")
     coords = _identity_index_array(
         offset_field.domain, source_dim, offset_field.array_ns, dtype=fbuiltins.IndexType
     )

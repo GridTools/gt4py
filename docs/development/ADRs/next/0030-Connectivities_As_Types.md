@@ -237,9 +237,16 @@ names no declared connectivity, as in hand-written IR, is not checked.
 
 `FieldOffset` and its export are gone. An unstructured connectivity is a
 `NeighborConnectivity`; a Cartesian shift is `Dim + i`, which the DSL already
-had; and `as_offset` takes the dimension to shift along, `as_offset(KDim, k_offsets)`, instead of a Cartesian `FieldOffset`. `scripts/python/migrate_connectivities.py`
-rewrites declarations and Cartesian offset uses, and reports the provider keys
-and other sites it cannot rewrite from the source alone.
+had; and `as_offset` takes the Cartesian axis to shift along,
+`as_offset(KDim, k_offsets)`, instead of a Cartesian `FieldOffset`.
+`scripts/python/migrate_connectivities.py` rewrites declarations and Cartesian
+offset uses, and reports the provider keys and other sites it cannot rewrite from
+the source alone. It decides per declaration whether a dimension is a Cartesian
+axis (`kind=VERTICAL`, a Cartesian offset, `as_offset`, index arithmetic or a
+staggered counterpart) or a mesh location (a domain or codomain of a neighbor
+offset), and reports a dimension with no evidence, or with evidence for both,
+instead of guessing. It drops aliases of the removed `DimensionKind.LOCAL` and
+reports its other uses.
 
 ## Consequences
 
