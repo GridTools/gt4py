@@ -13,11 +13,10 @@ import functools
 import pathlib
 import warnings
 from collections.abc import Callable
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, TypeAlias
 
 import gt4py
-from gt4py._core import filecache
-from gt4py.next import backend as next_backend, common, fingerprinting
+from gt4py.next import backend as next_backend, config
 from gt4py.next.otf import artifacts, recipes, stages, workflow
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
@@ -28,12 +27,6 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 from gt4py.next.program_processors.runners.dace.workflow.compilation import DaCeCompiler
 from gt4py.next.program_processors.runners.dace.workflow.translation import DaCeTranslator
 
-
-#: The parameters of `gt_auto_optimize()` that are derived from the toolchain
-#: configuration, and therefore cannot be customized.
-_DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
-    {"gpu", "constant_symbols", "unit_strides_kind"}
-)
 
 #: Warnings about the builder arguments point at the first caller outside GT4Py.
 _GT4PY_SOURCE_PREFIX: Final[str] = str(pathlib.Path(gt4py.__file__).parent)
@@ -47,7 +40,8 @@ class DaCeConfig(next_backend.ToolchainConfig):
     auto_optimize: bool = True
     #: Workspace memory allocated outside the SDFG. The toolchain injects it into
     #: the loaded programs, and the translation step then defaults to the
-    #: `EXTERNAL` transient memory mode, which stores the transients in it.
+    #: `EXTERNAL` transient memory mode, which stores the transients in it. The
+    #: workspace is a dict, so a config holding one is not hashable.
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
 
     #: Name of the function that binds the SDFG arguments. The bindings and the
@@ -59,52 +53,47 @@ def make_dace_translator(
     cfg: DaCeConfig,
     /,
     *,
-    optimization_args: dict[str, Any] | None = None,
+    auto_optimize_args: dict[str, Any] | None = None,
     async_sdfg_call: bool = True,
     use_metrics: bool = True,
-    use_zero_origin: bool = False,
+    disable_itir_transforms: bool = False,
+    disable_field_origin_on_program_arguments: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
 ) -> DaCeTranslator:
     """
     Build the GTIR -> SDFG translation step.
 
+    The keyword arguments are the step-local fields of `DaCeTranslator`.
+
     Args:
         cfg: The toolchain configuration.
-        optimization_args: Configuration for the SDFG auto-optimize pipeline, see
-            `gt_auto_optimize()`. The parameters derived from `cfg` cannot be
-            set here.
+        auto_optimize_args: Configuration for the SDFG auto-optimize pipeline,
+            see `gt_auto_optimize()`. The parameters `DaCeTranslator` derives
+            itself cannot be set here. With an external workspace in `cfg`, the
+            `transient_memory_mode` defaults to `EXTERNAL`.
         async_sdfg_call: Make an asynchronous SDFG call, to overlap GPU kernel
             execution with the Python driver code. Only effective on GPU.
         use_metrics: Add SDFG instrumentation for stencil compute time.
-        use_zero_origin: Assume that all fields passed as program arguments have
-            zero-based origin, which skips the range start-symbols `_range_0`.
+        disable_itir_transforms: Skip the GTIR transformation passes.
+        disable_field_origin_on_program_arguments: Assume that all fields passed
+            as program arguments have zero-based origin, which skips the range
+            start-symbols `_range_0`.
         use_max_domain_range_on_unstructured_shift: See `DaCeTranslator`.
 
     Returns:
         The translation step, targeting `cfg.device_type`.
 
     Raises:
-        ValueError: If `optimization_args` sets a parameter derived from `cfg`,
-            or requests the `EXTERNAL` transient memory mode without an
-            external workspace in `cfg`.
+        ValueError: If `auto_optimize_args` sets a parameter `DaCeTranslator`
+            derives itself, or requests the `EXTERNAL` transient memory mode
+            without an external workspace in `cfg`.
     """
-    if optimization_args is None:
-        optimization_args = {}
-    elif optimization_args and not cfg.auto_optimize:
+    optimization_args = dict(auto_optimize_args or {})
+    if optimization_args and not cfg.auto_optimize:
         warnings.warn(
             "Optimizations args given, but auto-optimize is disabled.",
             skip_file_prefixes=(_GT4PY_SOURCE_PREFIX,),
         )
-    elif intersect_args := optimization_args.keys() & _DERIVED_OPTIMIZATION_ARGS:
-        raise ValueError(
-            f"The following optimization arguments cannot be overriden: {intersect_args}."
-        )
-
-    optimization_args = optimization_args | {
-        "unit_strides_kind": common.DimensionKind.HORIZONTAL
-        if cfg.unstructured_horizontal_has_unit_stride
-        else None
-    }
 
     if cfg.external_workspace is None:
         if (
@@ -132,7 +121,8 @@ def make_dace_translator(
         async_sdfg_call=async_sdfg_call and cfg.gpu,
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride,
         use_metrics=use_metrics,
-        disable_field_origin_on_program_arguments=use_zero_origin,
+        disable_itir_transforms=disable_itir_transforms,
+        disable_field_origin_on_program_arguments=disable_field_origin_on_program_arguments,
         use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
 
@@ -144,27 +134,48 @@ def make_dace_bindings(
     return functools.partial(bindings_step.bind_sdfg, bind_func_name=cfg.bind_func_name)
 
 
-def make_dace_compiler(cfg: DaCeConfig, /) -> DaCeCompiler:
-    """Build the compilation step, targeting `cfg.device_type`."""
+def make_dace_compiler(
+    cfg: DaCeConfig, /, *, add_gpu_trace_markers: bool | None = None
+) -> DaCeCompiler:
+    """
+    Build the compilation step, targeting `cfg.device_type`.
+
+    Args:
+        cfg: The toolchain configuration.
+        add_gpu_trace_markers: Add GPU trace markers to the generated code.
+            Defaults to the value in `config`.
+
+    Returns:
+        The compilation step.
+    """
+    if add_gpu_trace_markers is None:
+        add_gpu_trace_markers = config.ADD_GPU_TRACE_MARKERS
     return DaCeCompiler(
         bind_func_name=cfg.bind_func_name,
         cache_lifetime=cfg.cache_lifetime,
         device_type=cfg.device_type,
         cmake_build_type=cfg.cmake_build_type,
+        add_gpu_trace_markers=add_gpu_trace_markers,
     )
+
+
+#: Step builders: callables creating a step from the toolchain configuration.
+DaCeTranslationBuilder: TypeAlias = Callable[[DaCeConfig], stages.TranslationStep]
+DaCeBindingsBuilder: TypeAlias = Callable[
+    [DaCeConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+]
+DaCeCompilationBuilder: TypeAlias = Callable[
+    [DaCeConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+]
 
 
 def make_dace_compile_workflow(
     cfg: DaCeConfig | None = None,
     /,
     *,
-    translation: Callable[[DaCeConfig], stages.TranslationStep] = make_dace_translator,
-    bindings: Callable[
-        [DaCeConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
-    ] = make_dace_bindings,
-    compilation: Callable[
-        [DaCeConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
-    ] = make_dace_compiler,
+    translation: DaCeTranslationBuilder = make_dace_translator,
+    bindings: DaCeBindingsBuilder = make_dace_bindings,
+    compilation: DaCeCompilationBuilder = make_dace_compiler,
 ) -> recipes.OTFCompileWorkflow:
     """
     Build the DaCe translation -> bindings -> compilation workflow.
@@ -194,16 +205,8 @@ def make_dace_compile_workflow(
     compilation_step = compilation(cfg)
 
     if cfg.cached_translation:
-        translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
-        ].persistent(
-            translation_step,
-            input_fingerprinter=fingerprinting.strict_fingerprinter,
-            cache=filecache.FileCache(
-                cache.get_translation_cache_folder(
-                    cache.get_cache_base_path(cfg.cache_lifetime), "dace"
-                )
-            ),
+        translation_step = cache.persistent_translation_cache(
+            translation_step, "dace", cfg.cache_lifetime
         )
 
     return recipes.OTFCompileWorkflow(

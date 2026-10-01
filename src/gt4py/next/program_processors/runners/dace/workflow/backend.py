@@ -11,11 +11,10 @@ from __future__ import annotations
 import dataclasses
 import functools
 import warnings
-from collections.abc import Callable
 from typing import Any
 
 from gt4py.next import backend, config
-from gt4py.next.otf import artifacts, stages, workflow
+from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -42,17 +41,9 @@ def make_dace_toolchain(
     /,
     *,
     name_postfix: str = "",
-    translation: Callable[
-        [gtx_wfdfactory.DaCeConfig], stages.TranslationStep
-    ] = gtx_wfdfactory.make_dace_translator,
-    bindings: Callable[
-        [gtx_wfdfactory.DaCeConfig],
-        workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource],
-    ] = gtx_wfdfactory.make_dace_bindings,
-    compilation: Callable[
-        [gtx_wfdfactory.DaCeConfig],
-        workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact],
-    ] = gtx_wfdfactory.make_dace_compiler,
+    translation: gtx_wfdfactory.DaCeTranslationBuilder = gtx_wfdfactory.make_dace_translator,
+    bindings: gtx_wfdfactory.DaCeBindingsBuilder = gtx_wfdfactory.make_dace_bindings,
+    compilation: gtx_wfdfactory.DaCeCompilationBuilder = gtx_wfdfactory.make_dace_compiler,
 ) -> DaCeBackend:
     """
     Build a DaCe toolchain.
@@ -144,10 +135,10 @@ def make_dace_backend(
         ),
         translation=functools.partial(
             gtx_wfdfactory.make_dace_translator,
-            optimization_args=optimization_args,
+            auto_optimize_args=optimization_args,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
-            use_zero_origin=use_zero_origin,
+            disable_field_origin_on_program_arguments=use_zero_origin,
             use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
         ),
     )

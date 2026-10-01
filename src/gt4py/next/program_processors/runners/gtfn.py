@@ -10,13 +10,12 @@ import dataclasses
 import functools
 import pathlib
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-from gt4py._core import filecache
-from gt4py.next import backend, common, field_utils, fingerprinting
+from gt4py.next import backend, common, field_utils
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir
@@ -129,6 +128,16 @@ class GTFNConfig(backend.ToolchainConfig):
     """Settings shared by the steps of a GTFN toolchain, see `ToolchainConfig`."""
 
 
+#: Step builders: callables creating a step from the toolchain configuration.
+GTFNTranslationBuilder: TypeAlias = Callable[[GTFNConfig], stages.TranslationStep]
+GTFNBindingsBuilder: TypeAlias = Callable[
+    [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
+]
+GTFNCompilationBuilder: TypeAlias = Callable[
+    [GTFNConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
+]
+
+
 def make_gtfn_translation(
     cfg: GTFNConfig,
     /,
@@ -228,13 +237,9 @@ def make_gtfn_compile_workflow(
     cfg: GTFNConfig | None = None,
     /,
     *,
-    translation: Callable[[GTFNConfig], stages.TranslationStep] = make_gtfn_translation,
-    bindings: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
-    ] = make_gtfn_bindings,
-    compilation: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
-    ] = make_gtfn_compiler,
+    translation: GTFNTranslationBuilder = make_gtfn_translation,
+    bindings: GTFNBindingsBuilder = make_gtfn_bindings,
+    compilation: GTFNCompilationBuilder = make_gtfn_compiler,
 ) -> recipes.OTFCompileWorkflow:
     """
     Build the GTFN translation -> bindings -> compilation workflow.
@@ -265,16 +270,8 @@ def make_gtfn_compile_workflow(
     compilation_step = compilation(cfg)
 
     if cfg.cached_translation:
-        translation_step = workflow.CachedStep[
-            stages.CompilableProgramDef, artifacts.ProgramSource, str
-        ].persistent(
-            translation_step,
-            input_fingerprinter=fingerprinting.strict_fingerprinter,
-            cache=filecache.FileCache(
-                cache.get_translation_cache_folder(
-                    cache.get_cache_base_path(cfg.cache_lifetime), "gtfn"
-                )
-            ),
+        translation_step = cache.persistent_translation_cache(
+            translation_step, "gtfn", cfg.cache_lifetime
         )
 
     return recipes.OTFCompileWorkflow(
@@ -287,13 +284,9 @@ def make_gtfn_toolchain(
     /,
     *,
     name_postfix: str = "",
-    translation: Callable[[GTFNConfig], stages.TranslationStep] = make_gtfn_translation,
-    bindings: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
-    ] = make_gtfn_bindings,
-    compilation: Callable[
-        [GTFNConfig], workflow.Workflow[artifacts.ExtensionSource, artifacts.CompilationArtifact]
-    ] = make_gtfn_compiler,
+    translation: GTFNTranslationBuilder = make_gtfn_translation,
+    bindings: GTFNBindingsBuilder = make_gtfn_bindings,
+    compilation: GTFNCompilationBuilder = make_gtfn_compiler,
 ) -> backend.Backend:
     """
     Build a GTFN toolchain.

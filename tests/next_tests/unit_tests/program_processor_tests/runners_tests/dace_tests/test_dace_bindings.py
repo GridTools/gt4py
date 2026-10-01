@@ -298,7 +298,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         translation=functools.partial(
             dace_runner.make_dace_translator,
             use_metrics=use_metrics,
-            use_zero_origin=use_zero_origin,
+            disable_field_origin_on_program_arguments=use_zero_origin,
         )
     )
     monkeypatch.setattr(
@@ -354,7 +354,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
         translation=functools.partial(
             dace_runner.make_dace_translator,
             use_metrics=use_metrics,
-            use_zero_origin=use_zero_origin,
+            disable_field_origin_on_program_arguments=use_zero_origin,
         )
     )
     monkeypatch.setattr(

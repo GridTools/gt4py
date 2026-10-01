@@ -95,8 +95,11 @@ front end over the config-based builder, for existing callers.
 - Default and partially customized steps agree on the shared settings by
   construction, because they read them from the same config. Steps from fully
   custom step builders are not checked.
-- Step fields that must agree with other steps get no default, so a builder
-  that forgets to pass one fails instead of silently using the default.
+- A step field that must agree with other steps should have no default, so a
+  builder that forgets to pass it fails instead of silently using the default.
+  Fields read by a single step, such as the build type of the build system,
+  may keep a default; a custom step builder that creates such a component
+  must pass the config value itself.
 - A new shared setting is one config field, read where it is needed, instead
   of a keyword argument threaded through every builder layer.
 - Step builders run at build time and are not stored, so a `lambda` step
