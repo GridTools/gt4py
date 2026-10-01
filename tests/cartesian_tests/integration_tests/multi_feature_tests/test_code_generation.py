@@ -1815,14 +1815,7 @@ def test_reset_mask_2d(backend: str) -> None:
         pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
         pytest.param(
             "dace:gpu",
-            marks=[
-                pytest.mark.uses_dace,
-                pytest.mark.requires_gpu,
-                pytest.mark.xfail(
-                    raises=SystemExit,
-                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
-                ),
-            ],
+            marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu],
         ),
         pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
     ],
