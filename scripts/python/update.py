@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --only-group scripts python3
 #
 # GT4Py - GridTools Framework
 #
@@ -17,10 +17,10 @@ import re
 import subprocess
 import tomllib
 
-import packaging
 import rich
 import typer
 from helpers import common
+from packaging.version import InvalidVersion, Version
 
 
 class ExitCode(enum.IntEnum):
@@ -86,10 +86,16 @@ def precommit() -> None:
 def package_version(new_version_number: str) -> None:
     """Hardcode a new version-in-git default version, for cases when git is not available."""
     try:
-        packaging.version.Version(new_version_number)  # Validate version string
-    except packaging.InvalidVersion as e:
+        new_version = Version(new_version_number)  # Validate version string
+    except InvalidVersion as e:
         rich.print(f"[red]Error:[/red] '{new_version_number}' is not a valid version string.")
         raise typer.Exit(ExitCode.INVALID_NEW_VERSION_STRING) from e
+    if new_version.local is not None:
+        rich.print(
+            f"[red]Error:[/red] '{new_version_number}' must not have a local version segment "
+            "('+...'): one is appended automatically."
+        )
+        raise typer.Exit(ExitCode.INVALID_NEW_VERSION_STRING)
 
     # Read the current default version from pyproject.toml
     try:
