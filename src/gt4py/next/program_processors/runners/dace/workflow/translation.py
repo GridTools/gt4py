@@ -9,10 +9,9 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+from typing import Any, Final, Optional
 
 import dace
-import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -340,6 +339,13 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
+#: The parameters of `gt_auto_optimize()` that the translation step derives from
+#: its own configuration, and which therefore cannot be customized.
+_DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
+    {"gpu", "constant_symbols", "unit_strides_kind"}
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
@@ -361,6 +367,14 @@ class DaCeTranslator(
     disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.auto_optimize_args and (
+            derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS
+        ):
+            raise ValueError(
+                f"The following optimization arguments cannot be overridden: {derived_args}."
+            )
 
     def generate_sdfg(
         self,
@@ -402,6 +416,11 @@ class DaCeTranslator(
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols=constant_symbols,
+                unit_strides_kind=(
+                    common.DimensionKind.HORIZONTAL
+                    if self.unstructured_horizontal_has_unit_stride
+                    else None
+                ),
                 **auto_optimize_args,
             )
         elif on_gpu:
@@ -467,8 +486,3 @@ class DaCeTranslator(
             code_spec=artifacts.SDFGCodeSpec(),
         )
         return module
-
-
-class DaCeTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeTranslator
