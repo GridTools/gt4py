@@ -164,9 +164,16 @@ def set_dace_config(
     # In debug mode use `development` otherwise use `production`.
     # NOTE: In case you want to run with optimizations, but would like to have the full
     #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
-    #   set to `development` (small case matters).
+    #   set to `development` (small case matters). DaCe applies `DACE_*` env variables
+    #   only when loading the config, and `Config.set()` overrides them afterwards,
+    #   so we need to read the env variable explicitly here.
     dace.Config.set(
-        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
+        "compiler",
+        "build_folder_mode",
+        value=os.environ.get(
+            "DACE_compiler_build_folder_mode",
+            "development" if gtx_config.DEBUG else "production",
+        ),
     )
 
     # We are not interested in storing the history of SDFG transformations.
