@@ -87,7 +87,12 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build a dataflow subgraph."""
 
     @abc.abstractmethod
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType: ...
+
+    @abc.abstractmethod
+    def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
+        """The offset of a connectivity over `local_dim`, see `common.connectivity_key_over`."""
+        ...
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, prefix: str) -> str: ...
@@ -555,21 +560,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
-    offset_provider_type: gtx_common.OffsetProviderType
+    offset_provider_type: gtx_common.TableTypes
     column_axis: Optional[gtx_common.Dimension]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
 
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+    def get_offset_provider_type(self, offset: str) -> gtx_common.NeighborTableType:
         return gtx_common.get_offset_type(self.offset_provider_type, offset)
+
+    def connectivity_key_over(self, local_dim: gtx_common.Dimension) -> str:
+        return gtx_common.connectivity_key_over(self.offset_provider_type, local_dim)
 
     def make_field(
         self,
         data_node: dace_nodes.AccessNode,
         data_type: ts.FieldType,
     ) -> gtir_to_sdfg_types.FieldopData:
-        local_dims = [dim for dim in data_type.dims if dim.kind == gtx_common.DimensionKind.LOCAL]
+        local_dims = [dim for dim in data_type.dims if gtx_common.is_local_dimension(dim)]
         if len(local_dims) == 0:
             # do nothing: the field domain consists of all global dimensions
             field_type = data_type
@@ -578,10 +586,12 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the local dimension is converted into `ListType` data element
             if not isinstance(data_type.dtype, ts.ScalarType):
                 raise ValueError(f"Invalid field type {data_type}.")
-            if not gtx_common.has_offset(self.offset_provider_type, local_dim.tag):
+            try:
+                self.connectivity_key_over(local_dim)
+            except KeyError as ex:
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
-                )
+                ) from ex
             local_type = ts.ListType(element_type=data_type.dtype, offset_type=local_dim)
             field_type = ts.FieldType(
                 dims=[dim for dim in data_type.dims if dim != local_dim], dtype=local_type
@@ -837,9 +847,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         neighbor_table_types = gtx_dace_args.filter_connectivity_types(self.offset_provider_type)
         shape = []
         for dim in dims:
-            if dim.kind == gtx_common.DimensionKind.LOCAL:
+            if gtx_common.is_local_dimension(dim):
                 # for local dimension, the size is taken from the associated connectivity type
-                shape.append(neighbor_table_types[dim.tag].max_neighbors)
+                shape.append(gtx_dace_args.local_dimension_size(name, dim, neighbor_table_types))
             elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
                 shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))
@@ -925,7 +935,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
                 all_dims = gt_type.dims
             else:  # for 'ts.ListType' use 'offset_type' as local dimension
                 assert gt_type.dtype.offset_type is not None
-                assert gt_type.dtype.offset_type.kind == gtx_common.DimensionKind.LOCAL
+                assert gtx_common.is_local_dimension(gt_type.dtype.offset_type)
                 assert isinstance(gt_type.dtype.element_type, ts.ScalarType)
                 dc_dtype = gtx_dace_args.as_dace_type(gt_type.dtype.element_type)
                 all_dims = gtx_common.order_dimensions([*gt_type.dims, gt_type.dtype.offset_type])
@@ -1030,7 +1040,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             self.offset_provider_type
         ).items():
             gt_type = ts.FieldType(
-                dims=[connectivity_type.source_dim, connectivity_type.neighbor_dim],
+                dims=[connectivity_type.domain[0], connectivity_type.domain[1]],
                 dtype=tt.from_dtype(connectivity_type.dtype),
             )
             # We store all connectivity tables as transient arrays here; later, while building
@@ -1386,7 +1396,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
 def lower_program_to_sdfg(
     ir: gtir.Program,
-    offset_provider_type: gtx_common.OffsetProviderType,
+    offset_provider_type: gtx_common.TableTypes,
     column_axis: Optional[gtx_common.Dimension] = None,
 ) -> dace.SDFG:
     """

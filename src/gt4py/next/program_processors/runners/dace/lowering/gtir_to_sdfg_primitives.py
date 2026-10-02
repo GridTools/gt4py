@@ -134,7 +134,7 @@ def _create_field_operator_impl(
         assert isinstance(dataflow_output_desc, dace.data.Array)
         assert len(dataflow_output_desc.shape) == 1
         # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
-        assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
+        assert all(not gtx_common.is_local_dimension(dim) for dim in field_dims)
         assert output_edge.result.gt_dtype.offset_type is not None
         local_dim = output_edge.result.gt_dtype.offset_type
         # construct the full subset according to the canonical field domain
@@ -325,8 +325,10 @@ def _construct_if_branch_output(
         assert out_type.dtype.offset_type is not None
         assert isinstance(out_type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_args.as_dace_type(out_type.dtype.element_type)
-        offset_provider_type = sdfg_builder.get_offset_provider_type(out_type.dtype.offset_type.tag)
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        offset_provider_type = sdfg_builder.get_offset_provider_type(
+            sdfg_builder.connectivity_key_over(out_type.dtype.offset_type)
+        )
+        assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
         shape = [*shape, offset_provider_type.max_neighbors]
 
     out, _ = sdfg_builder.add_temp_array(ctx.sdfg, shape, dtype)

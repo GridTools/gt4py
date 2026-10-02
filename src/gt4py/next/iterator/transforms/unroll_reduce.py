@@ -40,11 +40,11 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
     return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
-def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
+def _get_partial_local_dims(reduce_args: Iterable[itir.Expr]) -> Iterable[common.Dimension]:
     assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
 
     return [
-        arg.type.offset_type.tag  # type: ignore[union-attr] # checked in previous lines
+        arg.type.offset_type  # type: ignore[union-attr] # checked in previous lines
         for arg in reduce_args
         if arg.type.offset_type is not None  # type: ignore[union-attr] # checked in previous lines
     ]
@@ -52,16 +52,18 @@ def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
 
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
-    offset_provider_type: common.OffsetProviderType,
-) -> common.NeighborConnectivityType:
+    offset_provider_type: common.TableTypes,
+) -> common.NeighborTableType:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not cpm.is_applied_reduce(applied_reduce_node):
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
-    connectivities: list[common.NeighborConnectivityType] = []
-    for o in _get_partial_offset_tags(applied_reduce_node.args):
-        conn = common.get_offset_type(offset_provider_type, o)
-        assert isinstance(conn, common.NeighborConnectivityType)
+    connectivities: list[common.NeighborTableType] = []
+    for local_dim in _get_partial_local_dims(applied_reduce_node.args):
+        conn = common.get_offset_type(
+            offset_provider_type, common.connectivity_key_over(offset_provider_type, local_dim)
+        )
+        assert isinstance(conn, common.NeighborTableType)
         connectivities.append(conn)
 
     if not connectivities:
@@ -85,13 +87,13 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     def apply(
         cls,
         node: itir.Node,
-        offset_provider_type: common.OffsetProviderType,
+        offset_provider_type: common.TableTypes,
         uids: utils.IDGeneratorPool,
     ) -> itir.Node:
         return cls(uids=uids).visit(node, offset_provider_type=offset_provider_type)
 
     def _visit_reduce(
-        self, node: itir.FunCall, offset_provider_type: common.OffsetProviderType
+        self, node: itir.FunCall, offset_provider_type: common.TableTypes
     ) -> itir.Expr:
         connectivity_type = _get_connectivity(node, offset_provider_type)
         max_neighbors = connectivity_type.max_neighbors

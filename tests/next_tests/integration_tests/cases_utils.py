@@ -184,7 +184,7 @@ Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
 
-class C2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+class C2VDim(gtx.LocalDimensionIndex): ...
 
 
 V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
@@ -206,7 +206,7 @@ class CartesianGridDescriptor(Protocol):
     def offset_provider(self) -> common.OffsetProvider: ...
 
     @property
-    def offset_provider_type(self) -> common.OffsetProviderType: ...
+    def offset_provider_type(self) -> common.TableTypes: ...
 
 
 def simple_cartesian_grid(
@@ -248,7 +248,7 @@ class MeshDescriptor(Protocol):
     def offset_provider(self) -> common.OffsetProvider: ...
 
     @property
-    def offset_provider_type(self) -> common.OffsetProviderType: ...
+    def offset_provider_type(self) -> common.TableTypes: ...
 
 
 def simple_mesh(allocator) -> MeshDescriptor:

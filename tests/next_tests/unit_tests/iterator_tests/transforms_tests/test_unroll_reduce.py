@@ -11,7 +11,7 @@ import pytest
 from gt4py.next import common, utils
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_local_dims
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -27,17 +27,22 @@ class dummy_neighbor(common.DimensionIndex): ...
 #: The local dimensions of the neighbor lists under test. Each one's `tag` is also its IR offset
 #: string and its offset-provider key: `UnrollReduce` looks a connectivity up by the local
 #: dimension of the list it reduces, so those three names must be a single string (ADR 0029).
-class Dim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+class Dim(common.LocalDimensionIndex): ...
 
 
-class Dim2(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+class Dim2(common.LocalDimensionIndex): ...
 
 
 def dummy_connectivity_type(max_neighbors: int, has_skip_values: bool):
-    return common.NeighborConnectivityType(
-        domain=[dummy_origin, dummy_neighbor],
-        codomain=dummy_codomain,
-        skip_value=common._DEFAULT_SKIP_VALUE if has_skip_values else None,
+    skip_value = common._DEFAULT_SKIP_VALUE if has_skip_values else None
+    return common.NeighborTableType(
+        connectivity=common.ConnectivityType(
+            domain=(dummy_origin, dummy_neighbor),
+            codomain=dummy_codomain,
+            skip_value=skip_value,
+            dtype=None,
+        ),
+        skip_value=skip_value,
         dtype=None,
         max_neighbors=max_neighbors,
     )
@@ -98,10 +103,10 @@ def reduction_if():
         "reduction_if",
     ],
 )
-def test_get_partial_offsets(reduction, request):
-    partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
+def test_get_partial_local_dims(reduction, request):
+    partial_local_dims = _get_partial_local_dims(request.getfixturevalue(reduction).args)
 
-    assert set(partial_offsets) == {Dim.tag}
+    assert set(partial_local_dims) == {Dim}
 
 
 def _expected(red, max_neighbors, has_skip_values, shifted_arg=0):

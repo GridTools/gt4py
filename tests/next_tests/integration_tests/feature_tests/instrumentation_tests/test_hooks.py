@@ -214,7 +214,7 @@ def test_compile_variant_hook(backend: gtx_typing.Backend):
         key: gtx_typing.CompiledProgramsKey,
         backend: gtx_typing.Backend,
         argument_descriptors: dict[type, dict[str, Any]],
-        offset_provider: common.OffsetProviderType | common.OffsetProvider,
+        offset_provider: common.TableTypes | common.OffsetProvider,
     ) -> None:
         callback_results.append(
             (

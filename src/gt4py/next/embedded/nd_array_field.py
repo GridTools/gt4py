@@ -230,7 +230,9 @@ class NdArrayField(
 
     def premap(
         self: NdArrayField,
-        *connectivities: common.Connectivity | fbuiltins.FieldOffset,
+        *connectivities: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
     ) -> NdArrayField:
         """
         Rearrange the field content using the provided connectivities (index mappings).
@@ -305,7 +307,10 @@ class NdArrayField(
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
 
         for connectivity in connectivities:
-            # For neighbor reductions, a FieldOffset is passed instead of an actual Connectivity
+            # For neighbor reductions, a FieldOffset or a connectivity declaration is passed
+            # instead of an actual Connectivity
+            if isinstance(connectivity, common.ConnectivityMeta):
+                connectivity = connectivity.__gt_field_offset__()
             if not isinstance(connectivity, common.Connectivity):
                 assert isinstance(connectivity, fbuiltins.FieldOffset)
                 connectivity = connectivity.as_connectivity_field()
@@ -357,8 +362,10 @@ class NdArrayField(
 
     def __call__(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity
+        | fbuiltins.FieldOffset
+        | type[common.NeighborConnectivity],
+        *args: common.Connectivity | fbuiltins.FieldOffset | type[common.NeighborConnectivity],
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),
@@ -960,11 +967,11 @@ def _make_reduction(
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
         xp = field.array_ns
 
-        if not axis.kind == common.DimensionKind.LOCAL:
+        if not common.is_local_dimension(axis):
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
-        if len([d for d in field.domain.dims if d.kind is common.DimensionKind.LOCAL]) > 1:
+        if len([d for d in field.domain.dims if common.is_local_dimension(d)]) > 1:
             raise NotImplementedError(
                 "Reducing a field with more than one local dimension is not supported."
             )
@@ -972,8 +979,8 @@ def _make_reduction(
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
-            current_offset_provider, axis.tag
-        )  # assumes offset and local dimension have same name
+            current_offset_provider, common.connectivity_key_over(current_offset_provider, axis)
+        )
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 

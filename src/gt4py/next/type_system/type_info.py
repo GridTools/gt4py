@@ -409,7 +409,7 @@ def is_local_field(type_: ts.FieldType) -> bool:
 
     Examples:
         >>> class V(common.DimensionIndex): ...
-        >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+        >>> class V2E(common.LocalDimensionIndex): ...
         >>> is_local_field(
         ...     ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
         ... )
@@ -417,7 +417,7 @@ def is_local_field(type_: ts.FieldType) -> bool:
         >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
         False
     """
-    return any(dim.kind == common.DimensionKind.LOCAL for dim in type_.dims)
+    return any(common.is_local_dimension(dim) for dim in type_.dims)
 
 
 def contains_local_field(type_: ts.TypeSpec) -> bool:
@@ -533,7 +533,7 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
         True
 
         >>> is_concretizable(
-        ...     ts.DeferredType(constraint=ts.OffsetType),
+        ...     ts.DeferredType(constraint=ts.ShiftType),
         ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
         ... )
         False
@@ -587,7 +587,7 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+    >>> class V2E(common.LocalDimensionIndex): ...
     >>> list_dtype = ts.ListType(element_type=dtype, offset_type=V2E)
     >>> promote(
     ...     ts.FieldType(dims=[I], dtype=list_dtype),
@@ -669,19 +669,19 @@ def return_type_field(
     except ValueError as ex:
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
-    if not isinstance(with_args[0], ts.OffsetType):
-        raise ValueError(f"First argument must be of type '{ts.OffsetType}', got '{with_args[0]}'.")
+    if not isinstance(with_args[0], ts.ShiftType):
+        raise ValueError(f"First argument must be of type '{ts.ShiftType}', got '{with_args[0]}'.")
 
-    source_dim = with_args[0].source
-    target_dims = with_args[0].target
+    codomain = with_args[0].codomain
+    domain_dims = with_args[0].domain
     new_dims = []
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     for d in field_type.dims:
-        if d != source_dim:
+        if d != codomain:
             new_dims.append(d)
         else:
-            new_dims.extend(target_dims)
+            new_dims.extend(domain_dims)
     return ts.FieldType(dims=new_dims, dtype=field_type.dtype)
 
 
@@ -890,10 +890,10 @@ def function_signature_incompatibilities_field(
         yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
     for arg in args:
-        if not isinstance(arg, ts.OffsetType):
-            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
+        if not isinstance(arg, ts.ShiftType):
+            yield f"Expected arguments to be of type '{ts.ShiftType}', got '{arg}'."
             return
-        if len(args) > 1 and len(arg.target) > 1:
+        if len(args) > 1 and len(arg.domain) > 1:
             yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
             return
 
@@ -901,15 +901,15 @@ def function_signature_incompatibilities_field(
         yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
-    source_dim = args[0].source  # type: ignore[attr-defined] # ensured by loop above
-    target_dims = args[0].target  # type: ignore[attr-defined] # ensured by loop above
+    codomain = args[0].codomain  # type: ignore[attr-defined] # ensured by loop above
+    domain_dims = args[0].domain  # type: ignore[attr-defined] # ensured by loop above
     assert field_type.dims is not ...
-    if field_type.dims and source_dim not in field_type.dims:
+    if field_type.dims and codomain not in field_type.dims:
         yield (
             f"Incompatible offset can not shift field defined on "
             f"{', '.join([dim.__qualname__ for dim in field_type.dims])} from "
-            f"{source_dim.__qualname__} to target dim(s): "
-            f"{', '.join([dim.tag for dim in target_dims])}"
+            f"{codomain.__qualname__} to target dim(s): "
+            f"{', '.join([dim.tag for dim in domain_dims])}"
         )
 
 

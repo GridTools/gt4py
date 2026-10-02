@@ -311,7 +311,7 @@ def _transform_stmt(
 
 def create_global_tmps(
     program: itir.Program,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     #: A dictionary mapping axes names to their length. See :func:`infer_domain.infer_expr` for
     #: more details.
     symbolic_domain_sizes: Optional[dict[str, itir.Expr]] = None,

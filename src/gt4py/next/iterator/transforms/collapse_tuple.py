@@ -187,7 +187,7 @@ class CollapseTuple(
         node: itir.Node,
         *,
         remove_letified_make_tuple_elements: bool = True,
-        offset_provider_type: Optional[common.OffsetProviderType] = None,
+        offset_provider_type: Optional[common.TableTypes] = None,
         within_stencil: Optional[bool] = None,
         # manually passing enabled transformations is mostly for allowing separate testing of the modes
         enabled_transformations: Optional[Transformation] = None,

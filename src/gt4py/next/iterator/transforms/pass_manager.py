@@ -55,7 +55,7 @@ def _max_domain_range_sizes(offset_provider: common.OffsetProvider) -> dict[str,
     sizes: dict[str, int] = {}
     for provider in offset_provider.values():
         if common.is_neighbor_table(provider):
-            src_dim = provider.__gt_type__().source_dim.tag
+            src_dim = provider.__gt_type__().domain[0].tag
             codomain_dim = provider.__gt_type__().codomain.tag
             sizes[src_dim] = max(sizes.get(src_dim, 0), provider.ndarray.shape[0])
             sizes[codomain_dim] = max(
@@ -134,7 +134,7 @@ def _process_symbolic_domains_option(
 def apply_common_transforms(
     ir: itir.Program,
     *,
-    offset_provider: common.OffsetProvider | common.OffsetProviderType,
+    offset_provider: common.OffsetProvider | common.TableTypes,
     extract_temporaries=False,
     unroll_reduce=False,
     common_subexpression_elimination=True,
@@ -147,7 +147,7 @@ def apply_common_transforms(
     use_max_domain_range_on_unstructured_shift: Optional[bool] = None,
 ) -> itir.Program:
     assert isinstance(ir, itir.Program)
-    # TODO(tehrengruber): Allow `common.OffsetProviderType`, but domain inference currently
+    # TODO(tehrengruber): Allow `common.TableTypes`, but domain inference currently
     #  relies on static information or `symbolic_domain_sizes`.
     assert common.is_offset_provider(offset_provider)
 
