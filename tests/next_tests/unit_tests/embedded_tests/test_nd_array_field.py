@@ -744,8 +744,11 @@ def test_premap_chained_connectivities_raises():
         f.premap(c1, c2)
 
 
-def test_premap_non_contiguous_inverse_image_raises():
-    # A connectivity whose in-range indices are not a contiguous block cannot yield a contiguous domain.
+@pytest.mark.parametrize("fill_holes", [True, False])
+def test_premap_non_contiguous_inverse_image_has_holes(monkeypatch, fill_holes):
+    # An out-of-range index in the interior is a hole: the domain covers it, its value is NaN in
+    # debug mode and unspecified otherwise.
+    monkeypatch.setattr(nd_array_field, "_FILL_GATHER_HOLES", fill_holes)
     V = Dimension("V")
     E = Dimension("E")
 
@@ -758,8 +761,12 @@ def test_premap_non_contiguous_inverse_image_raises():
         codomain=V,
     )
 
-    with pytest.raises(ValueError, match="non-contiguous"):
-        f.premap(conn)
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(dims=(E,), ranges=(UnitRange(0, 5),))
+    assert np.array_equal(result.ndarray[[0, 1, 3, 4]], [0.0, 1.0, 3.0, 4.0])
+    if fill_holes:
+        assert np.isnan(result.ndarray[2])
 
 
 def test_premap_disjoint_inverse_image_raises():
@@ -777,6 +784,79 @@ def test_premap_disjoint_inverse_image_raises():
 
     with pytest.raises(ValueError, match="empty"):
         f.premap(conn)
+
+
+_C = Dimension("C")
+_E = Dimension("E")
+_C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
+
+
+def _c2e(table, skip_value=None):
+    table = np.asarray(table, dtype=np.int32)
+    return common._connectivity(
+        table,
+        domain=common.Domain(
+            dims=(_C, _C2E), ranges=(UnitRange(0, table.shape[0]), UnitRange(0, table.shape[1]))
+        ),
+        codomain=_E,
+        skip_value=skip_value,
+    )
+
+
+@pytest.mark.parametrize("fill_holes", [True, False])
+@pytest.mark.parametrize("dtype", [float, np.int32])
+def test_premap_holes_outside_read_points(monkeypatch, fill_holes, dtype):
+    # Cells 0, 1 each read one edge outside the field's edge range: holes. The other points are exact;
+    # the holes are NaN for floats in debug mode and unspecified otherwise.
+    monkeypatch.setattr(nd_array_field, "_FILL_GATHER_HOLES", fill_holes)
+    f = common._field(
+        np.arange(2, 8).astype(dtype), domain=common.Domain(dims=(_E,), ranges=(UnitRange(2, 8),))
+    )
+    table = np.asarray([[0, 2, 3], [1, 4, 5], [2, 5, 6], [3, 4, 7]])
+
+    result = f.premap(_c2e(table))
+
+    assert result.domain == common.Domain(
+        dims=(_C, _C2E), ranges=(UnitRange(0, 4), UnitRange(0, 3))
+    )
+    hole = table < 2
+    assert np.array_equal(result.ndarray[~hole], table[~hole].astype(dtype))
+    if fill_holes and dtype is float:
+        assert np.all(np.isnan(result.ndarray[hole]))
+
+
+def test_premap_partial_local_dimension_raises():
+    # Only neighbour 2 of every cell is in range: narrowing the local dimension would drop neighbours.
+    f = common._field(
+        np.arange(4).astype(float), domain=common.Domain(dims=(_E,), ranges=(UnitRange(4, 8),))
+    )
+    conn = _c2e([[0, 1, 4], [1, 2, 5], [2, 3, 6], [3, 0, 7]])
+
+    with pytest.raises(ValueError, match="partial local dimension"):
+        f.premap(conn)
+
+
+def test_premap_partial_local_dimension_of_skip_values():
+    f = common._field(
+        np.arange(4).astype(float), domain=common.Domain(dims=(_E,), ranges=(UnitRange(0, 4),))
+    )
+    conn = _c2e([[-1, -1, 0], [-1, -1, 1], [-1, 2, -1], [3, -1, -1]], skip_value=-1)
+
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_C, _C2E), ranges=(UnitRange(0, 4), UnitRange(0, 3))
+    )
+    assert np.array_equal(result.ndarray[:2, 2], [0.0, 1.0])
+
+    conn = _c2e([[-1, -1, 0], [-1, -1, 1], [-1, -1, 2], [-1, -1, 3]], skip_value=-1)
+
+    result = f.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_C, _C2E), ranges=(UnitRange(0, 4), UnitRange(2, 3))
+    )
+    assert np.array_equal(result.ndarray[:, 0], [0.0, 1.0, 2.0, 3.0])
 
 
 def test_as_offset_1d():
@@ -852,8 +932,10 @@ def test_as_offset_boundary_narrows_domain():
     assert np.all(result.ndarray == f.ndarray[0:9])  # out[i] == f[i - 1]
 
 
-def test_as_offset_scattered_oob_raises():
-    # An out-of-bounds shift in the interior cannot yield a contiguous domain.
+@pytest.mark.parametrize("fill_holes", [True, False])
+def test_as_offset_scattered_oob_has_holes(monkeypatch, fill_holes):
+    # An out-of-bounds shift in the interior is a hole: NaN in debug mode, unspecified otherwise.
+    monkeypatch.setattr(nd_array_field, "_FILL_GATHER_HOLES", fill_holes)
     I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
@@ -865,8 +947,13 @@ def test_as_offset_scattered_oob_raises():
         domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),)),
     )
 
-    with pytest.raises(ValueError, match="non-contiguous"):
-        f.premap(as_offset(Ioff, off))
+    result = f.premap(as_offset(Ioff, off))
+
+    not_hole = np.arange(10) != 3
+    assert result.domain == f.domain
+    assert np.array_equal(result.ndarray[not_hole], f.ndarray[not_hole])
+    if fill_holes:
+        assert np.isnan(result.ndarray[3])
 
 
 def test_as_offset_introduces_dimension():
@@ -1446,11 +1533,12 @@ def test_connectivity_field_inverse_image_2d_domain():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+    # the smallest hypercube, with holes
+    result = c2v_conn.inverse_image(UnitRange(1, 3))
+    assert result == c2v_conn.domain
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+    result = c2v_conn.inverse_image(UnitRange(2, 3))
+    assert result == c2v_conn.domain
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
@@ -1469,11 +1557,12 @@ def test_connectivity_field_inverse_image_non_contiguous():
     result = e2v_conn.inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, 6))
+    # the smallest hypercube, with holes
+    result = e2v_conn.inverse_image(UnitRange(V_START, 6))
+    assert result[0] == (E, UnitRange(V_START, 8))
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
+    result = e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
+    assert result[0] == (E, UnitRange(V_START, E_STOP))
 
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
@@ -1526,21 +1615,24 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+    # the smallest hypercube, with holes
+    result = c2v_conn.inverse_image(UnitRange(1, 3))
+    assert result == c2v_conn.domain
 
-    with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+    result = c2v_conn.inverse_image(UnitRange(2, 3))
+    assert result == c2v_conn.domain
 
 
 @pytest.mark.parametrize(
     "index_array, expected",
     [
-        ([0, 0, 1], [(0, 2)]),
-        ([0, 1, 0], None),
-        ([0, -1, 0], [(0, 3)]),
-        ([[1, 1, 1], [1, 0, 0]], [(1, 2), (1, 3)]),
-        ([[1, 0, -1], [1, 0, 0]], [(0, 2), (1, 3)]),
+        ([0, 0, 1], ([(0, 2)], False)),
+        ([0, 1, 0], ([(0, 3)], True)),
+        ([0, -1, 0], ([(0, 3)], False)),
+        ([[1, 1, 1], [1, 0, 0]], ([(1, 2), (1, 3)], False)),
+        ([[1, 0, -1], [1, 0, 0]], ([(0, 2), (1, 3)], False)),
+        ([[0, 1, 0], [1, 0, 0]], ([(0, 2), (0, 3)], True)),
+        ([1, 2, 3], None),
     ],
 )
 def test_hyperslice(index_array, expected):
@@ -1548,7 +1640,8 @@ def test_hyperslice(index_array, expected):
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
-    expected = tuple(slice(*e) for e in expected) if expected is not None else None
+    if expected is not None:
+        expected = (tuple(slice(*e) for e in expected[0]), expected[1])
 
     result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
 
