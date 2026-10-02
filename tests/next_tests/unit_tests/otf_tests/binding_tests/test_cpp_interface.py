@@ -11,7 +11,7 @@ import pytest
 import gt4py.next as gtx
 import gt4py.next.otf.binding.cpp_interface as cpp
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.eve.formatting import format_cpp_source
+from gt4py.eve import formatting
 from gt4py.next.otf.binding import interface
 
 
@@ -27,10 +27,10 @@ def function_scalar_example():
 
 
 def test_render_function_declaration_scalar(function_scalar_example):
-    rendered = format_cpp_source(
+    rendered = formatting.format_cpp_source(
         cpp.render_function_declaration(function_scalar_example, "return;")
     )
-    expected = format_cpp_source("""\
+    expected = formatting.format_cpp_source("""\
 decltype(auto) example(double a, std::int64_t b) {
         return;
     }\
@@ -39,10 +39,10 @@ decltype(auto) example(double a, std::int64_t b) {
 
 
 def test_render_function_call_scalar(function_scalar_example):
-    rendered = format_cpp_source(
+    rendered = formatting.format_cpp_source(
         cpp.render_function_call(function_scalar_example, args=["13.6", "get_arg()"])
     )
-    expected = format_cpp_source("""example(13.6, get_arg())""")
+    expected = formatting.format_cpp_source("""example(13.6, get_arg())""")
     assert rendered == expected
 
 
@@ -69,10 +69,10 @@ def function_buffer_example():
 
 
 def test_render_function_declaration_buffer(function_buffer_example):
-    rendered = format_cpp_source(
+    rendered = formatting.format_cpp_source(
         cpp.render_function_declaration(function_buffer_example, "return;")
     )
-    expected = format_cpp_source("""\
+    expected = formatting.format_cpp_source("""\
 template <class ArgT0, class ArgT1>
         decltype(auto) example(ArgT0&& a_buf, ArgT1&& b_buf) {
         return;
@@ -82,10 +82,10 @@ template <class ArgT0, class ArgT1>
 
 
 def test_render_function_call_buffer(function_buffer_example):
-    rendered = format_cpp_source(
+    rendered = formatting.format_cpp_source(
         cpp.render_function_call(function_buffer_example, args=["get_arg_1()", "get_arg_2()"])
     )
-    expected = format_cpp_source("""example(get_arg_1(), get_arg_2())""")
+    expected = formatting.format_cpp_source("""example(get_arg_1(), get_arg_2())""")
     assert rendered == expected
 
 
@@ -114,8 +114,10 @@ def function_tuple_example():
 
 
 def test_render_function_declaration_tuple(function_tuple_example):
-    rendered = format_cpp_source(cpp.render_function_declaration(function_tuple_example, "return;"))
-    expected = format_cpp_source("""\
+    rendered = formatting.format_cpp_source(
+        cpp.render_function_declaration(function_tuple_example, "return;")
+    )
+    expected = formatting.format_cpp_source("""\
 template <class ArgT0>
         decltype(auto) example(ArgT0&& a_buf) {
         return;
@@ -125,8 +127,8 @@ template <class ArgT0>
 
 
 def test_render_function_call_tuple(function_tuple_example):
-    rendered = format_cpp_source(
+    rendered = formatting.format_cpp_source(
         cpp.render_function_call(function_tuple_example, args=["get_arg_1()"])
     )
-    expected = format_cpp_source("""example(get_arg_1())""")
+    expected = formatting.format_cpp_source("""example(get_arg_1())""")
     assert rendered == expected

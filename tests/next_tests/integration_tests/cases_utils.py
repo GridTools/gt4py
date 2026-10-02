@@ -143,10 +143,10 @@ def debug_itir(tree):
     """Compare tree snippets while debugging."""
     from devtools import debug
 
-    from gt4py.eve.formatting import format_python_source
+    from gt4py.eve import formatting
     from gt4py.next.program_processors import EmbeddedDSL
 
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
+    debug(formatting.format_python_source(EmbeddedDSL.apply(tree)))
 
 
 DimsType = TypeVar("DimsType")
