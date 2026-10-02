@@ -126,7 +126,7 @@ def custom_compiled_program_callback(
 
 
 @pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: getattr(b, "name", str(b)))
-def test_program_call_hooks(backend: gtx_typing.Backend):
+def test_program_call_hooks(backend: gtx_typing.Toolchain):
     size = 10
     a_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
     b_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
@@ -208,11 +208,11 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 @pytest.mark.parametrize(
     "backend", [b for b in BACKENDS if b is not None], ids=lambda b: getattr(b, "name", str(b))
 )
-def test_compile_variant_hook(backend: gtx_typing.Backend):
+def test_compile_variant_hook(backend: gtx_typing.Toolchain):
     def custom_compile_variant_hook(
         program_pool: "CompiledProgramsPool",
         key: gtx_typing.CompiledProgramsKey,
-        backend: gtx_typing.Backend,
+        backend: gtx_typing.Toolchain,
         argument_descriptors: dict[type, dict[str, Any]],
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:

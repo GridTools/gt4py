@@ -39,7 +39,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Backend]):
+def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Toolchain]):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return

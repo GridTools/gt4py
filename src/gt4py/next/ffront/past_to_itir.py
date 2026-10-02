@@ -35,7 +35,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 # FIXME[#1582](tehrengruber): This should only depend on the program not the arguments. Remove
 #  dependency as soon as column axis can be deduced from ITIR in consumers of the CompilableProgram.
-def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
+def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgram:
     """
     Lower a PAST program definition to Iterator IR.
 
@@ -63,21 +63,21 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
         ... )
 
         >>> itir_copy = past_to_gtir(
-        ...     workflow.ConcreteArtifact(copy_program.past_stage, compile_time_args)
+        ...     workflow.ProgramWithArgs(copy_program.past_stage, compile_time_args)
         ... )
 
-        >>> print(itir_copy.data.id)
+        >>> print(itir_copy.definition.id)
         copy_program
 
-        >>> print(type(itir_copy.data))
+        >>> print(type(itir_copy.definition))
         <class 'gt4py.next.iterator.ir.Program'>
     """
-    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.data.closure_vars)
+    all_closure_vars = transform_utils._get_closure_vars_recursively(inp.definition.closure_vars)
     offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
         all_closure_vars, fbuiltins.FieldOffset, common.Dimension
     )
     grid_type = transform_utils._deduce_grid_type(
-        inp.data.grid_type, offsets_and_dimensions.values()
+        inp.definition.grid_type, offsets_and_dimensions.values()
     )
 
     gt_callables = transform_utils._filter_closure_vars_by_type(
@@ -94,7 +94,7 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
         lowered_funcs.append(gt_callable.__gt_gtir__())
 
     itir_program = ProgramLowering.apply(
-        inp.data.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        inp.definition.past_node, function_definitions=lowered_funcs, grid_type=grid_type
     )
 
     # TODO(tehrengruber): Put this in a dedicated transformation step.
@@ -141,15 +141,15 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
         inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
     )
 
-    if config.DEBUG or inp.data.debug:
+    if config.DEBUG or inp.definition.debug:
         devtools.debug(itir_program)
 
-    return stages.CompilableProgramDef(data=itir_program, args=compile_time_args)
+    return stages.CompilableProgram(definition=itir_program, args=compile_time_args)
 
 
 def past_to_gtir_factory(
     cached: bool = True,
-) -> workflow.Workflow[ConcretePASTProgramDef, stages.CompilableProgramDef]:
+) -> workflow.Workflow[ConcretePASTProgramDef, stages.CompilableProgram]:
     wf = workflow.make_step(past_to_gtir)
     if cached:
         wf = workflow.CachedStep.in_memory(
