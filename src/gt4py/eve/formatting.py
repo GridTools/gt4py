@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import subprocess
 import sys
@@ -54,7 +55,7 @@ def format_cpp_source(source: str) -> str:
     """Format C++ source code with `clang-format` using the LLVM style.
 
     The executable can be overridden with the `CLANG_FORMAT_EXECUTABLE`
-    environment variable.
+    environment variable. Its availability is checked once, on first use.
 
     Args:
         source: C++ source code.
@@ -63,11 +64,11 @@ def format_cpp_source(source: str) -> str:
         The formatted source code, or `source` unchanged if `clang-format` is
         not available or formatting fails.
     """
-    args = [
-        os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format"),
-        "--style=LLVM",
-        "--assume-filename=_gt4py_generated_file.cpp",
-    ]
+    executable = _get_clang_format()
+    if executable is None:
+        return source
+
+    args = [executable, "--style=LLVM", "--assume-filename=_gt4py_generated_file.cpp"]
     try:
         # use a timeout as clang-format used to deadlock on some sources
         return subprocess.run(
@@ -75,3 +76,19 @@ def format_cpp_source(source: str) -> str:
         ).stdout
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return source
+
+
+@functools.cache
+def _get_clang_format() -> str | None:
+    """Return the `clang-format` executable, or `None` if it is not available.
+
+    The result is cached, so the executable is probed only once.
+    """
+    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
+    try:
+        if subprocess.run([executable, "--version"], capture_output=True).returncode != 0:
+            return None
+    except Exception:
+        return None
+
+    return executable

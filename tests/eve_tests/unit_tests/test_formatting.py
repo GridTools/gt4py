@@ -64,6 +64,13 @@ def test_format_python_source_without_black(monkeypatch):
 
 
 # -- C++ tests --
+@pytest.fixture(autouse=True)
+def clear_clang_format_cache():
+    formatting._get_clang_format.cache_clear()
+    yield
+    formatting._get_clang_format.cache_clear()
+
+
 @pytest.mark.skipif(shutil.which("clang-format") is None, reason="clang-format not available")
 def test_format_cpp_source(monkeypatch):
     monkeypatch.delenv("CLANG_FORMAT_EXECUTABLE", raising=False)
@@ -81,3 +88,17 @@ def test_format_cpp_source_missing_executable(monkeypatch):
 def test_format_cpp_source_failing_executable(monkeypatch):
     monkeypatch.setenv("CLANG_FORMAT_EXECUTABLE", "false")
     assert formatting.format_cpp_source(UNFORMATTED_CPP) == UNFORMATTED_CPP
+
+
+@pytest.mark.skipif(shutil.which("false") is None, reason="`false` executable not available")
+def test_format_cpp_source_formatting_failure(monkeypatch):
+    # The executable passes the availability probe but fails when formatting.
+    monkeypatch.setattr(formatting, "_get_clang_format", lambda: "false")
+    assert formatting.format_cpp_source(UNFORMATTED_CPP) == UNFORMATTED_CPP
+
+
+def test_format_cpp_source_probes_executable_once(monkeypatch):
+    monkeypatch.setenv("CLANG_FORMAT_EXECUTABLE", "/nonexistent")
+    formatting.format_cpp_source(UNFORMATTED_CPP)
+    formatting.format_cpp_source(UNFORMATTED_CPP)
+    assert formatting._get_clang_format.cache_info().misses == 1
