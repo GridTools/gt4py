@@ -18,7 +18,7 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, recipes, workflow
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.workflow import translation as gtx_dace_translation
 from gt4py.next.type_system import type_specifications as ts
@@ -206,17 +206,17 @@ def _translation_only_toolchain(backend: gtx_backend.Toolchain) -> gtx_backend.T
 
     Raises:
         NotImplementedError: If `backend` is not shaped like the standard dace
-            toolchain, i.e. an 'OTFCompileWorkflow' whose translation step is a
+            toolchain, i.e. a 'CompilePipeline' whose translation step is a
             'DaCeTranslator' (optionally wrapped in a 'CachedStep').
     """
     pipeline = backend.backend
-    if not isinstance(pipeline, recipes.OTFCompileWorkflow):
+    if not isinstance(pipeline, gtx_backend.CompilePipeline):
         raise NotImplementedError(
             f"Toolchain '{backend.name}' cannot be converted to an SDFG: SDFG"
-            " conversion requires the standard 'OTFCompileWorkflow' compile"
+            " conversion requires the standard 'CompilePipeline' compile"
             f" pipeline, but this toolchain's backend is a '{type(pipeline).__name__}'."
         )
-    translation: workflow.Workflow[Any, Any] = pipeline.translation
+    translation: workflow.Step[Any, Any] = pipeline.translation
     if isinstance(translation, workflow.CachedStep):
         # The persistent translation cache is keyed on the untransformed program,
         # so it must not see the pre-transformed one handed to this variant.
