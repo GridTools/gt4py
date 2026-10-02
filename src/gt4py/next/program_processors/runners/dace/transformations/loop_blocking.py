@@ -111,7 +111,9 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
         super().__init__()
         if blocking_parameters is not None:
             self.blocking_parameters = [
-                gtx_dace_lowering.get_map_variable(p) if isinstance(p, gtx_common.Dimension) else p
+                gtx_dace_lowering.get_map_variable(p)
+                if isinstance(p, gtx_common.DimensionMeta)
+                else p
                 for p in blocking_parameters
             ]
         else:

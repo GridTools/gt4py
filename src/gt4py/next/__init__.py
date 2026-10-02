@@ -22,19 +22,24 @@ module in question is a submodule, defines `__all__` and exports many public API
 from .._core.definitions import CUPY_DEVICE_TYPE, Device, DeviceType, is_scalar_type
 from . import common, ffront, iterator, program_processors, typing
 from .common import (
+    AnyCartesianAxisIndex,
+    CartesianAxisIndex,
     CartesianConnectivity,
     Connectivity,
     Dimension,
+    DimensionIndex,
     DimensionKind,
     Dims,
     Domain,
     Field,
     GridType,
+    Staggered,
     UnitRange,
     as_non_staggered,
     domain,
     flip_staggered,
     is_staggered,
+    resolve,
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
@@ -115,7 +120,12 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "is_scalar_type",
     # from common
     "Dimension",
+    "DimensionIndex",
+    "AnyCartesianAxisIndex",
+    "CartesianAxisIndex",
     "DimensionKind",
+    "Staggered",
+    "resolve",
     "Dims",
     "Field",
     "CartesianConnectivity",

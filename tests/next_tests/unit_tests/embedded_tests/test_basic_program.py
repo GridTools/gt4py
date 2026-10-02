@@ -11,7 +11,7 @@ import numpy as np
 import gt4py.next as gtx
 
 
-IDim = gtx.Dimension("IDim")
+class IDim(gtx.CartesianAxisIndex): ...
 
 
 @gtx.field_operator

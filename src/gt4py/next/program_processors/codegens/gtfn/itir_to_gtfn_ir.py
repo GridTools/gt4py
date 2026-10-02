@@ -107,7 +107,9 @@ def _collect_dimensions_from_domain(
             for nr in domain.args:
                 assert isinstance(nr, itir.FunCall)
                 dim_name = _name_from_named_range(nr)
-                offset_definitions[dim_name] = TagDefinition(name=Sym(id=dim_name))
+                offset_definitions[dim_name] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim_name))
+                )
         elif domain.fun == itir.SymRef(id="unstructured_domain"):
             if len(domain.args) > 2:
                 raise ValueError("Unstructured_domain must not have more than 2 arguments.")
@@ -116,14 +118,14 @@ def _collect_dimensions_from_domain(
                 assert isinstance(horizontal_range, itir.FunCall)
                 horizontal_name = _name_from_named_range(horizontal_range)
                 offset_definitions[horizontal_name] = TagDefinition(
-                    name=Sym(id=horizontal_name), alias=_horizontal_dimension
+                    name=Sym(id=common.codegen_name(horizontal_name)), alias=_horizontal_dimension
                 )
             if len(domain.args) > 1:
                 vertical_range = domain.args[1]
                 assert isinstance(vertical_range, itir.FunCall)
                 vertical_name = _name_from_named_range(vertical_range)
                 offset_definitions[vertical_name] = TagDefinition(
-                    name=Sym(id=vertical_name), alias=_vertical_dimension
+                    name=Sym(id=common.codegen_name(vertical_name)), alias=_vertical_dimension
                 )
         else:
             raise AssertionError(
@@ -148,7 +150,9 @@ def _collect_dimensions_from_params(
         for type_ in type_info.primitive_constituents(param.type):
             if isinstance(type_, ts.FieldType):
                 for dim in type_.dims:
-                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                    offset_definitions[dim.tag] = TagDefinition(
+                        name=Sym(id=common.codegen_name(dim.tag))
+                    )
     return offset_definitions
 
 
@@ -170,31 +174,35 @@ def _collect_offset_definitions(
         ]
         for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim.tag))
+                )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if dim.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_vertical_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim.tag)), alias=_vertical_dimension
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
-            offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
-            if offset_name != connectivity_type.neighbor_dim.value:
-                offset_definitions[connectivity_type.neighbor_dim.value] = TagDefinition(
-                    name=Sym(id=connectivity_type.neighbor_dim.value)
+            offset_definitions[offset_name] = TagDefinition(
+                name=Sym(id=common.codegen_name(offset_name))
+            )
+            if offset_name != connectivity_type.neighbor_dim.tag:
+                offset_definitions[connectivity_type.neighbor_dim.tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(connectivity_type.neighbor_dim.tag))
                 )
 
             for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_horizontal_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=common.codegen_name(dim.tag)), alias=_horizontal_dimension
                 )
         else:
             raise AssertionError(
@@ -210,11 +218,15 @@ def _add_staggered_aliases(
     result: dict[str, TagDefinition] = {}
     aliases: dict[str, TagDefinition] = {}
     for name, tag_def in offset_definitions.items():
-        if tag_def.alias is None and common.is_staggered(common.Dimension(value=name)):
-            base_name = common.as_non_staggered(common.Dimension(value=name)).value
+        # NOTE: read from the tag grammar, not by resolving `name`: this dict mixes dimension
+        # tags with offset tags, and an offset tag is not a dimension and cannot be resolved.
+        if tag_def.alias is None and (base_name := common.staggered_base_tag(name)) is not None:
             # ensure the base tag exists (as alias target and loop dimension) in this position
-            result.setdefault(base_name, TagDefinition(name=Sym(id=base_name)))
-            aliases[name] = TagDefinition(name=Sym(id=name), alias=SymRef(id=base_name))
+            result.setdefault(base_name, TagDefinition(name=Sym(id=common.codegen_name(base_name))))
+            aliases[name] = TagDefinition(
+                name=Sym(id=common.codegen_name(name)),
+                alias=SymRef(id=common.codegen_name(base_name)),
+            )
         else:
             result[name] = tag_def
     return {**result, **aliases}
@@ -242,11 +254,16 @@ class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
             assert isinstance(node.args[0], itir.FunCall)
             first_axis_literal = node.args[0].args[0]
             assert isinstance(first_axis_literal, itir.AxisLiteral)
-            if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
+            if ir_utils_misc.dim_from_axis_literal(first_axis_literal).kind == (
+                itir.DimensionKind.VERTICAL
+            ):
                 assert len(node.args) == 2
                 assert isinstance(node.args[1], itir.FunCall)
                 assert isinstance(node.args[1].args[0], itir.AxisLiteral)
-                assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
+                assert (
+                    ir_utils_misc.dim_from_axis_literal(node.args[1].args[0]).kind
+                    == itir.DimensionKind.HORIZONTAL
+                )
                 return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
         return node
 
@@ -406,7 +423,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         assert isinstance(node.type, ts.DimensionType)
-        return Literal(value=node.type.dim.value, type="axis_literal")
+        return Literal(value=node.type.dim.tag, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
@@ -491,7 +508,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     common.get_offset_type(self.offset_provider_type, o),
                     common.NeighborConnectivityType,
                 ):
-                    connectivities.append(SymRef(id=o))
+                    # `o` is an offset-provider key, i.e. a qualified tag: mangle it exactly as
+                    # its `TagDefinition` was, or the reference names an undeclared tag type.
+                    connectivities.append(SymRef(id=common.codegen_name(o)))
         return UnstructuredDomain(
             tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )
@@ -673,12 +692,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 init=self.visit(stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
-            assert isinstance(column_axis, common.Dimension)
+            assert isinstance(column_axis, common.DimensionMeta)
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
-                axis=SymRef(id=column_axis.value),
+                # the column axis names its `generated::<name>_t` tag type: mangle as declared
+                axis=SymRef(id=common.codegen_name(column_axis.tag)),
             )
         assert projector is None  # only scans have projectors
         return StencilExecution(

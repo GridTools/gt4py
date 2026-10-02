@@ -54,7 +54,9 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
+    # NOTE: `name` is an offset-provider key, i.e. a qualified tag, which is not a valid SDFG
+    # array name; parse it back with `from_codegen_name` (see `is_connectivity_identifier`).
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{gtx_common.codegen_name(name)}"
 
 
 def is_connectivity_identifier(
@@ -67,7 +69,7 @@ def is_connectivity_identifier(
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
     else:
-        return gtx_common.has_offset(offset_provider_type, m[1])
+        return gtx_common.has_offset(offset_provider_type, gtx_common.from_codegen_name(m[1]))
 
 
 def _field_symbol(
@@ -77,11 +79,11 @@ def _field_symbol(
     offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
-        name = f"__{field_name}_{dim.value}_{sym}"
+        name = f"__{field_name}_{gtx_common.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
-        assert m[1] in offset_provider_type
-        offset = m[1]
+        offset = gtx_common.from_codegen_name(m[1])
+        assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
         if dim == conn_type.source_dim:
@@ -109,22 +111,21 @@ def field_stride_symbol(
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
-def _range_symbol_name(field_name: str, axis: str) -> str:
+def _range_symbol_name(field_name: str, dim: gtx_common.Dimension) -> str:
     """Common part of the name for the range start/stop symbols."""
-    dim = gtx_common.Dimension(axis)
     field_range = im.call("get_domain_range")(field_name, dim)
     return gtir_python_codegen.get_source(field_range)
 
 
 def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the start symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_0"
+    name = f"{_range_symbol_name(field_name, dim)}_0"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
 def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
     """Format name of the stop symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_1"
+    name = f"{_range_symbol_name(field_name, dim)}_1"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 

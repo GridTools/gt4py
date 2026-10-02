@@ -102,7 +102,7 @@ def primitive_constituents(
     Return the primitive types contained in a composite type.
 
     >>> from gt4py.next import common
-    >>> I = common.Dimension(value="I")
+    >>> class I(common.CartesianAxisIndex): ...
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
@@ -391,10 +391,10 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     Examples:
         >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
         []
-        >>> I = common.Dimension(value="I")
-        >>> J = common.Dimension(value="J")
+        >>> class I(common.CartesianAxisIndex): ...
+        >>> class J(common.CartesianAxisIndex): ...
         >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-        [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+        [gt4py.next.type_system.type_info.I[horizontal], gt4py.next.type_system.type_info.J[horizontal]]
     """
     if isinstance(symbol_type, ts.ScalarType):
         return []
@@ -408,8 +408,8 @@ def is_local_field(type_: ts.FieldType) -> bool:
     Return if `type_` is a field defined on a local dimension.
 
     Examples:
-        >>> V = common.Dimension(value="V")
-        >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
+        >>> class V(common.DimensionIndex): ...
+        >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
         >>> is_local_field(
         ...     ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64))
         ... )
@@ -442,7 +442,7 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
     Beside that this function simply checks for equality of types.
 
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    >>> IDim = common.Dimension(value="IDim")
+    >>> class IDim(common.CartesianAxisIndex): ...
     >>> type_on_i_of_i_it = it_ts.IteratorType(
     ...     position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
     ... )
@@ -452,7 +452,7 @@ def is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec) -> bool:
     >>> is_compatible_type(type_on_i_of_i_it, type_on_undefined_of_i_it)
     True
 
-    >>> JDim = common.Dimension(value="JDim")
+    >>> class JDim(common.CartesianAxisIndex): ...
     >>> type_on_j_of_j_it = it_ts.IteratorType(
     ...     position_dims=[JDim], defined_dims=[JDim], element_type=bool_type
     ... )
@@ -570,7 +570,11 @@ def promote(
     `offset_type` of `None` (a list from `make_const_list`) is compatible with any other.
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> class I(common.CartesianAxisIndex): ...
+
+    >>> class J(common.CartesianAxisIndex): ...
+
+    >>> class K(common.CartesianAxisIndex): ...
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[I, J, K], dtype=dtype), dtype
     ... )
@@ -583,7 +587,7 @@ def promote(
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
-    >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
+    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
     >>> list_dtype = ts.ListType(element_type=dtype, offset_type=V2E)
     >>> promote(
     ...     ts.FieldType(dims=[I], dtype=list_dtype),
@@ -903,9 +907,9 @@ def function_signature_incompatibilities_field(
     if field_type.dims and source_dim not in field_type.dims:
         yield (
             f"Incompatible offset can not shift field defined on "
-            f"{', '.join([dim.value for dim in field_type.dims])} from "
-            f"{source_dim.value} to target dim(s): "
-            f"{', '.join([dim.value for dim in target_dims])}"
+            f"{', '.join([dim.__qualname__ for dim in field_type.dims])} from "
+            f"{source_dim.__qualname__} to target dim(s): "
+            f"{', '.join([dim.tag for dim in target_dims])}"
         )
 
 
