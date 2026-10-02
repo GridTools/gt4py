@@ -61,6 +61,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all] # type: ignore[attr-defined]
     "where",
     "broadcast",
     "astype",
+    "scan",
     "abs",
     "neg",
     "sin",
@@ -293,6 +294,51 @@ def broadcast(
     return field  # type: ignore[return-value] # see comment above
 
 
+class ScanBuiltinFunction(BuiltInFunction[_R, _P]):
+    def __gt_type__(self) -> ts.FunctionType:
+        return ts.FunctionType(
+            pos_only_args=[ts.DeferredType(constraint=None)],
+            pos_or_kw_args={},
+            kw_only_args={
+                "axis": ts.DeferredType(constraint=ts.DimensionType),
+                "forward": ts.DeferredType(constraint=ts.ScalarType),
+                "init": ts.DeferredType(constraint=(ts.ScalarType, ts.TupleType)),
+            },
+            returns=ts.DeferredType(constraint=None),
+        )
+
+
+@ScanBuiltinFunction
+def scan(
+    scan_pass: Callable,
+    /,
+    *,
+    axis: common.Dimension | None = None,
+    forward: bool = True,
+    init: core_defs.Scalar | Tuple = 0.0,
+) -> Callable[..., common.Field | Tuple]:
+    """
+    Create a scan operator from a scan pass, to be called inside a field operator.
+
+    Args:
+        scan_pass: Field operator `(carry, *args) -> carry` on scalars (or tuples thereof).
+        axis: Vertical dimension to scan along. If omitted, it is the unique vertical
+            dimension of the arguments the scan operator is called with.
+        forward: Scan direction.
+        init: Initial value of the carry, a compile-time constant.
+
+    Examples:
+        >>> scan(my_pass, axis=KDim, forward=True, init=0.0)(a)  # doctest: +SKIP
+    """
+    from gt4py.next.embedded import context as embedded_context, operators as embedded_operators
+
+    def scan_operator(*args: Any, **kwargs: Any) -> common.Field | Tuple:
+        scan_axis = axis if axis is not None else embedded_context.get_closure_column_range().dim
+        return embedded_operators.ScanOperator(scan_pass, forward, init, scan_axis)(*args, **kwargs)
+
+    return scan_operator
+
+
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
@@ -453,6 +499,7 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
+    "scan",
     *MATH_BUILTIN_NAMES,
 ]
 

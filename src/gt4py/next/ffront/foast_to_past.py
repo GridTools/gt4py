@@ -36,6 +36,10 @@ class ItirShim:
     definition: ConcreteFOASTOperatorDef
     foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
 
+    @property
+    def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
+        return self.definition.data
+
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.definition.data.closure_vars
 

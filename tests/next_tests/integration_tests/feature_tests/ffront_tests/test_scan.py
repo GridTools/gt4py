@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import errors, float64, int32
+from gt4py.next import errors, float64, int32, scan
 from gt4py.next.ffront.decorator import program, scan_operator
 
 from next_tests.integration_tests import cases
@@ -391,3 +391,68 @@ def test_scan_without_carry(cartesian_case):
         @scan_operator(axis=KDim, forward=True, init=0)
         def testee_scan() -> float:
             return 1.0
+
+
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+def test_scan_call(cartesian_case):
+    @gtx.field_operator
+    def add(carry: float, inp: float) -> float:
+        return carry + inp
+
+    @gtx.field_operator
+    def testee(inp: cases.IKFloatField) -> cases.IKFloatField:
+        return scan(add, axis=KDim, forward=True, init=1.0)(inp)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
+
+    cases.verify(cartesian_case, testee, inp, out=out, ref=1.0 + np.cumsum(inp.asnumpy(), axis=1))
+
+
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+def test_scan_call_backward_inferred_axis(cartesian_case):
+    @gtx.field_operator
+    def add(carry: float, inp: float, scalar: float) -> float:
+        return carry + inp * scalar
+
+    @gtx.field_operator
+    def testee(inp: cases.IKFloatField, scalar: float) -> cases.IKFloatField:
+        return scan(add, forward=False, init=-1.0)(inp, scalar) + inp
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
+    inp_np = inp.asnumpy()
+    backward_cumsum = np.flip(np.cumsum(np.flip(2.0 * inp_np, axis=1), axis=1), axis=1)
+
+    cases.verify(cartesian_case, testee, inp, 2.0, out=out, ref=backward_cumsum - 1.0 + inp_np)
+
+
+@pytest.mark.uses_scan
+@pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_tuple_returns
+def test_scan_call_tuple_carry(cartesian_case):
+    @gtx.field_operator
+    def sum_and_count(carry: tuple[float, int32], inp: float) -> tuple[float, int32]:
+        return carry[0] + inp, carry[1] + int32(1)
+
+    @gtx.field_operator
+    def testee(inp: cases.IKFloatField) -> tuple[cases.IKFloatField, cases.IKField]:
+        return scan(sum_and_count, axis=KDim, init=(0.0, int32(0)))(inp)
+
+    inp = cases.allocate(cartesian_case, testee, "inp")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN).zeros()()
+    isize = cartesian_case.default_sizes[IDim]
+    ksize = cartesian_case.default_sizes[KDim]
+
+    cases.verify(
+        cartesian_case,
+        testee,
+        inp,
+        out=out,
+        ref=(
+            np.cumsum(inp.asnumpy(), axis=1),
+            np.full((isize, ksize), np.arange(1, ksize + 1, dtype=np.int32)),
+        ),
+    )
