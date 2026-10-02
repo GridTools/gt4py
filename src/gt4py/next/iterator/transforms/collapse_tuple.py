@@ -187,7 +187,7 @@ class CollapseTuple(
         node: itir.Node,
         *,
         remove_letified_make_tuple_elements: bool = True,
-        offset_provider_type: Optional[common.TableTypes] = None,
+        table_types: Optional[common.TableTypes] = None,
         within_stencil: Optional[bool] = None,
         # manually passing enabled transformations is mostly for allowing separate testing of the modes
         enabled_transformations: Optional[Transformation] = None,
@@ -211,7 +211,7 @@ class CollapseTuple(
                 point, without recursing into its children.
         """
         enabled_transformations = enabled_transformations or cls.enabled_transformations
-        offset_provider_type = offset_provider_type or {}
+        table_types = table_types or {}
 
         if isinstance(node, itir.Program):
             within_stencil = False
@@ -230,7 +230,7 @@ class CollapseTuple(
         if requires_types:
             node = itir_type_inference.infer(
                 node,
-                offset_provider_type=offset_provider_type,
+                table_types=table_types,
                 allow_undeclared_symbols=allow_undeclared_symbols,
             )
 

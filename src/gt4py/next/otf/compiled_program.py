@@ -41,7 +41,8 @@ T = TypeVar("T")
 
 ScalarOrTupleOfScalars: TypeAlias = xtyping.MaybeNestedInTuple[core_defs.Scalar]
 
-#: Content of the key: (*hashable_arg_descriptors, id(offset_provider), concrete_instantation_if_generic)
+#: Content of the key: (*hashable_arg_descriptors, hash of the offset provider's (tag, id(table))
+#: items, concrete_instantation_if_generic)
 CompiledProgramsKey: TypeAlias = tuple[tuple[Hashable, ...], int, str | None]
 
 ArgStaticDescriptorsByType: TypeAlias = dict[
@@ -643,6 +644,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             else:
                 raise ValueError(f"Invalid 'offset_provider': {offset_provider}")
 
+        common.check_offset_provider(offset_provider, deep=True)
         self._initialize_argument_descriptor_mapping(argument_descriptors)
         _validate_argument_descriptors(self.program_type, argument_descriptors)
 

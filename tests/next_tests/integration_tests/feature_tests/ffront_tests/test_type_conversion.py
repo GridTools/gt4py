@@ -51,7 +51,7 @@ def test_astype_int_local_field(unstructured_case):
         tmp = astype(a(E2V), int64)
         return neighbor_sum(tmp, axis=E2VDim)
 
-    e2v_table = unstructured_case.offset_provider[E2VDim.tag].asnumpy()
+    e2v_table = unstructured_case.offset_provider[E2V].asnumpy()
 
     cases.verify_with_default_data(
         unstructured_case,

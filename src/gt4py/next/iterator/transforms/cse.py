@@ -462,7 +462,7 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
         cls,
         node: ProgramOrExpr,
         within_stencil: bool | None = None,
-        offset_provider_type: common.TableTypes | None = None,
+        table_types: common.TableTypes | None = None,
         *,
         uids: utils.IDGeneratorPool,
     ) -> ProgramOrExpr:
@@ -475,9 +475,9 @@ class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
                 "The expression's context must be specified using `within_stencil`."
             )
 
-        offset_provider_type = offset_provider_type or {}
+        table_types = table_types or {}
         node = itir_type_inference.infer(
-            node, offset_provider_type=offset_provider_type, allow_undeclared_symbols=not is_program
+            node, table_types=table_types, allow_undeclared_symbols=not is_program
         )
         return cls(uids=uids).visit(node, within_stencil=within_stencil)
 

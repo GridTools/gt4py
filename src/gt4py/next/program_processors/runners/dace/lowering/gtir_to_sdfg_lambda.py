@@ -762,7 +762,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             local_dim = arg.gt_dtype.offset_type
             assert local_dim is not None
             assert isinstance(
-                self.subgraph_builder.get_offset_provider_type(
+                self.subgraph_builder.get_table_type(
                     self.subgraph_builder.connectivity_key_over(local_dim)
                 ),
                 gtx_common.NeighborTableType,
@@ -1078,7 +1078,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert isinstance(node.args[0], gtir.OffsetLiteral)
         offset = node.args[0].value
         assert isinstance(offset, str)
-        conn_type = self.subgraph_builder.get_offset_provider_type(offset)
+        conn_type = self.subgraph_builder.get_table_type(offset)
         assert isinstance(conn_type, gtx_common.NeighborTableType)
 
         it = self.visit(node.args[1])
@@ -1317,7 +1317,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             if offset_type is gtx_common.ConstList:
                 # this input argument is the result of `make_const_list`
                 continue
-            offset_provider_t = self.subgraph_builder.get_offset_provider_type(
+            offset_provider_t = self.subgraph_builder.get_table_type(
                 self.subgraph_builder.connectivity_key_over(offset_type)
             )
             assert isinstance(offset_provider_t, gtx_common.NeighborTableType)
@@ -1437,7 +1437,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         self, const_list: MemletExpr | ValueExpr, list_type: ts.ListType
     ) -> ValueExpr:
         assert list_type.offset_type is not None
-        offset_provider_t = self.subgraph_builder.get_offset_provider_type(
+        offset_provider_t = self.subgraph_builder.get_table_type(
             self.subgraph_builder.connectivity_key_over(list_type.offset_type)
         )
         assert isinstance(offset_provider_t, gtx_common.NeighborTableType)
@@ -1478,15 +1478,15 @@ class LambdaToDataflow(eve.NodeVisitor):
             and input_expr.gt_dtype.offset_type is not None
         )
         offset_type = input_expr.gt_dtype.offset_type
-        offset_provider_type = self.subgraph_builder.get_offset_provider_type(
+        table_type = self.subgraph_builder.get_table_type(
             self.subgraph_builder.connectivity_key_over(offset_type)
         )
-        assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
+        assert isinstance(table_type, gtx_common.NeighborTableType)
 
         inp_conn = "_in"
         outp_conn = "_out"
         mask_conn = "_mask"
-        if offset_provider_type.has_skip_values:
+        if table_type.has_skip_values:
             assert (
                 isinstance(input_expr.gt_dtype, ts.ListType)
                 and input_expr.gt_dtype.offset_type is not None
@@ -1509,12 +1509,10 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
             self.state.add_node(reduce_node)
 
-            origin_map_index = gtir_to_sdfg_utils.get_map_variable(offset_provider_type.domain[0])
+            origin_map_index = gtir_to_sdfg_utils.get_map_variable(table_type.domain[0])
             self._add_input_data_edge(
                 self.state.add_access(connectivity),
-                dace_subsets.Range.from_string(
-                    f"{origin_map_index}, 0:{offset_provider_type.max_neighbors}"
-                ),
+                dace_subsets.Range.from_string(f"{origin_map_index}, 0:{table_type.max_neighbors}"),
                 reduce_node,
                 mask_conn,
             )
@@ -1758,10 +1756,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             assert isinstance(offset_provider_arg, gtir.OffsetLiteral)
             assert isinstance(offset_provider_arg.value, str)
-            offset_provider_type = self.subgraph_builder.get_offset_provider_type(
-                offset_provider_arg.value
-            )
-            assert isinstance(offset_provider_type, gtx_common.NeighborTableType)
+            table_type = self.subgraph_builder.get_table_type(offset_provider_arg.value)
+            assert isinstance(table_type, gtx_common.NeighborTableType)
             # a named offset → unstructured shift; the offset value may be a static
             # `OffsetLiteral` or a dynamic offset (handled by `_make_unstructured_shift`).
             # initially, the storage for the connectivity tables is created as transient;
@@ -1771,9 +1767,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
 
-            return self._make_unstructured_shift(
-                it, offset_provider_type, offset_table_node, offset_expr
-            )
+            return self._make_unstructured_shift(it, table_type, offset_table_node, offset_expr)
 
     def _visit_generic_builtin(self, node: gtir.FunCall) -> ValueExpr:
         """

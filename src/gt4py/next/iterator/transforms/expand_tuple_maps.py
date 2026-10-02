@@ -61,12 +61,12 @@ class ExpandTupleMaps(eve.NodeTranslator):
         node: ProgramOrExpr,
         *,
         uids: utils.IDGeneratorPool | None,
-        offset_provider_type: common.TableTypes | None = None,
+        table_types: common.TableTypes | None = None,
     ) -> ProgramOrExpr:
         if node.type is None:
             node = itir_inference.infer(
                 node,
-                offset_provider_type=offset_provider_type or {},
+                table_types=table_types or {},
                 allow_undeclared_symbols=not isinstance(node, itir.Program),
             )
         if uids is None:

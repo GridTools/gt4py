@@ -52,7 +52,6 @@ from .embedded import (  # Just for registering field implementations
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import (
-    FieldOffset,
     IndexType,
     abs,  # noqa: A004 # shadowing
     arccos,
@@ -153,7 +152,6 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     "as_field",
     "as_connectivity",
     # from ffront
-    "FieldOffset",
     "field_operator",
     "program",
     "scan_operator",

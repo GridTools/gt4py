@@ -53,7 +53,8 @@ string equality and are never checked against each other at declaration time: th
 name, and the `offset_provider` key. Whichever one reaches
 `common.get_offset` depends on the execution path and the operation. Making a
 dimension's identity its Python type is the prerequisite for collapsing those
-names into one declaration (a follow-up ADR covers the connectivity half).
+names into one declaration ([ADR 0030](0030-Connectivities_As_Types.md) covers the
+connectivity half).
 
 ## Decision
 
@@ -82,10 +83,11 @@ disappears.
 
 1. **Reconstruction from the IR is an import.** `common.resolve(tag)` imports the
    module and walks the qualname; nested declarations resolve naturally. The IR
-   references a Python type exactly the way `pickle` references a class. It is
-   memoized, because type inference calls it once per `AxisLiteral`. An
-   `AxisLiteral` stores only the tag: its `kind` is the resolved dimension's, so the
-   two cannot disagree.
+   references a Python type exactly the way `pickle` references a class. Where the
+   module path ends is memoized, because type inference calls it once per
+   `AxisLiteral`; the attribute walk is repeated, so a redefined declaration is
+   found. An `AxisLiteral` stores only the tag: its `kind` is the resolved
+   dimension's, so the two cannot disagree.
 
    A purely dotted tag does not record where the module path ends and the
    qualname begins, so `resolve` tries the *longest importable prefix* and walks
@@ -216,7 +218,8 @@ The last row needs `DimensionMeta.__add__` / `__sub__` declared with the self-ty
 site and both reject it at the definition site, with different diagnostics (mypy
 `[misc]`, pyright `reportGeneralTypeIssues`), so it costs two separately spelled
 suppressions. The runtime check covers unannotated code; hand-written iterator IR,
-which names dimensions by tag, is not checked. Comparisons are deliberately *not* restricted: `D == n`
+which names dimensions by tag, is not checked. `as_offset(dim, field)` needs index
+arithmetic too and takes an `AnyCartesianAxisIndex`. Comparisons are deliberately *not* restricted: `D == n`
 and `D < n` build a `Domain` on every dimension, as `concat_where` over a mesh
 location requires.
 

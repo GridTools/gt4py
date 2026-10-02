@@ -30,10 +30,11 @@ class Cell(DimensionIndex): ...
 class Edge(DimensionIndex): ...
 
 
-class C2EDim(LocalDimensionIndex): ...
+class C2E(gtx.NeighborConnectivity[Cell, Edge]):
+    class Local(LocalDimensionIndex): ...
 
 
-C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
+C2EDim = C2E.Local
 
 CField = gtx.Field[Dims[Cell], float64]
 EField = gtx.Field[Dims[Edge], float64]
