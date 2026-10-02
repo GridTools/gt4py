@@ -45,7 +45,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations import caches
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 from gt4py.eve.codegen import MakoTemplate as as_mako
 from gt4py.storage.cartesian import layout, layout_registry
 
@@ -679,7 +679,7 @@ namespace gt = gridtools;
 """
 
         if builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
 
         return generated_code
 
@@ -863,7 +863,7 @@ class DaCeBindingsCodegen:
     def apply(cls, sdfg: SDFG, module_name: str, *, backend: BaseDaceBackend) -> str:
         generated_code = cls(backend).generate_sdfg_bindings(sdfg, module_name)
         if backend.builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
         return generated_code
 
 

@@ -43,6 +43,8 @@ profiling = [
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
+  'black>=25.11',
+  'clang-format>=18.1',
   'factory-boy>=3.3.3',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
@@ -91,7 +93,6 @@ classifiers = [
 dependencies = [
   'attrs>=21.3',
   'array-api-compat>=1.13',
-  'black>=25.11',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
@@ -142,7 +143,7 @@ readme = 'README.md'
 requires-python = '>=3.12, <3.15, !=3.13.10, !=3.14.1'
 
 [project.optional-dependencies]
-cartesian = ['gt4py[jax,standard,testing]']
+cartesian = ['black>=25.11', 'clang-format>=18.1', 'gt4py[jax,standard,testing]']
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
 jax = [
@@ -154,7 +155,7 @@ jax-cuda13 = ['jax[cuda13-local]>=0.7.0', 'gt4py[cuda13]']
 next = ['gt4py[jax,standard,testing]']
 rocm6 = ['cupy>=13.4.1,<14.0']
 rocm7 = ['cupy-rocm-7-0>=14.0']
-standard = ['clang-format>=18.1', 'scipy>=1.16.1']
+standard = ['scipy>=1.16.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]

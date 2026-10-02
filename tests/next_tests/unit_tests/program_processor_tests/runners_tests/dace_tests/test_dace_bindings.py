@@ -12,7 +12,7 @@ import functools
 import dace
 import numpy as np
 import pytest
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 
 from gt4py import next as gtx
 from gt4py.next import common as gtx_common, int32
@@ -238,7 +238,7 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    assert codegen.format_python_source(binding_source_pruned) == binding_source_ref
+    assert formatting.format_python_source(binding_source_pruned) == binding_source_ref
     return _dace_compile_call(self, inp)
 
 
