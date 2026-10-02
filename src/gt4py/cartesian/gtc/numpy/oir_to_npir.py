@@ -79,6 +79,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     ) -> Tuple[int, int, eve.Node]:
         return 0, 0, npir.VarKOffset(k=self.visit(node.k, **kwargs))
 
+    def visit_ForIndex(self, node: oir.ForIndex, **kwargs: Any) -> npir.ForIndex:
+        return npir.ForIndex(name=node.name, dtype=node.dtype)
+
     def visit_AbsoluteKIndex(self, node: oir.AbsoluteKIndex, **kwargs: Any) -> None:
         raise NotImplementedError(
             "Absolute K indexation (e.g. `field.at(...)`) is an experimental feature and not yet implemented for the `numpy` backend."
@@ -116,7 +119,9 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: oir.BinaryOp, **kwargs: Any
     ) -> Union[npir.VectorArithmetic, npir.VectorLogic]:
         args = dict(
-            op=node.op, left=self.visit(node.left, **kwargs), right=self.visit(node.right, **kwargs)
+            op=node.op,
+            left=self.visit(node.left, **kwargs),
+            right=self.visit(node.right, **kwargs),
         )
         if isinstance(node.op, common.LogicalOperator):
             return npir.VectorLogic(**args)
@@ -184,6 +189,15 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             cond=cond_expr, body=utils.flatten(self.visit(node.body, mask=cond_expr, **kwargs))
         )
 
+    def visit_For(self, node: oir.For, **kwargs: Any) -> npir.For:
+        return npir.For(
+            index_name=node.index_name,
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
+            body=utils.flatten(self.visit(node.body, **kwargs)),
+        )
+
     def visit_HorizontalRestriction(
         self, node: oir.HorizontalRestriction, *, extent: Extent, **kwargs: Any
     ) -> Any:
@@ -210,11 +224,17 @@ class OirToNpir(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         stmts = utils.flatten(self.visit(node.body, extent=extent, **kwargs))
         return npir.HorizontalBlock(
-            body=stmts, extent=extent, declarations=self.visit(node.declarations, **kwargs)
+            body=stmts,
+            extent=extent,
+            declarations=self.visit(node.declarations, **kwargs),
         )
 
     def visit_VerticalLoopSection(
-        self, node: oir.VerticalLoopSection, *, loop_order: common.LoopOrder, **kwargs: Any
+        self,
+        node: oir.VerticalLoopSection,
+        *,
+        loop_order: common.LoopOrder,
+        **kwargs: Any,
     ) -> npir.VerticalPass:
         return npir.VerticalPass(
             body=self.visit(node.horizontal_executions, **kwargs),

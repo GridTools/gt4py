@@ -98,6 +98,11 @@ def get_gt_pyext_build_opts(
         "-std=c++20",
         f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
         *extra_compile_args_from_config["cuda"],
+        *(
+            arg
+            for cxx_compile_arg in extra_compile_args["cxx"]
+            for arg in f"--compiler-options {cxx_compile_arg}".split(" ")
+        ),
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
