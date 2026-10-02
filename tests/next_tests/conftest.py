@@ -7,3 +7,4 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from .fixtures.common import uids
+from .fixtures.compilation import isolate_ongoing_compilations

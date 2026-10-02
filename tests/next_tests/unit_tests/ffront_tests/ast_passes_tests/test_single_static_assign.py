@@ -632,7 +632,7 @@ def test_broken_if():
     assert result == expected
 
 
-def test_annotated_assign():
+def test_empty_annotated_assign_before_assign():
     result = ast.unparse(
         ssaify_string(
             """

@@ -17,7 +17,7 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from next_tests.integration_tests.cases import IDim, JDim, KDim
 
 
-def test_data():
+def _testcases():
     return [
         (
             im.less(im.axis_literal(IDim), 1),
@@ -51,10 +51,18 @@ def test_data():
             im.greater_equal(1, im.axis_literal(IDim)),
             im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 2)}),
         ),
+        (im.eq(im.axis_literal(IDim), 1), im.domain(common.GridType.CARTESIAN, {IDim: (1, 2)})),
         (im.eq(1, im.axis_literal(IDim)), im.domain(common.GridType.CARTESIAN, {IDim: (1, 2)})),
         (
+            im.not_eq(im.axis_literal(IDim), 1),
+            im.or_(
+                im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)}),
+                im.domain(common.GridType.CARTESIAN, {IDim: (2, itir.InfinityLiteral.POSITIVE)}),
+            ),
+        ),
+        (
             im.not_eq(1, im.axis_literal(IDim)),
-            im.and_(
+            im.or_(
                 im.domain(common.GridType.CARTESIAN, {IDim: (itir.InfinityLiteral.NEGATIVE, 1)}),
                 im.domain(common.GridType.CARTESIAN, {IDim: (2, itir.InfinityLiteral.POSITIVE)}),
             ),
@@ -62,7 +70,7 @@ def test_data():
     ]
 
 
-@pytest.mark.parametrize("testee,expected", test_data())
+@pytest.mark.parametrize("testee,expected", _testcases())
 def test_trivial(testee, expected):
     actual = InferDomainOps(grid_type=common.GridType.CARTESIAN).visit(testee, recurse=True)
     actual = ConstantFolding.apply(actual)  # simplify expr to get simpler expected expressions

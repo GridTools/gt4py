@@ -11,10 +11,10 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
-from typing import TypeVar, cast, overload
+from collections.abc import Callable, Iterable
+from typing import Optional, TypeVar, Union, cast, overload
 
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import misc as ir_misc
@@ -213,6 +213,8 @@ def if_(
     #  want this, but for roundtrip it is totally fine.
     # assert true_branch == false_branch  # noqa: ERA001
 
+    if isinstance(true_branch, ts.ListType) and isinstance(false_branch, ts.ListType):
+        return type_info.promote(true_branch, false_branch)
     return true_branch
 
 
@@ -273,18 +275,11 @@ def concat_where(
         if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
             return ts.DeferredType(constraint=ts.FieldType)
 
-        tb_dtype, fb_dtype = (type_info.extract_dtype(b) for b in [tb, fb])
-
-        assert tb_dtype == fb_dtype, (
-            f"Field arguments to 'concat_where' must be of same dtype, got '{tb_dtype}' != '{fb_dtype}'."
+        promoted = type_info.promote(tb, fb)
+        return ts.FieldType(
+            dims=common.promote_dims(domain.dims, type_info.extract_dims(promoted)),
+            dtype=type_info.extract_dtype(promoted),
         )
-        dtype = tb_dtype
-
-        return_dims = common.promote_dims(
-            domain.dims, type_info.extract_dims(type_info.promote(tb, fb))
-        )
-        return_type = ts.FieldType(dims=return_dims, dtype=dtype)
-        return return_type
 
     result = deduce_return_type(true_field, false_field)
     assert isinstance(result, (ts.FieldType, ts.TupleType, ts.DeferredType))

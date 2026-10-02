@@ -802,7 +802,7 @@ def gt_data_descriptor_mapping(
         nsdfg: The nested SDFG node we want to process.
         only_fully_mapped: Only look at the fully mapped data.
         only_inputs: Only consider the data that are used as inputs.
-        only_inputs: Only consider the data that are used as outputs.
+        only_outputs: Only consider the data that are used as outputs.
     """
     assert not (only_inputs and only_outputs)
     name_mapping: dict[str, str] = {}
@@ -829,7 +829,7 @@ def gt_data_descriptor_mapping(
 
     oedges = sorted(
         (oedge for oedge in state.out_edges(nsdfg) if not oedge.data.is_empty()),
-        key=lambda oedge: iedge.src_conn,
+        key=lambda oedge: oedge.src_conn,
     )
     for oedge in oedges:
         data_outside = oedge.data.data

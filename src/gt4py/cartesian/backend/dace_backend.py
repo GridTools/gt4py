@@ -18,6 +18,7 @@ from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, 
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
 from dace.sdfg.utils import inline_sdfgs
+from dace.transformation.dataflow import MapCollapse
 
 from gt4py._core import definitions as core_defs
 from gt4py.cartesian import config as gt_config, definitions
@@ -44,7 +45,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations import caches
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
 from gt4py.cartesian.utils import shash
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 from gt4py.eve.codegen import MakoTemplate as as_mako
 from gt4py.storage.cartesian import layout, layout_registry
 
@@ -266,9 +267,17 @@ def freeze_origin_domain_sdfg(
     state = wrapper_sdfg.add_state("frozen_" + inner_sdfg.name + "_state")
 
     # gather inputs & outputs (i.e. reads/writes without transients)
-    inputs, outputs = inner_sdfg.read_and_write_sets()
-    inputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, inputs))
-    outputs = set(filter(lambda name: not inner_sdfg.arrays[name].transient, outputs))
+    read_set, write_set = inner_sdfg.read_and_write_sets()
+    inputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in read_set and not desc.transient
+    }
+    outputs = {
+        name: None
+        for name, desc in inner_sdfg.arrays.items()
+        if name in write_set and not desc.transient
+    }
 
     nsdfg = state.add_nested_sdfg(inner_sdfg, inputs, outputs)
 
@@ -432,6 +441,7 @@ class SDFGManager:
             #  - `LiftTrivialIf` because it's dead slow (e.g. fv3 acoustics parsing takes >90min compared to 10-15min without)
             skip={"ScalarToSymbolPromotion", "ControlFlowRaising", "LiftTrivialIf"},
         )
+        sdfg.apply_transformations_repeated(MapCollapse, progress=False, validate=False)
 
         if do_cache:
             self._save_sdfg(sdfg, path)
@@ -596,8 +606,6 @@ auto ${name}(const std::array<gt::uint_t, 3>& domain) {
             line = line.strip()
             if line == '#include "../../include/hash.h"':
                 return False
-            if line.startswith("DACE_EXPORTED") and line.endswith(");"):
-                return False
             if line == "#include <cuda_runtime.h>":
                 return False
             return True
@@ -671,7 +679,7 @@ namespace gt = gridtools;
 """
 
         if builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
 
         return generated_code
 
@@ -855,7 +863,7 @@ class DaCeBindingsCodegen:
     def apply(cls, sdfg: SDFG, module_name: str, *, backend: BaseDaceBackend) -> str:
         generated_code = cls(backend).generate_sdfg_bindings(sdfg, module_name)
         if backend.builder.options.format_source:
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
         return generated_code
 
 

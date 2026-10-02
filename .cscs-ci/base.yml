@@ -11,8 +11,8 @@
 # Shared CSCS-CI base configuration
 # =================================
 # Common building blocks reused by both CSCS pipelines:
-#   * ci/cscs-ci.yml                  — the default test pipeline
-#   * ci/cscs-ci-dace-determinism.yml — the DaCe codegen determinism check
+#   * .cscs-ci/default.yml          — the default test pipeline
+#   * .cscs-ci/dace-determinism.yml — the DaCe codegen determinism check
 
 include:
   - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
@@ -44,14 +44,14 @@ stages:
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/ubuntu:${UBUNTU_VERSION}
     # CSCS_REBUILD_POLICY: 'always' => rebuild even if target tag exists already
     CSCS_REBUILD_POLICY: if-not-exists  # default, i.e. we could also skip the variable
-    DOCKERFILE: ci/Dockerfile
+    DOCKERFILE: .cscs-ci/Dockerfile
     # We pass the build arguments to the Dockerfile as a JSON array of names.
     # The actual values will be taken from environment variables with the same
     # names, if they exist, or otherwise the defaults in the Dockerfile will be used.
     # To override the defaults, just define these variables in the actual job.
     DOCKER_BUILD_ARGS: '["BASE_IMAGE", "CACHE_DIR", "EXTRA_APTGET", "EXTRA_UV_ENV_VARS", "EXTRA_UV_PIP_ARGS", "EXTRA_UV_SYNC_ARGS", "PY_VERSION", "UV_VERSION", "WORKDIR_PATH" ]'
     PERSIST_IMAGE_NAME: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}  # The $DOCKER_TAG tag is added in the before_script of .dynamic-image-name
-    WATCH_FILECHANGES: 'ci/Dockerfile ci/cscs-ci-base.yml ci/cscs-ci.yml ci/cscs-ci-dace-determinism.yml uv.lock'
+    WATCH_FILECHANGES: '.cscs-ci/Dockerfile .cscs-ci/base.yml .cscs-ci/default.yml .cscs-ci/dace-determinism.yml uv.lock'
 
 .build_extra_cuda:
   variables:

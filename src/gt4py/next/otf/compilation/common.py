@@ -38,10 +38,15 @@ def _query_device_arch() -> str | None:
             )
             return None
     elif core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM:
-        # TODO(egparedes): Implement this properly, either parsing the output of `$ rocminfo`
-        # or using the HIP low level bindings.
-        # Check: https://rocm.docs.amd.com/projects/hip-python/en/latest/user_guide/1_usage.html
-        return "gfx942"  # MI300A
+        try:
+            arch = core_defs.cp.cuda.runtime.getDeviceProperties(0)["gcnArchName"]  # type: ignore[attr-defined]
+        except core_defs.cp.cuda.runtime.CUDARuntimeError as e:  # type: ignore[attr-defined]
+            warnings.warn(
+                UserWarning(f"Could not determine the HIP device architecture: {e}"), stacklevel=2
+            )
+            return None
+        # strip the target feature suffix, e.g. `b"gfx90a:sramecc+:xnack-"` -> `"gfx90a"`
+        return arch.decode().split(":")[0]
 
     return None
 

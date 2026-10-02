@@ -9,20 +9,20 @@
 """Test the bindings stage of the dace backend workflow."""
 
 import dataclasses
+import functools
 import re
 import unittest.mock as mock
 from typing import Any
 
+import dace
 import numpy as np
 import pytest
-
-
-dace = pytest.importorskip("dace")
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import definitions, runners
+from gt4py.next.otf import runners, stages
+from gt4py.next.otf import workflow as gtx_workflow
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
     auto_optimize as gtx_auto_optimize,
@@ -31,6 +31,8 @@ from gt4py.next.program_processors.runners.dace.workflow import (
     backend as dace_wf_backend,
     common as dace_wf_common,
     decoration as dace_wf_decoration,
+    factory as dace_wf_factory,
+    translation as dace_wf_translation,
 )
 
 from next_tests.integration_tests import cases, cases_utils
@@ -45,8 +47,6 @@ from next_tests.integration_tests.cases_utils import KDim
     ids=["CPU", "GPU"],
 )
 def device_type(request) -> gtx.DeviceType:
-    if request.param == core_defs.CUPY_DEVICE_TYPE:
-        pytest.importorskip("cupy")
     return request.param
 
 
@@ -105,13 +105,18 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
     monkeypatch.setattr(gtx_transformations, "gt_auto_optimize", mocked_auto_optimize)
     monkeypatch.setattr(gtx_transformations, "gt_gpu_transformation", mocked_gpu_transformation)
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=auto_optimize,
-        async_sdfg_call=True,
-        optimization_args=optimization_args,
-        unstructured_horizontal_has_unit_stride=on_gpu,
-        use_metrics=True,
+    custom_backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(
+            gpu=on_gpu,
+            auto_optimize=auto_optimize,
+            unstructured_horizontal_has_unit_stride=on_gpu,
+        ),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            auto_optimize_args=optimization_args,
+            async_sdfg_call=True,
+            use_metrics=True,
+        ),
     )
     # The monkeypatched transformation functions exist only in this process, so
     # compilation must not be offloaded to a worker.
@@ -168,7 +173,8 @@ def _make_external_workspace(
 ) -> dace_wf_common.ExternalWorkspace:
     """Return a sufficiently large array-like workspace for ``device_type``."""
     if device_type == core_defs.CUPY_DEVICE_TYPE:
-        cupy = pytest.importorskip("cupy")
+        import cupy
+
         return cupy.empty(nbytes, dtype=cupy.uint8)
     return np.empty(nbytes, dtype=np.uint8)
 
@@ -187,14 +193,14 @@ class _RecordingWorkspace:
 def test_make_backend_accepts_external_workspace_with_external_mode():
     workspace = _RecordingWorkspace()
 
-    backend = dace_wf_backend.make_dace_backend(
-        gpu=False,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
-        },
-        external_workspace={core_defs.DeviceType.CPU: workspace},
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace}),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            auto_optimize_args={
+                "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
+            },
+        ),
     )
 
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
@@ -203,11 +209,8 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
 def test_make_backend_infers_external_mode_when_workspace_is_provided():
     workspace = _RecordingWorkspace()
 
-    backend = dace_wf_backend.make_dace_backend(
-        gpu=False,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        external_workspace={core_defs.DeviceType.CPU: workspace},
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace})
     )
 
     assert (
@@ -221,14 +224,14 @@ def test_make_backend_warns_external_workspace_without_external_mode():
     workspace = _RecordingWorkspace()
 
     with pytest.warns(UserWarning, match="External memory workspace provided"):
-        backend = dace_wf_backend.make_dace_backend(
-            gpu=False,
-            auto_optimize=True,
-            async_sdfg_call=False,
-            optimization_args={
-                "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
-            },
-            external_workspace={core_defs.DeviceType.CPU: workspace},
+        backend = dace_wf_backend.make_dace_toolchain(
+            dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace}),
+            translation=functools.partial(
+                dace_wf_factory.make_dace_translator,
+                auto_optimize_args={
+                    "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
+                },
+            ),
         )
 
     # Explicit mode stays as requested by the caller; backend only warns.
@@ -237,6 +240,130 @@ def test_make_backend_warns_external_workspace_without_external_mode():
         == gtx_transformations.TransientMemoryMode.POOL
     )
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
+
+
+def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
+    """The toolchain and its translation step read the workspace from one config."""
+    workspace = _RecordingWorkspace()
+    cfg = dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace})
+
+    backend = dace_wf_backend.make_dace_toolchain(
+        cfg, translation=functools.partial(dace_wf_factory.make_dace_translator, use_metrics=False)
+    )
+
+    translator = backend.executor.translation.step
+    assert translator.use_metrics is False
+    assert (
+        translator.auto_optimize_args["transient_memory_mode"]
+        == gtx_transformations.TransientMemoryMode.EXTERNAL
+    )
+    assert backend.external_workspace is cfg.external_workspace
+    assert backend.executor.compilation.bind_func_name == cfg.bind_func_name
+
+
+def test_make_toolchain_rejects_derived_optimization_args():
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        dace_wf_backend.make_dace_toolchain(
+            translation=functools.partial(
+                dace_wf_factory.make_dace_translator,
+                auto_optimize_args={"unit_strides_kind": None},
+            )
+        )
+
+
+def test_make_toolchain_uncached_translation():
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(cached_translation=False)
+    )
+
+    assert isinstance(backend.executor.translation, dace_wf_translation.DaCeTranslator)
+
+
+def test_make_dace_backend_is_deprecated():
+    workspace = {core_defs.DeviceType.CPU: _RecordingWorkspace()}
+    with pytest.warns(DeprecationWarning, match="make_dace_toolchain"):
+        deprecated = dace_wf_backend.make_dace_backend(
+            gpu=False,
+            async_sdfg_call=False,
+            optimization_args={"blocking_size": 10},
+            external_workspace=workspace,
+            unstructured_horizontal_has_unit_stride=True,
+            use_metrics=False,
+            use_zero_origin=True,
+            use_max_domain_range_on_unstructured_shift=True,
+        )
+    toolchain = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(
+            external_workspace=workspace, unstructured_horizontal_has_unit_stride=True
+        ),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            auto_optimize_args={"blocking_size": 10},
+            async_sdfg_call=False,
+            use_metrics=False,
+            disable_field_origin_on_program_arguments=True,
+            use_max_domain_range_on_unstructured_shift=True,
+        ),
+    )
+
+    # The cached steps own distinct `FileCache` objects and the bindings are
+    # distinct `functools.partial` objects, so compare what they wrap.
+    assert deprecated.name == toolchain.name
+    assert deprecated.allocator == toolchain.allocator
+    assert deprecated.external_workspace is toolchain.external_workspace
+    assert deprecated.executor.translation.step == toolchain.executor.translation.step
+    assert deprecated.executor.translation.cache.path == toolchain.executor.translation.cache.path
+    assert deprecated.executor.bindings.func is toolchain.executor.bindings.func
+    assert deprecated.executor.bindings.keywords == toolchain.executor.bindings.keywords
+    assert deprecated.executor.compilation == toolchain.executor.compilation
+
+
+def test_translator_rejects_derived_optimization_args_on_every_route():
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        dace_wf_translation.DaCeTranslator(
+            device_type=core_defs.DeviceType.CPU,
+            auto_optimize=False,
+            auto_optimize_args={"gpu": True},
+            async_sdfg_call=False,
+            unstructured_horizontal_has_unit_stride=False,
+            use_metrics=False,
+        )
+    translator = dace_wf_backend.run_dace_cpu.executor.translation.step
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        dataclasses.replace(translator, auto_optimize_args={"constant_symbols": {}})
+
+
+def test_step_builders_reach_all_step_settings():
+    toolchain = dace_wf_backend.make_dace_toolchain(
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator, disable_itir_transforms=True
+        ),
+        compilation=functools.partial(
+            dace_wf_factory.make_dace_compiler, add_gpu_trace_markers=True
+        ),
+    )
+
+    assert toolchain.executor.translation.step.disable_itir_transforms is True
+    assert toolchain.executor.compilation.add_gpu_trace_markers is True
+
+
+def test_unused_optimization_args_warning_points_at_the_caller():
+    with pytest.warns(UserWarning, match="auto-optimize is disabled") as record:
+        dace_wf_backend.make_dace_toolchain(
+            dace_wf_factory.DaCeConfig(auto_optimize=False),
+            translation=functools.partial(
+                dace_wf_factory.make_dace_translator, auto_optimize_args={"blocking_size": 10}
+            ),
+        )
+
+    assert record[0].filename == __file__
+
+
+def test_compile_workflow_without_config_caches_translation():
+    workflow = dace_wf_factory.make_dace_compile_workflow()
+
+    assert isinstance(workflow.translation, gtx_workflow.CachedStep)
+    assert isinstance(workflow.translation.step, dace_wf_translation.DaCeTranslator)
 
 
 def _parse_generated_code_from_sdfg(sdfg: dace.SDFG, gpu_api_prefix: str) -> str:
@@ -292,14 +419,15 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
         else None
     )
 
-    custom_backend = dace_wf_backend.make_dace_backend(
-        gpu=on_gpu,
-        auto_optimize=True,
-        async_sdfg_call=False,
-        optimization_args={
-            "transient_memory_mode": transient_memory_mode,
-        },
-        external_workspace=external_workspace,
+    custom_backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(gpu=on_gpu, external_workspace=external_workspace),
+        translation=functools.partial(
+            dace_wf_factory.make_dace_translator,
+            auto_optimize_args={
+                "transient_memory_mode": transient_memory_mode,
+            },
+            async_sdfg_call=False,
+        ),
     )
 
     @gtx.field_operator
@@ -323,7 +451,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     captured_sdfg: dace.SDFG | None = None
     translation_step = custom_backend.executor.translation.step
 
-    def mocked_translator(inp: definitions.CompilableProgramDef) -> dace.SDFG:
+    def mocked_translator(inp: stages.CompilableProgramDef) -> dace.SDFG:
         nonlocal captured_sdfg
         result = translation_step(inp)
         captured_sdfg = dace.SDFG.from_json(result.source_code)

@@ -6,11 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
-
-dace = pytest.importorskip("dace")
 
 
 def _make_sdfg_with_top_level_transient(storage):

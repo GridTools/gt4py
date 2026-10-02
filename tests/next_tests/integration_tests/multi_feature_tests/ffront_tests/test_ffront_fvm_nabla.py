@@ -12,8 +12,6 @@ import numpy as np
 import pytest
 from packaging import version
 
-pytest.importorskip("atlas4py")
-
 from gt4py import next as gtx
 from gt4py.next import neighbor_sum
 

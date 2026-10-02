@@ -1762,7 +1762,7 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 
 @pytest.mark.requires_jax
 def test_jax_jit_field_arguments():
-    jax = pytest.importorskip("jax")
+    import jax
 
     domain = common.domain({D0: (1, 3), D1: (2, 5)})
     a = common._field(
@@ -1783,7 +1783,7 @@ def test_jax_jit_field_arguments():
 
 @pytest.mark.requires_jax
 def test_jax_pytree_roundtrip():
-    jax = pytest.importorskip("jax")
+    import jax
 
     domain = common.domain({D0: (1, 3), D1: (2, 5)})
     field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
@@ -1801,3 +1801,27 @@ def test_jax_pytree_roundtrip():
     )
     # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
     assert jax.tree_util.tree_structure(other_field) != treedef
+
+
+@pytest.mark.requires_jax
+def test_jax_traced_array_dispatch():
+    import jax
+
+    domain = common.domain({D0: (0, 3)})
+    x = jax.numpy.arange(3, dtype=np.float64)
+
+    def loss(arr):
+        field = common._field(arr, domain=domain)
+        assert isinstance(field, nd_array_field.JaxArrayField)
+        return jax.numpy.sum((field * field).ndarray)
+
+    np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())
+    np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
+
+    offsets = jax.numpy.asarray([[2, 0], [1, 2]])
+    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
+
+    def make_connectivity(arr):
+        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
+
+    np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)

@@ -2,6 +2,42 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.2] - 2026-08-31
+
+### General
+
+- Update DaCe to 2.0.0a7.
+- Fix `eve` annotation dispatch for modern typing spellings.
+- Validate `type[X]` annotations by subclass in `eve`.
+- Support recursive type aliases through containers in `eve`.
+- Make DaCe node connector ordering deterministic.
+
+### Cartesian
+
+- Remove support for `field[...]` assignment syntax.
+
+### Next
+
+See commit history.
+
+## [1.2.1] - 2026-08-17
+
+### General
+
+- Update `dace` dependency to `2.0.0a6`.
+- Support PEP 695 type aliases (`type X = ...`) in annotations, with diagnostics that point at the offending annotation.
+- Fix latent bugs surfaced by the Python 3.12 floor and stop re-exporting the deprecated `typing` aliases (`Dict`, `List`, `Set`, `FrozenSet`, `Tuple`, `Type`) from `gt4py.eve`; use the builtin generics instead.
+
+### Cartesian
+
+- Add support for `IntEnum` values in stencil code and as stencil arguments.
+- Allow data dimension sizes to be any integer type, not just plain `int`.
+- Remove deprecation warnings emitted by the GTScript frontend on Python 3.12 and later.
+
+### Next
+
+See commit history.
+
 ## [1.2.0] - 2026-08-05
 
 ### General

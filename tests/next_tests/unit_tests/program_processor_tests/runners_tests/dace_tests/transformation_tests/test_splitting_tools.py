@@ -8,12 +8,12 @@
 
 from typing import Optional
 
+import dace
 import pytest
 import numpy as np
 import copy
 import itertools
 
-dace = pytest.importorskip("dace")
 from dace import symbolic as dace_symbolic, subsets as dace_sbs
 from dace.sdfg import nodes as dace_nodes
 

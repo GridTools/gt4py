@@ -8,11 +8,10 @@
 
 from __future__ import annotations
 
+import dace
 import pytest
 import copy
 import numpy as np
-
-dace = pytest.importorskip("dace")
 
 from dace import libraries as dace_libnode
 from dace.sdfg import nodes as dace_nodes

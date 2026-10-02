@@ -13,18 +13,17 @@ from __future__ import annotations
 import abc
 import re
 from enum import Enum as Enum, IntEnum as IntEnum
+from typing import Any, ClassVar, NoReturn, Optional, TypeVar, final
 
 from boltons.typeutils import classproperty as classproperty
-
-from .extended_typing import Any, ClassVar, NoReturn, Optional, Tuple, TypeVar, final
 
 
 # -- Frozen collections --
 _Tc = TypeVar("_Tc", covariant=True)
 
 
-class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):
-    """Tuple subtype which works as an alias of ``Tuple[_Tc, ...]``."""
+class FrozenList(tuple[_Tc, ...], metaclass=abc.ABCMeta):
+    """Tuple subtype which works as an alias of ``tuple[_Tc, ...]``."""
 
     __slots__ = ()
 

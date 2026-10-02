@@ -15,21 +15,12 @@ import itertools
 import math
 from collections.abc import Callable, Sequence
 from types import ModuleType
+from typing import Any, ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import (
-    Any,
-    ClassVar,
-    Never,
-    Optional,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-    cast,
-)
 from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
@@ -1089,6 +1080,10 @@ if jnp:
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
     common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
+    # jax >= 0.11: 'Tracer' is no longer a subclass of 'jax.Array' (only 'isinstance' says so, via
+    # 'ArrayMeta.__instancecheck__'), and 'singledispatch' resolves on the class hierarchy.
+    common._field.register(jax.core.Tracer, JaxArrayField.from_array)
+    common._connectivity.register(jax.core.Tracer, JaxArrayConnectivityField.from_array)
 
     def _flatten_jax_field(
         field: JaxArrayField,
