@@ -81,11 +81,12 @@ def _unstructured_translate_range_statically(
     assert isinstance(start_expr, itir.Literal) and isinstance(stop_expr, itir.Literal)
     start, stop = int(start_expr.value), int(stop_expr.value)
 
+    empty_range = SymbolicRange(
+        im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+        im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
+    )
     if range_.empty():
-        return SymbolicRange(
-            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
-            im.literal(str("0"), builtins.INTEGER_INDEX_BUILTIN),
-        )
+        return empty_range
 
     nb_index: slice | int
     if val in [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE]:
@@ -105,6 +106,11 @@ def _unstructured_translate_range_statically(
             UserWarning(f"Translating '{expr}' using '{tag}' has an out-of-bounds access."),
             stacklevel=2,
         )
+
+    if skip_value is not None:
+        accessed = accessed[accessed != skip_value]
+    if accessed.size == 0:  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
+        return empty_range
 
     new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
 
