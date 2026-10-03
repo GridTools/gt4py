@@ -12,7 +12,10 @@ import gc
 import multiprocessing
 import os
 import pickle
+import signal
+import subprocess
 import sys
+import time
 import unittest.mock as mock
 
 import numpy as np
@@ -97,6 +100,68 @@ def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
 
     assert future.done()
     assert callable(future.result().load())
+
+
+# Brings up a pool, reports the pids of its workers and of the resource tracker,
+# then ends without running `atexit`: `os._exit`, or parked until the test kills it.
+_ORPHANING_POOL = """
+import multiprocessing.resource_tracker as resource_tracker
+import os
+import sys
+import time
+
+from gt4py.next.otf import runners
+
+if __name__ == "__main__":
+    runner = runners.ProcessRunner(max_workers=2, shared_session_cache_dir=sys.argv[1])
+    task = runners.CompilationTask(
+        name="noop", construct_compilable=lambda with_refs: None, executor=str
+    )
+    for future in [runner.submit(task) for _ in range(2)]:
+        future.result(timeout=60)
+    print(*runner._pool._processes, resource_tracker._resource_tracker._pid, flush=True)
+    if sys.argv[2] == "os_exit":
+        os._exit(0)
+    time.sleep(60)
+"""
+
+
+def _is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rpartition(")")[2].split()[0] != "Z"
+    except OSError:
+        return True
+
+
+@pytest.mark.parametrize("arm", ["os_exit", "sigkill"])
+def test_process_runner_workers_exit_with_parent(tmp_path, arm):
+    script = tmp_path / "orphaning_pool.py"
+    script.write_text(_ORPHANING_POOL)
+    parent = subprocess.Popen(
+        [sys.executable, str(script), str(tmp_path), arm], stdout=subprocess.PIPE, text=True
+    )
+    pids = [int(pid) for pid in parent.stdout.readline().split()]
+    assert len(pids) >= 2
+    if arm == "sigkill":
+        parent.kill()
+    parent.wait(timeout=60)
+
+    deadline = time.monotonic() + 30
+    try:
+        while (alive := [pid for pid in pids if _is_alive(pid)]) and time.monotonic() < deadline:
+            time.sleep(0.1)
+    finally:
+        # a failing run must not leave the orphans it detected
+        for pid in alive:
+            os.kill(pid, signal.SIGKILL)
+    assert not alive
 
 
 def test_make_compilation_task_decomposes_standard_backend():

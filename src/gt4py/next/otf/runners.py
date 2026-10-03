@@ -140,6 +140,27 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     if cuda_archs is not None:
         os.environ["CUDAARCHS"] = cuda_archs
         os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    _exit_with_parent()
+
+
+def _exit_with_parent() -> None:
+    """Make this worker process exit as soon as its parent process is gone.
+
+    The pool only tells its workers to stop from the parent's `shutdown`, which
+    does not run when the parent dies without finalizing the interpreter (an
+    embedding host exiting, `os._exit`, a kill). A worker cannot notice that on
+    its own: it holds the write end of the pool's call queue itself, so reading
+    the queue never hits end-of-file and blocks forever.
+    """
+    parent = multiprocessing.parent_process()
+    if parent is None:
+        return
+
+    def watch() -> None:
+        parent.join()
+        os._exit(1)
+
+    threading.Thread(target=watch, name="gt4py-exit-with-parent", daemon=True).start()
 
 
 def _config_snapshot() -> dict[str, Any]:
