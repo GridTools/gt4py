@@ -163,8 +163,7 @@ def set_dace_config(
 
     # Production-mode will only keep the compiled library and SDFG JSON-file.
     dace.Config.set(
-        "compiler",
-        "build_folder_mode",
+        "compiler.build_folder_mode",
         value=("development" if gtx_config.KEEP_DACE_BUILD_FILES else "production"),
     )
 
