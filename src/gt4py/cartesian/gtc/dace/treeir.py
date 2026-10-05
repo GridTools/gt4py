@@ -152,13 +152,3 @@ class TreeRoot(TreeScope):
 
     symbols: SymbolDict
     """Mapping between type and symbol name."""
-
-
-def k_symbol(scope: TreeScope) -> eve.SymbolRef:
-    if scope.parent is None:
-        raise ValueError("No vertical loop found in (parents of) current scope.")
-
-    if isinstance(scope, (SequentialVerticalLoop, ParallelVerticalLoop)):
-        return scope.iteration_variable
-
-    return k_symbol(scope.parent)

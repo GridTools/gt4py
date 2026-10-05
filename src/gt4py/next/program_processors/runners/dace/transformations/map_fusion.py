@@ -14,6 +14,7 @@ from typing import Any, Callable, Optional, TypeAlias, Union
 import dace
 from dace import nodes as dace_nodes, properties as dace_properties
 from dace.transformation import dataflow as dace_dftrans
+from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 
 
 VerticalMapFusionCallback: TypeAlias = Callable[
@@ -132,9 +133,38 @@ class MapFusionHorizontal(dace_dftrans.MapFusionHorizontal):
         sdfg: dace.SDFG,
         permissive: bool = False,
     ) -> bool:
+        first_map_entry = self.first_parallel_map_entry
+        second_map_entry = self.second_parallel_map_entry
         if self._check_fusion_callback is not None:
             if not self._check_fusion_callback(
-                self, self.first_parallel_map_entry, self.second_parallel_map_entry, graph, sdfg
+                self, first_map_entry, second_map_entry, graph, sdfg
             ):
                 return False
+
+        # The pattern matches every pair of Maps in the state. The base class performs these
+        #  checks too, but only after `is_parallel()`, which traverses the state twice. It also
+        #  rejects a contradictory scope selection, which has to keep happening.
+        if self.only_inner_maps and self.only_toplevel_maps:
+            raise ValueError(
+                "Only one of `only_inner_maps` and `only_toplevel_maps` is allowed per"
+                f" `{type(self).__name__}` instance."
+            )
+        if first_map_entry.map.schedule != second_map_entry.map.schedule:
+            return False
+        scope_dict = graph.scope_dict()
+        map_scope = scope_dict[first_map_entry]
+        if scope_dict[second_map_entry] != map_scope:
+            return False
+        if self.only_toplevel_maps and map_scope is not None:
+            return False
+        if self.only_inner_maps and map_scope is None:
+            return False
+        if (
+            dace_mfhelper.find_parameter_remapping(
+                first_map=first_map_entry.map, second_map=second_map_entry.map
+            )
+            is None
+        ):
+            return False
+
         return super().can_be_applied(graph, expr_index, sdfg, permissive)

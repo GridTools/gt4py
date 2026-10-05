@@ -132,8 +132,7 @@ def _mk_consumer_sdfg(consumer: str, memlet_on: str, offset: tuple[int, int]) ->
         )
         local_node = state2.add_access("local")
 
-        outer_entry.add_in_connector("IN_tmp")
-        outer_entry.add_out_connector("OUT_tmp")
+        outer_entry.add_scope_connectors("tmp")
         state2.add_edge(tmp_node, None, outer_entry, "IN_tmp", dace.Memlet("tmp[__i1, 0:10]"))
         state2.add_edge(
             outer_entry,
@@ -144,15 +143,12 @@ def _mk_consumer_sdfg(consumer: str, memlet_on: str, offset: tuple[int, int]) ->
             if memlet_on == "tmp"
             else dace.Memlet(data="local", subset="0:10", other_subset="__i1, 0:10"),
         )
-        inner_entry.add_in_connector("IN_local")
-        inner_entry.add_out_connector("OUT_local")
+        inner_entry.add_scope_connectors("local")
         state2.add_edge(local_node, None, inner_entry, "IN_local", dace.Memlet("local[0:10]"))
         state2.add_edge(inner_entry, "OUT_local", tasklet, "__in", dace.Memlet("local[__i2]"))
-        inner_exit.add_in_connector("IN_c")
-        inner_exit.add_out_connector("OUT_c")
+        inner_exit.add_scope_connectors("c")
         state2.add_edge(tasklet, "__out", inner_exit, "IN_c", dace.Memlet("c[__i1, __i2]"))
-        outer_exit.add_in_connector("IN_c")
-        outer_exit.add_out_connector("OUT_c")
+        outer_exit.add_scope_connectors("c")
         state2.add_edge(inner_exit, "OUT_c", outer_exit, "IN_c", dace.Memlet("c[__i1, 0:10]"))
         state2.add_edge(
             outer_exit, "OUT_c", state2.add_access("c"), None, dace.Memlet("c[0:10, 0:10]")
@@ -572,12 +568,10 @@ def test_write_back_buffer_elimination_empty_memlet():
     tasklet = state1.add_tasklet(
         "comp", inputs={"__in"}, outputs={"__out"}, code="__out = __in * 3.0"
     )
-    map_entry.add_in_connector("IN_a")
-    map_entry.add_out_connector("OUT_a")
+    map_entry.add_scope_connectors("a")
     state1.add_edge(state1.add_access("a"), None, map_entry, "IN_a", dace.Memlet("a[0:10]"))
     state1.add_edge(map_entry, "OUT_a", tasklet, "__in", dace.Memlet("a[__i]"))
-    map_exit.add_in_connector("IN_c")
-    map_exit.add_out_connector("OUT_c")
+    map_exit.add_scope_connectors("c")
     state1.add_edge(tasklet, "__out", map_exit, "IN_c", dace.Memlet("c[__i]"))
     state1.add_edge(map_exit, "OUT_c", state1.add_access("c"), None, dace.Memlet("c[0:10]"))
     state1.add_nedge(tmp_node, map_entry, dace.Memlet())
@@ -800,8 +794,7 @@ def test_write_back_buffer_elimination_view(viewed_data):
         tmp_node = state2.add_access("tmp")
         map_entry, map_exit = state2.add_map("consumer", ndrange={"__i2": "0:10"})
         view_node = state2.add_access("v")
-        map_entry.add_in_connector("IN_tmp")
-        map_entry.add_out_connector("OUT_tmp")
+        map_entry.add_scope_connectors("tmp")
         state2.add_edge(tmp_node, None, map_entry, "IN_tmp", dace.Memlet("tmp[0:10, __i2]"))
         state2.add_edge(map_entry, "OUT_tmp", view_node, "views", dace.Memlet("tmp[0:10, __i2]"))
         tasklet = state2.add_tasklet(
@@ -812,8 +805,7 @@ def test_write_back_buffer_elimination_view(viewed_data):
             language=dace.dtypes.Language.Python,
         )
         state2.add_edge(view_node, None, tasklet, "__in", dace.Memlet("v[0:10]"))
-        map_exit.add_in_connector("IN_c")
-        map_exit.add_out_connector("OUT_c")
+        map_exit.add_scope_connectors("c")
         state2.add_edge(tasklet, "__out", map_exit, "IN_c", dace.Memlet("c[0, __i2]"))
         state2.add_edge(map_exit, "OUT_c", state2.add_access("c"), None, dace.Memlet("c[0, 0:10]"))
     else:
