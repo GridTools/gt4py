@@ -237,7 +237,7 @@ def test_no_source_files_raises(tmp_path):
     c2 = tmp_path / "r2" / ".gt4py_cache"
     (c1 / _folder_name("p", "a")).mkdir(parents=True)
     (c2 / _folder_name("p", "a")).mkdir(parents=True)
-    with pytest.raises(NoSourceFilesObservedError, match="development"):
+    with pytest.raises(NoSourceFilesObservedError, match="GT4PY_KEEP_DACE_BUILD_FILES"):
         check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN)
 
 
@@ -442,7 +442,7 @@ def test_run_determinism_check_env_overrides_are_set(tmp_path):
         "junit = next(a.split('=', 1)[1] for a in sys.argv if a.startswith('--junit-xml='))\n"
         "cache = pathlib.Path(os.environ['GT4PY_BUILD_CACHE_DIR']) / '.gt4py_cache'\n"
         "rec = cache.parent.parent / (pathlib.Path(os.environ['GT4PY_BUILD_CACHE_DIR']).name + '.env')\n"
-        "rec.write_text(os.environ.get('DACE_compiler_build_folder_mode', '') + ',' "
+        "rec.write_text(os.environ.get('GT4PY_KEEP_DACE_BUILD_FILES', '') + ',' "
         "+ os.environ.get('GT4PY_BUILD_CACHE_LIFETIME', ''))\n"
         "cache.mkdir(parents=True, exist_ok=True)\n"
         'pathlib.Path(junit).write_text(\'<testsuite tests="0" failures="0" errors="0" />\')\n'
@@ -457,7 +457,7 @@ def test_run_determinism_check_env_overrides_are_set(tmp_path):
             dacecache=tmp_path / ".dacecache",
             self_check=False,
         )
-    assert (workdir / "run1.env").read_text() == "development,persistent"
+    assert (workdir / "run1.env").read_text() == "True,persistent"
 
 
 # --- CLI `ci-check` exit-code mapping ---
