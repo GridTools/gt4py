@@ -23,7 +23,7 @@ from gt4py.next.program_processors import program_formatter
 import next_tests
 
 
-ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatter
+ProgramProcessor: TypeAlias = backend.Toolchain | program_formatter.ProgramFormatter
 
 
 def _program_processor(request) -> tuple[ProgramProcessor, bool]:
