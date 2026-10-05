@@ -457,7 +457,7 @@ def test_run_determinism_check_env_overrides_are_set(tmp_path):
             dacecache=tmp_path / ".dacecache",
             self_check=False,
         )
-    assert (workdir / "run1.env").read_text() == "True,persistent"
+    assert (workdir / "run1.env").read_text() == "true,persistent"
 
 
 # --- CLI `ci-check` exit-code mapping ---
