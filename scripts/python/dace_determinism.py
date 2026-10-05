@@ -414,7 +414,7 @@ def check_determinism(
         raise NoSourceFilesObservedError(
             f"program(s) cached ({n_folders1} in run1, {n_folders2} in run2) but none "
             f"contain source files under {CODEGEN_DIR}/. Set "
-            f"GT4PY_KEEP_DACE_BUILD_FILES=True to keep the generated code "
+            f"GT4PY_KEEP_DACE_BUILD_FILES=true to keep the generated code "
             f"after compilation."
         )
 
