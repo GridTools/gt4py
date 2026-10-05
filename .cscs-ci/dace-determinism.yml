@@ -110,10 +110,6 @@ dace_determinism_cscs_gh200:
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
   rules:
     - *exclude_variants_rules
-    - if: $SUBPACKAGE == 'next' && $DETAIL == 'nomesh'
-      variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
     - when: on_success
 
 dace_determinism_cscs_amd_rocm:
