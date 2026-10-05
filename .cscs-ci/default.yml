@@ -99,6 +99,9 @@ test_cscs_gh200:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
+      variables:
+        SLURM_TIMELIMIT: "00:10:00"
     - when: on_success
 
 test_cscs_amd_rocm:
