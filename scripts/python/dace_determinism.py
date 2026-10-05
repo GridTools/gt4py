@@ -522,7 +522,7 @@ def _env_for_run(run_dir: Path) -> dict[str, str]:
     # GT4PY_BUILD_CACHE_LIFETIME to `persistent` keeps the cache around long
     # enough for the comparison to read it.
     #
-    # Setting GT4PY_KEEP_DACE_BUILD_FILES to `True` is REQUIRED: gt4py
+    # Setting GT4PY_KEEP_DACE_BUILD_FILES=true` is REQUIRED: gt4py
     # configures dace to `production` mode by default, which cleans up the dace
     # build folder after compilation — leaving only the compiled .so and
     # stripping the codegen sources we need to diff. Forcing `development` keeps
