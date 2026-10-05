@@ -675,12 +675,12 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  I.e. This is also the location where the temporary source was initialized.
         result_candidates: list[tuple[AccessLocation, list[AccessLocation]]] = []
 
-        def find_upstream_states(dst_state: dace.SDFGState) -> set[dace.SDFGState]:
-            return {
+        def find_upstream_states(dst_state: dace.SDFGState) -> list[dace.SDFGState]:
+            return [
                 src_state
                 for src_state in sdfg.states()
                 if dst_state in reachable[src_state] and dst_state is not src_state
-            }
+            ]
 
         for temp_storage in candidate_temp_storage:
             temp_storage_node, temp_storage_state = temp_storage
