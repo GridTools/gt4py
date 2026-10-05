@@ -27,13 +27,8 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.dialect_parser import DialectParser, type_from_annotation
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.stages import (
-    ConcreteDSLProgramDef,
-    ConcretePASTProgramDef,
-    DSLProgramDef,
-    PASTProgramDef,
-)
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.ffront.stages import DSLProgramDef, PASTProgramDef
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -72,29 +67,19 @@ def func_to_past(inp: DSLProgramDef) -> PASTProgramDef:
     )
 
 
-def func_to_past_factory(cached: bool = True) -> workflow.Workflow[DSLProgramDef, PASTProgramDef]:
+def func_to_past_factory(cached: bool = True) -> workflow.Step[DSLProgramDef, PASTProgramDef]:
     """
-    Wrap `func_to_past` in a chainable and optionally cached workflow step.
+    Return the `func_to_past` step, in-memory cached unless `cached` is unset.
 
-    Caching is switched off by default, because whether recompiling is necessary can only be known after
-    the closure variables have been collected (which is done in this step). In special cases where it can
-    be guaranteed that the closure variables do not change, switching caching on should be safe.
+    Caching is only safe as long as the closure variables of the program definition do not
+    change: whether recompiling is necessary can be known only after the closure variables
+    have been collected, which is what this step does.
     """
-    wf = workflow.make_step(func_to_past)
     if cached:
-        wf = workflow.CachedStep.in_memory(
-            wf, input_fingerprinter=ffront_stages.semantic_fingerprinter
+        return workflow.CachedStep.in_memory(
+            func_to_past, input_fingerprinter=ffront_stages.semantic_fingerprinter
         )
-    return wf
-
-
-def adapted_func_to_past_factory(
-    **kwargs: Any,
-) -> workflow.Workflow[ConcreteDSLProgramDef, ConcretePASTProgramDef]:
-    """
-    Wrap an adapter around the DSL definition -> PAST definition step to fit into transform toolchains.
-    """
-    return toolchain.DataOnlyAdapter(func_to_past_factory(**kwargs))
+    return func_to_past
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
