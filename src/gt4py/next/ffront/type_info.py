@@ -20,9 +20,8 @@ from gt4py.next.type_system import type_info
 
 named_collections_to_tuple_types = cast(
     Callable[..., ts.TupleType],
-    utils.tree_map(
+    type_info.tree_map_type(
         lambda x: x,
-        collection_type=ts.COLLECTION_TYPE_SPECS,
         result_collection_constructor=lambda _, elems: ts.TupleType(types=list(elems)),
     ),
 )
