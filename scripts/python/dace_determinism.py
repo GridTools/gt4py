@@ -532,7 +532,7 @@ def _env_for_run(run_dir: Path) -> dict[str, str]:
     return {
         "GT4PY_BUILD_CACHE_DIR": str(run_dir),
         "GT4PY_BUILD_CACHE_LIFETIME": "persistent",
-        "GT4PY_KEEP_DACE_BUILD_FILES": "True",
+        "GT4PY_KEEP_DACE_BUILD_FILES": "true",
     }
 
 
