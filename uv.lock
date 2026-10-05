@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a10"
-source = { git = "https://github.com/spcl/dace.git?branch=nested-sdfg#ee0d1a27c7210219bfe4279181380ccf1e01e061" }
+source = { git = "https://github.com/spcl/dace.git?branch=main#97f98e31f9e350c6270ddd11766bbeb57416d7d7" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1468,7 +1468,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/spcl/dace.git?branch=nested-sdfg" },
+    { name = "dace", git = "https://github.com/spcl/dace.git?branch=main" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
