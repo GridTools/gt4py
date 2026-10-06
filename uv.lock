@@ -922,7 +922,7 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a9"
+version = "2.0.0a10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astunparse" },
@@ -943,7 +943,7 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/34/a6e66f329ea94167c1c0da89dfaf053b1d90836ccab7161176dd12f10f9e/dace-2.0.0a9.tar.gz", hash = "sha256:ee9cd2a40c16fb09d559556433bb4f51b71fa88760fbc04306d54552775b5c4a", size = 6572070, upload-time = "2026-09-17T09:31:23.155Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/29/83c0d23a228c5f5cd5f6bdae1a124fcc2dd45fba239bc2b05925b99a3451/dace-2.0.0a10.tar.gz", hash = "sha256:8cfe968729be96ac66c5fd8c0f7c85c705182d30e9a49e3418cd4aafda238c30", size = 6616842, upload-time = "2026-10-03T13:32:04.812Z" }
 
 [[package]]
 name = "debugpy"
@@ -1269,7 +1269,6 @@ source = { editable = "." }
 dependencies = [
     { name = "array-api-compat" },
     { name = "attrs" },
-    { name = "black" },
     { name = "boltons" },
     { name = "cached-property" },
     { name = "click" },
@@ -1300,6 +1299,7 @@ dependencies = [
 
 [package.optional-dependencies]
 cartesian = [
+    { name = "black" },
     { name = "clang-format" },
     { name = "hypothesis" },
     { name = "jax" },
@@ -1324,7 +1324,6 @@ jax-cuda13 = [
     { name = "jax", extra = ["cuda13-local"], marker = "extra == 'extra-5-gt4py-jax-cuda13' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
 ]
 next = [
-    { name = "clang-format" },
     { name = "hypothesis" },
     { name = "jax" },
     { name = "pytest" },
@@ -1337,7 +1336,6 @@ rocm7 = [
     { name = "cupy-rocm-7-0" },
 ]
 standard = [
-    { name = "clang-format" },
     { name = "scipy" },
 ]
 testing = [
@@ -1354,6 +1352,8 @@ build = [
 ]
 dev = [
     { name = "atlas4py" },
+    { name = "black" },
+    { name = "clang-format" },
     { name = "cython" },
     { name = "esbonio" },
     { name = "factory-boy" },
@@ -1421,6 +1421,8 @@ scripts = [
     { name = "typer" },
 ]
 test = [
+    { name = "black" },
+    { name = "clang-format" },
     { name = "factory-boy" },
     { name = "hypothesis" },
     { name = "nbmake" },
@@ -1456,10 +1458,10 @@ typing-exports = [
 requires-dist = [
     { name = "array-api-compat", specifier = ">=1.13" },
     { name = "attrs", specifier = ">=21.3" },
-    { name = "black", specifier = ">=25.11" },
+    { name = "black", marker = "extra == 'cartesian'", specifier = ">=25.11" },
     { name = "boltons", specifier = ">=20.1" },
     { name = "cached-property", specifier = ">=1.5.1" },
-    { name = "clang-format", marker = "extra == 'standard'", specifier = ">=18.1" },
+    { name = "clang-format", marker = "extra == 'cartesian'", specifier = ">=18.1" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cmake", specifier = ">=3.22" },
     { name = "cupy", marker = "extra == 'rocm6'", specifier = ">=13.4.1,<14.0" },
@@ -1467,7 +1469,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = "==2.0.0a9" },
+    { name = "dace", specifier = "==2.0.0a10" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
@@ -1490,7 +1492,7 @@ requires-dist = [
     { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
     { name = "ordered-set", specifier = ">=4.1.0" },
-    { name = "packaging", specifier = ">=20.0" },
+    { name = "packaging", specifier = ">=24.2" },
     { name = "pybind11", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "extra == 'standard'", specifier = ">=1.16.1" },
@@ -1512,6 +1514,8 @@ build = [
 ]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
+    { name = "black", specifier = ">=25.11" },
+    { name = "clang-format", specifier = ">=18.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
     { name = "factory-boy", specifier = ">=3.3.3" },
@@ -1577,6 +1581,8 @@ scripts = [
     { name = "typer", specifier = ">=0.16.0" },
 ]
 test = [
+    { name = "black", specifier = ">=25.11" },
+    { name = "clang-format", specifier = ">=18.1" },
     { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "nbmake", specifier = ">=1.4.6" },

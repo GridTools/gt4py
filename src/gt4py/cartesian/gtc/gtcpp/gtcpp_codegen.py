@@ -20,7 +20,7 @@ from gt4py.cartesian.gtc.common import (
     UnaryOperator,
 )
 from gt4py.cartesian.gtc.gtcpp import gtcpp
-from gt4py.eve import codegen
+from gt4py.eve import codegen, formatting
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.eve.concepts import LeafNode
 
@@ -334,6 +334,6 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             raise TypeError("apply() missing 1 required keyword-only argument: 'gt_backend_t'")
         generated_code = super().apply(root, offset_limit=_offset_limit(root), **kwargs)
         if kwargs.get("format_source", True):
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
 
         return generated_code
