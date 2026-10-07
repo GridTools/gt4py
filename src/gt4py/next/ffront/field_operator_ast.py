@@ -12,9 +12,9 @@ from typing import Any, Generic, TypeAlias, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
-from gt4py.eve.extended_typing import MaybeNestedInTuple
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
+from gt4py.eve.xtyping import MaybeNestedInTuple
 from gt4py.next import utils
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts

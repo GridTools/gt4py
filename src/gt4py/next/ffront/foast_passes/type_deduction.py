@@ -12,7 +12,7 @@ from typing import Any, Optional, Sequence, TypeAlias, TypeVar, cast
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.xtyping import MaybeNestedInTuple
 from gt4py.next import common, errors
 from gt4py.next.common import Dimension, DimensionKind, promote_dims
 from gt4py.next.ffront import (

@@ -11,9 +11,10 @@ from __future__ import annotations
 import ast
 import textwrap
 import typing
+from typing import Any
 
 import gt4py.eve as eve
-from gt4py.eve.extended_typing import Any, MaybeNestedInTuple
+from gt4py.eve.xtyping import MaybeNestedInTuple
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
