@@ -148,6 +148,7 @@ class TupleType(DataType):
         return len(self.types)
 
 
+# TODO(tehrengruber): Rename to var length tuple or similar
 class VarArgType(DataType):
     """Represents a variable number of arguments of the same type."""
 
