@@ -15,25 +15,15 @@ import functools
 import math
 import operator
 import types
+from collections.abc import Buffer, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic, NewType, Optional, TypeAlias, TypeGuard, Union
 
 import numpy as np
 import numpy.typing as npt
+from typing_extensions import Protocol
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    NewType,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeAlias,
-    TypeGuard,
-    Union,
-)
+from gt4py.eve import xtyping
 
 
 try:
@@ -43,8 +33,10 @@ except ImportError:
 
 
 _NDBuffer: TypeAlias = Union[
-    # TODO: add `xtyping.Buffer` once we update typing_extensions
-    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    Buffer,
+    xtyping.ArrayInterface,
+    xtyping.CUDAArrayInterface,
+    xtyping.DLPackBuffer,
 ]
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that

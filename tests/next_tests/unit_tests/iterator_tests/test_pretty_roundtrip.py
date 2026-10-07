@@ -23,11 +23,6 @@ from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
 
 
-_XFAIL_LITERAL_TYPE = pytest.mark.xfail(
-    reason="`Literal.type` is not printed; the parser re-types the lexeme", strict=True
-)
-
-
 _SET_AT = ir.SetAt(expr=im.ref("x"), domain=im.call("cartesian_domain")(), target=im.ref("y"))
 
 
@@ -50,7 +45,6 @@ ROUNDTRIP_CASES = [
             im.literal("4", "int64"),
         ),
         id="arithmetic",
-        marks=_XFAIL_LITERAL_TYPE,
     ),
     pytest.param(
         im.plus(
@@ -58,7 +52,6 @@ ROUNDTRIP_CASES = [
             im.plus(im.literal("3", "int64"), im.literal("4", "int64")),
         ),
         id="associativity",
-        marks=_XFAIL_LITERAL_TYPE,
     ),
     pytest.param(im.deref("x"), id="deref"),
     pytest.param(im.call("lift")("x"), id="lift"),
@@ -137,6 +130,32 @@ ROUNDTRIP_CASES = [
             body=[_SET_AT],
         ),
         id="program",
+    ),
+    pytest.param(im.literal("1.0", "float32"), id="literal_float32"),
+    pytest.param(im.literal("1", "int64"), id="literal_int64"),
+    pytest.param(im.literal("1", "int8"), id="literal_int8"),
+    pytest.param(im.literal("1", "int16"), id="literal_int16"),
+    pytest.param(im.literal("True", "bool"), id="literal_bool"),
+    pytest.param(
+        ir.Temporary(
+            id="t",
+            domain=im.ref("domain"),
+            dtype=ts.TupleType(
+                types=[
+                    ts.ScalarType(kind=ts.ScalarKind.BOOL),
+                    ts.ScalarType(kind=ts.ScalarKind.INT16),
+                ]
+            ),
+        ),
+        id="temporary_tuple_dtype",
+    ),
+    pytest.param(
+        ir.Temporary(
+            id="t",
+            domain=im.ref("domain"),
+            dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=[3]),
+        ),
+        id="temporary_shaped_dtype",
     ),
     pytest.param(ir.InfinityLiteral.POSITIVE, id="infinity_positive"),
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),

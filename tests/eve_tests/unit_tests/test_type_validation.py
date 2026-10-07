@@ -11,24 +11,14 @@ from __future__ import annotations
 import dataclasses
 import enum
 import typing
-from frozendict import frozendict
+from collections.abc import Callable, Sequence
+from typing import Any, Final, ForwardRef, Optional, Union
 
 import pytest
+from frozendict import frozendict
 
-from gt4py.eve import (
-    extended_typing as xtyping,
-    type_validation as type_val,
-)
-from gt4py.eve.extended_typing import (
-    Any,
-    Callable,
-    Final,
-    ForwardRef,
-    Optional,
-    Sequence,
-    SourceTypeAnnotation,
-    Union,
-)
+from gt4py.eve import type_validation as type_val, xtyping
+from gt4py.eve.xtyping import SourceTypeAnnotation
 
 
 VALIDATORS: Final[list[Callable]] = [type_val.simple_type_validator]
@@ -47,6 +37,23 @@ class SampleEmptyClass:
 @dataclasses.dataclass
 class SampleDataClass:
     a: int
+
+
+type SampleTypeAlias = SampleEmptyClass  # PEP 695, nested inside `type[...]`
+
+type SampleRecursiveTypeAlias = SampleRecursiveTypeAlias  # cannot be resolved
+
+SampleBoundTypeVar = typing.TypeVar("SampleBoundTypeVar", bound=SampleEmptyClass)
+SampleUnboundTypeVar = typing.TypeVar("SampleUnboundTypeVar")
+
+
+class SampleProtocol(typing.Protocol):
+    def method(self) -> None: ...
+
+
+@typing.runtime_checkable
+class SampleRuntimeCheckableProtocol(typing.Protocol):
+    attribute: int
 
 
 # Each item should be a tuple like:
@@ -75,6 +82,39 @@ SAMPLE_TYPE_DEFINITIONS: list[
     (typing.List[int], ([1, 2, 3], []), (1, [1.0]), None, None),
     (typing.Set[int], ({1, 2, 3}, set()), (1, [1], (1,), {1: None}), None, None),
     (typing.Dict[int, str], ({}, {3: "three"}), ([(3, "three")], 3, "three", []), None, None),
+    (type[SampleEmptyClass], [SampleEmptyClass], [SampleEmptyClass(), int, 3], None, None),
+    (type[SampleDataClass], [SampleDataClass], [SampleDataClass(a=1), str], None, None),
+    (type[Any], [SampleEmptyClass, int, str], [3, "int", SampleEmptyClass()], None, None),
+    # `type[X]` shapes that are not a plain class must stay *usable*: they validated
+    # loosely before the `type[X]` case existed, so they fall back to "is a class"
+    # rather than being rejected at class-creation time.
+    (type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (typing.Type, [SampleEmptyClass, int], [3, "int"], None, None),
+    (
+        type[SampleEmptyClass | SampleDataClass],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
+    (
+        type[typing.Union[SampleEmptyClass, SampleDataClass]],
+        [SampleEmptyClass, SampleDataClass],
+        [int, SampleEmptyClass(), 3],
+        None,
+        None,
+    ),
+    (type[SampleTypeAlias], [SampleEmptyClass], [int, SampleEmptyClass(), 3], None, None),
+    # An alias which cannot be resolved keeps the loose check instead of propagating
+    # the resolution error out of the class definition.
+    (type[SampleRecursiveTypeAlias], [SampleEmptyClass, int], [3, "int"], None, None),
+    # Protocols do not support 'issubclass()' in general, so they keep the loose check
+    # too, independently of whether they are '@runtime_checkable'.
+    (type[SampleProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
+    (type[SampleRuntimeCheckableProtocol], [SampleEmptyClass, int], [3, "int"], None, None),
+    # a bounded TypeVar is honoured, mirroring the plain-TypeVar branch
+    (type[SampleBoundTypeVar], [SampleEmptyClass], [int, SampleEmptyClass()], None, None),
+    (type[SampleUnboundTypeVar], [SampleEmptyClass, int], [3, "int"], None, None),
     (
         frozendict[int, str],
         (
@@ -198,7 +238,13 @@ SAMPLE_TYPE_DEFINITIONS.extend(
             None,
             None,
         ),
-        (xtyping.MaybeNestedInTuple[int], (1, (), (1, (2, 3))), ("1", [1], (1, "2")), None, None),
+        (
+            xtyping.MaybeNestedInTuple[int],
+            (1, (), (1, (2, 3))),
+            ("1", [1], (1, "2")),
+            None,
+            None,
+        ),
     ]
 )
 
@@ -289,7 +335,7 @@ def test_simple_validation_particularities():
     lenient_validator(True)
 
     # not supported annotations
-    InvalidAnnotation = xtyping.TypeGuard[str]
+    InvalidAnnotation = typing.TypeGuard[str]
     assert (
         type_val.simple_type_validator_factory(InvalidAnnotation, "value", required=False) is None
     )

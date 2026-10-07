@@ -206,7 +206,7 @@ def test_examples(session: nox.Session) -> None:
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
-        ("docs/user/next/workshop/exercises", ["-k", "solutions"]),
+        ("docs/user/next/workshop/exercises", ["-k", "solution"]),
         ("docs/user/next/QuickstartGuide.ipynb", None),
         ("docs/user/next/advanced", None),
         ("examples", (None)),

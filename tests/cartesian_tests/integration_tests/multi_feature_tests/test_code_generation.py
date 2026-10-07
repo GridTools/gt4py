@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtscript import (
@@ -1819,6 +1820,7 @@ def test_reset_mask_2d(backend: str) -> None:
                 pytest.mark.uses_dace,
                 pytest.mark.requires_gpu,
                 pytest.mark.xfail(
+                    condition=core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM,
                     raises=SystemExit,
                     reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
                 ),
@@ -1890,3 +1892,20 @@ def test_enum_runtime(backend):
     assert out_arr[0, 0, 0] == MyEnum.A.value
     assert out_arr[0, 0, 1] == MyEnum.B.value
     assert (out_arr[0, 0, 2:] == MyEnum.C.value).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_negated_bool_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], done: bool):  # type: ignore
+        with computation(PARALLEL), interval(...):
+            if not done:
+                out_field = 1
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, done=False)
+
+    assert (out_arr[:] == 1).all()
