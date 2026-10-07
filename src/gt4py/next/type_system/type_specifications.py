@@ -8,13 +8,10 @@
 
 from __future__ import annotations
 
-from typing import Final, Iterator, Optional, Sequence, TypeVar
+import typing
+from typing import Final, Optional, Sequence, TypeVar
 
-from gt4py.eve import (
-    datamodels as eve_datamodels,
-    extended_typing as xtyping,
-    type_definitions as eve_types,
-)
+from gt4py.eve import datamodels as eve_datamodels, type_definitions as eve_types
 from gt4py.next import common
 
 
@@ -74,9 +71,12 @@ class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
+    #: The offset-provider key; `None` for the untagged Cartesian `Dim + offset`.
+    tag: Optional[common.Tag] = None
 
     def __str__(self) -> str:
-        return f"Offset[{self.source}, {self.target}]"
+        tag = "" if self.tag is None else f"{self.tag}: "
+        return f"Offset[{tag}{self.source}, {self.target}]"
 
 
 class ScalarKind(eve_types.IntEnum):
@@ -141,12 +141,6 @@ class TupleType(DataType):
     def __str__(self) -> str:
         return f"tuple[{', '.join(map(str, self.types))}]"
 
-    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
-        yield from self.types
-
-    def __len__(self) -> int:
-        return len(self.types)
-
 
 # TODO(tehrengruber): Rename to var length tuple or similar
 class VarArgType(DataType):
@@ -200,17 +194,10 @@ class NamedCollectionType(DataType):
     def __str__(self) -> str:
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
-    def __iter__(self) -> Iterator[DataType | DimensionType | DeferredType]:
-        # Note: Unlike `Mapping`s, we iterate the values (not the keys) by default.
-        yield from self.types
-
-    def __len__(self) -> int:
-        return len(self.types)
-
 
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType
-COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = xtyping.get_args(
+COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = typing.get_args(
     CollectionTypeSpec
 )
 

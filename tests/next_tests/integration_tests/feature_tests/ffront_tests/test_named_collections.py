@@ -629,7 +629,6 @@ def test_concat_where_nested(cartesian_case):
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_concat_where
 @pytest.mark.uses_unstructured_shift
-@pytest.mark.uses_concat_where_with_list_output
 def test_concat_where_with_local_fields(unstructured_case):
     @gtx.field_operator
     def testee(

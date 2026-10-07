@@ -28,12 +28,14 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     BinaryExpr,
     CartesianDomain,
     CastExpr,
+    Expr,
     FunCall,
     FunctionDefinition,
     IfStmt,
     IntegralConstant,
     Lambda,
     Literal,
+    Node,
     OffsetLiteral,
     Program,
     Scan,
@@ -42,6 +44,8 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     SidComposite,
     SidFromScalar,
     StencilExecution,
+    Sym,
+    SymRef,
     TagDefinition,
     TaggedValues,
     TemporaryAllocation,
@@ -49,7 +53,6 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     UnaryExpr,
     UnstructuredDomain,
 )
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 

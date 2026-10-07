@@ -255,9 +255,10 @@ def translate_as_fieldop(
     if cpm.is_ref_to(fieldop_expr, "deref"):
         arg_type = node.args[0].type
         assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
-        if isinstance(arg_type, ts.ScalarType) or arg_type.dims != node.type.dims:
+        if arg_type != node.type:
             # Special usage of 'deref' as argument to fieldop expression, to broadcast
-            # the input value (a scalar or a field slice) on the output domain.
+            # the input value (a scalar, a field slice or a field of constant lists)
+            # on the output field type.
             stencil_expr = im.lambda_("a")(im.deref("a"))
             stencil_expr.expr.type = node.type.dtype
         else:

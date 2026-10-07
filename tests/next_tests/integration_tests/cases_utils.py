@@ -90,7 +90,6 @@ no_backend = NoBackend(
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
         next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
@@ -144,10 +143,10 @@ def debug_itir(tree):
     """Compare tree snippets while debugging."""
     from devtools import debug
 
-    from gt4py.eve.codegen import format_python_source
+    from gt4py.eve import formatting
     from gt4py.next.program_processors import EmbeddedDSL
 
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
+    debug(formatting.format_python_source(EmbeddedDSL.apply(tree)))
 
 
 DimsType = TypeVar("DimsType")

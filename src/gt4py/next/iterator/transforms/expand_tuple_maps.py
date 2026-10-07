@@ -14,16 +14,14 @@ from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.type_system import inference as itir_inference
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _tree_map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleType) -> itir.Expr:
     """Recursively expand `tree_map_tuple(f)(t)` into `make_tuple` calls."""
 
-    @utils.tree_map(
-        collection_type=ts.TupleType,
-        result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
-        with_path_arg=True,
+    @type_info.tree_map_type(
+        result_collection_constructor=lambda _, elts: im.make_tuple(*elts), with_path_arg=True
     )
     def mapper(_el_type, path):
         return im.call(f)(functools.reduce(lambda expr, i: im.tuple_get(i, expr), path, tup_expr))

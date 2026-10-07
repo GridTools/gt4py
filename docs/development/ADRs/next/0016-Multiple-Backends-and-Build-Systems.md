@@ -13,7 +13,7 @@ In the process of enabling CUDA for the GTFN backend, we encountered a potential
 
 ## Context
 
-ADRs [0009](0009-Compiled_Backend_Integration.md), [0011](0011-On_The_Fly_Compilation.md) and [0012](0012-GridTools_Cpp_OTF_Steps.md) detail the design decisions around what is loosely referred as "gt4py.next backends". In summary the goals are:
+ADRs [0009](0009-Compiled-Backend-Integration.md), [0011](0011-On_The_Fly_Compilation.md) and [0012](0012-GridTools_Cpp_OTF_Steps.md) detail the design decisions around what is loosely referred as "gt4py.next backends". In summary the goals are:
 
 - extensibility
   - adding backends should not require changing existing code

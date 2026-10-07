@@ -12,7 +12,7 @@ import functools
 import inspect
 import itertools
 import types
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import (
     Any,
     ClassVar,
@@ -104,6 +104,8 @@ def tree_map(
     fun: Callable[_P, _R],
     *,
     collection_type: type | tuple[type, ...] = tuple,
+    collection_elements: Callable[[Any], Iterable[Any]] = iter,
+    collection_keys: Callable[[Any], Iterable[Any]] = lambda _: itertools.count(),
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
@@ -114,6 +116,8 @@ def tree_map(
 def tree_map(
     *,
     collection_type: type | tuple[type, ...] = tuple,
+    collection_elements: Callable[[Any], Iterable[Any]] = iter,
+    collection_keys: Callable[[Any], Iterable[Any]] = lambda _: itertools.count(),
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
@@ -126,6 +130,8 @@ def tree_map(
     fun: Optional[Callable[_P, _R]] = None,
     *,
     collection_type: type | tuple[type, ...] = tuple,
+    collection_elements: Callable[[Any], Iterable[Any]] = iter,
+    collection_keys: Callable[[Any], Iterable[Any]] = lambda _: itertools.count(),
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
@@ -136,6 +142,16 @@ def tree_map(
     Args:
         fun: Function to apply to each entry of the collection.
         collection_type: Type of the collection to be traversed. Can be a single type or a tuple of types.
+        collection_elements: Decompose a collection into its elements. Dual to
+          `result_collection_constructor`: the three facets of a traversable collection are
+          membership (`collection_type`), decomposition (`collection_elements`) and
+          reconstruction (`result_collection_constructor`). Defaults to `iter`, i.e. the
+          collections are assumed to implement the iterator protocol.
+        collection_keys: Keys of a collection's elements, used as the path components when
+          `with_path_arg` is set. May be an unbounded iterator, as the default is, which
+          addresses elements by their position. Note that the keys are not needed to
+          reconstruct a collection, since `result_collection_constructor` receives the original
+          collection and can recover them from there.
         result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
         unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
           tuple of result collections instead of result collections of tuples.
@@ -184,6 +200,36 @@ def tree_map(
         ((2, 3), 4)
         >>> squared
         ((4, 9), 16)
+
+        Collections that do not implement the iterator protocol are traversed by passing a
+        custom `collection_elements` decomposition:
+
+        >>> import dataclasses
+        >>> @dataclasses.dataclass
+        ... class Node:
+        ...     children: dict
+        >>> tree_map(
+        ...     collection_type=Node,
+        ...     collection_elements=lambda node: node.children.values(),
+        ...     result_collection_constructor=lambda value, elts: Node(
+        ...         children=dict(zip(value.children.keys(), elts))
+        ...     ),
+        ... )(lambda x: x + 1)(Node({"a": Node({"b": 1})}))
+        Node(children={'a': Node(children={'b': 2})})
+
+        Elements can be addressed by something other than their position by additionally
+        passing `collection_keys`:
+
+        >>> tree_map(
+        ...     collection_type=Node,
+        ...     collection_elements=lambda node: node.children.values(),
+        ...     collection_keys=lambda node: node.children.keys(),
+        ...     result_collection_constructor=lambda value, elts: dict(
+        ...         zip(value.children.keys(), elts)
+        ...     ),
+        ...     with_path_arg=True,
+        ... )(lambda x, path: path)(Node({"a": Node({"b": 1})}))
+        {'a': {'b': ('a', 'b')}}
     """
 
     if result_collection_constructor is None:
@@ -199,20 +245,29 @@ def tree_map(
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
             if isinstance(args[0], collection_type):
-                first_arg: Any = args[0]
                 non_path_args: Sequence[Any]
+                path: tuple[Any, ...] = ()
                 if with_path_arg:
                     *non_path_args, path = args
-                    args = (*non_path_args, tuple((*path, i) for i in range(len(first_arg))))
                 else:
                     non_path_args = args
 
                 assert all(isinstance(arg, collection_type) for arg in non_path_args)
-                assert all(len(first_arg) == len(arg) for arg in non_path_args)
+                first_arg: Any = non_path_args[0]
+                elements_per_arg = [tuple(collection_elements(arg)) for arg in non_path_args]
+
+                zipped_args: list[Iterable[Any]] = [*elements_per_arg]
+                if with_path_arg:
+                    # Note: `collection_keys` may be an unbounded iterator (as the default is),
+                    # hence `zip` below stops at the shortest argument and the structures are
+                    # only compared after the mapping.
+                    zipped_args.append((*path, key) for key in collection_keys(first_arg))
+
                 assert result_collection_constructor is not None
                 ctor = functools.partial(result_collection_constructor, first_arg)
 
-                mapped = [impl(*arg) for arg in zip(*args)]
+                mapped = [impl(*elements) for elements in zip(*zipped_args)]
+                assert all(len(mapped) == len(elements) for elements in elements_per_arg)
                 if unpack:
                     return tuple(map(ctor, zip(*mapped)))
                 else:
@@ -230,6 +285,8 @@ def tree_map(
         return functools.partial(
             tree_map,
             collection_type=collection_type,
+            collection_elements=collection_elements,
+            collection_keys=collection_keys,
             result_collection_constructor=result_collection_constructor,
             unpack=unpack,
             with_path_arg=with_path_arg,

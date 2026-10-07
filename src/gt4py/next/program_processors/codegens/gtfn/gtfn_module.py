@@ -9,22 +9,18 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 from typing import Any, Final, Optional
 
-import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
-from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
-from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
+from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -50,8 +46,9 @@ class GTFNTranslationStep(
     code_spec: Optional[artifacts.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
-    use_imperative_backend: bool = False
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    # No default: the device must agree with the other steps of the pipeline, so
+    # forgetting to pass it must fail instead of silently targeting the CPU.
+    device_type: core_defs.DeviceType = dataclasses.field(kw_only=True)
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
@@ -147,27 +144,14 @@ class GTFNTranslationStep(
         program: itir.Program,
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
     ) -> itir.Program:
-        apply_common_transforms = functools.partial(
-            pass_manager.apply_common_transforms,
+        return pass_manager.apply_common_transforms(
+            program,
             extract_temporaries=True,
+            unroll_reduce=True,
             offset_provider=offset_provider,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
             use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
-
-        new_program = apply_common_transforms(
-            program, unroll_reduce=not self.use_imperative_backend
-        )
-
-        if self.use_imperative_backend and any(
-            node.id == "neighbors"
-            for node in new_program.pre_walk_values().if_isinstance(itir.SymRef)
-        ):
-            # if we don't unroll, there may be lifts left in the itir which can't be lowered to
-            # gtfn. In this case, just retry with unrolled reductions.
-            new_program = apply_common_transforms(program, unroll_reduce=True)
-
-        return new_program
 
     def generate_stencil_source(
         self,
@@ -187,13 +171,7 @@ class GTFNTranslationStep(
             column_axis=column_axis,
         )
 
-        if self.use_imperative_backend:
-            gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir)
-            generated_code = GTFNIMCodegen.apply(gtfn_im_ir)
-        else:
-            generated_code = GTFNCodegen.apply(gtfn_ir)
-
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        return GTFNCodegen.apply(gtfn_ir)
 
     def __call__(
         self, inp: stages.CompilableProgramDef
@@ -230,14 +208,13 @@ class GTFNTranslationStep(
             inp.args.offset_provider,
             inp.args.column_axis,
         )
-        source_code = artifacts.format_source(
-            self._code_spec(),
-            f"""
-                    #include <{self._backend_header()}>
-                    #include <gridtools/sid/dimension_to_tuple_like.hpp>
-                    {stencil_src}
-                    {decl_src}
-                    """.strip(),
+        source_code = "\n".join(
+            [
+                f"#include <{self._backend_header()}>",
+                "#include <gridtools/sid/dimension_to_tuple_like.hpp>",
+                stencil_src,
+                decl_src,
+            ]
         )
 
         module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
@@ -286,13 +263,10 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
-    class Meta:
-        model = GTFNTranslationStep
+translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStep(
+    device_type=core_defs.DeviceType.CPU
+)
 
-
-translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
-
-translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStep(
     device_type=core_defs.DeviceType.CUDA
 )

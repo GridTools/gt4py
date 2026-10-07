@@ -11,14 +11,16 @@
 Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 """
 
-# TODO(tehrengruber): add support for printing the types of itir.Sym, itir.Literal nodes
+# TODO(tehrengruber): add support for printing the types of itir.Sym nodes
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+import types as _types
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 # replacements for builtin binary operations
@@ -63,12 +65,81 @@ PRECEDENCE: Final = {
 }
 
 
+#: Surface spelling of the scalar types, LLVM/MLIR style.
+SCALAR_TYPE_NAMES: Final[Mapping[ts.ScalarKind, str]] = _types.MappingProxyType(
+    {
+        ts.ScalarKind.BOOL: "i1",
+        ts.ScalarKind.INT8: "i8",
+        ts.ScalarKind.UINT8: "u8",
+        ts.ScalarKind.INT16: "i16",
+        ts.ScalarKind.UINT16: "u16",
+        ts.ScalarKind.INT32: "i32",
+        ts.ScalarKind.UINT32: "u32",
+        ts.ScalarKind.INT64: "i64",
+        ts.ScalarKind.UINT64: "u64",
+        ts.ScalarKind.FLOAT32: "f32",
+        ts.ScalarKind.FLOAT64: "f64",
+    }
+)
+
+SCALAR_TYPE_KINDS: Final[Mapping[str, ts.ScalarKind]] = _types.MappingProxyType(
+    {name: kind for kind, name in SCALAR_TYPE_NAMES.items()}
+)
+
+
+def format_type(type_: ts.TypeSpec) -> str:
+    if isinstance(type_, ts.TupleType):
+        return f"{{{', '.join(format_type(t) for t in type_.types)}}}"
+    if isinstance(type_, ts.ScalarType) and type_.kind in SCALAR_TYPE_NAMES:
+        name = SCALAR_TYPE_NAMES[type_.kind]
+        if type_.shape is None:
+            return name
+        return f"{name}[{', '.join(str(s) for s in type_.shape)}]"
+    raise NotImplementedError(f"No pretty-printed form for type '{type_}'.")
+
+
+def implied_literal_type(value: str) -> ts.ScalarType:
+    """Type the bare, unannotated lexeme `value` denotes.
+
+    `pretty_parser` assigns exactly this to an unannotated lexeme, so the printer
+    leaves the annotation off when it would agree.  The lexeme is read back to a
+    Python value and typed by `type_translation.from_value`, which is what the
+    frontend applies to a constant (`ffront/foast_passes/type_deduction.py`,
+    `TypeDeducer.visit_Constant`), so the two cannot disagree.
+
+    Raises:
+        ValueError: If `value` is not a literal lexeme; neither a bare nor an
+            annotated spelling of it parses back.
+    """
+    py_value: bool | int | float
+    if value in ("True", "False"):
+        py_value = value == "True"
+    else:
+        try:
+            py_value = int(value)
+        except ValueError:
+            try:
+                py_value = float(value)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid literal value '{value}'; expected a boolean, an integer or a"
+                    " floating point lexeme."
+                ) from None
+    type_ = type_translation.from_value(py_value)
+    assert isinstance(type_, ts.ScalarType)
+    return type_
+
+
 DEFAULT_INDENT: Final = 2
 DEFAULT_WIDTH: Final = 100
 
 
 class PrettyPrinter(NodeTranslator):
-    def __init__(self, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH) -> None:
+    def __init__(
+        self,
+        indent: int = DEFAULT_INDENT,
+        width: int = DEFAULT_WIDTH,
+    ) -> None:
         super().__init__()
         self.indent: int = indent
         self.width: int = width
@@ -131,7 +202,12 @@ class PrettyPrinter(NodeTranslator):
         return [node.id]
 
     def visit_Literal(self, node: ir.Literal, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        # Unconditional, as it also rejects a value that is no literal lexeme: printing such a
+        # value, annotated or not, yields text that does not parse back.
+        implied_type = implied_literal_type(node.value)
+        return [
+            node.value if implied_type == node.type else f"{node.value}:{format_type(node.type)}"
+        ]
 
     def visit_InfinityLiteral(self, node: ir.InfinityLiteral, *, prec: int) -> list[str]:
         if node == ir.InfinityLiteral.POSITIVE:
@@ -268,7 +344,7 @@ class PrettyPrinter(NodeTranslator):
         if node.domain is not None:
             args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
         if node.dtype is not None:
-            args.append(self._hmerge(["dtype="], [str(node.dtype)]))
+            args.append(self._hmerge(["dtype="], [format_type(node.dtype)]))
         hargs = self._hmerge(*self._hinterleave(args, ", "))
         vargs = self._vmerge(*self._hinterleave(args, ","))
         oargs = self._optimum(hargs, vargs)

@@ -16,8 +16,7 @@ from lark import (
     visitors as lark_visitors,
 )
 
-from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -84,6 +83,7 @@ GRAMMAR = """
         | "c⟨" ( prec0 "," )* prec0? "⟩" -> cartesian_domain
 
     ?prec9: _literal
+        | typed_literal
         | SYM_REF
         | named_range
         | cartesian_offset
@@ -94,10 +94,15 @@ GRAMMAR = """
     else_branch_seperator: "else"
     if_stmt: "if" "(" prec0 ")" "{" ( stmt )* "}" else_branch_seperator "{" ( stmt )* "}"
 
+    typed_literal: ( INT_LITERAL | FLOAT_LITERAL | SYM_REF ) ":" TYPE_LITERAL
+    ?type_expr: TYPE_LITERAL
+        | TYPE_LITERAL "[" INT_LITERAL ("," INT_LITERAL)* "]" -> shaped_scalar_type
+        | "{" type_expr ("," type_expr)* "}" -> tuple_type
+
     named_range: AXIS_LITERAL ":" "[" prec0 "," prec0 "["
     cartesian_offset: AXIS_LITERAL "→" AXIS_LITERAL
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
-    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" TYPE_LITERAL ")" ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" type_expr ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
     program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( stmt )+ "}"
@@ -107,6 +112,11 @@ GRAMMAR = """
 """  # noqa: RUF001 [ambiguous-unicode-character-string]
 
 
+def _bare_literal(value: str) -> ir.Literal:
+    """A literal written without a type annotation."""
+    return ir.Literal(value=value, type=pretty_printer.implied_literal_type(value))
+
+
 @lark_visitors.v_args(inline=True)
 class ToIrTransformer(lark_visitors.Transformer):
     def SYM(self, value: lark_lexer.Token) -> ir.Sym:
@@ -114,19 +124,35 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
-            return im.literal(value.value, "bool")
+            return _bare_literal(value.value)
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal_from_value(int(value.value))
+        return _bare_literal(str(int(value.value)))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return im.literal(value.value, "float64")
+        return _bare_literal(value.value)
 
-    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.TypeSpec:
-        if hasattr(ts.ScalarKind, value.upper()):
-            return ts.ScalarType(kind=getattr(ts.ScalarKind, value.upper()))
-        raise NotImplementedError(f"Type {value} not supported.")
+    def TYPE_LITERAL(self, value: lark_lexer.Token) -> ts.ScalarType:
+        if (kind := pretty_printer.SCALAR_TYPE_KINDS.get(value.value)) is None:
+            raise ValueError(
+                f"Invalid type '{value}'; expected one of "
+                f"{', '.join(sorted(pretty_printer.SCALAR_TYPE_KINDS))}."
+            )
+        return ts.ScalarType(kind=kind)
+
+    def shaped_scalar_type(self, type_: ts.ScalarType, *shape: ir.Literal) -> ts.ScalarType:
+        return ts.ScalarType(kind=type_.kind, shape=[int(s.value) for s in shape])
+
+    def tuple_type(self, *types: ts.DataType) -> ts.TupleType:
+        return ts.TupleType(types=list(types))
+
+    def typed_literal(
+        self, value: Union[ir.Literal, ir.SymRef], type_: ts.ScalarType
+    ) -> ir.Literal:
+        if not isinstance(value, ir.Literal):
+            raise ValueError(f"Only a literal can carry a type annotation, got '{value.id}'.")
+        return ir.Literal(value=value.value, type=type_)
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]

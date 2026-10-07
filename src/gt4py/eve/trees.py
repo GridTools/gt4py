@@ -13,18 +13,12 @@ from __future__ import annotations
 import abc
 import collections.abc
 import functools
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, Optional, TypeVar, Union
+
+from typing_extensions import Protocol
 
 from . import utils
-from .extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Iterable,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-)
 from .type_definitions import Enum
 
 

@@ -137,12 +137,9 @@ def _make_sdfg_with_multiple_maps_that_share_inputs(
     state.add_edge(mexit, "OUT_out1", out1, None, sdfg.make_array_memlet("out1"))
     for name in ["a", "b"]:
         mentry.add_scope_connectors(name)
-    mexit.add_in_connector("IN_out1")
-    mexit.add_out_connector("OUT_out1")
-    small_map_entry.add_in_connector("IN_tmp3")
-    small_map_entry.add_out_connector("OUT_tmp3")
-    small_map_exit.add_in_connector("IN_tmp4")
-    small_map_exit.add_out_connector("OUT_tmp4")
+    mexit.add_scope_connectors("out1")
+    small_map_entry.add_scope_connectors("tmp3")
+    small_map_exit.add_scope_connectors("tmp4")
 
     state.add_mapped_tasklet(
         name="second_computation",
@@ -295,3 +292,17 @@ def test_horizontal_map_fusion(run_map_fusion: bool):
                         f"Found maps with overlapping ranges: {map_entry_i.label} and {map_entry_j.label} "
                         f"[{sdfg.state(0).in_edges(map_entry_i)[0].src.label}]"
                     )
+
+
+def test_horizontal_map_fusion_rejects_contradictory_map_scopes():
+    """`can_be_applied()` tests the scope itself, so it has to reject this like DaCe does."""
+    sdfg, _ = _make_sdfg_with_multiple_maps_that_share_inputs(10)
+
+    with pytest.raises(ValueError, match="only_inner_maps"):
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.MapFusionHorizontal(
+                only_inner_maps=True,
+                only_toplevel_maps=True,
+            ),
+            validate=False,
+        )

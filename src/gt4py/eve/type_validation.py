@@ -15,22 +15,13 @@ import collections.abc
 import dataclasses
 import functools
 import typing
+from collections.abc import Sequence
+from typing import Any, Final, ForwardRef, Literal, Optional, TypeGuard, Union, cast, overload
 
-from . import exceptions, extended_typing as xtyping, utils
-from .extended_typing import (
-    Any,
-    Final,
-    ForwardRef,
-    Literal,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeAnnotation,
-    Union,
-    cast,
-    overload,
-    runtime_checkable,
-)
+from typing_extensions import Protocol, is_protocol, runtime_checkable
+
+from . import exceptions, utils, xtyping
+from .xtyping import TypeAnnotation
 
 
 # Protocols
@@ -255,7 +246,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
             # Non-generic types
             if xtyping.is_actual_type(type_annotation):
-                assert not xtyping.get_args(type_annotation)
+                assert not typing.get_args(type_annotation)
                 if type_annotation is int and kwargs.get("strict_int", True):
                     return self.make_is_instance_of_int(name)
                 else:
@@ -276,13 +267,13 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 return self._make_is_any(name)
 
             # Generic and parametrized type hints
-            origin_type = xtyping.get_origin(type_annotation)
-            type_args = xtyping.get_args(type_annotation)
+            origin_type = typing.get_origin(type_annotation)
+            type_args = typing.get_args(type_annotation)
 
             if (stripped := xtyping.strip_annotated(type_annotation)) is not type_annotation:
                 return make_recursive(stripped)
 
-            if origin_type in {typing.Literal, xtyping.Literal}:
+            if origin_type in {typing.Literal, typing.Literal}:
                 if len(type_args) == 1:
                     return self.make_is_literal(name, type_args[0])
                 else:
@@ -335,8 +326,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 # rejected outright unless the protocol is `@runtime_checkable`, and also
                 # for `@runtime_checkable` protocols with non-method members. Protocols
                 # therefore keep the loose check, like any other unsupported shape.
-                def is_strict_arg(a: Any) -> xtyping.TypeGuard[type]:
-                    return xtyping.is_actual_type(a) and not xtyping.is_protocol(a)
+                def is_strict_arg(a: Any) -> TypeGuard[type]:
+                    return xtyping.is_actual_type(a) and not is_protocol(a)
 
                 if isinstance(arg, typing.TypeVar):
                     # Mirror the plain-`TypeVar` branch above, which honours the bound.
@@ -347,8 +338,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
                 if is_strict_arg(arg):
                     return self.make_is_subclass_of(name, arg)
 
-                if xtyping.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
-                    members = xtyping.get_args(arg)
+                if typing.get_origin(arg) is Union:  # `type[A | B]`, `type[Union[A, B]]`
+                    members = typing.get_args(arg)
                     if members and all(is_strict_arg(m) for m in members):
                         return self.combine_validators_as_or(
                             name, *(self.make_is_subclass_of(name, m) for m in members)

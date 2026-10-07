@@ -192,7 +192,9 @@ class BindingCodeGenerator(TemplatedGenerator):
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
 
-    Tuple = as_jinja("""gridtools::tuple({{','.join(elems)}})""")
+    # Not `gridtools::tuple(...)`: class template argument deduction on a single argument that is
+    # itself a `gridtools::tuple` deduces the argument's own type, dropping one level of nesting.
+    Tuple = as_jinja("""gridtools::fn::make_tuple({{','.join(elems)}})""")
 
     DimensionSpec = as_jinja("""generated::{{name}}_t""")
 
@@ -307,11 +309,10 @@ def create_bindings(
         ),
     )
 
-    src = artifacts.format_source(
-        program_source.code_spec, BindingCodeGenerator.apply(file_binding)
+    return artifacts.BindingSource(
+        BindingCodeGenerator.apply(file_binding),
+        (interface.LibraryDependency("nanobind", "2.0.0"),),
     )
-
-    return artifacts.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
 @dataclasses.dataclass(frozen=True)

@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 import typing
+from collections.abc import Callable
+from typing import Optional, TypeAlias, TypeVar, Unpack
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, TypeVar, Unpack
 from gt4py.next import common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
@@ -489,9 +490,9 @@ def infer_expr(
         expr, offset_provider_type=common.offset_provider_to_type(offset_provider)
     )
     el_types, domain = gtx_utils.equalize_tuple_structure(
-        gtx_utils.tree_map(
-            collection_type=ts.TupleType, result_collection_constructor=lambda _, elts: tuple(elts)
-        )(lambda x: x)(expr.type),
+        type_info.tree_map_type(
+            lambda x: x, result_collection_constructor=lambda _, elts: tuple(elts)
+        )(expr.type),
         domain,
         fill_value=DomainAccessDescriptor.NEVER,
         # el_types already has the right structure, we only want to change domain

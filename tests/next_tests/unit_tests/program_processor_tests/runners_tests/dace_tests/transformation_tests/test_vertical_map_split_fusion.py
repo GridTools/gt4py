@@ -249,10 +249,8 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     st.add_edge(b_out_node, None, red, "IN_b_out", dace.Memlet(data=b_out, subset="0:2"))
     st.add_edge(red, "OUT_t", t_node, None, dace.Memlet(data=t, subset="0"))
     st.add_edge(t_node, None, mexit, "IN_B", dace.Memlet(data=B, subset="__i"))
-    mnexit.add_in_connector("IN_b_out")
-    mnexit.add_out_connector("OUT_b_out")
-    mexit.add_in_connector("IN_B")
-    mexit.add_out_connector("OUT_B")
+    mnexit.add_scope_connectors("b_out")
+    mexit.add_scope_connectors("B")
 
     st.add_mapped_tasklet(
         "map3",
@@ -314,8 +312,7 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
         reduction_tasklet, "__d_out", mnexit2, "IN_d_out", dace.Memlet(data=d_out, subset="__j")
     )
     st.add_edge(mnexit2, "OUT_d_out", d_out_node, None, dace.Memlet(data=d_out, subset="0:2"))
-    mnexit2.add_in_connector("IN_d_out")
-    mnexit2.add_out_connector("OUT_d_out")
+    mnexit2.add_scope_connectors("d_out")
     red2 = st.add_reduce(
         wcr="lambda a, b: a + b",
         axes=None,
@@ -334,8 +331,7 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
     st.add_edge(t2_node, None, tasklet2, "__inp1", dace.Memlet(data=t2, subset="0"))
     st.add_edge(mentry2, "OUT_tmp2", tasklet2, "__inp2", dace.Memlet(data=tmp2, subset="__i"))
     st.add_edge(tasklet2, "__out", mexit2, "IN_D", dace.Memlet(data=D, subset="__i"))
-    mexit2.add_in_connector("IN_D")
-    mexit2.add_out_connector("OUT_D")
+    mexit2.add_scope_connectors("D")
 
     st.add_mapped_tasklet(
         "map5",
@@ -453,12 +449,10 @@ def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
         ("__arg2", A_node, A, f"1:{N}"),
         ("__cond", M_node, M, f"1:{N}"),
     ]:
-        map_entry.add_in_connector(f"IN_{conn}")
-        map_entry.add_out_connector(f"OUT_{conn}")
+        map_entry.add_scope_connectors(conn)
         st.add_edge(node, None, map_entry, f"IN_{conn}", dace.Memlet(data=data, subset=subset))
         st.add_edge(map_entry, f"OUT_{conn}", nsdfg, conn, dace.Memlet(data=data, subset="__i"))
-    map_exit.add_in_connector("IN_B")
-    map_exit.add_out_connector("OUT_B")
+    map_exit.add_scope_connectors("B")
     st.add_edge(nsdfg, "__output", map_exit, "IN_B", dace.Memlet(data=B, subset="__i"))
     st.add_edge(map_exit, "OUT_B", B_node, None, dace.Memlet(data=B, subset=f"1:{N}"))
 
