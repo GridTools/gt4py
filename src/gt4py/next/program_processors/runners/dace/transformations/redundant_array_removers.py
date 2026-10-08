@@ -221,13 +221,13 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         ):
             return False
 
-        # If the container we keep is a global that is also read somewhere else in
-        #  this state, then the temporary we remove *is* used as a double buffer:
-        #  it holds the new value while the old one is still being read.  Merging
-        #  it away moves the write back to where the temporary was produced, which
-        #  is no longer ordered after those reads, so the readers would observe the
-        #  new value.  This is the situation of a field that a `field_operator` call
-        #  takes as an input and also produces as an output.
+        # If the container we keep is a global that is also read upstream of this
+        #  copy in the same state, then the temporary we remove *is* used as a
+        #  double buffer: it holds the new value while the old one is still being
+        #  read.  Merging it away moves the write back to where the temporary was
+        #  produced, which is no longer ordered after those reads, so the readers
+        #  would observe the new value.  This is the situation of a field that a
+        #  `field_operator` call takes as an input and also produces as an output.
         # NOTE: Transients are written only once (ADR-18), so they cannot be
         #   affected; only globals need this check.
         if self._creates_write_after_read_hazard(sdfg, graph):
@@ -244,8 +244,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
 
         The surviving container takes over the writes of the removed temporary,
         which moves them to where that temporary was produced.  If the surviving
-        container is a global that another AccessNode of this state reads, that
-        read is no longer guaranteed to happen before the write.
+        container is a global that another AccessNode of this state reads upstream
+        of the copy, that read is no longer guaranteed to happen before the write.
 
         Args:
             sdfg: The SDFG on which the transformation is applied.
@@ -262,14 +262,25 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         else:
             return True
 
+        # Transients are written only once (ADR-18), therefore they can never act
+        #  as a double buffer: there is no "old" value that a reader could observe,
+        #  so moving the single write cannot introduce a write-after-read hazard.
         if surviving_node.desc(sdfg).transient:
             return False
 
+        # A global AccessNode serializes its incoming writes before its outgoing
+        #  reads, so reads that are downstream of (or pass through) the survivor
+        #  remain ordered after the moved write.  Only reads that are upstream of
+        #  the survivor, i.e. ordered before the original copy write, can observe
+        #  the old value and may become racy when the write is moved upstream.
+        #  We therefore scan the ancestor region of the survivor for reads of the
+        #  same data.
+        upstream_nodes = gtx_transformations.utils.find_upstream_nodes(surviving_node, graph)
         return any(
-            dnode is not surviving_node
-            and dnode.data == surviving_node.data
-            and graph.out_degree(dnode) != 0
-            for dnode in graph.data_nodes()
+            isinstance(node, dace_nodes.AccessNode)
+            and node.data == surviving_node.data
+            and graph.out_degree(node) != 0
+            for node in upstream_nodes
         )
 
     def is_single_use_data(
