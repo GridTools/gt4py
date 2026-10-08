@@ -402,6 +402,9 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             if node.data == data and second_state.in_degree(node) != 0
         ]
         for write_node in write_nodes:
+            upstream_of_write = gtx_transformation_utils.find_upstream_nodes(
+                write_node, second_state
+            )
             for messenger in messengers:
                 # The AccessNodes that produce the messenger in the first state.
                 messenger_producers = [
@@ -411,16 +414,11 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 ]
                 # The AccessNodes through which the messenger enters the consumer
                 #  component of the second state.
-                has_war_path = True
-                for node in second_state.data_nodes():
-                    if (
-                        node.data == messenger
-                        and second_state.out_degree(node) != 0
-                        and gtx_transformation_utils.is_reachable(node, write_node, second_state)
-                    ):
-                        break
-                else:
-                    has_war_path = False
+                has_war_path = any(
+                    node.data == messenger and second_state.out_degree(node) != 0
+                    for node in second_state.data_nodes()
+                    if node in upstream_of_write
+                )
 
                 if has_war_path and all(
                     any(
