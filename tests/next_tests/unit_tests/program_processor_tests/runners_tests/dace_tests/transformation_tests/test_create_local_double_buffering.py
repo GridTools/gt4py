@@ -273,7 +273,9 @@ def test_non_scalar_read():
     assert count == 0
 
 
-def _make_war_hazard_sdfg() -> dace.SDFG:
+def _make_war_hazard_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.nodes.Tasklet, dace.nodes.Tasklet
+]:
     """Builds an SDFG with a write-after-read hazard pattern on `G`.
 
     A single Map contains two independent branches:
@@ -289,6 +291,10 @@ def _make_war_hazard_sdfg() -> dace.SDFG:
     Map is invalid here, because the reader branch is not dataflow-ordered
     before the writer branch, so it may observe the newly written value
     instead of the old one (WAR hazard inside the Map body).
+
+    Returns:
+        A tuple ``(sdfg, state, t_read, t_write)`` where ``t_read`` is the
+        tasklet reading ``G`` and ``t_write`` is the tasklet writing ``G``.
     """
     sdfg = dace.SDFG(util.unique_name("map_buffer_war"))
     state = sdfg.add_state(is_start_block=True)
@@ -321,7 +327,7 @@ def _make_war_hazard_sdfg() -> dace.SDFG:
 
     state.add_nedge(tmp_write, G_write, dace.Memlet("tmp[0:10] -> [0:10]"))
     sdfg.validate()
-    return sdfg
+    return sdfg, state, t_read, t_write
 
 
 def test_local_double_buffering_war_hazard():
@@ -335,17 +341,14 @@ def test_local_double_buffering_war_hazard():
     old one (WAR hazard). `gt_create_local_double_buffering` must detect this
     and insert a local double buffer so the reader sees the original value.
     """
-    sdfg = _make_war_hazard_sdfg()
+    sdfg, state, t_read, t_write = _make_war_hazard_sdfg()
 
-    ref = {
-        name: np.array(np.random.rand(10), dtype=np.float64, copy=True) for name in ("G", "A", "O")
-    }
-    expected = {
-        "G": 2.0 * copy.deepcopy(ref["A"]),
-        "O": copy.deepcopy(ref["G"]) + 1.0,
-        "A": copy.deepcopy(ref["A"]),
-    }
+    ref, res = util.make_sdfg_args(sdfg)
 
+    # Run the SDFG before transformation to obtain the reference result.
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    # Inlining the write-back into the Map body creates the WAR hazard on `G`.
     count_elim = sdfg.apply_transformations_repeated(
         gtx_transformations.GT4PyMapBufferElimination(assume_pointwise=True),
         validate=True,
@@ -353,10 +356,29 @@ def test_local_double_buffering_war_hazard():
     )
     assert count_elim >= 1, "Buffer elimination must fire to inline the write."
 
+    # Double buffering must insert an access node that caches the read of `G`,
+    # so the reader sees the original value.
     count_db = gtx_transformations.gt_create_local_double_buffering(sdfg)
     assert count_db >= 1, "Double buffering must fire to prevent the WAR hazard."
 
-    args = copy.deepcopy(ref)
-    sdfg(**args)
-    for name in args:
-        assert np.allclose(args[name], expected[name]), f"Failed verification in '{name}'."
+    # The double buffer access node must have been inserted between the map
+    #  entry and the reader tasklet, so the reader reads from the buffer and
+    #  not directly from the global data.
+    reader_producers = [in_edge.src for in_edge in state.in_edges(t_read)]
+    assert len(reader_producers) == 1
+    new_double_buffer = reader_producers[0]
+    assert isinstance(new_double_buffer, dace_nodes.AccessNode)
+    assert new_double_buffer.data not in ("G", "A", "O")
+    assert isinstance(new_double_buffer.desc(sdfg), dace_data.Scalar)
+    assert new_double_buffer.desc(sdfg).transient
+
+    # The double buffer must be sequenced before the writer tasklet, so the
+    #  read happens before the write.
+    write_dependencies = [
+        out_edge.dst for out_edge in state.out_edges(new_double_buffer) if out_edge.data.is_empty()
+    ]
+    assert t_write in write_dependencies
+
+    # Running the transformed SDFG must produce the same result.
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
