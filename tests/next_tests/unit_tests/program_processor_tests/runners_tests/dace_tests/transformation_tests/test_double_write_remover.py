@@ -362,3 +362,125 @@ def test_remove_double_write_multi_producer(slice_to_second: bool):
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_double_write_destination_read_in_map() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.AccessNode, dace_nodes.AccessNode, dace_nodes.MapExit
+]:
+    """Builds an SDFG where the destination of the double write is also read in the Map.
+
+    The SDFG implements the following code (`b` is a transient array):
+    ```python
+    for i in range(10):
+        d[i] = c[i] + 1.0  # `c` read in a branch independent of the producer of `b`.
+        b[i] = a[i] * 2.0
+    c[:] = b[:]  # Double write of `b`: its destination `c` is also read in the Map.
+    ```
+    """
+    sdfg = dace.SDFG(util.unique_name("double_write_destination_read_in_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array(
+        "a",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "b",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=True,
+    )
+    sdfg.add_array(
+        "c",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    sdfg.add_array(
+        "d",
+        shape=(10,),
+        dtype=dace.float64,
+        transient=False,
+    )
+    a, b, d = (state.add_access(name) for name in "abd")
+    # Two separate AccessNodes for `c` are needed, such that the state is
+    #  acyclic: one for the reads and one for the write back.
+    c_read, c_write = state.add_access("c"), state.add_access("c")
+
+    me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
+    tlet_read = state.add_tasklet(
+        "read_c",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in + 1.0",
+    )
+    tlet_prod = state.add_tasklet(
+        "produce_b",
+        inputs={"__in"},
+        outputs={"__out"},
+        code="__out = __in * 2.0",
+    )
+
+    # `c` is read inside the Map, in a branch that is independent of the one
+    #  producing `b`.
+    state.add_edge(c_read, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tlet_read, "__in", dace.Memlet("c[__i]"))
+    me.add_scope_connectors("c")
+    state.add_edge(tlet_read, "__out", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    mx.add_scope_connectors("d")
+
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tlet_prod, "__in", dace.Memlet("a[__i]"))
+    me.add_scope_connectors("a")
+    state.add_edge(tlet_prod, "__out", mx, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(mx, "OUT_b", b, None, dace.Memlet("b[0:10]"))
+    mx.add_scope_connectors("b")
+
+    # The final write of `b` goes into `c`, which is read inside the Map.
+    state.add_nedge(b, c_write, dace.Memlet("b[0:10] -> [0:10]"))
+
+    sdfg.validate()
+    return sdfg, state, b, c_write, mx
+
+
+def test_remove_double_write_destination_read_in_map_no_apply():
+    """Tests that the `DoubleWriteRemover` does not apply on a WAR hazard.
+
+    The transformation distributes the final write into the Map, i.e. the
+    destination is written directly by each Map iteration. If the destination is
+    also read inside the Map scope, in a branch that is independent of the
+    producer branch, DaCe does not guarantee that the read observes the original
+    value (WAR hazard). Therefore the transformation must not apply.
+    """
+    sdfg, state, b, _, mx = _make_double_write_destination_read_in_map()
+
+    pre_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert len(pre_ac) == 5
+    assert state.out_degree(mx) == 2
+    assert state.in_degree(b) == 1
+    assert state.out_degree(b) == 1
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nb_applied = sdfg.apply_transformations_repeated(
+        gtx_transformations.DoubleWriteRemover(
+            single_use_data=None,
+        ),
+        validate_all=True,
+        validate=True,
+    )
+    assert nb_applied == 0
+
+    # Since the transformation did not apply, the transient `b` must still exist.
+    after_ac = util.count_nodes(sdfg, dace_nodes.AccessNode, True)
+    assert b in after_ac
+    assert b.data in sdfg.arrays
+    assert state.out_degree(mx) == 2
+    assert state.out_degree(b) == 1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
