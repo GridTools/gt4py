@@ -413,9 +413,12 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 #  component of the second state.
                 has_war_path = True
                 for node in second_state.data_nodes():
-                    if node.data == messenger and second_state.out_degree(node) != 0:
-                        if gtx_transformation_utils.is_reachable(node, write_node, second_state):
-                            break
+                    if (
+                        node.data == messenger
+                        and second_state.out_degree(node) != 0
+                        and gtx_transformation_utils.is_reachable(node, write_node, second_state)
+                    ):
+                        break
                 else:
                     has_war_path = False
 
