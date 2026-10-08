@@ -14,7 +14,7 @@ from typing import Protocol, TypeGuard, TypeVar
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 
 
@@ -37,17 +37,17 @@ def is_usable(
     return data is not None and is_compiled(data) and module_exists(data, src_dir)
 
 
-CodeSpecT = TypeVar("CodeSpecT", bound=code_specs.SourceCodeSpec)
-TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=code_specs.SourceCodeSpec)
-CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=code_specs.CPPLikeCodeSpec)
+CodeSpecT = TypeVar("CodeSpecT", bound=artifacts.SourceCodeSpec)
+TargetCodeSpecT = TypeVar("TargetCodeSpecT", bound=artifacts.SourceCodeSpec)
+CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=artifacts.CPPLikeCodeSpec)
 
 
 class BuildSystemProjectGenerator(Protocol[CodeSpecT, TargetCodeSpecT]):
     def __call__(
         self,
-        source: stages.ExtensionSource[CodeSpecT, TargetCodeSpecT],
+        source: artifacts.ExtensionSource[CodeSpecT, TargetCodeSpecT],
         cache_lifetime: config.BuildCacheLifetime,
-    ) -> stages.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
+    ) -> artifacts.BuildSystemProject[CodeSpecT, TargetCodeSpecT]: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -63,7 +63,7 @@ class CPPCompilationArtifact:
     entry_point_name: str
     device_type: core_defs.DeviceType
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         """Import the .so and return the raw entry point.
 
         Must run in the process that will call the returned program:
@@ -78,14 +78,13 @@ class CPPCompilationArtifact:
 @dataclasses.dataclass(frozen=True)
 class CPPCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
         CPPCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
         CPPCompilationArtifact,
     ],
-    definitions.CompilationStep[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
 ):
     """Drive a CPP-style build system into a ``CPPCompilationArtifact``.
 
@@ -93,14 +92,14 @@ class CPPCompiler(
     """
 
     cache_lifetime: config.BuildCacheLifetime
-    builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, code_specs.PythonCodeSpec]
+    builder_factory: BuildSystemProjectGenerator[CPPLikeCodeSpecT, artifacts.PythonCodeSpec]
     device_type: core_defs.DeviceType
     fingerprint_builder_factory: bool = True
     force_recompile: bool = False
 
     def __call__(
         self,
-        inp: stages.ExtensionSource[CPPLikeCodeSpecT, code_specs.PythonCodeSpec],
+        inp: artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
     ) -> CPPCompilationArtifact:
         build_context_id = (
             fingerprinting.strict_fingerprinter(self.builder_factory)

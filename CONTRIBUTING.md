@@ -165,10 +165,6 @@ nox -s "test_cartesian-3.12(internal, cpu)"
 
 Check `nox` documentation (`nox --help`) for the complete reference.
 
-<!--
-TODO: add test coverage instructions
-Additionally, `nox` is configured to generate HTML test coverage reports in `tests/_reports/coverage_html/` at the end. -->
-
 ## Pull Requests (PRs) and Merge Guidelines
 
 Before submitting a pull request, check that it meets the following criteria:
@@ -188,7 +184,6 @@ As mentioned above, we use several tools to help us write high-quality code. New
 - [nox] for testing and task automation with different environments.
 - [pre-commit] for automating the execution of QA tools.
 - [pytest] for writing readable tests, extended with:
-  - [Coverage.py][coverage] and [pytest-cov] for test coverage reports.
   - [pytest-xdist] for running tests in parallel.
 - [ruff] for style enforcement and code linting.
 - [sphinx] for generating documentation, extended with:
@@ -199,12 +194,10 @@ As mentioned above, we use several tools to help us write high-quality code. New
 <!-- Reference links -->
 
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
-[coverage]: https://coverage.readthedocs.io/
 [jupytext]: https://jupytext.readthedocs.io/
 [nox]: https://nox.thea.codes/en/stable/
 [pre-commit]: https://pre-commit.com/
 [pytest]: https://docs.pytest.org/
-[pytest-cov]: https://pypi.org/project/pytest-cov/
 [pytest-xdist]: https://pytest-xdist.readthedocs.io/en/latest/
 [ruff]: https://astral.sh/ruff
 [sphinx]: https://www.sphinx-doc.org

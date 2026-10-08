@@ -25,7 +25,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils as eve_utils
+from gt4py.eve import utils as eve_utils, xtyping
 from gt4py.next import common, named_collections
 from gt4py.next.type_system import type_info, type_specifications as ts
 

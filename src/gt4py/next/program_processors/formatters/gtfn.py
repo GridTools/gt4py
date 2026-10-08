@@ -10,14 +10,12 @@ from typing import Any
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import program_formatter
-from gt4py.next.program_processors.codegens.gtfn.gtfn_module import GTFNTranslationStep
 from gt4py.next.program_processors.runners import gtfn
 
 
 @program_formatter.program_formatter
 def format_cpp(program: itir.Program, *args: Any, **kwargs: Any) -> str:
-    gtfn_translation = gtfn.GTFNCompileWorkflowFactory(cached_translation=False).translation
-    assert isinstance(gtfn_translation, GTFNTranslationStep)
+    gtfn_translation = gtfn.make_gtfn_translation(gtfn.GTFNConfig())
     return gtfn_translation.generate_stencil_source(
         program,
         offset_provider=kwargs.get("offset_provider", {}),

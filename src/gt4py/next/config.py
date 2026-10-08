@@ -178,6 +178,13 @@ COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", defa
 DUMP_METRICS_AT_EXIT: str | None = None
 
 
+#: Whether to keep all files in the DaCe build folder after compilation.
+#: This flag is mapped to the DaCe config option `compiler.build_folder_mode`.
+#: By default, if not in debug mode, the generated source code is deleted after
+#: compilation, leaving only the compiled library and SDFG JSON-file.
+KEEP_DACE_BUILD_FILES: bool = env_flag_to_bool("GT4PY_KEEP_DACE_BUILD_FILES", default=DEBUG)
+
+
 #: Filter out DaCe related warnings. If not set warnings will be suppressed if the
 #: code runs in no debug mode.
 SKIP_DACE_WARNINGS: bool = env_flag_to_bool("GT4PY_SKIP_DACE_WARNINGS", default=not __debug__)

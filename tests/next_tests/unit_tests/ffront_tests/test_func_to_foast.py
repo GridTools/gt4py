@@ -286,7 +286,10 @@ def test_conditional_wrong_arg_type():
 
     with pytest.raises(
         errors.DSLError,
-        match="Field arguments to 'where' must be of same dtype, got 'float32' != 'float64'.",
+        match=re.escape(
+            "Could not promote 'Field[[TDim], float32]' and 'Field[[TDim], float64]' "
+            "to common type in call to 'where'."
+        ),
     ):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 

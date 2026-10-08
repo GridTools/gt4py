@@ -10,10 +10,11 @@
 
 import pathlib
 import tempfile
-from typing import Final
+from typing import Final, TypeVar
 
+from gt4py._core import filecache
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts, workflow
 
 
 #: Regex describing the folder names produced by `get_cache_folder` (use
@@ -44,8 +45,11 @@ BINDINGS_NAME_SUFFIX: Final[str] = "_pyext"
 TRANSLATION_CACHE_DIR_NAME: Final[str] = "translation_cache"
 
 #: Backends that persist the output of their translation step, i.e. those whose
-#: workflow factory enables the `cached_translation` trait.
+#: builders wrap it with `persistent_translation_cache`.
 TRANSLATION_CACHE_BACKENDS: Final[tuple[str, ...]] = ("dace", "gtfn")
+
+StartT = TypeVar("StartT")
+EndT = TypeVar("EndT")
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
@@ -62,6 +66,29 @@ def get_translation_cache_folder(cache_base: pathlib.Path, backend: str) -> path
     return cache_base / TRANSLATION_CACHE_DIR_NAME / backend
 
 
+def persistent_translation_cache(
+    step: workflow.Workflow[StartT, EndT], backend: str, lifetime: config.BuildCacheLifetime
+) -> workflow.CachedStep[StartT, EndT, str]:
+    """
+    Wrap a translation step in the persistent translation cache of `backend`.
+
+    Args:
+        step: The translation step to cache.
+        backend: Name of the backend family, which selects the cache folder.
+        lifetime: Build-cache lifetime, which selects the cache base path.
+
+    Returns:
+        The step, cached in the translation cache folder of `backend`.
+    """
+    return workflow.CachedStep[StartT, EndT, str].persistent(
+        step,
+        input_fingerprinter=fingerprinting.strict_fingerprinter,
+        cache=filecache.FileCache(
+            get_translation_cache_folder(get_cache_base_path(lifetime), backend)
+        ),
+    )
+
+
 def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
     """Return the base directory for cached artifacts with the given lifetime."""
     match lifetime:
@@ -74,7 +101,7 @@ def get_cache_base_path(lifetime: config.BuildCacheLifetime) -> pathlib.Path:
 
 
 def get_cache_folder(
-    ext_source: stages.ExtensionSource,
+    ext_source: artifacts.ExtensionSource,
     lifetime: config.BuildCacheLifetime,
     build_context_id: str = "",
 ) -> pathlib.Path:

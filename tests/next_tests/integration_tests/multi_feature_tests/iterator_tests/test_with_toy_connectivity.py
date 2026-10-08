@@ -363,10 +363,7 @@ def shift_sparse_stencil2(inp):
 @pytest.mark.uses_sparse_fields
 def test_shift_sparse_input_field2(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-    ]:
+    if program_processor == gtfn.run_gtfn:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
         )  # observed in `config.BuildCacheLifetime.PERSISTENT` mode

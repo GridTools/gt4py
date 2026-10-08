@@ -1043,8 +1043,7 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                     new_memlet_outside = dace.Memlet.from_array(
                         out_edge.data.data, sdfg.arrays[out_edge.data.data]
                     )
-                    inner_entry.add_in_connector(new_in_conn)
-                    inner_entry.add_out_connector(new_out_conn)
+                    inner_entry.add_scope_connectors(new_map_conn)
 
                 state.add_edge(
                     out_edge.src,
@@ -1116,10 +1115,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                         new_out_conn,
                         in_edge.dst,
                         in_edge.dst_conn,
-                        copy.deepcopy(in_edge.data),
+                        dace.Memlet(
+                            data=in_edge.data.data,
+                            subset=dace_subsets.Range(
+                                in_edge.data.get_src_subset(in_edge, state).ndrange()
+                            ),
+                        ),
                     )
-                    inner_entry.add_in_connector(new_in_conn)
-                    inner_entry.add_out_connector(new_out_conn)
+                    inner_entry.add_scope_connectors(new_map_conn)
                     state.remove_edge(in_edge)
 
                 else:
@@ -1152,10 +1155,14 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
                 "OUT_" + edge_conn,
                 outer_exit,
                 in_edge.dst_conn,
-                copy.deepcopy(in_edge.data),
+                dace.Memlet(
+                    data=in_edge.data.data,
+                    subset=dace_subsets.Range(
+                        in_edge.data.get_dst_subset(in_edge, state).ndrange()
+                    ),
+                ),
             )
-            inner_exit.add_in_connector("IN_" + edge_conn)
-            inner_exit.add_out_connector("OUT_" + edge_conn)
+            inner_exit.add_scope_connectors(edge_conn)
 
         # There is an invalid cache state in the SDFG, that makes the memlet
         #  propagation fail, to clear the cache we call the hash function.
