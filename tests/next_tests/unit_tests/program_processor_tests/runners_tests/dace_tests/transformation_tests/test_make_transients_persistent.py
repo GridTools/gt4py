@@ -44,18 +44,14 @@ def _make_transients_persistent_inner_access_sdfg() -> tuple[dace.SDFG, dace.SDF
         outputs={"__out"},
     )
 
-    me.add_in_connector("IN_A")
+    me.add_scope_connectors("A")
     state.add_edge(a, None, me, "IN_A", dace.Memlet("a[0:10]"))
-
-    me.add_out_connector("OUT_A")
     state.add_edge(me, "OUT_A", b, None, dace.Memlet("a[__i0] -> [__i0]"))
 
     state.add_edge(b, None, tsklt, "__in", dace.Memlet("b[__i0]"))
 
-    mx.add_in_connector("IN_C")
+    mx.add_scope_connectors("C")
     state.add_edge(tsklt, "__out", mx, "IN_C", dace.Memlet("c[__i0]"))
-
-    mx.add_out_connector("OUT_C")
     state.add_edge(mx, "OUT_C", c, None, dace.Memlet("c[0:10]"))
     sdfg.validate()
     return sdfg, state

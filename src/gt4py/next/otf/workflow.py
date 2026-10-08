@@ -13,12 +13,10 @@ import dataclasses
 import functools
 import pathlib
 import typing
-from typing import Any, Callable, Generic, Protocol, TypeVar
-
-from typing_extensions import Self
+from typing import Any, Callable, Generic, Protocol, Self, TypeVar
 
 from gt4py._core import filecache
-from gt4py.eve.extended_typing import OpaqueMutableMapping
+from gt4py.eve.xtyping import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
 
 
@@ -31,6 +29,26 @@ IntermediateT = TypeVar("IntermediateT")
 HashT = TypeVar("HashT")
 DataT = TypeVar("DataT")
 ArgT = TypeVar("ArgT")
+DefT = TypeVar("DefT")
+ArgsT = TypeVar("ArgsT")
+
+
+@dataclasses.dataclass
+class ConcreteArtifact(Generic[DefT, ArgsT]):
+    """Pair of a program definition in any stage with the arguments it is compiled for.
+
+    This is the envelope threaded through the definition-transforming half of
+    the toolchain, so it is generic over DSL-frontend types. It nevertheless
+    lives in this DSL-neutral bottom module rather than beside the stage
+    definitions that use it: those parameterize it while they are being
+    imported, so hosting it any higher would close an import cycle. The
+    invariant that keeps this working -- this module reaching no IR or
+    frontend module at import time -- is checked by the OTF import-boundary
+    test in `tests/next_tests/unit_tests/otf_tests/`.
+    """
+
+    data: DefT
+    args: ArgsT
 
 
 def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT, EndT]:

@@ -182,6 +182,32 @@ def test_tuple_arg(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_args
+def test_single_element_tuple_of_tuple_arg(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: tuple[tuple[cases.IField, cases.IField]],
+        b: tuple[tuple[tuple[cases.IField]]],
+        c: tuple[tuple[cases.IField, int32]],
+    ) -> cases.IField:
+        return 3 * a[0][0] + a[0][1] + 5 * b[0][0][0] + 7 * c[0][0] + c[0][1]
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b, c: 3 * a[0][0] + a[0][1] + 5 * b[0][0][0] + 7 * c[0][0] + c[0][1],
+    )
+
+
+@pytest.mark.uses_tuple_returns
+def test_single_element_tuple_of_tuple_return(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IField, b: cases.IField) -> tuple[tuple[cases.IField, cases.IField]]:
+        return ((a, b),)
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: ((a, b),))
+
+
 @pytest.mark.uses_tuple_returns
 def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
