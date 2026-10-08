@@ -14,6 +14,10 @@ from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 from ordered_set import OrderedSet
 
+from gt4py.next.program_processors.runners.dace.transformations import (
+    utils as gtx_transformation_utils,
+)
+
 
 # Conditional import because `gt4py.cartesian` uses an older DaCe version without
 #  `explicit_cf_compatible`.
@@ -308,9 +312,10 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     #  component will not affect any component that is not involved
                     #  inside the merge.
                     # Moreover, the consumer itself must not create a WAR hazard:
-                    #  the messenger only orders the producer's writes before the
-                    #  consumer's accesses, it does not order the producer's *reads*
-                    #  of the same data before the consumer's write.
+                    #  the messenger only places the producer's writes before the
+                    #  consumer's accesses, it should not place the producer's *reads*
+                    #  of the same data before the consumer's write. Thus, we refuse
+                    #  such cases.
                     if any(
                         self._has_war_hazard(first_state, second_state, data, consumed_messenger)
                         for data in producer_dependency.intersection(consumer_influece)
@@ -382,22 +387,6 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
             `True` if the fusion would create a WAR hazard on `data`.
         """
 
-        def _has_path(
-            state: dace.SDFGState, src: dace_nodes.AccessNode, dst: dace_nodes.AccessNode
-        ) -> bool:
-            if src is dst:
-                return True
-            visited = {src}
-            to_visit = [src]
-            while to_visit:
-                for edge in state.out_edges(to_visit.pop()):
-                    if edge.dst is dst:
-                        return True
-                    if edge.dst not in visited:
-                        visited.add(edge.dst)
-                        to_visit.append(edge.dst)
-            return False
-
         # The sites where `data` is read in the first state are identified by the
         #  destination nodes of the read edges, i.e. the MapEntries and Tasklets
         #  that perform the read.
@@ -422,27 +411,27 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 ]
                 # The AccessNodes through which the messenger enters the consumer
                 #  component of the second state.
-                messenger_consumers = [
-                    node
-                    for node in second_state.data_nodes()
-                    if node.data == messenger and second_state.out_degree(node) != 0
-                ]
-                if not any(
-                    _has_path(second_state, consumer, write_node)
-                    for consumer in messenger_consumers
-                ):
-                    continue
-                if all(
+                has_war_path = True
+                for node in second_state.data_nodes():
+                    if node.data == messenger and second_state.out_degree(node) != 0:
+                        if gtx_transformation_utils.is_reachable(node, write_node, second_state):
+                            break
+                else:
+                    has_war_path = False
+
+                if has_war_path and all(
                     any(
-                        _has_path(first_state, read_site, producer)
+                        gtx_transformation_utils.is_reachable(read_site, producer, first_state)
                         for producer in messenger_producers
                     )
                     for read_site in read_sites
                 ):
                     # The write is ordered after all reads through `messenger`.
                     break
-            else:
+
+            else:  # belongs to `for messenger in messengers`
                 return True
+
         return False
 
     def _move_nodes(self, sdfg: dace.SDFG) -> None:
