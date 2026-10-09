@@ -416,8 +416,7 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 #  component of the second state.
                 has_war_path = any(
                     node.data == messenger and second_state.out_degree(node) != 0
-                    for node in second_state.data_nodes()
-                    if node in upstream_of_write
+                    for node in upstream_of_write
                 )
 
                 if has_war_path and all(
