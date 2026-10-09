@@ -433,8 +433,8 @@ url = 'https://gridtools.github.io/pypi/'
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
 # dace = {index = "gridtools"}
 [tool.uv.sources]
-atlas4py = {index = "test.pypi"}
-dace = {git = "https://github.com/spcl/dace.git", branch = "main"}
+atlas4py = { index = "test.pypi" }
+dace = { git = "https://github.com/edopao/dace.git", branch = "fix-staging" }
 
 # -- versioningit --
 [tool.versioningit]
