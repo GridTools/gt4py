@@ -104,7 +104,16 @@ def _translate_concat_where_branch(
     """
     assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
-    source_domain = source_expr.annex.domain
+    # The annex domain of the expression node is read-only here: the local copy is
+    #  specialized below to the region of this `concat_where` branch, but the node
+    #  itself keeps its own domain. This is essential when the node is lowered as
+    #  an argument of the promoted `as_fieldop` expression: there, the map ranges
+    #  and the result write subset are both derived from the node's domain, and an
+    #  inconsistency between them would produce subsets that reference map
+    #  variables which are not in scope.
+    source_domain = domain_utils.SymbolicDomain(
+        source_expr.annex.domain.grid_type, dict(source_expr.annex.domain.ranges)
+    )
     if source_expr.type != output_type:
         # We promote the input expression to a field defined on the output domain,
         # refer to the function documentation for examples of such field operators.
