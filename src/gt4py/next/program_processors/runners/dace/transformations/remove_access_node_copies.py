@@ -264,3 +264,10 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
             gtx_transformations_strides.gt_propagate_strides_from_access_node(
                 sdfg, graph, modified_node
             )
+
+        # Restate connectors of NestedSDFGs whose edge data was changed above.
+        # Without this the nested SDFG contract is violated because the
+        # connector descriptors no longer match the parent data.
+        for node in graph.nodes():
+            if isinstance(node, dace_nodes.NestedSDFG) and node.sdfg is not None:
+                node.integrate_into_parent()
