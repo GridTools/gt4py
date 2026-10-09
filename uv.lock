@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a10"
-source = { git = "https://github.com/edopao/dace.git?branch=fix-staging#b10c5f892cd9e5b42f09df9f2a9e54652828ca9f" }
+source = { git = "https://github.com/edopao/dace.git?branch=fix-staging#8a90455953dc52e917cfc709a875e9b2b0aae33a" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
