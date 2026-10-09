@@ -97,6 +97,22 @@ def gt_gpu_transformation(
         simplify=False,
     )
 
+    # `GPUTransformLocalStorage` (invoked above with `nested_seq=True`) sets all
+    #  `StorageType.Default` transients inside a GPU map to `StorageType.Register`.
+    #  However, a variable-length array (whose size is not known at compile time)
+    #  cannot be allocated in registers on GPU — the DaCe code generator would
+    #  emit a call to the host-only `dace::aligned_new_array()` inside the kernel,
+    #  which nvcc rejects.  Move such arrays to `GPU_Global` with the pool
+    #  allocator instead.
+    for sd, _, desc in sdfg.arrays_recursive():
+        if (
+            isinstance(desc, dace.data.Array)
+            and desc.transient
+            and desc.storage == dace.dtypes.StorageType.Register
+            and dace.symbolic.issymbolic(desc.total_size, sd.constants)
+        ):
+            desc.storage = dace.dtypes.StorageType.GPU_Global
+
     # The documentation recommends to run simplify afterwards
     gtx_transformations.gt_simplify(sdfg, validate=False, validate_all=validate_all)
 
