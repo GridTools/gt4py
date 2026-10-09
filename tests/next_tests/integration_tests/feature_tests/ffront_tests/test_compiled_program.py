@@ -39,7 +39,6 @@ from next_tests.integration_tests.cases_utils import (
     skip_value_mesh,
 )
 
-from gt4py.next.otf import arguments
 
 _raise_on_compile = mock.Mock()
 _raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
@@ -66,6 +65,7 @@ def compile_testee(request, cartesian_case):
         testee_op(a, b, out=out)
 
     wrap_in_program = request.param
+
     if wrap_in_program:
         return testee
     else:
@@ -1005,7 +1005,8 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
 
 @pytest.mark.uses_tuple_args
 @pytest.mark.uses_tuple_returns
-def test_compile_variants_decorator_static_domains(cartesian_case):
+@pytest.mark.parametrize("precompile", [True, False], ids=["precompile", "run"])
+def test_compile_variants_decorator_static_domains(cartesian_case, precompile):
     if cartesian_case.backend is None:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
@@ -1033,6 +1034,22 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
 
     inp = cases.allocate(cartesian_case, testee, "inp")()
     out = cases.allocate(cartesian_case, testee, "out")()
+    if precompile:
+        static_domain = {cases.IDim: (0, cartesian_case.default_sizes[cases.IDim])}
+        testee.compile(
+            offset_provider=cartesian_case.offset_provider,
+            static_domains={
+                "inp[0]": static_domain,
+                "inp[1]": static_domain,
+                "out[0]": static_domain,
+                "out[1]": static_domain,
+            },
+        )
+        gtx.wait_for_compilation()
+    else:
+        testee(inp, out, offset_provider={})
+        assert np.allclose(inp[0].ndarray, out[0].ndarray)
+        assert np.allclose(inp[1].ndarray, out[1].ndarray)
 
     testee(inp, out, offset_provider={})
     assert np.allclose(inp[0].ndarray, out[0].ndarray)
