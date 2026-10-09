@@ -1036,9 +1036,15 @@ def _apply_and_run_mixed_memlet_sdfg(
 
 
 def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
+    """The nested SDFG reads `inp[1, 1]` and writes the scalar `out`.
+
+    Since a nested SDFG connector has to be equivalent to the data it is connected
+    to, `inp` is the full `(10, 10)` array, and it is accessed with the same indices
+    as on the outside.
+    """
     sdfg = dace.SDFG(sdfg_label)
-    for data in [inp, out]:
-        sdfg.add_scalar(data, dtype=dace.float64)
+    sdfg.add_array(inp, shape=(10, 10), dtype=dace.float64)
+    sdfg.add_scalar(out, dtype=dace.float64)
 
     if_region = dace.sdfg.state.ConditionalBlock("if")
     sdfg.add_node(if_region)
@@ -1049,14 +1055,14 @@ def _make_conditional_block_sdfg(sdfg_label: str, sym: str, inp: str, out: str):
     tstate = then_body.add_state("true_branch", is_start_block=True)
     if_region.add_branch(dace.sdfg.state.CodeBlock(f"{sym} % 2 == 0"), then_body)
     tskli = tstate.add_tasklet("write_0", inputs={"inp"}, outputs={"val"}, code=f"val = inp + 0")
-    tstate.add_edge(tstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[0]"))
+    tstate.add_edge(tstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[1, 1]"))
     tstate.add_edge(tskli, "val", tstate.add_access(out), None, dace.Memlet(f"{out}[0]"))
 
     else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=sdfg)
     fstate = else_body.add_state("false_branch", is_start_block=True)
     if_region.add_branch(dace.sdfg.state.CodeBlock(f"{sym} % 2 != 0"), else_body)
     tskli = fstate.add_tasklet("write_1", inputs={"inp"}, outputs={"val"}, code=f"val = inp + 1")
-    fstate.add_edge(fstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[0]"))
+    fstate.add_edge(fstate.add_access(inp), None, tskli, "inp", dace.Memlet(f"{inp}[1, 1]"))
     fstate.add_edge(tskli, "val", fstate.add_access(out), None, dace.Memlet(f"{out}[0]"))
 
     return sdfg
@@ -1153,11 +1159,14 @@ def test_loop_blocking_no_independent_nodes():
         nsdfg, inputs={nsdfg_inp}, outputs={nsdfg_out}, symbol_mapping={nsdfg_sym: "__i1"}
     )
     state.add_memlet_path(A, me, nsdfg_node, dst_conn=nsdfg_inp, memlet=dace.Memlet("A[1,1]"))
+    # The scalar output connector can not write into an element of `C` directly.
+    sdfg.add_scalar("tmp", dtype=dace.float64, transient=True)
+    tmp = state.add_access("tmp")
+    state.add_edge(nsdfg_node, nsdfg_out, tmp, None, dace.Memlet("tmp[0]"))
     state.add_memlet_path(
-        nsdfg_node,
+        tmp,
         mx,
         state.add_access("C"),
-        src_conn=nsdfg_out,
         memlet=dace.Memlet("C[__i0, __i1]"),
     )
     sdfg.validate()

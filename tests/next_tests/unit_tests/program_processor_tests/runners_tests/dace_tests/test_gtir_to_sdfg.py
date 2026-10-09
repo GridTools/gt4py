@@ -1223,14 +1223,13 @@ def test_gtir_neighbors_as_input():
             gtir.SetAt(
                 expr=im.let(
                     "x",
-                    im.as_fieldop_neighbors("V2E", "edges", outer_domain),
+                    im.as_fieldop_neighbors("V2E", "edges"),
                 )(
                     im.as_fieldop(
                         im.lambda_("it")(
                             im.reduce("plus", im.literal_from_value(init_value))(im.deref("it"))
-                        ),
-                        inner_domain,
-                    )(im.op_as_fieldop(im.map_list("divides"), inner_domain)("v2e_field", "x"))
+                        )
+                    )(im.op_as_fieldop(im.map_list("divides"))("v2e_field", "x"))
                 ),
                 domain=outer_domain,
                 target=gtir.SymRef(id="vertices"),
@@ -1238,9 +1237,7 @@ def test_gtir_neighbors_as_input():
         ],
     )
 
-    # skip domain inference to test correct symbol mapping in let-statements,
-    # based on canonical order of field dimensions
-    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider, skip_domain_inference=True)
+    sdfg = build_dace_sdfg(testee, SIMPLE_MESH.offset_provider)
 
     connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
 
