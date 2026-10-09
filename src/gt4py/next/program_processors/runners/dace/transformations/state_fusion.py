@@ -14,6 +14,10 @@ from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
 from ordered_set import OrderedSet
 
+from gt4py.next.program_processors.runners.dace.transformations import (
+    utils as gtx_transformation_utils,
+)
+
 
 # Conditional import because `gt4py.cartesian` uses an older DaCe version without
 #  `explicit_cf_compatible`.
@@ -307,6 +311,16 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                     #  dataflow is executed. We thus have to ensure that the new
                     #  component will not affect any component that is not involved
                     #  inside the merge.
+                    # Moreover, the consumer itself must not create a WAR hazard:
+                    #  the messenger only places the producer's writes before the
+                    #  consumer's accesses, it should not place the producer's *reads*
+                    #  of the same data before the consumer's write. Thus, we refuse
+                    #  such cases.
+                    if any(
+                        self._has_war_hazard(first_state, second_state, data, consumed_messenger)
+                        for data in producer_dependency.intersection(consumer_influece)
+                    ):
+                        return True
                     unaffected_producers: list[int] = [
                         producer_id
                         for producer_id, data_producer in enumerate(data_producers)
@@ -333,6 +347,90 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
                 #  essentially creates concurrent dataflow within the component, which
                 #  would lead to non-deterministic results, so we have to reject the
                 #  merge.
+                return True
+
+        return False
+
+    def _has_war_hazard(
+        self,
+        first_state: dace.SDFGState,
+        second_state: dace.SDFGState,
+        data: str,
+        messengers: set[str],
+    ) -> bool:
+        """Checks if the fusion would create a write-after-read hazard on `data`.
+
+        The data `data` is read in the first state and written to in the second
+        state, by a consumer component that consumes the `messengers` from the
+        first state. In the merged state the consumer's write is only ordered after
+        the data the write depends on, i.e. the messengers. Thus the write is
+        unordered with respect to a read in the first state - a WAR hazard - unless
+        that read is dataflow-upstream of the exchanged messages, in which case the
+        dataflow through the messenger imposes the order.
+
+        The check is performed at node level and considers the fusion safe for a
+        write of `data` in the second state if there is an exchanged messenger such
+        that:
+        - the messenger is dataflow-upstream of the write in the second state, and
+        - every read of `data` in the first state is dataflow-upstream of the
+          messenger's producing AccessNode in the first state.
+
+        Args:
+            first_state: The first state of the fusion.
+            second_state: The second state of the fusion.
+            data: The global data that is read in the first state and written to
+                in the second state.
+            messengers: The data that is produced by a component of the first state
+                and consumed by the consumer component of the second state.
+
+        Returns:
+            `True` if the fusion would create a WAR hazard on `data`.
+        """
+
+        # The sites where `data` is read in the first state are identified by the
+        #  destination nodes of the read edges, i.e. the MapEntries and Tasklets
+        #  that perform the read.
+        read_sites = {
+            edge.dst
+            for read_node in first_state.data_nodes()
+            if read_node.data == data and first_state.out_degree(read_node) != 0
+            for edge in first_state.out_edges(read_node)
+        }
+        write_nodes = [
+            node
+            for node in second_state.data_nodes()
+            if node.data == data and second_state.in_degree(node) != 0
+        ]
+        for write_node in write_nodes:
+            upstream_of_write = gtx_transformation_utils.find_upstream_nodes(
+                write_node, second_state
+            )
+            for messenger in messengers:
+                # The AccessNodes that produce the messenger in the first state.
+                messenger_producers = [
+                    node
+                    for node in first_state.data_nodes()
+                    if node.data == messenger and first_state.in_degree(node) != 0
+                ]
+                # The AccessNodes through which the messenger enters the consumer
+                #  component of the second state.
+                has_war_path = any(
+                    node.data == messenger and second_state.out_degree(node) != 0
+                    for node in upstream_of_write
+                    if isinstance(node, dace_nodes.AccessNode)
+                )
+
+                if has_war_path and all(
+                    any(
+                        gtx_transformation_utils.is_reachable(read_site, producer, first_state)
+                        for producer in messenger_producers
+                    )
+                    for read_site in read_sites
+                ):
+                    # The write is ordered after all reads through `messenger`.
+                    break
+
+            else:  # belongs to `for messenger in messengers`
                 return True
 
         return False
