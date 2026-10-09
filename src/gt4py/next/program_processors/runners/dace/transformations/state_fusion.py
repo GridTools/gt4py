@@ -163,6 +163,16 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         if len(common_write_data) == 0:
             return False
 
+        # Transients are assumed to be written only once (ADR-18), in a single
+        #  state. If a transient is written to in both states — e.g. partial
+        #  writes on disjoint subsets, as produced for `concat_where` — merging
+        #  the states would leave one of the writer AccessNodes unconnected to
+        #  any reader (the consumer rewiring in `apply` only handles
+        #  second-state source nodes), leading to dangling dead writes or
+        #  uninitialized reads. Reject the fusion in this case.
+        if any(sdfg.arrays[data].transient for data in common_write_data):
+            return True
+
         for state, ac_nodes in [
             (first_state, first_state_writes),
             (second_state, second_state_writes),
