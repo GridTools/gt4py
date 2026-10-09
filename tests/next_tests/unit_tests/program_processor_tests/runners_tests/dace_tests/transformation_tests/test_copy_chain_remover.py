@@ -498,6 +498,88 @@ def _make_copy_chain_with_reduction_node(
     return sdfg, state, red0, accumulators[0], red1, accumulators[1], output_ac
 
 
+def _make_copy_chain_destination_read_in_map() -> dace.SDFG:
+    """Builds an SDFG where the copy chain destination is also read in the Map.
+
+    The SDFG implements the following code (`b` is a transient array):
+    ```python
+    for i in range(10):
+        d[i] = c[i] + 1.0  # `c` read in a branch independent of the producer of `b`.
+        b[i] = a[i] * 2.0
+    c[:] = b[:]  # Copy chain `(b) -> (c)`: the surviving global `c` is read in the Map.
+    ```
+
+    `CopyChainRemover` would remove the transient double buffer `b` and take over
+    its writes with `c`, moving them into the Map. But `c` is still read there, in
+    a branch independent of the one producing `b`, so the read could observe the
+    newly written value (write-after-read hazard). The transformation must not
+    apply.
+    """
+    sdfg = dace.SDFG(util.unique_name("copy_chain_destination_read_in_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in ["a", "c", "d"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=True)
+
+    a, b, d = (state.add_access(name) for name in "abd")
+    # Two separate AccessNodes for `c` are needed, such that the state is
+    #  acyclic: one for the read and one for the write back.
+    c_read, c_write = state.add_access("c"), state.add_access("c")
+
+    me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
+    tlet_read = state.add_tasklet(
+        "read_c", inputs={"__in"}, outputs={"__out"}, code="__out = __in + 1.0"
+    )
+    tlet_prod = state.add_tasklet(
+        "produce_b", inputs={"__in"}, outputs={"__out"}, code="__out = __in * 2.0"
+    )
+
+    # `c` is read inside the Map, in a branch independent of the one producing `b`.
+    state.add_edge(c_read, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tlet_read, "__in", dace.Memlet("c[__i]"))
+    me.add_scope_connectors("c")
+    state.add_edge(tlet_read, "__out", mx, "IN_d", dace.Memlet("d[__i]"))
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    mx.add_scope_connectors("d")
+
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tlet_prod, "__in", dace.Memlet("a[__i]"))
+    me.add_scope_connectors("a")
+    state.add_edge(tlet_prod, "__out", mx, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(mx, "OUT_b", b, None, dace.Memlet("b[0:10]"))
+    mx.add_scope_connectors("b")
+
+    # The transient `b` is fully copied into the global `c`, which is read above.
+    state.add_nedge(b, c_write, dace.Memlet("b[0:10] -> [0:10]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+def test_copy_chain_destination_read_in_map_no_apply():
+    sdfg = _make_copy_chain_destination_read_in_map()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    # The copy chain `(b) -> (c)` must not be removed: `c` survives and is still
+    #  read inside the Map, so removing the transient double buffer `b` would
+    #  create a write-after-read hazard on `c`.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies is None
+
+    # Since the transformation did not apply, the transient `b` must still exist.
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert any(ac.data == "b" for ac in acnodes)
+    assert "b" in sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
 def test_simple_linear_chain():
     sdfg = _make_simple_linear_chain_sdfg()
 
