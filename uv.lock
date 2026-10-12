@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a10"
-source = { git = "https://github.com/edopao/dace.git?branch=fix-staging#5e02c4157c71df548019cdc5ef71acaf8dfae4c4" }
+source = { git = "https://github.com/spcl/dace.git?branch=main#44ee5d13543560d62895c81be1d542e31b849c72" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1468,7 +1468,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/edopao/dace.git?branch=fix-staging" },
+    { name = "dace", git = "https://github.com/spcl/dace.git?branch=main" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
