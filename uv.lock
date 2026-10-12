@@ -923,7 +923,7 @@ wheels = [
 [[package]]
 name = "dace"
 version = "2.0.0a10"
-source = { git = "https://github.com/edopao/dace.git?branch=map-fusion-intermediates-symbolic-size#877e91fa195d84b17744c2f7c9664a5b58cdbbdc" }
+source = { git = "https://github.com/spcl/dace.git?branch=main#fd7289d20d5dbddc512d4e37c88db60edcd1c144" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },
@@ -1468,7 +1468,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", git = "https://github.com/edopao/dace.git?branch=map-fusion-intermediates-symbolic-size" },
+    { name = "dace", git = "https://github.com/spcl/dace.git?branch=main" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
