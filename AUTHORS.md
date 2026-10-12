@@ -31,6 +31,7 @@
 - Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss
 - Serafini, Giacomo. MeteoSwiss
+- Stark, Philipp. MeteoSwiss
 - Szenes, Kalman. ETH Zurich - CSCS
 - Thaler, Felix. ETH Zurich - CSCS
 - Ubbiali, Stefano. ETH Zurich

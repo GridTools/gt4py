@@ -27,6 +27,17 @@ class BuildCacheLifetime(enum.Enum):
     PERSISTENT = 2
 
 
+class BuildCacheToolchainCheck(enum.Enum):
+    """What to do when a persistent build cache was filled by a different toolchain."""
+
+    #: Stop with ``BuildCacheToolchainError`` before compiling into or loading from the cache.
+    ERROR = "error"
+    #: Warn once per process and go on using the cache.
+    WARN = "warn"
+    #: Neither check nor record the toolchain.
+    OFF = "off"
+
+
 class CMakeBuildType(enum.Enum):
     """
     CMake build types enum.
@@ -130,6 +141,15 @@ BUILD_CACHE_VERSION_ID: str = (
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
 BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
     os.environ.get("GT4PY_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper()
+]
+
+
+#: Whether to compare the toolchain (compilers, DaCe, GridTools, ...) with the one recorded in a
+#: persistent build cache. The toolchain is not part of the cache key, so without this check a
+#: changed toolchain silently reuses binaries built by the old one.
+#: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
+BUILD_CACHE_TOOLCHAIN_CHECK: BuildCacheToolchainCheck = BuildCacheToolchainCheck[
+    os.environ.get("GT4PY_BUILD_CACHE_TOOLCHAIN_CHECK", "error").upper()
 ]
 
 
