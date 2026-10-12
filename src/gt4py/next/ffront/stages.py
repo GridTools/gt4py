@@ -29,7 +29,7 @@ from typing import Any, Optional, TypeVar
 
 from gt4py.next import common, fingerprinting
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
-from gt4py.next.otf import arguments, toolchain
+from gt4py.next.otf import arguments, workflow
 
 
 @dataclasses.dataclass(frozen=True)
@@ -38,18 +38,22 @@ class BaseStage: ...
 
 def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting.Deconstruction:
     """
-    Deconstruct a Python function into its source definition and closure variables.
+    Deconstruct a Python function into its source definition, closure variables and annotations.
 
     This should be enough for the use case of GT4Py DSL definitions, which are
     expected to be pure functions without complicated closures. The full
     :class:`SourceDefinition` (including filename and line/column offsets) is
     fingerprinted, so that two textually identical operators defined at
     different source locations are distinguished and do not share a cached
-    lowering with the wrong `SourceLocation`s.
+    lowering with the wrong `SourceLocation`s. The annotations are fingerprinted
+    by value because Python evaluates them in the enclosing scope: a name used
+    only in an annotation, e.g. a parameter of a factory function, is not a
+    closure variable of the definition.
     """
     return fingerprinting.Deconstruction.from_pieces(
         source_utils.make_source_definition_from_function(func),
         source_utils.get_closure_vars_from_function(func),
+        func.__annotations__,
         state=b"definition_function",
     )
 
@@ -57,8 +61,8 @@ def _deconstruct_definition_function(func: types.FunctionType) -> fingerprinting
 #: Fingerprinter for the frontend stages: keeps source locations on AST nodes
 #: (the in-memory stage cache's lowered product bakes them in, so two textually
 #: identical operators at different locations must not share an entry) and
-#: fingerprints DSL definition functions by their source code and closure
-#: variables (instead of by qualified name).
+#: fingerprints DSL definition functions by their source code, closure
+#: variables and annotations (instead of by qualified name).
 semantic_fingerprinter: fingerprinting.Fingerprinter = fingerprinting.make_fingerprinter(
     deconstructor=fingerprinting.make_lenient_data_deconstructor(
         {types.FunctionType: _deconstruct_definition_function}
@@ -79,7 +83,7 @@ class DSLFieldOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLFieldOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteDSLFieldOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
     DSLFieldOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -93,7 +97,7 @@ class FOASTOperatorDef(BaseStage):
     debug: bool = False
 
 
-ConcreteFOASTOperatorDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteFOASTOperatorDef: typing.TypeAlias = workflow.ConcreteArtifact[
     FOASTOperatorDef, arguments.CompileTimeArgs
 ]
 
@@ -105,7 +109,7 @@ class DSLProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcreteDSLProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcreteDSLProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
     DSLProgramDef, arguments.CompileTimeArgs
 ]
 
@@ -118,7 +122,7 @@ class PASTProgramDef(BaseStage):
     debug: bool = False
 
 
-ConcretePASTProgramDef: typing.TypeAlias = toolchain.ConcreteArtifact[
+ConcretePASTProgramDef: typing.TypeAlias = workflow.ConcreteArtifact[
     PASTProgramDef, arguments.CompileTimeArgs
 ]
 

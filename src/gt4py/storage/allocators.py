@@ -15,27 +15,15 @@ import functools
 import math
 import operator
 import types
+from collections.abc import Buffer, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic, NewType, Optional, TypeAlias, TypeGuard, Union
 
 import numpy as np
 import numpy.typing as npt
+from typing_extensions import Protocol
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Generic,
-    NewType,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    Type,
-    TypeAlias,
-    TypeGuard,
-    Union,
-)
+from gt4py.eve import xtyping
 
 
 try:
@@ -45,8 +33,10 @@ except ImportError:
 
 
 _NDBuffer: TypeAlias = Union[
-    # TODO: add `xtyping.Buffer` once we update typing_extensions
-    xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    Buffer,
+    xtyping.ArrayInterface,
+    xtyping.CUDAArrayInterface,
+    xtyping.DLPackBuffer,
 ]
 
 #: Tuple of positive integers encoding a permutation of the dimensions, such that
@@ -96,11 +86,11 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
     device: core_defs.Device[core_defs.DeviceTypeT]
     dtype: core_defs.DType[core_defs.ScalarT]
     shape: core_defs.TensorShape
-    strides: Tuple[int, ...]
+    strides: tuple[int, ...]
     layout_map: BufferLayoutMap
     byte_offset: int
     byte_alignment: int
-    aligned_index: Tuple[int, ...]
+    aligned_index: tuple[int, ...]
     ndarray: core_defs.NDArrayObject = dataclasses.field(hash=False)
 
     @property
@@ -141,9 +131,9 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
 
 if TYPE_CHECKING:
     # TensorBuffer should be compatible with all the expected buffer interfaces
-    __TensorBufferAsArrayInterfaceT: Type[xtyping.ArrayInterface] = TensorBuffer
-    __TensorBufferAsCUDAArrayInterfaceT: Type[xtyping.CUDAArrayInterface] = TensorBuffer
-    __TensorBufferAsDLPackBufferT: Type[xtyping.DLPackBuffer] = TensorBuffer
+    __TensorBufferAsArrayInterfaceT: type[xtyping.ArrayInterface] = TensorBuffer
+    __TensorBufferAsCUDAArrayInterfaceT: type[xtyping.CUDAArrayInterface] = TensorBuffer
+    __TensorBufferAsDLPackBufferT: type[xtyping.DLPackBuffer] = TensorBuffer
 
 
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
@@ -302,7 +292,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 class ArrayUtils:
     array_ns: types.ModuleType
     empty: Callable[..., _NDBuffer]
-    byte_bounds: Callable[[_NDBuffer], Tuple[int, int]]
+    byte_bounds: Callable[[_NDBuffer], tuple[int, int]]
     as_strided: Callable[..., core_defs.NDArrayObject]
 
 

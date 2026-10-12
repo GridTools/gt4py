@@ -24,7 +24,7 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.dialect_parser import DialectParser
+from gt4py.next.ffront.dialect_parser import DialectParser, type_from_annotation
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.stages import (
@@ -138,7 +138,9 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        new_type = type_from_annotation(
+            annotation, loc, description=f"type annotation for parameter '{node.arg}'"
+        )
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return past.DataSymbol(id=node.arg, location=loc, type=new_type)

@@ -14,7 +14,7 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
     type_specifications as ts_ffront,
 )
-from gt4py.next.otf import arguments, toolchain, workflow
+from gt4py.next.otf import arguments, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -24,7 +24,7 @@ def transform_program_args(
     rewritten_args, rewritten_kwargs = _process_args(
         past_node=inp.data.past_node, args=inp.args.args, kwargs=inp.args.kwargs
     )
-    return toolchain.ConcreteArtifact(
+    return workflow.ConcreteArtifact(
         data=inp.data,
         args=arguments.CompileTimeArgs(
             args=rewritten_args,

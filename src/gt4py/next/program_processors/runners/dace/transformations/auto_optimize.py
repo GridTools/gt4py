@@ -9,17 +9,17 @@
 """Fast access to the auto optimization on DaCe."""
 
 import enum
+import typing
 import warnings
 from typing import Any, Callable, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import data as dace_data
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation, utils as dace_sdutils
-from dace.transformation import dataflow as dace_dataflow
+from dace.transformation import dataflow as dace_dataflow, pass_pipeline as dace_ppl
 from dace.transformation.auto import auto_optimize as dace_aoptimize
 from dace.transformation.passes import analysis as dace_analysis
 
-from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
@@ -153,9 +153,11 @@ def gt_auto_optimize(
     gpu_block_size_2d: Optional[Sequence[int | str] | str] = None,
     gpu_block_size_3d: Optional[Sequence[int | str] | str] = None,
     gpu_maxnreg: Optional[int] = None,
-    blocking_dim: Optional[gtx_common.Dimension] = None,
+    blocking_dims: Optional[Sequence[gtx_common.Dimension]] = None,
     blocking_size: int = 10,
     blocking_only_if_independent_nodes: bool = True,
+    promote_independent_memlets_for_blocking: bool = False,
+    blocking_independent_node_threshold: Optional[int] = None,
     scan_loop_unrolling: bool = False,
     scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
@@ -211,7 +213,7 @@ def gt_auto_optimize(
         gpu_block_size_{1, 2, 3}d: Allows to specify the GPU thread block size for
             1, 2 and 3 dimension Maps individually. See the `gpu_block_size_spec`
             argument of `gt_gpu_transformation()` for more.
-        blocking_dim: On which dimension blocking should be applied.
+        blocking_dims: On which dimensions blocking should be applied. Priority based on the order of the passed dimensions.
         blocking_size: How many elements each block should process.
         blocking_only_if_independent_nodes: If `True`, the default, only apply loop
             blocking if there are independent nodes in the Map, see the
@@ -355,9 +357,11 @@ def gt_auto_optimize(
         # Optimize the interior of the Maps:
         sdfg = _gt_auto_process_dataflow_inside_maps(
             sdfg=sdfg,
-            blocking_dim=blocking_dim,
+            blocking_dims=blocking_dims,
             blocking_size=blocking_size,
             blocking_only_if_independent_nodes=blocking_only_if_independent_nodes,
+            promote_independent_memlets_for_blocking=promote_independent_memlets_for_blocking,
+            blocking_independent_node_threshold=blocking_independent_node_threshold,
             scan_loop_unrolling=scan_loop_unrolling,
             scan_loop_unrolling_factor=scan_loop_unrolling_factor,
             fuse_tasklets=fuse_tasklets,
@@ -496,6 +500,7 @@ def _gt_auto_process_top_level_maps(
     # TODO(phimuell): Remove this hack as soon as DaCe is fixed.
     # TODO(phimuell): Maybe switch to `reset_cfg_list()`?
     sdfg_hash = sdfg.hash_sdfg()
+    hash_before_step = sdfg_hash
 
     if GT4PyAutoOptHook.TopLevelDataFlowPre in optimization_hooks:
         optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowPre](sdfg)  # type: ignore[call-arg]
@@ -518,6 +523,15 @@ def _gt_auto_process_top_level_maps(
         # TODO(phimuell): Remove that hack once [issue#1911](https://github.com/spcl/dace/issues/1911)
         #   has been solved.
         vertical_map_fusion._single_use_data = single_use_data
+
+        # Fold single iteration Map dimensions first, otherwise their Memlets still
+        #  refer to the parameter symbolically and `Range.covers()` fails to see that
+        #  a producer covers a consumer, rejecting legal fusions.
+        sdfg.apply_transformations_repeated(
+            gtx_transformations.TrivialMapDimensionFolding(only_toplevel_maps=True),
+            validate=False,
+            validate_all=validate_all,
+        )
 
         sdfg.apply_transformations_repeated(
             vertical_map_fusion,
@@ -596,7 +610,7 @@ def _gt_auto_process_top_level_maps(
             # TODO(phimuell): Implement a data cleaner.
             dace_sdutils.canonicalize_memlet_trees(sdfg)
             dace_propagation.propagate_memlets_sdfg(sdfg)
-            sdfg.apply_transformations_repeated(
+            nb_applied_splits = sdfg.apply_transformations_repeated(
                 [
                     gtx_transformations.MapSplitter(
                         single_use_data=single_use_data,
@@ -609,8 +623,11 @@ def _gt_auto_process_top_level_maps(
             )
             # TODO(phimuell): Find out how to skip the propagation and integrating it
             #   into the split transformation.
-            dace_sdutils.canonicalize_memlet_trees(sdfg)
-            dace_propagation.propagate_memlets_sdfg(sdfg)
+            if nb_applied_splits != 0:
+                # Without an applied split the SDFG is the one the canonicalization and the
+                #  propagation above already ran on, and both are idempotent.
+                dace_sdutils.canonicalize_memlet_trees(sdfg)
+                dace_propagation.propagate_memlets_sdfg(sdfg)
 
             # Split the top level AccessNodes.
             # NOTE: This function will also update `single_use_data`.
@@ -677,6 +694,14 @@ def _gt_auto_process_top_level_maps(
             validate_all=validate_all,
         )
 
+        dace_ppl.Pipeline(
+            [
+                gtx_transformations.GT4PyWriteBackBufferElimination(
+                    assume_pointwise=assume_pointwise,
+                )
+            ]
+        ).apply_pass(sdfg, {})
+
         # TODO(phimuell): Figuring out if this is the correct location for doing it.
         if GT4PyAutoOptHook.TopLevelDataFlowStep in optimization_hooks:
             optimization_hooks[GT4PyAutoOptHook.TopLevelDataFlowStep](sdfg)  # type: ignore[call-arg]
@@ -685,15 +710,27 @@ def _gt_auto_process_top_level_maps(
         old_sdfg_hash, sdfg_hash = sdfg_hash, sdfg.hash_sdfg()
         if old_sdfg_hash == sdfg_hash:
             break
+        step_has_modified_sdfg = sdfg_hash != hash_before_step
 
         # The SDFG was modified by the transformations above. The SDFG was
         #  modified. Call Simplify and try again to further optimize.
-        gtx_transformations.gt_simplify(
+        simplify_result = gtx_transformations.gt_simplify(
             sdfg,
             validate=False,
             validate_all=validate_all,
             skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
         )
+
+        # `gt_simplify()` reports every pass it applied, so `None` means the SDFG is still the one
+        #  the hash above was taken from.
+        if simplify_result is None:
+            # The next iteration would start from the same SDFG as this one. If this one changed
+            #  nothing, it would repeat itself and find nothing again.
+            if not step_has_modified_sdfg:
+                break
+            hash_before_step = sdfg_hash
+        else:
+            hash_before_step = sdfg.hash_sdfg()
 
     # Replace `concat_where` nodes
     # TODO(phimuell): Are there better locations for this transformation?
@@ -712,9 +749,11 @@ def _gt_auto_process_top_level_maps(
 
 def _gt_auto_process_dataflow_inside_maps(
     sdfg: dace.SDFG,
-    blocking_dim: Optional[gtx_common.Dimension],
+    blocking_dims: Optional[Sequence[gtx_common.Dimension]],
     blocking_size: int,
     blocking_only_if_independent_nodes: Optional[bool],
+    promote_independent_memlets_for_blocking: Optional[bool],
+    blocking_independent_node_threshold: Optional[int],
     scan_loop_unrolling: bool,
     scan_loop_unrolling_factor: int,
     fuse_tasklets: bool,
@@ -736,12 +775,14 @@ def _gt_auto_process_dataflow_inside_maps(
     # Separate Tasklets into dependent and independent parts to promote data
     #  reusability. It is important that this step has to be performed before
     #  `TaskletFusion` is used.
-    if blocking_dim is not None:
+    if blocking_dims is not None and blocking_size > 0:
         sdfg.apply_transformations_once_everywhere(
             gtx_transformations.LoopBlocking(
                 blocking_size=blocking_size,
-                blocking_parameter=blocking_dim,
+                blocking_parameters=blocking_dims,
                 require_independent_nodes=blocking_only_if_independent_nodes,
+                promote_independent_memlets=promote_independent_memlets_for_blocking,
+                independent_node_threshold=blocking_independent_node_threshold,
             ),
             validate=False,
             validate_all=validate_all,
@@ -995,7 +1036,7 @@ def _gt_auto_post_processing(
             pass
 
         case _ as unreachable:
-            xtyping.assert_never(unreachable)
+            typing.assert_never(unreachable)
 
     if validate_all:
         sdfg.validate()

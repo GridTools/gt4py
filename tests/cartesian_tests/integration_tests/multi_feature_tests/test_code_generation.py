@@ -1271,8 +1271,8 @@ def test_absolute_K_index_raise(backend) -> None:
     "backend",
     [
         pytest.param("debug"),
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_absolute_K_index(backend) -> None:
@@ -1389,7 +1389,7 @@ def test_absolute_K_index(backend) -> None:
 
 @pytest.mark.parametrize(
     "backend",
-    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
+    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.uses_dace])],
 )
 def test_iterator_access(backend: str) -> None:
     domain = (3, 4, 5)
@@ -1533,7 +1533,7 @@ def test_runtime_interval_bounds() -> None:
                     raises=NotImplementedError,
                     reason="Runtime interval bounds not implemented yet.",
                 ),
-                pytest.mark.requires_dace,
+                pytest.mark.uses_dace,
             ],
         ),
         pytest.param(
@@ -1543,7 +1543,7 @@ def test_runtime_interval_bounds() -> None:
                     raises=NotImplementedError,
                     reason="Runtime interval bounds not implemented yet.",
                 ),
-                pytest.mark.requires_dace,
+                pytest.mark.uses_dace,
                 pytest.mark.requires_gpu,
             ],
         ),
@@ -1575,8 +1575,8 @@ def test_runtime_interval_raises(backend) -> None:
     [
         pytest.param("debug"),
         pytest.param("numpy"),
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_2d_temporaries(backend) -> None:
@@ -1812,11 +1812,11 @@ def test_reset_mask_2d(backend: str) -> None:
     "backend",
     [
         "debug",
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
         pytest.param(
             "dace:gpu",
             marks=[
-                pytest.mark.requires_dace,
+                pytest.mark.uses_dace,
                 pytest.mark.requires_gpu,
                 pytest.mark.xfail(
                     raises=SystemExit,
@@ -1890,3 +1890,20 @@ def test_enum_runtime(backend):
     assert out_arr[0, 0, 0] == MyEnum.A.value
     assert out_arr[0, 0, 1] == MyEnum.B.value
     assert (out_arr[0, 0, 2:] == MyEnum.C.value).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_negated_bool_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], done: bool):  # type: ignore
+        with computation(PARALLEL), interval(...):
+            if not done:
+                out_field = 1
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, done=False)
+
+    assert (out_arr[:] == 1).all()

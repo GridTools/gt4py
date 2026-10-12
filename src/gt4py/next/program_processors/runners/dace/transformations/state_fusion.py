@@ -12,6 +12,7 @@ from typing import Any
 import dace
 from dace import transformation as dace_transformation
 from dace.sdfg import nodes as dace_nodes, utils as dace_sdutils
+from ordered_set import OrderedSet
 
 
 # Conditional import because `gt4py.cartesian` uses an older DaCe version without
@@ -424,23 +425,25 @@ class GT4PyStateFusion(dace_transformation.MultiStateTransformation):
         #  node for any global data in the combined state. The transients are handled
         #  naturally because we maintain the SSA invariant, furthermore, the inputs
         #  are already merged.
-        # TODO(phimuell): Improve this merging.
-        global_sink_nodes: dict[str, set[dace_nodes.AccessNode]] = {}
+        global_sink_nodes: dict[str, OrderedSet[dace_nodes.AccessNode]] = {}
         for sink_node in first_state.sink_nodes():
             if not isinstance(sink_node, dace_nodes.AccessNode):
                 continue
             if sink_node.desc(sdfg).transient:
                 continue
             if sink_node.data not in global_sink_nodes:
-                global_sink_nodes[sink_node.data] = set()
+                global_sink_nodes[sink_node.data] = OrderedSet()
             global_sink_nodes[sink_node.data].add(sink_node)
 
         for sink_nodes in global_sink_nodes.values():
             if len(sink_nodes) <= 1:
                 continue
-            # We now select one node and redirect all writes to it.
-            final_sink_node = sink_nodes.pop()
+            # We now select one node, in the order they appear in the state, and
+            #  redirect all writes to it.
+            final_sink_node = next(iter(sink_nodes))
             for sink_node in sink_nodes:
+                if sink_node is final_sink_node:
+                    continue
                 for iedge in first_state.in_edges(sink_node):
                     first_state.add_edge(
                         iedge.src, iedge.src_conn, final_sink_node, iedge.dst_conn, iedge.data

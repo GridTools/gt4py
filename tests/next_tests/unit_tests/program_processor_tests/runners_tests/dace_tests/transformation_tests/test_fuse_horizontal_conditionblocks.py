@@ -6,10 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dace
 import pytest
 import sympy
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import utils as gtx_utils
@@ -155,14 +155,10 @@ def _make_map_with_conditional_blocks(
     cond_var = state.add_access("cond_var")
 
     me, mx = state.add_map("map_with_ifs", ndrange={"__i": "0:10"})
-    me.add_in_connector("IN_a")
-    me.add_out_connector("OUT_a")
-    me.add_in_connector("IN_b")
-    me.add_out_connector("OUT_b")
-    mx.add_in_connector("IN_c")
-    mx.add_out_connector("OUT_c")
-    mx.add_in_connector("IN_d")
-    mx.add_out_connector("OUT_d")
+    me.add_scope_connectors("a")
+    me.add_scope_connectors("b")
+    mx.add_scope_connectors("c")
+    mx.add_scope_connectors("d")
     state.add_edge(a, None, me, "IN_a", dace.Memlet("a[__i]"))
     state.add_edge(b, None, me, "IN_b", dace.Memlet("b[__i]"))
     state.add_edge(me, "OUT_a", tmp_a, None, dace.Memlet("a[__i]"))

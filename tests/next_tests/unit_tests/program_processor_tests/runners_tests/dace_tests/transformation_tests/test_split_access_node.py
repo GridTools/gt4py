@@ -8,11 +8,11 @@
 
 from __future__ import annotations
 
+import dace
 import pytest
 import copy
 import numpy as np
 
-dace = pytest.importorskip("dace")
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import (
@@ -904,3 +904,227 @@ def test_unused_partial_read_from_inout_node():
     sdfg.validate()
 
     _perform_test(sdfg, explected_applies=1, removed_transients={t})
+
+
+def test_consumer_spanning_multiple_producers():
+    """A consumer that reads the data of two producers puts them in one fragment."""
+    sdfg = dace.SDFG(util.unique_name("consumer_spanning_multiple_producers"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abctde":
+        sdfg.add_array(
+            name,
+            shape=(20,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+    t = state.add_access("t")
+
+    for producer, (source, start) in enumerate([("a", 0), ("b", 5), ("c", 10)]):
+        state.add_mapped_tasklet(
+            f"producer_{producer}",
+            map_ranges={"__i": f"{start}:{start + 5}"},
+            inputs={"__in": dace.Memlet(f"{source}[__i]")},
+            code=f"__out = __in + {producer + 1}.0",
+            outputs={"__out": dace.Memlet("t[__i]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+
+    # The first consumer is served by the first producer alone, but the second one
+    #  reads what the second and third producer generate, so those two have to end
+    #  up in the same fragment.
+    for consumer, (destination, rng) in enumerate([("d", "0:5"), ("e", "5:15")]):
+        state.add_mapped_tasklet(
+            f"consumer_{consumer}",
+            map_ranges={"__i": rng},
+            inputs={"__in": dace.Memlet("t[__i]")},
+            code="__out = __in + 13.0",
+            outputs={"__out": dace.Memlet(f"{destination}[__i]")},
+            input_nodes={t},
+            external_edges=True,
+        )
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
+
+    # The node was split into exactly the two fragments described above: one fed by
+    #  the first producer alone, the other by the second and third together.
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    fragment_by_nb_producers = {state.in_degree(dnode): dnode for dnode in fragment_nodes}
+    assert set(fragment_by_nb_producers.keys()) == {1, 2}
+
+    # Each fragment serves exactly the consumer that reads it, i.e. the single
+    #  producer fragment feeds the consumer writing to `d` and the merged one the
+    #  consumer writing to `e`.
+    for nb_producers, expected_destination in [(1, "d"), (2, "e")]:
+        fragment_node = fragment_by_nb_producers[nb_producers]
+        assert state.out_degree(fragment_node) == 1
+        consumer_entry = next(iter(state.out_edges(fragment_node))).dst
+        assert isinstance(consumer_entry, dace_nodes.MapEntry)
+        destinations = {
+            oedge.dst.data
+            for oedge in state.out_edges(state.exit_node(consumer_entry))
+            if isinstance(oedge.dst, dace_nodes.AccessNode)
+        }
+        assert destinations == {expected_destination}
+
+
+def test_consumer_spanning_all_producers():
+    """If a single consumer reads everything there is only one fragment, so no split."""
+    sdfg = dace.SDFG(util.unique_name("consumer_spanning_all_producers"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abtd":
+        sdfg.add_array(
+            name,
+            shape=(20,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+    t = state.add_access("t")
+
+    for producer, (source, start) in enumerate([("a", 0), ("b", 5)]):
+        state.add_mapped_tasklet(
+            f"producer_{producer}",
+            map_ranges={"__i": f"{start}:{start + 5}"},
+            inputs={"__in": dace.Memlet(f"{source}[__i]")},
+            code=f"__out = __in + {producer + 1}.0",
+            outputs={"__out": dace.Memlet("t[__i]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+    state.add_mapped_tasklet(
+        "consumer",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("t[__i]")},
+        code="__out = __in + 13.0",
+        outputs={"__out": dace.Memlet("d[__i]")},
+        input_nodes={t},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    _perform_test(sdfg, explected_applies=0)
+
+
+def test_consumer_spanning_already_merged_producers():
+    """A consumer spans producers that a previous consumer already merged."""
+    sdfg = dace.SDFG(util.unique_name("consumer_spanning_already_merged_producers"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in "abctde":
+        sdfg.add_array(
+            name,
+            shape=(20,),
+            dtype=dace.float64,
+            transient=(name == "t"),
+        )
+    t = state.add_access("t")
+
+    for producer, (source, start) in enumerate([("a", 0), ("b", 5), ("c", 10)]):
+        state.add_mapped_tasklet(
+            f"producer_{producer}",
+            map_ranges={"__i": f"{start}:{start + 5}"},
+            inputs={"__in": dace.Memlet(f"{source}[__i]")},
+            code=f"__out = __in + {producer + 1}.0",
+            outputs={"__out": dace.Memlet("t[__i]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+
+    # The first consumer merges producer 1 and producer 2 into one fragment. The
+    #  second one spans all three, so looking up the fragment of producer 1 and of
+    #  producer 2 now yields the same non-minimal id twice.
+    for consumer, (destination, rng) in enumerate([("d", "5:15"), ("e", "0:15")]):
+        state.add_mapped_tasklet(
+            f"consumer_{consumer}",
+            map_ranges={"__i": rng},
+            inputs={"__in": dace.Memlet("t[__i]")},
+            code="__out = __in + 13.0",
+            outputs={"__out": dace.Memlet(f"{destination}[__i]")},
+            input_nodes={t},
+            external_edges=True,
+        )
+    sdfg.validate()
+
+    # Everything ends up in a single fragment, so there is nothing to split -- the
+    #  point of the test is that determining that does not raise.
+    _perform_test(sdfg, explected_applies=0)
+
+
+def _make_multi_producer_sdfg(
+    name: str,
+    producers: list[tuple[str, int]],
+    consumers: list[tuple[str, str]],
+) -> tuple[dace.SDFG, dace.SDFGState]:
+    """Builds an SDFG where `producers` write disjoint chunks of `t` that `consumers` read."""
+    sdfg = dace.SDFG(util.unique_name(name))
+    state = sdfg.add_state(is_start_block=True)
+
+    for array in [source for source, _ in producers] + [dst for dst, _ in consumers] + ["t"]:
+        sdfg.add_array(array, shape=(20,), dtype=dace.float64, transient=(array == "t"))
+    t = state.add_access("t")
+
+    for producer, (source, start) in enumerate(producers):
+        state.add_mapped_tasklet(
+            f"producer_{producer}",
+            map_ranges={"__i": f"{start}:{start + 5}"},
+            inputs={"__in": dace.Memlet(f"{source}[__i]")},
+            code=f"__out = __in + {producer + 1}.0",
+            outputs={"__out": dace.Memlet("t[__i]")},
+            output_nodes={t},
+            external_edges=True,
+        )
+    for consumer, (destination, rng) in enumerate(consumers):
+        state.add_mapped_tasklet(
+            f"consumer_{consumer}",
+            map_ranges={"__i": rng},
+            inputs={"__in": dace.Memlet("t[__i]")},
+            code="__out = __in + 13.0",
+            outputs={"__out": dace.Memlet(f"{destination}[__i]")},
+            input_nodes={t},
+            external_edges=True,
+        )
+    sdfg.validate()
+    return sdfg, state
+
+
+def test_partially_read_multi_producer_fragment():
+    """A fragment that is not read in full does not prevent the other ones.
+
+    The second and third producer are merged by the spanning consumer, which stops
+    short of what the third producer writes, so that fragment keeps data that nobody
+    reads. The first producer and its consumer are unaffected by that and become an
+    independent fragment.
+    """
+    sdfg, state = _make_multi_producer_sdfg(
+        "partially_read_multi_producer_fragment",
+        producers=[("a", 0), ("b", 5), ("c", 10)],
+        consumers=[("d", "0:5"), ("e", "5:12")],
+    )
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
+
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    assert {state.in_degree(dnode) for dnode in fragment_nodes} == {1, 2}
+
+
+def test_overlapping_consumers_cover_multi_producer_fragment():
+    """Consumers that read overlapping regions still cover the merged fragment.
+
+    The two reads of the merged fragment overlap rather than being adjacent, which
+    is the common case for stencils reading a halo. Their union still covers what
+    the two producers write, so the split must be performed.
+    """
+    sdfg, state = _make_multi_producer_sdfg(
+        "overlapping_consumers_cover_fragment",
+        producers=[("a", 0), ("b", 5), ("c", 10)],
+        consumers=[("d", "0:5"), ("e", "5:12"), ("f", "10:15")],
+    )
+    _perform_test(sdfg, explected_applies=1, removed_transients={"t"})
+
+    fragment_nodes = [dnode for dnode in state.data_nodes() if sdfg.arrays[dnode.data].transient]
+    assert len(fragment_nodes) == 2
+    assert {state.in_degree(dnode) for dnode in fragment_nodes} == {1, 2}

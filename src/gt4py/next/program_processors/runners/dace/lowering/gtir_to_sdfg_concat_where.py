@@ -85,6 +85,8 @@ def _translate_concat_where_branch(
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:
         return concat_where(KDim == 0, boundary, interior)
     ```
+    A field of constant lists, as produced by `make_const_list`, is broadcast in the
+    same way to the neighbor-list type of the result field.
 
     Args:
         ctx: The SDFG context in which to lower the `concat_where` branch expression.
@@ -103,9 +105,7 @@ def _translate_concat_where_branch(
     assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
     source_domain = source_expr.annex.domain
-    if isinstance(source_expr.type, ts.ScalarType) or len(source_expr.type.dims) < len(
-        output_type.dims
-    ):
+    if source_expr.type != output_type:
         # We promote the input expression to a field defined on the output domain,
         # refer to the function documentation for examples of such field operators.
         if concat_dim not in source_domain.ranges:
@@ -140,19 +140,24 @@ def _translate_concat_where_branch(
     )
     source_range_size = source_range_1 - source_range_0
 
+    src_origins = list(source.origin)
+    dst_origins = list(output_origin)
     if isinstance(output_type.dtype, ts.ScalarType):
         all_dims = gtx_common.order_dimensions(output_type.dims)
     else:
         assert output_type.dtype.offset_type
         all_dims = gtx_common.order_dimensions([*output_type.dims, output_type.dtype.offset_type])
+        local_idx = all_dims.index(output_type.dtype.offset_type)
+        src_origins.insert(local_idx, 0)
+        dst_origins.insert(local_idx, 0)
 
     source_subset = []
     output_subset = []
     for dim, size, src_origin, dst_origin in zip(
         all_dims,
         output_desc.shape,
-        source.origin,
-        output_origin,
+        src_origins,
+        dst_origins,
         strict=True,
     ):
         if dim == concat_dim:
@@ -245,8 +250,14 @@ def translate_concat_where(
     if isinstance(node.type.dtype, ts.ScalarType):
         dtype = gtx_dace_args.as_dace_type(node.type.dtype)
     else:
-        # TODO(edopao): Refactor allocation of fields with local dimension and enable this.
-        raise NotImplementedError("'concat_where' with list output is not supported")
+        assert isinstance(node.type.dtype.element_type, ts.ScalarType)
+        local_dim = node.type.dtype.offset_type
+        assert local_dim is not None
+        dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
+        offset_provider_type = sdfg_builder.get_offset_provider_type(local_dim.value)
+        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
+        local_idx = gtx_common.order_dimensions([*output_dims, local_dim]).index(local_dim)
+        output_shape.insert(local_idx, offset_provider_type.max_neighbors)
 
     output, output_desc = sdfg_builder.add_temp_array(ctx.sdfg, output_shape, dtype)
     output_node = ctx.state.add_access(output)

@@ -239,7 +239,7 @@ def test_concat_where_invalid_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match="Field arguments to 'concat_where' must be of same dtype, got 'float64' != 'int32'.",
+        match="Could not promote 'float64' and 'int32' to common type in call to 'concat_where'.",
     ):
         _ = FieldOperatorParser.apply_to_function(domain_comparison)
 

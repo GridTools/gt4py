@@ -1013,7 +1013,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
             name=next(self._uids[f"{tasklet.label}__clone"]),
             outputs=tasklet.out_connectors.keys(),
-            inputs=set(),
+            inputs={},
             code=tasklet.code,
             language=tasklet.language,
             debuginfo=tasklet.debuginfo,

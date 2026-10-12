@@ -21,7 +21,6 @@ from gt4py.next.iterator.ir import (
     FunCall,
     FunctionDefinition,
     Lambda,
-    NoneLiteral,
     OffsetLiteral,
     Sym,
     SymRef,
@@ -165,8 +164,6 @@ def make_node(o):
         return im.literal_from_value(o)
     if isinstance(o, tuple):
         return _f("make_tuple", *(make_node(arg) for arg in o))
-    if o is None:
-        return NoneLiteral()
     if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
     raise NotImplementedError(f"Cannot handle '{o}'.")

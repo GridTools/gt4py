@@ -3,7 +3,7 @@ import dataclasses
 import typing
 
 from gt4py import next as gtx
-from gt4py.next.otf import toolchain, workflow
+from gt4py.next.otf import workflow
 from gt4py.next.ffront import field_operator_ast as foast, stages as ff_stages
 from gt4py import eve
 ```
@@ -22,7 +22,7 @@ cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
 ## Skip Steps / Change Order
 
 ```python
-DUMMY_FOP = toolchain.ConcreteArtifact(
+DUMMY_FOP = workflow.ConcreteArtifact(
     data=ff_stages.DSLFieldOperatorDef(definition=None), args=None
 )
 ```
@@ -46,7 +46,31 @@ skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```
 
-## Alternative Factory
+## Alternative Workflow
+
+A toolchain is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
+which holds the settings all steps must agree on: the device, the build type,
+the cache lifetime, the data layout. Each step is created by a step builder
+that receives that configuration. To change a single setting of one step, pass
+a `functools.partial` of its default builder; the other settings still come
+from the configuration.
+
+```python
+import functools
+
+gtfn = gtx.program_processors.runners.gtfn
+
+debug_gpu_no_transforms = gtfn.make_gtfn_toolchain(
+    gtfn.GTFNConfig(gpu=True, cmake_build_type=gtx.config.CMakeBuildType.DEBUG),
+    name_postfix="_debug_no_transforms",
+    translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
+)
+```
+
+To replace a step, pass any callable that takes the configuration and returns
+the step. It is still wrapped in the translation cache. Configuring it
+consistently with the configuration it receives (the device, for instance) is
+up to the callable.
 
 ```python
 class MyCodeGen: ...
@@ -55,16 +79,11 @@ class MyCodeGen: ...
 class Cpp2BindingsGen: ...
 
 
-class PureCpp2WorkflowFactory(gtx.program_processors.runners.gtfn.GTFNCompileWorkflowFactory):
-    translation: workflow.Workflow[
-        gtx.otf.definitions.CompilableProgramDef, gtx.otf.stages.ProgramSource
-    ] = MyCodeGen()
-    bindings: workflow.Workflow[gtx.otf.stages.ProgramSource, gtx.otf.stages.ExtensionSource] = (
-        Cpp2BindingsGen()
-    )
-
-
-PureCpp2WorkflowFactory(cmake_build_type=gtx.config.CMAKE_BUILD_TYPE.DEBUG)
+pure_cpp2_workflow = gtfn.make_gtfn_compile_workflow(
+    gtfn.GTFNConfig(cmake_build_type=gtx.config.CMakeBuildType.DEBUG, cached_translation=False),
+    translation=lambda cfg: MyCodeGen(),
+    bindings=lambda cfg: Cpp2BindingsGen(),
+)
 ```
 
 ## Invent new Workflow Types

@@ -20,12 +20,11 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, Sequence, TypeAlias
+from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self, Unpack, override
+from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
     common,
@@ -47,7 +46,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, compiled_program, options, toolchain
+from gt4py.next.otf import arguments, compiled_program, options, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -264,9 +263,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.ConcreteArtifact(
-            self.past_stage, arguments.CompileTimeArgs.empty()
-        )
+        no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
         _ = self._frontend_transforms.past_lint(no_args_past).data
 
     @property
@@ -289,7 +286,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.ConcreteArtifact(
+        no_args_def = workflow.ConcreteArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -309,7 +306,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.ConcreteArtifact(
+        no_args_past = workflow.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -609,7 +606,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.ConcreteArtifact(
+            workflow.ConcreteArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data

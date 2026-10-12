@@ -17,7 +17,6 @@ jupyter:
 import dataclasses
 import re
 
-import factory
 
 import gt4py.next as gtx
 
@@ -193,17 +192,13 @@ gtx.backend.DEFAULT_PROG_TRANSFORMS.past_lint??
 
 Though we execute the workflow three times we only get the debug print once, it worked! Btw, hashing is rarely that easy in the wild...
 
-#### Conditionally skipping steps
-
-The `SkippableStep` pattern can be used to skip a step under a given condition. A main use case is when you might want to run a workflow either from the start or from further along (with the same interface).
-
 Let's say we want to make our calculation workflow compatible with string input. We can add a conversion step (which only works with strings).
 
 <!-- #endregion -->
 
 ```python editable=true slideshow={"slide_type": ""}
 # A plain conversion step turning a string into an int, chained into the
-# workflow below and reused by `StrToIntFactory(cached=True)`.
+# workflow below and reused by `make_str_to_int(cached=True)`.
 def to_int(inp: str) -> int:
     assert isinstance(inp, str), "Can not work with 'int'!"  # yes, this is horribly contrived
     return int(inp)
@@ -218,77 +213,9 @@ str_calc("1")
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
 
-Now we can start from a string that contains an int. But if we already have an int, it will fail.
+### Step with a builder
 
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-try:
-    str_calc(1)
-except AssertionError as err:
-    print(err)
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
-
-What to do? What we want is a to conditionally skip the first step, so we replace it with a `SkippableStep`:
-
-```python
-class OptionalStrToInt(SkippableStep[str | int, int]):
-    step: Workflow[str, int]
-
-    def skip_condition(
-        self, inp: str | int
-    ) -> (
-        bool
-    ): ...  # return True to skip (if we get an int) or False to run the conversion (str case)
-```
-
-```mermaid
-graph LR
-
-int(A: int = 1) --> calc{{"add_3_times_2(1)"}} --> result(8)
-int --> ski{{"skip_condition(1)"}} -->|True| calc
-str("B: str = '1'") --> sks{{"skip_condition('1')"}} -->|False| conv{{to_int}} --> b2("int(B) = 1") --> calc
-```
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-@dataclasses.dataclass(frozen=True)
-class OptionalStrToInt(gtx.otf.workflow.SkippableStep[str | int, int]):
-    step: gtx.otf.workflow.Workflow[str, int] = to_int
-
-    def skip_condition(self, inp: str | int) -> bool:
-        match inp:
-            case int():
-                return True
-            case str():
-                return False
-            case _:
-                # optionally raise an error with good advice
-                return False
-
-
-strint_calc = OptionalStrToInt().chain(add_3_times_2)
-strint_calc(1) == strint_calc("1")
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-### Example in the Wild
-
-<!-- #endregion -->
-
-```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past??
-```
-
-<!-- #region editable=true slideshow={"slide_type": ""} -->
-
-### Step with factory (builder)
-
-If a step can be useful with different combinations of parameters and wrappers, it should have a factory. In this case we will add a neutral wrapper around it, so we can put any combination of wrappers into that:
+If a step is useful with different combinations of parameters and wrappers, give it a **builder function**: a plain function taking the cross-cutting options and returning the assembled step. Steps are frozen dataclasses, so the builder is ordinary code — no factory framework involved, and the result is fully type-checked.
 
 <!-- #endregion -->
 
@@ -301,38 +228,23 @@ class AnyStrToInt(gtx.otf.workflow.ChainableWorkflowMixin[str | int, int]):
         return self.inner_step(inp)
 
 
-class StrToIntFactory(factory.Factory):
-    class Meta:
-        model = AnyStrToInt
-
-    class Params:
-        default_step = to_int
-        optional: bool = False
-        optional_or_not = factory.LazyAttribute(
-            lambda o: OptionalStrToInt(step=o.default_step) if o.optional else o.default_step
-        )
-        cached = factory.Trait(
-            inner_step=factory.LazyAttribute(
-                lambda o: gtx.otf.workflow.CachedStep.in_memory(
-                    step=o.optional_or_not, input_fingerprinter=str
-                )
-            )
-        )
-
-    inner_step = factory.LazyAttribute(lambda o: o.optional_or_not)
+def make_str_to_int(
+    *, cached: bool = False, step: gtx.otf.workflow.Workflow[str, int] = to_int
+) -> AnyStrToInt:
+    if cached:
+        step = gtx.otf.workflow.CachedStep.in_memory(step=step, input_fingerprinter=str)
+    return AnyStrToInt(inner_step=step)
 
 
-cached = StrToIntFactory(cached=True)
-optional = StrToIntFactory(optional=True)
-both = StrToIntFactory(cached=True, optional=True)
-neither = StrToIntFactory()
-neither.inner_step
+cached = make_str_to_int(cached=True)
+uncached = make_str_to_int()
+uncached.inner_step
 ```
 
 ### Example in the Wild
 
 ```python
-gtx.ffront.past_passes.linters.LinterFactory??
+gtx.ffront.past_passes.linters.linter_factory??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} tags=["skip-execution"] -->
@@ -491,5 +403,5 @@ gtx.program_processors.runners.gtfn.run_gtfn_gpu.executor.otf_workflow??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.GTFNBackendFactory??
+gtx.program_processors.runners.gtfn.make_gtfn_toolchain??
 ```

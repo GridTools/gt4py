@@ -64,4 +64,9 @@ class StringifyAnnotationsPass(ast.NodeTransformer):
 
     @staticmethod
     def _stringify_annotation(node: Optional[ast.AST]) -> Any:
-        return ast.Constant(value=ast.unparse(node), kind=None) if node else node
+        if node is None:
+            return None
+        # Keep the source span of the original annotation: this pass runs after
+        # 'FixMissingLocations', so a freshly built node would carry no location
+        # at all and diagnostics could not point at the annotation.
+        return ast.copy_location(ast.Constant(value=ast.unparse(node), kind=None), node)

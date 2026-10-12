@@ -14,58 +14,21 @@ import abc
 import collections.abc
 import contextlib
 import inspect
-import os
 import re
 import string
-import subprocess
 import sys
 import textwrap
 import types
+from collections.abc import Collection, Iterator, Mapping, Sequence
+from typing import Any, ClassVar, Optional, TypeVar, Union, overload
 
-import black
 import jinja2
 from mako import template as mako_tpl
+from typing_extensions import Protocol, runtime_checkable
 
 from . import exceptions, utils
 from .concepts import CollectionNode, LeafNode, Node, RootNode
-from .extended_typing import (
-    Any,
-    Callable,
-    ClassVar,
-    Collection,
-    Dict,
-    Iterator,
-    List,
-    Mapping,
-    Optional,
-    Protocol,
-    Sequence,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-    overload,
-    runtime_checkable,
-)
 from .visitors import NodeVisitor
-
-
-SourceFormatter = Callable[[str], str]
-
-SOURCE_FORMATTERS: Dict[str, SourceFormatter] = {}
-"""Global dict storing registered formatters."""
-
-
-class FormatterNameError(exceptions.EveRuntimeError):
-    """Run-time error registering a new source code formatter."""
-
-    ...
-
-
-class FormattingError(exceptions.EveRuntimeError):
-    """Run-time error applying a source code formatter."""
-
-    ...
 
 
 class TemplateDefinitionError(exceptions.EveTypeError):
@@ -80,115 +43,10 @@ class TemplateRenderingError(exceptions.EveRuntimeError):
     ...
 
 
-def register_formatter(language: str) -> Callable[[SourceFormatter], SourceFormatter]:
-    """Register source code formatters for specific languages (decorator)."""
-
-    def _decorator(formatter: SourceFormatter) -> SourceFormatter:
-        if language in SOURCE_FORMATTERS:
-            raise FormatterNameError(f"Another formatter for language '{language}' already exists")
-
-        assert callable(formatter)
-        SOURCE_FORMATTERS[language] = formatter
-
-        return formatter
-
-    return _decorator
-
-
-@register_formatter("python")
-def format_python_source(
-    source: str,
-    *,
-    line_length: int = 100,
-    python_versions: Optional[Set[str]] = None,
-    string_normalization: bool = True,
-) -> str:
-    """Format Python source code using black formatter."""
-    python_versions = python_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)  # type: ignore[attr-defined]  # .TargetVersion implicitly exported
-
-    formatted_source = black.format_str(
-        source,
-        mode=black.FileMode(
-            line_length=line_length,
-            target_versions=target_versions,
-            string_normalization=string_normalization,
-        ),
-    )
-    assert isinstance(formatted_source, str)
-
-    return formatted_source
-
-
-def _get_clang_format() -> Optional[str]:
-    """Return the clang-format executable, or None if not available."""
-    executable = os.getenv("CLANG_FORMAT_EXECUTABLE", "clang-format")
-    try:
-        assert isinstance(executable, str)
-        if subprocess.run([executable, "--version"], capture_output=True).returncode != 0:
-            return None
-    except Exception:
-        return None
-
-    return executable
-
-
-_CLANG_FORMAT_EXECUTABLE = _get_clang_format()
-
-
-if _CLANG_FORMAT_EXECUTABLE is not None:
-
-    @register_formatter("cpp")
-    def format_cpp_source(
-        source: str,
-        *,
-        style: Optional[str] = None,
-        fallback_style: Optional[str] = None,
-        sort_includes: bool = False,
-    ) -> str:
-        """Format C++ source code using clang-format."""
-        assert isinstance(_CLANG_FORMAT_EXECUTABLE, str)
-        args = [_CLANG_FORMAT_EXECUTABLE, "--assume-filename=_gt4py_generated_file.cpp"]
-        if style:
-            args.append(f"--style={style}")
-        if fallback_style:
-            args.append(f"--fallback-style={style}")
-        if sort_includes:
-            args.append("--sort-includes")
-
-        try:
-            # use a timeout as clang-format used to deadlock on some sources
-            formatted_source = subprocess.run(
-                args, check=True, input=source, capture_output=True, text=True, timeout=3
-            ).stdout
-        except subprocess.TimeoutExpired:
-            return source
-
-        assert isinstance(formatted_source, str)
-        return formatted_source
-
-
-def format_source(language: str, source: str, *, skip_errors: bool = True, **kwargs: Any) -> str:
-    """Format source code if a formatter exists for the specific language."""
-    formatter = SOURCE_FORMATTERS.get(language, None)
-    try:
-        if formatter:
-            return formatter(source, **kwargs)
-        else:
-            raise FormattingError(f"Missing formatter for '{language}' language")
-    except Exception as e:
-        if skip_errors:
-            return source
-        else:
-            raise FormattingError(
-                f"Something went wrong when trying to format '{language}' source code"
-            ) from e
-
-
 class Name:
     """Text formatter with different case styles for symbol names in source code."""
 
-    words: List[str]
+    words: list[str]
 
     @classmethod
     def from_string(cls, name: str, case_style: utils.CaseStyleConverter.CASE_STYLE) -> Name:
@@ -248,7 +106,7 @@ class TextBlock:
         self.indent_size = indent_size
         self.indent_char = indent_char
         self.end_line = end_line
-        self.lines: List[str] = []
+        self.lines: list[str] = []
 
     def append(self, new_line: str, *, update_indent: int = 0) -> TextBlock:
         if update_indent > 0:
@@ -404,7 +262,7 @@ class BaseTemplate(Template):
     """Helper class to add source location info of template definitions."""
 
     definition: Any
-    definition_loc: Optional[Tuple[str, int]]
+    definition_loc: Optional[tuple[str, int]]
 
     def __init__(self) -> None:
         self.definition_loc = None
@@ -617,7 +475,7 @@ class TemplatedGenerator(NodeVisitor):
         if "__templates__" in cls.__dict__:
             raise TypeError(f"Invalid '__templates__' member in class {cls}")
 
-        templates: Dict[str, Template] = {}
+        templates: dict[str, Template] = {}
         if inherit_templates:
             for templated_gen_class in reversed(cls.__mro__[1:]):
                 if (
@@ -719,7 +577,7 @@ class TemplatedGenerator(NodeVisitor):
 
         return self.generic_dump(node, **kwargs)
 
-    def get_template(self, node: RootNode) -> Tuple[Optional[Template], Optional[str]]:
+    def get_template(self, node: RootNode) -> tuple[Optional[Template], Optional[str]]:
         """Get a template for a node instance (see class documentation)."""
         template: Optional[Template] = None
         template_key = None
@@ -750,8 +608,8 @@ class TemplatedGenerator(NodeVisitor):
             _this_module=sys.modules[type(self).__module__],
         )
 
-    def transform_children(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
+    def transform_children(self, node: Node, **kwargs: Any) -> dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.iter_children_items()}  # type: ignore[misc]
 
-    def transform_annexed_items(self, node: Node, **kwargs: Any) -> Dict[str, Any]:
+    def transform_annexed_items(self, node: Node, **kwargs: Any) -> dict[str, Any]:
         return {key: self.visit(value, **kwargs) for key, value in node.annex.items()}
