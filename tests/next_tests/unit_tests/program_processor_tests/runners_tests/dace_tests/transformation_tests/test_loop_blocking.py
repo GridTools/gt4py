@@ -243,8 +243,8 @@ def test_only_dependent():
     )
     assert count == 1
 
-    assert len(sdfg.states()) == 1
-    state = sdfg.states()[0]
+    assert len(list(sdfg.states())) == 1
+    state = next(iter(sdfg.states()))
     source_nodes = state.source_nodes()
     assert len(source_nodes) == 2
     assert all(isinstance(x, dace_nodes.AccessNode) for x in source_nodes)
@@ -285,7 +285,7 @@ def test_intermediate_access_node():
     ref = reff(a, b)
 
     # Now make a small modification is such that the transformation does something.
-    state = sdfg.states()[0]
+    state = next(iter(sdfg.states()))
     sdfg.add_scalar("tmp", dace.float64, transient=True)
 
     tmp = state.add_access("tmp")
