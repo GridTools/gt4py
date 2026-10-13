@@ -12,7 +12,7 @@ import dataclasses
 from typing import Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import custom_layout_allocators as next_allocators
+from gt4py.next import config, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -172,3 +172,51 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
+
+
+@dataclasses.dataclass(frozen=True)
+class ToolchainConfig:
+    """
+    Settings that describe what a compiled toolchain builds for.
+
+    A toolchain builder creates every step from one config, so steps that must
+    agree on a setting (the target device, the build type, the cache lifetime,
+    the data layout) read it from the same place and cannot drift apart.
+    Settings that only tune how a single step does its job are not part of the
+    config: they are keyword arguments of that step's builder.
+
+    Defaults are read from `gt4py.next.config` when the config is created, not
+    when this module is imported, so the toolchains built from a default config
+    follow the current user configuration.
+    """
+
+    #: Target a GPU (the one CuPy was built for) instead of the CPU.
+    gpu: bool = False
+    #: Wrap the translation step in a persistent cache.
+    cached_translation: bool = True
+    cmake_build_type: config.CMakeBuildType = dataclasses.field(
+        default_factory=lambda: config.CMAKE_BUILD_TYPE
+    )
+    cache_lifetime: config.BuildCacheLifetime = dataclasses.field(
+        default_factory=lambda: config.BUILD_CACHE_LIFETIME
+    )
+    #: Assume unit stride in the horizontal dimension of unstructured fields.
+    unstructured_horizontal_has_unit_stride: bool = dataclasses.field(
+        default_factory=lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+    )
+
+    @property
+    def device_type(self) -> core_defs.DeviceType:
+        if self.gpu:
+            return core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+        return core_defs.DeviceType.CPU
+
+    @property
+    def device_name(self) -> str:
+        """Device part of the toolchain name."""
+        return "gpu" if self.gpu else "cpu"
+
+    def make_allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        if self.gpu:
+            return next_allocators.StandardGPUFieldBufferAllocator()
+        return next_allocators.StandardCPUFieldBufferAllocator()

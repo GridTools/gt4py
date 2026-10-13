@@ -10,14 +10,10 @@ from typing import Optional, TypeAlias
 
 import dace
 from dace import data as dace_data
-from dace.sdfg import nodes as dace_nodes
+from dace.sdfg import dealias as dace_dealias, nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import (
-    sdfg_args as gtx_dace_args,
-    sdfg_utils as gtx_dace_utils,
-    transformations as gtx_transformations,
-)
+from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 
 
 PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
@@ -317,9 +313,9 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
     When the function encounters a NestedSDFG it will determine what data
     the `outer_node` is mapped to on the inside of the NestedSDFG.
-    It will then replace the stride of the inner descriptor with the ones
-    of the outside. Afterwards it will recursively propagate the strides
-    inside the NestedSDFG.
+    It will then set the strides of the inner descriptor to the ones outside, see
+    `_gt_map_strides_into_nested_sdfg()`. Afterwards it will recursively
+    propagate the strides inside the NestedSDFG.
     During this propagation the function will follow any edges.
 
     If the function reaches a NestedSDFG that is listed inside `processed_nsdfgs`
@@ -361,12 +357,6 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
         def get_inner_data(edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]) -> str:
             return edge.dst_conn
 
-        def get_subset(
-            state: dace.SDFGState,
-            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
-        ) -> dace.subsets.Subset:
-            return edge.data.get_src_subset(edge, state)
-
         def next_edges_by_connector(
             state: dace.SDFGState,
             edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
@@ -384,12 +374,6 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
         def get_inner_data(edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet]) -> str:
             return edge.src_conn
-
-        def get_subset(
-            state: dace.SDFGState,
-            edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
-        ) -> dace.subsets.Subset:
-            return edge.data.get_dst_subset(edge, state)
 
         def next_edges_by_connector(
             state: dace.SDFGState,
@@ -420,14 +404,10 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
         # Mark this nested SDFG as processed.
         processed_nsdfgs.add(process_record)
 
-        # Now set the stride of the data descriptor inside the nested SDFG to
-        #  the ones it has outside.
+        # Now set the strides of the data descriptor inside the nested SDFG to the
+        #  ones outside.
         _gt_map_strides_into_nested_sdfg(
-            sdfg=sdfg,
-            nsdfg_node=nsdfg_node,
-            inner_data=inner_data,
-            outer_subset=get_subset(state, edge),
-            outer_desc=outer_node.desc(sdfg),
+            sdfg=sdfg, edge=edge, nsdfg_node=nsdfg_node, inner_data=inner_data
         )
 
         # Since the function call above is not recursive we have now to propagate
@@ -454,114 +434,65 @@ def _gt_map_strides_to_nested_sdfg_src_dst(
 
 def _gt_map_strides_into_nested_sdfg(
     sdfg: dace.SDFG,
-    nsdfg_node: dace.nodes.NestedSDFG,
+    edge: dace.sdfg.graph.MultiConnectorEdge[dace.Memlet],
+    nsdfg_node: dace_nodes.NestedSDFG,
     inner_data: str,
-    outer_subset: dace.subsets.Subset,
-    outer_desc: dace_data.Data,
 ) -> None:
-    """Modify the strides of `inner_data` inside `nsdfg_node` to match `outer_desc`.
+    """Sets the strides of the connector `inner_data` to the ones of the outer data.
 
-    `inner_data` is the name of a data descriptor inside the NestedSDFG.
-    The function will then modify the strides of `inner_data`, assuming this
-    is an array, to match the ones of `outer_desc`.
+    The data descriptor of a NestedSDFG connector has to be equivalent to the data
+    connected to it on the outside, i.e. it must have the same shape and strides,
+    see `NestedSDFG.validate()`. The function handles the case that only the
+    strides of the outer data have changed. The symbols used by the new strides
+    are mapped 1:1 into the NestedSDFG.
+
+    If a transformation connects different data to the connector, it has to restate
+    the connector itself, see `restate_nested_sdfg_connector()`, because only the
+    transformation knows where the old data is located inside the new one.
 
     Args:
         sdfg: The SDFG containing the NestedSDFG.
-        nsdfg_node: The node in the parent SDFG that contains the NestedSDFG.
-        inner_data: The name of the data descriptor that should be processed
-            inside the NestedSDFG (by construction also a connector name).
-        outer_subset: The subset that describes what part of the outer data is
-            mapped into the NestedSDFG.
-        outer_desc: The data descriptor of the data on the outside.
+        edge: The edge between the outer data and the connector `inner_data`.
+        nsdfg_node: The NestedSDFG that should be processed.
+        inner_data: The name of the connector, and of the data inside the NestedSDFG.
 
-    Todo:
-        - Handle explicit dimensions of size 1.
-        - What should we do if the stride symbol is used somewhere else, creating an
-            alias is probably not the right thing?
-        - Handle the case if the outer stride symbol is already used in another
-            context inside the Neste SDFG.
+    Raises:
+        ValueError: If the connector is still not equivalent to the outer data after
+            updating the strides, or if a stride symbol has a different meaning
+            inside the NestedSDFG.
     """
-    # We need to compute the new strides. In the following we assume that the
-    #  relative order of the dimensions does not change, but we support the case
-    #  where some dimensions of the outer data descriptor are not present on the
-    #  inside. For example this happens for the Memlet `a[__i0, 0:__a_size1]`. We
-    #  detect this case by checking if the Memlet subset in that dimension has size 1.
-    # TODO(phimuell): Handle the case were some additional size 1 dimensions are added.
-    inner_desc: dace_data.Data = nsdfg_node.sdfg.arrays[inner_data]
-    inner_shape = inner_desc.shape
-
-    outer_shape = outer_desc.shape
-    outer_strides = outer_desc.strides
-    outer_inflow = outer_subset.size()
-
-    if isinstance(inner_desc, dace_data.Scalar):
-        # A scalar does not have a stride that must be propagated.
+    nsdfg: dace.SDFG = nsdfg_node.sdfg
+    if inner_data not in dace_dealias.windowed_connectors(nsdfg):
         return
 
-    # Now determine the new stride that is needed on the inside.
-    new_strides: list = []
-    if len(outer_shape) == len(inner_shape):
-        # The inner and the outer descriptor have the same dimensionality.
-        #  We now have to decide if we should take the stride from the outside,
-        #  which happens for example in case of `A[0:N, 0:M] -> B[N, M]`, or if we
-        #  must take 1, which happens if we do `A[0:N, i] -> B[N, 1]`, we detect that
-        #  based on the volume that flows in.
-        for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
-            new_strides.append(1 if dim_oinflow == 1 else dim_ostride)
-
-    elif len(inner_shape) < len(outer_shape):
-        # There are less dimensions on the inside than on the outside. This means
-        #  that some were sliced away. We detect this case by checking if the Memlet
-        #  subset in that dimension has size 1.
-        #  NOTE: That this is not always correct as it might be possible that there
-        #   are some explicit size 1 dimensions at several places.
-        new_strides = []
-        for dim_ostride, dim_oinflow in zip(outer_strides, outer_inflow, strict=True):
-            if dim_oinflow == 1:
-                pass
-            else:
-                new_strides.append(dim_ostride)
-            assert len(new_strides) <= len(inner_shape)
-    else:
-        # The case that we have more dimensions on the inside than on the outside.
-        #  This is currently not supported.
-        raise NotImplementedError("NestedSDFGs can not be used to increase the rank.")
-
-    if len(new_strides) != len(inner_shape):
-        raise ValueError("Failed to compute the inner strides.")
-
-    # For the strides of the arrays inside the nested SDFG we will create a new unique
-    #  symbol which is initialized, through the symbol mapping, to the value of this
-    #  stride on the outside. The benefit is that only the mapped container is affected
-    #  and nothing else. Consider for example the case where initially two arrays
-    #  inside the nested SDFG use the same stride symbol, but only one array is mapped.
-    #  The main drawback is that the logical connection is lost, thus if the old
-    #  stride symbol is used somewhere inside the nested SDFG, with the expectation
-    #  that it corresponds to the stride of the inner container, then this connection
-    #  is lost. However, this is probably not much of an issue for the strides, but
-    #  more problematic for the shape, whose symbols are likely to appear as loop bounds.
-    for i, dim_ostride in enumerate(new_strides):
-        if gtx_dace_utils.is_compile_time_size(dim_ostride):
-            # A literal stride (e.g. `1`) can be set directly
-            new_strides[i] = dim_ostride
-        else:
-            if dim_ostride.is_symbol:
-                # Try reusing the same symbol name as the outer stride, but find a new name if already used.
-                dim_istride = nsdfg_node.sdfg.add_symbol(
-                    dim_ostride.name, sdfg.symbols[dim_ostride.name], find_new_name=True
+    inner_desc = nsdfg.arrays[inner_data]
+    outer_desc = sdfg.arrays[edge.data.data]
+    if (
+        isinstance(inner_desc, dace_data.Array)
+        and not isinstance(inner_desc, dace_data.View)
+        and len(inner_desc.shape) == len(outer_desc.strides)
+    ):
+        for sym in sorted(
+            str(fsym)
+            for stride in outer_desc.strides
+            if dace.symbolic.issymbolic(stride)
+            for fsym in stride.free_symbols
+        ):
+            if sym not in nsdfg.symbols:
+                nsdfg.add_symbol(sym, sdfg.symbols[sym])
+                nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
+            elif str(nsdfg_node.symbol_mapping.get(sym, "")) != sym:
+                raise ValueError(
+                    f"Can not map the stride symbol '{sym}' into NestedSDFG"
+                    f" '{nsdfg_node.label}', because it has a different meaning there."
                 )
-            else:
-                # Map a symbolic expression such as `value1 - value2` to a new stride symbol.
-                dim_istride = nsdfg_node.sdfg.add_symbol(
-                    f"__{inner_data}_stride_{i}",
-                    gtx_dace_args.FIELD_SYMBOL_DTYPE,
-                    find_new_name=True,
-                )
-            new_strides[i] = dace.symbolic.pystr_to_symbolic(dim_istride)
-            nsdfg_node.symbol_mapping[dim_istride] = dim_ostride
+        inner_desc.set_shape(inner_desc.shape, outer_desc.strides)
 
-    # We have to replace the `strides` attribute of the inner descriptor.
-    inner_desc.set_shape(inner_desc.shape, new_strides)
+    if inner_data in dace_dealias.windowed_connectors(nsdfg):
+        raise ValueError(
+            f"The connector '{inner_data}' of NestedSDFG '{nsdfg_node.label}' is not"
+            f" equivalent to the data '{edge.data.data}' connected to it."
+        )
 
 
 def _gt_find_toplevel_data_accesses(

@@ -110,8 +110,8 @@ def ${id}(${','.join(params)}):
 
 # Caches the generated source by IR hash so re-codegen is skipped within a process.
 _SOURCE_CACHE: dict[int, tuple[str, str]] = {}
-# Caches the loaded module by source string so re-exec is skipped within a process.
-_MODULE_CACHE: dict[str, types.ModuleType] = {}
+# Caches the loaded module by source string and debug flag so re-exec is skipped within a process.
+_MODULE_CACHE: dict[tuple[str, bool], types.ModuleType] = {}
 
 
 def _generate_source(
@@ -128,7 +128,6 @@ def _generate_source(
         (
             ir,
             transforms,
-            debug,
             use_embedded,
             tuple(common.offset_provider_to_type(offset_provider).items()),
         )
@@ -141,11 +140,6 @@ def _generate_source(
     ir = transforms(ir, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
-
-    # format output in debug mode for better debuggability
-    # (e.g. line numbers, overview in the debugger).
-    if debug:
-        program = codegen.format_python_source(program)
 
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
@@ -187,8 +181,9 @@ def _generate_source(
 
 
 def _load_module(source_code: str, debug: bool) -> types.ModuleType:
-    if source_code in _MODULE_CACHE:
-        return _MODULE_CACHE[source_code]
+    cache_key = (source_code, debug)
+    if cache_key in _MODULE_CACHE:
+        return _MODULE_CACHE[cache_key]
 
     if debug:
         # Write to a real .py so debuggers/tracebacks have file/line info.
@@ -205,7 +200,7 @@ def _load_module(source_code: str, debug: bool) -> types.ModuleType:
         mod = types.ModuleType("roundtrip_module")
         exec(compile(source_code, "<roundtrip>", "exec"), mod.__dict__)
 
-    _MODULE_CACHE[source_code] = mod
+    _MODULE_CACHE[cache_key] = mod
     return mod
 
 

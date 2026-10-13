@@ -198,7 +198,7 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG, device: core_defs.DeviceType) -
 
 
 def _check_sdfg_with_sync_call(sdfg: dace.SDFG, device: core_defs.DeviceType) -> None:
-    states = sdfg.states()
+    states = list(sdfg.states())
     sink_states = sdfg.sink_nodes()
 
     # Test if the distinctive sink node is present.

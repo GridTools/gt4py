@@ -531,6 +531,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
     - There is a `dest_storage` access node, that has an output degree larger
         than one.
 
+    Furthermore, the relocation will not happen if the state where `temp_storage`
+    is defined is nested inside a loop region. There the write back would be
+    executed in every iteration, potentially on data that the loop has only
+    written partially.
+
     Note:
         - Essentially this transformation removes the double buffering of
             `dest_storage`. Because we ensure that that `dest_storage` is non
@@ -670,17 +675,22 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  I.e. This is also the location where the temporary source was initialized.
         result_candidates: list[tuple[AccessLocation, list[AccessLocation]]] = []
 
-        def find_upstream_states(dst_state: dace.SDFGState) -> set[dace.SDFGState]:
-            return {
+        def find_upstream_states(dst_state: dace.SDFGState) -> list[dace.SDFGState]:
+            return [
                 src_state
                 for src_state in sdfg.states()
                 if dst_state in reachable[src_state] and dst_state is not src_state
-            }
+            ]
 
         for temp_storage in candidate_temp_storage:
             temp_storage_node, temp_storage_state = temp_storage
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(temp_storage_state):
+                if self._is_inside_loop(sdfg, upstream_state):
+                    # The definition of `temp_storage` is inside a loop. Moving the
+                    #  write back there would execute it in every iteration, thus
+                    #  on data that has potentially only been written partially.
+                    continue
                 if self._is_written_to_in_state(
                     data=temp_storage_node.data,
                     state=upstream_state,
@@ -763,6 +773,28 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 result.append((wb_location, def_locations))
 
         return result
+
+    def _is_inside_loop(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+    ) -> bool:
+        """Checks if `state` is located inside a loop region.
+
+        Args:
+            sdfg: The SDFG on which we operate.
+            state: The state that should be examined.
+
+        Returns:
+            `True` if `state` is nested inside a `LoopRegion`, at any depth,
+            `False` otherwise.
+        """
+        scope = state.parent_graph
+        while scope is not None and scope is not sdfg:
+            if isinstance(scope, dace.sdfg.state.LoopRegion):
+                return True
+            scope = scope.parent_graph
+        return False
 
     def _is_written_to_in_state(
         self,
@@ -1297,9 +1329,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
-        # Recursively visit the nested SDFGs for mapping of strides from inner to outer array
-        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
-
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(
@@ -1337,3 +1366,12 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
                 curr_edge.data.data = glob_data
             if curr_dst_subset is not None:
                 curr_dst_subset.offset(correcting_offset, negative=False)
+            # A NestedSDFG inside the Map now writes into `G`, thus its connector,
+            #  which has to be equivalent to the data connected to it, is restated.
+            if isinstance(curr_edge.src, dace_nodes.NestedSDFG):
+                gtx_transformations.utils.restate_nested_sdfg_connector(
+                    nsdfg_node=curr_edge.src,
+                    connector=curr_edge.src_conn,
+                    new_desc=glob_ac.desc(sdfg),
+                    ss_offset=correcting_offset.min_element(),
+                )

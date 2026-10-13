@@ -5,14 +5,15 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import functools
+
 import pytest
 from numpy import int32
 
 from gt4py import next as gtx
-from gt4py.next import backend, common
+from gt4py.next import common
 from gt4py.next.iterator.transforms import apply_common_transforms
 from gt4py.next.program_processors.runners import gtfn
-from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -31,19 +32,17 @@ from next_tests.toy_connectivity import Cell, Edge
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture
 def exec_alloc_descriptor():
-    return backend.Backend(
-        name="run_gtfn_with_temporaries_and_sizes",
-        transforms=backend.DEFAULT_TRANSFORMS,
-        executor=gtfn.GTFNCompileWorkflowFactory(
-            translation=gtfn.gtfn_module.GTFNTranslationStepFactory(
-                symbolic_domain_sizes={
-                    "Cell": "num_cells",
-                    "Edge": "num_edges",
-                    "Vertex": "num_vertices",
-                }
-            )
+    return gtfn.make_gtfn_toolchain(
+        gtfn.GTFNConfig(cached_translation=False),
+        name_postfix="_with_temporaries_and_sizes",
+        translation=functools.partial(
+            gtfn.make_gtfn_translation,
+            symbolic_domain_sizes={
+                "Cell": "num_cells",
+                "Edge": "num_edges",
+                "Vertex": "num_vertices",
+            },
         ),
-        allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     )
 
 
