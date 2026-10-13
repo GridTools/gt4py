@@ -1822,7 +1822,7 @@ def test_reset_mask_2d(backend: str) -> None:
                 pytest.mark.xfail(
                     condition=core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM,
                     raises=SystemExit,
-                    reason="DaCe issue: the global sync inside nested SDFG uses 'cub::GridBarrier', which is not available with HIP.",
+                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
                 ),
             ],
         ),

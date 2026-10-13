@@ -922,8 +922,8 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a9"
-source = { git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev#da7f2e3039f3df4e00368c208437657010c396ac" }
+version = "2.0.0a10"
+source = { git = "https://github.com/spcl/dace?branch=new-gpu-codegen-dev#6244cfbe8e5a07ac3d363c652d621feb9f7a5042" }
 dependencies = [
     { name = "astunparse" },
     { name = "click" },

@@ -43,10 +43,18 @@ class DaCeConfig(next_backend.ToolchainConfig):
     #: `EXTERNAL` transient memory mode, which stores the transients in it. The
     #: workspace is a dict, so a config holding one is not hashable.
     external_workspace: gtx_wfdcommon.ExternalWorkspace | None = None
+    #: An external GPU stream to be used for the SDFG call, which allows to
+    #: synchronize the execution of GPU kernels with external workload and to
+    #: share the stream memory pool.
+    external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None = None
 
     #: Name of the function that binds the SDFG arguments. The bindings and the
     #: compilation steps must agree on it.
     bind_func_name: ClassVar[str] = "update_sdfg_args"
+
+    def __post_init__(self) -> None:
+        # Validate the stream handle early, it is only used when the program is loaded.
+        gtx_wfdcommon.get_gpu_stream_ptr(self.external_gpu_stream)
 
 
 def make_dace_translator(
@@ -54,7 +62,7 @@ def make_dace_translator(
     /,
     *,
     auto_optimize_args: dict[str, Any] | None = None,
-    async_sdfg_call: bool = True,
+    sync_sdfg_call: bool = False,
     use_metrics: bool = True,
     disable_itir_transforms: bool = False,
     disable_field_origin_on_program_arguments: bool = False,
@@ -71,8 +79,8 @@ def make_dace_translator(
             see `gt_auto_optimize()`. The parameters `DaCeTranslator` derives
             itself cannot be set here. With an external workspace in `cfg`, the
             `transient_memory_mode` defaults to `EXTERNAL`.
-        async_sdfg_call: Make an asynchronous SDFG call, to overlap GPU kernel
-            execution with the Python driver code. Only effective on GPU.
+        sync_sdfg_call: Make a synchronous SDFG call, to ensure that the GPU kernel
+            execution completes before the Python driver code continues. Only effective on GPU.
         use_metrics: Add SDFG instrumentation for stencil compute time.
         disable_itir_transforms: Skip the GTIR transformation passes.
         disable_field_origin_on_program_arguments: Assume that all fields passed
@@ -118,7 +126,7 @@ def make_dace_translator(
         device_type=cfg.device_type,
         auto_optimize=cfg.auto_optimize,
         auto_optimize_args=optimization_args,
-        async_sdfg_call=async_sdfg_call and cfg.gpu,
+        sync_sdfg_call=sync_sdfg_call,
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride,
         use_metrics=use_metrics,
         disable_itir_transforms=disable_itir_transforms,

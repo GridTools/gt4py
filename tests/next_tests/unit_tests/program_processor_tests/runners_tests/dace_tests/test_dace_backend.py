@@ -200,7 +200,6 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
             auto_optimize_args={
                 "transient_memory_mode": gtx_transformations.TransientMemoryMode.EXTERNAL,
             },
-            sync_sdfg_call=True,
         ),
     )
 
@@ -211,7 +210,7 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     workspace = _RecordingWorkspace()
 
     backend = dace_wf_backend.make_dace_toolchain(
-        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace}, sync_sdfg_call=True)
+        dace_wf_factory.DaCeConfig(external_workspace={core_defs.DeviceType.CPU: workspace})
     )
 
     assert (
@@ -232,7 +231,6 @@ def test_make_backend_warns_external_workspace_without_external_mode():
                 auto_optimize_args={
                     "transient_memory_mode": gtx_transformations.TransientMemoryMode.POOL,
                 },
-                sync_sdfg_call=True,
             ),
         )
 
@@ -343,6 +341,8 @@ def test_decorated_program_skips_external_gpu_stream_arg_on_cpu():
 
     call_kwargs = compiled_program.construct_arguments.call_args.kwargs
     assert dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM not in call_kwargs
+
+
 def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
     """The toolchain and its translation step read the workspace from one config."""
     workspace = _RecordingWorkspace()
@@ -385,7 +385,7 @@ def test_make_dace_backend_is_deprecated():
     with pytest.warns(DeprecationWarning, match="make_dace_toolchain"):
         deprecated = dace_wf_backend.make_dace_backend(
             gpu=False,
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             optimization_args={"blocking_size": 10},
             external_workspace=workspace,
             unstructured_horizontal_has_unit_stride=True,
@@ -400,7 +400,7 @@ def test_make_dace_backend_is_deprecated():
         translation=functools.partial(
             dace_wf_factory.make_dace_translator,
             auto_optimize_args={"blocking_size": 10},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             use_metrics=False,
             disable_field_origin_on_program_arguments=True,
             use_max_domain_range_on_unstructured_shift=True,
@@ -425,7 +425,7 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=False,
             auto_optimize_args={"gpu": True},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=False,
         )
