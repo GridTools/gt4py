@@ -287,8 +287,9 @@ def test_fuse_horizontal_condition_blocks_single_false(uids: gtx_utils.IDGenerat
     # `__i` is used to write the outputs in place, see `_make_map_with_conditional_blocks()`.
     assert conditional_block.sdfg.symbols.keys() == {"multiplier", "__i"}
 
-    true_branch_state = conditional_block.sdfg.states()[0]
-    false_branch_state = conditional_block.sdfg.states()[1]
+    true_branch_state, false_branch_state = (st for st in conditional_block.sdfg.states())
+    assert "true_branch" in true_branch_state.label
+    assert "false_branch" in false_branch_state.label
     assert "true_tasklet" in [
         n.label for n in true_branch_state.nodes() if isinstance(n, dace_nodes.Tasklet)
     ]

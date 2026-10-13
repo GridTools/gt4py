@@ -1378,7 +1378,8 @@ def test_if_mover_dependent_branch_6():
         "__arg2",
         "__output1",
     ]
-    false_branch_state = if_block.sdfg.states()[1]
+    true_branch_state, false_branch_state = (st for st in if_block.sdfg.states())
+    assert "true_branch" in true_branch_state.label
     assert "false_branch" in false_branch_state.label
     actual_access_nodes_in_false_branch = [
         ac.data for ac in util.count_nodes(false_branch_state, dace_nodes.AccessNode, True)
@@ -1391,8 +1392,6 @@ def test_if_mover_dependent_branch_6():
         tlet.label for tlet in util.count_nodes(false_branch_state, dace_nodes.Tasklet, True)
     }
     assert expected_tasklets_in_false_branch == actual_tasklets_in_false_branch
-    true_branch_state = if_block.sdfg.states()[0]
-    assert "true_branch" in true_branch_state.label
     expected_access_nodes_in_true_branch = {"a", "b", "t1", "__arg1", "__output1"}
     actual_access_nodes_in_true_branch = [
         ac.data for ac in util.count_nodes(true_branch_state, dace_nodes.AccessNode, True)
