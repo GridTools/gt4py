@@ -736,7 +736,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         if isinstance(successor, dace.SDFGState):
             all_successors.append(successor)
         else:
-            all_successors.extend(successor.all_states())
+            all_successors.extend(successor.states())
 
     return all_successors
 
