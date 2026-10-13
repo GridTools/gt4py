@@ -511,7 +511,7 @@ def test_if_mover_invalid_if_block():
     # Replace the reads to `__arg2` with ones to `__arg1`. This means the dataflow
     #  that goes into `__arg1` would have to be replicated into two different places
     #  which is not supported, thus the transformation will not apply.
-    for inner_state in if_block.sdfg.all_states():
+    for inner_state in if_block.sdfg.states():
         for dnode in inner_state.data_nodes():
             if dnode.data == "__arg2":
                 dnode.data = "__arg1"
