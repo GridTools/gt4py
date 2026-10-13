@@ -73,7 +73,7 @@ def make_dace_toolchain(
         allocator=cfg.make_allocator(),
         transforms=backend.DEFAULT_TRANSFORMS,
         external_workspace=cfg.external_workspace,
-        external_gpu_stream = cfg.external_gpu_stream,
+        external_gpu_stream=cfg.external_gpu_stream,
     )
 
 

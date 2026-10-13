@@ -63,6 +63,9 @@ class GPUStream(Protocol):
         """The pointer value of the stream (`cudaStream_t` or `hipStream_t`)."""
         ...
 
+    def __hash__(self) -> int:
+        return self.ptr
+
 
 GPUStreamHandle: TypeAlias = int | GPUStream
 """ Handle of a GPU stream (`cudaStream_t` or `hipStream_t`).
