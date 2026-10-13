@@ -269,17 +269,16 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # A global AccessNode serializes its incoming writes before its outgoing
-        #  reads, so reads that are downstream of (or pass through) the survivor
+        #  reads, so reads that are downstream of the survivor, i.e. pass through,
         #  remain ordered after the moved write.  Only reads that are upstream of
         #  the survivor, i.e. ordered before the original copy write, can observe
         #  the old value and may become racy when the write is moved upstream.
         #  We therefore scan the ancestor region of the survivor for reads of the
         #  same data.
+        # TODO(phimuell): This ignores empty Memlets and the order they impose, fix that.
         upstream_nodes = gtx_transformations.utils.find_upstream_nodes(surviving_node, graph)
         return any(
-            isinstance(node, dace_nodes.AccessNode)
-            and node.data == surviving_node.data
-            and graph.out_degree(node) != 0
+            isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
             for node in upstream_nodes
         )
 
