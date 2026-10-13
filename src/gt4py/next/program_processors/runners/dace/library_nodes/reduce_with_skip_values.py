@@ -8,10 +8,11 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Final
 
 import dace
-from dace import library as dace_library, properties as dace_properties
+from dace import library as dace_library, properties as dace_properties, subsets as dace_subsets
 from dace.sdfg import graph as dace_graph
 from dace.transformation import transformation as dace_transform
 
@@ -93,6 +94,17 @@ class ReduceWithSkipValues(dace.sdfg.nodes.LibraryNode):
             raise ValueError(f"Invalid memlet on output connector {self.output_conn}.")
 
 
+_LOCAL_INDEX: Final[dace.symbol] = dace.symbol("__reduce_local_idx")
+"""Map parameter that iterates over the local dimension in the expansion."""
+
+
+def _as_global(desc: dace.data.Data) -> dace.data.Data:
+    """Returns a non-transient copy of `desc`, to be used as nested SDFG connector."""
+    global_desc = copy.deepcopy(desc)
+    global_desc.transient = False
+    return global_desc
+
+
 @dace_library.register_expansion(ReduceWithSkipValues, "pure")
 class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
     """Implements pure expansion of the ReduceWithSkipValues library node."""
@@ -124,20 +136,31 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         #  `max_neighbors` elements along one dimension.
         local_dim_index = inedge.data.src_subset.size().index(max_neighbors)
 
+        # The connectors of the nested SDFG have to be equivalent to the data connected
+        #  to them (see `NestedSDFG.validate()`). Thus, they are copies of the outer
+        #  data descriptors, and inside they are accessed with the same indices as
+        #  outside, where the local dimension is iterated by the map parameter `_LOCAL_INDEX`.
+        #  This way, a later change of the strides of the outer data is propagated
+        #  to the connectors, without the need of views.
+        def make_local_subset(subset: dace_subsets.Range, local_index: int) -> dace_subsets.Range:
+            local_subset = copy.deepcopy(subset)
+            local_start = local_subset[local_index][0]
+            local_subset[local_index] = (local_start + _LOCAL_INDEX, local_start + _LOCAL_INDEX, 1)
+            return local_subset
+
+        input_subset = make_local_subset(inedge.data.src_subset, local_dim_index)
+        mask_subset = make_local_subset(maskedge.data.src_subset, 1)
+
         nsdfg = dace.SDFG(node.label)
-        inp, _ = nsdfg.add_array(
-            node.input_conn,
-            (max_neighbors,),
-            input_desc.dtype,
-            strides=(input_desc.strides[local_dim_index],),
+        inp = node.input_conn
+        nsdfg.add_datadesc(inp, _as_global(input_desc))
+        mask = node.mask_conn
+        nsdfg.add_datadesc(mask, _as_global(mask_desc))
+        outp = node.output_conn
+        nsdfg.add_datadesc(outp, _as_global(output_desc))
+        output_subset = (
+            "0" if isinstance(output_desc, dace.data.Scalar) else str(outedge.data.dst_subset)
         )
-        mask, _ = nsdfg.add_array(
-            node.mask_conn,
-            (max_neighbors,),
-            mask_desc.dtype,
-            strides=(mask_desc.strides[1],),
-        )
-        outp, _ = nsdfg.add_scalar(node.output_conn, output_desc.dtype)
         st_init = nsdfg.add_state("init")
         init_tasklet = st_init.add_tasklet(
             name="write",
@@ -150,7 +173,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
             "__tlet_out",
             st_init.add_access(outp),
             None,
-            dace.Memlet(data=outp, subset="0"),
+            dace.Memlet(data=outp, subset=output_subset),
         )
         st_reduce = nsdfg.add_state_after(st_init, "compute")
         # Fill skip values in local dimension with the reduce identity value
@@ -160,14 +183,16 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         # TODO(phimuell): decide if auto-optimizer should reset `wcr_nonatomic` properties, as DaCe does.
         st_reduce.add_mapped_tasklet(
             name="reduce_with_skip_values",
-            map_ranges={"i": f"0:{max_neighbors}"},
+            map_ranges={str(_LOCAL_INDEX): f"0:{max_neighbors}"},
             inputs={
-                "__tlet_inp": dace.Memlet(data=inp, subset="i"),
-                "__tlet_mask": dace.Memlet(data=mask, subset="i"),
+                "__tlet_inp": dace.Memlet(data=inp, subset=input_subset),
+                "__tlet_mask": dace.Memlet(data=mask, subset=mask_subset),
             },
             code=f"__tlet_out = __tlet_inp if __tlet_mask != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
             outputs={
-                "__tlet_out": dace.Memlet(data=outp, subset="0", wcr=node.wcr, wcr_nonatomic=True),
+                "__tlet_out": dace.Memlet(
+                    data=outp, subset=output_subset, wcr=node.wcr, wcr_nonatomic=True
+                ),
             },
             external_edges=True,
             schedule=dace.dtypes.ScheduleType.Sequential,
