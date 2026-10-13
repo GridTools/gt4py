@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable
 from typing import Optional, TypeVar, Union, cast, overload
 
 from gt4py.eve import utils as eve_utils
-from gt4py.next import common, utils
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.type_system import type_specifications as it_ts
@@ -202,10 +202,7 @@ def if_(
     pred: ts.ScalarType | ts.DeferredType, true_branch: ts.DataType, false_branch: ts.DataType
 ) -> ts.DataType:
     if isinstance(true_branch, ts.TupleType) and isinstance(false_branch, ts.TupleType):
-        return utils.tree_map(
-            collection_type=ts.TupleType,
-            result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
-        )(functools.partial(if_, pred))(true_branch, false_branch)
+        return type_info.tree_map_type(functools.partial(if_, pred))(true_branch, false_branch)
 
     assert not isinstance(true_branch, ts.TupleType) and not isinstance(false_branch, ts.TupleType)
     assert isinstance(pred, ts.DeferredType) or (
@@ -273,10 +270,7 @@ def concat_where(
     if isinstance(true_field, ts.DeferredType) or isinstance(false_field, ts.DeferredType):
         return ts.DeferredType(constraint=None)
 
-    @utils.tree_map(
-        collection_type=ts.TupleType,
-        result_collection_constructor=lambda _, elts: ts.TupleType(types=list(elts)),
-    )
+    @type_info.tree_map_type
     def deduce_return_type(tb: ts.FieldType | ts.ScalarType, fb: ts.FieldType | ts.ScalarType):
         if any(isinstance(b, ts.DeferredType) for b in [tb, fb]):
             return ts.DeferredType(constraint=ts.FieldType)
@@ -287,17 +281,20 @@ def concat_where(
             dtype=type_info.extract_dtype(promoted),
         )
 
-    return deduce_return_type(true_field, false_field)
+    result = deduce_return_type(true_field, false_field)
+    assert isinstance(result, (ts.FieldType, ts.TupleType, ts.DeferredType))
+    return result
 
 
 @_register_builtin_type_synthesizer
 def broadcast(
-    arg: ts.FieldType | ts.ScalarType | ts.DeferredType, dims: tuple[ts.DimensionType]
+    arg: ts.FieldType | ts.ScalarType | ts.DeferredType, dims: ts.TupleType
 ) -> ts.FieldType | ts.DeferredType:
     if isinstance(arg, ts.DeferredType):
         return arg
 
-    dims_ = [dim.dim for dim in dims]
+    assert all(isinstance(dim, ts.DimensionType) for dim in dims.types)
+    dims_ = [cast(ts.DimensionType, dim).dim for dim in dims.types]
 
     if isinstance(arg, ts.FieldType):
         dtype = arg.dtype
@@ -417,13 +414,14 @@ def _canonicalize_nb_fields(
     """
     match input_:
         case tuple() | ts.TupleType():
+            elements = input_.types if isinstance(input_, ts.TupleType) else input_
             assert all(
-                isinstance(field, (ts.ScalarType, ts.FieldType, ts.TupleType)) for field in input_
+                isinstance(field, (ts.ScalarType, ts.FieldType, ts.TupleType)) for field in elements
             )
             return ts.TupleType(
                 types=[
                     _canonicalize_nb_fields(cast(ts.FieldType | ts.TupleType, field))
-                    for field in input_
+                    for field in elements
                 ]
             )
         case ts.FieldType():
@@ -582,7 +580,7 @@ def as_fieldop(
             output_dims: list[common.Dimension] = []
             if offset_provider_type is not None and shift_sequences_per_param is not None:
                 for field, shift_sequences in zip(
-                    new_fields, shift_sequences_per_param, strict=True
+                    new_fields.types, shift_sequences_per_param, strict=True
                 ):
                     for el in type_info.primitive_constituents(field):
                         input_dims = type_info.extract_dims(el)
@@ -603,7 +601,7 @@ def as_fieldop(
                 return ts.DeferredType(constraint=None)
 
         stencil_return = stencil(
-            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields),
+            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in new_fields.types),
             offset_provider_type=offset_provider_type,
         )
 
@@ -680,11 +678,7 @@ def _make_tuple_map_synthesizer(
             bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
 
             if recursive:
-                return utils.tree_map(  # type: ignore[return-value]
-                    bound_op,
-                    collection_type=ts.TupleType,
-                    result_collection_constructor=lambda _, elts: ts.TupleType(types=[*elts]),
-                )(arg)
+                return type_info.tree_map_type(bound_op)(arg)  # type: ignore[return-value]
 
             # Non-recursive: apply `op` once per top-level element.
             return ts.TupleType(types=[bound_op(el) for el in arg.types])
