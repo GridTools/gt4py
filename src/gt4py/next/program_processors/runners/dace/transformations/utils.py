@@ -571,6 +571,46 @@ def reconfigure_dataflow_after_rerouting(
         )
 
 
+def find_downstream_nodes(
+    start: dace_nodes.Node,
+    state: dace.SDFGState,
+    end_connector: Optional[str] = None,
+    limit_node: Optional[dace_nodes.Node] = None,
+) -> OrderedSet[dace_nodes.Node]:
+    """Finds all downstream nodes, i.e. all consumers, of `start`.
+
+    Note that `start` and `limit_node` are not part of the returned set.
+
+    Args:
+        start: Start the exploring from this node.
+        state: The state in which it should be explored.
+        end_connector: If given then only consider edges that originate
+            from this connector, otherwise consider all outgoing edges.
+        limit_node: Consider this node as "limiting wall", i.e. do not explore
+            beyond it.
+    """
+    seen: OrderedSet[dace_nodes.Node] = OrderedSet()
+
+    to_visit = [
+        oedge.dst
+        for oedge in (
+            state.out_edges(start)
+            if end_connector is None
+            else state.out_edges_by_connector(start, end_connector)
+        )
+        if oedge.dst is not limit_node
+    ]
+
+    while len(to_visit) != 0:
+        node = to_visit.pop()
+        if node in seen:
+            continue
+        seen.add(node)
+        to_visit.extend(oedge.dst for oedge in state.out_edges(node) if oedge.dst is not limit_node)
+
+    return seen
+
+
 def find_upstream_nodes(
     start: dace_nodes.Node,
     state: dace.SDFGState,

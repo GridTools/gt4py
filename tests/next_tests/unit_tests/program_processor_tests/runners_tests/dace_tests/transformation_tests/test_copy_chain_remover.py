@@ -917,3 +917,90 @@ def test_copy_chain_remover_with_reduction(output_an_array: bool):
     else:
         assert len(red1_oedge_mlet.dst_subset) == 1
         assert red1_oedge_mlet.dst_subset == dace.subsets.Range.from_string("1")
+
+
+def _make_push_chain_source_written_in_map() -> dace.SDFG:
+    """Builds an SDFG where the copy chain source is also written in the Map.
+
+    The SDFG implements the following code (`b` is a transient array):
+    ```python
+    b[:] = a[:]  # Copy chain `(a) -> (b)`: the surviving global `a` is
+    # copied into the transient `b`, freezing its value.
+    for i in range(10):
+        d[i] = b[i] + 1.0  # `b` read in a branch (old value of `a`).
+        a[i] = a[i] * 2.0  # `a` written again in another branch.
+    ```
+
+    `CopyChainRemover` would remove the transient double buffer `b` and reroute
+    its consumers to read from `a` directly.  But `a` is written again inside
+    the Map, between the original copy and the consumer, so the consumer would
+    observe the newly written value (read-after-write hazard) instead of the
+    value that was frozen in `b`.  The transformation must not apply.
+    """
+    sdfg = dace.SDFG(util.unique_name("push_chain_source_written_in_map"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in ["a", "d"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=True)
+
+    # Two separate AccessNodes for `a` are needed, such that the state is
+    #  acyclic: one for the read (the copy source) and one for the write back.
+    a_read, a_write = state.add_access("a"), state.add_access("a")
+    b = state.add_access("b")
+
+    # Copy the global `a` into the transient `b` (PUSH chain: a -> b).
+    state.add_nedge(a_read, b, dace.Memlet("a[0:10] -> [0:10]"))
+
+    me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
+    tlet_consume = state.add_tasklet(
+        "read_b", inputs={"__in"}, outputs={"__out"}, code="__out = __in + 1.0"
+    )
+    tlet_prod = state.add_tasklet(
+        "write_a", inputs={"__in"}, outputs={"__out"}, code="__out = __in * 2.0"
+    )
+
+    # `b` (old value of `a`) is read inside the Map, in a branch independent of
+    #  the one writing back to `a`.
+    state.add_edge(b, None, me, "IN_b", dace.Memlet("b[0:10]"))
+    state.add_edge(me, "OUT_b", tlet_consume, "__in", dace.Memlet("b[__i]"))
+    me.add_scope_connectors("b")
+    state.add_edge(tlet_consume, "__out", mx, "IN_d", dace.Memlet("d[__i]"))
+    d = state.add_access("d")
+    state.add_edge(mx, "OUT_d", d, None, dace.Memlet("d[0:10]"))
+    mx.add_scope_connectors("d")
+
+    # `a` is written again inside the Map, in a branch independent of the one
+    #  reading `b`.
+    state.add_edge(a_read, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tlet_prod, "__in", dace.Memlet("a[__i]"))
+    me.add_scope_connectors("a")
+    state.add_edge(tlet_prod, "__out", mx, "IN_aw", dace.Memlet("a[__i]"))
+    mx.add_scope_connectors("aw")
+    state.add_edge(mx, "OUT_aw", a_write, None, dace.Memlet("a[0:10]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+def test_push_chain_source_written_in_map_no_apply():
+    sdfg = _make_push_chain_source_written_in_map()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    # The copy chain `(a) -> (b)` must not be removed: `a` survives and is
+    #  written again inside the Map, so removing the transient double buffer
+    #  `b` would create a read-after-write hazard on `a`.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies is None
+
+    # Since the transformation did not apply, the transient `b` must still exist.
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert any(ac.data == "b" for ac in acnodes)
+    assert "b" in sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

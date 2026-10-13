@@ -242,10 +242,18 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
     ) -> bool:
         """Checks if removing the copy chain would let a write overtake a read.
 
-        The surviving container takes over the writes of the removed temporary,
-        which moves them to where that temporary was produced.  If the surviving
-        container is a global that another AccessNode of this state reads upstream
-        of the copy, that read is no longer guaranteed to happen before the write.
+        In `PULL` mode (`(T) -> (G)`, survivor `G`) the surviving container
+        takes over the writes of the removed temporary, moving them upstream to
+        where that temporary was produced.  If the surviving container is a
+        global that another AccessNode of this state reads upstream of the copy,
+        that read is no longer guaranteed to happen before the write.
+
+        In `PUSH` mode (`(G) -> (T)`, survivor `G`) the surviving container
+        takes over the reads of the removed temporary, moving them downstream to
+        where that temporary was consumed.  If the surviving container is a
+        global that another AccessNode of this state writes downstream of the
+        copy, the moved read would observe the new value instead of the one that
+        was frozen in the temporary.
 
         Args:
             sdfg: The SDFG on which the transformation is applied.
@@ -268,19 +276,40 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         if surviving_node.desc(sdfg).transient:
             return False
 
-        # A global AccessNode serializes its incoming writes before its outgoing
-        #  reads, so reads that are downstream of the survivor, i.e. pass through,
-        #  remain ordered after the moved write.  Only reads that are upstream of
-        #  the survivor, i.e. ordered before the original copy write, can observe
-        #  the old value and may become racy when the write is moved upstream.
-        #  We therefore scan the ancestor region of the survivor for reads of the
-        #  same data.
         # TODO(phimuell): This ignores empty Memlets and the order they impose, fix that.
-        upstream_nodes = gtx_transformations.utils.find_upstream_nodes(surviving_node, graph)
-        return any(
-            isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
-            for node in upstream_nodes
-        )
+        if copy_chain_mode == CopyChainRemoverMode.PULL:
+            # A global AccessNode serializes its incoming writes before its outgoing
+            #  reads, so reads that are downstream of the survivor, i.e. pass through,
+            #  remain ordered after the moved write.  Only reads that are upstream of
+            #  the survivor, i.e. ordered before the original copy write, can observe
+            #  the old value and may become racy when the write is moved upstream.
+            #  We therefore scan the ancestor region of the survivor for reads of the
+            #  same data.  Every node in the upstream set has at least one outgoing
+            #  edge (the one we walked backward through), so a plain data match is
+            #  enough to detect a read.
+            upstream_nodes = gtx_transformations.utils.find_upstream_nodes(surviving_node, graph)
+            return any(
+                isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+                for node in upstream_nodes
+            )
+        else:
+            assert copy_chain_mode == CopyChainRemoverMode.PUSH
+            # A global AccessNode serializes its incoming writes before its outgoing
+            #  reads, so writes that are upstream of the survivor remain ordered
+            #  before the moved read.  Only writes that are downstream of the
+            #  survivor, i.e. between the original copy read and where the
+            #  temporary was consumed, can overtake the moved read and make it
+            #  observe the new value.  We therefore scan the descendant region of
+            #  the survivor for writes to the same data.  Every node in the
+            #  downstream set has at least one incoming edge (the one we walked
+            #  forward through), so a plain data match is enough to detect a write.
+            downstream_nodes = gtx_transformations.utils.find_downstream_nodes(
+                surviving_node, graph
+            )
+            return any(
+                isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+                for node in downstream_nodes
+            )
 
     def is_single_use_data(
         self,
