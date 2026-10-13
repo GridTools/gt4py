@@ -82,9 +82,9 @@ class MapFusionVertical(dace_dftrans.MapFusionVertical):
         check_fusion_callback: Optional[VerticalMapFusionCallback] = None,
         **kwargs: Any,
     ) -> None:
+        # TODO(edopao): Put back `allow_intermediates_with_symbolic_size=False,` once the new gpu codegen is based on main
         super().__init__(
             strict_dataflow=strict_dataflow,
-            allow_intermediates_with_symbolic_size=False,
             **kwargs,
         )
         self._check_fusion_callback = None

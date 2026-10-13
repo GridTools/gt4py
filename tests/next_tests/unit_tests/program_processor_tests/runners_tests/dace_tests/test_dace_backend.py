@@ -284,7 +284,7 @@ def test_make_dace_backend_is_deprecated():
     with pytest.warns(DeprecationWarning, match="make_dace_toolchain"):
         deprecated = dace_wf_backend.make_dace_backend(
             gpu=False,
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             optimization_args={"blocking_size": 10},
             external_workspace=workspace,
             unstructured_horizontal_has_unit_stride=True,
@@ -299,7 +299,7 @@ def test_make_dace_backend_is_deprecated():
         translation=functools.partial(
             dace_wf_factory.make_dace_translator,
             auto_optimize_args={"blocking_size": 10},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             use_metrics=False,
             disable_field_origin_on_program_arguments=True,
             use_max_domain_range_on_unstructured_shift=True,
@@ -324,7 +324,7 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=False,
             auto_optimize_args={"gpu": True},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=False,
         )

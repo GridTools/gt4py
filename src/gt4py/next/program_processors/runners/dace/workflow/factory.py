@@ -52,6 +52,10 @@ class DaCeConfig(next_backend.ToolchainConfig):
     #: compilation steps must agree on it.
     bind_func_name: ClassVar[str] = "update_sdfg_args"
 
+    def __post_init__(self) -> None:
+        # Validate the stream handle early, it is only used when the program is loaded.
+        gtx_wfdcommon.get_gpu_stream_ptr(self.external_gpu_stream)
+
 
 def make_dace_translator(
     cfg: DaCeConfig,
