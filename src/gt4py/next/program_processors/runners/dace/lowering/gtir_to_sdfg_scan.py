@@ -361,8 +361,9 @@ def _handle_dataflow_result_of_nested_sdfg(
         )
         inner_desc.transient = False
         # We write the result to the output field after the loop region has ended.
-        if len(inner_ctx.sdfg.states()) == 3:
-            assert sorted(st.label for st in inner_ctx.sdfg.states()) == [
+        inner_states = list(inner_ctx.sdfg.states())
+        if len(inner_states) == 3:
+            assert sorted(st.label for st in inner_states) == [
                 "scan_compute",
                 "scan_entry",
                 "scan_update",
@@ -374,18 +375,16 @@ def _handle_dataflow_result_of_nested_sdfg(
             )
             last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "scan_last_level")
         else:
-            assert sorted(st.label for st in inner_ctx.sdfg.states()) == [
+            assert sorted(st.label for st in inner_states) == [
                 "scan_compute",
                 "scan_entry",
                 "scan_last_level",
                 "scan_update",
             ]
-            last_level_state = next(
-                s for s in inner_ctx.sdfg.states() if s.label == "scan_last_level"
-            )
+            last_level_state = next(s for s in inner_states if s.label == "scan_last_level")
         # Move the write of the result from the scan loop to the state after the loop,
         #  so that only the last level is written.
-        scan_compute_state = next(s for s in inner_ctx.sdfg.states() if s.label == "scan_compute")
+        scan_compute_state = next(s for s in inner_states if s.label == "scan_compute")
         inner_output_node = next(
             n for n in scan_compute_state.data_nodes() if n.data == inner_dataname
         )

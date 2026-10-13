@@ -106,7 +106,7 @@ def test_vertical_map_fusion():
     assert ret == 1
     assert util.count_nodes(sdfg, dace_nodes.MapEntry) == 1
 
-    assert len(sdfg.states()) == 1
+    assert len(list(sdfg.states())) == 1
     st = next(iter(sdfg.states()))
 
     map_entry = next(node for node in st.nodes() if isinstance(node, dace_nodes.MapEntry))
