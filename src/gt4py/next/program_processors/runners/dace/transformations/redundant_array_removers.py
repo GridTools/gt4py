@@ -322,16 +322,13 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             producers_of_a2 = [iedge.src for iedge in graph.in_edges(surviving_node)]
             if len(producers_of_a1) == 1 and len(producers_of_a2) == 1:
                 assert producers_of_a2[0] is self.node_a1
-                for node in same_data_nodes:
-                    if (
-                        gtx_transformations.utils.count_paths(node, surviving_node, graph, limit=2)
-                        == 1
-                    ):
-                        # Single connector-aware path through `a1`: ordering
-                        #  preserved, no hazard from this read.
-                        continue
-                    return True
-                return False
+                if all(
+                    gtx_transformations.utils.count_paths(node, surviving_node, graph, limit=2) == 1
+                    for node in same_data_nodes
+                ):
+                    return False
+
+                return True
             return True
         else:
             assert copy_chain_mode == CopyChainRemoverMode.PUSH
@@ -364,14 +361,12 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             consumers_of_a1 = [oedge.dst for oedge in graph.out_edges(surviving_node)]
             if len(consumers_of_a2) == 1 and len(consumers_of_a1) == 1:
                 assert consumers_of_a1[0] is self.node_a2
-                for node in same_data_nodes:
-                    if (
-                        gtx_transformations.utils.count_paths(surviving_node, node, graph, limit=2)
-                        == 1
-                    ):
-                        continue
-                    return True
-                return False
+                if all(
+                    gtx_transformations.utils.count_paths(surviving_node, node, graph, limit=2) == 1
+                    for node in same_data_nodes
+                ):
+                    return False
+                return True
             return True
 
     def is_single_use_data(
