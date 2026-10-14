@@ -83,7 +83,9 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import difflib
 import hashlib
+import itertools
 import os
 import re
 import shutil
@@ -97,6 +99,8 @@ import typer
 
 
 CODEGEN_DIR = "src"
+MAX_DIFF_LINES = 2000
+MAX_PAIRED_VARIANTS = 8
 SUPPORTED_BACKENDS = frozenset({"cpu", "cuda"})
 
 
@@ -216,8 +220,8 @@ def _sha256_of_contents(path: Path) -> str:
 
 def _scan(
     cache_root: Path, folder_re: re.Pattern[str]
-) -> tuple[dict[str, collections.Counter[ProgramSignature]], int]:
-    """Return the signature multiset per logical name and the program count.
+) -> tuple[dict[str, collections.Counter[ProgramSignature]], int, dict[SourceFileHash, Path]]:
+    """Return the signature multiset per logical name, the program count and the file locations.
 
     Each program folder yields one ``ProgramSignature``: the set of
     ``(relative path, contents hash)`` pairs of every file under ``src/``. The
@@ -227,13 +231,19 @@ def _scan(
 
     Program folders whose ``src/`` holds no source files are counted but
     excluded from the multisets, so they cannot manufacture mismatches.
+
+    The third return value maps each observed ``(relative path, contents hash)``
+    pair to a file that has those contents, so a difference can be rendered as a
+    diff and not just as a pair of digests. Equal hashes mean equal contents, so
+    which of several such files is kept does not matter.
     """
     if not cache_root.is_dir():
-        return {}, 0
+        return {}, 0, {}
 
     by_name: dict[str, collections.Counter[ProgramSignature]] = collections.defaultdict(
         collections.Counter
     )
+    locations: dict[SourceFileHash, Path] = {}
     n_folders = 0
     for folder in sorted(p for p in cache_root.iterdir() if p.is_dir()):
         m = folder_re.fullmatch(folder.name)
@@ -253,11 +263,13 @@ def _scan(
                     )
             for path in sorted(src_root.rglob("*")):
                 if path.is_file():
-                    sources.append((path.relative_to(folder).as_posix(), _sha256_of_contents(path)))
+                    entry = (path.relative_to(folder).as_posix(), _sha256_of_contents(path))
+                    sources.append(entry)
+                    locations.setdefault(entry, path)
 
         if sources:
             by_name[m.group("name")][frozenset(sources)] += 1
-    return dict(by_name), n_folders
+    return dict(by_name), n_folders, locations
 
 
 def _diagnose_empty(cache_root: Path, folder_re: re.Pattern[str]) -> str:
@@ -303,16 +315,122 @@ def compare(
     return results
 
 
-def write_diffs(results: list[ComparisonResult], diffs_dir: Path) -> None:
+def _read_lines(path: Path) -> list[str]:
+    return path.read_text(encoding="utf-8", errors="replace").splitlines()
+
+
+def _pair_variants(
+    paths1: Sequence[Path], paths2: Sequence[Path], relpath: str
+) -> tuple[list[tuple[int, int, list[str]]], list[int], list[int]]:
+    """Pair up the differing variants of one path and return their diffs.
+
+    A name can be compiled several times with different parameters, and a
+    variant carries no identity that survives across runs, so the smallest diff
+    is the best available guess at which two variants are the same one. Pairing
+    is greedy over all pairs, smallest diff first. Returns the pairs as
+    ``(index into paths1, index into paths2, diff)`` plus the indices left over
+    on either side when the two runs have unequal variant counts.
+    """
+    lines1 = [_read_lines(path) for path in paths1]
+    lines2 = [_read_lines(path) for path in paths2]
+    diffs = {
+        (i, j): list(
+            difflib.unified_diff(
+                left, right, fromfile=f"run1/{relpath}", tofile=f"run2/{relpath}", lineterm=""
+            )
+        )
+        for i, left in enumerate(lines1)
+        for j, right in enumerate(lines2)
+    }
+    pairs = []
+    paired1: set[int] = set()
+    paired2: set[int] = set()
+    for i, j in sorted(diffs, key=lambda key: (len(diffs[key]), key)):
+        if i in paired1 or j in paired2:
+            continue
+        paired1.add(i)
+        paired2.add(j)
+        pairs.append((i, j, diffs[i, j]))
+    return (
+        sorted(pairs, key=lambda pair: pair[:2]),
+        [i for i in range(len(paths1)) if i not in paired1],
+        [j for j in range(len(paths2)) if j not in paired2],
+    )
+
+
+def _render_file_diff(
+    relpath: str,
+    hashes1: list[str],
+    hashes2: list[str],
+    sources1: dict[SourceFileHash, Path],
+    sources2: dict[SourceFileHash, Path],
+) -> list[str]:
+    """Render the differing variants of one source file as unified diffs."""
+    if not hashes1 or not hashes2:
+        return [f"(only in run{1 if hashes1 else 2}: {', '.join(hashes1 or hashes2)})"]
+    if max(len(hashes1), len(hashes2)) > MAX_PAIRED_VARIANTS:
+        return [
+            (
+                f"(too many differing variants to pair: {len(hashes1)} in run1, "
+                f"{len(hashes2)} in run2)"
+            ),
+            f"  run1: {', '.join(hashes1)}",
+            f"  run2: {', '.join(hashes2)}",
+        ]
+
+    pairs, extra1, extra2 = _pair_variants(
+        [sources1[relpath, h] for h in hashes1],
+        [sources2[relpath, h] for h in hashes2],
+        relpath,
+    )
+    label_variants = len(pairs) > 1 or extra1 or extra2
+    lines = []
+    for i, j, diff in pairs:
+        if label_variants:
+            lines.append(f"-- variant: run1 {hashes1[i]} vs run2 {hashes2[j]}")
+        lines.extend(itertools.islice(diff, MAX_DIFF_LINES))
+        if len(diff) > MAX_DIFF_LINES:
+            lines.append(f"... {len(diff) - MAX_DIFF_LINES} more diff line(s) ...")
+    lines += [f"-- unpaired variant: run1 {hashes1[i]}" for i in extra1]
+    lines += [f"-- unpaired variant: run2 {hashes2[j]}" for j in extra2]
+    return lines
+
+
+def write_diffs(
+    results: list[ComparisonResult],
+    diffs_dir: Path,
+    sources1: dict[SourceFileHash, Path],
+    sources2: dict[SourceFileHash, Path],
+) -> None:
+    """Write one file per non-matching name: its differing paths, then their diffs.
+
+    ``sources1``/``sources2`` are the location maps of the two scans; they are
+    what turns a pair of digests into a readable diff, so this must run while
+    the caches are still on disk.
+    """
     for r in results:
         if r.match:
             continue
         c1 = collections.Counter(r.only_in_run1)
         c2 = collections.Counter(r.only_in_run2)
-        relpaths = sorted({rel for rel, _ in (c1 - c2)} | {rel for rel, _ in (c2 - c1)})
+        d1, d2 = c1 - c2, c2 - c1
+        relpaths = sorted({rel for rel, _ in d1} | {rel for rel, _ in d2})
+        lines = [r.name, *relpaths]
+        for relpath in relpaths:
+            lines += [
+                "",
+                f"=== {relpath}",
+                *_render_file_diff(
+                    relpath,
+                    sorted(h for rel, h in d1 if rel == relpath),
+                    sorted(h for rel, h in d2 if rel == relpath),
+                    sources1,
+                    sources2,
+                ),
+            ]
         diffs_dir.mkdir(parents=True, exist_ok=True)
         safe = re.sub(r"[^A-Za-z0-9._-]+", "_", r.name)[:200]
-        (diffs_dir / f"{safe}.txt").write_text("\n".join([r.name, *relpaths]) + "\n")
+        (diffs_dir / f"{safe}.txt").write_text("\n".join(lines) + "\n")
 
 
 def render_report(results: list[ComparisonResult], *, runs_healthy: bool | None = None) -> str:
@@ -394,12 +512,12 @@ def check_determinism(
     report_path: Path | None = None,
 ) -> list[ComparisonResult]:
     folder_re = _compile_folder_pattern(folder_pattern)
-    bags1, n_folders1 = _scan(cache1, folder_re)
-    bags2, n_folders2 = _scan(cache2, folder_re)
+    bags1, n_folders1, sources1 = _scan(cache1, folder_re)
+    bags2, n_folders2, sources2 = _scan(cache2, folder_re)
     results = compare(bags1, bags2)
 
     if diffs_dir is not None:
-        write_diffs(results, diffs_dir)
+        write_diffs(results, diffs_dir, sources1, sources2)
     if report_path is not None:
         report_path.parent.mkdir(parents=True, exist_ok=True)
         report_path.write_text(render_report(results, runs_healthy=runs_healthy))
@@ -658,7 +776,7 @@ def check(
         typer.Option(
             "--diffs-dir",
             metavar="PATH",
-            help="If set, write per-program mismatch reports here.",
+            help="If set, write a per-program diff of the mismatching sources here.",
         ),
     ] = None,
     report: Annotated[

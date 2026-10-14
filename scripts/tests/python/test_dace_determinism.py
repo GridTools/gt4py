@@ -17,6 +17,7 @@ import pathlib
 import stat
 import sys
 
+import dace_determinism
 import pytest
 from dace_determinism import (
     CacheFolderPatternError,
@@ -221,6 +222,70 @@ def test_check_determinism_differs_writes_diff(tmp_path):
     body = (diffs / "abs.txt").read_text().splitlines()
     assert body[0] == "abs"
     assert "src/cpu/k.cpp" in body
+    assert "--- run1/src/cpu/k.cpp" in body
+    assert "+++ run2/src/cpu/k.cpp" in body
+    assert "-A" in body and "+B" in body
+
+
+def test_diff_pairs_variants_by_smallest_diff(tmp_path):
+    # Three compiled variants per run, all differing. Pairing them in digest
+    # order would diff unrelated variants against each other and report the
+    # difference between the variants instead of the non-determinism.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    for cache, noise in ((c1, "one"), (c2, "two")):
+        for variant in ("fwd", "bwd", "mid"):
+            _program(cache, "p", f"{variant}{noise}", {"src/cpu/k.cpp": f"{variant}\n{noise}\n"})
+    diffs = tmp_path / "diffs"
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, diffs_dir=diffs)
+    body = (diffs / "p.txt").read_text()
+    assert body.count("-one") == 3 and body.count("+two") == 3
+    assert "-fwd" not in body and "-bwd" not in body and "-mid" not in body
+
+
+def test_diff_reports_unpaired_variant(tmp_path):
+    # `p` compiles twice in both runs, but only one of run1's two programs has
+    # a `k.cpp` while both of run2's do, so one run2 variant stays unpaired.
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "p", "a", {"src/cpu/k.cpp": "A"})
+    _program(c1, "p", "b", {"src/cuda/m.cu": "P"})
+    _program(c2, "p", "c", {"src/cpu/k.cpp": "B"})
+    _program(c2, "p", "d", {"src/cpu/k.cpp": "C"})
+    diffs = tmp_path / "diffs"
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, diffs_dir=diffs)
+    body = (diffs / "p.txt").read_text()
+    assert body.count("-- unpaired variant: run2 ") == 1
+    assert "(only in run1: " in body  # src/cuda/m.cu
+
+
+def test_diff_truncates_long_diffs(tmp_path, monkeypatch):
+    monkeypatch.setattr(dace_determinism, "MAX_DIFF_LINES", 5)
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    _program(c1, "p", "a", {"src/cpu/k.cpp": "\n".join(f"a{i}" for i in range(50))})
+    _program(c2, "p", "b", {"src/cpu/k.cpp": "\n".join(f"b{i}" for i in range(50))})
+    diffs = tmp_path / "diffs"
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, diffs_dir=diffs)
+    body = (diffs / "p.txt").read_text()
+    assert "more diff line(s) ..." in body
+
+
+def test_diff_lists_digests_when_variants_exceed_pairing_limit(tmp_path, monkeypatch):
+    monkeypatch.setattr(dace_determinism, "MAX_PAIRED_VARIANTS", 1)
+    c1 = tmp_path / "r1" / ".gt4py_cache"
+    c2 = tmp_path / "r2" / ".gt4py_cache"
+    for cache, noise in ((c1, "one"), (c2, "two")):
+        for variant in ("x", "y"):
+            _program(cache, "p", f"{variant}{noise}", {"src/cpu/k.cpp": f"{variant}{noise}"})
+    diffs = tmp_path / "diffs"
+    with pytest.raises(DeterminismError):
+        check_determinism(c1, c2, folder_pattern=_FOLDER_PATTERN, diffs_dir=diffs)
+    body = (diffs / "p.txt").read_text()
+    assert "too many differing variants to pair: 2 in run1, 2 in run2" in body
 
 
 def test_no_programs_raises(tmp_path):
