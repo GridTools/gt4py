@@ -1086,7 +1086,6 @@ def test_copy_chain_destination_read_single_path_apply():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-
 def _make_pull_chain_multiple_producers_disjoint_subsets(
     read_split: int, write_split: int
 ) -> dace.SDFG:
@@ -1102,7 +1101,7 @@ def _make_pull_chain_multiple_producers_disjoint_subsets(
     #             writes b[write_split:N]
     for i in range(N - write_split):
         b[i + write_split] = c[i + read_split] * 2.0
-    c[:] = b[:]                     # Copy chain (b) -> (c): surviving global c.
+    c[:] = b[:]  # Copy chain (b) -> (c): surviving global c.
     ```
 
     ``write_split`` controls where ``b`` is written (and thus where the moved
@@ -1126,7 +1125,9 @@ def _make_pull_chain_multiple_producers_disjoint_subsets(
     # First producer: reads c[0:write_split], writes b[0:write_split]
     me0, mx0 = state.add_map("prod0", ndrange={"__i": "0:" + str(write_split)})
     tlet0 = state.add_tasklet(
-        "produce0", inputs={"__in_c"}, outputs={"__out"},
+        "produce0",
+        inputs={"__in_c"},
+        outputs={"__out"},
         code="__out = __in_c * 2.0",
     )
     state.add_edge(c_read, None, me0, "IN_c", dace.Memlet("c[0:" + str(write_split) + "]"))
@@ -1141,11 +1142,18 @@ def _make_pull_chain_multiple_producers_disjoint_subsets(
     rest = N - write_split
     me1, mx1 = state.add_map("prod1", ndrange={"__i": "0:" + str(rest)})
     tlet1 = state.add_tasklet(
-        "produce1", inputs={"__in_c"}, outputs={"__out"},
+        "produce1",
+        inputs={"__in_c"},
+        outputs={"__out"},
         code="__out = __in_c * 2.0",
     )
-    state.add_edge(c_read, None, me1, "IN_c",
-                   dace.Memlet("c[" + str(read_split) + ":" + str(read_split + rest) + "]"))
+    state.add_edge(
+        c_read,
+        None,
+        me1,
+        "IN_c",
+        dace.Memlet("c[" + str(read_split) + ":" + str(read_split + rest) + "]"),
+    )
     state.add_edge(me1, "OUT_c", tlet1, "__in_c", dace.Memlet("c[__i + " + str(read_split) + "]"))
     me1.add_scope_connectors("c")
     state.add_edge(tlet1, "__out", mx1, "IN_b", dace.Memlet("b[__i + " + str(write_split) + "]"))
@@ -1168,10 +1176,10 @@ def _make_push_chain_multiple_consumers_disjoint_subsets(
 
     The SDFG implements the following code (``b`` is a transient array):
     ```python
-    b[:] = a[:]                     # Copy chain (a) -> (b): surviving global a.
+    b[:] = a[:]  # Copy chain (a) -> (b): surviving global a.
     # Consumer 0: reads frozen b[0:read_split], writes a[0:write_split]
     for i in range(write_split):
-        a[i] = b[i] * 2.0 + 1.0     # read b before write a, same tasklet
+        a[i] = b[i] * 2.0 + 1.0  # read b before write a, same tasklet
     # Consumer 1: reads frozen b[read_split:...], writes a[write_split:N]
     for i in range(N - write_split):
         a[i + write_split] = b[i + read_split] * 2.0 + 1.0
@@ -1225,22 +1233,32 @@ def _make_push_chain_multiple_consumers_disjoint_subsets(
         outputs={"__out_a"},
         code="__out_a = __in_b * 2.0 + 1.0",
     )
-    state.add_edge(b, None, me1, "IN_b",
-                   dace.Memlet("b[" + str(read_split) + ":" + str(read_split + rest_w) + "]"))
+    state.add_edge(
+        b,
+        None,
+        me1,
+        "IN_b",
+        dace.Memlet("b[" + str(read_split) + ":" + str(read_split + rest_w) + "]"),
+    )
     state.add_edge(me1, "OUT_b", tlet1, "__in_b", dace.Memlet("b[__i + " + str(read_split) + "]"))
     me1.add_scope_connectors("b")
     state.add_edge(tlet1, "__out_a", mx1, "IN_aw", dace.Memlet("a[__i + " + str(write_split) + "]"))
     mx1.add_scope_connectors("aw")
-    state.add_edge(mx1, "OUT_aw", a_write, None, dace.Memlet("a[" + str(write_split) + ":" + str(N) + "]"))
+    state.add_edge(
+        mx1, "OUT_aw", a_write, None, dace.Memlet("a[" + str(write_split) + ":" + str(N) + "]")
+    )
 
     sdfg.validate()
     return sdfg
 
 
-@pytest.mark.parametrize("read_split, write_split, should_apply", [
-    (5, 5, True),    # disjoint: R_1=[5:10] vs W_0'=[0:5] — safe
-    (3, 5, False),   # overlapping: R_1=[3:8] vs W_0'=[0:5] overlap at [3:5]
-])
+@pytest.mark.parametrize(
+    "read_split, write_split, should_apply",
+    [
+        (5, 5, True),  # disjoint: R_1=[5:10] vs W_0'=[0:5] — safe
+        (3, 5, False),  # overlapping: R_1=[3:8] vs W_0'=[0:5] overlap at [3:5]
+    ],
+)
 def test_pull_chain_multiple_producers_disjoint_subsets(
     read_split: int, write_split: int, should_apply: bool
 ):
@@ -1273,10 +1291,13 @@ def test_pull_chain_multiple_producers_disjoint_subsets(
         assert util.compare_sdfg_res(ref=ref, res=res)
 
 
-@pytest.mark.parametrize("read_split, write_split, should_apply", [
-    (5, 5, True),    # disjoint: W_0=[0:5] vs R_1'=[5:10] — safe
-    (3, 5, False),   # overlapping: W_0=[0:5] vs R_1'=[3:8] overlap at [3:5]
-])
+@pytest.mark.parametrize(
+    "read_split, write_split, should_apply",
+    [
+        (5, 5, True),  # disjoint: W_0=[0:5] vs R_1'=[5:10] — safe
+        (3, 5, False),  # overlapping: W_0=[0:5] vs R_1'=[3:8] overlap at [3:5]
+    ],
+)
 def test_push_chain_multiple_consumers_disjoint_subsets(
     read_split: int, write_split: int, should_apply: bool
 ):

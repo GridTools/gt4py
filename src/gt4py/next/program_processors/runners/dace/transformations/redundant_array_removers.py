@@ -359,12 +359,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             #  applies `W_i` (a sub-range of the copy's source extent) to the
             #  destination, yielding the slice of the survivor that the moved
             #  write would touch.
-            copy_edge = next(
-                e for e in graph.out_edges(self.node_a1) if e.dst is surviving_node
-            )
-            copy_dst = dace_sbs.Range(
-                copy_edge.data.get_dst_subset(copy_edge, graph)
-            )
+            copy_edge = next(e for e in graph.out_edges(self.node_a1) if e.dst is surviving_node)
+            copy_dst = dace_sbs.Range(copy_edge.data.get_dst_subset(copy_edge, graph))
             moved_write_subsets: list[dace_sbs.Range] = []
             for iedge in graph.in_edges(self.node_a1):
                 w_i = dace_sbs.Range(iedge.data.subset)
@@ -406,8 +402,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                     #  `e_i.dst_conn`; follow the paired `OUT_*` connector.
                     paired_out = (
                         "OUT_" + e_i.dst_conn[3:]
-                        if e_i.dst_conn is not None
-                        and e_i.dst_conn.startswith("IN_")
+                        if e_i.dst_conn is not None and e_i.dst_conn.startswith("IN_")
                         else None
                     )
                     read_first = [
@@ -425,8 +420,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                         #  connector to find the producer tasklet.
                         paired_in = (
                             "IN_" + p_edge.src_conn[4:]
-                            if p_edge.src_conn is not None
-                            and p_edge.src_conn.startswith("OUT_")
+                            if p_edge.src_conn is not None and p_edge.src_conn.startswith("OUT_")
                             else None
                         )
                         prod_first = [
@@ -437,16 +431,13 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                                 else graph.in_edges_by_connector(p_j, paired_in)
                             )
                         ]
-                        same_branch = (
-                            e_i.dst is p_j
-                            or any(
-                                (rf is pf or gtx_transformations.utils.count_paths(
-                                    rf, pf, graph, limit=1
-                                )
-                                 > 0)
-                                for rf in read_first
-                                for pf in prod_first
+                        same_branch = e_i.dst is p_j or any(
+                            (
+                                rf is pf
+                                or gtx_transformations.utils.count_paths(rf, pf, graph, limit=1) > 0  # type: ignore[operator]
                             )
+                            for rf in read_first
+                            for pf in prod_first
                         )
                         if same_branch:
                             # `P_j` is on the same branch as `e_i`: the read
@@ -546,12 +537,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             #  which starts at 0 because the whole transient `a2` is copied)
             #  to the source, yielding the slice of the survivor that the
             #  moved read would access.
-            copy_edge = next(
-                e for e in graph.in_edges(self.node_a2) if e.src is surviving_node
-            )
-            copy_src = dace_sbs.Range(
-                copy_edge.data.get_src_subset(copy_edge, graph)
-            )
+            copy_edge = next(e for e in graph.in_edges(self.node_a2) if e.src is surviving_node)
+            copy_src = dace_sbs.Range(copy_edge.data.get_src_subset(copy_edge, graph))
             # Track each consumer edge so we can start connector-aware path
             #  searches from the specific branch the transient feeds into.
             consumer_edges = list(graph.out_edges(self.node_a2))
@@ -592,8 +579,7 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                         #  `e_i.src` itself.
                         paired_conn = (
                             "OUT_" + c_edge.dst_conn[3:]
-                            if c_edge.dst_conn is not None
-                            and c_edge.dst_conn.startswith("IN_")
+                            if c_edge.dst_conn is not None and c_edge.dst_conn.startswith("IN_")
                             else None
                         )
                         c_first = [
@@ -610,25 +596,19 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                         #  with `IN_aw`).
                         paired_in = (
                             "IN_" + e_i.src_conn[4:]
-                            if e_i.src_conn is not None
-                            and e_i.src_conn.startswith("OUT_")
+                            if e_i.src_conn is not None and e_i.src_conn.startswith("OUT_")
                             else e_i.src_conn
                         )
                         write_tasklets = [
-                            ie.src
-                            for ie in graph.in_edges(e_i.src)
-                            if ie.dst_conn == paired_in
+                            ie.src for ie in graph.in_edges(e_i.src) if ie.dst_conn == paired_in
                         ]
-                        same_branch = (
-                            e_i.src is c_j
-                            or any(
-                                (f is wt or gtx_transformations.utils.count_paths(
-                                    f, wt, graph, limit=1
-                                )
-                                 > 0)
-                                for f in c_first
-                                for wt in write_tasklets
+                        same_branch = e_i.src is c_j or any(
+                            (
+                                f is wt
+                                or gtx_transformations.utils.count_paths(f, wt, graph, limit=1) > 0  # type: ignore[operator]
                             )
+                            for f in c_first
+                            for wt in write_tasklets
                         )
                         if same_branch:
                             # `C_j` is on the same branch as `e_i`: the write
