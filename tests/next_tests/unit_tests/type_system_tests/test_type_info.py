@@ -505,3 +505,53 @@ def test_is_concretizable_tuple_with_nested_vararg():
         nested, ts.TupleType(types=[ts.TupleType(types=[float_type]), field_type])
     )
     assert not type_info.is_concretizable(nested, ts.TupleType(types=[field_type]))
+
+
+def test_xtuple_is_not_compatible_with_regular_tuple():
+    scalar_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+    assert not type_info.is_compatible_type(
+        ts.XTupleType(types=[scalar_type]), ts.TupleType(types=[scalar_type])
+    )
+    assert not type_info.is_compatible_type(
+        ts.TupleType(types=[scalar_type]), ts.XTupleType(types=[scalar_type])
+    )
+    assert not type_info.is_compatible_type(
+        ts.XVarLenTupleType(element_type=scalar_type), ts.VarLenTupleType(element_type=scalar_type)
+    )
+    assert not type_info.is_compatible_type(
+        ts.VarLenTupleType(element_type=scalar_type), ts.XVarLenTupleType(element_type=scalar_type)
+    )
+    assert not type_info.is_concretizable(
+        ts.XVarLenTupleType(element_type=scalar_type), ts.TupleType(types=[scalar_type])
+    )
+    assert not type_info.is_concretizable(
+        ts.VarLenTupleType(element_type=scalar_type), ts.XTupleType(types=[scalar_type])
+    )
+    assert type_info.is_concretizable(
+        ts.XVarLenTupleType(element_type=scalar_type), ts.XTupleType(types=[scalar_type])
+    )
+
+
+def test_var_len_tuple_is_compatible_with_uniform_tuple():
+    scalar_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    other_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    var_len_tuple_type = ts.VarLenTupleType(element_type=scalar_type)
+
+    assert type_info.is_compatible_type(
+        var_len_tuple_type, ts.TupleType(types=[scalar_type, scalar_type])
+    )
+    assert type_info.is_compatible_type(
+        ts.TupleType(types=[scalar_type, scalar_type]), var_len_tuple_type
+    )
+    assert type_info.is_compatible_type(var_len_tuple_type, ts.TupleType(types=[]))
+    assert not type_info.is_compatible_type(
+        var_len_tuple_type, ts.TupleType(types=[scalar_type, other_type])
+    )
+    assert not type_info.is_compatible_type(var_len_tuple_type, ts.XTupleType(types=[scalar_type]))
+    assert not type_info.is_compatible_type(
+        ts.XVarLenTupleType(element_type=scalar_type), ts.TupleType(types=[scalar_type])
+    )
+    assert type_info.is_compatible_type(
+        ts.XVarLenTupleType(element_type=scalar_type), ts.XTupleType(types=[scalar_type])
+    )

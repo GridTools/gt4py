@@ -19,6 +19,7 @@ from gt4py.next import (
     DimensionKind,
     Field,
     FieldOffset,
+    XTuple,
     astype,
     broadcast,
     errors,
@@ -132,6 +133,228 @@ def test_binop_nonmatching_dims():
     assert parsed.body.stmts[0].value.type == ts.FieldType(
         dims=[X, Y], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
+
+
+def test_binop_fixed_tuple_elementwise_product():
+    def product(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+        s: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+    ) -> XTuple[Field[[TDim], float64], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(types=[field_type, field_type])
+
+
+def test_binop_fixed_tuple_elementwise_addition_type_mismatch():
+    def addition(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], int64]],
+        s: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+    ) -> XTuple[Field[[TDim], float64], Field[[TDim], float64]]:
+        return f + s
+
+    with pytest.raises(
+        errors.DSLError,
+        match=re.escape(
+            "Could not promote 'Field[[TDim], int64]' and 'Field[[TDim], float64]' to common type"
+        ),
+    ):
+        _ = FieldOperatorParser.apply_to_function(addition)
+
+
+def test_binop_nested_fixed_tuple_elementwise_product():
+    def product(
+        f: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],
+        s: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],
+    ) -> XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XTupleType(types=[field_type, field_type]), field_type]
+    )
+
+
+def test_binop_nested_same_outer_fixed_tuple_elementwise_product():
+    def product(
+        f: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],
+        s: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+    ) -> XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XTupleType(types=[field_type, field_type]), field_type]
+    )
+
+
+def test_binop_nested_different_sides_fixed_tuple_elementwise_product():
+    def product(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+        s: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],
+    ) -> XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XTupleType(types=[field_type, field_type]), field_type]
+    )
+
+
+def test_binop_fixed_tuple_scalar_elementwise_product():
+    def product(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], float64]], s: float64
+    ) -> XTuple[Field[[TDim], float64], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(types=[field_type, field_type])
+
+
+def test_binop_fixed_nested_tuple_scalar_elementwise_product():
+    def product(
+        f: XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]],
+        s: float64,
+    ) -> XTuple[XTuple[Field[[TDim], float64], Field[[TDim], float64]], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XTupleType(types=[field_type, field_type]), field_type]
+    )
+
+
+def test_binop_fixed_tuple_field_elementwise_product():
+    def product(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], float64]], s: Field[[TDim], float64]
+    ) -> XTuple[Field[[TDim], float64], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(types=[field_type, field_type])
+
+
+def test_binop_var_len_tuple_scalar_elementwise_product():
+    def product(
+        f: XTuple[Field[[TDim], float64], ...], s: float64
+    ) -> XTuple[Field[[TDim], float64], ...]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XVarLenTupleType(element_type=field_type)
+
+
+def test_binop_var_len_tuple_elementwise_product():
+    # Two variable-length tuples are combined element-wise regardless of their actual runtime
+    # lengths (the lengths are not known during type deduction). Embedded execution supports
+    # this; the lowering currently rejects it.
+    def product(
+        f: XTuple[Field[[TDim], float64], ...], s: XTuple[Field[[TDim], float64], ...]
+    ) -> XTuple[Field[[TDim], float64], ...]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XVarLenTupleType(element_type=field_type)
+
+
+def test_binop_nested_var_len_tuple_elementwise_product():
+    def product(
+        f: XTuple[XTuple[Field[[TDim], float64], ...], Field[[TDim], float64]],
+        s: XTuple[XTuple[Field[[TDim], float64], ...], Field[[TDim], float64]],
+    ) -> XTuple[XTuple[Field[[TDim], float64], ...], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XVarLenTupleType(element_type=field_type), field_type]
+    )
+
+
+def test_binop_mixed_fixed_var_len_tuple_unsupported():
+    # A fixed-length tuple never matches a variable-length tuple structurally, in particular
+    # not a fixed-length tuple of length one.
+    def product(
+        f: XTuple[Field[[TDim], float64]],
+        s: XTuple[Field[[TDim], float64], ...],
+    ):
+        return f * s
+
+    with pytest.raises(errors.DSLError, match="same structure"):
+        _ = FieldOperatorParser.apply_to_function(product)
+
+
+def test_binop_nested_var_len_tuple_scalar_elementwise_product():
+    def product(
+        f: XTuple[XTuple[Field[[TDim], float64], ...], Field[[TDim], float64]],
+        s: float64,
+    ) -> XTuple[XTuple[Field[[TDim], float64], ...], Field[[TDim], float64]]:
+        return f * s
+
+    parsed = FieldOperatorParser.apply_to_function(product)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(
+        types=[ts.XVarLenTupleType(element_type=field_type), field_type]
+    )
+
+
+def test_binop_tuple_structure_mismatch():
+    def product(
+        f: XTuple[Field[[TDim], float64], Field[[TDim], float64]],
+        s: XTuple[Field[[TDim], float64]],
+    ):
+        return f * s
+
+    with pytest.raises(errors.DSLError, match="same structure"):
+        _ = FieldOperatorParser.apply_to_function(product)
+
+
+def test_binop_regular_tuple_unsupported():
+    def product(f: tuple[Field[[TDim], float64], Field[[TDim], float64]], s: float64):
+        return f * s
+
+    with pytest.raises(errors.DSLError, match="Unsupported operand type"):
+        _ = FieldOperatorParser.apply_to_function(product)
+
+
+def test_tuple_comprehension_over_xtuple_preserves_xtuple():
+    def foo(f: XTuple[Field[[TDim], float64], Field[[TDim], float64]]):
+        return tuple(2.0 * el for el in f)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XTupleType(types=[field_type, field_type])
+
+
+def test_tuple_comprehension_over_xvarlentuple_preserves_xtuple():
+    def foo(f: XTuple[Field[[TDim], float64], ...]):
+        return tuple(2.0 * el for el in f)
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    field_type = ts.FieldType(dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    assert parsed.body.stmts[0].value.type == ts.XVarLenTupleType(element_type=field_type)
 
 
 def test_bitop_float():

@@ -156,6 +156,20 @@ class VarLenTupleType(DataType):
         return f"tuple[{self.element_type}, ...]"
 
 
+class XTupleType(TupleType):
+    """Fixed-length tuple on which binary operators apply element-wise (see `common.XTuple`)."""
+
+    def __str__(self) -> str:
+        return f"XTuple[{', '.join(map(str, self.types))}]"
+
+
+class XVarLenTupleType(VarLenTupleType):
+    """Variable-length counterpart of `XTupleType`, e.g. from an `XTuple[T, ...]` annotation."""
+
+    def __str__(self) -> str:
+        return f"XTuple[{self.element_type}, ...]"
+
+
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
 

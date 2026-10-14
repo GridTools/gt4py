@@ -35,7 +35,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
-from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
+from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering, FieldOperatorLoweringError
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -561,6 +561,103 @@ def test_fixed_len_tuple_comprehension_tuple_target_mixed_element_types():
         match="fixed-length tuples with differently typed iterable elements are not implemented",
     ):
         FieldOperatorParser.apply_to_function(foo)
+
+
+def test_elementwise_binop_fixed_xtuple():
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+        b: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+    ):
+        return a * b
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.op_as_fieldop("multiplies")(im.tuple_get(0, "a"), im.tuple_get(0, "b")),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), im.tuple_get(1, "b")),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_fixed_xtuple_scalar_broadcast():
+    def foo(a: gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]], factor: float64):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    reference = im.make_tuple(
+        im.op_as_fieldop("multiplies")(im.tuple_get(0, "a"), "factor"),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), "factor"),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_nested_xtuple_scalar_broadcast():
+    def foo(
+        a: gtx.XTuple[
+            gtx.XTuple[gtx.Field[[TDim], float64], gtx.Field[[TDim], float64]],
+            gtx.Field[[TDim], float64],
+        ],
+        factor: float64,
+    ):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+    lowered_inlined = inline_lambdas.InlineLambdas.apply(lowered)
+
+    inner = im.tuple_get(0, "a")
+    reference = im.make_tuple(
+        im.make_tuple(
+            im.op_as_fieldop("multiplies")(im.tuple_get(0, inner), "factor"),
+            im.op_as_fieldop("multiplies")(im.tuple_get(1, inner), "factor"),
+        ),
+        im.op_as_fieldop("multiplies")(im.tuple_get(1, "a"), "factor"),
+    )
+    reference_inlined = inline_lambdas.InlineLambdas.apply(reference)
+
+    assert lowered_inlined.expr == reference_inlined
+
+
+def test_elementwise_binop_two_var_len_xtuples_unsupported():
+    # Type deduction accepts this combination (embedded execution supports it), but the
+    # lowering can only map over a single variable-length tuple.
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+        b: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+    ):
+        return a * b
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+
+    with pytest.raises(FieldOperatorLoweringError, match="variable-length tuples"):
+        FieldOperatorLowering.apply(parsed)
+
+
+def test_elementwise_binop_var_len_xtuple_scalar_broadcast():
+    def foo(a: gtx.XTuple[gtx.Field[[TDim], float64], ...], factor: float64):
+        return a * factor
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_0")(
+                im.op_as_fieldop("multiplies")("__elementwise_0", "factor")
+            )
+        )
+    )("a")
+
+    assert lowered.expr == reference
 
 
 def test_unary_minus():
