@@ -221,15 +221,24 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
         ):
             return False
 
-        # If the container we keep is a global that is also read upstream of this
-        #  copy in the same state, then the temporary we remove *is* used as a
-        #  double buffer: it holds the new value while the old one is still being
-        #  read.  Merging it away moves the write back to where the temporary was
-        #  produced, which is no longer ordered after those reads, so the readers
-        #  would observe the new value.  This is the situation of a field that a
-        #  `field_operator` call takes as an input and also produces as an output.
-        # NOTE: Transients are written only once (ADR-18), so they cannot be
-        #   affected; only globals need this check.
+        # If the container that survives the merge is a global that is also read
+        #  upstream of the copy (`PULL` mode) or written downstream of it (`PUSH`
+        #  mode) in the same state, then the temporary we remove is a needed
+        #  double buffer between the old and the new value of that global: merging
+        #  it away lets the write overtake a read of the old value, which would
+        #  then observe the new one. This is the situation of a field that a
+        #  `field_operator` call takes as an input and also produces as an output;
+        #  `test_copy_chain_destination_read_in_map_no_apply` and
+        #  `test_push_chain_source_written_in_map_no_apply` reproduce the `PULL`
+        #  and `PUSH` variants of it.
+        # NOTE: This can happen even though the writes are elementwise in the
+        #   sense of ADR-18 rule 3, i.e. the write to `A[i]` never reads `A[j]`
+        #   for `i != j` (`a += 1` is allowed while `A[0:10] = A[1:11]` is not):
+        #   the hazardous access is a different read or write of the same global
+        #   that only the removed temporary keeps ordered against the copy. Since
+        #   that ordering is not always made explicit in the SDFG, we have to detect
+        #   the case here. Alternatively, empty Memlets could be used to explicitly
+        #   order the write after read access.
         if self._creates_write_after_read_hazard(sdfg, graph):
             return False
 
@@ -277,6 +286,8 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             return False
 
         # TODO(phimuell): This ignores empty Memlets and the order they impose, fix that.
+        # TODO(phimuell): This restriction could be relaxed as in some cases (Maps) only
+        #    point wise accesses are allowed anyway.
         if copy_chain_mode == CopyChainRemoverMode.PULL:
             # A global AccessNode serializes its incoming writes before its outgoing
             #  reads, so reads that are downstream of the survivor, i.e. pass through,
