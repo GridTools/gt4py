@@ -54,7 +54,9 @@ def _get_connectivity(
         if arg.type.offset_type is None:
             continue
         conn = common.get_connectivity_by_neighbor_dim(offset_provider_type, arg.type.offset_type)
-        assert conn is not None, f"Could not find connectivity for offset type {arg.type.offset_type}."
+        assert conn is not None, (
+            f"Could not find connectivity for offset type {arg.type.offset_type}."
+        )
         connectivities.append(conn)
 
     if not connectivities:

@@ -264,6 +264,12 @@ class SDFGBuilder(DataflowBuilder, Protocol):
     def is_column_axis(self, dim: gtx_common.Dimension) -> bool: ...
 
     @abc.abstractmethod
+    def get_connectivity_identifier(self, local_dim: gtx_common.Dimension) -> str | None:
+        """Return the SDFG connectivity-container name (``gt_conn_<offset>``)
+        for the connectivity whose local (neighbor) dimension is ``local_dim``,
+        or ``None`` if no such connectivity exists."""
+
+    @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any: ...
 
 
