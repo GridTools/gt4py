@@ -651,6 +651,81 @@ def find_upstream_nodes(
     return seen
 
 
+def count_paths(
+    start: dace_nodes.Node,
+    target: dace_nodes.Node,
+    state: dace.SDFGState,
+    limit: int = 2,
+) -> Optional[int]:
+    """Counts connector-aware simple data-flow paths from `start` to `target`.
+
+    Unlike `find_downstream_nodes` and `is_reachable`, which ignore connector
+    names and therefore fan out across *all* of a scope node's connectors, this
+    function follows real data flow: when the traversal enters or leaves a scope
+    node (``MapEntry``/``MapExit``) through a connector, it only continues
+    through the connector that pairs with it (``IN_<x>`` with ``OUT_<x>`` and
+    vice versa, as in ``SDFGState.memlet_path``).  At any other node it follows
+    all outgoing edges, as in a plain search.
+
+    This matters because a single map tasklet that reads two inputs gives its
+    entry two ``OUT_*`` connectors; a plain search would report two paths to a
+    downstream survivor even though there is only one data-flow branch, while
+    the connector-aware search reports one.
+
+    As soon as `limit` paths have been found the function returns `limit` (i.e.
+    it is an *at-least-`limit`* probe, not an exact count beyond that).
+    Returns `0` if `target` is not reachable.
+
+    Args:
+        start: Start of the forward DFS. Must not be a scope node.
+        target: Node to reach. Must not be a scope node.
+        state: The SDFG state on which we operate.
+        limit: Stop early once this many paths have been found. Must be `>= 1`.
+
+    Returns:
+        The number of paths if it is strictly less than `limit`, otherwise
+        `limit`. (`None` is never returned; the signature keeps `Optional` for
+        forward-compatibility with a future exact mode.)
+    """
+    assert limit >= 1
+    if start is target:
+        return 1
+    # `forbidden` is the trail of nodes on the current path (simple-path guard).
+    #  Each stack entry carries its own trail so branches don't share state.
+    stack: list[tuple[dace_nodes.Node, dace_nodes.Node, frozenset[dace_nodes.Node]]] = []
+    for oedge in state.out_edges(start):
+        nxt = oedge.dst
+        if nxt is target:
+            return 1  # limit >= 1, so a single hit is enough to know count == 1
+        if nxt in {start}:
+            continue
+        stack.append((start, nxt, frozenset({start, nxt})))
+
+    found = 0
+    while stack:
+        prev, node, forbidden = stack.pop()
+        # At a scope node, only follow the connector that pairs with the one we
+        #  arrived through; every other connector is a different data stream.
+        if isinstance(node, (dace_nodes.MapEntry, dace_nodes.MapExit)):
+            in_edge = next(e for e in state.in_edges(node) if e.src is prev)
+            assert in_edge.dst_conn is not None and in_edge.dst_conn.startswith("IN_")
+            paired = "OUT_" + in_edge.dst_conn[3:]
+            oedges = [e for e in state.out_edges(node) if e.src_conn == paired]
+        else:
+            oedges = state.out_edges(node)
+        for oedge in oedges:
+            nxt = oedge.dst
+            if nxt is target:
+                found += 1
+                if found >= limit:
+                    return found
+                continue
+            if nxt in forbidden:
+                continue
+            stack.append((node, nxt, forbidden | {nxt}))
+    return found
+
+
 def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
     """Finds the set of next states after `state`.
 

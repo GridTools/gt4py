@@ -1004,3 +1004,83 @@ def test_push_chain_source_written_in_map_no_apply():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_copy_chain_single_path_upstream_read() -> dace.SDFG:
+    """Builds an SDFG where the copy chain destination is read upstream of the
+    copy, but through a *single* data-flow path.
+
+    The SDFG implements the following code (`b` is a transient array):
+    ```python
+    b[i] = c[i] + a[i]  # `c` read upstream, in the *same* branch that writes `b`
+    c[:] = b[:]  # Copy chain `(b) -> (c)`: surviving global `c`.
+    ```
+
+    `CopyChainRemover` moves the write to `c` (the surviving global) into the
+    single branch that produced `b`, i.e. to the same tasklet that already reads
+    `c`.  Because the read and the moved write share the same branch, the read
+    stays ordered before the write -- no write-after-read hazard.  The
+    transformation *should* apply, unlike `test_copy_chain_destination_read_in_map_no_apply`
+    where the read sits in a branch independent of the producer.
+    """
+    sdfg = dace.SDFG(util.unique_name("copy_chain_single_path_upstream_read"))
+    state = sdfg.add_state(is_start_block=True)
+
+    for name in ["a", "c"]:
+        sdfg.add_array(name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(10,), dtype=dace.float64, transient=True)
+
+    a = state.add_access("a")
+    # Two AccessNodes for `c`: one read upstream of the copy, one written back.
+    c_read, c_write = state.add_access("c"), state.add_access("c")
+    b = state.add_access("b")
+
+    me, mx = state.add_map("comp_map", ndrange={"__i": "0:10"})
+    tlet = state.add_tasklet(
+        "comp",
+        inputs={"__in_c", "__in_a"},
+        outputs={"__out"},
+        code="__out = __in_c + __in_a",
+    )
+    # `c` is read upstream of the copy, in the *same* branch that produces `b`.
+    state.add_edge(c_read, None, me, "IN_c", dace.Memlet("c[0:10]"))
+    state.add_edge(me, "OUT_c", tlet, "__in_c", dace.Memlet("c[__i]"))
+    state.add_edge(a, None, me, "IN_a", dace.Memlet("a[0:10]"))
+    state.add_edge(me, "OUT_a", tlet, "__in_a", dace.Memlet("a[__i]"))
+    me.add_scope_connectors("c")
+    me.add_scope_connectors("a")
+    state.add_edge(tlet, "__out", mx, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(mx, "OUT_b", b, None, dace.Memlet("b[0:10]"))
+    mx.add_scope_connectors("b")
+
+    # The transient `b` is fully copied into the global `c`.
+    state.add_nedge(b, c_write, dace.Memlet("b[0:10] -> [0:10]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+def test_copy_chain_destination_read_single_path_apply():
+    """`c` is read upstream of the copy `(b) -> (c)` but through a single path
+    that runs through `b`'s producer, so the read stays ordered before the moved
+    write.  The hazard relaxation must let the transformation apply.
+    """
+    sdfg = _make_copy_chain_single_path_upstream_read()
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    # The copy chain `(b) -> (c)` is removed: the single-path hazard check
+    #  recognizes that the read of `c` upstream can not be overtaken.
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    assert nb_applies == 1
+
+    # The transient `b` must be gone.
+    acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+        sdfg, dace_nodes.AccessNode, return_nodes=True
+    )
+    assert not any(ac.data == "b" for ac in acnodes)
+    assert "b" not in sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

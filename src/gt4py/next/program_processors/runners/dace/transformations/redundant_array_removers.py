@@ -299,10 +299,40 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             #  edge (the one we walked backward through), so a plain data match is
             #  enough to detect a read.
             upstream_nodes = gtx_transformations.utils.find_upstream_nodes(surviving_node, graph)
-            return any(
-                isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+            same_data_nodes = [
+                node
                 for node in upstream_nodes
-            )
+                if isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+            ]
+            if not same_data_nodes:
+                return False
+
+            # Relaxation: if `a1` has a single producer `P` and `a2` has no other
+            #  producer, then a same-data read `n` upstream of `a2` reaches it
+            #  only through `a1 -> a2`.  When that path is a single
+            #  *connector-aware* one, `n` is ordered before `P` both before and
+            #  after the merge, so the moved write can not overtake it.  The
+            #  connector-aware count is needed because a plain search fans out
+            #  across a scope's connectors (a tasklet reading two inputs gives
+            #  its entry two `OUT_*`) and would report multiple paths for a
+            #  single data-flow branch.  The single-producer guards are needed
+            #  because an extra producer `X != a1` could give `n` a single path
+            #  through `X` that is not ordered before `P`.
+            producers_of_a1 = [iedge.src for iedge in graph.in_edges(self.node_a1)]
+            producers_of_a2 = [iedge.src for iedge in graph.in_edges(surviving_node)]
+            if len(producers_of_a1) == 1 and len(producers_of_a2) == 1:
+                assert producers_of_a2[0] is self.node_a1
+                for node in same_data_nodes:
+                    if (
+                        gtx_transformations.utils.count_paths(node, surviving_node, graph, limit=2)
+                        == 1
+                    ):
+                        # Single connector-aware path through `a1`: ordering
+                        #  preserved, no hazard from this read.
+                        continue
+                    return True
+                return False
+            return True
         else:
             assert copy_chain_mode == CopyChainRemoverMode.PUSH
             # A global AccessNode serializes its incoming writes before its outgoing
@@ -317,10 +347,32 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             downstream_nodes = gtx_transformations.utils.find_downstream_nodes(
                 surviving_node, graph
             )
-            return any(
-                isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+            same_data_nodes = [
+                node
                 for node in downstream_nodes
-            )
+                if isinstance(node, dace_nodes.AccessNode) and node.data == surviving_node.data
+            ]
+            if not same_data_nodes:
+                return False
+
+            # Mirror of the PULL relaxation: if `a2` has a single consumer `P`
+            #  and `a1` has no other consumer, then a same-data write `n`
+            #  downstream of `a1` reaches it only through `a1 -> a2`.  When that
+            #  path is a single *connector-aware* one, `n` stays ordered after
+            #  `P` and the moved read keeps observing the frozen value.
+            consumers_of_a2 = [oedge.dst for oedge in graph.out_edges(self.node_a2)]
+            consumers_of_a1 = [oedge.dst for oedge in graph.out_edges(surviving_node)]
+            if len(consumers_of_a2) == 1 and len(consumers_of_a1) == 1:
+                assert consumers_of_a1[0] is self.node_a2
+                for node in same_data_nodes:
+                    if (
+                        gtx_transformations.utils.count_paths(surviving_node, node, graph, limit=2)
+                        == 1
+                    ):
+                        continue
+                    return True
+                return False
+            return True
 
     def is_single_use_data(
         self,
