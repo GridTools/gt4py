@@ -109,6 +109,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]]: ...
 
 
@@ -121,6 +122,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[
     [Callable[_P, _R]], Callable[..., Any]
 ]: ...  # TODO(havogt): typing of `result_collection_constructor` is too weak here
@@ -135,6 +137,7 @@ def tree_map(
     result_collection_constructor: Optional[Callable] = None,
     unpack: bool = False,
     with_path_arg: bool = False,
+    broadcast_leaves: bool = False,
 ) -> Callable[..., _R | tuple[_R | tuple, ...]] | Callable[[Callable[_P, _R]], Callable[..., Any]]:
     """
     Apply `fun` to each entry of (possibly nested) collections (by default `tuple`s).
@@ -159,6 +162,9 @@ def tree_map(
         unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
           tuple of result collections instead of result collections of tuples.
         with_path_arg: Pass the path to access the current element to `fun`.
+        broadcast_leaves: If `True`, recurse while any argument is a collection, reusing leaf
+          arguments for every element of the collection arguments. All collection arguments
+          appearing at the same position must be of the same kind and length.
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
@@ -204,6 +210,15 @@ def tree_map(
         >>> squared
         ((4, 9), 16)
 
+        With `broadcast_leaves` the arguments need not be structurally equal: leaf arguments
+        are reused for every element of the collection arguments at the same position:
+
+        >>> @tree_map(broadcast_leaves=True)
+        ... def impl(x, y):
+        ...     return x, y
+        >>> impl((1, 5, (7, 8)), ((2, 3), 6, 9))
+        (((1, 2), (1, 3)), (5, 6), ((7, 9), (8, 9)))
+
         Collections that do not implement the iterator protocol are traversed by passing a
         custom `collection_elements` decomposition:
 
@@ -247,17 +262,50 @@ def tree_map(
 
         @functools.wraps(fun)
         def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
-            if isinstance(args[0], collection_type):
-                non_path_args: Sequence[Any]
-                path: tuple[Any, ...] = ()
-                if with_path_arg:
-                    *non_path_args, path = args
-                else:
-                    non_path_args = args
+            non_path_args: Sequence[Any]
+            path: tuple[Any, ...] = ()
+            if with_path_arg:
+                *non_path_args, path = args
+            else:
+                non_path_args = args
 
-                assert all(isinstance(arg, collection_type) for arg in non_path_args)
-                first_arg: Any = non_path_args[0]
-                elements_per_arg = [tuple(collection_elements(arg)) for arg in non_path_args]
+            collection_args: Sequence[Any]
+            if broadcast_leaves:
+                collection_args = [arg for arg in non_path_args if isinstance(arg, collection_type)]
+                traverse = bool(collection_args)
+            else:
+                # All arguments are collections whenever the first one is (asserted below).
+                collection_args = non_path_args
+                traverse = isinstance(non_path_args[0], collection_type)
+
+            if traverse:
+                if broadcast_leaves:
+                    if not all(type(arg) is type(collection_args[0]) for arg in collection_args):
+                        # Zipping collections of different kinds (e.g. a fixed-length with a
+                        # variable-length tuple type) is almost certainly an error, and since the
+                        # result collection is constructed from the first collection argument
+                        # alone, its kind would silently win.
+                        raise ValueError(
+                            "tree_map() expects collection arguments to be of the same type."
+                        )
+                else:
+                    assert all(isinstance(arg, collection_type) for arg in non_path_args)
+
+                first_arg: Any = collection_args[0]
+                num_elements = len(tuple(collection_elements(first_arg)))
+                # Note: the leaf branch is only ever taken when `broadcast_leaves` is set.
+                elements_per_arg = [
+                    tuple(collection_elements(arg))
+                    if isinstance(arg, collection_type)
+                    else (arg,) * num_elements
+                    for arg in non_path_args
+                ]
+                if broadcast_leaves and not all(
+                    len(elements) == num_elements for elements in elements_per_arg
+                ):
+                    raise ValueError(
+                        "tree_map() expects collection arguments to have the same length."
+                    )
 
                 zipped_args: list[Iterable[Any]] = [*elements_per_arg]
                 if with_path_arg:
@@ -293,6 +341,7 @@ def tree_map(
             result_collection_constructor=result_collection_constructor,
             unpack=unpack,
             with_path_arg=with_path_arg,
+            broadcast_leaves=broadcast_leaves,
         )
 
 

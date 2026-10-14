@@ -617,7 +617,8 @@ def _allocate_from_type(
         case ts.ScalarType(kind=kind):
             return strategy.scalar(dtype=dtype or kind.name.lower())
         case ts.TupleType(types=types):
-            return tuple(
+            tuple_constructor = common.XTuple if isinstance(arg_type, ts.XTupleType) else tuple
+            return tuple_constructor(
                 (
                     _allocate_from_type(
                         case=case,
@@ -635,7 +636,10 @@ def _allocate_from_type(
             # the unique-value offsets are computed from the declared types using the
             # default length (see `get_param_size`)
             assert length <= DEFAULT_TUPLE_LENGTH
-            return tuple(
+            tuple_constructor = (
+                common.XTuple if isinstance(arg_type, ts.XVarLenTupleType) else tuple
+            )
+            return tuple_constructor(
                 (
                     _allocate_from_type(
                         case=case,
