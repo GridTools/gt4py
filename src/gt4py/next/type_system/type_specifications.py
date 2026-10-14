@@ -142,6 +142,20 @@ class TupleType(DataType):
         return f"tuple[{', '.join(map(str, self.types))}]"
 
 
+class VarLenTupleType(DataType):
+    """
+    A homogeneous tuple whose length is not part of the type.
+
+    The length is only known at the call, where the type is specialized to a concrete
+    `TupleType` (or stays variable-length in length-agnostic code paths).
+    """
+
+    element_type: DataType
+
+    def __str__(self) -> str:
+        return f"tuple[{self.element_type}, ...]"
+
+
 class AnyPythonType:
     """Marker type representing any Python type which cannot be used for instantiation.
 
@@ -185,6 +199,8 @@ class NamedCollectionType(DataType):
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
 
+# TODO(tehrengruber): Add VarLenTupleType to this list, which requires checking all users of it
+#  that potentially depend on the length being known.
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType
 COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = typing.get_args(

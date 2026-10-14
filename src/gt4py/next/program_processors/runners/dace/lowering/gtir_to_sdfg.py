@@ -1151,6 +1151,10 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Visit the field operator expression.
         source_tree = self._visit_expression(stmt.expr, ctx)
+
+        # A single domain may apply to an entire tuple subtree of the target (see
+        # `gtir.SetAt`); promote it so all trees have the same structure.
+        _, domain = gtx_utils.equalize_tuple_structure(source_tree, domain, bidirectional=False)
         ctx_input_data = ctx.get_input_data()
 
         # In order to support inout argument, write the result in separate next state

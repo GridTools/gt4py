@@ -7,8 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+import functools
 from collections import ChainMap
-from typing import Callable, Iterable, TypeVar, cast
+from typing import Any, Callable, Iterable, Optional, TypeVar, cast
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -17,7 +18,7 @@ from gt4py.next import common
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -279,3 +280,86 @@ def value_from_literal(literal: itir.Literal) -> core_defs.Scalar:
         assert literal.value in ["True", "False"]
         return literal.value == "True"
     return getattr(embedded, str(literal.type))(literal.value)
+
+
+#: Name bound to the value of the current element in `tree_map_type_into_expr`; only the
+#: (shadowed) binders introduced by `map_tuple` lambdas remain visible in the result.
+_CURRENT_ELEMENT = "__tmtie_el"
+
+
+def tree_map_type_into_expr(
+    fun: Optional[Callable[..., itir.Expr]] = None,
+    *,
+    with_path_arg: bool = False,
+    unpack: bool = False,
+) -> Callable[..., Any]:
+    """
+    Map `fun` over the leaves of a type tree, building an ITIR expression over a
+    corresponding value expression.
+
+    Like `type_info.tree_map_type`, but `fun` additionally receives a `current` argument —
+    a reference to the value of the current element — and the mapped callable is called
+    with the value expression alongside the type. Fixed-length collection nodes recombine
+    the element results with `make_tuple`, rebinding `current` per element; `VarLenTupleType`
+    nodes map their elements with the `map_tuple` builtin, so the result is also valid for
+    types whose concrete length is only known later. The bindings introduced along the way
+    are inlined unconditionally before returning — the value expression should hence be
+    cheap (e.g. a symbol reference or tuple accesses thereon), as it may be duplicated.
+    With `with_path_arg`, paths contain `type_info.VAR_LENGTH_TUPLE_ELEMENT` below variable-length
+    tuples.
+
+    Can be used directly or as a (possibly parametrized) decorator.
+
+    >>> field = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    >>> type_ = ts.TupleType(types=[field, ts.VarLenTupleType(element_type=field)])
+    >>> expr = tree_map_type_into_expr(lambda t, current: im.call("get_dom")(current))(
+    ...     type_, im.ref("out")
+    ... )
+    >>> str(expr)
+    '{get_dom(out[0]), map_tuple(λ(__tmtie_el_) → get_dom(__tmtie_el_))(out[1])}'
+    """
+    if fun is None:
+        return functools.partial(
+            tree_map_type_into_expr, with_path_arg=with_path_arg, unpack=unpack
+        )
+
+    @functools.wraps(fun)
+    def impl(type_: ts.TypeSpec, expr: itir.Expr) -> itir.Expr | tuple[itir.Expr, ...]:
+        current = im.ref(_CURRENT_ELEMENT)
+
+        def collection_constructor(value: ts.TypeSpec, elts: Iterable[itir.Expr]) -> itir.Expr:
+            if isinstance(value, ts.VarLenTupleType):
+                (element_expr,) = elts
+                return im.call(im.call("map_tuple")(im.lambda_(_CURRENT_ELEMENT)(element_expr)))(
+                    current
+                )
+            return im.make_tuple(
+                *(
+                    im.let(_CURRENT_ELEMENT, im.tuple_get(i, current))(el)
+                    for i, el in enumerate(elts)
+                )
+            )
+
+        leaf_fun = (
+            (lambda type_, path: fun(type_, current, path))
+            if with_path_arg
+            else (lambda type_: fun(type_, current))
+        )
+        mapped = type_info.tree_map_type(
+            leaf_fun,
+            with_path_arg=with_path_arg,
+            unpack=unpack,
+            result_collection_constructor=collection_constructor,
+        )
+
+        def bind(tree: itir.Expr) -> itir.Expr:
+            # inline unconditionally so consumers see plain tuple accesses instead of
+            # `let`-bound references (see docstring)
+            return inline_lambdas.InlineLambdas.apply(im.let(_CURRENT_ELEMENT, expr)(tree))
+
+        result = mapped(type_)
+        if unpack:
+            return tuple(bind(tree) for tree in cast(tuple[itir.Expr, ...], result))
+        return bind(result)
+
+    return impl
