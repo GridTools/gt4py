@@ -229,7 +229,10 @@ def _unwrap_tuple_expr(
 
 
 def _specialize_program_params(
-    past_node: past.Program, arg_types: Sequence[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
+    past_node: past.Program,
+    arg_types: Sequence[ts.TypeSpec],
+    kwarg_types: dict[str, ts.TypeSpec],
+    check_compatibility: bool = True,
 ) -> past.Program:
     """
     Replace the program parameter types by the concrete argument types of the call.
@@ -246,7 +249,9 @@ def _specialize_program_params(
     for param in past_node.params:
         param_type = param_types[str(param.id)]
         # incompatible argument types have already been rejected in `transform_program_args`
-        assert type_info.is_concretizable(param.type, to_type=param_type), (
+        assert not check_compatibility or type_info.is_concretizable(
+            param.type, to_type=param_type
+        ), (
             f"Argument of type '{param_type}' is not compatible with parameter "
             f"'{param.id}' of type '{param.type}'."
         )

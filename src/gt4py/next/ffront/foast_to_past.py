@@ -164,7 +164,12 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         # this step would become obsolete, as the generic variant could be type checked
         # directly.
         untyped_past_node = past_to_itir._specialize_program_params(
-            untyped_past_node, inp.args.args, inp.args.kwargs
+            untyped_past_node,
+            inp.args.args,
+            inp.args.kwargs,
+            # argument validation has not run yet on this path; incompatible arguments are
+            # rejected right below, by the type deduction of the body call
+            check_compatibility=False,
         )
         untyped_past_node = closure_var_type_deduction.ClosureVarTypeDeduction.apply(
             untyped_past_node,
