@@ -134,15 +134,15 @@ class _PreloadedArtifact:
 
 
 def make_compilation_task(
-    backend: gtx_backend.Backend,
+    backend: gtx_backend.Toolchain,
     definition_stage: Any,
     compile_time_args: arguments.CompileTimeArgs,
 ) -> runners.CompilationTask:
     """Prepare the compilation of `definition_stage` with `backend` as a task for a runner."""
     name = getattr(backend, "name", type(backend).__name__)
-    if getattr(type(backend), "compile", None) is not gtx_backend.Backend.compile:
+    if getattr(type(backend), "compile", None) is not gtx_backend.Toolchain.compile:
         # A customized `compile` is opaque: it cannot be decomposed into the
-        # standard transforms/executor workflow (and yields an already-loaded
+        # standard frontend/backend workflow (and yields an already-loaded
         # program instead of an artifact), so the executor closes over
         # everything and ignores the compilable.
         return runners.CompilationTask(
@@ -156,12 +156,12 @@ def make_compilation_task(
         )
     # Frontend lowering happens here, main-side: decorators rebind the user's
     # function module attribute, so the raw `types.FunctionType` must not cross
-    # a process boundary; the lowered `CompilableProgramDef` is pickle-safe.
-    compilable = backend.transforms(
-        stages.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
+    # a process boundary; the lowered `CompilableProgram` is pickle-safe.
+    compilable = backend.frontend(
+        stages.ConcreteProgramDef(definition=definition_stage, args=compile_time_args)
     )
 
-    def construct_compilable(with_refs: bool) -> stages.CompilableProgramDef:
+    def construct_compilable(with_refs: bool) -> stages.CompilableProgram:
         if not with_refs or not compilable.args.offset_provider:
             return compilable
         # The shipped copy must not carry the connectivity buffers: they may
@@ -176,5 +176,5 @@ def make_compilation_task(
         )
 
     return runners.CompilationTask(
-        name=name, construct_compilable=construct_compilable, executor=backend.executor
+        name=name, construct_compilable=construct_compilable, executor=backend.backend
     )

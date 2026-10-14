@@ -15,7 +15,7 @@ from gt4py.next.otf import artifacts, stages, workflow
 
 @dataclasses.dataclass(frozen=True)
 class OTFCompileWorkflow(
-    workflow.NamedStepSequence[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    workflow.NamedStepSequence[stages.CompilableProgram, artifacts.CompilationArtifact]
 ):
     """The typical compiled backend steps composed into a workflow."""
 

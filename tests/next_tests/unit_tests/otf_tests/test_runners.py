@@ -100,11 +100,11 @@ def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
 
 
 def test_make_compilation_task_decomposes_standard_backend():
-    backend = next_backend.Backend(
+    backend = next_backend.Toolchain(
         name="test_backend",
-        executor=lambda compilable: _NoOpArtifact(),
+        backend=lambda compilable: _NoOpArtifact(),
         allocator=None,
-        transforms=lambda inp: inp,
+        frontend=lambda inp: inp,
     )
 
     task = compilation_tasks.make_compilation_task(
@@ -112,7 +112,7 @@ def test_make_compilation_task_decomposes_standard_backend():
     )
 
     assert task.no_offload_reason is None
-    assert task.executor is backend.executor
+    assert task.executor is backend.backend
     assert callable(task.compile().load())
 
 
@@ -129,11 +129,11 @@ def test_make_compilation_task_is_opaque_for_customized_compile():
             return self._wrapped.compile(program, compile_time_args=compile_time_args)
 
     backend = _WrapperBackend(
-        next_backend.Backend(
+        next_backend.Toolchain(
             name="test_backend",
-            executor=lambda compilable: _NoOpArtifact(),
+            backend=lambda compilable: _NoOpArtifact(),
             allocator=None,
-            transforms=lambda inp: inp,
+            frontend=lambda inp: inp,
         )
     )
 
@@ -154,11 +154,11 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     compile_time_args = dataclasses.replace(
         arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
     )
-    backend = next_backend.Backend(
+    backend = next_backend.Toolchain(
         name="test_backend",
-        executor=lambda compilable: _NoOpArtifact(),
+        backend=lambda compilable: _NoOpArtifact(),
         allocator=None,
-        transforms=lambda inp: inp,
+        frontend=lambda inp: inp,
     )
 
     task = compilation_tasks.make_compilation_task(
