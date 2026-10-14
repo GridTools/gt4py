@@ -153,9 +153,9 @@ def function_signature_incompatibilities_fieldop(
 
 
 def _tree_map_type_constructor_drop_python_type(
-    value: ts.CollectionTypeSpecT,
+    value: ts.CollectionTypeSpecT | ts.VarArgType,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
-) -> ts.CollectionTypeSpecT:
+) -> ts.CollectionTypeSpecT | ts.VarArgType:
     result = type_info.tree_map_type_constructor(value, elems)
     if isinstance(value, ts.NamedCollectionType):
         result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)

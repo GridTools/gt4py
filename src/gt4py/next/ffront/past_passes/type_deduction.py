@@ -57,6 +57,21 @@ def _validate_domain_out(
                     f"Only 'Dimension' allowed in domain dictionary keys, got '{dim}' which is of type '{dim.type}'."
                 )
 
+        dict_dims = [cast(ts.DimensionType, dim.type).dim for dim in dom.keys_]
+
+        # the result is irrelevant, the mapped function only validates
+        @type_info.tree_map_type(result_collection_constructor=lambda _, elts: None)
+        def _validate_field_dims(type_: ts.TypeSpec) -> None:
+            # non-field leaves are invalid `out` types, but only rejected later, by the
+            # check of the `out` type against the operator return type
+            if isinstance(type_, ts.FieldType) and list(type_.dims) != dict_dims:
+                raise ValueError(
+                    f"Dimensions in out field and field domain are not equivalent: "
+                    f"expected '{type_.dims}', got '{dict_dims}'."
+                )
+
+        _validate_field_dims(out)
+
         for domain_values in dom.values_:
             if len(domain_values.elts) != 2:
                 raise ValueError(
@@ -68,11 +83,18 @@ def _validate_domain_out(
                 )
 
     elif isinstance(dom, past.TupleExpr):
+        if isinstance(out, ts.VarArgType):
+            # The fixed-length domain tuple would pin the length of the variable-length
+            # output, so any call with a different length would break the program.
+            raise ValueError(
+                f"Per-element domain tuples are not supported for the variable-length tuple "
+                f"output '{out}'; use a single domain that applies to every element."
+            )
         if isinstance(out, ts.CollectionTypeSpec):
             # TODO(havogt): for NamedCollectionType, we assume the domain tuple is in element order
             out_elts = out.types
         else:
-            raise ValueError(f"Tuple domain requires tuple output, got {type(out)}.")
+            raise ValueError(f"Tuple domain requires tuple output, got '{out}'.")
 
         if len(dom.elts) != len(out_elts):
             raise ValueError("Mismatched tuple lengths between domain and output.")
@@ -142,6 +164,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
+        if isinstance(value.type, (*ts.COLLECTION_TYPE_SPECS, ts.VarArgType)):
+            # A subscript on a program argument is a domain slice; applying one to a
+            # (possibly variable-length) tuple is not supported, and element selection is
+            # not supported for any tuple argument.
+            raise errors.DSLError(
+                node.location,
+                f"Subscripting a tuple is not supported, got '{value.type}'.",
+            )
         return past.Subscript(
             value=value,
             slice_=self.visit(node.slice_, **kwargs),

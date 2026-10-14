@@ -195,6 +195,8 @@ class NamedCollectionType(DataType):
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
 
+# TODO(tehrengruber): Add VarArgType to this list, which requires checking all users of it
+#  that potentially depend on the length being known.
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType
 COLLECTION_TYPE_SPECS: Final[tuple[type[CollectionTypeSpec], ...]] = typing.get_args(

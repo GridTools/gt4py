@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import functools
+import itertools
 import types
 from collections.abc import Callable, Collection, Iterable, Iterator
 from typing import Any, Final, Literal, Sequence, Type, TypeGuard, TypeVar, overload
@@ -83,6 +84,19 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
+class VarArgElementKey:
+    """Path key of the representative element of a `VarArgType` in type traversals."""
+
+    def __repr__(self) -> str:
+        return "VAR_ARG_ELEMENT"
+
+
+#: Type traversals (`tree_map_type`, `primitive_constituents`) visit a `VarArgType` as
+#: a single representative element (its `element_type`), addressed by this sentinel
+#: instead of a position.
+VAR_ARG_ELEMENT: Final = VarArgElementKey()
+
+
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[False] = False
@@ -92,14 +106,20 @@ def primitive_constituents(
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
-) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
+) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]: ...
 
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: bool = False
-) -> utils.XIterable[ts.TypeSpec] | utils.XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
+) -> (
+    utils.XIterable[ts.TypeSpec]
+    | utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]
+):
     """
     Return the primitive types contained in a composite type.
+
+    A `VarArgType` is traversed as its single representative element, addressed by
+    `VAR_ARG_ELEMENT` in paths.
 
     >>> from gt4py.next import common
     >>> I = common.Dimension(value="I")
@@ -116,9 +136,11 @@ def primitive_constituents(
     """
 
     def constituents_yielder(
-        symbol_type: ts.TypeSpec, path: tuple[int, ...]
-    ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int, ...]]]:
-        if isinstance(symbol_type, ts.COLLECTION_TYPE_SPECS):
+        symbol_type: ts.TypeSpec, path: tuple[int | VarArgElementKey, ...]
+    ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]:
+        if isinstance(symbol_type, ts.VarArgType):
+            yield from constituents_yielder(symbol_type.element_type, (*path, VAR_ARG_ELEMENT))
+        elif isinstance(symbol_type, ts.COLLECTION_TYPE_SPECS):
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
         else:
@@ -134,10 +156,27 @@ _T = TypeVar("_T")
 _C = TypeVar("_C")
 
 
+def _tree_map_type_collection_elements(value: ts.TypeSpec) -> Iterable[ts.TypeSpec]:
+    if isinstance(value, ts.VarArgType):
+        return (value.element_type,)
+    assert isinstance(value, ts.COLLECTION_TYPE_SPECS)
+    return value.types
+
+
+def _tree_map_type_collection_keys(value: ts.TypeSpec) -> Iterable[Any]:
+    if isinstance(value, ts.VarArgType):
+        return (VAR_ARG_ELEMENT,)
+    return itertools.count()
+
+
 def tree_map_type_constructor(
-    value: ts.CollectionTypeSpecT,
+    value: ts.CollectionTypeSpecT | ts.VarArgType,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
-) -> ts.CollectionTypeSpecT:
+) -> ts.CollectionTypeSpecT | ts.VarArgType:
+    if isinstance(value, ts.VarArgType):
+        (element_type,) = elems
+        assert isinstance(element_type, ts.DataType)
+        return ts.VarArgType(element_type=element_type)
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
@@ -194,8 +233,9 @@ def tree_map_type(
         )
     return next_utils.tree_map(
         fun,
-        collection_type=ts.COLLECTION_TYPE_SPECS,
-        collection_elements=lambda t: t.types,
+        collection_type=(*ts.COLLECTION_TYPE_SPECS, ts.VarArgType),
+        collection_elements=_tree_map_type_collection_elements,
+        collection_keys=_tree_map_type_collection_keys,
         result_collection_constructor=result_collection_constructor,
         with_path_arg=with_path_arg,
         unpack=unpack,

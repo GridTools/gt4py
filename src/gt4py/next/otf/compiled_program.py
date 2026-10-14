@@ -733,6 +733,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             pool.compile(static_arg0=[0], static_arg1=[2]).compile(static_arg=[1], static_arg1=[3])
                 will compile for (0,2), (1,3)
         """
+        if self._is_generic:
+            raise ValueError(
+                f"Cannot compile '{self.definition_stage.definition.__name__}' ahead of time: "
+                "generic programs (e.g. with variable-length tuple parameters or direct scan "
+                "operator calls) require the concrete argument types of a call."
+            )
         for offset_provider in offset_providers:  # not included in product for better type checking
             for static_values in itertools.product(*static_args.values()):
                 # The argument descriptors built here must be kept in sync with the

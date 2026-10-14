@@ -12,6 +12,7 @@ from typing import Any, Optional
 from gt4py.next.ffront import (
     dialect_ast_enums,
     foast_to_gtir,
+    past_to_itir,
     program_ast as past,
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -21,7 +22,7 @@ from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduc
 from gt4py.next.ffront.stages import ConcreteFOASTOperatorDef, ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import workflow
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -99,40 +100,28 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-        arg_types, kwarg_types = inp.args.args, inp.args.kwargs
-        assert not kwarg_types
-
-        type_ = inp.data.foast_node.type
         loc = inp.data.foast_node.location
         assert isinstance(inp.data.foast_node.type, ts.CallableType)
         partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
         assert isinstance(partial_program_type, ts_ffront.ProgramType)
-        args_names = [
-            *partial_program_type.definition.pos_only_args,
-            *partial_program_type.definition.pos_or_kw_args.keys(),
-            *partial_program_type.definition.kw_only_args.keys(),
-        ]
-        assert isinstance(type_, ts.CallableType)
-        return_type = type_info.return_type(
-            type_, with_args=list(arg_types), with_kwargs=kwarg_types
+        param_types: tuple[tuple[str, ts.TypeSpec], ...] = (
+            *(
+                (f"__pos_arg{i}", type_)
+                for i, type_ in enumerate(partial_program_type.definition.pos_only_args)
+            ),
+            *partial_program_type.definition.pos_or_kw_args.items(),
+            *partial_program_type.definition.kw_only_args.items(),
         )
-        # Not equality: variadic comprehensions give a `VarArg[...]` return type,
-        # while 'out' is a concrete tuple.
-        assert type_info.is_concretizable(return_type, arg_types[-1])
-        assert args_names[-1] == "out"
+        assert param_types[-1][0] == "out"
 
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=name,
-                type=arg_type,
+                type=type_,  # note: this might be a generic type like VarArgType
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
-            for name, arg_type in zip(
-                args_names,
-                arg_types,
-                strict=True,
-            )
+            for name, type_ in param_types
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl[:-1]]
         out_ref = past.Name(id="out", location=loc)
@@ -165,6 +154,17 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
             ],
             closure_vars=closure_symbols,
             location=loc,
+        )
+        # Specialize the parameter types to the concrete argument types of the call before
+        # the type deduction: the declared types may be generic — e.g. `DeferredType` for
+        # scan operator parameters, which are only promoted to fields at the call — and the
+        # body call can not be type checked against them. The specialization happens again
+        # later, in `past_to_gtir`, which also covers hand-written programs that are not
+        # specialized here. With support for generic types in the program type deduction
+        # this step would become obsolete, as the generic variant could be type checked
+        # directly.
+        untyped_past_node = past_to_itir._specialize_program_params(
+            untyped_past_node, inp.args.args, inp.args.kwargs
         )
         untyped_past_node = closure_var_type_deduction.ClosureVarTypeDeduction.apply(
             untyped_past_node,

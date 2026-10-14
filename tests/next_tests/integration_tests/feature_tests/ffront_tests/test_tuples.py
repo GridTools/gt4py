@@ -189,8 +189,8 @@ def test_var_len_tuple_comprehension_different_lengths(cartesian_case):
         return tuple(tracer * factor for tracer in tracers)
 
     for length in (3, 2):
-        tracers = cases.allocate(cartesian_case, testee, "tracers")()[:length]
-        out = cases.allocate(cartesian_case, testee, cases.RETURN)()[:length]
+        tracers = cases.allocate(cartesian_case, testee, "tracers", varargs_length=length)()
+        out = cases.allocate(cartesian_case, testee, cases.RETURN, varargs_length=length)()
         cases.verify(
             cartesian_case,
             testee,
@@ -199,6 +199,148 @@ def test_var_len_tuple_comprehension_different_lengths(cartesian_case):
             out=out,
             ref=tuple(t.asnumpy() * 42 for t in tracers),
         )
+
+
+@pytest.mark.uses_tuple_args
+def test_var_len_tuple_program(cartesian_case):
+    @gtx.field_operator
+    def scale(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    @gtx.program
+    def testee(tracers: tuple[cases.IField, ...], factor: int32, out: tuple[cases.IField, ...]):
+        scale(tracers, factor, out=out)
+
+    for length in (3, 2):  # ensure each concrete length gets its own specialization
+        tracers = cases.allocate(cartesian_case, testee, "tracers", varargs_length=length)()
+        out = cases.allocate(cartesian_case, testee, "out", varargs_length=length)()
+        cases.run(cartesian_case, testee, tracers, 42, out)
+        assert all(np.allclose(o.asnumpy(), t.asnumpy() * 42) for o, t in zip(out, tracers))
+
+
+@pytest.mark.uses_tuple_args
+def test_var_len_tuple_program_domain(cartesian_case):
+    # A single `domain` argument applies to (is broadcast over) every element of the
+    # variable-length tuple output.
+    @gtx.field_operator
+    def scale(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    @gtx.program
+    def testee(
+        tracers: tuple[cases.IField, ...],
+        factor: int32,
+        size: int32,
+        out: tuple[cases.IField, ...],
+    ):
+        scale(tracers, factor, out=out, domain={IDim: (1, size - 1)})
+
+    size = cartesian_case.default_sizes[IDim]
+    tracers = cases.allocate(cartesian_case, testee, "tracers")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+    cases.run(cartesian_case, testee, tracers, 42, int32(size), out)
+    for o, t in zip(out, tracers):
+        assert np.allclose(o.asnumpy()[1:-1], t.asnumpy()[1:-1] * 42)
+        assert np.all(o.asnumpy()[[0, -1]] == 0)
+
+
+@pytest.mark.uses_tuple_args
+def test_var_len_tuple_program_fixed_in_vararg_out(cartesian_case):
+    @gtx.field_operator
+    def scale_pairs(
+        pairs: tuple[tuple[cases.IField, cases.IField], ...], factor: int32
+    ) -> tuple[tuple[cases.IField, cases.IField], ...]:
+        return tuple((a * factor, b * factor) for a, b in pairs)
+
+    @gtx.program
+    def testee(
+        pairs: tuple[tuple[cases.IField, cases.IField], ...],
+        factor: int32,
+        out: tuple[tuple[cases.IField, cases.IField], ...],
+    ):
+        scale_pairs(pairs, factor, out=out)
+
+    pairs = cases.allocate(cartesian_case, testee, "pairs")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+    cases.run(cartesian_case, testee, pairs, 42, out)
+    assert all(
+        np.allclose(o.asnumpy(), p.asnumpy() * 42)
+        for o_pair, p_pair in zip(out, pairs)
+        for o, p in zip(o_pair, p_pair)
+    )
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_var_len_tuple_program_vararg_in_fixed_out(cartesian_case):
+    @gtx.field_operator
+    def scale_and_copy(
+        tracers: tuple[cases.IField, ...], rho: cases.IField, factor: int32
+    ) -> tuple[tuple[cases.IField, ...], cases.IField]:
+        return tuple(tracer * factor for tracer in tracers), rho
+
+    @gtx.program
+    def testee(
+        tracers: tuple[cases.IField, ...],
+        rho: cases.IField,
+        factor: int32,
+        out: tuple[tuple[cases.IField, ...], cases.IField],
+    ):
+        scale_and_copy(tracers, rho, factor, out=out)
+
+    tracers = cases.allocate(cartesian_case, testee, "tracers")()
+    rho = cases.allocate(cartesian_case, testee, "rho")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+    cases.run(cartesian_case, testee, tracers, rho, 42, out)
+    assert all(np.allclose(o.asnumpy(), t.asnumpy() * 42) for o, t in zip(out[0], tracers))
+    assert np.allclose(out[1].asnumpy(), rho.asnumpy())
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_var_len_tuple_program_composed_out(cartesian_case):
+    # The 'out' argument is composed from several program parameters inside the program.
+    @gtx.field_operator
+    def scale_and_copy(
+        tracers: tuple[cases.IField, ...], rho: cases.IField, factor: int32
+    ) -> tuple[tuple[cases.IField, ...], cases.IField]:
+        return tuple(tracer * factor for tracer in tracers), rho
+
+    @gtx.program
+    def testee(
+        tracers: tuple[cases.IField, ...],
+        rho: cases.IField,
+        factor: int32,
+        out_tracers: tuple[cases.IField, ...],
+        out_rho: cases.IField,
+    ):
+        scale_and_copy(tracers, rho, factor, out=(out_tracers, out_rho))
+
+    tracers = cases.allocate(cartesian_case, testee, "tracers")()
+    rho = cases.allocate(cartesian_case, testee, "rho")()
+    out_tracers = cases.allocate(
+        cartesian_case, testee, "out_tracers", strategy=cases.ZeroInitializer()
+    )()
+    out_rho = cases.allocate(cartesian_case, testee, "out_rho", strategy=cases.ZeroInitializer())()
+    cases.run(cartesian_case, testee, tracers, rho, 42, out_tracers, out_rho)
+    assert all(np.allclose(o.asnumpy(), t.asnumpy() * 42) for o, t in zip(out_tracers, tracers))
+    assert np.allclose(out_rho.asnumpy(), rho.asnumpy())
+
+
+@pytest.mark.uses_tuple_args
+def test_var_len_tuple_program_compile_rejected(cartesian_case):
+    @gtx.field_operator
+    def scale(tracers: tuple[cases.IField, ...], factor: int32) -> tuple[cases.IField, ...]:
+        return tuple(tracer * factor for tracer in tracers)
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(tracers: tuple[cases.IField, ...], factor: int32, out: tuple[cases.IField, ...]):
+        scale(tracers, factor, out=out)
+
+    if cartesian_case.backend is None:
+        pytest.skip("Ahead-of-time compilation requires a backend.")
+    with pytest.raises(ValueError, match="generic programs"):
+        testee.compile(offset_provider={})
 
 
 @pytest.mark.uses_tuple_args
@@ -218,9 +360,9 @@ def test_var_len_tuple_length_mismatch_rejected(cartesian_case):
     ) -> tuple[cases.IField, ...]:
         return a if c else b
 
-    a = cases.allocate(cartesian_case, testee, "a")()[:2]
-    b = cases.allocate(cartesian_case, testee, "b")()  # allocated length: 3
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()[:2]
+    a = cases.allocate(cartesian_case, testee, "a", varargs_length=2)()
+    b = cases.allocate(cartesian_case, testee, "b", varargs_length=3)()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, varargs_length=2)()
 
     with pytest.raises(errors.DSLError):
         cases.run(cartesian_case, testee, a, b, False, out=out)
