@@ -307,17 +307,35 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if not same_data_nodes:
                 return False
 
-            # Relaxation: if `a1` has a single producer `P` and `a2` has no other
-            #  producer, then a same-data read `n` upstream of `a2` reaches it
-            #  only through `a1 -> a2`.  When that path is a single
-            #  *connector-aware* one, `n` is ordered before `P` both before and
-            #  after the merge, so the moved write can not overtake it.  The
-            #  connector-aware count is needed because a plain search fans out
-            #  across a scope's connectors (a tasklet reading two inputs gives
-            #  its entry two `OUT_*`) and would report multiple paths for a
-            #  single data-flow branch.  The single-producer guards are needed
-            #  because an extra producer `X != a1` could give `n` a single path
-            #  through `X` that is not ordered before `P`.
+            # Relaxation: a same-data read `n` upstream of the survivor is safe
+            #  when, after merging, the moved write can not overtake it.  Two
+            #  cases are recognised:
+            #
+            #  1. Single path (the original relaxation): `a1` has a single
+            #     producer `P` and `a2` has no other producer, so `n` reaches
+            #     the survivor only through `a1 -> a2`.  When that path is a
+            #     single *connector-aware* one, `n` is ordered before `P` both
+            #     before and after the merge, so the moved write can not overtake
+            #     it.  The connector-aware count is needed because a plain search
+            #     fans out across a scope's connectors (a tasklet reading two
+            #     inputs gives its entry two `OUT_*`) and would report multiple
+            #     paths for a single data-flow branch.  The single-producer
+            #     guards are needed because an extra producer `X != a1` could
+            #     give `n` a single path through `X` that is not ordered before
+            #     `P`.
+            #
+            #  2. Multiple paths with disjoint subsets: `a1` has several
+            #     producers, each writing a disjoint subset of `a1` (which, after
+            #     merging, becomes a disjoint subset of the survivor).  A
+            #     same-data read `n` reaches the survivor through exactly one of
+            #     those producers per outgoing branch.  The moved write of a
+            #     *different* producer can only overtake `n` on the subset that
+            #     producer writes; if the read subset of every branch is disjoint
+            #     from every other branch's moved write, no read can observe a
+            #     new value and the merge is safe.  This is the common
+            #     field-operator pattern where an output field is updated in
+            #     place through several `concat_where`/`where` branches that
+            #     each touch a disjoint part of the field.
             producers_of_a1 = [iedge.src for iedge in graph.in_edges(self.node_a1)]
             producers_of_a2 = [iedge.src for iedge in graph.in_edges(surviving_node)]
             if len(producers_of_a1) == 1 and len(producers_of_a2) == 1:
@@ -329,7 +347,117 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                     return False
 
                 return True
-            return True
+
+            if len(producers_of_a2) != 1 or producers_of_a2[0] is not self.node_a1:
+                # The survivor is written by something other than the copy we
+                #  are about to remove; the ordering assumptions below do not
+                #  hold.
+                return True
+
+            # Map each producer's write subset of `a1` through the copy to the
+            #  surviving global's coordinate space.  `copy_dst.compose(W_i)`
+            #  applies `W_i` (a sub-range of the copy's source extent) to the
+            #  destination, yielding the slice of the survivor that the moved
+            #  write would touch.
+            copy_edge = next(
+                e for e in graph.out_edges(self.node_a1) if e.dst is surviving_node
+            )
+            copy_dst = dace_sbs.Range(
+                copy_edge.data.get_dst_subset(copy_edge, graph)
+            )
+            moved_write_subsets: list[dace_sbs.Range] = []
+            for iedge in graph.in_edges(self.node_a1):
+                w_i = dace_sbs.Range(iedge.data.subset)
+                try:
+                    moved_write_subsets.append(copy_dst.compose(w_i))
+                except (ValueError, TypeError):
+                    # If the subset mapping cannot be computed, fall back to the
+                    #  conservative answer.
+                    return True
+
+            for node in same_data_nodes:
+                num_paths = gtx_transformations.utils.count_paths(
+                    node, surviving_node, graph, limit=2
+                )
+                if num_paths == 0:
+                    # The read is in a branch that never reaches the survivor
+                    #  through the copy chain: the moved write (in the
+                    #  producer's branch) is not ordered after it.
+                    return True
+                if num_paths == 1:
+                    # Single connector-aware path through `a1`: the read is
+                    #  ordered before the moved write.
+                    continue
+                # Multiple paths: each outgoing branch of `n` reaches a
+                #  different producer.  For every branch `e_i` and every
+                #  producer `P_j` that is *not* on `e_i`'s branch, the moved
+                #  write `W_j'` must be disjoint from the subset `R_i` that
+                #  `e_i` reads of the surviving global.  Otherwise the write
+                #  moved into `P_j`'s branch could overtake the read in `e_i`'s
+                #  branch.  To avoid a MapEntry fanning out across all
+                #  connectors, the "same branch" check starts from the first
+                #  node downstream of `e_i.dst` through the connector `e_i`
+                #  arrives at, and from the first node upstream of `P_j`
+                #  through the connector that feeds it.
+                producer_edges = list(graph.in_edges(self.node_a1))
+                for e_i in graph.out_edges(node):
+                    r_i = dace_sbs.Range(e_i.data.subset)
+                    # The read `e_i` arrives at `e_i.dst` through
+                    #  `e_i.dst_conn`; follow the paired `OUT_*` connector.
+                    paired_out = (
+                        "OUT_" + e_i.dst_conn[3:]
+                        if e_i.dst_conn is not None
+                        and e_i.dst_conn.startswith("IN_")
+                        else None
+                    )
+                    read_first = [
+                        oe.dst
+                        for oe in (
+                            graph.out_edges(e_i.dst)
+                            if paired_out is None
+                            else graph.out_edges_by_connector(e_i.dst, paired_out)
+                        )
+                    ]
+                    for j, p_edge in enumerate(producer_edges):
+                        p_j = p_edge.src
+                        # The producer `P_j` feeds `a1` through
+                        #  `p_edge.src_conn`; follow the paired `IN_*`
+                        #  connector to find the producer tasklet.
+                        paired_in = (
+                            "IN_" + p_edge.src_conn[4:]
+                            if p_edge.src_conn is not None
+                            and p_edge.src_conn.startswith("OUT_")
+                            else None
+                        )
+                        prod_first = [
+                            ie.src
+                            for ie in (
+                                graph.in_edges(p_j)
+                                if paired_in is None
+                                else graph.in_edges_by_connector(p_j, paired_in)
+                            )
+                        ]
+                        same_branch = (
+                            e_i.dst is p_j
+                            or any(
+                                (rf is pf or gtx_transformations.utils.count_paths(
+                                    rf, pf, graph, limit=1
+                                )
+                                 > 0)
+                                for rf in read_first
+                                for pf in prod_first
+                            )
+                        )
+                        if same_branch:
+                            # `P_j` is on the same branch as `e_i`: the read
+                            #  is ordered before this producer's moved write.
+                            continue
+                        try:
+                            if r_i.intersects(moved_write_subsets[j]):
+                                return True
+                        except (ValueError, TypeError):
+                            return True
+            return False
         else:
             assert copy_chain_mode == CopyChainRemoverMode.PUSH
             # A global AccessNode serializes its incoming writes before its outgoing
@@ -352,11 +480,28 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
             if not same_data_nodes:
                 return False
 
-            # Mirror of the PULL relaxation: if `a2` has a single consumer `P`
-            #  and `a1` has no other consumer, then a same-data write `n`
-            #  downstream of `a1` reaches it only through `a1 -> a2`.  When that
-            #  path is a single *connector-aware* one, `n` stays ordered after
-            #  `P` and the moved read keeps observing the frozen value.
+            # Mirror of the PULL relaxation: a same-data write `n` downstream
+            #  of the survivor is safe when, after merging, the moved read can
+            #  not overtake it.  Two cases are recognised, mirroring PULL:
+            #
+            #  1. Single path (the original relaxation): `a2` has a single
+            #     consumer `P` and `a1` has no other consumer, so `n` reaches
+            #     `a1` only through `a1 -> a2`.  When that path is a single
+            #     *connector-aware* one, `n` stays ordered after `P` and the
+            #     moved read keeps observing the frozen value.
+            #
+            #  2. Multiple paths with disjoint subsets: `a2` has several
+            #     consumers, each reading a disjoint subset of `a2` (which,
+            #     after merging, becomes a disjoint subset of the survivor).
+            #     A same-data write `n` downstream of the survivor is reached
+            #     by exactly one of those consumers per incoming branch.  The
+            #     moved read of a *different* consumer can only observe a new
+            #     value on the subset that consumer reads; if the write subset
+            #     of every branch is disjoint from every other branch's moved
+            #     read, the merge is safe.  This is the common field-operator
+            #     pattern where an input field is also written in place through
+            #     several `concat_where`/`where` branches that each touch a
+            #     disjoint part of the field.
             consumers_of_a2 = [oedge.dst for oedge in graph.out_edges(self.node_a2)]
             consumers_of_a1 = [oedge.dst for oedge in graph.out_edges(surviving_node)]
             if len(consumers_of_a2) == 1 and len(consumers_of_a1) == 1:
@@ -367,7 +512,134 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 ):
                     return False
                 return True
-            return True
+
+            # The survivor is a global that is also read by the same-data write
+            #  nodes downstream (those reads are what the moved reads would
+            #  overtake).  The only consumers of the survivor that are NOT
+            #  same-data nodes must be (i) `a2` (the copy we are about to
+            #  remove) and (ii) scope nodes (e.g. MapEntries) that only reach
+            #  same-data writes — the reads through those scope nodes are what
+            #  the write-back consumes, and they are ordered after the moved
+            #  read through the copy chain.  Any other consumer could give a
+            #  write a single path through it that is not ordered after the
+            #  moved read.
+            same_data_set = set(same_data_nodes)
+            unsafe_consumers = []
+            for c in consumers_of_a1:
+                if c is self.node_a2 or c in same_data_set:
+                    continue
+                c_downstream = gtx_transformations.utils.find_downstream_nodes(c, graph)
+                c_same_data = {
+                    n
+                    for n in c_downstream
+                    if isinstance(n, dace_nodes.AccessNode) and n.data == surviving_node.data
+                }
+                if c_same_data.issubset(same_data_set):
+                    continue
+                unsafe_consumers.append(c)
+            if len(unsafe_consumers) != 0 or not any(c is self.node_a2 for c in consumers_of_a1):
+                return True
+
+            # Map each consumer's read subset of `a2` through the copy to the
+            #  surviving global's coordinate space.  `copy_src.compose(R_j)`
+            #  applies `R_j` (a sub-range of the copy's destination extent,
+            #  which starts at 0 because the whole transient `a2` is copied)
+            #  to the source, yielding the slice of the survivor that the
+            #  moved read would access.
+            copy_edge = next(
+                e for e in graph.in_edges(self.node_a2) if e.src is surviving_node
+            )
+            copy_src = dace_sbs.Range(
+                copy_edge.data.get_src_subset(copy_edge, graph)
+            )
+            # Track each consumer edge so we can start connector-aware path
+            #  searches from the specific branch the transient feeds into.
+            consumer_edges = list(graph.out_edges(self.node_a2))
+            moved_read_subsets: list[dace_sbs.Range] = []
+            for c_edge in consumer_edges:
+                r_j = dace_sbs.Range(c_edge.data.subset)
+                try:
+                    moved_read_subsets.append(copy_src.compose(r_j))
+                except (ValueError, TypeError):
+                    # If the subset mapping cannot be computed, fall back to
+                    #  the conservative answer.
+                    return True
+
+            for node in same_data_nodes:
+                # For each incoming branch `e_i` (write `W_i` of the surviving
+                #  global by node `n`) and every consumer `C_j` of `a2` that is
+                #  *not* on `e_i`'s branch, the moved read `R_j'` must be
+                #  disjoint from `W_i`.  Otherwise the read moved into `C_j`'s
+                #  branch could overtake the write in `e_i`'s branch.  When
+                #  `C_j` IS on `e_i`'s branch the moved read is ordered before
+                #  the write (read of `b` before write of `a` in the same
+                #  tasklet), so that pair is always safe.
+                for e_i in graph.in_edges(node):
+                    w_i = dace_sbs.Range(e_i.data.subset)
+                    for j, c_edge in enumerate(consumer_edges):
+                        c_j = c_edge.dst
+                        # To check whether `C_j` is on the same branch as the
+                        #  write `e_i`, start a connector-aware search from
+                        #  the first node downstream of `C_j` through the
+                        #  connector the transient feeds into (so a MapEntry
+                        #  with multiple branches does not fan out across
+                        #  all of them).  The write `e_i` comes from
+                        #  `e_i.src` through `e_i.src_conn`; to avoid matching
+                        #  through a *different* connector of the same scope
+                        #  node, we check reachability to the actual write
+                        #  tasklet — the source of the edge that feeds
+                        #  `e_i.src` through `e_i.src_conn` — not to
+                        #  `e_i.src` itself.
+                        paired_conn = (
+                            "OUT_" + c_edge.dst_conn[3:]
+                            if c_edge.dst_conn is not None
+                            and c_edge.dst_conn.startswith("IN_")
+                            else None
+                        )
+                        c_first = [
+                            oe.dst
+                            for oe in (
+                                graph.out_edges(c_j)
+                                if paired_conn is None
+                                else graph.out_edges_by_connector(c_j, paired_conn)
+                            )
+                        ]
+                        # The write tasklet: the source of the edge into
+                        #  `e_i.src` through the connector paired with
+                        #  `e_i.src_conn` (e.g. `e_i.src_conn=OUT_aw` pairs
+                        #  with `IN_aw`).
+                        paired_in = (
+                            "IN_" + e_i.src_conn[4:]
+                            if e_i.src_conn is not None
+                            and e_i.src_conn.startswith("OUT_")
+                            else e_i.src_conn
+                        )
+                        write_tasklets = [
+                            ie.src
+                            for ie in graph.in_edges(e_i.src)
+                            if ie.dst_conn == paired_in
+                        ]
+                        same_branch = (
+                            e_i.src is c_j
+                            or any(
+                                (f is wt or gtx_transformations.utils.count_paths(
+                                    f, wt, graph, limit=1
+                                )
+                                 > 0)
+                                for f in c_first
+                                for wt in write_tasklets
+                            )
+                        )
+                        if same_branch:
+                            # `C_j` is on the same branch as `e_i`: the write
+                            #  is ordered after this consumer's moved read.
+                            continue
+                        try:
+                            if w_i.intersects(moved_read_subsets[j]):
+                                return True
+                        except (ValueError, TypeError):
+                            return True
+            return False
 
     def is_single_use_data(
         self,

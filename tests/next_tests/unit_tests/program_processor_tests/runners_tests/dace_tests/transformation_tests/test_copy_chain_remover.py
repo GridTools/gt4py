@@ -1084,3 +1084,226 @@ def test_copy_chain_destination_read_single_path_apply():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+
+def _make_pull_chain_multiple_producers_disjoint_subsets(
+    read_split: int, write_split: int
+) -> dace.SDFG:
+    """Builds a PULL-mode SDFG with two producers of the transient ``b``
+    and a global ``c`` that is read upstream in two branches.
+
+    The SDFG implements the following code (``b`` is a transient array):
+    ```python
+    # Producer 0: reads c[0:write_split], writes b[0:write_split]
+    for i in range(write_split):
+        b[i] = c[i] * 2.0
+    # Producer 1: reads c[read_split:read_split+(N-write_split)],
+    #             writes b[write_split:N]
+    for i in range(N - write_split):
+        b[i + write_split] = c[i + read_split] * 2.0
+    c[:] = b[:]                     # Copy chain (b) -> (c): surviving global c.
+    ```
+
+    ``write_split`` controls where ``b`` is written (and thus where the moved
+    writes land on ``c``); ``read_split`` controls where the second producer
+    reads ``c``.  When ``read_split == write_split`` the read of one branch is
+    disjoint from the moved write of the other, so the transformation is safe.
+    When they differ the read of one branch overlaps the moved write of the
+    other, creating a hazard.
+    """
+    N = 10
+    assert 0 < read_split <= N and 0 < write_split <= N
+    sdfg = dace.SDFG(util.unique_name("pull_chain_multi_producer"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("c", shape=(N,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(N,), dtype=dace.float64, transient=True)
+
+    c_read, c_write = state.add_access("c"), state.add_access("c")
+    b = state.add_access("b")
+
+    # First producer: reads c[0:write_split], writes b[0:write_split]
+    me0, mx0 = state.add_map("prod0", ndrange={"__i": "0:" + str(write_split)})
+    tlet0 = state.add_tasklet(
+        "produce0", inputs={"__in_c"}, outputs={"__out"},
+        code="__out = __in_c * 2.0",
+    )
+    state.add_edge(c_read, None, me0, "IN_c", dace.Memlet("c[0:" + str(write_split) + "]"))
+    state.add_edge(me0, "OUT_c", tlet0, "__in_c", dace.Memlet("c[__i]"))
+    me0.add_scope_connectors("c")
+    state.add_edge(tlet0, "__out", mx0, "IN_b", dace.Memlet("b[__i]"))
+    state.add_edge(mx0, "OUT_b", b, None, dace.Memlet("b[0:" + str(write_split) + "]"))
+    mx0.add_scope_connectors("b")
+
+    # Second producer: reads c[read_split:read_split+(N-write_split)],
+    #                  writes b[write_split:N]
+    rest = N - write_split
+    me1, mx1 = state.add_map("prod1", ndrange={"__i": "0:" + str(rest)})
+    tlet1 = state.add_tasklet(
+        "produce1", inputs={"__in_c"}, outputs={"__out"},
+        code="__out = __in_c * 2.0",
+    )
+    state.add_edge(c_read, None, me1, "IN_c",
+                   dace.Memlet("c[" + str(read_split) + ":" + str(read_split + rest) + "]"))
+    state.add_edge(me1, "OUT_c", tlet1, "__in_c", dace.Memlet("c[__i + " + str(read_split) + "]"))
+    me1.add_scope_connectors("c")
+    state.add_edge(tlet1, "__out", mx1, "IN_b", dace.Memlet("b[__i + " + str(write_split) + "]"))
+    state.add_edge(mx1, "OUT_b", b, None, dace.Memlet("b[" + str(write_split) + ":" + str(N) + "]"))
+    mx1.add_scope_connectors("b")
+
+    # Copy chain: b (full) -> c (full).
+    state.add_nedge(b, c_write, dace.Memlet("b[0:" + str(N) + "] -> [0:" + str(N) + "]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+def _make_push_chain_multiple_consumers_disjoint_subsets(
+    read_split: int, write_split: int
+) -> dace.SDFG:
+    """Builds a PUSH-mode SDFG with two consumers of the transient ``b``,
+    each in a separate map that also writes back to the surviving global ``a``
+    in the *same* branch (read of ``b`` before write of ``a``).
+
+    The SDFG implements the following code (``b`` is a transient array):
+    ```python
+    b[:] = a[:]                     # Copy chain (a) -> (b): surviving global a.
+    # Consumer 0: reads frozen b[0:read_split], writes a[0:write_split]
+    for i in range(write_split):
+        a[i] = b[i] * 2.0 + 1.0     # read b before write a, same tasklet
+    # Consumer 1: reads frozen b[read_split:...], writes a[write_split:N]
+    for i in range(N - write_split):
+        a[i + write_split] = b[i + read_split] * 2.0 + 1.0
+    ```
+
+    ``read_split`` controls where ``b`` is read (and thus where the moved
+    reads land on ``a``); ``write_split`` controls where ``a`` is written back.
+    When ``read_split == write_split`` the write of one branch is disjoint from
+    the moved read of the other, so the transformation is safe.  When they
+    differ the write of one branch overlaps the moved read of the other,
+    creating a hazard.
+    """
+    N = 10
+    assert 0 < read_split <= N and 0 < write_split <= N
+    sdfg = dace.SDFG(util.unique_name("push_chain_multi_consumer"))
+    state = sdfg.add_state(is_start_block=True)
+
+    sdfg.add_array("a", shape=(N,), dtype=dace.float64, transient=False)
+    sdfg.add_array("b", shape=(N,), dtype=dace.float64, transient=True)
+
+    a_read, a_write = state.add_access("a"), state.add_access("a")
+    b = state.add_access("b")
+
+    # Copy the global a (full [0:N]) into the transient b (PUSH chain).
+    state.add_nedge(a_read, b, dace.Memlet("a[0:" + str(N) + "] -> [0:" + str(N) + "]"))
+
+    # First map: reads frozen b[0:read_split], writes a[0:write_split].
+    #  The read of b and the write of a are in the SAME tasklet, so after
+    #  removal (b -> a), the read of a is ordered before the write of a.
+    me0, mx0 = state.add_map("half0", ndrange={"__i": "0:" + str(write_split)})
+    tlet0 = state.add_tasklet(
+        "consume0",
+        inputs={"__in_b"},
+        outputs={"__out_a"},
+        code="__out_a = __in_b * 2.0 + 1.0",
+    )
+    state.add_edge(b, None, me0, "IN_b", dace.Memlet("b[0:" + str(read_split) + "]"))
+    state.add_edge(me0, "OUT_b", tlet0, "__in_b", dace.Memlet("b[__i]"))
+    me0.add_scope_connectors("b")
+    state.add_edge(tlet0, "__out_a", mx0, "IN_aw", dace.Memlet("a[__i]"))
+    mx0.add_scope_connectors("aw")
+    state.add_edge(mx0, "OUT_aw", a_write, None, dace.Memlet("a[0:" + str(write_split) + "]"))
+
+    # Second map: reads frozen b[read_split:read_split+(N-write_split)],
+    #              writes a[write_split:N].
+    rest_w = N - write_split
+    me1, mx1 = state.add_map("half1", ndrange={"__i": "0:" + str(rest_w)})
+    tlet1 = state.add_tasklet(
+        "consume1",
+        inputs={"__in_b"},
+        outputs={"__out_a"},
+        code="__out_a = __in_b * 2.0 + 1.0",
+    )
+    state.add_edge(b, None, me1, "IN_b",
+                   dace.Memlet("b[" + str(read_split) + ":" + str(read_split + rest_w) + "]"))
+    state.add_edge(me1, "OUT_b", tlet1, "__in_b", dace.Memlet("b[__i + " + str(read_split) + "]"))
+    me1.add_scope_connectors("b")
+    state.add_edge(tlet1, "__out_a", mx1, "IN_aw", dace.Memlet("a[__i + " + str(write_split) + "]"))
+    mx1.add_scope_connectors("aw")
+    state.add_edge(mx1, "OUT_aw", a_write, None, dace.Memlet("a[" + str(write_split) + ":" + str(N) + "]"))
+
+    sdfg.validate()
+    return sdfg
+
+
+@pytest.mark.parametrize("read_split, write_split, should_apply", [
+    (5, 5, True),    # disjoint: R_1=[5:10] vs W_0'=[0:5] — safe
+    (3, 5, False),   # overlapping: R_1=[3:8] vs W_0'=[0:5] overlap at [3:5]
+])
+def test_pull_chain_multiple_producers_disjoint_subsets(
+    read_split: int, write_split: int, should_apply: bool
+):
+    """PULL mode with multiple producers of the transient.
+
+    When ``read_split == write_split`` the read of one branch is disjoint from
+    the moved write of the other, so the transformation applies.  When they
+    differ the moved write of one branch overlaps the read of the other,
+    creating a write-after-read hazard, and the transformation must not apply.
+    """
+    sdfg = _make_pull_chain_multiple_producers_disjoint_subsets(read_split, write_split)
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    if should_apply:
+        assert nb_applies == 1
+        acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+            sdfg, dace_nodes.AccessNode, return_nodes=True
+        )
+        assert not any(ac.data == "b" for ac in acnodes)
+        assert "b" not in sdfg.arrays
+    else:
+        assert nb_applies is None
+        assert "b" in sdfg.arrays
+
+    if should_apply:
+        util.compile_and_run_sdfg(sdfg, **res)
+        assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+@pytest.mark.parametrize("read_split, write_split, should_apply", [
+    (5, 5, True),    # disjoint: W_0=[0:5] vs R_1'=[5:10] — safe
+    (3, 5, False),   # overlapping: W_0=[0:5] vs R_1'=[3:8] overlap at [3:5]
+])
+def test_push_chain_multiple_consumers_disjoint_subsets(
+    read_split: int, write_split: int, should_apply: bool
+):
+    """PUSH mode with multiple consumers of the transient.
+
+    When ``read_split == write_split`` the write of one branch is disjoint from
+    the moved read of the other, so the transformation applies.  When they
+    differ the moved read of one branch overlaps the write of the other,
+    creating a read-after-write hazard, and the transformation must not apply.
+    """
+    sdfg = _make_push_chain_multiple_consumers_disjoint_subsets(read_split, write_split)
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    nb_applies = gtx_transformations.gt_remove_copy_chain(sdfg, validate_all=True)
+    if should_apply:
+        assert nb_applies == 1
+        acnodes: list[dace_nodes.AccessNode] = util.count_nodes(
+            sdfg, dace_nodes.AccessNode, return_nodes=True
+        )
+        assert not any(ac.data == "b" for ac in acnodes)
+        assert "b" not in sdfg.arrays
+    else:
+        assert nb_applies is None
+        assert "b" in sdfg.arrays
+
+    if should_apply:
+        util.compile_and_run_sdfg(sdfg, **res)
+        assert util.compare_sdfg_res(ref=ref, res=res)
