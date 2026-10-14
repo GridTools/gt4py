@@ -189,8 +189,8 @@ def test_var_len_tuple_comprehension_different_lengths(cartesian_case):
         return tuple(tracer * factor for tracer in tracers)
 
     for length in (3, 2):
-        tracers = cases.allocate(cartesian_case, testee, "tracers", varargs_length=length)()
-        out = cases.allocate(cartesian_case, testee, cases.RETURN, varargs_length=length)()
+        tracers = cases.allocate(cartesian_case, testee, "tracers", tuple_length=length)()
+        out = cases.allocate(cartesian_case, testee, cases.RETURN, tuple_length=length)()
         cases.verify(
             cartesian_case,
             testee,
@@ -212,8 +212,8 @@ def test_var_len_tuple_program(cartesian_case):
         scale(tracers, factor, out=out)
 
     for length in (3, 2):  # ensure each concrete length gets its own specialization
-        tracers = cases.allocate(cartesian_case, testee, "tracers", varargs_length=length)()
-        out = cases.allocate(cartesian_case, testee, "out", varargs_length=length)()
+        tracers = cases.allocate(cartesian_case, testee, "tracers", tuple_length=length)()
+        out = cases.allocate(cartesian_case, testee, "out", tuple_length=length)()
         cases.run(cartesian_case, testee, tracers, 42, out)
         assert all(np.allclose(o.asnumpy(), t.asnumpy() * 42) for o, t in zip(out, tracers))
 
@@ -360,9 +360,9 @@ def test_var_len_tuple_length_mismatch_rejected(cartesian_case):
     ) -> tuple[cases.IField, ...]:
         return a if c else b
 
-    a = cases.allocate(cartesian_case, testee, "a", varargs_length=2)()
-    b = cases.allocate(cartesian_case, testee, "b", varargs_length=3)()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN, varargs_length=2)()
+    a = cases.allocate(cartesian_case, testee, "a", tuple_length=2)()
+    b = cases.allocate(cartesian_case, testee, "b", tuple_length=3)()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN, tuple_length=2)()
 
     with pytest.raises(errors.DSLError):
         cases.run(cartesian_case, testee, a, b, False, out=out)

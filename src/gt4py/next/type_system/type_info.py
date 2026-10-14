@@ -84,17 +84,17 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
-class VarArgElementKey:
-    """Path key of the representative element of a `VarArgType` in type traversals."""
+class VarLenTupleElementKey:
+    """Path key of the representative element of a `VarLenTupleType` in type traversals."""
 
     def __repr__(self) -> str:
-        return "VAR_ARG_ELEMENT"
+        return "VAR_LENGTH_TUPLE_ELEMENT"
 
 
-#: Type traversals (`tree_map_type`, `primitive_constituents`) visit a `VarArgType` as
+#: Type traversals (`tree_map_type`, `primitive_constituents`) visit a `VarLenTupleType` as
 #: a single representative element (its `element_type`), addressed by this sentinel
 #: instead of a position.
-VAR_ARG_ELEMENT: Final = VarArgElementKey()
+VAR_LENGTH_TUPLE_ELEMENT: Final = VarLenTupleElementKey()
 
 
 @overload
@@ -106,20 +106,20 @@ def primitive_constituents(
 @overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: Literal[True]
-) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]: ...
+) -> utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarLenTupleElementKey, ...]]]: ...
 
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec, with_path_arg: bool = False
 ) -> (
     utils.XIterable[ts.TypeSpec]
-    | utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]
+    | utils.XIterable[tuple[ts.TypeSpec, tuple[int | VarLenTupleElementKey, ...]]]
 ):
     """
     Return the primitive types contained in a composite type.
 
-    A `VarArgType` is traversed as its single representative element, addressed by
-    `VAR_ARG_ELEMENT` in paths.
+    A `VarLenTupleType` is traversed as its single representative element, addressed by
+    `VAR_LENGTH_TUPLE_ELEMENT` in paths.
 
     >>> from gt4py.next import common
     >>> I = common.Dimension(value="I")
@@ -136,10 +136,15 @@ def primitive_constituents(
     """
 
     def constituents_yielder(
-        symbol_type: ts.TypeSpec, path: tuple[int | VarArgElementKey, ...]
-    ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int | VarArgElementKey, ...]]]:
-        if isinstance(symbol_type, ts.VarArgType):
-            yield from constituents_yielder(symbol_type.element_type, (*path, VAR_ARG_ELEMENT))
+        symbol_type: ts.TypeSpec, path: tuple[int | VarLenTupleElementKey, ...]
+    ) -> (
+        Iterator[ts.TypeSpec]
+        | Iterator[tuple[ts.TypeSpec, tuple[int | VarLenTupleElementKey, ...]]]
+    ):
+        if isinstance(symbol_type, ts.VarLenTupleType):
+            yield from constituents_yielder(
+                symbol_type.element_type, (*path, VAR_LENGTH_TUPLE_ELEMENT)
+            )
         elif isinstance(symbol_type, ts.COLLECTION_TYPE_SPECS):
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
@@ -157,26 +162,26 @@ _C = TypeVar("_C")
 
 
 def _tree_map_type_collection_elements(value: ts.TypeSpec) -> Iterable[ts.TypeSpec]:
-    if isinstance(value, ts.VarArgType):
+    if isinstance(value, ts.VarLenTupleType):
         return (value.element_type,)
     assert isinstance(value, ts.COLLECTION_TYPE_SPECS)
     return value.types
 
 
 def _tree_map_type_collection_keys(value: ts.TypeSpec) -> Iterable[Any]:
-    if isinstance(value, ts.VarArgType):
-        return (VAR_ARG_ELEMENT,)
+    if isinstance(value, ts.VarLenTupleType):
+        return (VAR_LENGTH_TUPLE_ELEMENT,)
     return itertools.count()
 
 
 def tree_map_type_constructor(
-    value: ts.CollectionTypeSpecT | ts.VarArgType,
+    value: ts.CollectionTypeSpecT | ts.VarLenTupleType,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
-) -> ts.CollectionTypeSpecT | ts.VarArgType:
-    if isinstance(value, ts.VarArgType):
+) -> ts.CollectionTypeSpecT | ts.VarLenTupleType:
+    if isinstance(value, ts.VarLenTupleType):
         (element_type,) = elems
         assert isinstance(element_type, ts.DataType)
-        return ts.VarArgType(element_type=element_type)
+        return ts.VarLenTupleType(element_type=element_type)
     return (
         ts.NamedCollectionType(
             keys=value.keys, original_python_type=value.original_python_type, types=list(elems)
@@ -233,7 +238,7 @@ def tree_map_type(
         )
     return next_utils.tree_map(
         fun,
-        collection_type=(*ts.COLLECTION_TYPE_SPECS, ts.VarArgType),
+        collection_type=(*ts.COLLECTION_TYPE_SPECS, ts.VarLenTupleType),
         collection_elements=_tree_map_type_collection_elements,
         collection_keys=_tree_map_type_collection_keys,
         result_collection_constructor=result_collection_constructor,
@@ -614,9 +619,9 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
         or issubclass(type_class(to_type), symbol_type.constraint)
     ):
         return True
-    if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.VarArgType):
+    if isinstance(symbol_type, ts.VarLenTupleType) and isinstance(to_type, ts.VarLenTupleType):
         return is_concretizable(symbol_type.element_type, to_type.element_type)
-    if isinstance(symbol_type, ts.VarArgType) and isinstance(to_type, ts.TupleType):
+    if isinstance(symbol_type, ts.VarLenTupleType) and isinstance(to_type, ts.TupleType):
         # The empty tuple is a valid concretization of any variable-length tuple: there
         # are no elements whose type could conflict with the element type.
         return len(to_type.types) == 0 or (

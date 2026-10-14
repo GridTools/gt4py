@@ -467,7 +467,7 @@ def test_needs_value_extraction(type_spec: ts.TypeSpec, expected: bool):
 def test_is_concretizable_vararg_to_tuple():
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-    vararg = ts.VarArgType(element_type=float_type)
+    vararg = ts.VarLenTupleType(element_type=float_type)
 
     assert type_info.is_concretizable(vararg, ts.TupleType(types=[float_type, float_type]))
     assert not type_info.is_concretizable(vararg, ts.TupleType(types=[int_type]))
@@ -496,7 +496,7 @@ def test_promote_lists():
 def test_is_concretizable_tuple_with_nested_vararg():
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     field_type = ts.FieldType(dims=[], dtype=float_type)
-    nested = ts.TupleType(types=[ts.VarArgType(element_type=field_type), field_type])
+    nested = ts.TupleType(types=[ts.VarLenTupleType(element_type=field_type), field_type])
 
     assert type_info.is_concretizable(
         nested, ts.TupleType(types=[ts.TupleType(types=[field_type, field_type]), field_type])

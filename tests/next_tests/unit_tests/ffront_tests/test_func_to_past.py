@@ -153,7 +153,7 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
 
 
 @pytest.fixture
-def vararg_scale_op():
+def var_len_tuple_scale_op():
     @gtx.field_operator
     def scale(
         tracers: tuple[gtx.Field[[IDim], float64], ...], factor: float64
@@ -163,10 +163,10 @@ def vararg_scale_op():
     return scale
 
 
-def test_vararg_subscript_out_exception(vararg_scale_op):
-    scale = vararg_scale_op
+def test_var_len_tuple_subscript_out_exception(var_len_tuple_scale_op):
+    scale = var_len_tuple_scale_op
 
-    def vararg_slice_program(
+    def var_len_tuple_slice_program(
         tracers: tuple[gtx.Field[[IDim], float64], ...],
         factor: float64,
         out: tuple[gtx.Field[[IDim], float64], ...],
@@ -174,13 +174,13 @@ def test_vararg_subscript_out_exception(vararg_scale_op):
         scale(tracers, factor, out=out[0:2])
 
     with pytest.raises(errors.DSLError, match="Subscripting a tuple"):
-        ProgramParser.apply_to_function(vararg_slice_program)
+        ProgramParser.apply_to_function(var_len_tuple_slice_program)
 
 
-def test_vararg_subscript_arg_exception(vararg_scale_op):
-    scale = vararg_scale_op
+def test_var_len_tuple_subscript_arg_exception(var_len_tuple_scale_op):
+    scale = var_len_tuple_scale_op
 
-    def vararg_slice_program(
+    def var_len_tuple_slice_program(
         tracers: tuple[gtx.Field[[IDim], float64], ...],
         factor: float64,
         out: tuple[gtx.Field[[IDim], float64], ...],
@@ -188,7 +188,7 @@ def test_vararg_subscript_arg_exception(vararg_scale_op):
         scale(tracers[0:2], factor, out=out)
 
     with pytest.raises(errors.DSLError, match="Subscripting a tuple"):
-        ProgramParser.apply_to_function(vararg_slice_program)
+        ProgramParser.apply_to_function(var_len_tuple_slice_program)
 
 
 def test_tuple_subscript_out_exception():
@@ -208,10 +208,10 @@ def test_tuple_subscript_out_exception():
         ProgramParser.apply_to_function(tuple_slice_program)
 
 
-def test_vararg_per_element_domain_exception(vararg_scale_op):
-    scale = vararg_scale_op
+def test_var_len_tuple_per_element_domain_exception(var_len_tuple_scale_op):
+    scale = var_len_tuple_scale_op
 
-    def vararg_domain_program(
+    def var_len_tuple_domain_program(
         tracers: tuple[gtx.Field[[IDim], float64], ...],
         factor: float64,
         out: tuple[gtx.Field[[IDim], float64], ...],
@@ -219,7 +219,7 @@ def test_vararg_per_element_domain_exception(vararg_scale_op):
         scale(tracers, factor, out=out, domain=({IDim: (0, 2)}, {IDim: (0, 2)}))
 
     with pytest.raises(errors.DSLError) as exc_info:
-        ProgramParser.apply_to_function(vararg_domain_program)
+        ProgramParser.apply_to_function(var_len_tuple_domain_program)
 
     assert exc_info.match("Invalid call to 'scale'")
     assert (

@@ -117,7 +117,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=name,
-                type=type_,  # note: this might be a generic type like VarArgType
+                type=type_,  # note: this might be a generic type like VarLenTupleType
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )

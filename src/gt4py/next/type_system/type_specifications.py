@@ -142,14 +142,18 @@ class TupleType(DataType):
         return f"tuple[{', '.join(map(str, self.types))}]"
 
 
-# TODO(tehrengruber): Rename to var length tuple or similar
-class VarArgType(DataType):
-    """Represents a variable number of arguments of the same type."""
+class VarLenTupleType(DataType):
+    """
+    A homogeneous tuple whose length is not part of the type.
+
+    The length is only known at the call, where the type is specialized to a concrete
+    `TupleType` (or stays variable-length in length-agnostic code paths).
+    """
 
     element_type: DataType
 
     def __str__(self) -> str:
-        return f"VarArg[{self.element_type}]"
+        return f"tuple[{self.element_type}, ...]"
 
 
 class AnyPythonType:
@@ -195,7 +199,7 @@ class NamedCollectionType(DataType):
         return f"NamedTuple{{{', '.join(f'{k}: {v}' for k, v in zip(self.keys, self.types))}}}"
 
 
-# TODO(tehrengruber): Add VarArgType to this list, which requires checking all users of it
+# TODO(tehrengruber): Add VarLenTupleType to this list, which requires checking all users of it
 #  that potentially depend on the length being known.
 CollectionTypeSpecT = TypeVar("CollectionTypeSpecT", TupleType, NamedCollectionType)
 CollectionTypeSpec = TupleType | NamedCollectionType

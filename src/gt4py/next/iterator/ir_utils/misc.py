@@ -300,18 +300,18 @@ def tree_map_type_into_expr(
     Like `type_info.tree_map_type`, but `fun` additionally receives a `current` argument —
     a reference to the value of the current element — and the mapped callable is called
     with the value expression alongside the type. Fixed-length collection nodes recombine
-    the element results with `make_tuple`, rebinding `current` per element; `VarArgType`
+    the element results with `make_tuple`, rebinding `current` per element; `VarLenTupleType`
     nodes map their elements with the `map_tuple` builtin, so the result is also valid for
     types whose concrete length is only known later. The bindings introduced along the way
     are inlined unconditionally before returning — the value expression should hence be
     cheap (e.g. a symbol reference or tuple accesses thereon), as it may be duplicated.
-    With `with_path_arg`, paths contain `type_info.VAR_ARG_ELEMENT` below variable-length
+    With `with_path_arg`, paths contain `type_info.VAR_LENGTH_TUPLE_ELEMENT` below variable-length
     tuples.
 
     Can be used directly or as a (possibly parametrized) decorator.
 
     >>> field = ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
-    >>> type_ = ts.TupleType(types=[field, ts.VarArgType(element_type=field)])
+    >>> type_ = ts.TupleType(types=[field, ts.VarLenTupleType(element_type=field)])
     >>> expr = tree_map_type_into_expr(lambda t, current: im.call("get_dom")(current))(
     ...     type_, im.ref("out")
     ... )
@@ -328,7 +328,7 @@ def tree_map_type_into_expr(
         current = im.ref(_CURRENT_ELEMENT)
 
         def collection_constructor(value: ts.TypeSpec, elts: Iterable[itir.Expr]) -> itir.Expr:
-            if isinstance(value, ts.VarArgType):
+            if isinstance(value, ts.VarLenTupleType):
                 (element_expr,) = elts
                 return im.call(im.call("map_tuple")(im.lambda_(_CURRENT_ELEMENT)(element_expr)))(
                     current

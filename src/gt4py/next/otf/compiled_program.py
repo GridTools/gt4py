@@ -515,7 +515,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         #  in the type system. For now we just use `DeferredType` to communicate between
         #  here and `type_info.type_in_program_context`.
         def is_generic_type(t: ts.TypeSpec) -> bool:
-            if isinstance(t, (ts.DeferredType, ts.VarArgType)):
+            if isinstance(t, (ts.DeferredType, ts.VarLenTupleType)):
                 return True
             if isinstance(t, ts.TupleType):
                 return any(is_generic_type(el) for el in t.types)

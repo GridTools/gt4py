@@ -81,7 +81,7 @@ def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
                     pos_only_args=[ts.DeferredType(constraint=None)],
                     pos_or_kw_args={},
                     kw_only_args={},
-                    returns=ts.DeferredType(constraint=ts.VarArgType),
+                    returns=ts.DeferredType(constraint=ts.VarLenTupleType),
                 )
             )
 
@@ -235,7 +235,7 @@ def from_type_hint(
                     raise ValueError(
                         f"Tuple annotation '{type_hint}' contains an invalid element type."
                     )
-                return ts.VarArgType(element_type=element_type)
+                return ts.VarLenTupleType(element_type=element_type)
             # Unparametrized annotation, i.e. bare `tuple` / `typing.Tuple` (the
             # empty-tuple annotation `tuple[()]` has `args == ()` and is rejected below)
             elif args is None:

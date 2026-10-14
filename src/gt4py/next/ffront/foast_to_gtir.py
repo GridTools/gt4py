@@ -316,8 +316,8 @@ class FieldOperatorLowering(eve.PreserveLocationVisitor, eve.NodeTranslator):
             result_tuple = im.make_tuple(*fixed_tuple_elements)
             return im.let(iterable_value_name, iterable_expr)(result_tuple)
 
-        assert isinstance(iterable_type, ts.VarArgType)
-        assert isinstance(node.type, ts.VarArgType)
+        assert isinstance(iterable_type, ts.VarLenTupleType)
+        assert isinstance(node.type, ts.VarLenTupleType)
         if isinstance(comprehension_target, itir.Sym):
             map_tuple_lambda = im.lambda_(comprehension_target)(element_expr)
         else:

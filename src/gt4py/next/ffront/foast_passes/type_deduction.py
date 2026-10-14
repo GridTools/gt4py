@@ -863,13 +863,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 type=ts.TupleType(types=[new_mapper.element_expr.type for _ in element_types]),
             )
             return result
-        elif isinstance(iterable.type, ts.VarArgType):
+        elif isinstance(iterable.type, ts.VarLenTupleType):
             element_type = iterable.type.element_type
             new_mapper = self._deduce_tuple_comprehension_mapper(
                 node, target, element_type, **kwargs
             )
             element_expr = new_mapper.element_expr
-            return_type = ts.VarArgType(element_type=element_expr.type)
+            return_type = ts.VarLenTupleType(element_type=element_expr.type)
 
             return foast.TupleComprehension(
                 inner=new_mapper,

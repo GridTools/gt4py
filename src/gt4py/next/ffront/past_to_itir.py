@@ -211,14 +211,14 @@ def _compute_field_slice(node: past.Subscript) -> list[past.Slice]:
 
 
 def _unwrap_tuple_expr(
-    expr: past.Expr, path: tuple[int | type_info.VarArgElementKey, ...]
-) -> tuple[past.Expr, Sequence[int | type_info.VarArgElementKey]]:
+    expr: past.Expr, path: tuple[int | type_info.VarLenTupleElementKey, ...]
+) -> tuple[past.Expr, Sequence[int | type_info.VarLenTupleElementKey]]:
     """Unwrap (nested) TupleExpr by following the given path as long as possible.
 
     If a non-tuple expression is encountered, the current expression and the remaining path are
     returned.
     """
-    path_remainder: Sequence[int | type_info.VarArgElementKey] = path
+    path_remainder: Sequence[int | type_info.VarLenTupleElementKey] = path
     while isinstance(expr, past.TupleExpr):
         idx, *path_remainder = path_remainder
         # a `TupleExpr` always has a fixed-length tuple type, so the path element is an index
@@ -472,7 +472,7 @@ class ProgramLowering(
             def impl(
                 out_type: ts.FieldType,
                 current: itir.Expr,
-                path: tuple[int | type_info.VarArgElementKey, ...],
+                path: tuple[int | type_info.VarLenTupleElementKey, ...],
             ) -> itir.Expr:
                 out_field, path_remainder = _unwrap_tuple_expr(out_arg, path)
 

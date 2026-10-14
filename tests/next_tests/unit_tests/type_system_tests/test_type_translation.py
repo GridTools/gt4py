@@ -218,7 +218,7 @@ def test_generic_tuple_constructor_type():
             pos_only_args=[ts.DeferredType(constraint=None)],
             pos_or_kw_args={},
             kw_only_args={},
-            returns=ts.DeferredType(constraint=ts.VarArgType),
+            returns=ts.DeferredType(constraint=ts.VarLenTupleType),
         )
     )
     assert (
@@ -249,11 +249,11 @@ def test_invalid_symbol_types():
     with pytest.raises(ValueError, match="invalid element type"):
         type_translation.from_type_hint(tuple[tuple, ...])
 
-    # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarArgType.
-    assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarArgType(
+    # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarLenTupleType.
+    assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarLenTupleType(
         element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
     )
-    assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarArgType(
+    assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarLenTupleType(
         element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     )
 

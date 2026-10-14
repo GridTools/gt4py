@@ -347,7 +347,7 @@ def allocate(
     strategy: Optional[DataInitializer] = None,
     dtype: Optional[np.typing.DTypeLike] = None,
     extend: Optional[dict[gtx.Dimension, tuple[int, int]]] = None,
-    varargs_length: Optional[int] = None,
+    tuple_length: Optional[int] = None,
 ) -> FieldViewArg:
     """
     Allocate a parameter or return value from a fieldview code object.
@@ -365,8 +365,8 @@ def allocate(
         extend: Lower and upper size extension per dimension.
             Useful for shifted fields, which must start off bigger
             than the output field in the shifted dimension.
-        varargs_length: Concrete length to allocate for variable-length tuple
-            parameters (default: ``DEFAULT_VARARGS_LENGTH``).
+        tuple_length: Concrete length to allocate for variable-length tuple
+            parameters (default: ``DEFAULT_TUPLE_LENGTH``).
     """
     if sizes:
         assert not domain and all(dim in case.default_sizes for dim in sizes)
@@ -396,7 +396,7 @@ def allocate(
         domain=domain,
         dtype=dtype,
         strategy=strategy.from_case(case=case, fieldview_prog=fieldview_prog, arg_name=name),
-        varargs_length=varargs_length,
+        tuple_length=tuple_length,
     )
 
 
@@ -594,7 +594,7 @@ def unstructured_case_3d(unstructured_case):
 
 #: Default concrete length used for variable-length tuple parameters, e.g. when
 #: allocating arguments for them.
-DEFAULT_VARARGS_LENGTH: Final = 3
+DEFAULT_TUPLE_LENGTH: Final = 3
 
 
 def _allocate_from_type(
@@ -604,7 +604,7 @@ def _allocate_from_type(
     strategy: DataInitializer,
     dtype: Optional[np.typing.DTypeLike] = None,
     tuple_start: Optional[int] = None,
-    varargs_length: Optional[int] = None,
+    tuple_length: Optional[int] = None,
 ) -> FieldViewArg:
     """Allocate data based on the type or a (nested) tuple thereof."""
     match arg_type:
@@ -625,16 +625,16 @@ def _allocate_from_type(
                         domain=domain,
                         dtype=dtype,
                         strategy=strategy,
-                        varargs_length=varargs_length,
+                        tuple_length=tuple_length,
                     )
                     for t in types
                 )
             )
-        case ts.VarArgType(element_type=element_type):
-            length = varargs_length if varargs_length is not None else DEFAULT_VARARGS_LENGTH
+        case ts.VarLenTupleType(element_type=element_type):
+            length = tuple_length if tuple_length is not None else DEFAULT_TUPLE_LENGTH
             # the unique-value offsets are computed from the declared types using the
             # default length (see `get_param_size`)
-            assert length <= DEFAULT_VARARGS_LENGTH
+            assert length <= DEFAULT_TUPLE_LENGTH
             return tuple(
                 (
                     _allocate_from_type(
@@ -643,7 +643,7 @@ def _allocate_from_type(
                         domain=domain,
                         dtype=dtype,
                         strategy=strategy,
-                        varargs_length=varargs_length,
+                        tuple_length=tuple_length,
                     )
                     for t in [element_type] * length
                 )
@@ -663,7 +663,7 @@ def _allocate_from_type(
                             domain=domain,
                             dtype=dtype,
                             strategy=strategy,
-                            varargs_length=varargs_length,
+                            tuple_length=tuple_length,
                         )
                         for t in types
                     )
@@ -698,10 +698,8 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case ts.NamedCollectionType(types=types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
-        case ts.VarArgType(element_type=element_type):
-            return get_param_size(
-                ts.TupleType(types=[element_type] * DEFAULT_VARARGS_LENGTH), sizes
-            )
+        case ts.VarLenTupleType(element_type=element_type):
+            return get_param_size(ts.TupleType(types=[element_type] * DEFAULT_TUPLE_LENGTH), sizes)
         case _:
             raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 

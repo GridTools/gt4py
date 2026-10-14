@@ -83,7 +83,7 @@ def _validate_domain_out(
                 )
 
     elif isinstance(dom, past.TupleExpr):
-        if isinstance(out, ts.VarArgType):
+        if isinstance(out, ts.VarLenTupleType):
             # The fixed-length domain tuple would pin the length of the variable-length
             # output, so any call with a different length would break the program.
             raise ValueError(
@@ -164,7 +164,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
-        if isinstance(value.type, (*ts.COLLECTION_TYPE_SPECS, ts.VarArgType)):
+        if isinstance(value.type, (*ts.COLLECTION_TYPE_SPECS, ts.VarLenTupleType)):
             # A subscript on a program argument is a domain slice; applying one to a
             # (possibly variable-length) tuple is not supported, and element selection is
             # not supported for any tuple argument.
@@ -278,7 +278,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 operator_return_type = type_info.return_type(
                     new_func.type, with_args=arg_types, with_kwargs=kwarg_types
                 )
-                # Not equality: variadic comprehensions give a `VarArg[...]` return type,
+                # Not equality: variadic comprehensions give a variable-length tuple return type,
                 # while 'out' is a concrete tuple.
                 if not type_info.is_compatible_type(operator_return_type, new_kwargs["out"].type):
                     raise ValueError(
