@@ -52,6 +52,9 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
   subsystem. Add new ADRs there, not in a flat `docs/adr/`.
 - `gt4py.next`-specific conventions and test framework:
   [`src/gt4py/next/AGENTS.md`](src/gt4py/next/AGENTS.md).
+- Agent skills (task recipes agents load on demand):
+  [`.agents/skills/`](.agents/skills/). Claude Code finds them through the
+  tracked `.claude/skills` symlink — keep it, or discovery silently stops.
 - Dev-environment setup and CI infrastructure:
   [`docs/development/`](docs/development/).
 - User-facing docs: [`docs/user/cartesian/`](docs/user/cartesian/) and
