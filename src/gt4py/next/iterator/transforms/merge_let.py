@@ -51,8 +51,12 @@ class MergeLet(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if any(ref_count != 0 for ref_count in ref_counts_outer.values()):
                 return node
             # check if the argument to the inner lambda call depend on an argument to the outer lambda
+            # note: `ignore_builtins=False` since a param may shadow a builtin, in which case
+            # references to it are ordinary references to that param
             ref_counts = CountSymbolRefs.apply(
-                inner_lambda_args, [param.id for param in outer_lambda.params]
+                inner_lambda_args,
+                [param.id for param in outer_lambda.params],
+                ignore_builtins=False,
             )
             if any(ref_count != 0 for ref_count in ref_counts.values()):
                 return node
