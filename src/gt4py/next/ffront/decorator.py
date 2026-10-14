@@ -20,12 +20,11 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, Sequence, TypeAlias
+from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self, Unpack, override
+from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
     common,

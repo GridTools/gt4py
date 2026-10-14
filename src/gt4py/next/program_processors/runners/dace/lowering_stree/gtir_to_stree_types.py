@@ -23,7 +23,7 @@ from typing import Any, TypeAlias
 import dace
 from dace import subsets as dace_subsets
 
-from gt4py.eve.extended_typing import MaybeNestedInTuple
+from gt4py.eve.xtyping import MaybeNestedInTuple
 from gt4py.next.type_system import type_specifications as ts
 
 

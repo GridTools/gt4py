@@ -309,11 +309,10 @@ def create_bindings(
         ),
     )
 
-    src = artifacts.format_source(
-        program_source.code_spec, BindingCodeGenerator.apply(file_binding)
+    return artifacts.BindingSource(
+        BindingCodeGenerator.apply(file_binding),
+        (interface.LibraryDependency("nanobind", "2.0.0"),),
     )
-
-    return artifacts.BindingSource(src, (interface.LibraryDependency("nanobind", "2.0.0"),))
 
 
 @dataclasses.dataclass(frozen=True)

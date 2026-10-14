@@ -13,7 +13,7 @@ from typing import Any, Final, Generator, Optional, TypeAlias
 import dace
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import xtyping
 from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
@@ -40,8 +40,8 @@ ExternalWorkspace: TypeAlias = dict[
 """ Mapping from device types to array-like objects.
 
     The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
-    as a workspace: a host array exposing `gt4py.eve.extended_typing.ArrayInterface`
-    or a device array exposing `gt4py.eve.extended_typing.CUDAArrayInterface`.
+    as a workspace: a host array exposing `gt4py.eve.xtyping.ArrayInterface`
+    or a device array exposing `gt4py.eve.xtyping.CUDAArrayInterface`.
 """
 
 
@@ -161,12 +161,10 @@ def set_dace_config(
         "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
     )
 
-    # In debug mode use `development` otherwise use `production`.
-    # NOTE: In case you want to run with optimizations, but would like to have the full
-    #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
-    #   set to `development` (small case matters).
+    # Production-mode will only keep the compiled library and SDFG JSON-file.
     dace.Config.set(
-        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
+        "compiler.build_folder_mode",
+        value=("development" if gtx_config.KEEP_DACE_BUILD_FILES else "production"),
     )
 
     # We are not interested in storing the history of SDFG transformations.

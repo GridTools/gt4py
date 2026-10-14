@@ -28,7 +28,7 @@ from dace import subsets as dace_subsets
 from gt4py import eve
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.extended_typing import MaybeNestedInTuple, NestedTuple
+from gt4py.eve.xtyping import MaybeNestedInTuple, NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import (
