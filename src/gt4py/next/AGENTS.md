@@ -29,11 +29,11 @@ field operators / programs (ffront)
 - `embedded/` — field-level embedded execution: field operators evaluated
   directly on NumPy / CuPy / JAX-backed `Field`s, without lowering to the IR.
   Distinct from `iterator/embedded.py`, which runs one level lower.
-- `otf/` — on-the-fly compilation toolchain (workflow steps, caching,
-  argument descriptors).
+- `otf/` — on-the-fly compilation toolchain (pipeline steps: `Step`,
+  `CachedStep`; caching; argument descriptors).
 - `backend.py` — the toolchain root object `Toolchain` (formerly `Backend`):
-  `frontend` (definition transforms) + `backend` (compile pipeline) +
-  allocator.
+  `frontend` (the `Transforms` definition pipeline) + `backend` (the
+  `CompilePipeline` translate / bind / compile pipeline) + allocator.
 - `program_processors/runners/` — the backends: `gtfn` (GridTools C++),
   `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
 - `type_system/` — `next` type specifications and the type inference the
