@@ -158,3 +158,21 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
+
+
+def find_connectivity_identifier_by_neighbor_dim(
+    offset_provider_type: gtx_common.OffsetProviderType,
+    local_dim: gtx_common.Dimension,
+) -> str | None:
+    """
+    Find the SDFG connectivity-container name for the connectivity whose
+    local (neighbor) dimension is ``local_dim``.
+
+    The container is stored under ``connectivity_identifier(offset_tag)``
+    (see ``_add_sdfg_params``); this helper returns that name without the
+    caller having to know the offset tag.
+    """
+    for offset, conn in offset_provider_type.items():
+        if isinstance(conn, gtx_common.NeighborConnectivityType) and conn.neighbor_dim == local_dim:
+            return connectivity_identifier(offset)
+    return None

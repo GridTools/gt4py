@@ -40,16 +40,6 @@ def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCa
     return filter(_is_neighbors_or_lifted_and_neighbors, flat_reduce_args)
 
 
-def _get_partial_offset_tags(reduce_args: Iterable[itir.Expr]) -> Iterable[str]:
-    assert all(isinstance(arg.type, ts.ListType) for arg in reduce_args)
-
-    return [
-        arg.type.offset_type.value  # type: ignore[union-attr] # checked in previous lines
-        for arg in reduce_args
-        if arg.type.offset_type is not None  # type: ignore[union-attr] # checked in previous lines
-    ]
-
-
 def _get_connectivity(
     applied_reduce_node: itir.FunCall,
     offset_provider_type: common.OffsetProviderType,
@@ -59,9 +49,12 @@ def _get_connectivity(
         raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
     connectivities: list[common.NeighborConnectivityType] = []
-    for o in _get_partial_offset_tags(applied_reduce_node.args):
-        conn = common.get_offset_type(offset_provider_type, o)
-        assert isinstance(conn, common.NeighborConnectivityType)
+    for arg in applied_reduce_node.args:
+        assert isinstance(arg.type, ts.ListType)
+        if arg.type.offset_type is None:
+            continue
+        conn = common.get_connectivity_by_neighbor_dim(offset_provider_type, arg.type.offset_type)
+        assert conn is not None, f"Could not find connectivity for offset type {arg.type.offset_type}."
         connectivities.append(conn)
 
     if not connectivities:

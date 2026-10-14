@@ -1400,7 +1400,9 @@ class StreePythonCodegen(eve.NodeVisitor):
                 ):
                     local_offset = data.gt_type.dtype.offset_type
                     assert local_offset is not None
-                    offset_provider_t = ctx.offset_provider_type.get(local_offset.value)
+                    offset_provider_t = gtx_common.get_connectivity_by_neighbor_dim(
+                        ctx.offset_provider_type, local_offset
+                    )
                     if isinstance(offset_provider_t, gtx_common.NeighborConnectivityType):
                         local_size = offset_provider_t.max_neighbors
                         loop_var = ctx.fresh_temp()
@@ -1413,7 +1415,10 @@ class StreePythonCodegen(eve.NodeVisitor):
                             # not contribute to the reduction.  The mask is
                             # reconstructed from the connectivity table, as in
                             # ``ReduceWithSkipValues`` in the SDFG lowering.
-                            conn_name = gtx_dace_args.connectivity_identifier(local_offset.value)
+                            conn_name = gtx_dace_args.find_connectivity_identifier_by_neighbor_dim(
+                                ctx.offset_provider_type, local_offset
+                            )
+                            assert conn_name is not None
                             ctx.used_connectivities.add(conn_name)
                             source_index = ctx.map_indices.get(offset_provider_t.source_dim)
                             assert source_index is not None, (
@@ -1523,7 +1528,9 @@ class StreePythonCodegen(eve.NodeVisitor):
                 offset_type = arg_type.offset_type
                 if offset_type == CONST_DIM:
                     continue
-                offset_provider_t = ctx.offset_provider_type[offset_type.value]
+                offset_provider_t = gtx_common.get_connectivity_by_neighbor_dim(
+                    ctx.offset_provider_type, offset_type
+                )
                 assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
                 local_size = offset_provider_t.max_neighbors
                 break
@@ -1700,7 +1707,9 @@ class StreePythonCodegen(eve.NodeVisitor):
                     return ListElementAccess(expr=self.visit(arg, ctx=ctx)), None
 
                 if local_offset_dim is not None:
-                    offset_provider_t = ctx.offset_provider_type.get(local_offset_dim.value)
+                    offset_provider_t = gtx_common.get_connectivity_by_neighbor_dim(
+                        ctx.offset_provider_type, local_offset_dim
+                    )
                     if not isinstance(offset_provider_t, gtx_common.NeighborConnectivityType):
                         # The local dimension is not a known neighbor
                         # connectivity (e.g. an explicit local field dim not
@@ -1727,7 +1736,10 @@ class StreePythonCodegen(eve.NodeVisitor):
                         # The mask is derived from the connectivity table,
                         # as in ``ReduceWithSkipValues`` / ``_visit_map``
                         # of the SDFG lowering.
-                        conn_name = gtx_dace_args.connectivity_identifier(local_offset_dim.value)
+                        conn_name = gtx_dace_args.find_connectivity_identifier_by_neighbor_dim(
+                            ctx.offset_provider_type, local_offset_dim
+                        )
+                        assert conn_name is not None
                         ctx.used_connectivities.add(conn_name)
                         source_index = ctx.map_indices.get(offset_provider_t.source_dim)
                         assert source_index is not None, (

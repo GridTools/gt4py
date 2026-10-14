@@ -135,7 +135,17 @@ class DataflowBuilder(Protocol):
     """Visitor interface to build schedule-tree dataflow nodes."""
 
     @abc.abstractmethod
-    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem: ...
+    def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
+        """Look up a single offset-provider entry by its **offset tag**."""
+
+    @abc.abstractmethod
+    def get_connectivity_type(
+        self, local_dim: gtx_common.Dimension
+    ) -> gtx_common.NeighborConnectivityType | None:
+        """Look up the neighbor connectivity whose local (neighbor) dimension
+        is ``local_dim`` — the offset tag and the local dimension's name need
+        not agree, so the lookup matches on ``neighbor_dim`` rather than by
+        name.  Returns ``None`` if no such connectivity exists."""
 
     @abc.abstractmethod
     def unique_nsdfg_name(self, prefix: str) -> str: ...
@@ -440,8 +450,8 @@ def translate_as_fieldop(
         list_dtype = node.type.dtype
         assert list_dtype.offset_type is not None
         local_dim = list_dtype.offset_type
-        conn_type = offset_provider_type.get(local_dim.value)
-        if not isinstance(conn_type, gtx_common.NeighborConnectivityType):
+        conn_type = sdfg_builder.get_connectivity_type(local_dim)
+        if conn_type is None:
             raise NotImplementedError(
                 f"'as_fieldop' with 'ListType' dtype over offset '{local_dim.value}' "
                 "is not supported."
@@ -659,9 +669,7 @@ def translate_map_list(
             offset_type = arg_type.offset_type
             if offset_type == CONST_DIM:
                 continue
-            offset_provider_t = sdfg_builder.get_offset_provider_type.__self__.offset_provider_type[  # type: ignore[attr-defined]
-                offset_type.value
-            ]
+            offset_provider_t = sdfg_builder.get_connectivity_type(offset_type)
             assert isinstance(offset_provider_t, gtx_common.NeighborConnectivityType)
             local_offset_type = offset_type
             local_size = offset_provider_t.max_neighbors
@@ -715,7 +723,8 @@ def translate_map_list(
     # values, the tasklet writes a dummy value for invalid neighbors (matching
     # the SDFG lowering's `map` with `__neighbor_idx` masking).
     if has_skip_values:
-        conn_name = gtx_dace_args.connectivity_identifier(local_offset_type.value)
+        conn_name = sdfg_builder.get_connectivity_identifier(local_offset_type)
+        assert conn_name is not None
         ctx.root.containers[conn_name].transient = False
         used_connectivities.add(conn_name)
         element_type = node.type.element_type
@@ -1922,11 +1931,9 @@ def translate_concat_where(
         assert node.type.dtype.offset_type is not None
         assert isinstance(node.type.dtype.element_type, ts.ScalarType)
         dtype = gtx_dace_args.as_dace_type(node.type.dtype.element_type)
-        offset_provider_type = sdfg_builder.get_offset_provider_type(
-            node.type.dtype.offset_type.value
-        )
-        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         local_dim = node.type.dtype.offset_type
+        offset_provider_type = sdfg_builder.get_connectivity_type(local_dim)
+        assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         extended_dims = gtx_common.order_dimensions([*output_dims, local_dim])
         output_shape.insert(extended_dims.index(local_dim), offset_provider_type.max_neighbors)
 
@@ -1999,6 +2006,23 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
         return gtx_common.get_offset_type(self.offset_provider_type, offset)
 
+    def get_connectivity_type(
+        self, local_dim: gtx_common.Dimension
+    ) -> gtx_common.NeighborConnectivityType | None:
+        return gtx_common.get_connectivity_by_neighbor_dim(self.offset_provider_type, local_dim)
+
+    def get_connectivity_identifier(self, local_dim: gtx_common.Dimension) -> str | None:
+        """Return the SDFG connectivity-container name (``gt_conn_<offset>``)
+        for the connectivity whose local (neighbor) dimension is ``local_dim``,
+        or ``None`` if no such connectivity exists."""
+        for offset, conn in self.offset_provider_type.items():
+            if (
+                isinstance(conn, gtx_common.NeighborConnectivityType)
+                and conn.neighbor_dim == local_dim
+            ):
+                return gtx_dace_args.connectivity_identifier(offset)
+        return None
+
     def make_field(
         self,
         name: str,
@@ -2054,7 +2078,9 @@ class GTIRToScheduleTree(eve.NodeVisitor, SDFGBuilder):
         shape = []
         for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
-                shape.append(neighbor_table_types[dim.value].max_neighbors)
+                conn_type = self.get_connectivity_type(dim)
+                assert conn_type is not None, f"No connectivity for local dimension {dim}."
+                shape.append(conn_type.max_neighbors)
             elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
                 shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))
             else:

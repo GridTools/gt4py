@@ -1219,6 +1219,25 @@ def has_offset(offset_provider: OffsetProvider | OffsetProviderType, offset_tag:
     return True
 
 
+def get_connectivity_by_neighbor_dim(
+    offset_provider_type: OffsetProviderType, local_dim: Dimension
+) -> NeighborConnectivityType | None:
+    """
+    Find the neighbor connectivity whose local (neighbor) dimension is ``local_dim``.
+
+    A connectivity is identified by four independently authored names (the
+    offset tag, the Python variable, the local dimension's name and the
+    offset-provider key); only the offset tag keys the provider. The local
+    dimension, however, is what the lowering needs to match against — for a
+    ``ListType`` field whose ``offset_type`` is ``local_dim`` — so look the
+    connectivity up by its ``neighbor_dim`` rather than by name.
+    """
+    for conn in offset_provider_type.values():
+        if isinstance(conn, NeighborConnectivityType) and conn.neighbor_dim == local_dim:
+            return conn
+    return None
+
+
 def hash_offset_provider_items_by_id(offset_provider: OffsetProvider) -> int:
     """
     Compute hash of an offset provider on the tuples of key and value id.
