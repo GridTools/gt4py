@@ -9,22 +9,14 @@
 import abc
 import dataclasses
 import functools
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Final, Optional, TypeAlias, cast
+
+from typing_extensions import Protocol, TypeIs
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
-from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Final,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeAlias,
-    TypeIs,
-    cast,
-)
 
 
 FieldLayoutMapper: TypeAlias = Callable[

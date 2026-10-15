@@ -18,10 +18,9 @@ from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
-import factory
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
@@ -88,7 +87,9 @@ def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
 
 
 def _validate_external_workspace(
-    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface, storage: dace.StorageType, nbytes: int
+    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface,
+    storage: dace.StorageType,
+    nbytes: int,
 ) -> None:
     """Validate that the provided ``wsp`` workspace satisfies the requirements.
 
@@ -365,8 +366,3 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-
-
-class DaCeCompilationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeCompiler

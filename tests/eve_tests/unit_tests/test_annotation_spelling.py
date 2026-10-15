@@ -60,12 +60,7 @@ from typing import (  # noqa: UP035 [deprecated-import] deliberately exercising 
 
 import pytest
 
-from gt4py.eve import (
-    datamodels,
-    exceptions,
-    extended_typing as xtyping,
-    type_validation as type_val,
-)
+from gt4py.eve import datamodels, exceptions, type_validation as type_val, xtyping
 
 # Imported directly on purpose: reaching these two through a datamodel is not enough.
 # 'get_partial_type_hints' strips 'Annotated' before a field annotation gets this far,
