@@ -308,15 +308,20 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = workflow.ConcreteArtifact(
+        # The program is lowered without a call here, so use the declared parameter
+        # types as compile-time arguments.
+        declared_args_past = workflow.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
             ),
-            args=arguments.CompileTimeArgs.empty(),
+            args=dataclasses.replace(
+                arguments.CompileTimeArgs.empty(),
+                args=tuple(param.type for param in self.past_stage.past_node.params),
+            ),
         )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
+        return self._frontend_transforms.past_to_itir(declared_args_past).data
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
