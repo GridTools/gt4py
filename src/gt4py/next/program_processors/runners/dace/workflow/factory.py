@@ -36,8 +36,18 @@ _GT4PY_SOURCE_PREFIX: Final[str] = str(pathlib.Path(gt4py.__file__).parent)
 class DaCeConfig(next_backend.ToolchainConfig):
     """Settings shared by the steps of a DaCe toolchain, see `ToolchainConfig`."""
 
+    #: Lower the GTIR program to SDFG through the schedule-tree
+    #: intermediate representation; otherwise use the direct lowering.
+    use_stree_lowering: bool = False
+
+    #: Run the ITIR common-transforms pipeline (inlining,
+    #: constant folding, CSE, ...) before lowering. Only supported with
+    #: `use_stree_lowering=True`; otherwise the fieldview transforms are applied.
+    apply_common_transforms: bool = False
+
     #: Run the SDFG auto-optimize pipeline.
     auto_optimize: bool = True
+
     #: Workspace memory allocated outside the SDFG. The toolchain injects it into
     #: the loaded programs, and the translation step then defaults to the
     #: `EXTERNAL` transient memory mode, which stores the transients in it. The
@@ -119,6 +129,8 @@ def make_dace_translator(
         auto_optimize=cfg.auto_optimize,
         auto_optimize_args=optimization_args,
         async_sdfg_call=async_sdfg_call and cfg.gpu,
+        use_stree_lowering=cfg.use_stree_lowering,
+        apply_common_transforms=cfg.apply_common_transforms,
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride,
         use_metrics=use_metrics,
         disable_itir_transforms=disable_itir_transforms,

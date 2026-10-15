@@ -144,8 +144,50 @@ def make_dace_backend(
     )
 
 
+# Legacy backends: direct GTIR-to-SDFG lowering, without the ITIR
+#  common-transforms pipeline.
 run_dace_cpu = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(auto_optimize=True))
 run_dace_cpu_noopt = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(auto_optimize=False))
-
 run_dace_gpu = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(gpu=True, auto_optimize=True))
 run_dace_gpu_noopt = make_dace_toolchain(gtx_wfdfactory.DaCeConfig(gpu=True, auto_optimize=False))
+
+# Schedule-tree lowering, without the ITIR common-transforms pipeline.
+run_dace_stree_fview_cpu = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        auto_optimize=True, use_stree_lowering=True, apply_common_transforms=False
+    ),
+    name_postfix="_stree_fview",
+)
+run_dace_stree_fview_cpu_noopt = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        auto_optimize=False, use_stree_lowering=True, apply_common_transforms=False
+    ),
+    name_postfix="_stree_fview_noopt",
+)
+run_dace_stree_fview_gpu = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        gpu=True, auto_optimize=True, use_stree_lowering=True, apply_common_transforms=False
+    ),
+    name_postfix="_stree_fview",
+)
+
+# Schedule-tree lowering, with the ITIR common-transforms pipeline (which also
+#  performs operator fusion).
+run_dace_stree_iview_cpu = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        auto_optimize=True, use_stree_lowering=True, apply_common_transforms=True
+    ),
+    name_postfix="_stree_iview",
+)
+run_dace_stree_iview_cpu_noopt = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        auto_optimize=False, use_stree_lowering=True, apply_common_transforms=True
+    ),
+    name_postfix="_stree_iview_noopt",
+)
+run_dace_stree_iview_gpu = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(
+        gpu=True, auto_optimize=True, use_stree_lowering=True, apply_common_transforms=True
+    ),
+    name_postfix="_stree_iview",
+)
