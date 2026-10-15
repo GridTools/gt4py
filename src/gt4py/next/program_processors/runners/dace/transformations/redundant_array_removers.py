@@ -375,22 +375,23 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                 num_paths = gtx_transformations.utils.count_paths(
                     node, surviving_node, graph, limit=2
                 )
-                if num_paths == 0:
-                    # The read is in a branch that never reaches the survivor
-                    #  through the copy chain: the moved write (in the
-                    #  producer's branch) is not ordered after it.
-                    return True
                 if num_paths == 1:
                     # Single connector-aware path through `a1`: the read is
                     #  ordered before the moved write.
                     continue
-                # Multiple paths: each outgoing branch of `n` reaches a
-                #  different producer.  For every branch `e_i` and every
-                #  producer `P_j` that is *not* on `e_i`'s branch, the moved
-                #  write `W_j'` must be disjoint from the subset `R_i` that
-                #  `e_i` reads of the surviving global.  Otherwise the write
-                #  moved into `P_j`'s branch could overtake the read in `e_i`'s
-                #  branch.  To avoid a MapEntry fanning out across all
+                # Zero or multiple paths: a "same branch" read is always safe
+                #  (the read is ordered before the producer's moved write, either
+                #  because they share a single data-flow branch or because the
+                #  read is hoisted to a MapEntry whose scope contains the
+                #  producer).  For every other pair `(e_i, P_j)` the moved write
+                #  `W_j'` must be disjoint from the subset `R_i` that `e_i` reads
+                #  of the surviving global.  A zero-path read is only a hazard if
+                #  it touches a subset a different producer's moved write reaches:
+                #  in the common field-operator pattern the read is hoisted to a
+                #  MapEntry (ordered before every inner write) and the producers
+                #  write disjoint sub-arrays, so the merge is safe even though no
+                #  connector-aware path links the read to the survivor through
+                #  the copy chain.  To avoid a MapEntry fanning out across all
                 #  connectors, the "same branch" check starts from the first
                 #  node downstream of `e_i.dst` through the connector `e_i`
                 #  arrives at, and from the first node upstream of `P_j`
@@ -431,13 +432,32 @@ class CopyChainRemover(dace_transformation.SingleStateTransformation):
                                 else graph.in_edges_by_connector(p_j, paired_in)
                             )
                         ]
-                        same_branch = e_i.dst is p_j or any(
-                            (
-                                rf is pf
-                                or gtx_transformations.utils.count_paths(rf, pf, graph, limit=1) > 0  # type: ignore[operator]
+                        # The read and the producer are on the same branch when
+                        #  they belong to the same scope (a read hoisted to a
+                        #  MapEntry is ordered before any inner write of that
+                        #  map) or when a downstream node of the read reaches an
+                        #  upstream node of the producer.
+                        same_scope = (
+                            hasattr(e_i.dst, "map")
+                            and hasattr(p_j, "map")
+                            and e_i.dst.map is p_j.map
+                        )
+                        same_branch = (
+                            e_i.dst is p_j
+                            or same_scope
+                            or any(
+                                (
+                                    rf is pf
+                                    or (
+                                        gtx_transformations.utils.count_paths(  # type: ignore[operator]
+                                            rf, pf, graph, limit=1
+                                        )
+                                        > 0
+                                    )
+                                )
+                                for rf in read_first
+                                for pf in prod_first
                             )
-                            for rf in read_first
-                            for pf in prod_first
                         )
                         if same_branch:
                             # `P_j` is on the same branch as `e_i`: the read
