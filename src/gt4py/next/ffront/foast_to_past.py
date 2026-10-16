@@ -102,15 +102,15 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         #  with the out argument of the program we generate here.
         loc = inp.data.foast_node.location
         assert isinstance(inp.data.foast_node.type, ts.CallableType)
-        partial_program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
-        assert isinstance(partial_program_type, ts_ffront.ProgramType)
+        program_type = ffront_type_info.type_in_program_context(inp.data.foast_node.type)
+        assert isinstance(program_type, ts_ffront.ProgramType)
         param_types: tuple[tuple[str, ts.TypeSpec], ...] = (
             *(
                 (f"__pos_arg{i}", type_)
-                for i, type_ in enumerate(partial_program_type.definition.pos_only_args)
+                for i, type_ in enumerate(program_type.definition.pos_only_args)
             ),
-            *partial_program_type.definition.pos_or_kw_args.items(),
-            *partial_program_type.definition.kw_only_args.items(),
+            *program_type.definition.pos_or_kw_args.items(),
+            *program_type.definition.kw_only_args.items(),
         )
         assert param_types[-1][0] == "out"
 
@@ -163,12 +163,15 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         # specialized here. With support for generic types in the program type deduction
         # this step would become obsolete, as the generic variant could be type checked
         # directly.
+        # TODO(tehrengruber): Remove again. This specialization is only needed as the `program_type`
+        #  above contains `DeferredType` for direct scan operator calls due to the lack of
+        #  generics.
         untyped_past_node = past_to_itir._specialize_program_params(
             untyped_past_node,
             inp.args.args,
             inp.args.kwargs,
             # argument validation has not run yet on this path; incompatible arguments are
-            # rejected right below, by the type deduction of the body call
+            # rejected right below with the proper error message
             check_compatibility=False,
         )
         untyped_past_node = closure_var_type_deduction.ClosureVarTypeDeduction.apply(
