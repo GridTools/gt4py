@@ -59,6 +59,7 @@ from .multi_state_global_self_copy_elimination import (
     gt_multi_state_global_self_copy_elimination,
 )
 from .redundant_array_removers import CopyChainRemover, DoubleWriteRemover, gt_remove_copy_chain
+from .redundant_computation_elimination import gt_eliminate_redundant_computations
 from .remove_access_node_copies import RemoveAccessNodeCopies
 from .remove_scalar_copies import RemoveScalarCopies
 from .remove_views import RemovePointwiseViews
@@ -135,6 +136,7 @@ __all__ = [
     "gt_configure_transient_lifetime",
     "gt_create_local_double_buffering",
     "gt_eliminate_dead_dataflow",
+    "gt_eliminate_redundant_computations",
     "gt_gpu_transform_non_standard_memlet",
     "gt_gpu_transformation",
     "gt_horizontal_map_split_fusion",

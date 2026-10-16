@@ -149,6 +149,24 @@ def gt_simplify(
                     result["FuseStates"] = 0
                 result["FuseStates"] += fuse_state_res
 
+        # Remove redundant computations. The frontend lowers every field
+        #  expression into its own Map, thus identical sub expressions, that
+        #  are used by multiple consumers, are lowered multiple times. After
+        #  the nested SDFGs have been inlined and the states fused, these
+        #  duplicates are sibling Maps inside the same state and can be
+        #  merged. This has to happen before the Map fusion, such that the
+        #  duplicates are not fused into their consumers.
+        if "RedundantComputationElimination" not in skip:
+            redundant_computations_res = gtx_transformations.gt_eliminate_redundant_computations(
+                sdfg=sdfg,
+                validate=False,
+                validate_all=validate_all,
+            )
+            if redundant_computations_res:
+                at_least_one_xtrans_run = True
+                result = result or {}
+                result["RedundantComputationElimination"] = redundant_computations_res
+
         if "MapToCopy" not in skip:
             find_single_use_data = dace_transformation.passes.analysis.FindSingleUseData()
             single_use_data = find_single_use_data.apply_pass(sdfg, None)
