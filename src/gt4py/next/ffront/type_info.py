@@ -187,9 +187,9 @@ def _scan_param_promotion(
         if isinstance(idx, type_info.VarLenTupleElementKey):
             if isinstance(type_, ts.TupleType):
                 # case where `param` is variable length, but `arg` is actual tuple
-                if not all(el == type_.types[0] for el in type_.types):  # type: ignore[attr-defined]
+                if not all(el == type_.types[0] for el in type_.types):
                     raise IndexError()
-                return type_.types[0]  # type: ignore[attr-defined]
+                return type_.types[0]
             elif isinstance(type_, ts.VarLenTupleType):
                 return type_.element_type
             raise AttributeError

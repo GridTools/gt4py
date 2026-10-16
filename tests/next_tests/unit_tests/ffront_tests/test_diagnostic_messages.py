@@ -393,6 +393,7 @@ def test_conditional_in_generator_expression_explains_static_length():
     assert any("known at compile time" in note for note in err.notes)
     assert "if True" in str(err)
 
+
 def test_unindexed_cartesian_offset_names_the_offset_as_written():
     # The tag of 'IOff' is 'Ioff'; the message has to quote what the user wrote.
     def unindexed(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
