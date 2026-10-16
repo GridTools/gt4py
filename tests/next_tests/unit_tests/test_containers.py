@@ -72,6 +72,50 @@ def test_make_container_extractor(
     )
 
 
+@dataclasses.dataclass
+class PointDataclass:
+    x: int
+    y: int
+
+
+@dataclasses.dataclass
+class VarLenPointsDataclass:
+    points: tuple[PointDataclass, ...]
+    offset: int
+
+
+def test_make_container_extractor_var_len_tuple():
+    # the length of the variable-length tuple member is only known from the value, the
+    # same extractor must handle all lengths
+    extractor = named_collections.make_named_collection_extractor(VarLenPointsDataclass)
+    value = VarLenPointsDataclass(
+        points=(PointDataclass(1, 2), PointDataclass(3, 4), PointDataclass(5, 6)), offset=7
+    )
+    assert extractor(value) == (((1, 2), (3, 4), (5, 6)), 7)
+    assert extractor(VarLenPointsDataclass(points=(PointDataclass(1, 2),), offset=0)) == (
+        ((1, 2),),
+        0,
+    )
+
+
+@dataclasses.dataclass
+class NestedVarLenDataclass:
+    groups: tuple[VarLenPointsDataclass, ...]
+
+
+def test_make_container_extractor_nested_var_len_tuple():
+    # nested comprehensions in the generated extractor reuse the variable name,
+    # relying on comprehension scoping
+    extractor = named_collections.make_named_collection_extractor(NestedVarLenDataclass)
+    value = NestedVarLenDataclass(
+        groups=(
+            VarLenPointsDataclass(points=(PointDataclass(1, 2), PointDataclass(3, 4)), offset=5),
+            VarLenPointsDataclass(points=(PointDataclass(6, 7),), offset=8),
+        )
+    )
+    assert extractor(value) == (((((1, 2), (3, 4)), 5), (((6, 7),), 8)),)
+
+
 @pytest.mark.parametrize(
     ["nested_tuple", "expected_container"],
     [(value, cnc.from_nested_tuple(cls, value)) for cls, value in cnc.PYCONTAINERS_SAMPLES.items()],

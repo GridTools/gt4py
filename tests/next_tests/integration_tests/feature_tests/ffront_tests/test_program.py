@@ -250,17 +250,13 @@ def test_dimensions_domain(cartesian_case):
     def empty_domain_fieldop(a: cases.IJField):
         return a
 
-    @gtx.program
-    def empty_domain_program(a: cases.IJField, out_field: cases.IJField):
-        empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
-
-    a = cases.allocate(cartesian_case, empty_domain_program, "a")()
-    out_field = cases.allocate(cartesian_case, empty_domain_program, "out_field")()
-
     with pytest.raises(
-        ValueError, match=(r"Dimensions in out field and field domain are not equivalent")
+        errors.DSLError, match=(r"Dimensions in out field and field domain are not equivalent")
     ):
-        cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})
+
+        @gtx.program
+        def empty_domain_program(a: cases.IJField, out_field: cases.IJField):
+            empty_domain_fieldop(a, out=out_field, domain={JDim: (0, 1), IDim: (0, 1)})
 
 
 @pytest.mark.uses_origin
