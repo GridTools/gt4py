@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import enum
 import types
 import typing
@@ -313,6 +314,23 @@ def test_as_from_dtype(dtype):
 
 
 _FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
+_FIELD_TYPE = ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+
+
+class VarLenMemberNamedTuple(typing.NamedTuple):
+    tracers: tuple[gtx.Field[gtx.Dims[cnc.TDim], gtx.float32], ...]
+    rho: gtx.Field[gtx.Dims[cnc.TDim], gtx.float32]
+
+
+@dataclasses.dataclass
+class VarLenMemberDataclass:
+    tracers: tuple[gtx.Field[gtx.Dims[cnc.TDim], gtx.float32], ...]
+    rho: gtx.Field[gtx.Dims[cnc.TDim], gtx.float32]
+
+
+@dataclasses.dataclass
+class ScalarMemberDataclass:
+    value: gtx.float32
 
 
 @pytest.mark.parametrize(
@@ -426,6 +444,42 @@ _FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
 )
 def test_from_value(value, expected):
     assert type_translation.from_value(value) == expected
+
+
+@pytest.mark.parametrize("container", [VarLenMemberNamedTuple, VarLenMemberDataclass])
+def test_from_value_named_collection_var_len_tuple_member(container):
+    # the declared type keeps the variable-length tuple ...
+    assert type_translation.from_type_hint(container) == ts.NamedCollectionType(
+        types=[ts.VarLenTupleType(element_type=_FIELD_TYPE), _FIELD_TYPE],
+        keys=["tracers", "rho"],
+        original_python_type=_make_type_string_for_container(container),
+    )
+    # ... while the member types of a value are taken from the runtime members, i.e.
+    # the tuple has a concrete length
+    value = container(tracers=(_FIELD, _FIELD), rho=_FIELD)
+    assert type_translation.from_value(value) == ts.NamedCollectionType(
+        types=[ts.TupleType(types=[_FIELD_TYPE, _FIELD_TYPE]), _FIELD_TYPE],
+        keys=["tracers", "rho"],
+        original_python_type=_make_type_string_for_container(container),
+    )
+
+
+def test_from_value_named_collection_scalar_member():
+    assert type_translation.from_value(
+        ScalarMemberDataclass(value=np.float32(0.0))
+    ) == ts.NamedCollectionType(
+        types=[ts.ScalarType(kind=ts.ScalarKind.FLOAT32)],
+        keys=["value"],
+        original_python_type=_make_type_string_for_container(ScalarMemberDataclass),
+    )
+
+
+@pytest.mark.skipif(not __debug__, reason="the member compatibility is only checked in debug mode")
+def test_from_value_named_collection_incompatible_member():
+    # a plain Python 'float' is typed 'float64' by convention, which is incompatible
+    # with the member annotation 'float32'; note that this is only checked in debug mode
+    with pytest.raises(ValueError, match="Member 'value' of 'ScalarMemberDataclass'"):
+        type_translation.from_value(ScalarMemberDataclass(value=0.0))
 
 
 def test_from_value_namespace_proxy():

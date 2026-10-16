@@ -19,7 +19,7 @@ import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, TypeAlias
+from typing import Any, ForwardRef, Optional, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -405,6 +405,30 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
+    elif isinstance(value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
+        # Take the member types from the runtime values — the annotated types may be
+        # generic, e.g. a variable-length tuple, whose concrete type is only known from
+        # the value. Members whose type is incompatible with the annotation are rejected
+        # later, by the signature checks against the (annotated) parameter types; in
+        # debug mode reject them already here, with a more precise error.
+        annotated_type = from_type_hint(xtyping.infer_type(value))
+        assert isinstance(annotated_type, ts.NamedCollectionType)
+        member_types = [from_value(getattr(value, key)) for key in annotated_type.keys]
+        if __debug__:
+            for key, annotated_member_type, member_type in zip(
+                annotated_type.keys, annotated_type.types, member_types, strict=True
+            ):
+                if not type_info.is_concretizable(annotated_member_type, to_type=member_type):
+                    raise ValueError(
+                        f"Member '{key}' of '{type(value).__name__}' has type '{member_type}',"
+                        f" which is incompatible with its annotation '{annotated_member_type}'."
+                    )
+        assert all(isinstance(t, (ts.DataType, ts.DimensionType)) for t in member_types)
+        return ts.NamedCollectionType(
+            types=cast(list[ts.DataType], member_types),
+            keys=list(annotated_type.keys),
+            original_python_type=annotated_type.original_python_type,
+        )
     elif isinstance(value, PythonNamespaceObject):
         return NamespaceProxy(value)
     else:

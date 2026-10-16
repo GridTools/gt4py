@@ -110,6 +110,45 @@ def test_named_tuple_like_constructed_outside(cartesian_case, testee):
     )
 
 
+class VarLenMemberNamedTuple(NamedTuple):
+    tracers: tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]
+    rho: gtx.Field[[IDim, JDim], gtx.float32]
+
+
+@dataclasses.dataclass
+class VarLenMemberDataclass:
+    tracers: tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]
+    rho: gtx.Field[[IDim, JDim], gtx.float32]
+
+
+@gtx.field_operator
+def add_rho_named_tuple(
+    c: VarLenMemberNamedTuple,
+) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]:
+    return tuple(tracer + c.rho for tracer in c.tracers)
+
+
+@gtx.field_operator
+def add_rho_dataclass(
+    c: VarLenMemberDataclass,
+) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]:
+    return tuple(tracer + c.rho for tracer in c.tracers)
+
+
+@pytest.mark.parametrize("testee", [add_rho_named_tuple, add_rho_dataclass])
+@pytest.mark.uses_tuple_args
+def test_named_collection_with_var_len_tuple_member(cartesian_case, testee):
+    c = cases.allocate(cartesian_case, testee, "c")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    cases.verify(
+        cartesian_case,
+        testee,
+        c,
+        out=out,
+        ref=tuple(t.asnumpy() + c.rho.asnumpy() for t in c.tracers),
+    )
+
+
 @gtx.field_operator
 def constructed_inside_named_tuple(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
@@ -307,7 +346,7 @@ class StateNamedTuple(NamedTuple):
     value: gtx.float32
 
 
-@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=0.0))
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateDataclass(value=gtx.float32(0.0)))
 def scan_dataclass(
     state: StateDataclass,
     inp: gtx.float32,
@@ -322,7 +361,7 @@ def scan_dataclass_wrapper(inp: gtx.Field[[KDim], gtx.float32]) -> gtx.Field[[KD
     return scan_dataclass(inp).value
 
 
-@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateNamedTuple(value=0.0))
+@gtx.scan_operator(axis=cases.KDim, forward=True, init=StateNamedTuple(value=gtx.float32(0.0)))
 def scan_named_tuple(
     state: StateNamedTuple,
     inp: gtx.float32,
