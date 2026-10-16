@@ -117,6 +117,18 @@ def callable_type_info_cases():
             returns=float_type,
         ),
     )
+    var_len_scanop_type = ts_ffront.ScanOperatorType(
+        axis=KDim,
+        definition=ts.FunctionType(
+            pos_only_args=[],
+            pos_or_kw_args={
+                "carry": float_type,
+                "a": ts.VarLenTupleType(element_type=int_type),
+            },
+            kw_only_args={},
+            returns=float_type,
+        ),
+    )
 
     return [
         # func_type, pos_only_args, kwargs, expected incompatibilities, return type
@@ -347,6 +359,56 @@ def callable_type_info_cases():
                 r"Field\[\[\.\.\.\], int64\]\]', got 'tuple\[Field\[\[I, J, K\], int64\]\]'."
             ],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        # scan operator with a variable-length tuple parameter
+        (
+            # concrete, homogeneous argument
+            var_len_scanop_type,
+            [
+                ts.TupleType(
+                    types=[
+                        ts.FieldType(dims=[IDim, JDim], dtype=int_type),
+                        ts.FieldType(dims=[IDim, JDim], dtype=int_type),
+                    ]
+                )
+            ],
+            {},
+            [],
+            ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        (
+            # still generic argument, e.g. a variable-length tuple parameter of a program
+            var_len_scanop_type,
+            [ts.VarLenTupleType(element_type=ts.FieldType(dims=[IDim, JDim], dtype=int_type))],
+            {},
+            [],
+            ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        (
+            # heterogeneous argument
+            var_len_scanop_type,
+            [
+                ts.TupleType(
+                    types=[
+                        ts.FieldType(dims=[IDim], dtype=int_type),
+                        ts.FieldType(dims=[JDim], dtype=int_type),
+                    ]
+                )
+            ],
+            {},
+            [
+                r"Expected argument 'a' to be of type 'tuple\[Field\[\[\.\.\.\], int64\], "
+                r"\.\.\.\]', got 'tuple\[Field\[\[I\], int64\], Field\[\[J\], int64\]\]'."
+            ],
+            ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
+        ),
+        (
+            # the empty tuple is a valid concretization of a variable-length tuple
+            var_len_scanop_type,
+            [ts.TupleType(types=[])],
+            {},
+            [],
+            ts.FieldType(dims=[KDim], dtype=float_type),
         ),
         (
             ts.FunctionType(

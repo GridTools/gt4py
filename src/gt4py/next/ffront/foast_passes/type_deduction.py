@@ -865,6 +865,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             return result
         elif isinstance(iterable.type, ts.VarLenTupleType):
             element_type = iterable.type.element_type
+            assert isinstance(element_type, ts.DataType)  # 'DeferredType' can not occur here
             new_mapper = self._deduce_tuple_comprehension_mapper(
                 node, target, element_type, **kwargs
             )

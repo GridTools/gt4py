@@ -228,6 +228,24 @@ def test_var_len_tuple_per_element_domain_exception(var_len_tuple_scale_op):
     )
 
 
+def test_var_len_tuple_scan_arg():
+    # A variable-length tuple program parameter forwarded to a scan operator: the scan
+    # signature check runs against the still generic (declared) argument type.
+    KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=float64(0.0))
+    def scan_tracers(carry: float64, tracers: tuple[float64, ...]) -> float64:
+        return carry
+
+    def scan_program(
+        tracers: tuple[gtx.Field[[KDim], float64], ...],
+        out: gtx.Field[[KDim], float64],
+    ):
+        scan_tracers(tracers, out=out)
+
+    ProgramParser.apply_to_function(scan_program)
+
+
 def test_domain_exception_1(identity_def):
     domain_format_1 = gtx.field_operator(identity_def)
 

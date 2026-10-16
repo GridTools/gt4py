@@ -180,7 +180,7 @@ def tree_map_type_constructor(
 ) -> ts.CollectionTypeSpecT | ts.VarLenTupleType:
     if isinstance(value, ts.VarLenTupleType):
         (element_type,) = elems
-        assert isinstance(element_type, ts.DataType)
+        assert isinstance(element_type, (ts.DataType, ts.DeferredType))
         return ts.VarLenTupleType(element_type=element_type)
     return (
         ts.NamedCollectionType(

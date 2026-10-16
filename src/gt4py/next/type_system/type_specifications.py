@@ -150,7 +150,8 @@ class VarLenTupleType(DataType):
     `TupleType` (or stays variable-length in length-agnostic code paths).
     """
 
-    element_type: DataType
+    # TODO(tehrengruber): `DeferredType` should be removed again, see `TupleType.types`.
+    element_type: DataType | DeferredType
 
     def __str__(self) -> str:
         return f"tuple[{self.element_type}, ...]"
