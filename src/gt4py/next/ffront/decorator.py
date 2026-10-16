@@ -215,7 +215,11 @@ def _field_domain_descriptor_mapping_from_func_type(func_type: ts.FunctionType) 
         for el_type_, path in type_info.primitive_constituents(type_, with_path_arg=True):
             if isinstance(el_type_, ts.FieldType):
                 if any(isinstance(idx, type_info.VarLenTupleElementKey) for idx in path):
-                    raise NotImplementedError()
+                    raise NotImplementedError(
+                        f"Static domains are not supported for parameter '{name}': the "
+                        "elements of a variable-length tuple can not be addressed before "
+                        "the concrete length is known at the call."
+                    )
                 path_as_expr = "".join(f"[{idx}]" for idx in path)
                 static_domain_args.append(f"{name}{path_as_expr}")
     return static_domain_args
