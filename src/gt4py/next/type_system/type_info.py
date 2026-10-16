@@ -1050,8 +1050,15 @@ def accepts_args(
 
 def needs_value_extraction(
     type_spec: ts.TypeSpec,
-) -> typing_extensions.TypeIs[ts.NamedCollectionType | ts.TupleType]:
-    return isinstance(type_spec, ts.NamedCollectionType) or (
-        isinstance(type_spec, ts.TupleType)
-        and any(needs_value_extraction(t) for t in type_spec.types)
+) -> typing_extensions.TypeIs[ts.NamedCollectionType | ts.TupleType | ts.VarLenTupleType]:
+    return (
+        isinstance(type_spec, ts.NamedCollectionType)
+        or (
+            isinstance(type_spec, ts.TupleType)
+            and any(needs_value_extraction(t) for t in type_spec.types)
+        )
+        or (
+            isinstance(type_spec, ts.VarLenTupleType)
+            and needs_value_extraction(type_spec.element_type)
+        )
     )

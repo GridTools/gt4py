@@ -150,6 +150,60 @@ def test_named_collection_with_var_len_tuple_member(cartesian_case, testee):
 
 
 @gtx.field_operator
+def sum_named_tuple_elements(
+    pairs: tuple[NamedTupleNamedCollection, ...],
+) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]:
+    return tuple(p.u + p.v for p in pairs)
+
+
+@gtx.field_operator
+def sum_dataclass_elements(
+    pairs: tuple[DataclassNamedCollection, ...],
+) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]:
+    return tuple(p.u + p.v for p in pairs)
+
+
+@pytest.mark.parametrize("testee", [sum_named_tuple_elements, sum_dataclass_elements])
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_var_len_tuple_of_named_collections(cartesian_case, testee):
+    pairs = cases.allocate(cartesian_case, testee, "pairs")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+    cases.verify(
+        cartesian_case,
+        testee,
+        pairs,
+        out=out,
+        ref=tuple(p.u.asnumpy() + p.v.asnumpy() for p in pairs),
+    )
+
+
+@dataclasses.dataclass
+class PairsContainer:
+    pairs: tuple[DataclassNamedCollection, ...]
+    offset: gtx.Field[[IDim, JDim], gtx.float32]
+
+
+@gtx.field_operator
+def sum_nested_pairs(c: PairsContainer) -> tuple[gtx.Field[[IDim, JDim], gtx.float32], ...]:
+    return tuple(p.u + p.v + c.offset for p in c.pairs)
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_tuple_returns
+def test_named_collection_with_var_len_tuple_of_named_collections_member(cartesian_case):
+    c = cases.allocate(cartesian_case, sum_nested_pairs, "c")()
+    out = cases.allocate(cartesian_case, sum_nested_pairs, cases.RETURN)()
+    cases.verify(
+        cartesian_case,
+        sum_nested_pairs,
+        c,
+        out=out,
+        ref=tuple(p.u.asnumpy() + p.v.asnumpy() + c.offset.asnumpy() for p in c.pairs),
+    )
+
+
+@gtx.field_operator
 def constructed_inside_named_tuple(
     vel: tuple[gtx.Field[[IDim, JDim], gtx.float32], gtx.Field[[IDim, JDim], gtx.float32]],
 ) -> NamedTupleNamedCollection:

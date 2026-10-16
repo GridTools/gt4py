@@ -464,6 +464,21 @@ def test_from_value_named_collection_var_len_tuple_member(container):
     )
 
 
+def test_from_value_var_len_tuple_of_named_collections():
+    # the declared type is a variable-length tuple of named collections ...
+    assert type_translation.from_type_hint(
+        tuple[cnc.NamedTupleNamedCollection, ...]
+    ) == ts.VarLenTupleType(element_type=NamedTupleNamedCollectionTypeSpec)
+    # ... while the type of a value has a concrete length
+    value = (
+        cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+        cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+    )
+    assert type_translation.from_value(value) == ts.TupleType(
+        types=[NamedTupleNamedCollectionTypeSpec, NamedTupleNamedCollectionTypeSpec]
+    )
+
+
 def test_from_value_named_collection_scalar_member():
     assert type_translation.from_value(
         ScalarMemberDataclass(value=np.float32(0.0))
