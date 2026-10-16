@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Iterable, Optional, Protocol
+from typing import TYPE_CHECKING, Optional, Protocol
 
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
@@ -27,6 +27,7 @@ from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_python_codegen,
     gtir_to_sdfg,
+    gtir_to_sdfg_fieldop,
     gtir_to_sdfg_lambda,
     gtir_to_sdfg_types,
     gtir_to_sdfg_utils,
@@ -34,7 +35,9 @@ from gt4py.next.program_processors.runners.dace.lowering import (
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_concat_where import (
     translate_concat_where,
 )
-from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import translate_scan
+from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import (
+    translate_scan_fieldop,
+)
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
@@ -62,154 +65,6 @@ class PrimitiveTranslator(Protocol):
             in the case the returned data is an array, because the type provdes the domain
             information (e.g. order of dimensions, dimension types).
         """
-
-
-def _parse_fieldop_arg(
-    node: gtir.Expr,
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    domain: gtir_domain.FieldopDomain,
-) -> gtir_to_sdfg_lambda.IteratorExpr | gtir_to_sdfg_lambda.MemletExpr:
-    """
-    Helper method to visit an expression passed as argument to a field operator
-    and create the local view for the field argument.
-    """
-    arg = sdfg_builder.visit(node, ctx=ctx)
-
-    if not isinstance(arg, gtir_to_sdfg_types.FieldopData):
-        raise ValueError("Expected a field, found a tuple of fields.")
-    return arg.get_local_view(domain, ctx.sdfg)
-
-
-def _create_field_operator_impl(
-    ctx: gtir_to_sdfg.SubgraphContext,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    field_domain: gtir_domain.FieldopDomain,
-    output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
-    output_type: ts.FieldType,
-    map_exit: dace_nodes.MapExit,
-) -> gtir_to_sdfg_types.FieldopData:
-    """
-    Helper method to allocate a temporary array that stores one field computed
-    by a field operator.
-
-    This method is called by `_create_field_operator()`.
-
-    Args:
-        ctx: The SDFG context in which to lower the field operator.
-        sdfg_builder: The object used to build the map scope in the provided SDFG.
-        domain: The domain of the field operator that computes the field.
-        output_edge: The dataflow write edge representing the output data.
-        output_type: The GT4Py field type descriptor.
-        map_exit: The `MapExit` node of the field operator map scope.
-
-    Returns:
-        The field data descriptor, which includes the field access node in the
-        given `state` and the field domain offset.
-    """
-    dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
-
-    # the memory layout of the output field follows the field operator compute domain
-    field_dims, field_origin, field_shape = gtir_domain.get_field_layout(field_domain)
-    if len(field_domain) == 0:
-        # The field operator computes a zero-dimensional field, and the data subset
-        # is set later depending on the element type (`ts.ListType` or `ts.ScalarType`)
-        field_subset = dace_subsets.Range([])
-    else:
-        field_subset = gtir_domain.get_element_subset(field_dims, field_origin)
-
-    if isinstance(output_edge.result.gt_dtype, ts.ScalarType):
-        if output_edge.result.gt_dtype != output_type.dtype:
-            raise TypeError(
-                f"Type mismatch, expected {output_type.dtype} got {output_edge.result.gt_dtype}."
-            )
-        assert isinstance(dataflow_output_desc, dace.data.Scalar)
-    else:
-        assert isinstance(output_type.dtype, ts.ListType)
-        assert isinstance(output_edge.result.gt_dtype.element_type, ts.ScalarType)
-        if output_edge.result.gt_dtype.element_type != output_type.dtype.element_type:
-            raise TypeError(
-                f"Type mismatch, expected {output_type.dtype.element_type} got {output_edge.result.gt_dtype.element_type}."
-            )
-        assert isinstance(dataflow_output_desc, dace.data.Array)
-        assert len(dataflow_output_desc.shape) == 1
-        # extend the array with the local dimensions added by the field operator (e.g. `neighbors`)
-        assert all(dim.kind != gtx_common.DimensionKind.LOCAL for dim in field_dims)
-        assert output_edge.result.gt_dtype.offset_type is not None
-        local_dim = output_edge.result.gt_dtype.offset_type
-        # construct the full subset according to the canonical field domain
-        extended_dims = gtx_common.order_dimensions([*field_dims, local_dim])
-        local_idx = extended_dims.index(local_dim)
-
-        field_shape.insert(local_idx, dataflow_output_desc.shape[0])
-        field_subset = (
-            dace_subsets.Range(field_subset[:local_idx])
-            + dace_subsets.Range.from_array(dataflow_output_desc)
-            + dace_subsets.Range(field_subset[local_idx:])
-        )
-
-    # allocate local temporary storage
-    if len(field_shape) == 0:  # zero-dimensional field
-        field_name, _ = sdfg_builder.add_temp_scalar(ctx.sdfg, dataflow_output_desc.dtype)
-        field_subset = dace_subsets.Range.from_string("0")
-    else:
-        field_name, _ = sdfg_builder.add_temp_array(
-            ctx.sdfg, field_shape, dataflow_output_desc.dtype
-        )
-    field_node = ctx.state.add_access(field_name)
-
-    # and here the edge writing the dataflow result data through the map exit node
-    output_edge.connect(map_exit, field_node, field_subset)
-
-    return gtir_to_sdfg_types.FieldopData(
-        field_node, ts.FieldType(field_dims, output_edge.result.gt_dtype), tuple(field_origin)
-    )
-
-
-def _create_field_operator(
-    ctx: gtir_to_sdfg.SubgraphContext,
-    domain: gtir_domain.FieldopDomain,
-    node_type: ts.FieldType,
-    sdfg_builder: gtir_to_sdfg.SDFGBuilder,
-    input_edges: Iterable[gtir_to_sdfg_lambda.DataflowInputEdge],
-    output_edge: gtir_to_sdfg_lambda.DataflowOutputEdge,
-) -> gtir_to_sdfg_types.FieldopResult:
-    """
-    Helper method to build the output of a field operator.
-
-    Args:
-        ctx: The SDFG context in which to lower the field operator.
-        domain: The domain of the field operator that computes the field.
-        node_type: The GT4Py type of the IR node that produces this field.
-        sdfg_builder: The object used to build the map scope in the provided SDFG.
-        input_edges: List of edges to pass input data into the dataflow.
-        output_edge: Edge corresponding to the dataflow output.
-
-    Returns:
-        The descriptor of the field operator result, which is a single field defined
-        on the domain of the field operator.
-    """
-
-    if len(domain) == 0:
-        # create a trivial map for zero-dimensional fields
-        map_range = {
-            "__gt4py_zerodim": "0",
-        }
-    else:
-        # create map range corresponding to the field operator domain
-        map_range = {
-            gtir_to_sdfg_utils.get_map_variable(
-                domain_range.dim
-            ): f"{domain_range.start}:{domain_range.stop}"
-            for domain_range in domain
-        }
-    map_entry, map_exit = sdfg_builder.add_map("fieldop", ctx.state, map_range)
-
-    # here we setup the edges passing through the map entry node
-    for edge in input_edges:
-        edge.connect(map_entry)
-
-    return _create_field_operator_impl(ctx, sdfg_builder, domain, output_edge, node_type, map_exit)
 
 
 def translate_as_fieldop(
@@ -240,19 +95,19 @@ def translate_as_fieldop(
         )
     fieldop_expr, fieldop_domain_expr = fun_node.args
 
-    if cpm.is_call_to(fieldop_expr, "scan"):
-        return translate_scan(node, ctx, sdfg_builder)
-
-    if not isinstance(node.type, ts.FieldType):
-        raise NotImplementedError("Unexpected 'as_fieldop' with tuple output in SDFG lowering.")
-
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
         domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
     )
 
+    if cpm.is_call_to(fieldop_expr, "scan"):
+        raise AssertionError(
+            "The 'scan' operator should be lowered by 'translate_scan_fieldop()' instead of 'translate_as_fieldop()'."
+        )
+
     if cpm.is_ref_to(fieldop_expr, "deref"):
+        assert isinstance(node.type, ts.FieldType)
         arg_type = node.args[0].type
         assert isinstance(arg_type, (ts.FieldType, ts.ScalarType))
         if arg_type != node.type:
@@ -277,16 +132,18 @@ def translate_as_fieldop(
         )
 
     # visit the list of arguments to be passed to the lambda expression
-    fieldop_args = [_parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain) for arg in node.args]
+    fieldop_args = [
+        gtir_to_sdfg_fieldop.parse_fieldop_arg(arg, ctx, sdfg_builder, field_domain)
+        for arg in node.args
+    ]
 
     # represent the field operator as a mapped tasklet graph, which will range over the field domain
-    input_edges, output_edge = gtir_to_sdfg_lambda.translate_lambda_to_dataflow(
+    input_edges, output_tree = gtir_to_sdfg_lambda.translate_lambda_to_dataflow(
         ctx.sdfg, ctx.state, sdfg_builder, stencil_expr, fieldop_args
     )
-    assert isinstance(output_edge, gtir_to_sdfg_lambda.DataflowOutputEdge)
 
-    return _create_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
+    return gtir_to_sdfg_fieldop.create_field_operator(
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_tree, node.annex.domain
     )
 
 
@@ -498,8 +355,8 @@ def translate_index(
         gtir_to_sdfg_lambda.EmptyInputEdge(ctx.state, index_write_tasklet),
     ]
     output_edge = gtir_to_sdfg_lambda.DataflowOutputEdge(ctx.state, index_value)
-    return _create_field_operator(
-        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge
+    return gtir_to_sdfg_fieldop.create_field_operator(
+        ctx, field_domain, node.type, sdfg_builder, input_edges, output_edge, node.annex.domain
     )
 
 
@@ -745,6 +602,6 @@ if TYPE_CHECKING:
         translate_make_tuple,
         translate_tuple_get,
         translate_scalar_expr,
-        translate_scan,
+        translate_scan_fieldop,
         translate_symbol_ref,
     ]
