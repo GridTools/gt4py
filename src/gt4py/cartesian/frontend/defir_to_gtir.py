@@ -39,6 +39,8 @@ from gt4py.cartesian.frontend.nodes import (
     Expr,
     FieldDecl,
     FieldRef,
+    For,
+    ForIndex,
     HorizontalIf,
     If,
     IterationOrder,
@@ -578,6 +580,19 @@ class DefIRToGTIR(IRNodeVisitor):
     def visit_While(self, node: While) -> gtir.While:
         return gtir.While(
             cond=self.visit(node.condition),
+            body=self.visit(node.body),
+            loc=location_to_source_location(node.loc),
+        )
+
+    def visit_ForIndex(self, node: ForIndex) -> gtir.ForIndex:
+        return gtir.ForIndex(name=node.name, dtype=common.DataType(node.data_type.value))
+
+    def visit_For(self, node: For) -> gtir.For:
+        return gtir.For(
+            index_name=node.index_name,
+            iter_start=node.iter_start,
+            iter_stop=node.iter_stop,
+            iter_step=node.iter_step,
             body=self.visit(node.body),
             loc=location_to_source_location(node.loc),
         )
