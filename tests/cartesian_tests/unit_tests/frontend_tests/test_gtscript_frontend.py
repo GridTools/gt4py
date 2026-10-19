@@ -2277,24 +2277,40 @@ class TestTemporaryTypes:
         def temporary_int_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary: int = 12
-                field[0, 0, 0] = temporary
+                temporary_as_upper_case: Int = 12
+                field[0, 0, 0] = temporary + temporary_as_upper_case
 
         def temporary_float_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary: float = 12
-                field[0, 0, 0] = temporary
+                temporary_as_upper_case: Float = 12
+                field[0, 0, 0] = temporary + temporary_as_upper_case
 
         def temporary_float32_64_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary32: float32 = 12.12
+                temporary32_as_upper_case: Float32 = 12.12
                 temporary64: float64 = 34.34
-                field[0, 0, 0] = temporary32 + temporary64
+                temporary64_as_upper_case: Float64 = 34.34
+                field[0, 0, 0] = (
+                    temporary32
+                    + temporary64
+                    + temporary32_as_upper_case
+                    + temporary64_as_upper_case
+                )
 
         def temporary_int32_64_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary32: int32 = 12
+                temporary_as_upper_case_32: int32 = 12
                 temporary64: int64 = 34
-                field[0, 0, 0] = temporary32 + temporary64
+                temporary_as_upper_case_64: int64 = 34
+                field[0, 0, 0] = (
+                    temporary32
+                    + temporary_as_upper_case_32
+                    + temporary64
+                    + temporary_as_upper_case_64
+                )
 
         self.int_stencil = temporary_int_stencil
         self.float_stencil = temporary_float_stencil
@@ -2356,7 +2372,9 @@ class TestTemporaryTypes:
         ]
 
         assert field_decls[0].data_type == nodes.DataType.FLOAT32
-        assert field_decls[1].data_type == nodes.DataType.FLOAT64
+        assert field_decls[1].data_type == nodes.DataType.FLOAT32
+        assert field_decls[2].data_type == nodes.DataType.FLOAT64
+        assert field_decls[3].data_type == nodes.DataType.FLOAT64
 
     def test_explicit_int_precision_temp_defn(self):
         def_ir = parse_definition(
@@ -2372,7 +2390,9 @@ class TestTemporaryTypes:
         ]
 
         assert field_decls[0].data_type == nodes.DataType.INT32
-        assert field_decls[1].data_type == nodes.DataType.INT64
+        assert field_decls[1].data_type == nodes.DataType.INT32
+        assert field_decls[2].data_type == nodes.DataType.INT64
+        assert field_decls[3].data_type == nodes.DataType.INT64
 
 
 class TestNumpyTypedConstants:
