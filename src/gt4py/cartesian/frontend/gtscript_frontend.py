@@ -968,14 +968,28 @@ class IRMaker(ast.NodeVisitor):
             "trunc": nodes.NativeFunction.TRUNC,
             "int32": nodes.NativeFunction.INT32,
             "int64": nodes.NativeFunction.INT64,
+            "Int32": nodes.NativeFunction.INT32,
+            "Int64": nodes.NativeFunction.INT64,
             "float32": nodes.NativeFunction.FLOAT32,
             "float64": nodes.NativeFunction.FLOAT64,
+            "Float32": nodes.NativeFunction.FLOAT32,
+            "Float64": nodes.NativeFunction.FLOAT64,
             "int": (
                 nodes.NativeFunction.INT32
                 if self.literal_int_precision == 32
                 else nodes.NativeFunction.INT64
             ),
             "float": (
+                nodes.NativeFunction.FLOAT32
+                if self.literal_float_precision == 32
+                else nodes.NativeFunction.FLOAT64
+            ),
+            "Int": (
+                nodes.NativeFunction.INT32
+                if self.literal_int_precision == 32
+                else nodes.NativeFunction.INT64
+            ),
+            "Float": (
                 nodes.NativeFunction.FLOAT32
                 if self.literal_float_precision == 32
                 else nodes.NativeFunction.FLOAT64
@@ -1002,6 +1016,18 @@ class IRMaker(ast.NodeVisitor):
                 nodes.DataType.INT32 if self.literal_int_precision == 32 else nodes.DataType.INT64
             ),
             "float": (
+                nodes.DataType.FLOAT32
+                if self.literal_float_precision == 32
+                else nodes.DataType.FLOAT64
+            ),
+            "Int32": nodes.DataType.INT32,
+            "Int64": nodes.DataType.INT64,
+            "Float32": nodes.DataType.FLOAT32,
+            "Float64": nodes.DataType.FLOAT64,
+            "Int": (
+                nodes.DataType.INT32 if self.literal_int_precision == 32 else nodes.DataType.INT64
+            ),
+            "Float": (
                 nodes.DataType.FLOAT32
                 if self.literal_float_precision == 32
                 else nodes.DataType.FLOAT64
