@@ -2302,9 +2302,9 @@ class TestTemporaryTypes:
         def temporary_int32_64_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary32: int32 = 12
-                temporary_as_upper_case_32: int32 = 12
+                temporary_as_upper_case_32: Int32 = 12
                 temporary64: int64 = 34
-                temporary_as_upper_case_64: int64 = 34
+                temporary_as_upper_case_64: Int64 = 34
                 field[0, 0, 0] = (
                     temporary32
                     + temporary_as_upper_case_32
