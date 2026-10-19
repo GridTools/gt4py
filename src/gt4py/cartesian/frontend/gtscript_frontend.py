@@ -1001,6 +1001,9 @@ class IRMaker(ast.NodeVisitor):
         }  # Conversion table for functions to NativeFunctions
 
         # Filter the field type from `dtypes`
+        # TODO: We could use `dtypes` (or extend into another paramters)
+        #       to reverse map the `node.NativeFunction` and the `node.DataType` to
+        #       allow user keywords to be defined in stencil for type hinting
         self.temporary_field_type = {}
         if self.dtypes:
             for name, _type in self.dtypes.items():
