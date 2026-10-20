@@ -95,19 +95,17 @@ def get_gt_pyext_build_opts(
         ]
     )
     extra_compile_args["cuda"] = [
-        "-std=c++20",
-        f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
         *extra_compile_args_from_config["cuda"],
     ]
     if is_rocm_gpu:
         extra_compile_args["cuda"] += [
-            f"-isystem{gt_include_path}",
-            "-fvisibility=hidden",
-            "-fPIC",
+            *extra_compile_args["cxx"],
             *([f"--offload-arch={cuda_arch}"] if cuda_arch else []),
         ]
     else:
         extra_compile_args["cuda"] += [
+            "-std=c++20",
+            f"-ftemplate-depth={gt_config.build_settings['cpp_template_depth']}",
             f"-isystem={gt_include_path}",
             f"-arch=sm_{cuda_arch}",
             "--expt-relaxed-constexpr",
@@ -115,6 +113,11 @@ def get_gt_pyext_build_opts(
             "-fvisibility=hidden",
             "--compiler-options",
             "-fPIC",
+            *(
+                arg
+                for cxx_compile_arg in extra_compile_args["cxx"]
+                for arg in f"--compiler-options {cxx_compile_arg}".split(" ")
+            ),
         ]
     extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
