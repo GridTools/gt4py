@@ -12,6 +12,7 @@ from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next import common, constructors
 
 I = common.Dimension("I")
@@ -250,6 +251,9 @@ def test_is_finite_symbolic_domain(ranges, expected):
         (("V2E", 0), {Edge: (0, 4)}),
         (("V2E", 0, "E2V", 0), {Vertex: (0, 4)}),
         (("V2V", 3, "V2E", 0), {Edge: (1, 4)}),
+        (("V2V", 4), {Vertex: (1, 3)}),
+        (("V2V", trace_shifts.Sentinel.ALL_NEIGHBORS), {Vertex: (0, 4)}),
+        (("V2V", 4, "V2V", trace_shifts.Sentinel.ALL_NEIGHBORS), {Vertex: (0, 4)}),
     ],
 )
 def test_unstructured_translate(shift_chain, expected_end_domain):
@@ -283,7 +287,9 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
             ).reshape((4, 1)),
         ),
     }
-    shift_chain = [im.ensure_offset(o) for o in shift_chain]
+    shift_chain = [
+        o if isinstance(o, trace_shifts.Sentinel) else im.ensure_offset(o) for o in shift_chain
+    ]
     expected_end_domain = im.domain(common.GridType.UNSTRUCTURED, expected_end_domain)
 
     init_domain = domain_utils.SymbolicDomain.from_expr(
@@ -319,6 +325,35 @@ def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
 
     expected = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, im.ref("num_edges"))})
     assert translated.as_expr() == expected
+
+
+@pytest.mark.parametrize(
+    "neighbor",
+    [trace_shifts.Sentinel.ALL_NEIGHBORS, trace_shifts.Sentinel.VALUE],
+)
+@pytest.mark.parametrize(
+    "vertex_range, expected_edge_range",
+    [((0, 4), (1, 6)), ((1, 3), (2, 6)), ((3, 4), (0, 0))],
+)
+def test_unstructured_translate_ignores_skip_values(neighbor, vertex_range, expected_edge_range):
+    offset_provider = {
+        "V2E": constructors.as_connectivity(
+            domain={Vertex: (0, 4), V2EDim: 3},
+            codomain=Edge,
+            data=np.asarray(
+                [[1, 2, -1], [2, 3, 4], [5, -1, -1], [-1, -1, -1]], dtype=fbuiltins.IndexType
+            ),
+            skip_value=-1,
+        )
+    }
+    domain = domain_utils.SymbolicDomain.from_expr(
+        im.domain(common.GridType.UNSTRUCTURED, {Vertex: vertex_range})
+    )
+    translated = domain.translate([itir.OffsetLiteral(value="V2E"), neighbor], offset_provider)
+
+    assert translated.as_expr() == im.domain(
+        common.GridType.UNSTRUCTURED, {Edge: expected_edge_range}
+    )
 
 
 def test_translate_staggered_cartesian_offset():
@@ -373,4 +408,5 @@ def test_oob_error():
         UserWarning,
         match=r"out-of-bounds",
     ):
-        domain.translate(shift_chain, offset_provider).as_expr()
+        translated = domain.translate(shift_chain, offset_provider)
+    assert translated.as_expr() == im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 2)})
