@@ -12,8 +12,8 @@ import tempfile
 
 import pytest
 
-from gt4py.next import config, fingerprinting
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next import config
+from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
@@ -22,7 +22,9 @@ def clean_compiledb_cache(extension_source_example):
     cache_dir = cache.get_cache_folder(
         ext_source=extension_source_example,
         lifetime=config.BuildCacheLifetime.SESSION,
-        build_context_id=fingerprinting.strict_fingerprinter(compiledb.CompiledbFactory()),
+        build_context_id=compiler.cpp_build_context_id(
+            compiledb.CompiledbFactory(), extension_source_example
+        ),
     )
     if cache_dir.exists():
         shutil.rmtree(cache_dir)

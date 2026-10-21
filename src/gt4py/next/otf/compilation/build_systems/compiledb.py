@@ -17,7 +17,7 @@ import subprocess
 from typing import Final, Optional, TypeVar
 
 from gt4py._core import file_utils, locking
-from gt4py.next import config, errors, fingerprinting
+from gt4py.next import config, errors
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -80,7 +80,7 @@ class CompiledbFactory(
             root_path=cache.get_cache_folder(
                 source,
                 cache_lifetime,
-                build_context_id=fingerprinting.strict_fingerprinter(self),
+                build_context_id=compiler.cpp_build_context_id(self, source),
             ),
             program_name=name,
             source_files={

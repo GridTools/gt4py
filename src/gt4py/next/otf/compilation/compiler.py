@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeGuard, TypeVar
+from typing import Final, Protocol, TypeGuard, TypeVar
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import artifacts, workflow
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_data, cache, importer, toolchain
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -35,6 +35,25 @@ def is_usable(
     without the artifact; such a build folder must be rebuilt, not reused.
     """
     return data is not None and is_compiled(data) and module_exists(data, src_dir)
+
+
+#: Python distributions compiled into every C++-like program.
+CPP_DISTRIBUTIONS: Final[tuple[str, ...]] = ("gridtools-cpp", "nanobind")
+
+
+def cpp_build_context_id(
+    builder_factory: BuildSystemProjectGenerator,
+    source: artifacts.ExtensionSource,
+) -> str:
+    """Build context id of a C++-like program: the build system settings and the toolchain."""
+    return fingerprinting.strict_fingerprinter(
+        (
+            builder_factory,
+            toolchain.fingerprint(
+                source.program_source.code_spec.source_language, CPP_DISTRIBUTIONS
+            ),
+        )
+    )
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=artifacts.SourceCodeSpec)
@@ -102,7 +121,7 @@ class CPPCompiler(
         inp: artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
     ) -> CPPCompilationArtifact:
         build_context_id = (
-            fingerprinting.strict_fingerprinter(self.builder_factory)
+            cpp_build_context_id(self.builder_factory, inp)
             if self.fingerprint_builder_factory
             else ""
         )
