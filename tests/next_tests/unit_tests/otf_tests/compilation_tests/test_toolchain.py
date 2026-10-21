@@ -12,6 +12,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import cache, common, compiler, toolchain
 from gt4py.next.otf.compilation.build_systems import compiledb
 
@@ -61,6 +62,28 @@ def test_changed_cxx_changes_folder(
 
     assert folder_a != folder_b
     assert dict(toolchain.describe("CXX"))["CXX"] == "fake c++ 2.0"
+
+
+def test_changed_cxx_changes_compiledb_prototype(fresh_toolchain, monkeypatch, tmp_path):
+    def prototype_folder() -> pathlib.Path:
+        prototype = compiledb._cc_prototype_program_source(
+            deps=(),
+            build_type=config.CMakeBuildType.DEBUG,
+            cmake_flags=[],
+            code_spec=artifacts.CPPCodeSpec(),
+        )
+        return cache.get_cache_folder(
+            artifacts.ExtensionSource(prototype, artifacts.BindingSource("", ())),
+            config.BuildCacheLifetime.SESSION,
+        )
+
+    monkeypatch.setenv("CXX", _fake_compiler(tmp_path, "cxx_a", "fake c++ 1.0"))
+    folder_a = prototype_folder()
+    toolchain.describe.cache_clear()
+    monkeypatch.setenv("CXX", _fake_compiler(tmp_path, "cxx_b", "fake c++ 2.0"))
+
+    assert prototype_folder() != folder_a
+    assert prototype_folder().name.startswith(compiledb.COMPILEDB_PROTOTYPE_NAME_PREFIX)
 
 
 def test_cpu_ignores_device_toolchain(fresh_toolchain, monkeypatch, tmp_path):

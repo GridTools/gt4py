@@ -20,7 +20,7 @@ from gt4py._core import file_utils, locking
 from gt4py.next import config, errors
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
-from gt4py.next.otf.compilation import build_data, cache, compiler
+from gt4py.next.otf.compilation import build_data, cache, compiler, toolchain
 from gt4py.next.otf.compilation.build_systems import cmake
 
 
@@ -257,7 +257,9 @@ def _cc_prototype_program_source(
     cmake_flags: list[str],
     code_spec: artifacts.CPPLikeCodeSpec,
 ) -> artifacts.ProgramSource:
-    name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
+    # the compiledb holds the compiler command CMake configured, so it is keyed by the toolchain too
+    toolchain_id = toolchain.fingerprint(code_spec.source_language, compiler.CPP_DISTRIBUTIONS)
+    name = f"{_cc_prototype_program_name(deps, build_type.value, cmake_flags)}_{toolchain_id}"
     return artifacts.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
