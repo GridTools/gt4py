@@ -47,8 +47,16 @@ from gt4py.cartesian.gtscript import (
     int64,
 )
 
-
 # ---- Utilities -----
+
+user_dtypes = {
+    "Int": np.int32,
+    "Int32": np.int32,
+    "Int64": np.int64,
+    "Float": np.float32,
+    "Float32": np.float32,
+    "Float64": np.float64,
+}
 
 
 def parse_definition(
@@ -57,7 +65,7 @@ def parse_definition(
     name: str,
     module: str,
     externals: Optional[Dict[str, Any]] = None,
-    dtypes: Dict[Type, Type] = None,
+    dtypes: Optional[Dict[str, Type]] = None,
     literal_int_precision: int | None = None,
     literal_float_precision: int | None = None,
     rebuild=False,
@@ -2323,6 +2331,14 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_int_precision=64,
+            dtypes={
+                "Int": np.int32,
+                "Int32": np.int32,
+                "Int64": np.int64,
+                "Float": np.float32,
+                "Float32": np.float32,
+                "Float64": np.float64,
+            },
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2334,6 +2350,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_int_precision=32,
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2345,6 +2362,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_float_precision=64,
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2356,6 +2374,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_float_precision=32,
+            dtypes=user_dtypes,
         )
 
     def test_explicit_float_precision_temp_defn(self):
@@ -2363,6 +2382,7 @@ class TestTemporaryTypes:
             self.float_explicit_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
+            dtypes=user_dtypes,
         )
 
         field_decls = [
@@ -2381,6 +2401,7 @@ class TestTemporaryTypes:
             self.int_explicit_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
+            dtypes=user_dtypes,
         )
 
         field_decls = [
