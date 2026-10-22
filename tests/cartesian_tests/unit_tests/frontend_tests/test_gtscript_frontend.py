@@ -2331,14 +2331,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_int_precision=64,
-            dtypes={
-                "Int": np.int32,
-                "Int32": np.int32,
-                "Int64": np.int64,
-                "Float": np.float32,
-                "Float32": np.float32,
-                "Float64": np.float64,
-            },
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
