@@ -115,7 +115,7 @@ class IntervalParser(gt_meta.ASTPass):
 
         error_msg = "Invalid interval range specification"
 
-        if self.loc is not None:
+        if loc is not None:
             error_msg = f"{error_msg} at line {loc.line} (column: {loc.column})"
 
         self.interval_error = GTScriptSyntaxError(error_msg)
@@ -912,7 +912,7 @@ class IRMaker(ast.NodeVisitor):
         domain: nodes.Domain,
         options: gt_definitions.BuildOptions,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
-        dtypes: Optional[Dict[Type | str, Type]] = None,
+        dtypes: Optional[Dict[str, Type | nodes.DataType]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -936,7 +936,7 @@ class IRMaker(ast.NodeVisitor):
         self.decls_stack = []
         self.parsing_horizontal_region = False
         self.written_vars: Set[str] = set()
-        self.dtypes = dtypes
+        self.dtypes = dtypes or {}
         self.python_symbol_to_ir_op = {
             "abs": nodes.NativeFunction.ABS,
             "min": nodes.NativeFunction.MIN,
@@ -986,27 +986,13 @@ class IRMaker(ast.NodeVisitor):
             "round_away_from_zero": nodes.NativeFunction.ROUND_AWAY_FROM_ZERO,
         }  # Conversion table for functions to NativeFunctions
 
-        # Filter the field type from `dtypes`
-        self.temporary_field_type = {}
-        if self.dtypes:
-            for name, _type in self.dtypes.items():
-                if isinstance(_type, gtscript._FieldDescriptor):
-                    self.temporary_field_type[name] = _type
-
-        self.temporary_type_as_str_to_native_type = {
-            "int32": nodes.DataType.INT32,
-            "int64": nodes.DataType.INT64,
-            "float32": nodes.DataType.FLOAT32,
-            "float64": nodes.DataType.FLOAT64,
-            "int": (
-                nodes.DataType.INT32 if self.literal_int_precision == 32 else nodes.DataType.INT64
-            ),
-            "float": (
-                nodes.DataType.FLOAT32
-                if self.literal_float_precision == 32
-                else nodes.DataType.FLOAT64
-            ),
-        }  # Conversion table for types to DataTypes
+        # Conversion table for types to DataTypes
+        self.dtypes["int"] = (
+            nodes.DataType.INT32 if self.literal_int_precision == 32 else nodes.DataType.INT64
+        )
+        self.dtypes["float"] = (
+            nodes.DataType.FLOAT32 if self.literal_float_precision == 32 else nodes.DataType.FLOAT64
+        )
 
     def __call__(self, ast_root: ast.AST):
         assert (
@@ -1229,7 +1215,7 @@ class IRMaker(ast.NodeVisitor):
 
     # Visitor methods
     # -- Special nodes --
-    def visit_Raise(self):
+    def visit_Raise(self, node: ast.Raise):
         return nodes.InvalidBranch()
 
     # -- Literal nodes --
@@ -1530,7 +1516,7 @@ class IRMaker(ast.NodeVisitor):
     def visit_And(self, node: ast.And) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.AND
 
-    def visit_Or(self, node: ast.And) -> nodes.BinaryOperator:
+    def visit_Or(self, node: ast.Or) -> nodes.BinaryOperator:
         return nodes.BinaryOperator.OR
 
     def visit_Eq(self, node: ast.Eq) -> nodes.BinaryOperator:
@@ -1858,14 +1844,12 @@ class IRMaker(ast.NodeVisitor):
                         try:
                             dtype_or_field_desc = eval(
                                 source,
-                                self.temporary_type_as_str_to_native_type
-                                | self.temporary_field_type
-                                | gtscript.__dict__,
+                                self.dtypes | gtscript.__dict__,
                             )
                         except NameError:
                             raise GTScriptSyntaxError(
                                 message=f"Failed to recognize type {source} for local symbol {name}."
-                                f"Available types are {self.temporary_type_as_str_to_native_type.keys()}, {self.dtypes}, "
+                                f"Available types are {self.dtypes}, "
                                 "or `Field[IJ, dtype]`.",
                                 loc=nodes.Location.from_ast_node(t),
                             ) from None
