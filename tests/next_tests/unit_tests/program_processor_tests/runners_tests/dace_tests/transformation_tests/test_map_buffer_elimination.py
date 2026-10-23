@@ -262,80 +262,111 @@ def test_map_buffer_elimination_not_apply():
 
 def test_map_buffer_elimination_with_nested_sdfgs():
     """
-    After removing a transient connected to a nested SDFG node, ensure that the strides
-    are propagated to the arrays in nested SDFG.
+    After removing a transient connected to a nested SDFG node, ensure that the connector
+    of the nested SDFG is restated as the new data, including its shape and strides.
+
+    A nested SDFG connector has to be equivalent to the data connected to it. Thus,
+    the connectors initially describe the transients `tmp`, `tmp1` and `tmp2`, which
+    are written back into `__out`. Once the transients are removed, the
+    connectors, also the one of the second level, have to describe `__out`.
     """
 
-    stride1, stride2, stride3 = [dace.symbol(f"stride{i}", dace.int32) for i in range(3)]
+    strides = [dace.symbol(f"stride{i}", dace.int32) for i in range(3)]
+
+    def make_level2() -> dace.SDFG:
+        # Writes `tmp2`, then `__out[__i, __j, 0:10]` (i.e. `tmp1` of level 1).
+        nsdfg2 = dace.SDFG(util.unique_name("map_buffer_level2"))
+        for sym in ["__i", "__j"]:
+            nsdfg2.add_symbol(sym, dace.int32)
+        nsdfg2.add_array("__inp", (10,), dace.float64)
+        nsdfg2.add_array("__out", (10, 10, 10), dace.float64)
+        tmp2, _ = nsdfg2.add_temp_transient((10, 10, 10), dace.float64)
+        state2 = nsdfg2.add_state()
+        tmp2_node = state2.add_access(tmp2)
+        state2.add_mapped_tasklet(
+            "broadcast2",
+            map_ranges={"__k": "0:10"},
+            code="__oval = __ival + 1.0",
+            inputs={"__ival": dace.Memlet("__inp[__k]")},
+            outputs={"__oval": dace.Memlet(f"{tmp2}[__i, __j, __k]")},
+            output_nodes={tmp2_node},
+            external_edges=True,
+        )
+        state2.add_nedge(
+            tmp2_node,
+            state2.add_access("__out"),
+            dace.Memlet(f"{tmp2}[__i, __j, 0:10] -> [__i, __j, 0:10]"),
+        )
+        return nsdfg2
+
+    def make_level1() -> tuple[dace.SDFG, dace_nodes.NestedSDFG]:
+        # Writes `tmp1`, then `__out[__i, 0:10, 0:10]` (i.e. `tmp` of the top level).
+        nsdfg1 = dace.SDFG(util.unique_name("map_buffer_level1"))
+        nsdfg1.add_symbol("__i", dace.int32)
+        nsdfg1.add_array("__inp", (10,), dace.float64)
+        nsdfg1.add_array("__out", (10, 10, 10), dace.float64)
+        tmp1, _ = nsdfg1.add_temp_transient((10, 10, 10), dace.float64)
+        state1 = nsdfg1.add_state()
+        tmp1_node = state1.add_access(tmp1)
+
+        nsdfg2_node = state1.add_nested_sdfg(
+            make_level2(),
+            inputs={"__inp"},
+            outputs={"__out"},
+            symbol_mapping={"__i": "__i", "__j": "__j"},
+        )
+        me1, mx1 = state1.add_map("broadcast1", ndrange={"__j": "0:10"})
+        state1.add_memlet_path(
+            state1.add_access("__inp"),
+            me1,
+            nsdfg2_node,
+            dst_conn="__inp",
+            memlet=dace.Memlet("__inp[0:10]"),
+        )
+        state1.add_memlet_path(
+            nsdfg2_node,
+            mx1,
+            tmp1_node,
+            src_conn="__out",
+            memlet=dace.Memlet(f"{tmp1}[__i, __j, 0:10]"),
+        )
+        state1.add_nedge(
+            tmp1_node,
+            state1.add_access("__out"),
+            dace.Memlet(f"{tmp1}[__i, 0:10, 0:10] -> [__i, 0:10, 0:10]"),
+        )
+        return nsdfg1, nsdfg2_node
 
     # top-level sdfg
     sdfg = dace.SDFG(util.unique_name("map_buffer"))
-    inp, inp_desc = sdfg.add_array("__inp", (10,), dace.float64)
-    out, out_desc = sdfg.add_array(
-        "__out", (10, 10, 10), dace.float64, strides=(stride1, stride2, stride3)
-    )
-    tmp, _ = sdfg.add_temp_transient_like(out_desc)
+    sdfg.add_array("__inp", (10,), dace.float64)
+    _, out_desc = sdfg.add_array("__out", (10, 10, 10), dace.float64, strides=strides)
+    tmp, _ = sdfg.add_temp_transient((10, 10, 10), dace.float64)
     state = sdfg.add_state()
     tmp_node = state.add_access(tmp)
 
-    nsdfg1 = dace.SDFG(util.unique_name("map_buffer"))
-    inp1, inp1_desc = nsdfg1.add_array("__inp", (10,), dace.float64)
-    out1, out1_desc = nsdfg1.add_array("__out", (10, 10), dace.float64)
-    tmp1, _ = nsdfg1.add_temp_transient_like(out1_desc)
-    state1 = nsdfg1.add_state()
-    tmp1_node = state1.add_access(tmp1)
-
-    nsdfg2 = dace.SDFG(util.unique_name("map_buffer"))
-    inp2, _ = nsdfg2.add_array("__inp", (10,), dace.float64)
-    out2, out2_desc = nsdfg2.add_array("__out", (10,), dace.float64)
-    tmp2, _ = nsdfg2.add_temp_transient_like(out2_desc)
-    state2 = nsdfg2.add_state()
-    tmp2_node = state2.add_access(tmp2)
-
-    state2.add_mapped_tasklet(
-        "broadcast2",
-        map_ranges={"__i": "0:10"},
-        code="__oval = __ival + 1.0",
-        inputs={
-            "__ival": dace.Memlet(f"{inp2}[__i]"),
-        },
-        outputs={
-            "__oval": dace.Memlet(f"{tmp2}[__i]"),
-        },
-        output_nodes={tmp2_node},
-        external_edges=True,
+    nsdfg1, nsdfg2_node = make_level1()
+    nsdfg1_node = state.add_nested_sdfg(
+        nsdfg1, inputs={"__inp"}, outputs={"__out"}, symbol_mapping={"__i": "__i"}
     )
-    state2.add_nedge(tmp2_node, state2.add_access(out2), dace.Memlet.from_array(out2, out2_desc))
-
-    nsdfg2_node = state1.add_nested_sdfg(nsdfg2, inputs={"__inp"}, outputs={"__out"})
-    me1, mx1 = state1.add_map("broadcast1", ndrange={"__i": "0:10"})
-    state1.add_memlet_path(
-        state1.add_access(inp1),
-        me1,
-        nsdfg2_node,
-        dst_conn="__inp",
-        memlet=dace.Memlet.from_array(inp1, inp1_desc),
-    )
-    state1.add_memlet_path(
-        nsdfg2_node, mx1, tmp1_node, src_conn="__out", memlet=dace.Memlet(f"{tmp1}[__i, 0:10]")
-    )
-    state1.add_nedge(tmp1_node, state1.add_access(out1), dace.Memlet.from_array(out1, out1_desc))
-
-    nsdfg1_node = state.add_nested_sdfg(nsdfg1, inputs={"__inp"}, outputs={"__out"})
     me, mx = state.add_map("broadcast", ndrange={"__i": "0:10"})
     state.add_memlet_path(
-        state.add_access(inp),
+        state.add_access("__inp"),
         me,
         nsdfg1_node,
         dst_conn="__inp",
-        memlet=dace.Memlet.from_array(inp, inp_desc),
+        memlet=dace.Memlet("__inp[0:10]"),
     )
     state.add_memlet_path(
         nsdfg1_node, mx, tmp_node, src_conn="__out", memlet=dace.Memlet(f"{tmp}[__i, 0:10, 0:10]")
     )
-    state.add_nedge(tmp_node, state.add_access(out), dace.Memlet.from_array(out, out_desc))
-
+    state.add_nedge(tmp_node, state.add_access("__out"), dace.Memlet.from_array("__out", out_desc))
     sdfg.validate()
+
+    # Fortran order, so that the propagation of the strides is visible in the result.
+    stride_values = {"stride0": 1, "stride1": 10, "stride2": 100}
+    ref, res = util.make_sdfg_args(sdfg, symbols=stride_values)
+    util.compile_and_run_sdfg(sdfg, **ref)
 
     count = sdfg.apply_transformations_repeated(
         gtx_transformations.GT4PyMapBufferElimination(
@@ -345,5 +376,13 @@ def test_map_buffer_elimination_with_nested_sdfgs():
         validate_all=True,
     )
     assert count == 3
-    assert out1_desc.strides == out_desc.strides[1:]
-    assert out2_desc.strides == out_desc.strides[2:]
+
+    # The descriptors are replaced when a connector is restated, so look them up again.
+    for nsdfg_node in [nsdfg1_node, nsdfg2_node]:
+        inner_out_desc = nsdfg_node.sdfg.arrays["__out"]
+        assert inner_out_desc.shape == out_desc.shape
+        assert inner_out_desc.strides == out_desc.strides
+    assert tmp not in sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)

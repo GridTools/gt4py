@@ -287,7 +287,7 @@ def freeze_origin_domain_sdfg(
 
     # in special case of empty domain, remove entire SDFG.
     if any(d == 0 for d in domain):
-        states = wrapper_sdfg.states()
+        states = list(wrapper_sdfg.states())
         assert len(states) == 1
         for node in states[0].nodes():
             state.remove_node(node)
