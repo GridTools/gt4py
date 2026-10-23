@@ -562,6 +562,24 @@ class TestStrictFingerprinter:
         assert fp(self._connectivity(table)) != fp(self._connectivity([[1, 0], [0, 1]]))
         assert fp(self._connectivity(table)) != fp(self._connectivity(table, skip_value=-1))
 
+    def test_connectivity_fingerprint_is_independent_of_memory_order(self):
+        import numpy as np
+
+        import gt4py.next as gtx
+        from gt4py.next.embedded import nd_array_field
+
+        V = gtx.Dimension("V")
+        V2V = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+        table = np.array([[0, 1, 2], [1, 2, 0], [2, 0, 1], [0, 2, 1]], dtype=np.int32)
+        c_order, f_order = (
+            nd_array_field.NumPyArrayConnectivityField.from_array(data, V, domain={V: 4, V2V: 3})
+            for data in (table, np.asfortranarray(table))
+        )
+        assert f_order.ndarray.flags.f_contiguous
+        assert fingerprinting.strict_fingerprinter(c_order) == (
+            fingerprinting.strict_fingerprinter(f_order)
+        )
+
     def test_connectivity_table_is_copied_to_host_once(self):
         conn = self._connectivity([[0, 1], [1, 0]])
         with mock.patch.object(

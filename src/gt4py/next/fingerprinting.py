@@ -53,6 +53,7 @@ from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import Any, Final, Optional, TypeAlias, TypeVar
 from unittest import mock
 
+import numpy as np
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
@@ -208,11 +209,12 @@ _field_fingerprints: dict[int, tuple[weakref.ref, str]] = {}
 
 def _field_fingerprint(field: common.Field) -> str:
     # Memoized: a device buffer is copied to the host only once, not on every
-    # fingerprint. Fields are assumed not to be modified in place.
+    # fingerprint. Fields are assumed not to be modified in place. By content
+    # only: copies of the same field may come back in a different memory order.
     entry = _field_fingerprints.get(id(field))
     if entry is not None and entry[0]() is field:
         return entry[1]
-    fingerprint = strict_fingerprinter(field.asnumpy())
+    fingerprint = strict_fingerprinter(np.ascontiguousarray(field.asnumpy()))
 
     def _prune(ref: weakref.ref, key: int = id(field)) -> None:
         if (current := _field_fingerprints.get(key)) is not None and current[0] is ref:

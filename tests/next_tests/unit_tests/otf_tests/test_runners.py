@@ -211,11 +211,14 @@ def test_compilable_fingerprint_is_independent_of_runner(xp, tmp_path):
     Vertex = gtx.Dimension("Vertex")
     Edge = gtx.Dimension("Edge")
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-    conn = gtx.as_connectivity(
-        [Vertex, V2EDim], Edge, xp.asarray(np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32))
+    table = np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+    c_order = gtx.as_connectivity([Vertex, V2EDim], Edge, xp.asarray(table))
+    f_order = type(c_order).from_array(
+        xp.asarray(np.asfortranarray(table)), Edge, domain=c_order.domain
     )
+    assert f_order.ndarray.flags.f_contiguous
     compile_time_args = dataclasses.replace(
-        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
+        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": c_order, "V2EF": f_order}
     )
     backend = next_backend.Backend(
         name="test_backend",
