@@ -48,14 +48,16 @@ import functools
 import struct
 import sys
 import types
+import weakref
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from typing import Any, Final, Optional, TypeAlias, TypeVar
 from unittest import mock
 
+import numpy as np
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
-from gt4py.next import utils as next_utils
+from gt4py.next import common, utils as next_utils
 
 
 _T = TypeVar("_T")
@@ -200,7 +202,45 @@ def _instance_state(obj: Any) -> tuple[Any, ...]:
     return ((b"__dict__\0", state),) if state else ()
 
 
+#: Content fingerprints of fields, keyed by `id` (validated against a weakref,
+#: since ids can be reused).
+_field_fingerprints: dict[int, tuple[weakref.ref, str]] = {}
+
+
+def _field_fingerprint(field: common.Field) -> str:
+    # Memoized: a device buffer is copied to the host only once, not on every
+    # fingerprint. Fields are assumed not to be modified in place. By content
+    # only: copies of the same field may come back in a different memory order.
+    entry = _field_fingerprints.get(id(field))
+    if entry is not None and entry[0]() is field:
+        return entry[1]
+    fingerprint = strict_fingerprinter(np.ascontiguousarray(field.asnumpy()))
+
+    def _prune(ref: weakref.ref, key: int = id(field)) -> None:
+        if (current := _field_fingerprints.get(key)) is not None and current[0] is ref:
+            del _field_fingerprints[key]
+
+    try:
+        _field_fingerprints[id(field)] = (weakref.ref(field, _prune), fingerprint)
+    except TypeError:  # not weakref-able: correct but not memoized
+        pass
+    return fingerprint
+
+
+def _deconstruct_gather_connectivity(obj: common.GatherConnectivity) -> Deconstruction:
+    # By content only, never by array library or class: the same table on a
+    # device and in host memory must give the same fingerprint.
+    return Deconstruction.from_pieces(
+        obj.domain,
+        obj.codomain,
+        obj.skip_value,
+        _field_fingerprint(obj),
+        state=b"gather_connectivity",
+    )
+
+
 _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    common.GatherConnectivity: _deconstruct_gather_connectivity,
     **{
         # for mixin-based enums (`IntEnum`, `IntFlag`, `StrEnum`, ...) the value-type base
         # precedes `Enum` in the MRO and would win the dispatch.
