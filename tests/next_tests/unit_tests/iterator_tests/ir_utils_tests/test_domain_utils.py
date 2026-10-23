@@ -72,6 +72,23 @@ def test_domain_union():
     assert result.as_expr() == expected
 
 
+def test_domain_union_symbolic_bounds_do_not_grow():
+    # accumulate the union one domain at a time, as domain inference does
+    result = _make_domain({I: ("start", "stop")})
+    for offset in (-1, 1, -2, 0, 2, -1, 1):
+        shifted = domain_utils.SymbolicDomain(
+            grid_type=common.GridType.CARTESIAN,
+            ranges={
+                I: domain_utils.SymbolicRange(im.plus("start", offset), im.plus("stop", offset))
+            },
+        )
+        other = _make_domain({I: ("start", "other_stop")})
+        result = domain_utils.domain_union(result, shifted, other)
+
+    assert result.ranges[I].start == im.minus("start", 2)
+    assert result.ranges[I].stop == im.maximum(im.plus("stop", 2), "other_stop")
+
+
 def test_domain_union_drops_empty_domains():
     # Empty domains are the union's identity element; keeping them would over-approximate (#2205).
     non_empty = domain_utils.SymbolicDomain(

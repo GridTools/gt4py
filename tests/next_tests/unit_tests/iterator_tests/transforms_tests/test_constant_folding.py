@@ -226,3 +226,59 @@ def test_constant_folding(test_case):
     testee, expected = test_case
     actual = constant_folding.ConstantFolding.apply(testee)
     assert actual == im.ensure_expr(expected)
+
+
+@pytest.mark.parametrize(
+    "test_case",
+    (
+        # expr, simplified expr
+        (
+            im.maximum(im.maximum(im.maximum("a", "b"), "c"), "b"),
+            im.maximum(im.maximum("a", "b"), "c"),
+        ),
+        (
+            im.maximum(im.maximum("a", "b"), im.maximum("b", "c")),
+            im.maximum(im.maximum("a", "b"), "c"),
+        ),
+        (
+            im.maximum(im.maximum(im.maximum("a", im.plus("b", 1)), "c"), "b"),
+            im.maximum(im.maximum(im.plus("b", 1), "a"), "c"),
+        ),
+        (
+            im.maximum(im.maximum(im.maximum("a", "b"), "c"), im.plus("b", 1)),
+            im.maximum(im.maximum(im.plus("b", 1), "a"), "c"),
+        ),
+        (
+            im.minimum(im.minimum(im.minimum("a", im.minus("b", 4)), "c"), "b"),
+            im.minimum(im.minimum(im.minus("b", 4), "a"), "c"),
+        ),
+        (im.maximum(im.maximum(im.maximum("a", 3), "c"), 5), im.maximum(im.maximum("a", 5), "c")),
+        # absorption
+        (im.maximum(im.minimum("a", "b"), "b"), "b"),
+        (im.maximum(im.minimum("a", "b"), im.plus("b", 1)), im.plus("b", 1)),
+        (im.minimum(im.maximum("a", "b"), im.minus("b", 1)), im.minus("b", 1)),
+        (
+            im.maximum(im.minimum("a", im.plus("b", 2)), im.plus("b", 1)),
+            im.maximum(im.minimum(im.plus("b", 2), "a"), im.plus("b", 1)),
+        ),
+        (im.maximum(im.maximum(im.minimum("a", "b"), "c"), "b"), im.maximum("c", "b")),
+        # nothing to fold
+        (
+            im.maximum(im.maximum(im.minimum("a", "b"), "c"), "d"),
+            im.maximum(im.maximum(im.minimum("a", "b"), "c"), "d"),
+        ),
+    ),
+    ids=lambda x: str(x[0]),
+)
+def test_constant_folding_nested_min_max(test_case):
+    testee, expected = test_case
+    actual = constant_folding.ConstantFolding.apply(
+        testee, enabled_transformations=constant_folding.ConstantFolding.Transformation.all()
+    )
+    assert actual == im.ensure_expr(expected)
+
+
+def test_constant_folding_nested_min_max_not_by_default():
+    # reordering operands is only valid for integers (not for NaN)
+    testee = im.maximum(im.maximum("a", "b"), im.maximum("b", "c"))
+    assert constant_folding.ConstantFolding.apply(testee) == testee

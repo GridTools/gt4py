@@ -12,7 +12,7 @@ import dataclasses
 import enum
 import functools
 import operator
-from typing import Optional
+from typing import Any, Optional
 
 from gt4py import eve
 from gt4py.next.iterator import builtins, embedded, ir
@@ -49,6 +49,36 @@ class UndoCanonicalizeMinus(eve.NodeTranslator):
 _COMMUTATIVE_OPS = ("plus", "multiplies", "minimum", "maximum")
 
 
+@dataclasses.dataclass(frozen=True)
+class _Operand:
+    """An operand of `minimum`/`maximum` split as `base + offset`; `offset` is `None` if unknown."""
+
+    expr: ir.Expr
+    base: Optional[ir.Expr]
+    offset: Any
+
+    @classmethod
+    def from_expr(cls, expr: ir.Expr) -> _Operand:
+        if isinstance(expr, ir.InfinityLiteral):
+            return cls(expr, expr, None)
+        if isinstance(expr, ir.Literal) and expr.type is not None:
+            return cls(expr, None, ir_misc.value_from_literal(expr))
+        if (
+            cpm.is_call_to(expr, "plus")
+            and isinstance(expr.args[1], ir.Literal)
+            and expr.args[1].type is not None
+        ):
+            return cls(expr, expr.args[0], ir_misc.value_from_literal(expr.args[1]))
+        return cls(expr, expr, 0)
+
+
+def _min_max_operands(expr: ir.Expr, op: str) -> list[ir.Expr]:
+    """Operands of the tree of nested calls to `op` rooted at `expr`, in left-to-right order."""
+    if not cpm.is_call_to(expr, op):
+        return [expr]
+    return [operand for arg in expr.args for operand in _min_max_operands(arg, op)]
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class ConstantFolding(
     fixed_point_transformation.CombinedFixedPointTransform, eve.PreserveLocationVisitor
@@ -77,6 +107,10 @@ class ConstantFolding(
         # `maximum(maximum(a, 1), 1)` -> `maximum(a, 1)`
         FOLD_MIN_MAX = enum.auto()
 
+        # `maximum(maximum(maximum(a, b), c), b)` -> `maximum(maximum(a, b), c)`
+        # `maximum(maximum(a, b), maximum(b, c))` -> `maximum(maximum(a, b), c)`
+        FOLD_MIN_MAX_NESTED = enum.auto()
+
         # `maximum(a + 1, a)` -> `a + 1`
         # `maximum(a + 1, a + (-1))` -> `a + maximum(1, -1)`
         FOLD_MIN_MAX_PLUS = enum.auto()
@@ -99,13 +133,18 @@ class ConstantFolding(
         def all(self) -> ConstantFolding.Transformation:
             return functools.reduce(operator.or_, self.__members__.values())
 
-    enabled_transformations: Transformation = Transformation.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
+        @classmethod
+        def default(self) -> ConstantFolding.Transformation:
+            """All transformations that are valid regardless of the operand types."""
+            return self.all() & ~self.FOLD_MIN_MAX_NESTED
+
+    enabled_transformations: Transformation = Transformation.default()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     @classmethod
     def apply(
         cls, node: ir.Node, enabled_transformations: Optional[Transformation] = None
     ) -> ir.Node:
-        enabled_transformations = enabled_transformations or cls.Transformation.all()
+        enabled_transformations = enabled_transformations or cls.Transformation.default()
 
         node = cls(enabled_transformations=enabled_transformations).visit(node)
         return UndoCanonicalizeMinus().visit(node)
@@ -159,6 +198,54 @@ class ConstantFolding(
                 if arg1 in fun_call.args:  # type: ignore[attr-defined] # assured by if above
                     return fun_call
         return None
+
+    def transform_fold_min_max_nested(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
+        # `maximum(maximum(maximum(a, b), c), b)` -> `maximum(maximum(a, b), c)`
+        # `maximum(maximum(a, b), maximum(b + 1, c))` -> `maximum(maximum(a, b + 1), c)`
+        # `maximum(minimum(a, b), b + 1)` -> `b + 1`
+        # Only valid for integers: it reorders operands, which changes the result for NaN.
+        if not cpm.is_call_to(node, ("minimum", "maximum")) or not any(
+            cpm.is_call_to(arg, ("minimum", "maximum")) for arg in node.args
+        ):
+            return None
+        op = node.fun.id
+        dual_op = "minimum" if op == "maximum" else "maximum"
+        at_least = operator.ge if op == "maximum" else operator.le
+
+        def covers(this: _Operand, other: _Operand) -> bool:
+            # `this` is at least `other` in the direction of `op`
+            if this.base == other.base and this.offset is not None and other.offset is not None:
+                return at_least(this.offset, other.offset)
+            return this.expr == other.expr
+
+        operands = [_Operand.from_expr(expr) for expr in _min_max_operands(node, op)]
+        kept: list[_Operand] = []
+        for operand in operands:
+            for i, kept_operand in enumerate(kept):
+                if covers(kept_operand, operand):
+                    break
+                if covers(operand, kept_operand):
+                    kept[i] = operand
+                    break
+            else:
+                kept.append(operand)
+        # `op(..., k, ..., dual_op(..., d, ...))` with `d` covered by `k` does not depend on the
+        # `dual_op` call, since it is bounded by `d`.
+        for dual_call in [operand for operand in kept if cpm.is_call_to(operand.expr, dual_op)]:
+            if any(
+                covers(other, _Operand.from_expr(expr))
+                for expr in _min_max_operands(dual_call.expr, dual_op)
+                for other in kept
+                if other is not dual_call
+            ):
+                kept.remove(dual_call)
+
+        if len(kept) == len(operands):
+            return None
+        result: ir.Node = kept[0].expr
+        for operand in kept[1:]:
+            result = self.fp_transform(im.call(op)(result, operand.expr))
+        return result
 
     def transform_fold_min_max_plus(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         if (
