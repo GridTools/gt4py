@@ -334,7 +334,8 @@ def test_translate_staggered_cartesian_offset():
     )
 
 
-def test_non_contiguous_domain_warning(monkeypatch):
+@pytest.mark.parametrize("array_scalar", [False, True])
+def test_non_contiguous_domain_warning(monkeypatch, array_scalar):
     monkeypatch.setattr(domain_utils, "_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS", set())
 
     offset_provider = {
@@ -344,6 +345,21 @@ def test_non_contiguous_domain_warning(monkeypatch):
             data=np.asarray([0] + [99] * 99, dtype=fbuiltins.IndexType).reshape((100, 1)),
         )
     }
+    if array_scalar:
+        # CuPy reductions return 0-D arrays, which support float() but not round().
+        class ArrayScalarReduction(np.ndarray):
+            def min(self, *args, **kwargs):
+                return np.asarray(super().min(*args, **kwargs))
+
+            def max(self, *args, **kwargs):
+                return np.asarray(super().max(*args, **kwargs))
+
+        table = offset_provider["V2V"]
+        data = table.asnumpy()
+        monkeypatch.setattr(
+            type(table), "ndarray", property(lambda self: data.view(ArrayScalarReduction))
+        )
+
     shift_chain = ("V2V", 0)
     shift_chain = [im.ensure_offset(o) for o in shift_chain]
     domain = domain_utils.SymbolicDomain.from_expr(
