@@ -13,6 +13,7 @@
 - Faghih-Naini, Sara. ECMWF
 - Fandrich, Katrina. SSAI/NASA-GSFC
 - Farabullini, Nicoletta. ETH Zurich - EXCLAIM
+- Ganellari, Daniel. ETH Zurich - CSCS
 - George, Rhea. Allen Institute for AI
 - González Paredes, Enrique. ETH Zurich - CSCS
 - Gopal, Abishek. ETH Zurich - EXCLAIM
