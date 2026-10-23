@@ -19,7 +19,8 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend, config
+from gt4py._core import definitions as core_defs
+from gt4py.next import backend as next_backend, config, fingerprinting
 from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners
 
 from next_tests.fixtures import compilation as fixtures_compilation
@@ -185,6 +186,61 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     )
     pickle.dumps(task2.construct_compilable(True).args.offset_provider["V2E"])
     assert compilation_tasks._connectivity_files[id(conn)][1] == path
+
+
+@dataclasses.dataclass(frozen=True)
+class _FingerprintArtifact:
+    fingerprint: str
+
+    def load(self):
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _FingerprintingExecutor:
+    def __call__(self, compilable):
+        return _FingerprintArtifact(fingerprinting.strict_fingerprinter(compilable))
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_compilable_fingerprint_is_independent_of_runner(xp, tmp_path):
+    Vertex = gtx.Dimension("Vertex")
+    Edge = gtx.Dimension("Edge")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    conn = gtx.as_connectivity(
+        [Vertex, V2EDim], Edge, xp.asarray(np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32))
+    )
+    compile_time_args = dataclasses.replace(
+        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
+    )
+    backend = next_backend.Backend(
+        name="test_backend",
+        executor=_FingerprintingExecutor(),
+        allocator=None,
+        transforms=lambda inp: inp,
+    )
+    task = compilation_tasks.make_compilation_task(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+
+    all_runners = [
+        runners.SerialRunner(),
+        runners.ThreadRunner(max_workers=1),
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)),
+    ]
+    try:
+        fingerprints = [
+            runner.submit(task).result(timeout=120).fingerprint for runner in all_runners
+        ]
+    finally:
+        for runner in all_runners:
+            runner.shutdown(wait=True)
+
+    assert len(set(fingerprints)) == 1, fingerprints
 
 
 def test_connectivity_file_registry_prunes_on_gc():

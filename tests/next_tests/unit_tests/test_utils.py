@@ -9,6 +9,7 @@
 import copy
 import dataclasses
 import inspect
+from unittest import mock
 
 import pytest
 
@@ -540,6 +541,44 @@ class TestStrictFingerprinter:
         assert fingerprinting.strict_fingerprinter(a) != fingerprinting.strict_fingerprinter(
             a.astype(np.int64)
         )
+
+    @staticmethod
+    def _connectivity(table, xp=None, skip_value=None):
+        import numpy as np
+
+        import gt4py.next as gtx
+
+        V = gtx.Dimension("V")
+        V2V = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+        data = np.asarray(table, dtype=np.int32)
+        return gtx.as_connectivity(
+            [V, V2V], V, data if xp is None else xp.asarray(data), skip_value=skip_value
+        )
+
+    def test_connectivity_is_fingerprinted_by_content(self):
+        fp = fingerprinting.strict_fingerprinter
+        table = [[0, 1], [1, 0]]
+        assert fp(self._connectivity(table)) == fp(self._connectivity(table))
+        assert fp(self._connectivity(table)) != fp(self._connectivity([[1, 0], [0, 1]]))
+        assert fp(self._connectivity(table)) != fp(self._connectivity(table, skip_value=-1))
+
+    def test_connectivity_table_is_copied_to_host_once(self):
+        conn = self._connectivity([[0, 1], [1, 0]])
+        with mock.patch.object(
+            type(conn), "asnumpy", autospec=True, side_effect=type(conn).asnumpy
+        ) as asnumpy:
+            first = fingerprinting.strict_fingerprinter(conn)
+            assert fingerprinting.strict_fingerprinter(conn) == first
+        assert asnumpy.call_count == 1
+
+    @pytest.mark.requires_gpu
+    def test_connectivity_fingerprint_is_independent_of_array_library(self):
+        import cupy as cp
+
+        table = [[0, 1], [1, 0]]
+        assert fingerprinting.strict_fingerprinter(
+            self._connectivity(table, xp=cp)
+        ) == fingerprinting.strict_fingerprinter(self._connectivity(table))
 
     def test_copyreg_dispatch_table_reducers_are_honored(self):
         import numpy as np
