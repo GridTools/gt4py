@@ -76,8 +76,8 @@ def program_example():
 def test_codegen(program_example):
     fencil, parameters = program_example
     module = gtfn_module.translate_program_cpu(
-        stages.CompilableProgramDef(
-            data=fencil,
+        stages.CompilableProgram(
+            definition=fencil,
             args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
         )
     )
@@ -88,8 +88,8 @@ def test_codegen(program_example):
 
 def test_hash_and_diskcache(program_example, tmp_path):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
-        data=fencil,
+    compilable_program = stages.CompilableProgram(
+        definition=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     hash = fingerprinting.strict_fingerprinter(compilable_program)
@@ -110,7 +110,7 @@ def test_hash_and_diskcache(program_example, tmp_path):
 
     # hash is different if program changes
     altered_program_id = copy.deepcopy(compilable_program)
-    altered_program_id.data.id = "example2"
+    altered_program_id.definition.id = "example2"
     assert fingerprinting.strict_fingerprinter(
         compilable_program
     ) != fingerprinting.strict_fingerprinter(altered_program_id)
@@ -130,8 +130,8 @@ def test_hash_and_diskcache(program_example, tmp_path):
 
 def test_gtfn_file_cache(program_example):
     fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
-        data=fencil,
+    compilable_program = stages.CompilableProgram(
+        definition=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
     cached_gtfn_translation_step = gtfn.make_gtfn_compile_workflow(

@@ -59,7 +59,7 @@ def _no_backend_allocator(*args: Any, **kwargs: Any) -> None:
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-class NoBackend(next_backend.Backend):
+class NoBackend(next_backend.Toolchain):
     """Temporary default backend to not accidentally test the wrong backend."""
 
     def __call__(self, program, *args, **kwargs) -> None:
@@ -76,12 +76,12 @@ class NoBackend(next_backend.Backend):
 
 no_backend = NoBackend(
     name="no_backend",
-    executor=_no_backend_executor,
+    backend=_no_backend_executor,
     allocator=_no_backend_allocator,
     # TODO(tehrengruber): We don't want any transformations, but since `decorator.FieldOperator`
     #  and `decorator.Program` unconditionally do linting on construction we need the
     #  transformations. When this is up to the backend we can remove this again.
-    transforms=next_backend.DEFAULT_TRANSFORMS,
+    frontend=next_backend.DEFAULT_TRANSFORMS,
 )
 
 

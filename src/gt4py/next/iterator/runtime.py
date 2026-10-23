@@ -74,7 +74,7 @@ class FendefDispatcher:
     def __call__(
         self,
         *args,
-        backend: Optional[next_backend.Backend | program_formatter.ProgramFormatter] = None,
+        backend: Optional[next_backend.Toolchain | program_formatter.ProgramFormatter] = None,
         offset_provider=None,
         column_axis=None,
     ):
@@ -87,8 +87,8 @@ class FendefDispatcher:
             # TODO(tehrengruber): remove cirular dependency and place import at the top of the file
             from gt4py.next import backend as next_backend
 
-            if isinstance(backend, next_backend.Backend):
-                assert isinstance(backend, next_backend.Backend)
+            if isinstance(backend, next_backend.Toolchain):
+                assert isinstance(backend, next_backend.Toolchain)
                 compiled_program = backend.compile(
                     itir_node,
                     arguments.CompileTimeArgs.from_concrete(
@@ -102,7 +102,7 @@ class FendefDispatcher:
                 )
             else:
                 raise ValueError(
-                    "Backend must be a 'gt4py.next.backend.Backend' or "
+                    "Backend must be a 'gt4py.next.backend.Toolchain' or "
                     "'gt4py.next.program_formatter.ProgramFormatter'."
                 )
         else:
