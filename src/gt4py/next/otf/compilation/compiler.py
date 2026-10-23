@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeGuard, TypeVar
+from typing import Generic, Protocol, TypeGuard, TypeVar
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf import artifacts, workflow
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, importer
 
 
@@ -76,16 +76,7 @@ class CPPCompilationArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class CPPCompiler(
-    workflow.ChainableWorkflowMixin[
-        artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
-        CPPCompilationArtifact,
-    ],
-    workflow.ReplaceEnabledWorkflowMixin[
-        artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
-        CPPCompilationArtifact,
-    ],
-):
+class CPPCompiler(Generic[CPPLikeCodeSpecT]):
     """Drive a CPP-style build system into a ``CPPCompilationArtifact``.
 
     Backends override ``_make_artifact`` to use their own artifact subclass.
