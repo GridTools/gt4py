@@ -823,7 +823,7 @@ def _find_new_nested_symbol(nsdfg: dace.SDFG, name: str, reserved: Collection[st
     """
     taken = set(reserved) | {name}
     while True:
-        new_name = dace_data.find_new_name(name, taken)
+        new_name = dace.utils.find_new_name(name, taken)
         if nsdfg.is_name_free(new_name):
             return new_name
         taken.add(new_name)
