@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import json
 import re
 
 import pytest
@@ -105,98 +104,3 @@ def test_folder_name_round_trips_through_documented_pattern(
     assert match["name"] == expected_name
     assert match["version_id"] == config.BUILD_CACHE_VERSION_ID
     assert match["build_context_id"] == (context_id if with_context_id else None)
-
-
-TOOLCHAIN = {"machine": "x86_64", "python": "3.13.0", "dace": "2.0.0", "cxx": "g++ 14.3.0"}
-
-
-@pytest.fixture
-def toolchain_cache(monkeypatch, tmp_path):
-    """A persistent cache base in `tmp_path`, with the toolchain faked as `TOOLCHAIN`."""
-    monkeypatch.setattr(config, "BUILD_CACHE_DIR", tmp_path / ".gt4py_cache")
-    monkeypatch.setattr(
-        config, "BUILD_CACHE_TOOLCHAIN_CHECK", config.BuildCacheToolchainCheck.ERROR
-    )
-    monkeypatch.setattr(cache, "current_toolchain", lambda: dict(TOOLCHAIN))
-    check = cache.check_build_cache_toolchain
-    check.cache_clear()
-    yield config.BUILD_CACHE_DIR
-    check.cache_clear()
-
-
-def _record(base_path):
-    return json.loads((base_path / cache.TOOLCHAIN_FILE_NAME).read_text())
-
-
-def _use_cache(extension_source_example):
-    cache.check_build_cache_toolchain.cache_clear()
-    return cache.get_cache_folder(extension_source_example, config.BuildCacheLifetime.PERSISTENT)
-
-
-def test_toolchain_recorded_on_first_use(toolchain_cache, extension_source_example):
-    _use_cache(extension_source_example)
-
-    assert _record(toolchain_cache) == TOOLCHAIN
-
-
-def test_same_toolchain_passes(toolchain_cache, extension_source_example):
-    _use_cache(extension_source_example)
-    _use_cache(extension_source_example)
-
-    assert _record(toolchain_cache) == TOOLCHAIN
-
-
-def test_changed_toolchain_raises(monkeypatch, toolchain_cache, extension_source_example):
-    _use_cache(extension_source_example)
-    monkeypatch.setattr(cache, "current_toolchain", lambda: {**TOOLCHAIN, "dace": "2.1.0"})
-
-    with pytest.raises(
-        cache.BuildCacheToolchainError, match=r"dace: '2\.0\.0' \(cache\) -> '2\.1\.0'"
-    ):
-        _use_cache(extension_source_example)
-    assert _record(toolchain_cache) == TOOLCHAIN
-
-
-def test_changed_toolchain_warns_if_downgraded(
-    monkeypatch, toolchain_cache, extension_source_example
-):
-    _use_cache(extension_source_example)
-    monkeypatch.setattr(cache, "current_toolchain", lambda: {**TOOLCHAIN, "cxx": "g++ 15.1.0"})
-    monkeypatch.setattr(config, "BUILD_CACHE_TOOLCHAIN_CHECK", config.BuildCacheToolchainCheck.WARN)
-
-    with pytest.warns(UserWarning, match="cxx"):
-        _use_cache(extension_source_example)
-    assert _record(toolchain_cache) == TOOLCHAIN
-
-
-def test_new_toolchain_entry_is_added_not_compared(
-    monkeypatch, toolchain_cache, extension_source_example
-):
-    _use_cache(extension_source_example)
-    monkeypatch.setattr(
-        cache, "current_toolchain", lambda: {**TOOLCHAIN, "cuda_cxx": "release 13.1"}
-    )
-
-    _use_cache(extension_source_example)
-    assert _record(toolchain_cache) == {**TOOLCHAIN, "cuda_cxx": "release 13.1"}
-
-
-def test_toolchain_check_off_records_nothing(
-    monkeypatch, toolchain_cache, extension_source_example
-):
-    monkeypatch.setattr(config, "BUILD_CACHE_TOOLCHAIN_CHECK", config.BuildCacheToolchainCheck.OFF)
-
-    _use_cache(extension_source_example)
-    assert not (toolchain_cache / cache.TOOLCHAIN_FILE_NAME).exists()
-
-
-def test_session_cache_is_not_checked(monkeypatch, toolchain_cache, extension_source_example):
-    monkeypatch.setattr(cache, "check_build_cache_toolchain", lambda base_path: pytest.fail())
-
-    cache.get_cache_folder(extension_source_example, config.BuildCacheLifetime.SESSION)
-
-
-def test_current_toolchain_reports_machine_and_python():
-    toolchain = cache.current_toolchain()
-
-    assert toolchain["machine"] and toolchain["python"]

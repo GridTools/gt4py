@@ -8,19 +8,11 @@
 
 """Caching for compiled backend artifacts."""
 
-import functools
-import importlib.metadata
-import json
-import os
 import pathlib
-import platform
-import shutil
-import subprocess
 import tempfile
-import warnings
 from typing import Final, TypeVar
 
-from gt4py._core import filecache, locking
+from gt4py._core import filecache
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import artifacts, workflow
 
@@ -58,94 +50,6 @@ TRANSLATION_CACHE_BACKENDS: Final[tuple[str, ...]] = ("dace", "gtfn")
 
 StartT = TypeVar("StartT")
 EndT = TypeVar("EndT")
-
-#: File in a persistent cache base directory recording the toolchain that filled the cache.
-TOOLCHAIN_FILE_NAME: Final[str] = "toolchain.json"
-
-#: Python distributions whose version shapes the compiled artifacts but not the cache key.
-_TOOLCHAIN_DISTRIBUTIONS: Final[tuple[str, ...]] = ("dace", "gridtools-cpp", "nanobind")
-
-
-class BuildCacheToolchainError(RuntimeError):
-    """The toolchain differs from the one that filled the persistent build cache."""
-
-
-def _compiler_version(env_var: str, default: str) -> str | None:
-    executable = shutil.which(os.environ.get(env_var) or default)
-    if executable is None:
-        return None
-    try:
-        output = subprocess.run(
-            [executable, "--version"], capture_output=True, text=True, timeout=60, check=False
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-    lines = [line.strip() for line in output.splitlines() if line.strip()]
-    # nvcc prints a banner first; its version is on the "release" line
-    return next((line for line in lines if "release" in line), lines[0] if lines else None)
-
-
-def current_toolchain() -> dict[str, str]:
-    """Versions of what turns generated code into binaries but is not part of the cache key."""
-    toolchain = {"machine": platform.machine(), "python": platform.python_version()}
-    for distribution in _TOOLCHAIN_DISTRIBUTIONS:
-        try:
-            toolchain[distribution] = importlib.metadata.version(distribution)
-        except importlib.metadata.PackageNotFoundError:
-            pass
-    for key, env_var, default in (("cxx", "CXX", "c++"), ("cuda_cxx", "CUDACXX", "nvcc")):
-        if (version := _compiler_version(env_var, default)) is not None:
-            toolchain[key] = version
-    if archs := os.environ.get("CUDAARCHS", "").strip():
-        toolchain["cuda_archs"] = archs
-    return toolchain
-
-
-@functools.cache
-def check_build_cache_toolchain(base_path: pathlib.Path) -> None:
-    """
-    Record the toolchain in a persistent cache on first use, and compare it on every later use.
-
-    Only entries present in both the record and the current toolchain are compared; entries the
-    record lacks (e.g. a CUDA compiler first seen by a GPU build) are added to it. On a mismatch,
-    ``config.BUILD_CACHE_TOOLCHAIN_CHECK`` decides between raising and warning.
-
-    Raises:
-        BuildCacheToolchainError: if an entry differs and the check is set to ``ERROR``.
-    """
-    mode = config.BUILD_CACHE_TOOLCHAIN_CHECK
-    if mode == config.BuildCacheToolchainCheck.OFF:
-        return
-
-    current = current_toolchain()
-    record_path = base_path / TOOLCHAIN_FILE_NAME
-    base_path.mkdir(parents=True, exist_ok=True)
-    with locking.lock(base_path, suffix=".toolchain.lock"):
-        recorded = json.loads(record_path.read_text()) if record_path.exists() else {}
-        changed = {
-            key: (recorded[key], value)
-            for key, value in current.items()
-            if key in recorded and recorded[key] != value
-        }
-        if not changed and any(key not in recorded for key in current):
-            record_path.write_text(json.dumps({**current, **recorded}, indent=2) + "\n")
-
-    if not changed:
-        return
-    differences = "\n".join(
-        f"  {key}: {old!r} (cache) -> {new!r} (now)" for key, (old, new) in changed.items()
-    )
-    message = (
-        f"The toolchain differs from the one that filled the GT4Py build cache '{base_path}':\n"
-        f"{differences}\n"
-        "Its compiled programs may be stale. Delete the cache, point GT4PY_BUILD_CACHE_DIR to "
-        "another directory, or set GT4PY_BUILD_CACHE_TOOLCHAIN_CHECK=warn if the change does "
-        "not require a rebuild."
-    )
-    if mode == config.BuildCacheToolchainCheck.ERROR:
-        raise BuildCacheToolchainError(message)
-    warnings.warn(message, UserWarning, stacklevel=2)
-
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
@@ -226,8 +130,6 @@ def get_cache_folder(
 
     base_path = get_cache_base_path(lifetime)
     base_path.mkdir(exist_ok=True)
-    if lifetime == config.BuildCacheLifetime.PERSISTENT:
-        check_build_cache_toolchain(base_path)
 
     complete_path = base_path / folder_name
     complete_path.mkdir(exist_ok=True)
