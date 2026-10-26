@@ -35,10 +35,13 @@ from gt4py.next.program_processors.runners.dace.lowering import (
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_concat_where import (
     translate_concat_where,
 )
-from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import (
-    translate_scan_fieldop,
-)
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
+
+
+if TYPE_CHECKING:
+    from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_scan import (
+        translate_scan_fieldop,
+    )
 
 
 class PrimitiveTranslator(Protocol):

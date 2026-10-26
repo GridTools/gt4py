@@ -561,13 +561,13 @@ def translate_scan_fieldop(
     # the `LoopRegion` inside the stencil dataflow.
     scan_dim = next(r.dim for r in field_domain if sdfg_builder.is_column_axis(r.dim))
     result = gtir_to_sdfg_fieldop.create_field_operator(
-        ctx,
-        field_domain,
-        node.type,
-        sdfg_builder,
-        input_edges,
-        output_tree,
-        node.annex.domain,
+        ctx=ctx,
+        domain=field_domain,
+        node_type=node.type,
+        sdfg_builder=sdfg_builder,
+        input_edges=input_edges,
+        output=output_tree,
+        output_domain=node.annex.domain,
         inner_dims=(scan_dim,),
     )
 

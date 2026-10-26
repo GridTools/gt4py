@@ -397,6 +397,13 @@ def get_tuple_type(
     return ts.TupleType(data_types)
 
 
+def _as_global(desc: dace.data.Data) -> dace.data.Data:
+    """Returns a non-transient copy of `desc`, to be used as nested SDFG connector."""
+    global_desc = copy.deepcopy(desc)
+    global_desc.transient = False
+    return global_desc
+
+
 @dataclasses.dataclass(frozen=True)
 class LambdaToDataflow(eve.NodeVisitor):
     """
@@ -747,8 +754,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             raise TypeError(f"Unexpected {arg} as input argument.")
 
-        inner_desc = arg_desc.clone()
-        inner_desc.transient = False
+        inner_desc = _as_global(arg_desc)
         if param_name not in sdfg.arrays:
             sdfg.add_datadesc(param_name, inner_desc)
             input_memlets[param_name] = arg_expr
@@ -848,15 +854,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         The result data inside the nested SDFG must have the same name as the connector.
         """
         output_data = str(sym.id)
-        if output_data in sdfg.arrays:
-            output_desc = sdfg.data(output_data)
+        if output_desc := sdfg.arrays.get(output_data):
             assert not output_desc.transient
         else:
             # If the result is currently written to a transient node, inside the nested SDFG,
             # we need to allocate a non-transient data node.
             result_desc = edge.result.dc_node.desc(sdfg)
-            output_desc = result_desc.clone()
-            output_desc.transient = False
+            output_desc = _as_global(result_desc)
             output_data = sdfg.add_datadesc(output_data, output_desc, find_new_name=True)
         output_node = state.add_access(output_data)
         state.add_nedge(
@@ -908,9 +912,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         # add connectivities
         for aname, adesc in self.sdfg.arrays.items():
             if gtx_dace_args.is_connectivity_identifier(aname):
-                adesc = adesc.clone()
-                adesc.transient = True
-                nsdfg.add_datadesc(aname, adesc)
+                inner_desc = _as_global(adesc)
+                nsdfg.add_datadesc(aname, inner_desc)
 
         # create states inside the nested SDFG for the if-branches
         if_region = dace.sdfg.state.ConditionalBlock("if")

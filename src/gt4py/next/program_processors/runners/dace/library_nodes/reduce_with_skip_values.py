@@ -137,18 +137,16 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         local_dim_index = inedge.data.src_subset.size().index(max_neighbors)
 
         # The connectors of the nested SDFG have to be equivalent to the data connected
-        #  to them (see `NestedSDFG.validate()`). Thus, they are copies of the outer
-        #  data descriptors, and inside they are accessed with the same indices as
-        #  outside, where the local dimension is iterated by the map parameter `_LOCAL_INDEX`.
-        #  This way, a later change of the strides of the outer data is propagated
-        #  to the connectors, without the need of views.
+        #  to them. Thus, they are copies of the outer data descriptors, and inside they
+        #  are accessed with the same indices as outside, where the local dimension is
+        #  iterated by the map parameter `_LOCAL_INDEX`.
         def make_local_subset(subset: dace_subsets.Range, local_index: int) -> dace_subsets.Range:
             local_subset = copy.deepcopy(subset)
             local_start = local_subset[local_index][0]
             local_subset[local_index] = (local_start + _LOCAL_INDEX, local_start + _LOCAL_INDEX, 1)
             return local_subset
 
-        input_subset = make_local_subset(inedge.data.src_subset, local_dim_index)
+        inp_subset = make_local_subset(inedge.data.src_subset, local_dim_index)
         mask_subset = make_local_subset(maskedge.data.src_subset, 1)
 
         nsdfg = dace.SDFG(node.label)
@@ -158,7 +156,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         nsdfg.add_datadesc(mask, _as_global(mask_desc))
         outp = node.output_conn
         nsdfg.add_datadesc(outp, _as_global(output_desc))
-        output_subset = (
+        outp_subset = (
             "0" if isinstance(output_desc, dace.data.Scalar) else str(outedge.data.dst_subset)
         )
         st_init = nsdfg.add_state("init")
@@ -173,7 +171,7 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
             "__tlet_out",
             st_init.add_access(outp),
             None,
-            dace.Memlet(data=outp, subset=output_subset),
+            dace.Memlet(data=outp, subset=outp_subset),
         )
         st_reduce = nsdfg.add_state_after(st_init, "compute")
         # Fill skip values in local dimension with the reduce identity value
@@ -185,13 +183,13 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
             name="reduce_with_skip_values",
             map_ranges={str(_LOCAL_INDEX): f"0:{max_neighbors}"},
             inputs={
-                "__tlet_inp": dace.Memlet(data=inp, subset=input_subset),
+                "__tlet_inp": dace.Memlet(data=inp, subset=inp_subset),
                 "__tlet_mask": dace.Memlet(data=mask, subset=mask_subset),
             },
             code=f"__tlet_out = __tlet_inp if __tlet_mask != {gtx_common._DEFAULT_SKIP_VALUE} else {skip_value}",
             outputs={
                 "__tlet_out": dace.Memlet(
-                    data=outp, subset=output_subset, wcr=node.wcr, wcr_nonatomic=True
+                    data=outp, subset=outp_subset, wcr=node.wcr, wcr_nonatomic=True
                 ),
             },
             external_edges=True,
