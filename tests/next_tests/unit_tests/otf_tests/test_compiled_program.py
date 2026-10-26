@@ -13,6 +13,7 @@ import gc
 import traceback
 import weakref
 
+import numpy as np
 import pytest
 
 from gt4py import eve, next as gtx
@@ -221,6 +222,35 @@ def noop_runner(monkeypatch):
     runner = _NoOpRunner()
     monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
     return runner
+
+
+class _RecordingRunner(_NoOpRunner):
+    def __init__(self):
+        self.tasks = []
+
+    def submit(self, task):
+        self.tasks.append(task)
+        return super().submit(task)
+
+
+def test_variants_compile_with_shared_host_connectivities(testee_prog, monkeypatch):
+    runner = _RecordingRunner()
+    monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
+    LocalDim = gtx.Dimension("Local", kind=gtx.DimensionKind.LOCAL)
+    table = np.asfortranarray(np.array([[0, 1], [1, 0]], dtype=np.int32))
+    conn = gtx.as_connectivity([TDim, LocalDim], TDim, table)
+    conn = type(conn).from_array(table, TDim, domain=conn.domain)
+    assert conn.ndarray.flags.f_contiguous
+
+    testee_prog.compile(cond=[True, False], offset_provider={"T2T": conn})
+
+    first, second = (
+        task.construct_compilable(False).args.offset_provider["T2T"] for task in runner.tasks
+    )
+    assert first is second
+    assert first is not conn
+    assert first.ndarray.flags.c_contiguous
+    assert np.array_equal(first.ndarray, table)
 
 
 def _formatted_traceback(error: BaseException) -> str:

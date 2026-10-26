@@ -28,8 +28,61 @@ from typing import Any, Callable
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as gtx_backend, common, constructors
+from gt4py.next import backend as gtx_backend, common
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, artifacts, runners, stages
+
+
+#: Host snapshots of connectivities, keyed by the `id` of their source
+#: (validated against a weakref, since ids can be reused).
+_host_connectivities: dict[int, tuple[weakref.ref, nd_array_field.NdArrayConnectivityField]] = {}
+
+
+def _host_connectivity(
+    value: common.GatherConnectivity,
+) -> nd_array_field.NdArrayConnectivityField:
+    if (
+        isinstance(value, nd_array_field.NumPyArrayConnectivityField)
+        and value.asnumpy().flags.c_contiguous
+    ):
+        return value
+    entry = _host_connectivities.get(id(value))
+    if entry is not None and entry[0]() is value:
+        return entry[1]
+    # Tables are assumed not to be modified in place: the copy is taken once.
+    snapshot = nd_array_field.NumPyArrayConnectivityField.from_array(
+        np.ascontiguousarray(value.asnumpy()),
+        value.codomain,
+        domain=value.domain,
+        skip_value=value.skip_value,
+    )
+
+    def _prune(ref: weakref.ref, key: int = id(value)) -> None:
+        if (current := _host_connectivities.get(key)) is not None and current[0] is ref:
+            del _host_connectivities[key]
+
+    try:
+        _host_connectivities[id(value)] = (weakref.ref(value, _prune), snapshot)
+    except TypeError:  # not weakref-able: correct but copied per call
+        pass
+    return snapshot
+
+
+def host_offset_provider(offset_provider: common.OffsetProvider) -> common.OffsetProvider:
+    """
+    Return the compile-time view of `offset_provider`.
+
+    Every gather connectivity is replaced by a NumPy connectivity over a
+    C-contiguous host copy of its table, so that compilation neither depends
+    on the device or memory layout of the tables nor touches device memory.
+    Other entries and the order of the entries are kept.
+    """
+    return {
+        name: typing.cast(common.OffsetProviderElem, _host_connectivity(value))
+        if isinstance(value, common.GatherConnectivity)
+        else value
+        for name, value in offset_provider.items()
+    }
 
 
 def _connectivity_from_file(
@@ -40,9 +93,8 @@ def _connectivity_from_file(
 ) -> common.Connectivity:
     """Rehydrate a `_ConnectivityFileRef`: memory-mapped, so unpickling the same
     file in many worker processes shares the physical pages instead of copying."""
-    data = np.load(path, mmap_mode="r")
-    return constructors.as_connectivity(
-        domain=domain, codomain=codomain, data=data, skip_value=skip_value
+    return nd_array_field.NumPyArrayConnectivityField.from_array(
+        np.load(path, mmap_mode="r"), codomain, domain=domain, skip_value=skip_value
     )
 
 

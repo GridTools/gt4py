@@ -20,7 +20,8 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as next_backend, config, fingerprinting
+from gt4py.next import backend as next_backend, common, config, fingerprinting
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners
 
 from next_tests.fixtures import compilation as fixtures_compilation
@@ -244,6 +245,112 @@ def test_compilable_fingerprint_is_independent_of_runner(xp, tmp_path):
             runner.shutdown(wait=True)
 
     assert len(set(fingerprints)) == 1, fingerprints
+
+
+def _v2e_tables(xp):
+    Vertex = gtx.Dimension("Vertex")
+    Edge = gtx.Dimension("Edge")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    table = np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+    c_order = gtx.as_connectivity([Vertex, V2EDim], Edge, xp.asarray(table))
+    f_order = type(c_order).from_array(
+        xp.asarray(np.asfortranarray(table)), Edge, domain=c_order.domain
+    )
+    assert f_order.ndarray.flags.f_contiguous
+    return table, {"V2E": c_order, "V2EF": f_order, "Vertex": Vertex}
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_host_offset_provider_is_canonical_and_memoized(xp):
+    table, offset_provider = _v2e_tables(xp)
+
+    host = compilation_tasks.host_offset_provider(offset_provider)
+
+    assert list(host) == list(offset_provider)
+    assert host["Vertex"] is offset_provider["Vertex"]
+    for name in ("V2E", "V2EF"):
+        conn, original = host[name], offset_provider[name]
+        assert type(conn) is nd_array_field.NumPyArrayConnectivityField
+        assert conn.ndarray.flags.c_contiguous
+        assert np.array_equal(conn.ndarray, table)
+        assert conn.domain == original.domain
+        assert conn.codomain == original.codomain
+        assert conn.skip_value == original.skip_value
+        assert compilation_tasks.host_offset_provider(offset_provider)[name] is conn
+
+
+def test_host_connectivity_registry_prunes_on_gc():
+    _, offset_provider = _v2e_tables(np)
+    conn = offset_provider.pop("V2EF")
+    key = id(conn)
+    compilation_tasks.host_offset_provider({"V2EF": conn})
+    assert key in compilation_tasks._host_connectivities
+    del conn
+    gc.collect()
+    assert key not in compilation_tasks._host_connectivities
+
+
+@dataclasses.dataclass(frozen=True)
+class _TableLayoutArtifact:
+    layout: tuple
+
+    def load(self):
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _TableLayoutExecutor:
+    def __call__(self, compilable):
+        return _TableLayoutArtifact(
+            tuple(
+                (name, type(conn).__name__, conn.ndarray.flags.c_contiguous)
+                for name, conn in compilable.args.offset_provider.items()
+                if isinstance(conn, common.GatherConnectivity)
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_compile_time_tables_are_host_c_order_in_every_runner(xp, tmp_path):
+    _, offset_provider = _v2e_tables(xp)
+    compile_time_args = dataclasses.replace(
+        arguments.CompileTimeArgs.empty(),
+        offset_provider=compilation_tasks.host_offset_provider(offset_provider),
+    )
+    backend = next_backend.Backend(
+        name="test_backend",
+        executor=_TableLayoutExecutor(),
+        allocator=None,
+        transforms=lambda inp: inp,
+    )
+    task = compilation_tasks.make_compilation_task(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+
+    all_runners = [
+        runners.SerialRunner(),
+        runners.ThreadRunner(max_workers=1),
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)),
+    ]
+    try:
+        layouts = [runner.submit(task).result(timeout=120).layout for runner in all_runners]
+    finally:
+        for runner in all_runners:
+            runner.shutdown(wait=True)
+
+    expected = (
+        ("V2E", "NumPyArrayConnectivityField", True),
+        ("V2EF", "NumPyArrayConnectivityField", True),
+    )
+    assert layouts == [expected] * 3
 
 
 def test_connectivity_file_registry_prunes_on_gc():
