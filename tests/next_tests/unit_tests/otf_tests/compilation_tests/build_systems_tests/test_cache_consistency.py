@@ -22,7 +22,7 @@ import shutil
 import pytest
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config, fingerprinting
+from gt4py.next import config
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -42,7 +42,7 @@ def _src_dir(
     return cache.get_cache_folder(
         extension_source,
         config.BuildCacheLifetime.SESSION,
-        build_context_id=fingerprinting.strict_fingerprinter(comp.builder_factory),
+        build_context_id=compiler.cpp_build_context_id(comp.builder_factory, extension_source),
     )
 
 
