@@ -38,7 +38,7 @@ from gt4py.next.otf.compilation import cache as _cache
 
 def _table_digest(table: np.ndarray) -> str:
     """Digest of the content of a C-contiguous `table`, hashed in place."""
-    hasher = xxhash.xxh64(b"table\0")
+    hasher = xxhash.xxh3_128(b"table\0")
     hasher.update(table.dtype.str.encode())
     hasher.update(repr(table.shape).encode())
     hasher.update(table.data)
@@ -46,7 +46,7 @@ def _table_digest(table: np.ndarray) -> str:
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
+class _CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
     """
     Compile-time view of a connectivity: a read-only, C-contiguous host table,
     memory-mapped from a file named by the digest of its content.
@@ -60,36 +60,65 @@ class CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
     _ndarray: core_defs.NDArrayObject = dataclasses.field(
         metadata=next_utils.gt4py_metadata(fingerprint=False)
     )
-    #: Derived from the table when not given.
-    _digest: str = ""
+    _digest: str = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        if not self._digest:
-            table = np.ascontiguousarray(np.asarray(self._ndarray))
-            object.__setattr__(self, "_digest", _table_digest(table))
+        table = np.ascontiguousarray(np.asarray(self._ndarray))
+        object.__setattr__(self, "_digest", _table_digest(table))
+
+    @classmethod
+    def _from_file(
+        cls,
+        path: str,
+        digest: str,
+        domain: common.Domain,
+        codomain: common.Dimension,
+        skip_value: core_defs.IntegralScalar | None,
+        shape: tuple[int, ...],
+        dtype: str,
+    ) -> _CompileTimeConnectivity:
+        """Map the table file written for `digest`, without hashing the table again."""
+        table = np.asarray(np.load(path, mmap_mode="r"))
+        if table.shape != shape or table.dtype.str != dtype:
+            raise ValueError(
+                f"Connectivity table file '{path}' holds a '{table.dtype.str}' table of shape"
+                f" {table.shape}, expected '{dtype}' and {shape}."
+            )
+        result = object.__new__(cls)
+        for name, value in (
+            ("_domain", domain),
+            ("_ndarray", table),
+            ("_codomain", codomain),
+            ("_skip_value", skip_value),
+            ("_digest", digest),
+        ):
+            object.__setattr__(result, name, value)
+        return result
 
     def __reduce__(self) -> tuple[Callable, tuple]:
+        table = np.asarray(self._ndarray)
         path = _table_path(self._digest)
-        _write_table(np.asarray(self._ndarray), path)
+        _write_table(table, path)
         return (
             _connectivity_from_file,
-            (str(path), self._digest, self.domain, self.codomain, self.skip_value),
+            (
+                str(path),
+                self._digest,
+                self.domain,
+                self.codomain,
+                self.skip_value,
+                table.shape,
+                table.dtype.str,
+            ),
         )
+
+
+def _connectivity_from_file(*args: Any) -> _CompileTimeConnectivity:
+    return _CompileTimeConnectivity._from_file(*args)
 
 
 def _table_path(digest: str) -> pathlib.Path:
     return _cache._session_cache_dir_path / "connectivities" / f"{digest}.npy"
-
-
-def _connectivity_from_file(
-    path: str,
-    digest: str,
-    domain: common.Domain,
-    codomain: common.Dimension,
-    skip_value: core_defs.IntegralScalar | None,
-) -> CompileTimeConnectivity:
-    table = typing.cast(core_defs.NDArrayObject, np.asarray(np.load(path, mmap_mode="r")))
-    return CompileTimeConnectivity(domain, table, codomain, skip_value, digest)
 
 
 def _write_table(table: np.ndarray, path: pathlib.Path) -> None:
@@ -98,22 +127,27 @@ def _write_table(table: np.ndarray, path: pathlib.Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Written aside and renamed, so a reader never maps a partially written file.
     with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npy", delete=False) as f:
+        temporary = f.name
         try:
             np.save(f, np.ascontiguousarray(table))
         except BaseException:
             f.close()
-            os.unlink(f.name)
+            os.unlink(temporary)
             raise
-    os.replace(f.name, path)
+    try:
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
 
 
 #: Compile-time views of runtime connectivities, keyed by the `id` of the
 #: runtime connectivity (validated against a weakref, since ids can be reused).
-_compile_time_connectivities: dict[int, tuple[weakref.ref, CompileTimeConnectivity]] = {}
+_compile_time_connectivities: dict[int, tuple[weakref.ref, _CompileTimeConnectivity]] = {}
 
 
-def _to_compile_time_connectivity(value: common.GatherConnectivity) -> CompileTimeConnectivity:
-    if isinstance(value, CompileTimeConnectivity):
+def _to_compile_time_connectivity(value: common.GatherConnectivity) -> _CompileTimeConnectivity:
+    if isinstance(value, _CompileTimeConnectivity):
         return value
     entry = _compile_time_connectivities.get(id(value))
     if entry is not None and entry[0]() is value:
@@ -122,10 +156,16 @@ def _to_compile_time_connectivity(value: common.GatherConnectivity) -> CompileTi
     digest = _table_digest(table)
     path = _table_path(digest)
     _write_table(table, path)
-    del table
-    result = _connectivity_from_file(
-        str(path), digest, value.domain, value.codomain, value.skip_value
+    result = _CompileTimeConnectivity._from_file(
+        str(path),
+        digest,
+        value.domain,
+        value.codomain,
+        value.skip_value,
+        table.shape,
+        table.dtype.str,
     )
+    del table
 
     def _prune(ref: weakref.ref, key: int = id(value)) -> None:
         if (current := _compile_time_connectivities.get(key)) is not None and current[0] is ref:
@@ -142,9 +182,10 @@ def compile_time_offset_provider(offset_provider: common.OffsetProvider) -> comm
     """
     Return the compile-time view of `offset_provider`.
 
-    Every gather connectivity is replaced by its `CompileTimeConnectivity`, so
-    that compilation depends neither on the device nor on the memory layout of
-    the tables, and does not read device memory after the conversion. Other
+    Every gather connectivity is replaced by a read-only, C-contiguous host
+    copy of it, memory-mapped from a file named by the digest of its content,
+    so that compilation depends neither on the device nor on the memory layout
+    of the tables, and does not read device memory after the conversion. Other
     entries and the order of the entries are kept.
     """
     return {

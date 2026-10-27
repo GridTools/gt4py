@@ -52,7 +52,8 @@ pickle-safe `CompilableProgramDef`. A `CompilationTask` carries exactly two
 ingredients, `construct_compilable(with_refs)` and `executor`, and every
 runner executes the same pipeline: in-process as
 `executor(construct_compilable(False))`, cross-process by shipping the pickled
-`executor` together with `construct_compilable(True)`.
+`executor` together with `construct_compilable(True)`. (Superseded: a task now
+carries the compilable itself, see the amendment below.)
 
 ### Crossing the process boundary
 
@@ -64,7 +65,7 @@ runner executes the same pipeline: in-process as
   shipping) and rehydrate as memory-mapped arrays, shared by all workers
   through the page cache. Compilation only consumes device-independent values
   of the tables (shape and maximum), so main-side and worker-side compilation
-  produce equivalent artifacts.
+  produce equivalent artifacts. (Superseded by the amendment below.)
 - A per-submit snapshot of `gt4py.next.config` is applied in the worker,
   since `spawn` workers do not see post-import config changes.
 
@@ -147,15 +148,17 @@ between runners.
 offset provider (`compilation_tasks.compile_time_offset_provider`), and a
 `CompilationTask` carries the resulting compilable itself instead of
 `construct_compilable(with_refs)`. Each gather connectivity is replaced by a
-`CompileTimeConnectivity`: a read-only, C-contiguous host table, memory-mapped
-from a file in the session cache directory named by a digest of its content
-(dtype, shape and data). It is created once per runtime connectivity, is
-fingerprinted by the digest instead of the table, and pickles as a reference to
-its file. All runners thus compile the same input with the same key, and the
-host tables are shared with the workers through the page cache. The dace
-orchestration path uses the same view; compilation that bypasses both
-(a direct `Backend.compile`, for example) still sees the runtime tables.
-Execution always receives the runtime connectivities.
+read-only, C-contiguous host copy (`compilation_tasks._CompileTimeConnectivity`),
+memory-mapped from a file in the session cache directory named by a 128-bit
+digest of its content (dtype, shape and data). It is created once per runtime
+connectivity, is fingerprinted by the digest instead of the table, and pickles
+as a reference to its file; a worker unpickles the compilable inside the task,
+so an unreadable file fails that task only. All runners thus compile the same
+input with the same key, and the host tables are shared with the workers
+through the page cache. The dace orchestration path uses the same view.
+Compilation that bypasses both still sees the runtime tables: a direct
+`Backend.compile`, and backends with a customized `compile`, whose tasks are
+opaque. Execution always receives the runtime connectivities.
 
 Since the view is taken once, tables must not be modified in place after they
 have been used for compilation.

@@ -9,6 +9,7 @@
 import concurrent.futures
 import dataclasses
 import gc
+import hashlib
 import multiprocessing
 import os
 import pickle
@@ -177,7 +178,7 @@ def test_compile_time_offset_provider_is_canonical_and_memoized(xp):
     assert compile_time["Vertex"] is offset_provider["Vertex"]
     for name in ("V2E", "V2EF"):
         conn, original = compile_time[name], offset_provider[name]
-        assert type(conn) is compilation_tasks.CompileTimeConnectivity
+        assert type(conn) is compilation_tasks._CompileTimeConnectivity
         assert conn.ndarray.flags.c_contiguous
         assert not conn.ndarray.flags.writeable
         assert np.array_equal(conn.ndarray, table)
@@ -274,7 +275,7 @@ def test_compile_time_connectivity_copies_are_valid():
     )
 
 
-def test_compile_time_tables_are_written_once(tmp_path, monkeypatch):
+def test_compile_time_table_files_are_content_addressed_and_kept(tmp_path, monkeypatch):
     monkeypatch.setattr(compilation_tasks._cache, "_session_cache_dir_path", tmp_path)
     Vertex = gtx.Dimension("Vertex")
     V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
@@ -288,14 +289,14 @@ def test_compile_time_tables_are_written_once(tmp_path, monkeypatch):
             )
         )
     (path,) = (tmp_path / "connectivities").iterdir()
-    mtime = path.stat().st_mtime_ns
+    inode = path.stat().st_ino
     compilation_tasks.compile_time_offset_provider(
         {"V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table)}
     )
 
     assert len({view._digest for view in views}) == 1
     assert path.name == f"{views[0]._digest}.npy"
-    assert path.stat().st_mtime_ns == mtime
+    assert path.stat().st_ino == inode
     assert [p.name for p in (tmp_path / "connectivities").iterdir()] == [path.name]
 
 
@@ -330,8 +331,8 @@ def test_make_compilation_task_compiles_against_compile_time_view():
     )
 
     compiled_against = task.compilable.args.offset_provider
-    assert type(compiled_against["V2E"]) is compilation_tasks.CompileTimeConnectivity
-    assert type(compiled_against["V2EF"]) is compilation_tasks.CompileTimeConnectivity
+    assert type(compiled_against["V2E"]) is compilation_tasks._CompileTimeConnectivity
+    assert type(compiled_against["V2EF"]) is compilation_tasks._CompileTimeConnectivity
     assert compiled_against["Vertex"] is offset_provider["Vertex"]
 
 
@@ -346,10 +347,59 @@ def test_compile_time_connectivity_registry_prunes_on_gc():
     assert key not in compilation_tasks._compile_time_connectivities
 
 
+def test_compile_time_connectivity_digest_is_derived_from_table():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+
+    replaced = dataclasses.replace(
+        conn, _ndarray=np.array([[0, 1], [1, 2], [2, 2]], dtype=np.int32)
+    )
+
+    assert replaced._digest != conn._digest
+    with pytest.raises(TypeError):
+        type(conn)(conn.domain, conn.ndarray, conn.codomain, conn.skip_value, conn._digest)
+
+
+def test_compile_time_connectivity_rejects_mismatching_table_file():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+    reconstruct, args = conn.__reduce__()
+    path, digest, domain, codomain, skip_value, shape, dtype = args
+
+    with pytest.raises(ValueError, match="expected"):
+        reconstruct(path, digest, domain, codomain, skip_value, (shape[0] + 1, shape[1]), dtype)
+    with pytest.raises(ValueError, match="expected"):
+        reconstruct(path, digest, domain, codomain, skip_value, shape, "<i8")
+
+
+def _fail_to_unpickle():
+    raise FileNotFoundError("connectivity table file is gone")
+
+
+class _FailsToUnpickle:
+    def __reduce__(self):
+        return (_fail_to_unpickle, ())
+
+
+def test_process_runner_fails_only_the_task_whose_compilable_cannot_be_unpickled(process_runner):
+    broken = runners.CompilationTask(
+        name="broken", compilable=_FailsToUnpickle(), executor=_RecursingExecutor(0)
+    )
+
+    with pytest.raises(FileNotFoundError, match="is gone"):
+        process_runner.submit(broken).result(timeout=120)
+    assert callable(
+        process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
+        .result(timeout=120)
+        .load()
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class _CompilableSummaryArtifact:
     fingerprint: str
     tables: tuple
+    contents: tuple
 
     def load(self):
         return lambda *args, **kwargs: None
@@ -365,12 +415,24 @@ class _SummarizingExecutor:
                 for name, conn in compilable.args.offset_provider.items()
                 if isinstance(conn, common.GatherConnectivity)
             ),
+            tuple(
+                (name, _sha256(conn.ndarray))
+                for name, conn in compilable.args.offset_provider.items()
+                if isinstance(conn, common.GatherConnectivity)
+            ),
         )
+
+
+def _sha256(table) -> str:
+    table = np.ascontiguousarray(np.asarray(table))
+    return hashlib.sha256(
+        table.dtype.str.encode() + repr(table.shape).encode() + table.tobytes()
+    ).hexdigest()
 
 
 @_xp_params
 def test_compilable_is_identical_in_every_runner(xp, tmp_path):
-    _, offset_provider = _v2e_tables(xp)
+    table, offset_provider = _v2e_tables(xp)
     compile_time_args = dataclasses.replace(
         arguments.CompileTimeArgs.empty(),
         offset_provider=compilation_tasks.compile_time_offset_provider(offset_provider),
@@ -398,10 +460,12 @@ def test_compilable_is_identical_in_every_runner(xp, tmp_path):
 
     assert len({summary.fingerprint for summary in summaries}) == 1
     expected = (
-        ("V2E", "CompileTimeConnectivity", True),
-        ("V2EF", "CompileTimeConnectivity", True),
+        ("V2E", "_CompileTimeConnectivity", True),
+        ("V2EF", "_CompileTimeConnectivity", True),
     )
     assert [summary.tables for summary in summaries] == [expected] * 3
+    expected_contents = (("V2E", _sha256(table)), ("V2EF", _sha256(table)))
+    assert [summary.contents for summary in summaries] == [expected_contents] * 3
 
 
 def test_wait_for_compilation_untracks_successful_futures():

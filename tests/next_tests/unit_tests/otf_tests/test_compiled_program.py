@@ -27,6 +27,9 @@ from gt4py.next import fingerprinting
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+from gt4py.next.iterator.ir_utils import domain_utils
+from gt4py.next import neighbor_sum
 
 
 def test_static_arg_from_enum():
@@ -262,7 +265,7 @@ def test_variants_compile_against_shared_compile_time_connectivities(testee_prog
 
     first, second = (task.compilable.args.offset_provider["T2T"] for task in runner.tasks)
     assert first is second
-    assert type(first) is compilation_tasks.CompileTimeConnectivity
+    assert type(first) is compilation_tasks._CompileTimeConnectivity
     assert np.array_equal(first.ndarray, table)
     (call,) = runner.calls
     assert call["offset_provider"]["T2T"] is conn
@@ -321,6 +324,158 @@ def test_compilable_fingerprint_is_independent_of_runner(testee_prog, monkeypatc
 
     assert len(_LOADED_FINGERPRINTS) == 3
     assert len(set(_LOADED_FINGERPRINTS)) == 1
+
+
+def _translate(compilable) -> str:
+    return "translated"
+
+
+_PERSISTENT_CACHE_HITS: list[bool] = []
+
+
+@dataclasses.dataclass(frozen=True)
+class _LookupArtifact:
+    hit: bool
+
+    def load(self):
+        _PERSISTENT_CACHE_HITS.append(self.hit)
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _PersistentLookupExecutor:
+    cache_dir: str
+
+    def __call__(self, compilable):
+        step = workflow.CachedStep.persistent(
+            _translate,
+            input_fingerprinter=fingerprinting.strict_fingerprinter,
+            cache=self.cache_dir,
+        )
+        hit = step.cache_key(compilable) in step.cache
+        step(compilable)
+        return _LookupArtifact(hit)
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_persistent_cache_filled_in_process_mode_hits_in_other_modes(
+    testee_prog, monkeypatch, tmp_path, xp
+):
+    LocalDim = gtx.Dimension("Local", kind=gtx.DimensionKind.LOCAL)
+    table = np.asfortranarray(np.array([[0, 1], [1, 0]], dtype=np.int32))
+    offset_provider = {"T2T": gtx.as_connectivity([TDim, LocalDim], TDim, xp.asarray(table))}
+    all_runners = [
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path / "session")),
+        runners.ThreadRunner(max_workers=1),
+        runners.SerialRunner(),
+    ]
+    _PERSISTENT_CACHE_HITS.clear()
+    try:
+        for i, runner in enumerate(all_runners):
+            monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
+            program = testee_prog.with_backend(
+                backend.Backend(
+                    name=f"persistent_{i}",
+                    executor=_PersistentLookupExecutor(str(tmp_path / "translation_cache")),
+                    allocator=None,
+                    transforms=gtfn.run_gtfn.transforms,
+                )
+            )
+            program.compile(cond=[True], offset_provider=offset_provider)
+            program(
+                cond=True, out=gtx.zeros({TDim: 2}, dtype=bool), offset_provider=offset_provider
+            )
+    finally:
+        for runner in all_runners:
+            runner.shutdown(wait=True)
+
+    assert _PERSISTENT_CACHE_HITS == [False, True, True]
+
+
+_TRANSLATED_SOURCES: list[str] = []
+
+
+@dataclasses.dataclass(frozen=True)
+class _SourceArtifact:
+    source: str
+
+    def load(self):
+        _TRANSLATED_SOURCES.append(self.source)
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _TranslatingExecutor:
+    def __call__(self, compilable):
+        translation = gtfn_module.GTFNTranslationStep(device_type=core_defs.DeviceType.CPU)
+        return _SourceArtifact(translation(compilable).source_code)
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_translation_against_compile_time_view_matches_runtime_tables(monkeypatch, xp):
+    V = gtx.Dimension("V")
+    E = gtx.Dimension("E")
+    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+    E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+    V2E = gtx.FieldOffset("V2E", source=E, target=(V, V2EDim))
+    E2V = gtx.FieldOffset("E2V", source=V, target=(E, E2VDim))
+    rng = np.random.default_rng(0)
+    e2v = np.asfortranarray(rng.integers(0, 50, size=(80, 2)).astype(np.int32))
+    v2e = np.asfortranarray(rng.integers(0, 80, size=(50, 4)).astype(np.int32))
+    offset_provider = {
+        "V2E": gtx.as_connectivity([V, V2EDim], E, xp.asarray(v2e)),
+        "E2V": gtx.as_connectivity([E, E2VDim], V, xp.asarray(e2v)),
+    }
+    static_translations = []
+    translate_statically = domain_utils._unstructured_translate_range_statically
+
+    def counting_translate_statically(*args, **kwargs):
+        static_translations.append(type(args[3]).__name__)
+        return translate_statically(*args, **kwargs)
+
+    monkeypatch.setattr(
+        domain_utils, "_unstructured_translate_range_statically", counting_translate_statically
+    )
+    monkeypatch.setattr(compiled_program.runners, "get_default_runner", runners.SerialRunner)
+    _TRANSLATED_SOURCES.clear()
+
+    for name in ("compile_time_view", "runtime_tables"):
+        if name == "runtime_tables":
+            monkeypatch.setattr(compilation_tasks, "compile_time_offset_provider", lambda op: op)
+        translating_backend = backend.Backend(
+            name=name,
+            executor=_TranslatingExecutor(),
+            allocator=gtfn.run_gtfn.allocator,
+            transforms=gtfn.run_gtfn.transforms,
+        )
+
+        @gtx.field_operator
+        def fop(v: gtx.Field[[V], gtx.int32]) -> gtx.Field[[V], gtx.int32]:
+            e = neighbor_sum(v(E2V), axis=E2VDim)
+            return neighbor_sum(e(V2E), axis=V2EDim)
+
+        @gtx.program(backend=translating_backend, static_domains=True)
+        def prog(v: gtx.Field[[V], gtx.int32], out: gtx.Field[[V], gtx.int32]):
+            fop(v, out=out, domain={V: (3, 40)})
+
+        prog(
+            gtx.zeros({V: 50}, dtype=np.int32),
+            gtx.zeros({V: 50}, dtype=np.int32),
+            offset_provider=offset_provider,
+        )
+
+    view_source, runtime_source = _TRANSLATED_SOURCES
+    assert view_source == runtime_source
+    assert "_CompileTimeConnectivity" in static_translations
+    assert type(offset_provider["V2E"]).__name__ in static_translations
 
 
 def _formatted_traceback(error: BaseException) -> str:

@@ -165,17 +165,21 @@ def _apply_config_overrides(overrides: dict[str, Any]) -> None:
 # Top-level (must be top-level for pickle).
 def _run_compilation_task_in_worker(
     executor_blob: bytes,
-    compilable: Any,
+    compilable_blob: bytes,
     config_overrides: dict[str, Any],
     recursion_limit: int,
 ) -> artifacts.CompilationArtifact:
-    """Worker entry point: deserialize the executor and run it."""
+    """Worker entry point: deserialize the executor and the compilable and run it."""
     # `sys.setrecursionlimit` is per-process: a limit the parent raised for
     # deeply nested IR would silently reset to the interpreter default in a
     # `spawn` worker. Adopt the parent's limit, but never lower the worker's.
     sys.setrecursionlimit(max(recursion_limit, sys.getrecursionlimit()))
     _apply_config_overrides(config_overrides)
     executor = pickle.loads(executor_blob)
+    # Unpickled here rather than by the pool, so that a failure (e.g. an
+    # unreadable connectivity table file) fails this task instead of breaking
+    # the pool for all later tasks.
+    compilable = pickle.loads(compilable_blob)
     return executor(compilable)
 
 
@@ -225,10 +229,19 @@ class ProcessRunner:
             )
             return _run_in_calling_thread(task)
 
+        try:
+            compilable_blob = pickle.dumps(task.compilable)
+        except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
+            future: concurrent.futures.Future[artifacts.CompilationArtifact] = (
+                concurrent.futures.Future()
+            )
+            future.set_exception(error)
+            return future
+
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.compilable,
+            compilable_blob=compilable_blob,
             config_overrides=_config_snapshot(),
             recursion_limit=sys.getrecursionlimit(),
         )
