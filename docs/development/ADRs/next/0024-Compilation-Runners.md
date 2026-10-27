@@ -133,3 +133,25 @@ does not offload.
 - `GT4PY_BUILD_JOBS` defaults to the number of CPUs available to the process
   (affinity-aware), capped at 32; in process mode every job is a full
   interpreter, so memory-constrained environments should set it explicitly.
+
+## Amendment: compile-time connectivities (2026-10)
+
+The statement above that compilation only consumes the shape and maximum of
+the tables no longer holds: static domain inference reads slices of the
+tables. On GPU, compilation therefore read device memory, and since workers
+received host copies while the calling thread and thread runners received the
+device originals, the compiled input and its translation-cache key differed
+between runners.
+
+Compilation now runs against a compile-time view of the offset provider
+(`compilation_tasks.compile_time_offset_provider`), built once per runtime
+connectivity when a program variant is compiled. Each gather connectivity is
+replaced by a `CompileTimeConnectivity`: a read-only, C-contiguous host table,
+memory-mapped from a file in the session cache directory named by the digest
+of its content. It is fingerprinted by that digest and pickled as a reference
+to the file, which replaces the lazily dumped file references described above.
+All runners thus compile the same input with the same key, compilation never
+touches device memory, and workers share the tables through the page cache.
+Execution still receives the runtime connectivities. Since the view is taken
+once, tables must not be modified in place after they have been used for
+compilation.

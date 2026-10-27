@@ -21,7 +21,8 @@ from gt4py.next import utils
 from gt4py.next import errors, backend, broadcast, common
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.otf import arguments, compiled_program, workflow
+from gt4py._core import definitions as core_defs
+from gt4py.next.otf import arguments, compilation_tasks, compiled_program, workflow
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -224,33 +225,48 @@ def noop_runner(monkeypatch):
     return runner
 
 
-class _RecordingRunner(_NoOpRunner):
+class _RecordingRunner:
     def __init__(self):
         self.tasks = []
+        self.calls = []
 
     def submit(self, task):
         self.tasks.append(task)
-        return super().submit(task)
+        future = concurrent.futures.Future()
+        future.set_result(self)
+        return future
+
+    def load(self):
+        return lambda *args, **kwargs: self.calls.append(kwargs)
+
+    def shutdown(self, wait: bool = True) -> None:
+        pass
 
 
-def test_variants_compile_with_shared_host_connectivities(testee_prog, monkeypatch):
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_variants_compile_against_shared_compile_time_connectivities(testee_prog, monkeypatch, xp):
     runner = _RecordingRunner()
     monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
     LocalDim = gtx.Dimension("Local", kind=gtx.DimensionKind.LOCAL)
-    table = np.asfortranarray(np.array([[0, 1], [1, 0]], dtype=np.int32))
-    conn = gtx.as_connectivity([TDim, LocalDim], TDim, table)
-    conn = type(conn).from_array(table, TDim, domain=conn.domain)
-    assert conn.ndarray.flags.f_contiguous
+    table = np.array([[0, 1], [1, 0]], dtype=np.int32)
+    conn = gtx.as_connectivity([TDim, LocalDim], TDim, xp.asarray(table))
+    offset_provider = {"T2T": conn}
 
-    testee_prog.compile(cond=[True, False], offset_provider={"T2T": conn})
+    testee_prog.compile(cond=[True, False], offset_provider=offset_provider)
+    testee_prog(cond=True, out=gtx.zeros({TDim: 2}, dtype=bool), offset_provider=offset_provider)
 
     first, second = (
         task.construct_compilable(False).args.offset_provider["T2T"] for task in runner.tasks
     )
     assert first is second
-    assert first is not conn
-    assert first.ndarray.flags.c_contiguous
+    assert type(first) is compilation_tasks.CompileTimeConnectivity
     assert np.array_equal(first.ndarray, table)
+    (call,) = runner.calls
+    assert call["offset_provider"]["T2T"] is conn
 
 
 def _formatted_traceback(error: BaseException) -> str:

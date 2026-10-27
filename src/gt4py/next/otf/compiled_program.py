@@ -673,7 +673,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
             kwarg_types = self.program_type.definition.kw_only_args
 
         compile_time_args = arguments.CompileTimeArgs(
-            offset_provider=compilation_tasks.host_offset_provider(offset_provider),
+            offset_provider=compilation_tasks.compile_time_offset_provider(offset_provider),
             column_axis=None,  # TODO(havogt): column_axis seems to a unused, even for programs with scans
             args=arg_types,
             kwargs=kwarg_types,
