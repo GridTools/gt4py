@@ -11,8 +11,9 @@
 This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
 user function cannot cross a process boundary), whether the task can be
-decomposed for offloading at all, and what may cross the process boundary
-(connectivity tables travel as memory-mapped file references).
+decomposed for offloading at all, and what compilation sees of the offset
+provider (compile-time views of the connectivity tables, which travel as
+memory-mapped file references).
 """
 
 from __future__ import annotations
@@ -26,12 +27,22 @@ import weakref
 from typing import Any, Callable
 
 import numpy as np
+import xxhash
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as gtx_backend, common, fingerprinting, utils as next_utils
+from gt4py.next import backend as gtx_backend, common, utils as next_utils
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, artifacts, runners, stages
 from gt4py.next.otf.compilation import cache as _cache
+
+
+def _table_digest(table: np.ndarray) -> str:
+    """Digest of the content of a C-contiguous `table`, hashed in place."""
+    hasher = xxhash.xxh64(b"table\0")
+    hasher.update(table.dtype.str.encode())
+    hasher.update(repr(table.shape).encode())
+    hasher.update(table.data)
+    return hasher.hexdigest()
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -49,18 +60,20 @@ class CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
     _ndarray: core_defs.NDArrayObject = dataclasses.field(
         metadata=next_utils.gt4py_metadata(fingerprint=False)
     )
-    _digest: str
+    #: Derived from the table when not given.
+    _digest: str = ""
+
+    def __post_init__(self) -> None:
+        if not self._digest:
+            table = np.ascontiguousarray(np.asarray(self._ndarray))
+            object.__setattr__(self, "_digest", _table_digest(table))
 
     def __reduce__(self) -> tuple[Callable, tuple]:
+        path = _table_path(self._digest)
+        _write_table(np.asarray(self._ndarray), path)
         return (
             _connectivity_from_file,
-            (
-                str(_table_path(self._digest)),
-                self._digest,
-                self.domain,
-                self.codomain,
-                self.skip_value,
-            ),
+            (str(path), self._digest, self.domain, self.codomain, self.skip_value),
         )
 
 
@@ -85,7 +98,12 @@ def _write_table(table: np.ndarray, path: pathlib.Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Written aside and renamed, so a reader never maps a partially written file.
     with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npy", delete=False) as f:
-        np.save(f, table)
+        try:
+            np.save(f, np.ascontiguousarray(table))
+        except BaseException:
+            f.close()
+            os.unlink(f.name)
+            raise
     os.replace(f.name, path)
 
 
@@ -101,9 +119,10 @@ def _to_compile_time_connectivity(value: common.GatherConnectivity) -> CompileTi
     if entry is not None and entry[0]() is value:
         return entry[1]
     table = np.ascontiguousarray(value.asnumpy())
-    digest = fingerprinting.strict_fingerprinter(table)
+    digest = _table_digest(table)
     path = _table_path(digest)
     _write_table(table, path)
+    del table
     result = _connectivity_from_file(
         str(path), digest, value.domain, value.codomain, value.skip_value
     )
@@ -125,8 +144,8 @@ def compile_time_offset_provider(offset_provider: common.OffsetProvider) -> comm
 
     Every gather connectivity is replaced by its `CompileTimeConnectivity`, so
     that compilation depends neither on the device nor on the memory layout of
-    the tables, and never touches device memory. Other entries and the order of
-    the entries are kept.
+    the tables, and does not read device memory after the conversion. Other
+    entries and the order of the entries are kept.
     """
     return {
         name: typing.cast(common.OffsetProviderElem, _to_compile_time_connectivity(value))
@@ -160,12 +179,19 @@ def make_compilation_task(
         # everything and ignores the compilable.
         return runners.CompilationTask(
             name=name,
-            construct_compilable=lambda with_refs: None,
+            compilable=None,
             executor=lambda _: _PreloadedArtifact(
                 backend.compile(definition_stage, compile_time_args=compile_time_args)
             ),
             no_offload_reason="it does not use the standard compilation workflow"
             " (customized 'compile')",
+        )
+    # Compilation runs against the compile-time view of the offset provider,
+    # whichever runner executes it.
+    if compile_time_args.offset_provider:
+        compile_time_args = dataclasses.replace(
+            compile_time_args,
+            offset_provider=compile_time_offset_provider(compile_time_args.offset_provider),
         )
     # Frontend lowering happens here, main-side: decorators rebind the user's
     # function module attribute, so the raw `types.FunctionType` must not cross
@@ -173,21 +199,4 @@ def make_compilation_task(
     compilable = backend.transforms(
         stages.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
     )
-
-    def construct_compilable(with_refs: bool) -> stages.CompilableProgramDef:
-        if not with_refs or not compilable.args.offset_provider:
-            return compilable
-        # The shipped copy must not carry the connectivity buffers: they may
-        # live on a device the worker cannot see. Compile-time connectivities
-        # pickle as references to their memory-mapped files.
-        return dataclasses.replace(
-            compilable,
-            args=dataclasses.replace(
-                compilable.args,
-                offset_provider=compile_time_offset_provider(compilable.args.offset_provider),
-            ),
-        )
-
-    return runners.CompilationTask(
-        name=name, construct_compilable=construct_compilable, executor=backend.executor
-    )
+    return runners.CompilationTask(name=name, compilable=compilable, executor=backend.executor)

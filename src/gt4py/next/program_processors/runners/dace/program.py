@@ -18,7 +18,7 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, workflow
+from gt4py.next.otf import arguments, compilation_tasks, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.type_system import type_specifications as ts
 
@@ -39,7 +39,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         if (self.backend is None) or "dace" not in self.backend.name.lower():
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
-        offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
+        offset_provider = compilation_tasks.compile_time_offset_provider(
+            self.compilation_options.connectivities or {}
+        )
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.

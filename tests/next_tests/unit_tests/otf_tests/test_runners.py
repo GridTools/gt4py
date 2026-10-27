@@ -42,7 +42,7 @@ class _NoOpArtifact:
 def _decomposed_task(executor):
     return runners.CompilationTask(
         name="test_task",
-        construct_compilable=lambda with_refs: "compilable",
+        compilable="compilable",
         executor=executor,
     )
 
@@ -88,7 +88,7 @@ def test_process_runner_propagates_recursion_limit(process_runner):
 def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
     task = runners.CompilationTask(
         name="opaque",
-        construct_compilable=lambda with_refs: None,
+        compilable=None,
         executor=lambda _: _NoOpArtifact(),
         no_offload_reason="it does not use the standard compilation workflow",
     )
@@ -217,6 +217,14 @@ def test_compile_time_connectivity_fingerprint_depends_only_on_content():
         "codomain": gtx.as_connectivity(
             conn.domain, Vertex, np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
         ),
+        "domain": gtx.as_connectivity(
+            [gtx.Dimension("Cell"), conn.domain.dims[1]],
+            Edge,
+            np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32),
+        ),
+        "dtype": gtx.as_connectivity(
+            conn.domain, Edge, np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int64)
+        ),
     }
 
     def fingerprint(c):
@@ -233,8 +241,9 @@ def test_compile_time_connectivity_pickles_as_file_reference():
     Vertex = gtx.Dimension("Vertex")
     V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
     table = np.arange(4000, dtype=np.int32).reshape(1000, 4) % 1000
+    table[::7, 3] = -1
     conn = compilation_tasks.compile_time_offset_provider(
-        {"V2V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table)}
+        {"V2V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table, skip_value=-1)}
     )["V2V"]
 
     data = pickle.dumps(conn)
@@ -245,13 +254,66 @@ def test_compile_time_connectivity_pickles_as_file_reference():
     assert np.array_equal(restored.ndarray, table)
     assert restored.domain == conn.domain
     assert restored.codomain == conn.codomain
-    assert restored.skip_value == conn.skip_value
+    assert restored.skip_value == conn.skip_value == -1
     assert fingerprinting.strict_fingerprinter(restored) == fingerprinting.strict_fingerprinter(
         conn
     )
 
 
-def test_offloaded_task_ships_compile_time_connectivities():
+def test_compile_time_connectivity_copies_are_valid():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+
+    rebuilt = type(conn)(conn.domain, conn.ndarray, conn.codomain, conn.skip_value)
+    restricted = conn.restrict((slice(0, 2),))
+
+    assert fingerprinting.strict_fingerprinter(rebuilt) == fingerprinting.strict_fingerprinter(conn)
+    assert np.array_equal(pickle.loads(pickle.dumps(restricted)).ndarray, conn.ndarray[0:2])
+    assert fingerprinting.strict_fingerprinter(restricted) != fingerprinting.strict_fingerprinter(
+        conn
+    )
+
+
+def test_compile_time_tables_are_written_once(tmp_path, monkeypatch):
+    monkeypatch.setattr(compilation_tasks._cache, "_session_cache_dir_path", tmp_path)
+    Vertex = gtx.Dimension("Vertex")
+    V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+    table = np.array([[0, 1], [1, 0]], dtype=np.int32)
+    sources = [gtx.as_connectivity([Vertex, V2VDim], Vertex, table) for _ in range(8)]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        views = list(
+            pool.map(
+                lambda c: compilation_tasks.compile_time_offset_provider({"V": c})["V"], sources
+            )
+        )
+    (path,) = (tmp_path / "connectivities").iterdir()
+    mtime = path.stat().st_mtime_ns
+    compilation_tasks.compile_time_offset_provider(
+        {"V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table)}
+    )
+
+    assert len({view._digest for view in views}) == 1
+    assert path.name == f"{views[0]._digest}.npy"
+    assert path.stat().st_mtime_ns == mtime
+    assert [p.name for p in (tmp_path / "connectivities").iterdir()] == [path.name]
+
+
+def test_compile_time_table_write_failure_leaves_no_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(compilation_tasks._cache, "_session_cache_dir_path", tmp_path)
+
+    def failing_save(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(compilation_tasks.np, "save", failing_save)
+    _, offset_provider = _v2e_tables(np)
+
+    with pytest.raises(OSError, match="disk full"):
+        compilation_tasks.compile_time_offset_provider(offset_provider)
+    assert list((tmp_path / "connectivities").iterdir()) == []
+
+
+def test_make_compilation_task_compiles_against_compile_time_view():
     _, offset_provider = _v2e_tables(np)
     compile_time_args = dataclasses.replace(
         arguments.CompileTimeArgs.empty(), offset_provider=offset_provider
@@ -267,10 +329,10 @@ def test_offloaded_task_ships_compile_time_connectivities():
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
 
-    assert task.construct_compilable(False).args.offset_provider is offset_provider
-    shipped = task.construct_compilable(True).args.offset_provider
-    assert type(shipped["V2E"]) is compilation_tasks.CompileTimeConnectivity
-    assert shipped["Vertex"] is offset_provider["Vertex"]
+    compiled_against = task.compilable.args.offset_provider
+    assert type(compiled_against["V2E"]) is compilation_tasks.CompileTimeConnectivity
+    assert type(compiled_against["V2EF"]) is compilation_tasks.CompileTimeConnectivity
+    assert compiled_against["Vertex"] is offset_provider["Vertex"]
 
 
 def test_compile_time_connectivity_registry_prunes_on_gc():

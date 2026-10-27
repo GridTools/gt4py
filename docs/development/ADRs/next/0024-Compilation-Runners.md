@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-07-08
-- **Updated**: 2026-07-08
+- **Updated**: 2026-10-27
 
 In the context of ahead-of-time compilation of many program variants
 (`CompiledProgramsPool`), facing a thread pool that can neither hide the
@@ -143,15 +143,19 @@ received host copies while the calling thread and thread runners received the
 device originals, the compiled input and its translation-cache key differed
 between runners.
 
-Compilation now runs against a compile-time view of the offset provider
-(`compilation_tasks.compile_time_offset_provider`), built once per runtime
-connectivity when a program variant is compiled. Each gather connectivity is
-replaced by a `CompileTimeConnectivity`: a read-only, C-contiguous host table,
-memory-mapped from a file in the session cache directory named by the digest
-of its content. It is fingerprinted by that digest and pickled as a reference
-to the file, which replaces the lazily dumped file references described above.
-All runners thus compile the same input with the same key, compilation never
-touches device memory, and workers share the tables through the page cache.
-Execution still receives the runtime connectivities. Since the view is taken
-once, tables must not be modified in place after they have been used for
-compilation.
+`make_compilation_task` now builds the task against a compile-time view of the
+offset provider (`compilation_tasks.compile_time_offset_provider`), and a
+`CompilationTask` carries the resulting compilable itself instead of
+`construct_compilable(with_refs)`. Each gather connectivity is replaced by a
+`CompileTimeConnectivity`: a read-only, C-contiguous host table, memory-mapped
+from a file in the session cache directory named by a digest of its content
+(dtype, shape and data). It is created once per runtime connectivity, is
+fingerprinted by the digest instead of the table, and pickles as a reference to
+its file. All runners thus compile the same input with the same key, and the
+host tables are shared with the workers through the page cache. The dace
+orchestration path uses the same view; compilation that bypasses both
+(a direct `Backend.compile`, for example) still sees the runtime tables.
+Execution always receives the runtime connectivities.
+
+Since the view is taken once, tables must not be modified in place after they
+have been used for compilation.

@@ -37,17 +37,16 @@ class CompilationTask:
 
     #: Label used in user-facing messages.
     name: str
-    #: Constructs the program to compile; with ``with_refs`` the connectivity
-    #: buffers are replaced by file references for crossing a process boundary.
-    construct_compilable: Callable[[bool], Any]
+    #: The program to compile; it must be picklable to cross a process boundary.
+    compilable: Any
     #: The artifact-producing step. A runner may execute it anywhere, including
     #: another process; its picklability is the runner's concern.
     executor: Callable[[Any], artifacts.CompilationArtifact]
     #: Reason this task is known not to be shippable to another process, if any.
     no_offload_reason: str | None = None
 
-    def compile(self, with_refs: bool = False) -> artifacts.CompilationArtifact:
-        return self.executor(self.construct_compilable(with_refs))
+    def compile(self) -> artifacts.CompilationArtifact:
+        return self.executor(self.compilable)
 
 
 @runtime_checkable
@@ -229,7 +228,7 @@ class ProcessRunner:
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.construct_compilable(True),
+            compilable=task.compilable,
             config_overrides=_config_snapshot(),
             recursion_limit=sys.getrecursionlimit(),
         )
@@ -292,7 +291,7 @@ def reset_default_runner() -> None:
 # Shut down worker pools while the interpreter is still intact; relying on
 # garbage collection at teardown leaks the pool's semaphores (with a
 # ``resource_tracker`` warning on stderr). Ordering: the temporary directories
-# workers read from (session cache, connectivity dumps) are removed by
+# workers read from (the session cache, including the connectivity tables) are removed by
 # ``weakref.finalize``, whose exit hook is registered no later than the import
 # of `otf.compilation.cache` above — atexit runs LIFO, so this shutdown runs
 # before those directories disappear.

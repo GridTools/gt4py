@@ -22,7 +22,8 @@ from gt4py.next import errors, backend, broadcast, common
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py._core import definitions as core_defs
-from gt4py.next.otf import arguments, compilation_tasks, compiled_program, workflow
+from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners, workflow
+from gt4py.next import fingerprinting
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -259,14 +260,67 @@ def test_variants_compile_against_shared_compile_time_connectivities(testee_prog
     testee_prog.compile(cond=[True, False], offset_provider=offset_provider)
     testee_prog(cond=True, out=gtx.zeros({TDim: 2}, dtype=bool), offset_provider=offset_provider)
 
-    first, second = (
-        task.construct_compilable(False).args.offset_provider["T2T"] for task in runner.tasks
-    )
+    first, second = (task.compilable.args.offset_provider["T2T"] for task in runner.tasks)
     assert first is second
     assert type(first) is compilation_tasks.CompileTimeConnectivity
     assert np.array_equal(first.ndarray, table)
     (call,) = runner.calls
     assert call["offset_provider"]["T2T"] is conn
+
+
+_LOADED_FINGERPRINTS: list[str] = []
+
+
+@dataclasses.dataclass(frozen=True)
+class _FingerprintArtifact:
+    fingerprint: str
+
+    def load(self):
+        _LOADED_FINGERPRINTS.append(self.fingerprint)
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _FingerprintingExecutor:
+    def __call__(self, compilable):
+        return _FingerprintArtifact(fingerprinting.strict_fingerprinter(compilable))
+
+
+@pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+def test_compilable_fingerprint_is_independent_of_runner(testee_prog, monkeypatch, tmp_path, xp):
+    LocalDim = gtx.Dimension("Local", kind=gtx.DimensionKind.LOCAL)
+    table = np.array([[0, 1], [1, 0]], dtype=np.int32)
+    offset_provider = {"T2T": gtx.as_connectivity([TDim, LocalDim], TDim, xp.asarray(table))}
+    all_runners = [
+        runners.SerialRunner(),
+        runners.ThreadRunner(max_workers=1),
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)),
+    ]
+    _LOADED_FINGERPRINTS.clear()
+    try:
+        for i, runner in enumerate(all_runners):
+            monkeypatch.setattr(compiled_program.runners, "get_default_runner", lambda: runner)
+            fingerprinting_backend = backend.Backend(
+                name=f"fingerprinting_{i}",
+                executor=_FingerprintingExecutor(),
+                allocator=None,
+                transforms=gtfn.run_gtfn.transforms,
+            )
+            program = testee_prog.with_backend(fingerprinting_backend)
+            program.compile(cond=[True], offset_provider=offset_provider)
+            program(
+                cond=True, out=gtx.zeros({TDim: 2}, dtype=bool), offset_provider=offset_provider
+            )
+    finally:
+        for runner in all_runners:
+            runner.shutdown(wait=True)
+
+    assert len(_LOADED_FINGERPRINTS) == 3
+    assert len(set(_LOADED_FINGERPRINTS)) == 1
 
 
 def _formatted_traceback(error: BaseException) -> str:
