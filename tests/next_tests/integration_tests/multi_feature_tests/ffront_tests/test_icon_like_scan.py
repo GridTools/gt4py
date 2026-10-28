@@ -183,9 +183,7 @@ def reference(
 @pytest.fixture
 def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        None
-        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-        else exec_alloc_descriptor,
+        exec_alloc_descriptor,
         offset_provider={},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,

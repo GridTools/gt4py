@@ -77,7 +77,7 @@ no_backend = NoBackend(name="no_backend", allocator=_no_backend_allocator)
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
-        # will use the default (embedded) execution, but input/output allocated with the provided allocator
+        # embedded execution: the embedded backends differ only in their allocator
         next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
         pytest.param(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
