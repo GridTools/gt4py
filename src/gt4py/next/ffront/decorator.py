@@ -47,23 +47,27 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, workflow
+from gt4py.next.program_processors.runners import embedded as embedded_runners
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DEFAULT_BACKEND: next_backend.Backend | None = None
+DEFAULT_BACKEND: next_backend.Backend = embedded_runners.embedded_numpy
 
 
 def _check_backend(backend: Any) -> None:
     """Reject, when a program or operator is created, anything that is not a backend."""
-    if backend is not None and not isinstance(backend, next_backend.Backend):
+    if backend is None:
         raise TypeError(
-            f"Expected a 'gt4py.next.backend.Backend' (or None for embedded execution),"
-            f" got '{type(backend).__name__}'."
+            "'backend=None' is not supported: embedded execution is selected by an"
+            " 'EmbeddedBackend'. Omit 'backend' to use the default, or pass one such as"
+            " 'gtx.embedded_numpy'."
         )
+    if not isinstance(backend, next_backend.Backend):
+        raise TypeError(f"Expected a 'gt4py.next.backend.Backend', got '{type(backend).__name__}'.")
 
 
 def _compiled_backend_or_none(
-    backend: next_backend.Backend | None,
+    backend: next_backend.Backend,
 ) -> next_backend.CompiledBackend | None:
     """
     Dispatch on the kind of `backend`.
@@ -77,7 +81,7 @@ def _compiled_backend_or_none(
     match backend:
         case next_backend.CompiledBackend():
             return backend
-        case next_backend.EmbeddedBackend() | None:
+        case next_backend.EmbeddedBackend():
             return None
         case _:
             raise TypeError(
@@ -86,9 +90,7 @@ def _compiled_backend_or_none(
             )
 
 
-def _not_compilable_message(backend: next_backend.Backend | None, what: str) -> str:
-    if backend is None:
-        return f"Cannot compile a {what} without backend."
+def _not_compilable_message(backend: next_backend.Backend) -> str:
     return f"Backend '{backend.name}' is an embedded backend; embedded programs are not compiled."
 
 
@@ -117,8 +119,7 @@ def embedded_program_call_context(
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
-    backend_name = "'embedded'" if program.backend is None else program.backend.name
-    return metrics.metrics_source_key_setter(f"{program.__name__}<{backend_name}>")
+    return metrics.metrics_source_key_setter(f"{program.__name__}<{program.backend.name}>")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -136,7 +137,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     # backend-specific compilation is keyed separately in the backend's own
     # caches, and fingerprinting the whole backend object graph is both wasteful
     # and fragile (it may hold non-importable callables, see also test doubles).
-    backend: Optional[next_backend.Backend] = dataclasses.field(
+    backend: next_backend.Backend = dataclasses.field(
         metadata=utils.gt4py_metadata(fingerprint=False)
     )
     compilation_options: options.CompilationOptions
@@ -144,7 +145,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
-    def with_backend(self, backend: next_backend.Backend | None) -> Self:
+    def with_backend(self, backend: next_backend.Backend) -> Self:
         return dataclasses.replace(self, backend=backend)
 
     def with_compilation_options(
@@ -173,7 +174,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         compiled_backend = _compiled_backend_or_none(self.backend)
         if compiled_backend is None:
-            raise RuntimeError(_not_compilable_message(self.backend, "program"))
+            raise RuntimeError(_not_compilable_message(self.backend))
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -274,7 +275,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         past_node: The node representing the program.
         closure_vars: Mapping of externally defined symbols to their respective values.
             For example, referenced global and nonlocal variables.
-        backend: The backend the program runs on (`None` for embedded execution).
+        backend: The backend the program runs on.
         definition: The Python function object corresponding to the PAST node.
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
@@ -287,7 +288,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: next_backend.Backend | None,
+        backend: next_backend.Backend,
         grid_type: common.GridType | None = None,
         **compilation_options: Unpack[options.CompilationOptionsArgs],
     ) -> Program:
@@ -322,8 +323,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         | core_ndarray_utils.ArrayNamespace
     ):
         _compiled_backend_or_none(self.backend)  # rejects unsupported backend kinds
-        if self.backend is None:
-            raise RuntimeError(f"Program '{self}' does not have a backend set.")
         return self.backend.__gt_allocator__
 
     @property
@@ -546,7 +545,7 @@ def program(definition: Callable) -> Program: ...
 @typing.overload
 def program(
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Callable[[Callable], Program]: ...
@@ -555,8 +554,8 @@ def program(
 def program(
     definition: Callable | None = None,
     *,
-    # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    # `NOTHING` -> default backend (`DEFAULT_BACKEND`, embedded execution on NumPy)
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> Program | Callable[[Callable], Program]:
@@ -587,7 +586,7 @@ def program(
         program = Program.from_function(
             definition,
             backend=typing.cast(
-                next_backend.Backend | None,
+                next_backend.Backend,
                 DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type=grid_type,
@@ -624,7 +623,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[next_backend.Backend],
+        backend: next_backend.Backend,
         grid_type: Optional[common.GridType] = None,
         *,
         operator_node_cls: type[foast.OperatorNode] = foast.FieldOperator,
@@ -763,7 +762,7 @@ class FieldOperatorFromFoast(FieldOperator):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         compiled_backend = _compiled_backend_or_none(self.backend)
         if compiled_backend is None:
-            raise RuntimeError(_not_compilable_message(self.backend, "field operator"))
+            raise RuntimeError(_not_compilable_message(self.backend))
         compiled_fo = next_backend.Toolchain(compiled_backend).compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )
@@ -774,7 +773,7 @@ class FieldOperatorFromFoast(FieldOperator):
 def field_operator(
     definition: Callable,
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator: ...
 
@@ -782,7 +781,7 @@ def field_operator(
 @typing.overload
 def field_operator(
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> Callable[[Callable], FieldOperator]: ...
 
@@ -790,7 +789,7 @@ def field_operator(
 def field_operator(
     definition: Callable | None = None,
     *,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
     **compilation_options: Unpack[options.CompilationOptionsArgs],
 ) -> FieldOperator | Callable[[types.FunctionType], FieldOperator]:
@@ -815,7 +814,7 @@ def field_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None,
+                next_backend.Backend,
                 DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,
@@ -832,7 +831,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | eve.NothingType | None,
+    backend: next_backend.Backend | eve.NothingType,
     grid_type: common.GridType | None,
 ) -> FieldOperator: ...
 
@@ -859,7 +858,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | eve.NothingType | None,
+    backend: next_backend.Backend | eve.NothingType,
     grid_type: common.GridType | None,
 ) -> Callable[[Callable], FieldOperator]: ...
 
@@ -870,7 +869,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator | Callable[[Callable], FieldOperator]:
     """
@@ -907,7 +906,7 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None,
+                next_backend.Backend,
                 DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,

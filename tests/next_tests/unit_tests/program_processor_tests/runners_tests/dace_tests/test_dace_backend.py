@@ -306,8 +306,15 @@ def test_is_dace_backend_recognizes_dace_backends(backend):
 
 @pytest.mark.parametrize(
     "backend",
-    [gtfn.run_gtfn, roundtrip.default, cases_utils.no_backend, None, "run_dace_cpu"],
-    ids=["gtfn", "roundtrip", "no_backend", "None", "name"],
+    [
+        gtfn.run_gtfn,
+        roundtrip.default,
+        gtx.embedded_numpy,
+        cases_utils.no_backend,
+        None,
+        "run_dace_cpu",
+    ],
+    ids=["gtfn", "roundtrip", "embedded_numpy", "no_backend", "None", "name"],
 )
 def test_is_dace_backend_rejects_other_objects(backend):
     assert not dace_wf_backend.is_dace_backend(backend)

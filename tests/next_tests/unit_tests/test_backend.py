@@ -216,3 +216,18 @@ def test_deepcopy_of_a_program_after_allocation(backend):
 
     assert program_copy.backend is backend
     assert "__gt_allocator__" not in program.__dict__
+
+
+def test_deepcopy_of_a_default_program():
+    @gtx.field_operator
+    def identity(a: gtx.Field[[IDim], gtx.float64]) -> gtx.Field[[IDim], gtx.float64]:
+        return a
+
+    @gtx.program
+    def copy_program(a: gtx.Field[[IDim], gtx.float64], out: gtx.Field[[IDim], gtx.float64]):
+        identity(a, out=out)
+
+    assert copy_program.backend is gtx.embedded_numpy
+    assert copy.deepcopy(copy_program).backend is gtx.embedded_numpy
+    gtx.zeros({IDim: 3}, allocator=copy_program)
+    assert copy.deepcopy(copy_program).backend is gtx.embedded_numpy

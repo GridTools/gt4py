@@ -23,11 +23,11 @@ from next_tests.integration_tests.cases_utils import (
 
 
 def test_program_gtir_regression(cartesian_case):
-    @gtx.field_operator(backend=None)
+    @gtx.field_operator(backend=gtx.embedded_numpy)
     def testee_op(a: cases.IField) -> cases.IField:
         return a
 
-    @gtx.program(backend=None)
+    @gtx.program(backend=gtx.embedded_numpy)
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, out=out)
 
@@ -53,7 +53,7 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
     def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
         return a + b
 
-    @gtx.program(backend=None)
+    @gtx.program(backend=gtx.embedded_numpy)
     def testee(a: cases.IField, out: cases.IField):
         testee_op(a, a, out=out)
 
