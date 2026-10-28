@@ -33,12 +33,12 @@ _GT4PY_SOURCE_PREFIX: Final[str] = str(pathlib.Path(gt4py.__file__).parent)
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeConfig(next_backend.ToolchainConfig):
-    """Settings shared by the steps of a DaCe toolchain, see `ToolchainConfig`."""
+class DaCeConfig(next_backend.CompiledBackendConfig):
+    """Settings shared by the steps of a DaCe backend, see `CompiledBackendConfig`."""
 
     #: Run the SDFG auto-optimize pipeline.
     auto_optimize: bool = True
-    #: Workspace memory allocated outside the SDFG. The toolchain injects it into
+    #: Workspace memory allocated outside the SDFG. The backend's loader injects it into
     #: the loaded programs, and the translation step then defaults to the
     #: `EXTERNAL` transient memory mode, which stores the transients in it. The
     #: workspace is a dict, so a config holding one is not hashable.
@@ -66,7 +66,7 @@ def make_dace_translator(
     The keyword arguments are the step-local fields of `DaCeTranslator`.
 
     Args:
-        cfg: The toolchain configuration.
+        cfg: The backend configuration.
         auto_optimize_args: Configuration for the SDFG auto-optimize pipeline,
             see `gt_auto_optimize()`. The parameters `DaCeTranslator` derives
             itself cannot be set here. With an external workspace in `cfg`, the
@@ -141,7 +141,7 @@ def make_dace_compiler(
     Build the compilation step, targeting `cfg.device_type`.
 
     Args:
-        cfg: The toolchain configuration.
+        cfg: The backend configuration.
         add_gpu_trace_markers: Add GPU trace markers to the generated code.
             Defaults to the value in `config`.
 
@@ -159,7 +159,7 @@ def make_dace_compiler(
     )
 
 
-#: Step builders: callables creating a step from the toolchain configuration.
+#: Step builders: callables creating a step from the backend configuration.
 DaCeTranslationBuilder: TypeAlias = Callable[[DaCeConfig], stages.TranslationStep]
 DaCeBindingsBuilder: TypeAlias = Callable[
     [DaCeConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
@@ -190,7 +190,7 @@ def make_dace_compile_workflow(
     responsible for configuring its step from `cfg`.
 
     Args:
-        cfg: The toolchain configuration. Defaults to `DaCeConfig()`.
+        cfg: The backend configuration. Defaults to `DaCeConfig()`.
         translation: Builder of the translation step.
         bindings: Builder of the bindings step.
         compilation: Builder of the compilation step.

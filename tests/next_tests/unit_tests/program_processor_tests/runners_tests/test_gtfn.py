@@ -33,9 +33,9 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
 
 
-def test_make_gtfn_toolchain_device():
-    cpu_version = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=False))
-    gpu_version = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(gpu=True))
+def test_make_gtfn_backend_device():
+    cpu_version = gtfn.make_gtfn_backend(gtfn.GTFNConfig(gpu=False))
+    gpu_version = gtfn.make_gtfn_backend(gtfn.GTFNConfig(gpu=True))
 
     assert cpu_version.name == "run_gtfn_cpu"
     assert isinstance(cpu_version.compiler.translation, workflow.CachedStep)
@@ -56,11 +56,11 @@ def test_make_gtfn_toolchain_device():
     )
 
 
-def test_make_gtfn_toolchain_build_cache_config(monkeypatch):
+def test_make_gtfn_backend_build_cache_config(monkeypatch):
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.SESSION)
-    session_version = gtfn.make_gtfn_toolchain()
+    session_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "BUILD_CACHE_LIFETIME", config.BuildCacheLifetime.PERSISTENT)
-    persistent_version = gtfn.make_gtfn_toolchain()
+    persistent_version = gtfn.make_gtfn_backend()
 
     assert session_version.compiler.compilation.cache_lifetime is config.BuildCacheLifetime.SESSION
     assert (
@@ -69,11 +69,11 @@ def test_make_gtfn_toolchain_build_cache_config(monkeypatch):
     )
 
 
-def test_make_gtfn_toolchain_build_type_config(monkeypatch):
+def test_make_gtfn_backend_build_type_config(monkeypatch):
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.make_gtfn_toolchain()
+    release_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.MIN_SIZE_REL)
-    min_size_version = gtfn.make_gtfn_toolchain()
+    min_size_version = gtfn.make_gtfn_backend()
 
     assert (
         release_version.compiler.compilation.builder_factory.cmake_build_type
@@ -94,9 +94,9 @@ def test_cmake_build_type_changes_build_folder(monkeypatch, tmp_path):
     land in different cache folders.
     """
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.RELEASE)
-    release_version = gtfn.make_gtfn_toolchain()
+    release_version = gtfn.make_gtfn_backend()
     monkeypatch.setattr(config, "CMAKE_BUILD_TYPE", config.CMakeBuildType.DEBUG)
-    debug_version = gtfn.make_gtfn_toolchain()
+    debug_version = gtfn.make_gtfn_backend()
 
     release_compiler = release_version.compiler.compilation
     debug_compiler = debug_version.compiler.compilation
@@ -136,7 +136,7 @@ def test_step_builder_partial_keeps_config_settings():
     """A partial of a default step builder changes a step-local setting only."""
     cfg = gtfn.GTFNConfig(gpu=True, cmake_build_type=config.CMakeBuildType.DEBUG)
 
-    toolchain = gtfn.make_gtfn_toolchain(
+    toolchain = gtfn.make_gtfn_backend(
         cfg,
         translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
         compilation=functools.partial(
@@ -163,21 +163,21 @@ def test_custom_step_builder_output_is_cached():
         device_type=core_defs.DeviceType.CPU, use_max_domain_range_on_unstructured_shift=True
     )
 
-    toolchain = gtfn.make_gtfn_toolchain(translation=lambda cfg: custom_step)
+    toolchain = gtfn.make_gtfn_backend(translation=lambda cfg: custom_step)
 
     assert isinstance(toolchain.compiler.translation, workflow.CachedStep)
     assert toolchain.compiler.translation.step is custom_step
 
 
 def test_uncached_translation():
-    toolchain = gtfn.make_gtfn_toolchain(gtfn.GTFNConfig(cached_translation=False))
+    toolchain = gtfn.make_gtfn_backend(gtfn.GTFNConfig(cached_translation=False))
 
     assert isinstance(toolchain.compiler.translation, gtfn_module.GTFNTranslationStep)
 
 
 def test_step_builder_cannot_override_config_setting():
     with pytest.raises(TypeError, match="device_type"):
-        gtfn.make_gtfn_toolchain(
+        gtfn.make_gtfn_backend(
             gtfn.GTFNConfig(gpu=True),
             translation=functools.partial(
                 gtfn.make_gtfn_translation, device_type=core_defs.DeviceType.CPU

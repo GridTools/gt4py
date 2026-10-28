@@ -228,18 +228,18 @@ class Toolchain:
 
 
 @dataclasses.dataclass(frozen=True)
-class ToolchainConfig:
+class CompiledBackendConfig:
     """
-    Settings that describe what a compiled toolchain builds for.
+    Settings that describe what a compiled backend builds for.
 
-    A toolchain builder creates every step from one config, so steps that must
+    A backend builder creates every step from one config, so steps that must
     agree on a setting (the target device, the build type, the cache lifetime,
     the data layout) read it from the same place and cannot drift apart.
     Settings that only tune how a single step does its job are not part of the
     config: they are keyword arguments of that step's builder.
 
     Defaults are read from `gt4py.next.config` when the config is created, not
-    when this module is imported, so the toolchains built from a default config
+    when this module is imported, so the backends built from a default config
     follow the current user configuration.
     """
 
@@ -266,7 +266,7 @@ class ToolchainConfig:
 
     @property
     def device_name(self) -> str:
-        """Device part of the toolchain name."""
+        """Device part of the backend name."""
         return "gpu" if self.gpu else "cpu"
 
     def make_allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:

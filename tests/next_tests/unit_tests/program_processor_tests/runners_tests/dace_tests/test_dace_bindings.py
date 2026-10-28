@@ -294,7 +294,7 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     ):
         testee_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
 
-    backend = dace_runner.make_dace_toolchain(
+    backend = dace_runner.make_dace_backend(
         translation=functools.partial(
             dace_runner.make_dace_translator,
             use_metrics=use_metrics,
@@ -350,7 +350,7 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     def testee(a: cases.VField, b: cases.VField):
         testee_op(a, out=b)
 
-    backend = dace_runner.make_dace_toolchain(
+    backend = dace_runner.make_dace_backend(
         translation=functools.partial(
             dace_runner.make_dace_translator,
             use_metrics=use_metrics,
