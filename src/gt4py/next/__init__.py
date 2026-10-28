@@ -97,6 +97,7 @@ from .ffront.fbuiltins import (
     where,
 )
 from .otf.compiled_program import wait_for_compilation
+from .program_processors.runners.embedded import embedded_numpy
 from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
 from .program_processors.runners.roundtrip import default as itir_python
 
@@ -144,6 +145,7 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # from otf
     "wait_for_compilation",
     # from program_processor
+    "embedded_numpy",
     "gtfn_cpu",
     "gtfn_gpu",
     "itir_python",

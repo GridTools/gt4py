@@ -9,9 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable
+import typing
+from typing import Any, Callable, Final, Self
 
-from gt4py._core import definitions as core_defs
+import numpy as np
+
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import config, constructors, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
@@ -147,7 +150,11 @@ class Backend:
 
     A backend decides how a program runs and where the buffers of its fields are
     allocated. This class is abstract: instantiate a concrete kind, such as
-    `CompiledBackend`.
+    `CompiledBackend` or `EmbeddedBackend`.
+
+    Backends are immutable configuration objects: a deep copy of a backend is the
+    backend itself, so deep copies of programs share their backend, including any
+    caller-owned state it holds (e.g. a DaCe external workspace).
 
     Attributes:
         name: Human-readable label used in metrics, logs and diagnostics. It is
@@ -165,8 +172,24 @@ class Backend:
     def __post_init__(self) -> None:
         if type(self) is Backend:
             raise TypeError(
-                "'Backend' is abstract: instantiate a concrete kind such as 'CompiledBackend'."
+                "'Backend' is abstract: instantiate a concrete kind such as 'CompiledBackend'"
+                " or 'EmbeddedBackend'."
             )
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        # Immutable configuration object: share its fields (array namespaces,
+        # compile pipelines with caches, caller-owned buffers) instead of copying them.
+        return self
+
+    @property
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol | core_ndarray_utils.ArrayNamespace:
+        """The allocator for fields used with this backend (unwrapping an allocator factory)."""
+        allocator = self.allocator
+        if next_allocators.is_field_allocator_factory(allocator):
+            return allocator.__gt_allocator__
+        return allocator
 
 
 @dataclasses.dataclass(frozen=True)
@@ -198,6 +221,40 @@ class CompiledBackend(Backend):
 
     @property
     def __gt_allocator__(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        return self.allocator
+
+
+_NUMPY_NAMESPACE: Final = typing.cast(core_ndarray_utils.ArrayNamespace, np)
+
+
+@dataclasses.dataclass(frozen=True)
+class EmbeddedBackend(Backend):
+    """
+    A backend that runs the Python definition directly on fields, without lowering.
+
+    Execution is the same for every instance: embedded operators dispatch on the
+    array types of their arguments. The allocator only decides where gt4py
+    allocates the buffers of fields for this backend, e.g. in
+    `gtx.zeros(..., allocator=program)`. The instances live in
+    `gt4py.next.program_processors.runners.embedded`.
+
+    Attributes:
+        allocator: The array namespace (e.g. `numpy`, `cupy`, `jax.numpy`) used
+            to allocate field buffers. Defaults to NumPy.
+    """
+
+    allocator: core_ndarray_utils.ArrayNamespace = _NUMPY_NAMESPACE
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not core_ndarray_utils.is_array_namespace(self.allocator):
+            raise TypeError(
+                f"The allocator of embedded backend '{self.name}' must be an array namespace"
+                f" (e.g. 'numpy'), got '{self.allocator}'."
+            )
+
+    @property
+    def __gt_allocator__(self) -> core_ndarray_utils.ArrayNamespace:
         return self.allocator
 
 

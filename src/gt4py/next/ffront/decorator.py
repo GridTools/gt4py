@@ -305,7 +305,9 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def __name__(self) -> str:
         return self.definition_stage.definition.__name__
 
-    @functools.cached_property
+    # A plain property, not a cached one: caching would store the allocator (which
+    # may hold a module) in the program, and the program could not be deep-copied.
+    @property
     def __gt_allocator__(
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
