@@ -38,6 +38,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg,
@@ -535,11 +536,23 @@ def translate_scan_fieldop(
 
     input_edges = []
     for input_connector, memlet in input_memlets.items():
-        src_node = lambda_arg_nodes[input_connector]
-        assert src_node is not None
-        input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
-            ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
-        )
+        if src_node := lambda_arg_nodes.get(input_connector, None):
+            input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
+                state=ctx.state,
+                source=src_node.dc_node,
+                subset=memlet.src_subset,
+                dest=nsdfg_node,
+                dest_conn=input_connector,
+            )
+        else:
+            assert gtx_dace_args.is_connectivity_identifier(input_connector)
+            input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
+                state=ctx.state,
+                source=ctx.state.add_access(input_connector),
+                subset=memlet.src_subset,
+                dest=nsdfg_node,
+                dest_conn=input_connector,
+            )
         input_edges.append(input_edge)
 
     # for output connections, we create temporary arrays that contain the computation
