@@ -42,7 +42,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         """
         cmake_minimum_required(VERSION 3.20.0)
 
-        project({{project_name}})
+        project({{project_name}} LANGUAGES CXX)
 
         # Languages
         {{"\\n".join(languages)}}
