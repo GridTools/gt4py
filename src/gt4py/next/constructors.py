@@ -52,8 +52,10 @@ Type for field memory allocators.
 Accepts either:
 - An array namespace following the Array API standard (e.g. ``numpy``, ``cupy``, ``jax.numpy``),
   which will be used directly for array creation.
-- A GT4Py field buffer allocator or allocator factory (e.g. a backend), which controls
-  memory layout and alignment.
+- A GT4Py field buffer allocator, which controls memory layout and alignment.
+- An allocator factory (e.g. a backend or a program), which provides one of the above
+  through its ``__gt_allocator__`` property: a field buffer allocator for compiled
+  backends, an array namespace for embedded backends.
 """
 
 DEFAULT_DEVICE: Final[core_defs.Device] = core_defs.Device(core_defs.DeviceType.CPU, 0)
@@ -81,6 +83,11 @@ class FieldConstructor:
             # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
             allocator = next_allocators.device_allocators[device.device_type]
 
+        # Unwrap factories first: a factory (e.g. a backend or a program) may provide
+        # an array namespace as well as a field buffer allocator.
+        if next_allocators.is_field_allocator_factory(allocator):
+            allocator = allocator.__gt_allocator__
+
         if core_ndarray_utils.is_array_namespace(allocator):
             if aligned_index is not None:
                 import warnings
@@ -97,9 +104,7 @@ class FieldConstructor:
             self._array_constructor = _ArrayAPIArrayConstructor(
                 array_ns=allocator, device=translated_device
             )
-        elif next_allocators.is_field_allocation_tool(allocator):
-            if next_allocators.is_field_allocator_factory(allocator):
-                allocator = allocator.__gt_allocator__
+        elif next_allocators.is_field_allocator(allocator):
             if device is not None and allocator.__gt_device_type__ != device.device_type:
                 raise ValueError(
                     f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
