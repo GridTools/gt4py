@@ -59,13 +59,16 @@ class CMakeFactory(
         header_name = f"{name}.{source.program_source.code_spec.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
         cmake_languages = [cmake_lists.Language(name="CXX")]
+        cmake_extra_flags = [*self.cmake_extra_flags]
         if (src_lang_name := source.program_source.code_spec.source_language) in {
             artifacts.CUDACodeSpec.source_language,
             artifacts.HIPCodeSpec.source_language,
         }:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name=src_lang_name)]
-            if device_arch_flag := get_cmake_device_arch_option():
-                self.cmake_extra_flags.append(device_arch_flag)
+            if (
+                device_arch_flag := get_cmake_device_arch_option()
+            ) and device_arch_flag not in cmake_extra_flags:
+                cmake_extra_flags.append(device_arch_flag)
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
             name,
             source.library_deps,
@@ -83,7 +86,7 @@ class CMakeFactory(
             program_name=name,
             generator_name=self.cmake_generator_name,
             build_type=self.cmake_build_type,
-            extra_cmake_flags=self.cmake_extra_flags,
+            extra_cmake_flags=cmake_extra_flags,
         )
 
 

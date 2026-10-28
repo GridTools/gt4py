@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import os
 import pathlib
 import shutil
@@ -15,6 +16,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import cmake
 
@@ -80,3 +82,25 @@ def test_default_cmake_factory(extension_source_example, clean_cmake_cache):
     )
 
     assert (otf_builder.root_path / "configure.sh").exists()
+
+
+def test_cmake_factory_does_not_change_its_extra_flags(extension_source_example):
+    cuda_source = dataclasses.replace(
+        extension_source_example,
+        program_source=dataclasses.replace(
+            extension_source_example.program_source, code_spec=artifacts.CUDACodeSpec()
+        ),
+    )
+    factory = cmake.CMakeFactory(cmake_extra_flags=["-DEXTRA=ON"])
+    with (
+        mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
+        mock.patch.dict(os.environ, {"CUDAARCHS": "90"}),
+    ):
+        projects = [
+            factory(source=cuda_source, cache_lifetime=config.BuildCacheLifetime.SESSION)
+            for _ in range(2)
+        ]
+
+    assert factory.cmake_extra_flags == ["-DEXTRA=ON"]
+    for project in projects:
+        assert project.extra_cmake_flags == ["-DEXTRA=ON", "-DCMAKE_CUDA_ARCHITECTURES=90"]
