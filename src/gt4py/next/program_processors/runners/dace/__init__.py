@@ -9,6 +9,8 @@
 
 from gt4py.next.program_processors.runners.dace.sdfg_callable import get_sdfg_args
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
+    DaCeLoader,
+    is_dace_backend,
     make_dace_backend,
     make_dace_toolchain,
     run_dace_cpu,
@@ -32,8 +34,10 @@ __all__ = [
     "DaCeBindingsBuilder",
     "DaCeCompilationBuilder",
     "DaCeConfig",
+    "DaCeLoader",
     "DaCeTranslationBuilder",
     "get_sdfg_args",
+    "is_dace_backend",
     "make_dace_backend",
     "make_dace_bindings",
     "make_dace_compile_workflow",

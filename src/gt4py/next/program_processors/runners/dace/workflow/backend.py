@@ -14,20 +14,21 @@ import warnings
 from typing import Any
 
 from gt4py.next import backend, config
-from gt4py.next.otf import artifacts
+from gt4py.next.otf import artifacts, recipes, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
     factory as gtx_wfdfactory,
+    translation as gtx_wfdtranslation,
 )
 
 
 @dataclasses.dataclass(frozen=True)
-class DaCeLoadingStep:
+class DaCeLoader:
     """
-    Loading step that injects an external workspace into the loaded program.
+    Loader that injects an external workspace into the loaded program.
 
-    The workspace is owned by the caller, not by the toolchain; it is installed
+    The workspace is owned by the caller, not by the backend; it is installed
     onto the program wrapper before its first call, so that it is used when the
     SDFG argument vector is constructed.
     """
@@ -39,6 +40,32 @@ class DaCeLoadingStep:
         assert isinstance(program, gtx_wfddecoration.DaCeDecoratedProgram)
         program.set_external_workspace(self.external_workspace or {})
         return program
+
+
+def is_dace_backend(backend_: Any) -> bool:
+    """
+    Check whether `backend_` is a compiled backend translating programs to SDFGs.
+
+    The check looks at the translation step of the standard compile pipeline
+    (through a `CachedStep`), not at the backend name, so renamed and customized
+    DaCe backends are recognized too.
+
+    Args:
+        backend_: Any object, typically a `Backend`.
+
+    Returns:
+        `True` if `backend_` is a `CompiledBackend` whose compiler is the standard
+        compile pipeline with a `DaCeTranslator` translation step.
+    """
+    if not isinstance(backend_, backend.CompiledBackend):
+        return False
+    compiler = backend_.compiler
+    if not isinstance(compiler, recipes.OTFCompileWorkflow):
+        return False
+    translation: Any = compiler.translation
+    if isinstance(translation, workflow.CachedStep):
+        translation = translation.step
+    return isinstance(translation, gtx_wfdtranslation.DaCeTranslator)
 
 
 def make_dace_toolchain(
@@ -73,7 +100,7 @@ def make_dace_toolchain(
             cfg, translation=translation, bindings=bindings, compilation=compilation
         ),
         allocator=cfg.make_allocator(),
-        loader=DaCeLoadingStep(cfg.external_workspace),
+        loader=DaCeLoader(cfg.external_workspace),
     )
 
 

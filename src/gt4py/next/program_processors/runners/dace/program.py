@@ -20,6 +20,7 @@ from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.workflow import backend as gtx_dace_backend
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -36,16 +37,14 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     ] = {}  # symbolically defined
 
     def __sdfg__(self, *args: Any, **kwargs: Any) -> dace.sdfg.sdfg.SDFG:
-        if not (
-            isinstance(self.backend, gtx_backend.CompiledBackend)
-            and "dace" in self.backend.name.lower()
-        ):
+        if not gtx_dace_backend.is_dace_backend(self.backend):
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
         offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
+        assert isinstance(self.backend, gtx_backend.CompiledBackend)
         gtir_stage = self._frontend_transforms.past_to_itir(
             workflow.ProgramWithArgs(
                 definition=self.past_stage,

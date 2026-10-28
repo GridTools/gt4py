@@ -22,6 +22,7 @@ from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
 from gt4py.next.otf import runners, stages
+from gt4py.next.program_processors.runners import gtfn, roundtrip
 from gt4py.next.otf import workflow as gtx_workflow
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import (
@@ -277,6 +278,39 @@ def test_make_toolchain_uncached_translation():
     )
 
     assert isinstance(toolchain.compiler.translation, dace_wf_translation.DaCeTranslator)
+
+
+def test_backend_carries_its_workspace_in_a_dace_loader():
+    workspace: dict = {}
+    backend = dace_wf_backend.make_dace_toolchain(
+        dace_wf_factory.DaCeConfig(external_workspace=workspace)
+    )
+
+    assert isinstance(backend.loader, dace_wf_backend.DaCeLoader)
+    assert backend.loader.external_workspace is workspace
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        dace_wf_backend.run_dace_cpu,
+        dace_wf_backend.make_dace_toolchain(name_postfix="_custom"),
+        dace_wf_backend.make_dace_toolchain(dace_wf_factory.DaCeConfig(cached_translation=False)),
+        dataclasses.replace(dace_wf_backend.run_dace_cpu, name="renamed"),
+    ],
+    ids=["run_dace_cpu", "postfix", "uncached", "renamed"],
+)
+def test_is_dace_backend_recognizes_dace_backends(backend):
+    assert dace_wf_backend.is_dace_backend(backend)
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [gtfn.run_gtfn, roundtrip.default, cases_utils.no_backend, None, "run_dace_cpu"],
+    ids=["gtfn", "roundtrip", "no_backend", "None", "name"],
+)
+def test_is_dace_backend_rejects_other_objects(backend):
+    assert not dace_wf_backend.is_dace_backend(backend)
 
 
 def test_make_dace_backend_is_deprecated():
