@@ -11,7 +11,7 @@ tags: [backend, otf, workflows, toolchain]
 
 In order to provide a streamlined user experience, we attempt to standardize how users of GT4Py stencils can configure how those stencils are optimized without editing GT4Py code. This describes the design of the first minimal implementation.
 
-Refined by [0029 - Toolchain Naming and Pipeline Simplification](0029-Toolchain-Naming-and-Pipeline-Simplification.md) (the term *toolchain* becomes the name of the root object).
+Refined by [0029 - Backend Structure and Pipeline Simplification](0029-Backend-Structure-and-Pipeline-Simplification.md) (the term *toolchain* names the internal composition of the frontend with a compiled backend; the user-facing object stays `Backend`).
 
 ## Context
 

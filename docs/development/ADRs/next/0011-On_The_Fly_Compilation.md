@@ -14,7 +14,7 @@ This supersedes [0009 - Compiled Backend Integration](0009-Compiled-Backend-Inte
 > [!NOTE]
 > The stage and step names introduced below have since been renamed and redistributed over two modules: `ProgramCall` is now `otf.stages.CompilableProgramDef`; `ProgramSource`, `CompilableSource` and `CompiledProgram` are now `otf.artifacts.ProgramSource`, `otf.artifacts.ExtensionSource` and `otf.artifacts.CompilationArtifact` (whose `load()` returns an `otf.artifacts.ExecutableProgram`); and `otf.step_types` was merged into `otf.stages`, where `BindingStep` no longer exists. The architecture described here — composable, statically typed workflows — is unchanged.
 
-Partially superseded by [0029 - Toolchain Naming and Pipeline Simplification](0029-Toolchain-Naming-and-Pipeline-Simplification.md) (workflow combinators and step-type naming).
+Partially superseded by [0029 - Backend Structure and Pipeline Simplification](0029-Backend-Structure-and-Pipeline-Simplification.md) (workflow combinators and step-type naming).
 
 ## Context
 
