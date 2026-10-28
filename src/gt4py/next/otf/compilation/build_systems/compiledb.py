@@ -27,8 +27,8 @@ from gt4py.next.otf.compilation.build_systems import cmake
 CPPLikeCodeSpecT = TypeVar("CPPLikeCodeSpecT", bound=artifacts.CPPLikeCodeSpec)
 
 #: Name prefix of the synthetic program under which the shared compiledb is cached.
-#: Its cache folder sits next to the folders of real programs, so tools that scan
-#: the build cache use this to tell the two apart.
+#: Its cache folder sits in the session cache, next to the folders of session-lifetime
+#: programs, so tools that scan the build cache use this to tell the two apart.
 COMPILEDB_PROTOTYPE_NAME_PREFIX: Final[str] = "compile_commands_cache"
 
 
@@ -40,8 +40,12 @@ class CompiledbFactory(
     Create a CompiledbProject from an ``ExtensionSource`` stage object with given CMake settings.
 
     Use CMake to generate a compiledb with the required sequence of build commands.
-    Generate a compiledb only if there isn't one for the given combination of cmake configuration
-    and library dependencies.
+    Generate a compiledb only if this process does not have one yet for the given combination of
+    cmake configuration and library dependencies.
+
+    The compiledb is always kept in the session cache, also when the programs are cached
+    persistently: it records the toolchain found by CMake (compiler, device architecture), which
+    is not part of its cache key, so a persistent one would outlive a toolchain change.
     """
 
     cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
@@ -73,7 +77,7 @@ class CompiledbFactory(
             cc_prototype_program_source,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
-            cache_lifetime=cache_lifetime,
+            cache_lifetime=config.BuildCacheLifetime.SESSION,
         )
 
         return CompiledbProject(

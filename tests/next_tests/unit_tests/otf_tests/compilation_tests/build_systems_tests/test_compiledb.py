@@ -49,6 +49,27 @@ def test_default_compiledb_factory(extension_source_example, clean_compiledb_cac
     assert (otf_builder.root_path / "build.sh").exists()
 
 
+def test_compiledb_prototype_is_kept_in_session_cache(
+    extension_source_example, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(config, "BUILD_CACHE_DIR", tmp_path)
+    builder = compiledb.CompiledbFactory()(
+        extension_source_example, cache_lifetime=config.BuildCacheLifetime.PERSISTENT
+    )
+
+    assert builder.root_path.is_relative_to(tmp_path.resolve())
+    assert builder.compile_commands_cache.is_relative_to(
+        cache.get_cache_base_path(config.BuildCacheLifetime.SESSION).resolve()
+    )
+
+    builder.build()
+
+    assert build_data.read_data(builder.root_path).status == build_data.BuildStatus.COMPILED
+    assert not any(
+        p.name.startswith(compiledb.COMPILEDB_PROTOTYPE_NAME_PREFIX) for p in tmp_path.iterdir()
+    )
+
+
 def test_compiledb_project_is_relocatable(extension_source_example, clean_compiledb_cache):
     builder = compiledb.CompiledbFactory()(
         extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
