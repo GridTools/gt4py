@@ -33,7 +33,8 @@ workspace is injected by a `CompiledBackend.loader`, not a `DaCeBackend` subclas
 (builder and config names, and the deprecated flat-keyword `make_dace_backend`), and refines
 [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md) (its term *toolchain* names the
 internal composition of the frontend with a compiled backend; its configuration decisions remain
-valid). Embedded execution as `Backend` objects is decided separately, in ADR 0030 (follow-up).
+valid). Embedded execution as `Backend` objects is decided separately, in
+[ADR 0030](0030-Embedded-Backends.md) (follow-up).
 
 ## Context
 
@@ -116,7 +117,7 @@ class Toolchain:  # internal
   not a method of any `Backend`.
 - **Embedded execution gets its own kind**, `EmbeddedBackend(Backend)`, a sibling of
   `CompiledBackend` rather than a mode of it. Introducing it, together with retiring
-  `backend=None`, is decided in ADR 0030 and lands separately; until
+  `backend=None`, is decided in [ADR 0030](0030-Embedded-Backends.md) and lands separately; until
   then embedded execution is still `backend=None`.
 - **The frontend is global.** `DEFAULT_TRANSFORMS` is the only frontend; it is not a field of any
   `Backend`. The internal `Toolchain` composes it with a `CompiledBackend` where a compilation
@@ -227,7 +228,7 @@ The decisions in this ADR land as a stack of PRs. The backend structure, loader,
 the `OTFCompileWorkflow` → `CompilePipeline` rename) and the removal of the opaque compile path
 land first (#2741); stage observability follows (#2742); the pipeline simplification lands last,
 together with the deferred `CompilePipeline` rename (#2743). `EmbeddedBackend` and the retirement
-of `backend=None` follow separately under ADR 0030.
+of `backend=None` follow separately under [ADR 0030](0030-Embedded-Backends.md).
 
 ## Consequences
 

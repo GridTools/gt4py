@@ -6,8 +6,9 @@ the repo-wide [root `AGENTS.md`](../../../AGENTS.md).
 `gt4py.next` is the successor to `gt4py.cartesian`, targeting both structured
 and unstructured grids. Field operators and programs run in one of two modes:
 **embedded** — executed directly in Python on `Field`s (backed by NumPy /
-CuPy / JAX), with no lowering to the IR — or **compiled**, lowered through a
-fixed toolchain to a backend:
+CuPy / JAX), with no lowering to the IR, by an `EmbeddedBackend` (the default
+is `gtx.embedded_numpy`; `backend=None` is an error) — or **compiled**, lowered
+through a fixed toolchain to a `CompiledBackend`:
 
 ```
 field operators / programs (ffront)
@@ -32,11 +33,13 @@ field operators / programs (ffront)
 - `otf/` — on-the-fly compilation toolchain (workflow steps, caching,
   argument descriptors).
 - `backend.py` — `Backend` (abstract: `name`, `allocator`), its concrete
-  kind `CompiledBackend` (+ `compiler`, `loader`), the global frontend
-  (`Transforms` / `DEFAULT_TRANSFORMS`) and the internal `Toolchain`
-  composing the two.
-- `program_processors/runners/` — the backends: `gtfn` (GridTools C++),
-  `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
+  kinds `CompiledBackend` (+ `compiler`, `loader`) and `EmbeddedBackend`
+  (allocator = array namespace), the global frontend (`Transforms` /
+  `DEFAULT_TRANSFORMS`) and the internal `Toolchain` composing the frontend
+  with a compiled backend.
+- `program_processors/runners/` — the backends: `embedded`
+  (`embedded_numpy` / `embedded_cupy` / `embedded_jax`), `gtfn` (GridTools
+  C++), `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
 - `type_system/` — `next` type specifications and the type inference the
   frontend runs.
 - `errors/` — user-facing DSL error formatting. When raising or improving a
