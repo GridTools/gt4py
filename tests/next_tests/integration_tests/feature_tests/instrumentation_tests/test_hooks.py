@@ -15,15 +15,15 @@ from typing import Any
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common, Dims, gtfn_cpu, typing as gtx_typing
+from gt4py.next import backend as next_backend, common, Dims, gtfn_cpu, typing as gtx_typing
 from gt4py.next.instrumentation import gpu_profiler, hooks
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
-    BACKENDS = [None, gtfn_cpu, dace_backends.run_dace_cpu]
+    BACKENDS = [None, gtx.embedded_numpy, gtfn_cpu, dace_backends.run_dace_cpu]
 except ImportError:
-    BACKENDS = [None, gtfn_cpu]
+    BACKENDS = [None, gtx.embedded_numpy, gtfn_cpu]
 
 
 IDim = gtx.Dimension("IDim")
@@ -161,7 +161,7 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
     assert hook_name == "custom_program_callback"
     assert hook_call_info["program"] == test_program.__name__
 
-    if backend is None:
+    if backend is None or isinstance(backend, next_backend.EmbeddedBackend):
         # The embedded program call hook should have also been called
         # with the embedded backend
         assert len(embedded_callback_results) == 2
@@ -206,7 +206,9 @@ def test_program_call_hooks(backend: gtx_typing.Backend):
 
 
 @pytest.mark.parametrize(
-    "backend", [b for b in BACKENDS if b is not None], ids=lambda b: getattr(b, "name", str(b))
+    "backend",
+    [b for b in BACKENDS if isinstance(b, next_backend.CompiledBackend)],
+    ids=lambda b: getattr(b, "name", str(b)),
 )
 def test_compile_variant_hook(backend: gtx_typing.Backend):
     def custom_compile_variant_hook(

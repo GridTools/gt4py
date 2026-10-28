@@ -23,7 +23,7 @@ from collections.abc import Callable
 from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
@@ -77,13 +77,19 @@ def _compiled_backend_or_none(
     match backend:
         case next_backend.CompiledBackend():
             return backend
-        case None:
+        case next_backend.EmbeddedBackend() | None:
             return None
         case _:
             raise TypeError(
                 f"Backend '{backend.name}' of type '{type(backend).__name__}' is not supported:"
-                " expected a 'CompiledBackend', or None for embedded execution."
+                " expected a 'CompiledBackend' or an 'EmbeddedBackend'."
             )
+
+
+def _not_compilable_message(backend: next_backend.Backend | None, what: str) -> str:
+    if backend is None:
+        return f"Cannot compile a {what} without backend."
+    return f"Backend '{backend.name}' is an embedded backend; embedded programs are not compiled."
 
 
 ProgramCallMetricsCollector = metrics.make_collector(
@@ -111,7 +117,8 @@ def embedded_program_call_context(
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
-    return metrics.metrics_source_key_setter(f"{program.__name__}<'embedded'>")
+    backend_name = "'embedded'" if program.backend is None else program.backend.name
+    return metrics.metrics_source_key_setter(f"{program.__name__}<{backend_name}>")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -166,7 +173,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         compiled_backend = _compiled_backend_or_none(self.backend)
         if compiled_backend is None:
-            raise RuntimeError("Cannot compile a program without backend.")
+            raise RuntimeError(_not_compilable_message(self.backend, "program"))
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -310,11 +317,14 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
-        compiled_backend = _compiled_backend_or_none(self.backend)
-        if compiled_backend is None:
+    ) -> (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    ):
+        _compiled_backend_or_none(self.backend)  # rejects unsupported backend kinds
+        if self.backend is None:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
-        return compiled_backend.__gt_allocator__
+        return self.backend.__gt_allocator__
 
     @property
     def definition(self) -> types.FunctionType:
@@ -753,7 +763,7 @@ class FieldOperatorFromFoast(FieldOperator):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         compiled_backend = _compiled_backend_or_none(self.backend)
         if compiled_backend is None:
-            raise RuntimeError("Cannot compile a field operator without backend.")
+            raise RuntimeError(_not_compilable_message(self.backend, "field operator"))
         compiled_fo = next_backend.Toolchain(compiled_backend).compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )

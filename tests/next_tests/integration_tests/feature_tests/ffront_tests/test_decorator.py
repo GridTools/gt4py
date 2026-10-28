@@ -77,6 +77,35 @@ def test_collect_metrics(cartesian_case, metrics_level, expected_names):
             assert set(source.metrics.keys()) == set(expected_names)
 
 
+@pytest.mark.parametrize(
+    "metrics_level",
+    [metrics.MINIMAL, metrics.PERFORMANCE, metrics.ALL],
+)
+def test_collect_metrics_embedded(metrics_level):
+    @gtx.field_operator(backend=gtx.embedded_numpy)
+    def testee_op(a: cases.IField, b: cases.IField) -> cases.IField:
+        return a + b
+
+    @gtx.program(backend=gtx.embedded_numpy)
+    def testee(a: cases.IField, out: cases.IField):
+        testee_op(a, a, out=out)
+
+    a = gtx.ones({cases.IDim: 5}, dtype=gtx.int32)
+    out = gtx.zeros({cases.IDim: 5}, dtype=gtx.int32)
+    with (
+        mock.patch("gt4py.next.config.COLLECT_METRICS_LEVEL", metrics_level),
+        mock.patch(
+            "gt4py.next.instrumentation.metrics.sources", collections.defaultdict(metrics.Source)
+        ),
+        pytest.warns(UserWarning, match="Using Python execution"),
+    ):
+        testee(a, out, offset_provider={})
+
+        # Embedded calls are reported under the name of their backend.
+        assert set(metrics.sources.keys()) == {"testee<embedded_numpy>"}
+        assert "total" in metrics.sources["testee<embedded_numpy>"].metrics
+
+
 def test_docstring(cartesian_case):
     @gtx.field_operator
     def fieldop_with_docstring(a: cases.IField) -> cases.IField:

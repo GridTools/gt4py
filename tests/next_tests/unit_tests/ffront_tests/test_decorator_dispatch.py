@@ -103,6 +103,45 @@ def test_none_backend_runs_embedded():
         copy_program.compile(offset_provider={})
 
 
+def test_embedded_backend_runs_embedded():
+    copy, copy_program, scan = _make_testees(gtx.embedded_numpy)
+    a = gtx.as_field([IDim], np.arange(3.0))
+    out = gtx.zeros({IDim: 3})
+    k_field = gtx.as_field([KDim], np.ones(3))
+    k_out = gtx.zeros({KDim: 3})
+
+    with pytest.warns(UserWarning, match="Using Python execution"):
+        copy_program(a, out, offset_provider={})
+    assert np.allclose(out.asnumpy(), a.asnumpy())
+
+    out = gtx.zeros({IDim: 3})
+    copy(a, out=out, offset_provider={})
+    assert np.allclose(out.asnumpy(), a.asnumpy())
+
+    scan(k_field, out=k_out, offset_provider={})
+    assert np.allclose(k_out.asnumpy(), [1.0, 2.0, 3.0])
+
+    with pytest.raises(RuntimeError, match="'embedded_numpy' is an embedded backend"):
+        copy_program.compile(offset_provider={})
+    with pytest.raises(RuntimeError, match="'embedded_numpy' is an embedded backend"):
+        copy.compile(offset_provider={})
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [gtx.embedded_numpy, next_backend.EmbeddedBackend(name="other_numpy")],
+    ids=lambda backend: backend.name,
+)
+def test_embedded_backend_allocator(backend):
+    _, copy_program, _ = _make_testees(backend)
+
+    assert copy_program.__gt_allocator__ is np
+    field = gtx.zeros({IDim: 3}, allocator=copy_program)
+    assert isinstance(field.ndarray, np.ndarray)
+    field = gtx.ones({IDim: 3}, allocator=backend)
+    assert isinstance(field.ndarray, np.ndarray)
+
+
 def test_compiled_backend_allocator_and_toolchain():
     _, copy_program, _ = _make_testees(roundtrip.default)
 

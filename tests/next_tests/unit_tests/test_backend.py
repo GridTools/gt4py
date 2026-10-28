@@ -204,12 +204,15 @@ def test_deepcopy_of_a_program_shares_the_backend(backend):
     assert program_copy.backend is backend
 
 
-def test_deepcopy_of_a_compiled_program_after_allocation():
-    program = _make_copy_program(gtfn.run_gtfn)
+@pytest.mark.parametrize(
+    "backend", [gtx.embedded_numpy, gtfn.run_gtfn], ids=lambda backend: backend.name
+)
+def test_deepcopy_of_a_program_after_allocation(backend):
+    program = _make_copy_program(backend)
     field = gtx.zeros({IDim: 3}, allocator=program)
     assert isinstance(field.ndarray, np.ndarray)
 
     program_copy = copy.deepcopy(program)
 
-    assert program_copy.backend is gtfn.run_gtfn
+    assert program_copy.backend is backend
     assert "__gt_allocator__" not in program.__dict__
