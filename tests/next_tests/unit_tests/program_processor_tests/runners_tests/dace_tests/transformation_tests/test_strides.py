@@ -195,17 +195,20 @@ def test_strides_propagation():
         for aname, adesc in sdfg.arrays.items():
             assert [str(s) for s in adesc.strides] == [f"{aname[0]}1_stride"]
 
-    # Now we change the strides of `a1` and propagate them, but not the ones of `c1`.
-    sdfg_level1.add_symbol("a1_new_stride", dace.int32)
-    sdfg_level1.arrays["a1"].set_shape((10,), (dace_symbolic.pystr_to_symbolic("a1_new_stride"),))
-    gtx_transformations.gt_propagate_strides_of(sdfg_level1, "a1")
-    sdfg_level1.validate()
+    # Now we propagate `a` and `b`, but not `c`.
+    for data in ["a", "b"]:
+        sdfg_level1.add_symbol(f"{data}1_new_stride", dace.int32)
+        sdfg_level1.arrays[f"{data}1"].set_shape(
+            (10,), (dace_symbolic.pystr_to_symbolic(f"{data}1_new_stride"),)
+        )
+        gtx_transformations.gt_propagate_strides_of(sdfg_level1, f"{data}1")
+        sdfg_level1.validate()
 
     # The new strides have been propagated to all levels, including `a2_alias`, which is
     #  also connected to `a1`. Inside the nested SDFGs the new symbol is mapped 1:1.
     for sdfg in all_sdfgs:
         assert set(_get_stride_of(sdfg, "a").values()) == {"a1_new_stride"}
-        assert set(_get_stride_of(sdfg, "b").values()) <= {"b1_stride"}
+        assert set(_get_stride_of(sdfg, "b").values()) <= {"b1_new_stride"}
         assert set(_get_stride_of(sdfg, "c").values()) == {"c1_stride"}
         if (nsdfg := sdfg.parent_nsdfg_node) is not None:
             assert str(nsdfg.symbol_mapping["a1_new_stride"]) == "a1_new_stride"
@@ -217,6 +220,7 @@ def test_strides_propagation():
     sdfg_level1.validate()
     for sdfg in all_sdfgs:
         assert set(_get_stride_of(sdfg, "a").values()) == {"a1_new_stride"}
+        assert set(_get_stride_of(sdfg, "b").values()) <= {"b1_new_stride"}
         assert set(_get_stride_of(sdfg, "c").values()) == {"c1_new_stride"}
 
 

@@ -104,11 +104,6 @@ def _write_if_output(
 ) -> str:
     """Write the scalar output `connector` of `if_block` to `outer_data[__i]`.
 
-    The value passes through a scalar transient, because the connector of a nested
-    SDFG has to be equivalent to the data it is connected to, so it cannot write
-    into an element of the outer array directly. This is also how the lowering
-    writes the result of an if-expression.
-
     Returns:
         The name of the scalar transient.
     """

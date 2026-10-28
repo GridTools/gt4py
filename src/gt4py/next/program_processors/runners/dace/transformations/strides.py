@@ -440,15 +440,13 @@ def _gt_map_strides_into_nested_sdfg(
 ) -> None:
     """Sets the strides of the connector `inner_data` to the ones of the outer data.
 
-    The data descriptor of a NestedSDFG connector has to be equivalent to the data
-    connected to it on the outside, i.e. it must have the same shape and strides,
-    see `NestedSDFG.validate()`. The function handles the case that only the
-    strides of the outer data have changed. The symbols used by the new strides
-    are mapped 1:1 into the NestedSDFG.
+    The data descriptor of a NestedSDFG connector has to be equivalent to the
+    data connected to it on the outside, i.e. it must have the same shape and strides.
+    This function handles the case that only the strides of the outer data have changed.
+    The symbols used by the new strides are mapped 1:1 into the NestedSDFG.
 
     If a transformation connects different data to the connector, it has to restate
-    the connector itself, see `restate_nested_sdfg_connector()`, because only the
-    transformation knows where the old data is located inside the new one.
+    the connector itself: in that case, use `restate_nested_sdfg_connector()`.
 
     Args:
         sdfg: The SDFG containing the NestedSDFG.

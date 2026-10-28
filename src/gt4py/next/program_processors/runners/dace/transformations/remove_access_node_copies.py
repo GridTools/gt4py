@@ -276,8 +276,9 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                 connector = edge.dst_conn if edge.dst is node else edge.src_conn
                 if not connector or connector not in node.sdfg.arrays:
                     continue
-                if node.sdfg.arrays[connector].transient:
-                    continue
+                assert not node.sdfg.arrays[connector].transient, (
+                    "NestedSDFG connector data must be non-transient"
+                )
                 gtx_transformations_utils.restate_nested_sdfg_connector(
                     node,
                     connector,

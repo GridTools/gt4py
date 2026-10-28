@@ -18,6 +18,7 @@ from dace.transformation import transformation as dace_transform
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import sdfg_utils as gtx_dace_utils
+from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg_utils
 
 
 @dace.library.node
@@ -98,13 +99,6 @@ _LOCAL_INDEX: Final[dace.symbol] = dace.symbol("__reduce_local_idx")
 """Map parameter that iterates over the local dimension in the expansion."""
 
 
-def _as_global(desc: dace.data.Data) -> dace.data.Data:
-    """Returns a non-transient copy of `desc`, to be used as nested SDFG connector."""
-    global_desc = copy.deepcopy(desc)
-    global_desc.transient = False
-    return global_desc
-
-
 @dace_library.register_expansion(ReduceWithSkipValues, "pure")
 class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
     """Implements pure expansion of the ReduceWithSkipValues library node."""
@@ -140,22 +134,22 @@ class ReduceWithSkipValuesExpandInlined(dace_transform.ExpandTransformation):
         #  to them. Thus, they are copies of the outer data descriptors, and inside they
         #  are accessed with the same indices as outside, where the local dimension is
         #  iterated by the map parameter `_LOCAL_INDEX`.
-        def make_local_subset(subset: dace_subsets.Range, local_index: int) -> dace_subsets.Range:
+        def access_list_elem(subset: dace_subsets.Range, local_index: int) -> dace_subsets.Range:
             local_subset = copy.deepcopy(subset)
             local_start = local_subset[local_index][0]
             local_subset[local_index] = (local_start + _LOCAL_INDEX, local_start + _LOCAL_INDEX, 1)
             return local_subset
 
-        inp_subset = make_local_subset(inedge.data.src_subset, local_dim_index)
-        mask_subset = make_local_subset(maskedge.data.src_subset, 1)
+        inp_subset = access_list_elem(inedge.data.src_subset, local_dim_index)
+        mask_subset = access_list_elem(maskedge.data.src_subset, 1)
 
         nsdfg = dace.SDFG(node.label)
         inp = node.input_conn
-        nsdfg.add_datadesc(inp, _as_global(input_desc))
+        nsdfg.add_datadesc(inp, gtir_to_sdfg_utils.as_global_desc(input_desc))
         mask = node.mask_conn
-        nsdfg.add_datadesc(mask, _as_global(mask_desc))
+        nsdfg.add_datadesc(mask, gtir_to_sdfg_utils.as_global_desc(mask_desc))
         outp = node.output_conn
-        nsdfg.add_datadesc(outp, _as_global(output_desc))
+        nsdfg.add_datadesc(outp, gtir_to_sdfg_utils.as_global_desc(output_desc))
         outp_subset = (
             "0" if isinstance(output_desc, dace.data.Scalar) else str(outedge.data.dst_subset)
         )

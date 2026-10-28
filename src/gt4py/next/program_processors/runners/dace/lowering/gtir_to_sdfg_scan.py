@@ -271,9 +271,6 @@ def _lower_lambda_to_nested_sdfg(
         else:
             assert isinstance(scan_result.gt_dtype, ts.ScalarType)
             assert len(scan_output_shape) == len(field_subset)
-            # This function is called once per field of a tuple result, so the subset
-            # has to be copied: DaCe rejects an SDFG where two memlets refer to the
-            # same subset object.
             output_subset = copy.deepcopy(field_subset)
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(lambda_ctx.sdfg)
@@ -363,11 +360,11 @@ def _handle_dataflow_result_of_nested_sdfg(
         # We write the result to the output field after the loop region has ended.
         inner_states = list(inner_ctx.sdfg.states())
         if len(inner_states) == 3:
-            assert sorted(st.label for st in inner_states) == [
+            assert set(st.label for st in inner_states) == {
                 "scan_compute",
                 "scan_entry",
                 "scan_update",
-            ]
+            }
             scan_loop = next(
                 node
                 for node in inner_ctx.sdfg.nodes()
@@ -375,12 +372,12 @@ def _handle_dataflow_result_of_nested_sdfg(
             )
             last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "scan_last_level")
         else:
-            assert sorted(st.label for st in inner_states) == [
+            assert set(st.label for st in inner_states) == {
                 "scan_compute",
                 "scan_entry",
                 "scan_last_level",
                 "scan_update",
-            ]
+            }
             last_level_state = next(s for s in inner_states if s.label == "scan_last_level")
         # Move the write of the result from the scan loop to the state after the loop,
         #  so that only the last level is written.

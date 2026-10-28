@@ -720,11 +720,11 @@ def _configure_descending_point(
 
     # Symbols that the nested SDFG assigns itself, e.g. on an interstate edge or as a
     #  loop variable. They are not necessarily listed in `nsdfg.symbols`.
-    reassigned_symbols: set[str] = set()
+    inner_written_symbols: set[str] = set()
     for isedge in nsdfg.all_interstate_edges():
-        reassigned_symbols.update(isedge.data.assignments.keys())
+        inner_written_symbols.update(isedge.data.assignments.keys())
     for region in nsdfg.all_control_flow_regions():
-        reassigned_symbols.update(region.new_symbols(nsdfg.symbols).keys())
+        inner_written_symbols.update(region.new_symbols(nsdfg.symbols).keys())
 
     nested_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, _ProducerSpec] = {}
@@ -742,7 +742,7 @@ def _configure_descending_point(
                 _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
             ptype = state.sdfg.symbols[psym]
             if (
-                psym not in reassigned_symbols
+                psym not in inner_written_symbols
                 and psym in symbol_mapping
                 and psym == str(symbol_mapping[psym])
                 and psym in nsdfg.symbols
@@ -751,14 +751,14 @@ def _configure_descending_point(
                 # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
                 continue
 
-            if psym in nsdfg.symbols or psym in symbol_mapping or psym in reassigned_symbols:
-                renamed_symbol = _find_new_nested_symbol(nsdfg, psym, reassigned_symbols)
+            if psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
+                renamed_symbol = _find_new_nested_symbol(nsdfg, psym, inner_written_symbols)
                 nsdfg.replace_dict({psym: renamed_symbol})
                 if psym in symbol_mapping:
                     symbol_mapping[renamed_symbol] = symbol_mapping.pop(psym)
-                if psym in reassigned_symbols:
-                    reassigned_symbols.discard(psym)
-                    reassigned_symbols.add(renamed_symbol)
+                if psym in inner_written_symbols:
+                    inner_written_symbols.discard(psym)
+                    inner_written_symbols.add(renamed_symbol)
             nsdfg.add_symbol(psym, ptype)
             symbol_mapping[psym] = psym
 
@@ -778,6 +778,9 @@ def _configure_descending_point(
         else:
             # The data is not yet mapped into the nested SDFG, so we have to create
             #  a new one, and we have to make sure that it is a global.
+            #  The symbols used by the data descriptor, e.g. in the shape, must have
+            #  the same name and meaning inside. Symbol clashes have been handled above,
+            #  so we can safely use the same names.
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
@@ -850,7 +853,7 @@ def _rename_nested_data(
             to the names of the data inside the nested SDFG.
     """
     nsdfg: dace.SDFG = nsdfg_node.sdfg
-    new_data_name = nsdfg.find_new_symbol(data_name)
+    new_data_name = _find_new_nested_symbol(nsdfg, data_name, nsdfg.arrays.keys())
     dace_replace_datadesc_names(nsdfg, {data_name: new_data_name})
 
     for parent_data_name, nested_data_name in parent_to_nested_name_mapping.items():
@@ -1342,12 +1345,11 @@ def _find_consumer_specs_single_source_single_level(
                 return None
             raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
 
-    # Now wet and partition the consumer. A nested SDFG always opens up a "new level":
-    #  its connector is equivalent to the concat where data (see `NestedSDFG.validate()`),
-    #  so the nested SDFG accesses the data with the same indices as here, even if it
-    #  only reads a single element. Thus, the accesses have to be replaced inside it.
-    #  All other consumers have to read a single element, which makes them genuine
-    #  consumers.
+    # Now wet and partition the consumer. Most importantly test if they only read
+    #  a single element, in which case they are genuine consumers this applies to
+    #  _all_ nodes, even nested SDFGs. Otherwise it might open up a "new level".
+    #  For this the consumer must be a nested SDFG that reads the _whole_ concat
+    #  where node.
     stairs_to_deeper_levels: list[_FinalConsumerSpec] = []  # Better name appreciated.
     consumer_specs: list[_FinalConsumerSpec] = []
     for consumer_spec in all_consumers:
