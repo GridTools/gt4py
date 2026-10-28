@@ -757,7 +757,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             # This is a reasonable assumption because the nested SDFG is generated
             # from a single if-expression, and therefore all branches of the if
             # expression must have the same input arguments.
-            assert sdfg.arrays[param_name] == arg_desc
+            assert sdfg.arrays[param_name] == gtir_to_sdfg_utils.as_global_desc(arg_desc)
 
         inner_node = state.add_access(param_name)
         if isinstance(arg, IteratorExpr):
