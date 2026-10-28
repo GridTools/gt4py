@@ -54,7 +54,6 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 class EmbeddedDummyBackend:
     name: str
     allocator: constructors.Allocator
-    backend: Final = None
 
 
 numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)

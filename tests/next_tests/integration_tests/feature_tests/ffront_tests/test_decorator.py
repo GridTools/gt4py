@@ -103,7 +103,7 @@ def test_default_backend_is_respected_field_operator(cartesian_case):
 
     a = cases.allocate(cartesian_case, copy, "a")()
 
-    with pytest.raises(ValueError, match="No backend selected!"):
+    with pytest.raises(TypeError, match="no_backend"):
         # Calling this should fail if the default backend is respected
         # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
         # setting the default backend to something invalid.
@@ -121,7 +121,7 @@ def test_default_backend_is_respected_scan_operator(cartesian_case):
 
     a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
 
-    with pytest.raises(ValueError, match="No backend selected!"):
+    with pytest.raises(TypeError, match="no_backend"):
         # see comment in field_operator test
         _ = sum(a, out=a, offset_provider={})
 
@@ -141,6 +141,6 @@ def test_default_backend_is_respected_program(cartesian_case):
     a = cases.allocate(cartesian_case, copy_program, "a")()
     b = cases.allocate(cartesian_case, copy_program, "b")()
 
-    with pytest.raises(ValueError, match="No backend selected!"):
+    with pytest.raises(TypeError, match="no_backend"):
         # see comment in field_operator test
         _ = copy_program(a, b, offset_provider={})

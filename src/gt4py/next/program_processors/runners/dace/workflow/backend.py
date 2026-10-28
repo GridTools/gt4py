@@ -49,7 +49,7 @@ def make_dace_toolchain(
     translation: gtx_wfdfactory.DaCeTranslationBuilder = gtx_wfdfactory.make_dace_translator,
     bindings: gtx_wfdfactory.DaCeBindingsBuilder = gtx_wfdfactory.make_dace_bindings,
     compilation: gtx_wfdfactory.DaCeCompilationBuilder = gtx_wfdfactory.make_dace_compiler,
-) -> backend.Toolchain:
+) -> backend.CompiledBackend:
     """
     Build a DaCe toolchain.
 
@@ -67,14 +67,13 @@ def make_dace_toolchain(
     if cfg is None:
         cfg = gtx_wfdfactory.DaCeConfig()
 
-    return backend.Toolchain(
+    return backend.CompiledBackend(
         name=f"run_dace_{cfg.device_name}{'_opt' if cfg.auto_optimize else ''}{name_postfix}",
-        backend=gtx_wfdfactory.make_dace_compile_workflow(
+        compiler=gtx_wfdfactory.make_dace_compile_workflow(
             cfg, translation=translation, bindings=bindings, compilation=compilation
         ),
         allocator=cfg.make_allocator(),
-        frontend=backend.DEFAULT_TRANSFORMS,
-        loading=DaCeLoadingStep(cfg.external_workspace),
+        loader=DaCeLoadingStep(cfg.external_workspace),
     )
 
 
@@ -88,7 +87,7 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-) -> backend.Toolchain:
+) -> backend.CompiledBackend:
     """Customize the dace backend with the given configuration parameters.
 
     Deprecated: use `make_dace_toolchain` with a `DaCeConfig` for the shared

@@ -9,10 +9,10 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable, Generic
+from typing import Callable
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config, custom_layout_allocators as next_allocators
+from gt4py.next import config, constructors, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -141,41 +141,90 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 
 
 @dataclasses.dataclass(frozen=True)
-class Toolchain(Generic[core_defs.DeviceTypeT]):
+class Backend:
     """
-    Complete pipeline from a program definition to an executable program.
+    Abstract base of the objects passed as `backend=` to programs and operators.
 
-    The `frontend` workflow transforms any supported program definition into a
-    `CompilableProgram`, which the `backend` workflow then compiles into a
-    loadable compilation artifact. The `loading` step turns that artifact into a
-    directly-callable program; toolchains needing to inject backend-specific
-    runtime data supply their own step here. The `allocator` describes the
-    device the compiled program expects its buffers on.
+    A backend decides how a program runs and where the buffers of its fields are
+    allocated. This class is abstract: instantiate a concrete kind, such as
+    `CompiledBackend`.
+
+    Attributes:
+        name: Human-readable label used in metrics, logs and diagnostics. It is
+            expected to be unique among the backends used in a process; backends
+            sharing a name are reported under the same label. gt4py does not use
+            it to identify a backend: not as a cache key and not in fingerprints.
+            Code that needs the kind of a backend should check its type, not its
+            name.
+        allocator: Allocates the buffers of fields used with this backend.
     """
 
     name: str
-    backend: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
-    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram]
+    allocator: constructors.Allocator
+
+    def __post_init__(self) -> None:
+        if type(self) is Backend:
+            raise TypeError(
+                "'Backend' is abstract: instantiate a concrete kind such as 'CompiledBackend'."
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class CompiledBackend(Backend):
+    """
+    A backend that compiles programs before running them.
+
+    Programs are lowered by the (global) frontend to a `CompilableProgram`, turned
+    into a loadable `CompilationArtifact` by `compiler` (possibly in a worker
+    process, see `config.BuildJobsMode`), and made directly callable by `loader`
+    (always in the calling process). Backends needing backend-specific runtime
+    data in the loaded program supply their own `loader`. Customize either step
+    with `dataclasses.replace`.
+
+    Attributes:
+        allocator: The field buffer allocator for the device the compiled
+            programs expect their buffers on.
+        compiler: Compiles a lowered program into a loadable artifact.
+        loader: Loads an artifact into a directly-callable program.
+    """
+
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    compiler: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
     # A plain `Callable`, not `workflow.Workflow`: the protocol names its
-    # parameter `inp`, which would force every loading step to use that name.
-    loading: Callable[[artifacts.CompilationArtifact], artifacts.ExecutableProgram] = (
+    # parameter `inp`, which would force every loader to use that name.
+    loader: Callable[[artifacts.CompilationArtifact], artifacts.ExecutableProgram] = (
         dataclasses.field(default=artifacts.load_artifact)
     )
 
-    def compile(
-        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
-    ) -> artifacts.ExecutableProgram:
-        artifact = self.backend(
-            self.frontend(stages.ConcreteProgramDef(definition=program, args=compile_time_args))
-        )
-        return self.loading(artifact)
-
     @property
-    def __gt_allocator__(
-        self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    def __gt_allocator__(self) -> next_allocators.FieldBufferAllocatorProtocol:
         return self.allocator
+
+
+@dataclasses.dataclass(frozen=True)
+class Toolchain:
+    """
+    Internal: the complete route from a program definition to an executable program.
+
+    Composes the frontend, which transforms any supported program definition into
+    a `CompilableProgram`, with a compiled backend, whose `compiler` turns it into
+    a compilation artifact and whose `loader` makes that callable. Not part of the
+    public API: gt4py builds it where a compilation happens.
+    """
+
+    backend: CompiledBackend
+    frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram] = (
+        DEFAULT_TRANSFORMS
+    )
+
+    def compile(
+        self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+    ) -> artifacts.ExecutableProgram:
+        """Lower, compile and load `definition` in the calling thread."""
+        compilable = self.frontend(
+            stages.ConcreteProgramDef(definition=definition, args=compile_time_args)
+        )
+        return self.backend.loader(self.backend.compiler(compilable))
 
 
 @dataclasses.dataclass(frozen=True)

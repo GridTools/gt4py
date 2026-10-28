@@ -36,14 +36,17 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     ] = {}  # symbolically defined
 
     def __sdfg__(self, *args: Any, **kwargs: Any) -> dace.sdfg.sdfg.SDFG:
-        if (self.backend is None) or "dace" not in self.backend.name.lower():
+        if not (
+            isinstance(self.backend, gtx_backend.CompiledBackend)
+            and "dace" in self.backend.name.lower()
+        ):
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
         offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
-        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.frontend).past_to_itir(
+        gtir_stage = self._frontend_transforms.past_to_itir(
             workflow.ProgramWithArgs(
                 definition=self.past_stage,
                 args=arguments.CompileTimeArgs(
@@ -76,7 +79,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        otf_workflow = self.backend.backend
+        otf_workflow = self.backend.compiler
         assert hasattr(otf_workflow, "translation")
         otf_workflow_translation = (
             otf_workflow.translation.step

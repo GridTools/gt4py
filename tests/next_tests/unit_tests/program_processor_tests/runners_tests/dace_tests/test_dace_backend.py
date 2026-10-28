@@ -203,7 +203,7 @@ def test_make_backend_accepts_external_workspace_with_external_mode():
         ),
     )
 
-    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loader.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_backend_infers_external_mode_when_workspace_is_provided():
@@ -214,10 +214,10 @@ def test_make_backend_infers_external_mode_when_workspace_is_provided():
     )
 
     assert (
-        backend.backend.translation.step.auto_optimize_args["transient_memory_mode"]
+        backend.compiler.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.EXTERNAL
     )
-    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loader.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_backend_warns_external_workspace_without_external_mode():
@@ -236,10 +236,10 @@ def test_make_backend_warns_external_workspace_without_external_mode():
 
     # Explicit mode stays as requested by the caller; backend only warns.
     assert (
-        backend.backend.translation.step.auto_optimize_args["transient_memory_mode"]
+        backend.compiler.translation.step.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.POOL
     )
-    assert backend.loading.external_workspace[core_defs.DeviceType.CPU] is workspace
+    assert backend.loader.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
 def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
@@ -251,14 +251,14 @@ def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
         cfg, translation=functools.partial(dace_wf_factory.make_dace_translator, use_metrics=False)
     )
 
-    translator = backend.backend.translation.step
+    translator = backend.compiler.translation.step
     assert translator.use_metrics is False
     assert (
         translator.auto_optimize_args["transient_memory_mode"]
         == gtx_transformations.TransientMemoryMode.EXTERNAL
     )
-    assert backend.loading.external_workspace is cfg.external_workspace
-    assert backend.backend.compilation.bind_func_name == cfg.bind_func_name
+    assert backend.loader.external_workspace is cfg.external_workspace
+    assert backend.compiler.compilation.bind_func_name == cfg.bind_func_name
 
 
 def test_make_toolchain_rejects_derived_optimization_args():
@@ -276,7 +276,7 @@ def test_make_toolchain_uncached_translation():
         dace_wf_factory.DaCeConfig(cached_translation=False)
     )
 
-    assert isinstance(toolchain.backend.translation, dace_wf_translation.DaCeTranslator)
+    assert isinstance(toolchain.compiler.translation, dace_wf_translation.DaCeTranslator)
 
 
 def test_make_dace_backend_is_deprecated():
@@ -310,12 +310,12 @@ def test_make_dace_backend_is_deprecated():
     # distinct `functools.partial` objects, so compare what they wrap.
     assert deprecated.name == toolchain.name
     assert deprecated.allocator == toolchain.allocator
-    assert deprecated.loading.external_workspace is toolchain.loading.external_workspace
-    assert deprecated.backend.translation.step == toolchain.backend.translation.step
-    assert deprecated.backend.translation.cache.path == toolchain.backend.translation.cache.path
-    assert deprecated.backend.bindings.func is toolchain.backend.bindings.func
-    assert deprecated.backend.bindings.keywords == toolchain.backend.bindings.keywords
-    assert deprecated.backend.compilation == toolchain.backend.compilation
+    assert deprecated.loader.external_workspace is toolchain.loader.external_workspace
+    assert deprecated.compiler.translation.step == toolchain.compiler.translation.step
+    assert deprecated.compiler.translation.cache.path == toolchain.compiler.translation.cache.path
+    assert deprecated.compiler.bindings.func is toolchain.compiler.bindings.func
+    assert deprecated.compiler.bindings.keywords == toolchain.compiler.bindings.keywords
+    assert deprecated.compiler.compilation == toolchain.compiler.compilation
 
 
 def test_translator_rejects_derived_optimization_args_on_every_route():
@@ -328,7 +328,7 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=False,
         )
-    translator = dace_wf_backend.run_dace_cpu.backend.translation.step
+    translator = dace_wf_backend.run_dace_cpu.compiler.translation.step
     with pytest.raises(ValueError, match="cannot be overridden"):
         dataclasses.replace(translator, auto_optimize_args={"constant_symbols": {}})
 
@@ -343,8 +343,8 @@ def test_step_builders_reach_all_step_settings():
         ),
     )
 
-    assert toolchain.backend.translation.step.disable_itir_transforms is True
-    assert toolchain.backend.compilation.add_gpu_trace_markers is True
+    assert toolchain.compiler.translation.step.disable_itir_transforms is True
+    assert toolchain.compiler.compilation.add_gpu_trace_markers is True
 
 
 def test_unused_optimization_args_warning_points_at_the_caller():
@@ -449,7 +449,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
     out = cases.allocate(test_case, testee, "out")()
 
     captured_sdfg: dace.SDFG | None = None
-    translation_step = custom_backend.backend.translation.step
+    translation_step = custom_backend.compiler.translation.step
 
     def mocked_translator(inp: stages.CompilableProgram) -> dace.SDFG:
         nonlocal captured_sdfg
@@ -459,8 +459,8 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
 
     custom_backend = dataclasses.replace(
         custom_backend,
-        backend=dataclasses.replace(
-            custom_backend.backend,
+        compiler=dataclasses.replace(
+            custom_backend.compiler,
             translation=mocked_translator,
         ),
     )

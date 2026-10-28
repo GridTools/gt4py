@@ -287,7 +287,7 @@ def make_gtfn_toolchain(
     translation: GTFNTranslationBuilder = make_gtfn_translation,
     bindings: GTFNBindingsBuilder = make_gtfn_bindings,
     compilation: GTFNCompilationBuilder = make_gtfn_compiler,
-) -> backend.Toolchain:
+) -> backend.CompiledBackend:
     """
     Build a GTFN toolchain.
 
@@ -305,13 +305,12 @@ def make_gtfn_toolchain(
     if cfg is None:
         cfg = GTFNConfig()
 
-    return backend.Toolchain(
+    return backend.CompiledBackend(
         name=f"run_gtfn_{cfg.device_name}{name_postfix}",
-        backend=make_gtfn_compile_workflow(
+        compiler=make_gtfn_compile_workflow(
             cfg, translation=translation, bindings=bindings, compilation=compilation
         ),
         allocator=cfg.make_allocator(),
-        frontend=backend.DEFAULT_TRANSFORMS,
     )
 
 

@@ -100,50 +100,20 @@ def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
 
 
 def test_make_compilation_task_decomposes_standard_backend():
-    backend = next_backend.Toolchain(
-        name="test_backend",
-        backend=lambda compilable: _NoOpArtifact(),
-        allocator=None,
+    toolchain = next_backend.Toolchain(
+        next_backend.CompiledBackend(
+            name="test_backend", compiler=lambda compilable: _NoOpArtifact(), allocator=None
+        ),
         frontend=lambda inp: inp,
     )
 
     task = compilation_tasks.make_compilation_task(
-        backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
+        toolchain, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
     )
 
     assert task.no_offload_reason is None
-    assert task.executor is backend.backend
+    assert task.executor is toolchain.backend.compiler
     assert callable(task.compile().load())
-
-
-def test_make_compilation_task_is_opaque_for_customized_compile():
-    class _WrapperBackend:
-        def __init__(self, wrapped):
-            self._wrapped = wrapped
-
-        def __getattr__(self, name):
-            return getattr(self._wrapped, name)
-
-        def compile(self, program, compile_time_args):
-            self.compile_called = True
-            return self._wrapped.compile(program, compile_time_args=compile_time_args)
-
-    backend = _WrapperBackend(
-        next_backend.Toolchain(
-            name="test_backend",
-            backend=lambda compilable: _NoOpArtifact(),
-            allocator=None,
-            frontend=lambda inp: inp,
-        )
-    )
-
-    task = compilation_tasks.make_compilation_task(
-        backend, definition_stage=None, compile_time_args=arguments.CompileTimeArgs.empty()
-    )
-
-    assert task.no_offload_reason is not None
-    assert callable(task.compile().load())
-    assert backend.compile_called
 
 
 def test_offloaded_task_ships_connectivities_as_file_refs():
@@ -154,15 +124,15 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     compile_time_args = dataclasses.replace(
         arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
     )
-    backend = next_backend.Toolchain(
-        name="test_backend",
-        backend=lambda compilable: _NoOpArtifact(),
-        allocator=None,
+    toolchain = next_backend.Toolchain(
+        next_backend.CompiledBackend(
+            name="test_backend", compiler=lambda compilable: _NoOpArtifact(), allocator=None
+        ),
         frontend=lambda inp: inp,
     )
 
     task = compilation_tasks.make_compilation_task(
-        backend, definition_stage=None, compile_time_args=compile_time_args
+        toolchain, definition_stage=None, compile_time_args=compile_time_args
     )
 
     # without refs the original compilable is used as is
@@ -181,7 +151,7 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
     # the same connectivity is dumped only once across tasks
     path = compilation_tasks._connectivity_files[id(conn)][1]
     task2 = compilation_tasks.make_compilation_task(
-        backend, definition_stage=None, compile_time_args=compile_time_args
+        toolchain, definition_stage=None, compile_time_args=compile_time_args
     )
     pickle.dumps(task2.construct_compilable(True).args.offset_provider["V2E"])
     assert compilation_tasks._connectivity_files[id(conn)][1] == path
