@@ -1800,6 +1800,89 @@ def test_concat_where_with_symbolic_size_clashing_with_nested_assignment():
     assert util.compare_sdfg_res(ref=ref, res=res)
 
 
+def test_concat_where_with_symbolic_size_clashing_with_nested_map_param():
+    # The symbol `n`, that defines the size of the producer `a`, has to be mapped into
+    #  the nested SDFG, which binds `n` as the parameter of one of its maps. A map
+    #  parameter shadows any outer symbol of the same name, so the map parameter has to
+    #  be renamed inside the nested SDFG, together with all its uses, this also tests
+    #  that `replace_dict()` performs these renames consistently (in particular the
+    #  parameter of the map itself).
+    symbolic_size = "n"
+
+    nested = dace.SDFG("nested")
+    for aname in "ab":
+        nested.add_array(aname, shape=(10,), dtype=dace.float64, transient=False)
+    nested_state = nested.add_state(is_start_block=True)
+    nested_state.add_mapped_tasklet(
+        "nested_map",
+        map_ranges={symbolic_size: "0:10"},
+        inputs={"__in": dace.Memlet(f"a[{symbolic_size}]")},
+        outputs={"__out": dace.Memlet(f"b[{symbolic_size}]")},
+        code=f"__out = __in + {symbolic_size}",
+        external_edges=True,
+    )
+    nested.validate()
+    assert symbolic_size not in nested.symbols
+
+    sdfg = dace.SDFG(util.unique_name("concat_where_symbolic_size_clashing_with_nested_map_param"))
+    state = sdfg.add_state()
+    sdfg.add_symbol(symbolic_size, dace.int32)
+    for aname in "abcd":
+        sdfg.add_array(
+            name=aname,
+            shape=((10,) if aname != "a" else (dace.symbolic.pystr_to_symbolic(symbolic_size),)),
+            dtype=dace.float64,
+            transient=(aname == "c"),
+        )
+
+    a, b, c, d = (state.add_access(aname) for aname in "abcd")
+    state.add_nedge(a, c, dace.Memlet("a[1:6] -> [0:5]"))
+    state.add_nedge(b, c, dace.Memlet("b[3:8] -> [5:10]"))
+
+    nested_sdfg = state.add_nested_sdfg(sdfg=nested, inputs={"a"}, outputs={"b"}, symbol_mapping={})
+    state.add_edge(c, None, nested_sdfg, "a", dace.Memlet("c[0:10]"))
+    state.add_edge(nested_sdfg, "b", d, None, dace.Memlet("d[0:10]"))
+    sdfg.validate()
+
+    ref, res = util.make_sdfg_args(sdfg, symbols={symbolic_size: 10})
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    gtx_transformations.gt_replace_concat_where_node(state=state, sdfg=sdfg, concat_node=c)
+    sdfg.validate()
+
+    assert c.data not in sdfg.arrays
+    assert state.in_degree(nested_sdfg) == 2
+
+    # `n` is now mapped 1:1 into the nested SDFG...
+    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
+    assert nested_sdfg.sdfg.symbols[symbolic_size] == dace.int32
+
+    # ... and the map parameter, which used the name inside the nested SDFG, has been
+    #  renamed, together with all of its uses. The consistency of the renaming (in
+    #  particular of the uses inside the map scope) is verified by the compile and run.
+    map_entries = util.count_nodes(nested_sdfg.sdfg, dace_nodes.MapEntry, True)
+    assert len(map_entries) >= 1
+    renamed_params = {param for me in map_entries for param in me.params}
+    assert symbolic_size not in renamed_params
+    assert all(param.startswith(symbolic_size + "_") for param in renamed_params)
+    (renamed_param,) = renamed_params
+    used_inside = {
+        str(fs)
+        for state_ in nested_sdfg.sdfg.states()
+        for edge in state_.edges()
+        for fs in edge.data.free_symbols
+    }
+    used_inside |= {
+        str(fs)
+        for tlet in util.count_nodes(nested_sdfg.sdfg, dace_nodes.Tasklet, True)
+        for fs in tlet.free_symbols
+    }
+    assert renamed_param in used_inside
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
 def _make_multi_producer_sdfg(
     nb_producers: int,
 ) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode]:

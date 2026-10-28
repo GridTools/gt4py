@@ -718,49 +718,88 @@ def _configure_descending_point(
         parent: nested for nested, parent in nested_to_parent_name_mapping.items()
     }
 
-    # Symbols that the nested SDFG assigns itself, e.g. on an interstate edge or as a
-    #  loop variable. They are not necessarily listed in `nsdfg.symbols`.
+    # Symbols that the nested SDFG assigns itself, e.g. on an interstate edge, as a
+    #  loop variable of a `LoopRegion`, or as a map parameter. Such a symbol binds the
+    #  name inside the nested SDFG, so the name could mean something entirely different
+    #  than in the parent SDFG. Note that these symbols are not necessarily listed in
+    #  `nsdfg.symbols` and are thus unknown to `nsdfg.is_name_free()`.
     inner_written_symbols: set[str] = set()
     for isedge in nsdfg.all_interstate_edges():
         inner_written_symbols.update(isedge.data.assignments.keys())
     for region in nsdfg.all_control_flow_regions():
         inner_written_symbols.update(region.new_symbols(nsdfg.symbols).keys())
+    for inner_state in nsdfg.states():
+        for inner_node in inner_state.nodes():
+            if isinstance(inner_node, dace_nodes.MapEntry):
+                inner_written_symbols.update(inner_node.params)
+
+    # Collect all the symbols that the producers use, e.g. in the shape of their data
+    #  descriptors. They are mapped 1:1 into the nested SDFG, i.e. they have the same
+    #  name and meaning inside. Note that a connector is not a view: the descriptor
+    #  inside the nested SDFG is equivalent to the parent data once the symbol mapping
+    #  of the node is applied, so instead of mapping 1:1, the symbols could also be
+    #  renamed to fresh names that are mapped back onto the parent symbols, which is
+    #  what previous versions of this code did. However, with renamed symbols, each
+    #  object that crosses the scope boundary, e.g. a descriptor, an offset or a
+    #  subset, would have to be rewritten through that rename map, and so on for each
+    #  level of nesting. The 1:1 mapping avoids all of these rewrites: it is the reason
+    #  why we can simply insert the objects, e.g. the data descriptors and the access
+    #  patterns, from the parent SDFG into the nested SDFG as they are. The price is
+    #  that a name clash, i.e. the nested SDFG uses the name of a symbol for something
+    #  else, either a data container or a symbol, including one it assigns itself or
+    #  binds as a map parameter, has to be resolved by renaming that symbol inside,
+    #  which is done below.
+    parent_symbol_types: dict[str, dace.dtypes.typeclass] = {
+        psym: state.sdfg.symbols[psym]
+        for parent_prod_spec in parent_producer_specs
+        for psym in parent_prod_spec.free_symbols
+    }
+
+    # In order to not scan the whole nested SDFG once per symbol, the renames of all
+    #  conflicting symbols are first gathered and then applied in a single pass.
+    rename_dict: dict[str, str] = {}
+    symbols_to_map: set[str] = set()
+    taken_names: set[str] = inner_written_symbols | set(parent_symbol_types)
+    for psym in sorted(parent_symbol_types):
+        ptype = parent_symbol_types[psym]
+        if psym in nsdfg.arrays:
+            _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
+        if (
+            psym not in inner_written_symbols
+            and psym in symbol_mapping
+            and psym == str(symbol_mapping[psym])
+            and psym in nsdfg.symbols
+            and nsdfg.symbols[psym] == ptype
+        ):
+            # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
+            continue
+
+        if psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
+            renamed_symbol = _find_new_nested_symbol(nsdfg, psym, taken_names)
+            rename_dict[psym] = renamed_symbol
+            taken_names.add(renamed_symbol)
+        symbols_to_map.add(psym)
+
+    if rename_dict:
+        # A single pass renames all the conflicting symbols inside the nested SDFG. Note
+        #  that if the nested SDFG bound the name as a map parameter, then the parameter
+        #  is renamed together with all the uses of it inside its scope.
+        nsdfg.replace_dict(rename_dict)
+        for psym, renamed_symbol in rename_dict.items():
+            if psym in symbol_mapping:
+                symbol_mapping[renamed_symbol] = symbol_mapping.pop(psym)
+            if psym in inner_written_symbols:
+                inner_written_symbols.discard(psym)
+                inner_written_symbols.add(renamed_symbol)
+
+    for psym in sorted(symbols_to_map):
+        nsdfg.add_symbol(psym, parent_symbol_types[psym])
+        symbol_mapping[psym] = psym
 
     nested_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, _ProducerSpec] = {}
     for parent_prod_spec in parent_producer_specs:
         parent_data_name = parent_prod_spec.data_name
-
-        # The symbols used by the producer are mapped 1:1 into the nested SDFG. The
-        #  data descriptors mapped into the nested SDFG have to be equivalent to the
-        #  ones in the parent SDFG (see `NestedSDFG.validate()`), so the symbols they
-        #  use, e.g. in the shape, must have the same name and meaning inside. If the
-        #  nested SDFG uses the name of the symbol for something else, either a data
-        #  container or a symbol, including one it assigns itself, it is renamed there.
-        for psym in sorted(parent_prod_spec.free_symbols):
-            if psym in nsdfg.arrays:
-                _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
-            ptype = state.sdfg.symbols[psym]
-            if (
-                psym not in inner_written_symbols
-                and psym in symbol_mapping
-                and psym == str(symbol_mapping[psym])
-                and psym in nsdfg.symbols
-                and nsdfg.symbols[psym] == ptype
-            ):
-                # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
-                continue
-
-            if psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
-                renamed_symbol = _find_new_nested_symbol(nsdfg, psym, inner_written_symbols)
-                nsdfg.replace_dict({psym: renamed_symbol})
-                if psym in symbol_mapping:
-                    symbol_mapping[renamed_symbol] = symbol_mapping.pop(psym)
-                if psym in inner_written_symbols:
-                    inner_written_symbols.discard(psym)
-                    inner_written_symbols.add(renamed_symbol)
-            nsdfg.add_symbol(psym, ptype)
-            symbol_mapping[psym] = psym
 
         # Compute the nested data descriptor.
         if parent_data_name in handled_data:
@@ -777,10 +816,9 @@ def _configure_descending_point(
 
         else:
             # The data is not yet mapped into the nested SDFG, so we have to create
-            #  a new one, and we have to make sure that it is a global.
-            #  The symbols used by the data descriptor, e.g. in the shape, must have
-            #  the same name and meaning inside. Symbol clashes have been handled above,
-            #  so we can safely use the same names.
+            #  a new one, and we have to make sure that it is a global. Per the policy
+            #  described above, the descriptor is written with the parent's symbols as
+            #  is. The symbol clashes have been handled there, so this is safe.
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
@@ -1345,11 +1383,18 @@ def _find_consumer_specs_single_source_single_level(
                 return None
             raise ValueError(f"Expected that partition for {concat_node} exists but it does not.")
 
-    # Now wet and partition the consumer. Most importantly test if they only read
-    #  a single element, in which case they are genuine consumers this applies to
-    #  _all_ nodes, even nested SDFGs. Otherwise it might open up a "new level".
-    #  For this the consumer must be a nested SDFG that reads the _whole_ concat
-    #  where node.
+    # Now we partition the consumers. A tasklet or access node has to read exactly a
+    #  single element of the concat where data, only then it is a genuine consumer,
+    #  i.e. the replacement is performed on this level: a tasklet is inserted here
+    #  that produces the single consumed element.
+    #  A nested SDFG is different, it always opens up a deeper level, a "descending
+    #  point": in the SDFG IR the connector of a nested SDFG is not a view, it is
+    #  equivalent to the whole data connected to it, so the accesses inside use the
+    #  same coordinates as on this level, even if the nested SDFG only reads a single
+    #  element inside.
+    #  The replacement thus has to be performed inside it, which means that the
+    #  producers of the concat where data have to be mapped into the nested SDFG,
+    #  see `_configure_descending_point()`.
     stairs_to_deeper_levels: list[_FinalConsumerSpec] = []  # Better name appreciated.
     consumer_specs: list[_FinalConsumerSpec] = []
     for consumer_spec in all_consumers:

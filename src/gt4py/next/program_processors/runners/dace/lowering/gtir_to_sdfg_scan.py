@@ -162,6 +162,8 @@ def _lower_lambda_to_nested_sdfg(
         offset_provider_type = sdfg_builder.get_offset_provider_type(offset_type.value)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         list_size = offset_provider_type.max_neighbors
+        # The local (list) dimension of the scan result takes the position that
+        # the scan (column) dimension has in the field layout.
         return [
             *field_shape[:scan_dim_index],
             sympy.Integer(list_size),

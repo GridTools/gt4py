@@ -596,12 +596,12 @@ def restate_nested_sdfg_connector(
 ) -> None:
     """Restates `connector` of `nsdfg_node` as the new data connected to it.
 
-    The data descriptor of a NestedSDFG connector has to be equivalent to the data
-    connected to it (see `NestedSDFG.validate()`), and the accesses inside use the
-    coordinates of that data. When a transformation connects different data to the
-    connector, e.g. through `reroute_edge()`, the connector has to adopt `new_desc`
-    and every access inside the NestedSDFG, and inside the NestedSDFGs below it, has
-    to be shifted by `ss_offset`.
+    In the SDFG IR a connector of a NestedSDFG is not a view: it is equivalent to
+    the data connected to it on the outside, i.e. it has the same shape and strides,
+    and the accesses inside use the coordinates of that data. When a transformation
+    connects different data to the connector, e.g. through `reroute_edge()`, the
+    connector has to adopt `new_desc` and every access inside the NestedSDFG, and
+    inside the NestedSDFGs below it, has to be shifted by `ss_offset`.
 
     Args:
         nsdfg_node: The NestedSDFG whose connector is connected to different data.
