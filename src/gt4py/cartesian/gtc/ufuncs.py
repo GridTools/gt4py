@@ -44,7 +44,7 @@ round_away_from_zero_ = _round_away_from_zero
 round_away_from_zero_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 rand_ = _random
-rand_.types = ["ff->f", "dd->d", "FF->F", "DD->D"]  # type: ignore[attr-defined]
+rand_.types = ["ff->d", "dd->d"]  # type: ignore[attr-defined]
 
 positive: np.ufunc = np.positive
 negative: np.ufunc = np.negative
