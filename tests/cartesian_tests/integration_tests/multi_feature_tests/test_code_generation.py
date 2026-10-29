@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtscript import (
@@ -1819,6 +1820,7 @@ def test_reset_mask_2d(backend: str) -> None:
                 pytest.mark.uses_dace,
                 pytest.mark.requires_gpu,
                 pytest.mark.xfail(
+                    condition=core_defs.CUPY_DEVICE_TYPE == core_defs.DeviceType.ROCM,
                     raises=SystemExit,
                     reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
                 ),

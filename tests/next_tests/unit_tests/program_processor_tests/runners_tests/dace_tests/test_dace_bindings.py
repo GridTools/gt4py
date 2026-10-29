@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from gt4py import next as gtx
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 from gt4py.next import common as gtx_common, int32, neighbor_sum
 from gt4py.next.otf import artifacts
 from gt4py.next.program_processors.runners import dace as dace_runner
@@ -245,12 +245,12 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    # NOTE: both sides go through the same formatter. The generated side always did; formatting
-    # the reference too makes the comparison independent of where long lines happen to wrap,
-    # which the mangled (qualified) connectivity names in the binding now make them do.
-    assert codegen.format_python_source(binding_source_pruned) == codegen.format_python_source(
-        binding_source_ref
-    )
+    # NOTE: both sides go through the same formatter. The generated side is emitted unformatted;
+    # formatting the reference too makes the comparison independent of where long lines happen
+    # to wrap, which the mangled (qualified) connectivity names in the binding now make them do.
+    assert formatting.format_python_source(
+        binding_source_pruned
+    ) == formatting.format_python_source(binding_source_ref)
     return _dace_compile_call(self, inp)
 
 

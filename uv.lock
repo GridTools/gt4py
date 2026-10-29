@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12, !=3.13.10, !=3.14.1, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -403,7 +403,7 @@ name = "cffi"
 version = "2.1.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pycparser", marker = "implementation_name != 'PyPy' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "pycparser" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz", hash = "sha256:dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be", size = 530807, upload-time = "2026-08-03T21:21:18.939Z" }
 wheels = [
@@ -559,7 +559,7 @@ name = "click"
 version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
@@ -606,7 +606,7 @@ name = "colorlog"
 version = "6.12.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/8c/55/ba79756cb90c8d69d599d57785398ac87bba7b19c80e87f4e8a562197c93/colorlog-6.12.0.tar.gz", hash = "sha256:2a7924c1dadf18b22a0eb8b06d1c7b01d5341707ec1641eb6fcc4fde0c3e8e5f", size = 18151, upload-time = "2026-07-23T13:40:40.71Z" }
 wheels = [
@@ -922,7 +922,7 @@ wheels = [
 
 [[package]]
 name = "dace"
-version = "2.0.0a9"
+version = "2.0.0a10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "astunparse" },
@@ -937,13 +937,13 @@ dependencies = [
     { name = "ordered-set" },
     { name = "packaging" },
     { name = "ply" },
-    { name = "pyreadline", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "pyreadline", marker = "sys_platform == 'win32'" },
     { name = "pyyaml" },
     { name = "scikit-build" },
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/34/a6e66f329ea94167c1c0da89dfaf053b1d90836ccab7161176dd12f10f9e/dace-2.0.0a9.tar.gz", hash = "sha256:ee9cd2a40c16fb09d559556433bb4f51b71fa88760fbc04306d54552775b5c4a", size = 6572070, upload-time = "2026-09-17T09:31:23.155Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/29/83c0d23a228c5f5cd5f6bdae1a124fcc2dd45fba239bc2b05925b99a3451/dace-2.0.0a10.tar.gz", hash = "sha256:8cfe968729be96ac66c5fd8c0f7c85c705182d30e9a49e3418cd4aafda238c30", size = 6616842, upload-time = "2026-10-03T13:32:04.812Z" }
 
 [[package]]
 name = "debugpy"
@@ -1127,7 +1127,7 @@ name = "faker"
 version = "40.36.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "tzdata", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "tzdata", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/98/d2/026af1e002bbc6df534d1f8262b18ec79a974f928e9290bfbfdfe7c7b2af/faker-40.36.0.tar.gz", hash = "sha256:754048c76c03afa7de83eee8f4bcee3cf668cbb7d995f54a4e9678db7f110308", size = 2025903, upload-time = "2026-07-24T21:11:33.088Z" }
 wheels = [
@@ -1269,7 +1269,6 @@ source = { editable = "." }
 dependencies = [
     { name = "array-api-compat" },
     { name = "attrs" },
-    { name = "black" },
     { name = "boltons" },
     { name = "cached-property" },
     { name = "click" },
@@ -1300,6 +1299,7 @@ dependencies = [
 
 [package.optional-dependencies]
 cartesian = [
+    { name = "black" },
     { name = "clang-format" },
     { name = "hypothesis" },
     { name = "jax" },
@@ -1324,7 +1324,6 @@ jax-cuda13 = [
     { name = "jax", extra = ["cuda13-local"], marker = "extra == 'extra-5-gt4py-jax-cuda13' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
 ]
 next = [
-    { name = "clang-format" },
     { name = "hypothesis" },
     { name = "jax" },
     { name = "pytest" },
@@ -1337,7 +1336,6 @@ rocm7 = [
     { name = "cupy-rocm-7-0" },
 ]
 standard = [
-    { name = "clang-format" },
     { name = "scipy" },
 ]
 testing = [
@@ -1354,6 +1352,8 @@ build = [
 ]
 dev = [
     { name = "atlas4py" },
+    { name = "black" },
+    { name = "clang-format" },
     { name = "cython" },
     { name = "esbonio" },
     { name = "factory-boy" },
@@ -1421,6 +1421,8 @@ scripts = [
     { name = "typer" },
 ]
 test = [
+    { name = "black" },
+    { name = "clang-format" },
     { name = "factory-boy" },
     { name = "hypothesis" },
     { name = "nbmake" },
@@ -1456,10 +1458,10 @@ typing-exports = [
 requires-dist = [
     { name = "array-api-compat", specifier = ">=1.13" },
     { name = "attrs", specifier = ">=21.3" },
-    { name = "black", specifier = ">=25.11" },
+    { name = "black", marker = "extra == 'cartesian'", specifier = ">=25.11" },
     { name = "boltons", specifier = ">=20.1" },
     { name = "cached-property", specifier = ">=1.5.1" },
-    { name = "clang-format", marker = "extra == 'standard'", specifier = ">=18.1" },
+    { name = "clang-format", marker = "extra == 'cartesian'", specifier = ">=18.1" },
     { name = "click", specifier = ">=8.0.0" },
     { name = "cmake", specifier = ">=3.22" },
     { name = "cupy", marker = "extra == 'rocm6'", specifier = ">=13.4.1,<14.0" },
@@ -1467,7 +1469,7 @@ requires-dist = [
     { name = "cupy-cuda13x", marker = "extra == 'cuda13'", specifier = ">=14.0" },
     { name = "cupy-rocm-7-0", marker = "extra == 'rocm7'", specifier = ">=14.0" },
     { name = "cytoolz", specifier = ">=1.0.1" },
-    { name = "dace", specifier = "==2.0.0a9" },
+    { name = "dace", specifier = "==2.0.0a10" },
     { name = "deepdiff", specifier = ">=8.1.0" },
     { name = "devtools", specifier = ">=0.6" },
     { name = "filelock", specifier = ">=3.18.0" },
@@ -1490,7 +1492,7 @@ requires-dist = [
     { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
     { name = "ordered-set", specifier = ">=4.1.0" },
-    { name = "packaging", specifier = ">=20.0" },
+    { name = "packaging", specifier = ">=24.2" },
     { name = "pybind11", specifier = ">=3.0.3" },
     { name = "pytest", marker = "extra == 'testing'", specifier = ">=7.0" },
     { name = "scipy", marker = "extra == 'standard'", specifier = ">=1.16.1" },
@@ -1512,6 +1514,8 @@ build = [
 ]
 dev = [
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
+    { name = "black", specifier = ">=25.11" },
+    { name = "clang-format", specifier = ">=18.1" },
     { name = "cython", specifier = ">=3.0.0" },
     { name = "esbonio", specifier = ">=0.16.0" },
     { name = "factory-boy", specifier = ">=3.3.3" },
@@ -1527,7 +1531,7 @@ dev = [
     { name = "pip", specifier = ">=22.1.1" },
     { name = "pre-commit", specifier = ">=4.0.1" },
     { name = "pygments", specifier = ">=2.7.3" },
-    { name = "pytest", specifier = ">=8.0.1" },
+    { name = "pytest", specifier = ">=8.0.1,<9.2.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
     { name = "pytest-cache", specifier = ">=1.0" },
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
@@ -1577,11 +1581,13 @@ scripts = [
     { name = "typer", specifier = ">=0.16.0" },
 ]
 test = [
+    { name = "black", specifier = ">=25.11" },
+    { name = "clang-format", specifier = ">=18.1" },
     { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "nbmake", specifier = ">=1.4.6" },
     { name = "nox", specifier = ">=2025.2.9" },
-    { name = "pytest", specifier = ">=8.0.1" },
+    { name = "pytest", specifier = ">=8.0.1,<9.2.0" },
     { name = "pytest-benchmark", specifier = ">=5.0.0" },
     { name = "pytest-cache", specifier = ">=1.0" },
     { name = "pytest-factoryboy", specifier = ">=2.6.1" },
@@ -1733,7 +1739,7 @@ name = "ipykernel"
 version = "7.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "appnope", marker = "sys_platform == 'darwin' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "appnope", marker = "sys_platform == 'darwin'" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython" },
@@ -1757,13 +1763,13 @@ name = "ipython"
 version = "9.16.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "ipython-pygments-lexers" },
     { name = "jedi" },
     { name = "matplotlib-inline" },
-    { name = "pexpect", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "pexpect", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
     { name = "prompt-toolkit" },
-    { name = "psutil", marker = "(sys_platform != 'cygwin' and sys_platform != 'emscripten') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'cygwin' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "psutil", marker = "sys_platform != 'cygwin' and sys_platform != 'emscripten'" },
     { name = "pygments" },
     { name = "stack-data" },
     { name = "traitlets" },
@@ -2436,7 +2442,7 @@ version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ast-serialize" },
-    { name = "librt", marker = "platform_python_implementation != 'PyPy' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "librt", marker = "platform_python_implementation != 'PyPy'" },
     { name = "mypy-extensions" },
     { name = "pathspec" },
     { name = "typing-extensions" },
@@ -2820,7 +2826,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "python-dateutil" },
-    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "tzdata", marker = "sys_platform == 'emscripten' or sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/be/4f/5f3422a2afec5ffc46308b79e53291365a93748b498ac2e58bead0197916/pandas-3.0.5.tar.gz", hash = "sha256:dca3734d6ab7c906e6730f0788b0a1dbb9f2467731f9711f77995c8e9d62d712", size = 4658219, upload-time = "2026-07-22T22:19:28.819Z" }
 wheels = [
@@ -2882,7 +2888,7 @@ name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "ptyprocess", marker = "(sys_platform != 'emscripten' and sys_platform != 'win32') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'emscripten' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (sys_platform == 'win32' and extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "ptyprocess" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
@@ -3128,18 +3134,18 @@ sdist = { url = "https://files.pythonhosted.org/packages/bc/7c/d724ef1ec3ab2125f
 
 [[package]]
 name = "pytest"
-version = "9.1.1"
+version = "8.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "iniconfig" },
     { name = "packaging" },
     { name = "pluggy" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/47/b9efed96c114afcfa3c9d3fe98a76a1d14c74a9e266d397cf6eb64be5e01/pytest-9.1.1.tar.gz", hash = "sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313", size = 1636369, upload-time = "2026-06-19T10:58:32.857Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/00a0e072241553e1a7496d638deababa67c5058571567b92a7eaa258397c/pytest-8.4.2.tar.gz", hash = "sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01", size = 1519618, upload-time = "2025-09-04T14:34:22.711Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl", hash = "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c", size = 386536, upload-time = "2026-06-19T10:58:31.347Z" },
+    { url = "https://files.pythonhosted.org/packages/a8/a4/20da314d277121d6534b3a980b29035dcd51e6744bd79075a6ce8fa4eb8d/pytest-8.4.2-py3-none-any.whl", hash = "sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79", size = 365750, upload-time = "2025-09-04T14:34:20.226Z" },
 ]
 
 [[package]]
@@ -3335,7 +3341,7 @@ name = "pyzmq"
 version = "27.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cffi", marker = "implementation_name == 'pypy' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "cffi", marker = "implementation_name == 'pypy'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/04/0b/3c9baedbdf613ecaa7aa07027780b8867f57b6293b6ee50de316c9f3222b/pyzmq-27.1.0.tar.gz", hash = "sha256:ac0765e3d44455adb6ddbf4417dcce460fc40a05978c08efdf2948072f6db540", size = 281750, upload-time = "2025-09-08T23:10:18.157Z" }
 wheels = [
@@ -3380,7 +3386,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
     { name = "rpds-py" },
-    { name = "typing-extensions", marker = "python_full_version < '3.13' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/22/f5/df4e9027acead3ecc63e50fe1e36aca1523e1719559c499951bb4b53188f/referencing-0.37.0.tar.gz", hash = "sha256:44aefc3142c5b842538163acb373e24cce6632bd54bdb01b21ad5863489f50d8", size = 78036, upload-time = "2025-10-13T15:30:48.871Z" }
 wheels = [
@@ -3758,7 +3764,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alabaster" },
     { name = "babel" },
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "docutils" },
     { name = "imagesize" },
     { name = "jinja2" },
@@ -3798,7 +3804,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
     { name = "markupsafe" },
-    { name = "standard-imghdr", marker = "python_full_version >= '3.13' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "standard-imghdr", marker = "python_full_version >= '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/43/98/43313781f29e8c6c46fec907430310172d6f207e95e4fbea9289990fbbfe/sphinx_jinja2_compat-0.4.1.tar.gz", hash = "sha256:0188f0802d42c3da72997533b55a00815659a78d3f81d4b4747b1fb15a5728e6", size = 5222, upload-time = "2025-08-06T20:06:25.824Z" }
 wheels = [
@@ -4149,7 +4155,7 @@ version = "0.27.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-jax-cuda13') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-cuda12' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm6') or (extra == 'extra-5-gt4py-jax-cuda13' and extra == 'extra-5-gt4py-rocm7') or (extra == 'extra-5-gt4py-rocm6' and extra == 'extra-5-gt4py-rocm7')" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "rich" },
     { name = "shellingham" },
 ]

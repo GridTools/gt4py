@@ -25,28 +25,18 @@ describable without reaching for an IR.
 from __future__ import annotations
 
 import dataclasses
-import functools
-from collections.abc import Callable, Mapping
-from typing import Any, Generic, Optional, Protocol, TypeAlias, TypeVar, runtime_checkable
+from collections.abc import Callable
+from typing import Generic, Optional, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from gt4py.eve import codegen
 from gt4py.next.otf.binding import interface
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SourceCodeSpec:
-    """
-    Basic settings for any source programming language.
-
-    Formatting will happen through ``eve.codegen.format_source``.
-    For available formatting options, check the options of the
-    specific formatter used depending on ``.formatter_key``.
-    """
+    """Basic settings for any source programming language."""
 
     source_language: str
     file_extension: str
-    formatter_key: str | None = None
-    formatter_options: Mapping[str, Any] | None = None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -62,7 +52,6 @@ class PythonCodeSpec(SourceCodeSpec):
 
     source_language: str = "python"
     file_extension: str = "py"
-    formatter_key: str = "python"
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -85,10 +74,6 @@ class CPPCodeSpec(CPPLikeCodeSpec):
     source_language: str = "CXX"
     file_extension: str = "cpp"
     header_extension: str = "hpp"
-    formatter_key: str = "cpp"
-    formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, style="LLVM")
-    )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -98,10 +83,6 @@ class CUDACodeSpec(CPPLikeCodeSpec):
     source_language: str = "CUDA"
     file_extension: str = "cu"
     header_extension: str = "cuh"
-    formatter_key: str = "cpp"
-    formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, style="LLVM")
-    )
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -111,19 +92,6 @@ class HIPCodeSpec(CPPLikeCodeSpec):
     source_language: str = "HIP"
     file_extension: str = "hip"
     header_extension: str = "h"
-    formatter_key: str = "cpp"
-    formatter_options: Mapping[str, Any] = dataclasses.field(
-        default_factory=functools.partial(dict, style="LLVM")
-    )
-
-
-def format_source(source_code_spec: SourceCodeSpec, source: str) -> str:
-    assert source_code_spec.formatter_key is not None, (
-        "No formatter key specified in source code specification."
-    )
-    return codegen.format_source(
-        source_code_spec.formatter_key, source, **(source_code_spec.formatter_options or {})
-    )
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=SourceCodeSpec)
