@@ -1012,11 +1012,25 @@ def unit_range(r: RangeLike) -> UnitRange:
 
 
 class NamedRange(NamedTuple, Generic[_Rng]):
+    """
+    A range along one dimension.
+
+    The range counterpart of a `DimensionIndex` instance, which is a point along its
+    dimension: both expose `dim` and `value`, so an element of an absolute index is read the
+    same way whether it is a point (`value` is an `int`) or a range (`value` is a `UnitRange`).
+    """
+
     dim: Dimension
-    unit_range: _Rng
+    value: _Rng
+
+    @property
+    def unit_range(self) -> _Rng:
+        """Alias of `value`."""
+        # TODO(egparedes): deprecate once downstream code (ICON4Py) reads `value`.
+        return self.value
 
     def __str__(self) -> str:
-        return f"{self.dim}={self.unit_range}"
+        return f"{self.dim}={self.value}"
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
@@ -1042,7 +1056,7 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
 
 
 def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
-    return UnitRange.is_finite(v.unit_range)
+    return UnitRange.is_finite(v.value)
 
 
 def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
@@ -1160,7 +1174,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
             index = found
         if isinstance(index, int):
-            return NamedRange(dim=self.dims[index], unit_range=self.ranges[index])
+            return NamedRange(dim=self.dims[index], value=self.ranges[index])
         if isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
@@ -1302,7 +1316,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         if index < 0:
             index += len(self.dims)
         new_dims = (arg.dim for arg in named_ranges) if len(named_ranges) > 0 else ()
-        new_ranges = (arg.unit_range for arg in named_ranges) if len(named_ranges) > 0 else ()
+        new_ranges = (arg.value for arg in named_ranges) if len(named_ranges) > 0 else ()
         dims = self.dims[:index] + tuple(new_dims) + self.dims[index + 1 :]
         ranges = self.ranges[:index] + tuple(new_ranges) + self.ranges[index + 1 :]
 
@@ -2015,7 +2029,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
                     f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                 )
 
-            image_range = image_range.unit_range
+            image_range = image_range.value
 
         assert isinstance(image_range, UnitRange)
         return (named_range((self.domain_dim, image_range - self.offset)),)

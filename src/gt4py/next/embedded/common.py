@@ -70,13 +70,7 @@ def _absolute_sub_domain(
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
-            # NOTE: `NamedRange` is a namedtuple but an index is a `DimensionIndex`
-            # instance, so the payload has to be selected rather than unpacked.
-            idx = (
-                named_idx.unit_range
-                if isinstance(named_idx, common.NamedRange)
-                else named_idx.value
-            )
+            idx = named_idx.value
             if isinstance(idx, common.UnitRange):
                 if not idx <= rng:
                     raise embedded_exceptions.IndexOutOfBounds(
@@ -187,8 +181,6 @@ def _find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.DimensionIndex | Any],
 ) -> Optional[int]:
-    # NOTE: `.dim`, not tuple unpacking: a `NamedRange` is a namedtuple, but an index is a
-    # `DimensionIndex` instance, and both expose `.dim`.
     for i, elem in enumerate(domain_slice):
         if dim == elem.dim:
             return i

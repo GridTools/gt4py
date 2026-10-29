@@ -66,7 +66,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
 
         def scan_loop(hpos: Sequence[common.DimensionIndex]) -> None:
             acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
-            for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
+            for k in scan_range.value if self.forward else reversed(scan_range.value):
                 pos = (*hpos, scan_axis(k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}

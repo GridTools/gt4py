@@ -269,9 +269,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))
         column_range: common.NamedRange = embedded_context.get_closure_column_range()
-        self.data = (
-            data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
-        )
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range.value), data)
 
     @property
     def dtype(self) -> np.dtype:
@@ -822,7 +820,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         assert column_range is not None
 
         col: list[
@@ -899,7 +897,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.unit_range))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.value))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -933,7 +931,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim.tag] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_dimension is not None:
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_dimension.tag] = column_range.start
@@ -1155,7 +1153,6 @@ class IndexField(common.Field):
             assert isinstance(
                 item[0], common.DimensionIndex
             )  # for mypy errors on multiple lines below
-            # an index is a `DimensionIndex` instance now, not a (dim, value) namedtuple
             d, r = item[0].dim, item[0].value
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
@@ -1631,7 +1628,7 @@ def _elem_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1673,7 +1670,7 @@ def set_at(
 
 @runtime.get_domain_range.register(EMBEDDED)
 def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
-    return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
+    return (field.domain[dim].value.start, field.domain[dim].value.stop)
 
 
 @runtime.if_stmt.register(EMBEDDED)
@@ -1724,7 +1721,7 @@ def _compute_at_position(
 def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
     if (col_range_placeholder := embedded_context.get_closure_column_range(None)) is not None:
         assert (
-            col_range_placeholder.unit_range.is_empty()
+            col_range_placeholder.value.is_empty()
         )  # check it's just the placeholder with empty range
         column_axis = col_range_placeholder.dim
         if column_axis is not None and column_axis.tag in domain:
@@ -1842,7 +1839,7 @@ def closure(
             else:
                 column_range = cast(common.NamedRange, column_range)
                 col_pos = pos.copy()
-                for k in column_range.unit_range:
+                for k in column_range.value:
                     col_pos[column_range.dim.tag] = k
                     assert _is_concrete_position(col_pos)
                     out.field_setitem(col_pos, res[k])  # type: ignore[index]

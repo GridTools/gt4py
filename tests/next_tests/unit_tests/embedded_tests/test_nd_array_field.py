@@ -472,7 +472,7 @@ def test_domain_premap():
                 I_half,
                 J,
             ),
-            ranges=(data_field.domain[I].unit_range, data_field.domain[J].unit_range),
+            ranges=(data_field.domain[I].value, data_field.domain[J].value),
         ),
     )
 
@@ -1101,8 +1101,8 @@ def test_absolute_indexing_dim_sliced():
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
     expected = field[
-        NamedRange(dim=D0, unit_range=UnitRange(5, 9)),
-        NamedRange(dim=D1, unit_range=UnitRange(8, 10)),
+        NamedRange(dim=D0, value=UnitRange(5, 9)),
+        NamedRange(dim=D1, value=UnitRange(8, 10)),
     ]
 
     assert isinstance(indexed_field_1, common.Field)

@@ -98,13 +98,13 @@ def _absolute_to_relative_index(
     result = []
     for named_range in domain:
         dim = named_range.dim
-        abs_idx = dim_to_index.get(dim, named_range.unit_range.start)
-        if abs_idx < named_range.unit_range.start or abs_idx >= named_range.unit_range.stop:
+        abs_idx = dim_to_index.get(dim, named_range.value.start)
+        if abs_idx < named_range.value.start or abs_idx >= named_range.value.stop:
             raise ValueError(
                 f"Absolute index for dimension '{dim}' is {abs_idx}, "
-                f"which is outside the domain range [{named_range.unit_range.start}, {named_range.unit_range.stop})."
+                f"which is outside the domain range [{named_range.value.start}, {named_range.value.stop})."
             )
-        result.append(abs_idx - named_range.unit_range.start)
+        result.append(abs_idx - named_range.value.start)
     return result
 
 

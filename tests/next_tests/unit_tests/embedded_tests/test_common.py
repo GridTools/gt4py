@@ -133,8 +133,8 @@ def test_sub_domain(domain, index, expected):
 def test_iterate_domain():
     domain = common.domain({I: 2, J: 3})
     ref = []
-    for i in domain[I].unit_range:
-        for j in domain[J].unit_range:
+    for i in domain[I].value:
+        for j in domain[J].value:
             ref.append((I(i), J(j)))
 
     testee = list(iterate_domain(domain))

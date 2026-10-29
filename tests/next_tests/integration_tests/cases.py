@@ -677,8 +677,8 @@ def extend_domain(
                     (
                         dim,
                         (
-                            domain[dim].unit_range.start - lower,
-                            domain[dim].unit_range.stop + upper,
+                            domain[dim].value.start - lower,
+                            domain[dim].value.stop + upper,
                         ),
                     )
                 ),
