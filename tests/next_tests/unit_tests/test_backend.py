@@ -108,7 +108,7 @@ def test_toolchain_compile_runs_frontend_compiler_and_loader_in_order():
 
 def test_toolchain_default_frontend_is_the_global_one():
     assert next_backend.Toolchain(_make_compiled_backend()).frontend is (
-        next_backend.DEFAULT_TRANSFORMS
+        next_backend.DEFAULT_FRONTEND
     )
 
 

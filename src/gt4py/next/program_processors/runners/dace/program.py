@@ -45,7 +45,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
         # TODO(ricoh): connectivity tables required here for now.
         assert isinstance(self.backend, gtx_backend.CompiledBackend)
-        gtir_stage = self._frontend_transforms.past_to_itir(
+        gtir_stage = gtx_backend.DEFAULT_FRONTEND.past_to_itir(
             workflow.ProgramWithArgs(
                 definition=self.past_stage,
                 args=arguments.CompileTimeArgs(

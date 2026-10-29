@@ -35,7 +35,7 @@ field operators / programs (ffront)
 - `backend.py` — `Backend` (abstract: `name`, `allocator`), its concrete
   kinds `CompiledBackend` (+ `compiler`, `loader`) and `EmbeddedBackend`
   (allocator = array namespace), the global frontend (`Transforms` /
-  `DEFAULT_TRANSFORMS`) and the internal `Toolchain` composing the frontend
+  `DEFAULT_FRONTEND`) and the internal `Toolchain` composing the frontend
   with a compiled backend.
 - `program_processors/runners/` — the backends: `embedded`
   (`embedded_numpy` / `embedded_cupy` / `embedded_jax`), `gtfn` (GridTools

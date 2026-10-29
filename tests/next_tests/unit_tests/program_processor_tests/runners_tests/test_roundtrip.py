@@ -101,7 +101,7 @@ def test_gtir_uses_the_default_frontend_without_changing_the_lowering():
     a = gtx.zeros({IDim: 4})
     out = gtx.zeros({IDim: 4})
     default_frontend = next_backend.Toolchain(roundtrip.gtir).frontend
-    assert default_frontend is next_backend.DEFAULT_TRANSFORMS
+    assert default_frontend is next_backend.DEFAULT_FRONTEND
 
     # A field operator is lowered as the program wrapping it, so `out` is positional.
     compile_time_args = arguments.CompileTimeArgs.from_concrete(a, out, offset_provider={})
