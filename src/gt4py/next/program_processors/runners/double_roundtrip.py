@@ -12,9 +12,8 @@ from gt4py.next import backend as next_backend
 from gt4py.next.program_processors.runners import roundtrip
 
 
-backend = next_backend.Backend(
+backend = next_backend.CompiledBackend(
     name="double_roundtrip",
-    transforms=next_backend.DEFAULT_TRANSFORMS,
-    executor=roundtrip.Roundtrip(dispatch_backend=roundtrip.default, use_embedded=False),
+    compiler=roundtrip.Roundtrip(dispatch_backend=roundtrip.default, use_embedded=False),
     allocator=roundtrip.default.allocator,
 )

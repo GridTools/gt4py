@@ -9,6 +9,8 @@ tags: []
 - **Created**: 2026-07-08
 - **Updated**: 2026-07-08
 
+Partially superseded by [0029 - Backend Structure and Pipeline Simplification](0029-Backend-Structure-and-Pipeline-Simplification.md) (`compile` is no longer a backend method, so the fallback for backends that customize it no longer exists; a compiler that cannot be pickled still compiles in the calling thread).
+
 In the context of ahead-of-time compilation of many program variants
 (`CompiledProgramsPool`), facing a thread pool that can neither hide the
 CPython-bound cost of translation and optimization (GIL) nor parallelize the

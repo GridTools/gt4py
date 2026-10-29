@@ -13,6 +13,7 @@ dimension, offset and field-type aliases used across unit, integration and
 regression tests. The ``cases`` framework builds on these; see ``cases.py``.
 """
 
+import dataclasses
 import types
 from typing import Any, Protocol, TypeVar
 
@@ -51,38 +52,21 @@ __all__ = [
 ]
 
 
-def _no_backend_executor(*args: Any, **kwargs: Any) -> None:
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-
 def _no_backend_allocator(*args: Any, **kwargs: Any) -> None:
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
+@dataclasses.dataclass(frozen=True)
 class NoBackend(next_backend.Backend):
-    """Temporary default backend to not accidentally test the wrong backend."""
+    """
+    Default backend in tests, to not accidentally test the wrong backend.
 
-    def __call__(self, program, *args, **kwargs) -> None:
-        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-    def compile(self, program, compile_time_args):
-        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
-
-    def __gt_allocator__(
-        self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
-        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+    It is neither a compiled nor an embedded backend, so programs and operators
+    can be created with it, but calling them raises a `TypeError`.
+    """
 
 
-no_backend = NoBackend(
-    name="no_backend",
-    executor=_no_backend_executor,
-    allocator=_no_backend_allocator,
-    # TODO(tehrengruber): We don't want any transformations, but since `decorator.FieldOperator`
-    #  and `decorator.Program` unconditionally do linting on construction we need the
-    #  transformations. When this is up to the backend we can remove this again.
-    transforms=next_backend.DEFAULT_TRANSFORMS,
-)
+no_backend = NoBackend(name="no_backend", allocator=_no_backend_allocator)
 
 
 @pytest.fixture(

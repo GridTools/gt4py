@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import dataclasses
 import inspect
 import threading
 import warnings
@@ -18,7 +19,7 @@ import contextlib
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import errors, config
+from gt4py.next import backend as next_backend, config, errors
 from gt4py.next.otf import compiled_program, options, arguments
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.ffront.decorator import Program
@@ -41,8 +42,24 @@ from next_tests.integration_tests.cases_utils import (
 
 from gt4py.next.otf import arguments
 
-_raise_on_compile = mock.Mock()
-_raise_on_compile.compile.side_effect = AssertionError("This function should never be called.")
+
+def _never_called(*args, **kwargs):
+    raise AssertionError("This function should never be called.")
+
+
+def _forbid_compilation(program) -> None:
+    """
+    Make every new compilation of `program` fail.
+
+    Replaces the toolchain of the program's compiled-programs pool by one whose
+    frontend and compiler raise. Variants that are already compiled, or still in
+    flight, keep loading and running; `program.backend` is left untouched.
+    """
+    pool = program._compiled_programs
+    pool.toolchain = next_backend.Toolchain(
+        dataclasses.replace(pool.toolchain.backend, compiler=_never_called),
+        frontend=_never_called,
+    )
 
 
 class NamedTupleNamedCollection(NamedTuple):
@@ -116,7 +133,7 @@ def test_compile(cartesian_case, compile_testee):
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee)
 
     compile_testee(*args, offset_provider=cartesian_case.offset_provider, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
@@ -163,7 +180,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     (a, b), kwargs = cases.get_default_data(cartesian_case, compile_testee)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee)
 
     compile_testee(offset_provider=cartesian_case.offset_provider, b=b, a=a, **kwargs)
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
@@ -184,7 +201,7 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
     out = cartesian_case.as_field([KDim], np.zeros(k_size, dtype=np.int32))
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_scan, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee_scan)
 
     compile_testee_scan(inp, out=out, offset_provider=cartesian_case.offset_provider)
     assert np.allclose(out.ndarray, np.cumsum(inp.ndarray))
@@ -199,7 +216,7 @@ def test_compile_domain(cartesian_case, compile_testee_domain):
     args, kwargs = cases.get_default_data(cartesian_case, compile_testee_domain)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_domain, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee_domain)
 
     compile_testee_domain(
         *args[:-1],
@@ -248,7 +265,7 @@ def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee_unstructured)
 
     compile_testee_unstructured(*args, offset_provider=unstructured_case.offset_provider, **kwargs)
 
@@ -286,7 +303,7 @@ def test_compile_unstructured_wrong_offset_provider(
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee_unstructured_no_jit)
 
     with pytest.raises(RuntimeError, match="No program.*static.*arg.*"):
         compile_testee_unstructured_no_jit(
@@ -310,7 +327,7 @@ def test_compile_unstructured_for_two_offset_providers(
     )
 
     # make sure the backend is never called
-    object.__setattr__(compile_testee_unstructured_no_jit, "backend", _raise_on_compile)
+    _forbid_compilation(compile_testee_unstructured_no_jit)
 
     args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured_no_jit)
     compile_testee_unstructured_no_jit(
@@ -386,7 +403,7 @@ def compile_variants_testee(cartesian_case, compile_variants_testee_not_compiled
 @pytest.mark.uses_tuple_returns
 def test_compile_variants(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_variants_testee)
 
     assert compile_variants_testee._compiled_programs.argument_descriptor_mapping[
         arguments.StaticArg
@@ -429,7 +446,7 @@ def test_compile_variants(cartesian_case, compile_variants_testee):
 @pytest.mark.uses_tuple_returns
 def test_compile_variants_args_and_kwargs(cartesian_case, compile_variants_testee):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_variants_testee)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee, "field_b")()
@@ -601,7 +618,7 @@ def test_compile_variants_not_compiled_then_reset_static_params(
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
     # make sure the backend is never called form here on
-    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
+    _forbid_compilation(testee_static_float_static_bool)
 
     # calling it again will not recompile
     out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
@@ -651,7 +668,8 @@ def test_compile_variants_not_compiled_then_set_new_static_params(
     )
 
     # make sure the backend is never called form here on
-    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_variants_testee)
+    _forbid_compilation(testee_static_float_static_bool)
 
     out = cases.allocate(cartesian_case, testee_static_float_static_bool, "out")()
     testee_static_float_static_bool(
@@ -699,7 +717,7 @@ def test_compile_variants_jit(cartesian_case, compile_variants_testee):
     assert np.allclose(out[1].ndarray, field_b.ndarray - 4.0)
 
     # make sure on the second call the backend is not called
-    object.__setattr__(compile_variants_testee, "backend", _raise_on_compile)
+    _forbid_compilation(compile_variants_testee)
     out = cases.allocate(cartesian_case, compile_variants_testee, "out")()
     compile_variants_testee(
         field_a,
@@ -740,7 +758,7 @@ def test_compile_variants_with_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
     # make sure the backend is not called on the second call
-    object.__setattr__(testee_with_static_params, "backend", _raise_on_compile)
+    _forbid_compilation(testee_with_static_params)
 
     out = cases.allocate(cartesian_case, testee_with_static_params, "out")()
     testee_with_static_params(
@@ -797,7 +815,7 @@ def test_compile_variants_decorator_static_params_jit(
     assert np.allclose(out[1].ndarray, field_b.ndarray + 3.0)
 
     # make sure the backend is not called on the second call
-    object.__setattr__(testee, "backend", _raise_on_compile)
+    _forbid_compilation(testee)
 
     out = cases.allocate(cartesian_case, testee, "out")()
     testee(
@@ -867,7 +885,7 @@ def compile_variants_testee_tuple(cartesian_case):
 @pytest.mark.uses_tuple_args
 def test_compile_variants_tuple(cartesian_case, compile_variants_testee_tuple):
     # make sure the backend is never called
-    object.__setattr__(compile_variants_testee_tuple, "backend", _raise_on_compile)
+    _forbid_compilation(compile_variants_testee_tuple)
 
     field_a = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_a")()
     field_b = cases.allocate(cartesian_case, compile_variants_testee_tuple, "field_b")()
@@ -978,13 +996,11 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
     # submission; an instant failure would raise eagerly at `compile()` already.
     gate = threading.Event()
 
-    class FailingBackend:
-        def __getattr__(self, name):
-            return getattr(cartesian_case.backend, name)
+    def failing_compiler(compilable):
+        gate.wait()
+        raise ValueError("compilation went boom")
 
-        def compile(self, program, compile_time_args):
-            gate.wait()
-            raise ValueError("compilation went boom")
+    failing_backend = dataclasses.replace(cartesian_case.backend, compiler=failing_compiler)
 
     runner = compiled_program.runners.ThreadRunner(max_workers=1)
     try:
@@ -992,7 +1008,7 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
             get_runner.return_value = runner
             # The program must stay referenced: failure tracking is weak, so the
             # failed future of a garbage-collected program is not reported.
-            testee = compile_testee.with_backend(FailingBackend())
+            testee = compile_testee.with_backend(failing_backend)
             testee.compile(offset_provider=cartesian_case.offset_provider)
             gate.set()
             with pytest.raises(ValueError, match="compilation went boom"):
@@ -1011,15 +1027,12 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
 
     captured_cargs: Optional[arguments.CompileTimeArgs] = None
 
-    class CaptureCompileTimeArgsBackend:
-        def __getattr__(self, name):
-            return getattr(cartesian_case.backend, name)
+    def capturing_compiler(compilable):
+        nonlocal captured_cargs
+        captured_cargs = compilable.args
+        return cartesian_case.backend.compiler(compilable)
 
-        def compile(self, program, compile_time_args):
-            nonlocal captured_cargs
-            captured_cargs = compile_time_args
-
-            return cartesian_case.backend.compile(program, compile_time_args)
+    capturing_backend = dataclasses.replace(cartesian_case.backend, compiler=capturing_compiler)
 
     @gtx.field_operator
     def identity_like(inp: tuple[cases.IField, cases.IField, float]):
@@ -1027,7 +1040,7 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
 
     # the float argument here is merely to test that static domains work for tuple arguments
     # of inhomogeneous types
-    @gtx.program(backend=CaptureCompileTimeArgsBackend(), static_domains=True)
+    @gtx.program(backend=capturing_backend, static_domains=True)
     def testee(inp: tuple[cases.IField, cases.IField, float], out: NamedTupleNamedCollection):
         identity_like(inp, out=out)
 
@@ -1088,3 +1101,28 @@ def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee)
     w = generic_warnings[0]
     assert w.filename == __file__
     assert w.lineno == call_lineno
+
+
+def test_forbid_compilation_guard_is_effective(cartesian_case):
+    """`_forbid_compilation` lets compiled variants run and makes any new compilation fail."""
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded execution does not compile.")
+
+    @gtx.field_operator
+    def scale(a: cases.IField, factor: int32) -> cases.IField:
+        return a * factor
+
+    @gtx.program(backend=cartesian_case.backend, static_params=("factor",))
+    def testee(a: cases.IField, factor: int32, out: cases.IField):
+        scale(a, factor, out=out)
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, "out")()
+    testee.compile(factor=[int32(2)], offset_provider=cartesian_case.offset_provider)
+    _forbid_compilation(testee)
+
+    testee(a, int32(2), out, offset_provider=cartesian_case.offset_provider, enable_jit=True)
+    assert np.allclose(out.ndarray, 2 * a.ndarray)
+
+    with pytest.raises(AssertionError, match="should never be called"):
+        testee(a, int32(3), out, offset_provider=cartesian_case.offset_provider, enable_jit=True)

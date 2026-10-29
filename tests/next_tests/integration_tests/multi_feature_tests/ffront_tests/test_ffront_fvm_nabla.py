@@ -83,7 +83,9 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
     zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=exec_alloc_descriptor.allocator)
 
     compute_zavgS.with_backend(
-        None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor
     )(
         setup.input_field,
         setup.S_fields[0],
@@ -106,7 +108,11 @@ def test_ffront_nabla(exec_alloc_descriptor):
     pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
     pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
 
-    pnabla.with_backend(None if exec_alloc_descriptor.executor is None else exec_alloc_descriptor)(
+    pnabla.with_backend(
+        None
+        if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
+        else exec_alloc_descriptor
+    )(
         setup.input_field,
         setup.S_fields,
         setup.sign_field,

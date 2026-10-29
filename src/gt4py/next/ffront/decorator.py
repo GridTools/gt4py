@@ -53,6 +53,39 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 DEFAULT_BACKEND: next_backend.Backend | None = None
 
 
+def _check_backend(backend: Any) -> None:
+    """Reject, when a program or operator is created, anything that is not a backend."""
+    if backend is not None and not isinstance(backend, next_backend.Backend):
+        raise TypeError(
+            f"Expected a 'gt4py.next.backend.Backend' (or None for embedded execution),"
+            f" got '{type(backend).__name__}'."
+        )
+
+
+def _compiled_backend_or_none(
+    backend: next_backend.Backend | None,
+) -> next_backend.CompiledBackend | None:
+    """
+    Dispatch on the kind of `backend`.
+
+    Returns:
+        The compiled backend to run on, or `None` for embedded execution.
+
+    Raises:
+        TypeError: If `backend` is a `Backend` of a kind that cannot run programs.
+    """
+    match backend:
+        case next_backend.CompiledBackend():
+            return backend
+        case None:
+            return None
+        case _:
+            raise TypeError(
+                f"Backend '{backend.name}' of type '{type(backend).__name__}' is not supported:"
+                " expected a 'CompiledBackend', or None for embedded execution."
+            )
+
+
 ProgramCallMetricsCollector = metrics.make_collector(
     level=metrics.MINIMAL, metric_name=metrics.TOTAL_METRIC
 )
@@ -131,7 +164,8 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     def _make_compiled_programs_pool(
         self, static_params: Sequence[str], static_domains: bool
     ) -> compiled_program.CompiledProgramsPool:
-        if self.backend is None or self.backend == eve.NOTHING:
+        compiled_backend = _compiled_backend_or_none(self.backend)
+        if compiled_backend is None:
             raise RuntimeError("Cannot compile a program without backend.")
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
@@ -151,7 +185,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             )
 
         return compiled_program.CompiledProgramsPool(
-            backend=self.backend,
+            toolchain=next_backend.Toolchain(compiled_backend),
             definition_stage=self.definition_stage,
             program_type=program_type,
             argument_descriptor_mapping=argument_descriptor_mapping,
@@ -233,7 +267,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         past_node: The node representing the program.
         closure_vars: Mapping of externally defined symbols to their respective values.
             For example, referenced global and nonlocal variables.
-        backend: The backend to be used for code generation.
+        backend: The backend the program runs on (`None` for embedded execution).
         definition: The Python function object corresponding to the PAST node.
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
@@ -261,10 +295,11 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         assert isinstance(self.past_stage.past_node.type, ts_ffront.ProgramType)
         return self.past_stage.past_node.type
 
-    # TODO(ricoh): linting should become optional, up to the backend.
+    # TODO(ricoh): linting should become optional.
     def __post_init__(self) -> None:
-        no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
-        _ = self._frontend_transforms.past_lint(no_args_past).data
+        _check_backend(self.backend)
+        no_args_past = workflow.ProgramWithArgs(self.past_stage, arguments.CompileTimeArgs.empty())
+        _ = next_backend.DEFAULT_FRONTEND.past_lint(no_args_past).definition
 
     @property
     def __name__(self) -> str:
@@ -274,10 +309,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def __gt_allocator__(
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
-        if self.backend:
-            return self.backend.__gt_allocator__
-        else:
+        compiled_backend = _compiled_backend_or_none(self.backend)
+        if compiled_backend is None:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
+        return compiled_backend.__gt_allocator__
 
     @property
     def definition(self) -> types.FunctionType:
@@ -286,19 +321,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = workflow.ConcreteArtifact(
+        no_args_def = workflow.ProgramWithArgs(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
-        return self._frontend_transforms.func_to_past(no_args_def).data
-
-    @property
-    def _frontend_transforms(self) -> next_backend.Transforms:
-        if self.backend is None:
-            return next_backend.DEFAULT_TRANSFORMS
-        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
-        #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
-        assert isinstance(self.backend.transforms, next_backend.Transforms)
-        return self.backend.transforms
+        return next_backend.DEFAULT_FRONTEND.func_to_past(no_args_def).definition
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -306,15 +332,15 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = workflow.ConcreteArtifact(
-            data=ffront_stages.PASTProgramDef(
+        no_args_past = workflow.ProgramWithArgs(
+            definition=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
                 grid_type=self.definition_stage.grid_type,
             ),
             args=arguments.CompileTimeArgs.empty(),
         )
-        return self._frontend_transforms.past_to_itir(no_args_past).data
+        return next_backend.DEFAULT_FRONTEND.past_to_itir(no_args_past).definition
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -398,7 +424,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            if self.backend is not None:
+            if _compiled_backend_or_none(self.backend) is not None:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
@@ -544,7 +570,8 @@ def program(
         program = Program.from_function(
             definition,
             backend=typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Backend | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type=grid_type,
             **compilation_options,
@@ -598,18 +625,19 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             compilation_options=options.CompilationOptions(**compilation_options),
         )
 
-    # TODO(ricoh): linting should become optional, up to the backend.
+    # TODO(ricoh): linting should become optional.
     def __post_init__(self) -> None:
         """This ensures that DSL linting occurs at decoration time."""
+        _check_backend(self.backend)
         _ = self.foast_stage
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
-        return self._frontend_transforms.func_to_foast(
-            workflow.ConcreteArtifact(
-                data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
+        return next_backend.DEFAULT_FRONTEND.func_to_foast(
+            workflow.ProgramWithArgs(
+                definition=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
-        ).data
+        ).definition
 
     @property
     def __name__(self) -> str:
@@ -618,15 +646,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @property
     def definition(self) -> types.FunctionType:
         return self.definition_stage.definition
-
-    @property
-    def _frontend_transforms(self) -> next_backend.Transforms:
-        if self.backend is None:
-            return next_backend.DEFAULT_TRANSFORMS
-        # TODO(tehrengruber): This class relies heavily on `self.backend.transforms` being
-        #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
-        assert isinstance(self.backend.transforms, next_backend.Transforms)
-        return self.backend.transforms
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_stage.foast_node.type
@@ -638,9 +657,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
         )
 
-    # TODO(tehrengruber): We can not use transforms from `self.backend` since this can be
-    #  a different backend than the one of the program that calls this field operator. Just use
-    #  the hard-coded lowering until this is cleaned up.
+    # The lowering does not depend on the backend: the frontend is global (ADR 0029).
     def __gt_itir__(self) -> itir.FunctionDefinition:
         return foast_to_gtir.foast_to_gtir(self.foast_stage)
 
@@ -652,7 +669,10 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
-        if not next_embedded.context.within_valid_context() and self.backend is not None:
+        if (
+            not next_embedded.context.within_valid_context()
+            and _compiled_backend_or_none(self.backend) is not None
+        ):
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
@@ -719,8 +739,10 @@ class FieldOperatorFromFoast(FieldOperator):
 
     @override
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        assert self.backend is not None
-        compiled_fo = self.backend.compile(
+        compiled_backend = _compiled_backend_or_none(self.backend)
+        if compiled_backend is None:
+            raise RuntimeError("Cannot compile a field operator without backend.")
+        compiled_fo = next_backend.Toolchain(compiled_backend).compile(
             self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
         )
         return compiled_fo(*args, **kwargs)
@@ -771,7 +793,8 @@ def field_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Backend | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,
             **compilation_options,
@@ -862,7 +885,8 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             typing.cast(
-                next_backend.Backend | None, DEFAULT_BACKEND if backend is eve.NOTHING else backend
+                next_backend.Backend | None,
+                DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             ),
             grid_type,
             operator_node_cls=foast.ScanOperator,

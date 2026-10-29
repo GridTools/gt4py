@@ -48,11 +48,10 @@ class BuildJobsMode(enum.Enum):
     #: Run compilation in a ``ThreadPoolExecutor``.
     THREAD = "thread"
     #: Run compilation in a ``ProcessPoolExecutor`` with the ``spawn`` start
-    #: method. Requires the backend's ``executor`` to be stdlib-picklable
-    #: (standard runners and factory-constructed variants are) and to return a
-    #: picklable ``CompilationArtifact``; backends that don't qualify (or that
-    #: customize ``Backend.compile``) are compiled in the calling thread
-    #: instead, with a warning.
+    #: method. Requires the backend's ``compiler`` to be stdlib-picklable
+    #: (standard runners and builder-constructed variants are) and to return a
+    #: picklable ``CompilationArtifact``; backends that don't qualify are
+    #: compiled in the calling thread instead, with a warning.
     PROCESS = "process"
 
 

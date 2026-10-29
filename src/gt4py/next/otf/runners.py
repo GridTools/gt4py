@@ -43,8 +43,6 @@ class CompilationTask:
     #: The artifact-producing step. A runner may execute it anywhere, including
     #: another process; its picklability is the runner's concern.
     executor: Callable[[Any], artifacts.CompilationArtifact]
-    #: Reason this task is known not to be shippable to another process, if any.
-    no_offload_reason: str | None = None
 
     def compile(self, with_refs: bool = False) -> artifacts.CompilationArtifact:
         return self.executor(self.construct_compilable(with_refs))
@@ -186,9 +184,9 @@ class ProcessRunner:
     The worker runs the task's executor (post-lowering compile) and returns
     the picklable ``CompilationArtifact``.
 
-    Tasks that cannot be offloaded — a known ``no_offload_reason`` or an executor
-    that stdlib ``pickle`` cannot serialize — are compiled in the calling thread
-    instead (with a warning), so they behave as under ``SerialRunner``.
+    Tasks whose executor stdlib ``pickle`` cannot serialize are compiled in the
+    calling thread instead (with a warning), so they behave as under
+    ``SerialRunner``.
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
@@ -211,14 +209,10 @@ class ProcessRunner:
     def submit(
         self, task: CompilationTask
     ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
-        reason = task.no_offload_reason
-        executor_blob: bytes | None = None
-        if reason is None:
-            try:
-                executor_blob = pickle.dumps(task.executor)
-            except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
-                reason = f"its executor is not picklable ({error!s})"
-        if executor_blob is None:
+        try:
+            executor_blob = pickle.dumps(task.executor)
+        except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
+            reason = f"its executor is not picklable ({error!s})"
             warnings.warn(
                 f"Compiling '{task.name}' in the calling thread instead of a worker process "
                 f"because {reason}.",

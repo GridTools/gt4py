@@ -38,6 +38,5 @@ __all__ = [
     "FieldOperator",
     "OffsetProvider",
     "Program",
-    # from _core.definitions for convenience
-    "Scalar",
+    "Scalar",  # from _core.definitions for convenience
 ]

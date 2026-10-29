@@ -39,12 +39,12 @@ IRDefinitionT = TypeVar(
 )
 ArgsDefinitionT = TypeVar("ArgsDefinitionT", arguments.JITArgs, arguments.CompileTimeArgs)
 
-ConcreteProgramDef: TypeAlias = workflow.ConcreteArtifact[IRDefinitionT, ArgsDefinitionT]
-CompilableProgramDef: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
+ConcreteProgramDef: TypeAlias = workflow.ProgramWithArgs[IRDefinitionT, ArgsDefinitionT]
+CompilableProgram: TypeAlias = ConcreteProgramDef[itir.Program, arguments.CompileTimeArgs]
 
 
 class TranslationStep(
-    workflow.ReplaceEnabledWorkflowMixin[CompilableProgramDef, artifacts.ProgramSource[CodeSpecT]],
+    workflow.ReplaceEnabledWorkflowMixin[CompilableProgram, artifacts.ProgramSource[CodeSpecT]],
     Protocol[CodeSpecT],
 ):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""

@@ -9,6 +9,8 @@ tags: [backend, otf, toolchain, workflows, dependencies]
 - **Created**: 2026-08-20
 - **Updated**: 2026-09-30
 
+Partially superseded by [0029 - Backend Structure and Pipeline Simplification](0029-Backend-Structure-and-Pipeline-Simplification.md) (the builders are renamed `make_gtfn_backend` / `make_dace_backend` and the config base `CompiledBackendConfig`; the deprecated flat-keyword `make_dace_backend` is removed and its name reused; the composition rules are unchanged).
+
 In the context of composing the GTFN and DaCe toolchains and their OTF compile
 workflows, facing a production dependency on `factory-boy` — a test-data
 library — whose `Trait` / `SubFactory` / `SelfAttribute` / `LazyAttribute`

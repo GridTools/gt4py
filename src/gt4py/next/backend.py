@@ -9,10 +9,10 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+from typing import Callable, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import config, custom_layout_allocators as next_allocators
+from gt4py.next import config, constructors, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -45,7 +45,7 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 class Transforms(
     workflow.MultiWorkflow[
         stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
-        stages.CompilableProgramDef,
+        stages.CompilableProgram,
     ]
 ):
     """
@@ -92,14 +92,14 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgram
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
     def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
-        match inp.data:
+        match inp.definition:
             case ffront_stages.DSLFieldOperatorDef():
                 steps.extend(
                     [
@@ -137,35 +137,64 @@ class Transforms(
         return steps
 
 
-DEFAULT_TRANSFORMS: Transforms = Transforms()
+DEFAULT_FRONTEND: Transforms = Transforms()
 
 
-# TODO(tehrengruber): Rename class and `executor` & `transforms` attribute. Maybe:
-#  `Backend` -> `Toolchain`
-#  `transforms` -> `frontend_transforms`
-#  `executor` -> `backend_transforms`
 @dataclasses.dataclass(frozen=True)
-class Backend(Generic[core_defs.DeviceTypeT]):
+class Backend:
+    """
+    Abstract base of the objects passed as `backend=` to programs and operators.
+
+    A backend decides how a program runs and where the buffers of its fields are
+    allocated. This class is abstract: instantiate a concrete kind, such as
+    `CompiledBackend`.
+
+    Attributes:
+        name: Human-readable label used in metrics, logs and diagnostics. It is
+            expected to be unique among the backends used in a process; backends
+            sharing a name are reported under the same label. gt4py does not use
+            it to identify a backend: not as a cache key and not in fingerprints.
+            Code that needs the kind of a backend should check its type, not its
+            name.
+        allocator: Allocates the buffers of fields used with this backend.
+    """
+
     name: str
-    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    allocator: constructors.Allocator
+
+    def __post_init__(self) -> None:
+        if type(self) is Backend:
+            raise TypeError(
+                "'Backend' is abstract: instantiate a concrete kind such as 'CompiledBackend'."
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class CompiledBackend(Backend, Generic[core_defs.DeviceTypeT]):
+    """
+    A backend that compiles programs before running them.
+
+    Programs are lowered by the (global) frontend to a `CompilableProgram`, turned
+    into a loadable `CompilationArtifact` by `compiler` (possibly in a worker
+    process, see `config.BuildJobsMode`), and made directly callable by `loader`
+    (always in the calling process). Backends needing backend-specific runtime
+    data in the loaded program supply their own `loader`. Customize either step
+    with `dataclasses.replace`.
+
+    Attributes:
+        allocator: The field buffer allocator for the device the compiled
+            programs expect their buffers on.
+        compiler: Compiles a lowered program into a loadable artifact.
+        loader: Loads an artifact into a directly-callable program.
+    """
+
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
-
-    def compile(
-        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
-    ) -> artifacts.ExecutableProgram:
-        artifact = self.executor(
-            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
-        )
-        return self.load_artifact(artifact)
-
-    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
-        """Load an artifact into an executable program.
-
-        Backends may override this method to inject backend-specific runtime data
-        into the loaded program.
-        """
-        return artifact.load()
+    compiler: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
+    # A plain `Callable`, not `workflow.Workflow`: the protocol names its
+    # parameter `inp`, which would force every loader to use that name.
+    loader: Callable[[artifacts.CompilationArtifact], artifacts.ExecutableProgram] = (
+        dataclasses.field(default=artifacts.load_artifact)
+    )
 
     @property
     def __gt_allocator__(
@@ -175,18 +204,44 @@ class Backend(Generic[core_defs.DeviceTypeT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class ToolchainConfig:
+class Toolchain(Generic[core_defs.DeviceTypeT]):
     """
-    Settings that describe what a compiled toolchain builds for.
+    Internal: the complete route from a program definition to an executable program.
 
-    A toolchain builder creates every step from one config, so steps that must
+    Composes the frontend, which transforms any supported program definition into
+    a `CompilableProgram`, with a compiled backend, whose `compiler` turns it into
+    a compilation artifact and whose `loader` makes that callable. Not part of the
+    public API: gt4py builds it where a compilation happens.
+    """
+
+    backend: CompiledBackend[core_defs.DeviceTypeT]
+    frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram] = (
+        DEFAULT_FRONTEND
+    )
+
+    def compile(
+        self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+    ) -> artifacts.ExecutableProgram:
+        """Lower, compile and load `definition` in the calling thread."""
+        compilable = self.frontend(
+            stages.ConcreteProgramDef(definition=definition, args=compile_time_args)
+        )
+        return self.backend.loader(self.backend.compiler(compilable))
+
+
+@dataclasses.dataclass(frozen=True)
+class CompiledBackendConfig:
+    """
+    Settings that describe what a compiled backend builds for.
+
+    A backend builder creates every step from one config, so steps that must
     agree on a setting (the target device, the build type, the cache lifetime,
     the data layout) read it from the same place and cannot drift apart.
     Settings that only tune how a single step does its job are not part of the
     config: they are keyword arguments of that step's builder.
 
     Defaults are read from `gt4py.next.config` when the config is created, not
-    when this module is imported, so the toolchains built from a default config
+    when this module is imported, so the backends built from a default config
     follow the current user configuration.
     """
 
@@ -213,7 +268,7 @@ class ToolchainConfig:
 
     @property
     def device_name(self) -> str:
-        """Device part of the toolchain name."""
+        """Device part of the backend name."""
         return "gpu" if self.gpu else "cpu"
 
     def make_allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:

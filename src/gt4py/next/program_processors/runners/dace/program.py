@@ -20,6 +20,7 @@ from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
+from gt4py.next.program_processors.runners.dace.workflow import backend as gtx_dace_backend
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -36,16 +37,17 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     ] = {}  # symbolically defined
 
     def __sdfg__(self, *args: Any, **kwargs: Any) -> dace.sdfg.sdfg.SDFG:
-        if (self.backend is None) or "dace" not in self.backend.name.lower():
+        if not gtx_dace_backend.is_dace_backend(self.backend):
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
         offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
-        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.transforms).past_to_itir(
-            workflow.ConcreteArtifact(
-                data=self.past_stage,
+        assert isinstance(self.backend, gtx_backend.CompiledBackend)
+        gtir_stage = gtx_backend.DEFAULT_FRONTEND.past_to_itir(
+            workflow.ProgramWithArgs(
+                definition=self.past_stage,
                 args=arguments.CompileTimeArgs(
                     args=tuple(p.type for p in self.past_stage.past_node.params),
                     kwargs={},
@@ -55,28 +57,35 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 ),
             )
         )
-        program = gtir_stage.data
+        program = gtir_stage.definition
         program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
             program, offset_provider=offset_provider
         )
-        object.__setattr__(
+        # `gtir_stage` is the cached result of the shared frontend: build a new stage
+        # instead of mutating it, otherwise every later compilation of this program
+        # (on any backend) would get the transformed definition and offset provider types.
+        # TODO(ricoh): the offset provider types isolate DaCe from the runtime tables in
+        # connectivities.offset_provider, which are needed at the time of writing for
+        # mandatory GTIR passes. Remove this as soon as Program does not expect
+        # connectivity tables anymore.
+        gtir_stage = dataclasses.replace(
             gtir_stage,
-            "data",
-            program,
+            definition=program,
+            args=dataclasses.replace(
+                gtir_stage.args,
+                # `CompileTimeArgs.offset_provider` is still typed as the runtime
+                # mapping, even though the mandatory GTIR passes are the only
+                # consumers needing the tables and they already ran above.
+                offset_provider=gtir_stage.args.offset_provider_type,  # type: ignore[arg-type]
+            ),
         )
-        object.__setattr__(
-            gtir_stage.args, "offset_provider", gtir_stage.args.offset_provider_type
-        )  # TODO(ricoh): currently this is circumventing the frozenness of CompileTimeArgs
-        # in order to isolate DaCe from the runtime tables in connectivities.offset_provider.
-        # These are needed at the time of writing for mandatory GTIR passes.
-        # Remove this as soon as Program does not expect connectivity tables anymore.
 
         _crosscheck_dace_parsing(
             dace_parsed_args=[*args, *kwargs.values()],
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        otf_workflow = self.backend.executor
+        otf_workflow = self.backend.compiler
         assert hasattr(otf_workflow, "translation")
         otf_workflow_translation = (
             otf_workflow.translation.step
