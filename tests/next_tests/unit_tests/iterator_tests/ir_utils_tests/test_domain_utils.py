@@ -13,6 +13,7 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
+from next_tests.toy_connectivity import E2VDim, Edge, V2EDim, V2VDim, Vertex
 
 
 class I(common.CartesianAxisIndex): ...
@@ -25,21 +26,6 @@ class J(common.CartesianAxisIndex): ...
 
 
 class K(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
-
-
-class Vertex(common.DimensionIndex): ...
-
-
-class Edge(common.DimensionIndex): ...
-
-
-class V2EDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
-
-
-class E2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
-
-
-class V2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
 
 
 a_range = domain_utils.SymbolicRange(0, 10)

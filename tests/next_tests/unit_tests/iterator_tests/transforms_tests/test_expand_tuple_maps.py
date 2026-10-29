@@ -14,9 +14,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.expand_tuple_maps import ExpandTupleMaps
 from gt4py.next.type_system import type_specifications as ts
-
-
-class IDim(common.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 T = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)

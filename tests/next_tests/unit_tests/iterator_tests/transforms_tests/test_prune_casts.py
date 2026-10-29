@@ -11,9 +11,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.prune_casts import PruneCasts
 from gt4py.next.iterator.type_system import inference as type_inference
 from gt4py.next.type_system import type_specifications as ts
-
-
-class IDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 def test_prune_casts_simple():

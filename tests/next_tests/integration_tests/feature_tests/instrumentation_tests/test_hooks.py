@@ -17,6 +17,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import common, Dims, gtfn_cpu, typing as gtx_typing
 from gt4py.next.instrumentation import gpu_profiler, hooks
+from next_tests.integration_tests.cases_utils import IDim
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
@@ -24,9 +25,6 @@ try:
     BACKENDS = [None, gtfn_cpu, dace_backends.run_dace_cpu]
 except ImportError:
     BACKENDS = [None, gtfn_cpu]
-
-
-class IDim(gtx.CartesianAxisIndex): ...
 
 
 @gtx.field_operator

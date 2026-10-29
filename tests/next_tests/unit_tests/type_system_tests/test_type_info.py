@@ -19,21 +19,8 @@ from gt4py.next import (
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.iterator.type_system import type_specifications as ts_it
-
-
-class IDim(CartesianAxisIndex): ...
-
-
-class JDim(CartesianAxisIndex): ...
-
-
-class KDim(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
-
-
-class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
-
-
-class C2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
+from next_tests.integration_tests.cases_utils import IDim, JDim, KDim
+from next_tests.toy_connectivity import C2EDim, V2EDim
 
 
 class TDim(CartesianAxisIndex): ...

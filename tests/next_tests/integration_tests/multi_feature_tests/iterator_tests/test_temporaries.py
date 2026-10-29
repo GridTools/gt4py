@@ -22,12 +22,7 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.runtime import fendef, fundef, set_at, temporary
 
 from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
-
-
-class IDim(gtx.CartesianAxisIndex): ...
-
-
-class JDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim, JDim
 
 
 i = gtx.CartesianConnectivity(IDim)

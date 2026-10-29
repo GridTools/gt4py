@@ -22,15 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import Dims, Dimension, DimensionIndex, float64, neighbor_sum
 from gt4py.next.ffront import source_utils
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
-
-
-class Cell(DimensionIndex): ...
-
-
-class Edge(DimensionIndex): ...
-
-
-class C2EDim(DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+from next_tests.toy_connectivity import C2EDim, Cell, Edge
 
 
 C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))

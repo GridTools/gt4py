@@ -15,11 +15,9 @@ from gt4py.next.iterator.transforms import (
 )
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator.type_system import type_specifications as it_ts
+from next_tests.integration_tests.cases_utils import IDim
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-
-
-class IDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
 
 
 field_type = ts.FieldType(dims=[IDim], dtype=int_type)

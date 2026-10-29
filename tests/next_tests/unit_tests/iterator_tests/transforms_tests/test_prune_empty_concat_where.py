@@ -17,15 +17,7 @@ from gt4py.next.iterator.transforms.infer_domain import infer_expr
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, domain_utils
 from gt4py.next.type_system import type_info, type_specifications as ts
-
-
-class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class V2EDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+from next_tests.toy_connectivity import Edge, V2EDim, Vertex
 
 
 class K(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...

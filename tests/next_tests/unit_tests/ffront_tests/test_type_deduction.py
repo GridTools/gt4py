@@ -38,6 +38,8 @@ from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.artifacts import custom_named_collections as cnc
+from next_tests.integration_tests.cases_utils import IDim, JDim
+from next_tests.toy_connectivity import Edge, V2EDim, Vertex
 
 # the artifact's named collections are annotated with this very `TDim`
 TDim = cnc.TDim
@@ -62,21 +64,6 @@ class BDim(CartesianAxisIndex): ...
 
 
 class CDim(DimensionIndex): ...
-
-
-class Vertex(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
-
-
-class Edge(DimensionIndex, kind=DimensionKind.HORIZONTAL): ...
-
-
-class V2EDim(DimensionIndex, kind=DimensionKind.LOCAL): ...
-
-
-class IDim(CartesianAxisIndex): ...
-
-
-class JDim(CartesianAxisIndex): ...
 
 
 # Meaningless dimensions, used for tests.

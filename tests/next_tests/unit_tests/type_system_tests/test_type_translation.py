@@ -22,18 +22,13 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
 
 from next_tests.artifacts import custom_named_collections as cnc
+from next_tests.integration_tests.cases_utils import IDim, JDim
 
 
 class CustomInt32DType:
     @property
     def dtype(self) -> np.dtype:
         return np.dtype(np.int32)
-
-
-class IDim(gtx.CartesianAxisIndex): ...
-
-
-class JDim(gtx.CartesianAxisIndex): ...
 
 
 # -- PEP 695 type aliases --

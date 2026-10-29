@@ -25,27 +25,11 @@ from gt4py.next.iterator.ir_utils import (
 from gt4py.next.iterator.transforms import infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.type_system import type_specifications as ts
+from next_tests.integration_tests.cases_utils import IDim, JDim, KDim
+from next_tests.toy_connectivity import E2VDim, Edge, Vertex
 
 
 float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-
-
-class IDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class JDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class KDim(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
-
-
-class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class Edge(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-
-
-class E2VDim(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
 
 
 float_i_field = ts.FieldType(dims=[IDim], dtype=float_type)

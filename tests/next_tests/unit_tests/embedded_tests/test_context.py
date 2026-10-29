@@ -11,9 +11,7 @@ import pytest
 import gt4py.next.embedded.context as ctx
 import gt4py.next.common as common
 from gt4py.next.errors import exceptions
-
-
-class IDim(common.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 class NewDim(common.CartesianAxisIndex): ...

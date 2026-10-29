@@ -15,14 +15,12 @@ from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, na
 from gt4py.next.iterator.runtime import fendef, fundef, if_stmt, set_at
 
 from next_tests.unit_tests.conftest import program_processor_no_transforms, run_processor
+from next_tests.integration_tests.cases_utils import IDim
 
 
 @fundef
 def multiply(alpha, inp):
     return deref(alpha) * deref(inp)
-
-
-class IDim(gtx.CartesianAxisIndex): ...
 
 
 @pytest.mark.uses_ir_if_stmts

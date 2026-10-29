@@ -10,9 +10,7 @@ from gt4py.next import utils
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_dynamic_shifts
 from gt4py.next.type_system import type_specifications as ts
-
-
-class IDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))

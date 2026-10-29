@@ -12,15 +12,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-
-
-class Vertex(gtx.DimensionIndex): ...
-
-
-class Edge(gtx.DimensionIndex): ...
-
-
-class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+from next_tests.toy_connectivity import Edge, V2EDim, Vertex
 
 
 V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))

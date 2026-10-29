@@ -15,15 +15,10 @@ from gt4py.next.iterator.transforms import (
     collapse_tuple as ct,
 )
 from gt4py.next.type_system import type_specifications as ts
+from next_tests.integration_tests.cases_utils import IDim, JDim
 
 
 class Neighbor(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
-
-
-class IDim(common.CartesianAxisIndex): ...
-
-
-class JDim(common.CartesianAxisIndex): ...
 
 
 field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))

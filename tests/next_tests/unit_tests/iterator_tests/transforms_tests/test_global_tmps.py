@@ -24,15 +24,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_utils_misc,
 )
-
-
-class IDim(common.CartesianAxisIndex): ...
-
-
-class JDim(common.CartesianAxisIndex): ...
-
-
-class KDim(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
+from next_tests.integration_tests.cases_utils import IDim, JDim, KDim
 
 
 index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))

@@ -41,15 +41,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
-
-
-class Edge(gtx.DimensionIndex): ...
-
-
-class Vertex(gtx.DimensionIndex): ...
-
-
-class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+from next_tests.toy_connectivity import Edge, V2EDim, Vertex
 
 
 V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))

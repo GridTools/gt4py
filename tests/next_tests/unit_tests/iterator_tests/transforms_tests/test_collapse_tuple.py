@@ -12,12 +12,10 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
+from next_tests.toy_connectivity import Vertex
 
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-
-
-class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
 
 
 def test_simple_make_tuple_tuple_get(uids: utils.IDGeneratorPool):

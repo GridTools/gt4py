@@ -54,6 +54,7 @@ from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.integration_tests.cases_utils import IDim
 
 
 class Node(gtx.DimensionIndex): ...
@@ -71,9 +72,6 @@ def array_maker(*lists):
 
     res = list(map(lambda val: np.asarray(_listify(val)), lists))
     return res
-
-
-class IDim(gtx.CartesianAxisIndex): ...
 
 
 def field_maker(*arrays):

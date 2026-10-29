@@ -9,9 +9,7 @@
 import numpy as np
 
 import gt4py.next as gtx
-
-
-class IDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 @gtx.field_operator

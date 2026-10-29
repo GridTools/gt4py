@@ -13,9 +13,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import stages
 from gt4py.next.type_system import type_specifications as ts
-
-
-class IDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 def _field_type(kind: ts.ScalarKind) -> ts.FieldType:

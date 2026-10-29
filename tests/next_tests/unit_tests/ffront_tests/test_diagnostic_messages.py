@@ -25,9 +25,7 @@ import gt4py.next as gtx
 from gt4py.next import errors, float32, float64
 from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-
-
-class IDim(gtx.CartesianAxisIndex): ...
+from next_tests.integration_tests.cases_utils import IDim
 
 
 IOff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
