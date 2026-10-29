@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from gt4py.next import common
 from gt4py.next.iterator.dispatcher import Dispatcher
 
 
@@ -65,6 +66,17 @@ def tree_map_tuple(*args):
 @builtin_dispatch
 def map_tuple(*args):
     raise BackendNotSelectedError()
+
+
+class ConstList(common.DimensionIndex, kind=common.DimensionKind.LOCAL):
+    """
+    The local dimension of a list of one repeated value (`make_const_list`).
+
+    The value is broadcast against the neighbor lists it is combined with, and a materialized
+    constant list has extent 1 along it. It indexes no table, so it is never in an offset provider.
+    """
+
+    __slots__ = ()
 
 
 @builtin_dispatch

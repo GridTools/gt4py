@@ -139,8 +139,8 @@ class ListType(DataType):
     element_type: DataType
     #: The local dimension the list runs along. `None` where type inference does not know it,
     #: which is how it spells the result of `make_const_list`; embedded execution and the DaCe
-    #: lowering use `common.ConstList` for the same thing.
-    #: TODO(egparedes): use `common.ConstList` in type inference too, and drop `None`.
+    #: lowering use `iterator.builtins.ConstList` for the same thing.
+    #: TODO(egparedes): use `iterator.builtins.ConstList` in type inference too, and drop `None`.
     offset_type: common.DimensionRef | None = eve_datamodels.field(
         converter=common.optional_dimension_ref
     )

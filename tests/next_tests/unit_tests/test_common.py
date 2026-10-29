@@ -23,6 +23,7 @@ import re
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
+from gt4py.next.iterator import builtins as itir_builtins
 from gt4py.next.common import (
     Dimension,
     CartesianAxisIndex,
@@ -1012,7 +1013,7 @@ class TestDimensionRef:
 
     def test_local_category(self):
         assert common.dimension_ref(V2E).category is common.DimensionCategory.LOCAL
-        assert common.is_local_dimension(common.dimension_ref(common.ConstList))
+        assert common.is_local_dimension(common.dimension_ref(itir_builtins.ConstList))
         assert common.is_local_dimension(V2E) and not common.is_local_dimension(ECDim)
         assert common.is_cartesian_axis(common.dimension_ref(IDim))
         assert not common.is_cartesian_axis(common.dimension_ref(V2E))

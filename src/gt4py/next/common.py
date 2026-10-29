@@ -158,7 +158,7 @@ class DimensionCategory(StrEnum):
 
     #: Either cell class of a Cartesian axis: a `CartesianAxisIndex` or a `Staggered[...]`.
     CARTESIAN_AXIS = "cartesian_axis"
-    #: A local (neighbor) dimension, including `ConstList`.
+    #: A local (neighbor) dimension, including `iterator.builtins.ConstList`.
     #: TODO: derived from `kind is LOCAL` in this version; a `LocalDimensionIndex` level in the
     #: class hierarchy (later in the stack) will decide it instead.
     LOCAL = "local"
@@ -2249,20 +2249,6 @@ else:
                     " write 'Staggered[BaseDim]'."
                 )
             super().__init_subclass__(**kwargs)
-
-
-class ConstList(DimensionIndex, kind=DimensionKind.LOCAL):
-    """
-    The local dimension of a list of one repeated value (`make_const_list`).
-
-    The value is broadcast against the neighbor lists it is combined with, and a materialized
-    constant list has extent 1 along it. It indexes no table, so it is never in an offset provider.
-
-    Declared here, once: it used to be built independently in `iterator/embedded.py` and in the
-    DaCe lowering, which only worked while dimensions compared by `(name, kind)`.
-    """
-
-    __slots__ = ()
 
 
 def _reduce_staggered(cls: StaggeredMeta) -> Any:
