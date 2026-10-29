@@ -667,9 +667,10 @@ def restate_nested_sdfg_connector(
                 f" because the symbol '{sym}' has a different meaning inside it."
             )
 
-    dace_dealias.rebase_connector(
+    dace_dealias.reduce_connector(
         nsdfg,
         connector,
+        reduced_desc=new_desc,
         # Where the origin of the new data is located in the coordinates of the old data.
         offset=None if ss_offset is None else [-off for off in ss_offset],
     )
