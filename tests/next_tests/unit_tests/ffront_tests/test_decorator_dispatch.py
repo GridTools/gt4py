@@ -111,5 +111,5 @@ def test_compiled_backend_allocator_and_toolchain():
     copy_program.compile(offset_provider={})
     toolchain = copy_program._compiled_programs.toolchain
     assert toolchain.backend is roundtrip.default
-    assert toolchain.frontend is next_backend.DEFAULT_TRANSFORMS
+    assert toolchain.frontend is next_backend.DEFAULT_FRONTEND
     assert copy_program._compiled_programs.backend is roundtrip.default

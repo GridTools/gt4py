@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Callable
+from typing import Callable, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, constructors, custom_layout_allocators as next_allocators
@@ -137,7 +137,7 @@ class Transforms(
         return steps
 
 
-DEFAULT_TRANSFORMS: Transforms = Transforms()
+DEFAULT_FRONTEND: Transforms = Transforms()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -170,7 +170,7 @@ class Backend:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompiledBackend(Backend):
+class CompiledBackend(Backend, Generic[core_defs.DeviceTypeT]):
     """
     A backend that compiles programs before running them.
 
@@ -188,7 +188,7 @@ class CompiledBackend(Backend):
         loader: Loads an artifact into a directly-callable program.
     """
 
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     compiler: workflow.Workflow[stages.CompilableProgram, artifacts.CompilationArtifact]
     # A plain `Callable`, not `workflow.Workflow`: the protocol names its
     # parameter `inp`, which would force every loader to use that name.
@@ -197,12 +197,14 @@ class CompiledBackend(Backend):
     )
 
     @property
-    def __gt_allocator__(self) -> next_allocators.FieldBufferAllocatorProtocol:
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
 
 
 @dataclasses.dataclass(frozen=True)
-class Toolchain:
+class Toolchain(Generic[core_defs.DeviceTypeT]):
     """
     Internal: the complete route from a program definition to an executable program.
 
@@ -212,9 +214,9 @@ class Toolchain:
     public API: gt4py builds it where a compilation happens.
     """
 
-    backend: CompiledBackend
+    backend: CompiledBackend[core_defs.DeviceTypeT]
     frontend: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgram] = (
-        DEFAULT_TRANSFORMS
+        DEFAULT_FRONTEND
     )
 
     def compile(

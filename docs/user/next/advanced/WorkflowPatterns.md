@@ -185,7 +185,7 @@ cached_calc(1)
 ### Example in the Wild
 
 ```python
-gtx.backend.DEFAULT_TRANSFORMS.past_lint??
+gtx.backend.DEFAULT_FRONTEND.past_lint??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
@@ -395,7 +395,7 @@ proc.hexify_colors("blue")
 ### Example in the Wild
 
 ```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_TRANSFORMS??
+gtx.backend.DEFAULT_FRONTEND??
 ```
 
 ```python

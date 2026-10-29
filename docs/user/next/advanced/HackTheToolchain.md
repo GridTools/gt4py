@@ -21,7 +21,7 @@ from gt4py import eve
 ## Replace Steps
 
 ```python
-cached_lowering_toolchain = gtx.backend.DEFAULT_TRANSFORMS.replace(
+cached_lowering_toolchain = gtx.backend.DEFAULT_FRONTEND.replace(
     past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False)
 )
 ```
@@ -35,7 +35,7 @@ DUMMY_FOP = workflow.ProgramWithArgs(
 ```
 
 ```python
-gtx.backend.DEFAULT_TRANSFORMS.step_order(DUMMY_FOP)
+gtx.backend.DEFAULT_FRONTEND.step_order(DUMMY_FOP)
 ```
 
 ```python
@@ -48,7 +48,7 @@ class SkipLinting(gtx.backend.Transforms):
         return order
 
 
-same_steps = dataclasses.asdict(gtx.backend.DEFAULT_TRANSFORMS)
+same_steps = dataclasses.asdict(gtx.backend.DEFAULT_FRONTEND)
 skip_linting_transforms = SkipLinting(**same_steps)
 skip_linting_transforms.step_order(DUMMY_FOP)
 ```

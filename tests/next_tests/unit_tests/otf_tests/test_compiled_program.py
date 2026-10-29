@@ -103,7 +103,7 @@ def test_inlining_of_scalars_works(testee_prog):
         ),
     )
 
-    transformed = backend.DEFAULT_TRANSFORMS(input_pair).definition
+    transformed = backend.DEFAULT_FRONTEND(input_pair).definition
     _verify_program_has_expected_true_value(transformed)
 
 
@@ -313,7 +313,7 @@ def test_inlining_of_static_domain_works(testee_prog, uids: utils.IDGeneratorPoo
         ),
     )
 
-    transformed = backend.DEFAULT_TRANSFORMS(input_pair).definition
+    transformed = backend.DEFAULT_FRONTEND(input_pair).definition
     _verify_program_has_expected_domain(transformed, domain, uids)
 
 

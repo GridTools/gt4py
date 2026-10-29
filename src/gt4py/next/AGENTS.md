@@ -33,7 +33,7 @@ field operators / programs (ffront)
   argument descriptors).
 - `backend.py` — `Backend` (abstract: `name`, `allocator`), its concrete
   kind `CompiledBackend` (+ `compiler`, `loader`), the global frontend
-  (`Transforms` / `DEFAULT_TRANSFORMS`) and the internal `Toolchain`
+  (`Transforms` / `DEFAULT_FRONTEND`) and the internal `Toolchain`
   composing the two.
 - `program_processors/runners/` — the backends: `gtfn` (GridTools C++),
   `dace` (DaCe SDFG), `roundtrip` / `double_roundtrip` (pure Python).
