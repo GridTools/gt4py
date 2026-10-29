@@ -303,10 +303,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         assert isinstance(self.past_stage.past_node.type, ts_ffront.ProgramType)
         return self.past_stage.past_node.type
 
-    # TODO(ricoh): linting should become optional, up to the backend.
+    # TODO(ricoh): linting should become optional.
     def __post_init__(self) -> None:
         _check_backend(self.backend)
-        _ = self._frontend_transforms.past_lint(self.past_stage)
+        _ = next_backend.DEFAULT_FRONTEND.past_lint(self.past_stage)
 
     @property
     def __name__(self) -> str:
@@ -330,12 +330,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
-        return self._frontend_transforms.func_to_past(self.definition_stage)
-
-    @property
-    def _frontend_transforms(self) -> next_backend.Transforms:
-        # The frontend is global: it is not part of any backend (ADR 0029).
-        return next_backend.DEFAULT_TRANSFORMS
+        return next_backend.DEFAULT_FRONTEND.func_to_past(self.definition_stage)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -351,7 +346,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             ),
             args=arguments.CompileTimeArgs.empty(),
         )
-        return self._frontend_transforms.past_to_itir(no_args_past).definition
+        return next_backend.DEFAULT_FRONTEND.past_to_itir(no_args_past).definition
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -636,7 +631,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             compilation_options=options.CompilationOptions(**compilation_options),
         )
 
-    # TODO(ricoh): linting should become optional, up to the backend.
+    # TODO(ricoh): linting should become optional.
     def __post_init__(self) -> None:
         """This ensures that DSL linting occurs at decoration time."""
         _check_backend(self.backend)
@@ -644,7 +639,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
-        return self._frontend_transforms.func_to_foast(self.definition_stage)
+        return next_backend.DEFAULT_FRONTEND.func_to_foast(self.definition_stage)
 
     @property
     def __name__(self) -> str:
@@ -653,11 +648,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @property
     def definition(self) -> types.FunctionType:
         return self.definition_stage.definition
-
-    @property
-    def _frontend_transforms(self) -> next_backend.Transforms:
-        # The frontend is global: it is not part of any backend (ADR 0029).
-        return next_backend.DEFAULT_TRANSFORMS
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_stage.foast_node.type

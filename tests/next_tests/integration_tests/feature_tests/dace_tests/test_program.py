@@ -168,7 +168,7 @@ def test_sdfg_conversion_does_not_mutate_gtir_cache(
             argument_descriptor_contexts={},
         ),
     )
-    past_to_itir = program._frontend_transforms.past_to_itir
+    past_to_itir = gtx.backend.DEFAULT_FRONTEND.past_to_itir
     cached_stage = past_to_itir(stage_input)
     definition_before = str(cached_stage.definition)
     offset_provider_before = cached_stage.args.offset_provider

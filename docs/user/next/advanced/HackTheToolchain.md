@@ -22,7 +22,7 @@ Pipelines are frozen dataclasses whose fields are the steps, so a variant is bui
 
 ```python
 cached_lowering_toolchain = dataclasses.replace(
-    gtx.backend.DEFAULT_TRANSFORMS,
+    gtx.backend.DEFAULT_FRONTEND,
     past_to_itir=gtx.ffront.past_to_itir.past_to_gtir_factory(cached=False),
 )
 ```
@@ -33,7 +33,7 @@ Which steps run is decided by `Transforms.__call__` from the type of the input d
 
 ```python
 skip_linting_transforms = dataclasses.replace(
-    gtx.backend.DEFAULT_TRANSFORMS,
+    gtx.backend.DEFAULT_FRONTEND,
     past_lint=lambda past_def: past_def,  # identity step: linting skipped
 )
 ```

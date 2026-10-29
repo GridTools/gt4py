@@ -114,7 +114,7 @@ def test_toolchain_compile_runs_frontend_compiler_and_loader_in_order():
 
 def test_toolchain_default_frontend_is_the_global_one():
     assert next_backend.Toolchain(_make_compiled_backend()).frontend is (
-        next_backend.DEFAULT_TRANSFORMS
+        next_backend.DEFAULT_FRONTEND
     )
 
 
@@ -537,7 +537,7 @@ def test_compiled_backend_accepts_agreeing_or_undeclared_devices(compiler, alloc
 
 
 def test_transforms_emits_stages_for_dsl_program(compile_time_args, emitted_stages):
-    result = next_backend.DEFAULT_TRANSFORMS(
+    result = next_backend.DEFAULT_FRONTEND(
         workflow.ProgramWithArgs(copy_prog.definition_stage, compile_time_args)
     )
 
@@ -553,7 +553,7 @@ def test_transforms_emits_stages_for_dsl_program(compile_time_args, emitted_stag
 
 
 def test_transforms_emits_stages_for_dsl_field_operator(compile_time_args, emitted_stages):
-    result = next_backend.DEFAULT_TRANSFORMS(
+    result = next_backend.DEFAULT_FRONTEND(
         workflow.ProgramWithArgs(copy_op.definition_stage, compile_time_args)
     )
 
@@ -568,7 +568,7 @@ def test_transforms_emits_stages_for_dsl_field_operator(compile_time_args, emitt
 
 
 def test_transforms_emits_stages_for_foast_operator(compile_time_args, emitted_stages):
-    result = next_backend.DEFAULT_TRANSFORMS(
+    result = next_backend.DEFAULT_FRONTEND(
         workflow.ProgramWithArgs(copy_op.foast_stage, compile_time_args)
     )
 
@@ -582,7 +582,7 @@ def test_transforms_emits_stages_for_foast_operator(compile_time_args, emitted_s
 
 
 def test_transforms_emits_stages_for_past_program(compile_time_args, emitted_stages):
-    result = next_backend.DEFAULT_TRANSFORMS(
+    result = next_backend.DEFAULT_FRONTEND(
         workflow.ProgramWithArgs(copy_prog.past_stage, compile_time_args)
     )
 
@@ -597,13 +597,13 @@ def test_transforms_emits_stages_for_past_program(compile_time_args, emitted_sta
 def test_transforms_itir_program_is_passthrough(compile_time_args, emitted_stages):
     pair = workflow.ProgramWithArgs(_empty_itir_program(), compile_time_args)
 
-    assert next_backend.DEFAULT_TRANSFORMS(pair) is pair
+    assert next_backend.DEFAULT_FRONTEND(pair) is pair
     assert emitted_stages == []
 
 
 def test_transforms_aotify_and_replace(compile_time_args, emitted_stages):
     transforms = dataclasses.replace(
-        next_backend.DEFAULT_TRANSFORMS, aotify_args=lambda jit_args: compile_time_args
+        next_backend.DEFAULT_FRONTEND, aotify_args=lambda jit_args: compile_time_args
     )
     pair = workflow.ProgramWithArgs(_empty_itir_program(), arguments.JITArgs(args=(), kwargs={}))
 
@@ -616,11 +616,11 @@ def test_transforms_aotify_and_replace(compile_time_args, emitted_stages):
 
 def test_transforms_rejects_unexpected_input(compile_time_args, emitted_stages):
     with pytest.raises(ValueError, match="Unexpected input"):
-        next_backend.DEFAULT_TRANSFORMS(workflow.ProgramWithArgs(42, compile_time_args))
+        next_backend.DEFAULT_FRONTEND(workflow.ProgramWithArgs(42, compile_time_args))
 
     # The type guard runs before `aotify_args`, so nothing is emitted either.
     with pytest.raises(ValueError, match="Unexpected input"):
-        next_backend.DEFAULT_TRANSFORMS(
+        next_backend.DEFAULT_FRONTEND(
             workflow.ProgramWithArgs(42, arguments.JITArgs(args=(), kwargs={}))
         )
 
@@ -629,10 +629,10 @@ def test_transforms_rejects_unexpected_input(compile_time_args, emitted_stages):
 
 def test_transforms_steps_are_plain_callables():
     """The pipeline fields hold bare callables, not combinator instances."""
-    assert callable(next_backend.DEFAULT_TRANSFORMS.past_lint)
-    assert isinstance(next_backend.DEFAULT_TRANSFORMS.past_lint, workflow.CachedStep)
+    assert callable(next_backend.DEFAULT_FRONTEND.past_lint)
+    assert isinstance(next_backend.DEFAULT_FRONTEND.past_lint, workflow.CachedStep)
     # A data-only step consumes the bare stage, not the `ProgramWithArgs` pair.
-    linted = next_backend.DEFAULT_TRANSFORMS.past_lint(copy_prog.past_stage)
+    linted = next_backend.DEFAULT_FRONTEND.past_lint(copy_prog.past_stage)
     assert isinstance(linted, ffront_stages.PASTProgramDef)
 
 
@@ -646,7 +646,7 @@ def test_transforms_step_order_fails_loudly():
             return [step for step in order if step != "past_lint"]
 
     with pytest.raises(TypeError, match="'Transforms.step_order' was removed"):
-        next_backend.DEFAULT_TRANSFORMS.step_order(None)
+        next_backend.DEFAULT_FRONTEND.step_order(None)
 
     with pytest.raises(TypeError, match="'Transforms.step_order' was removed"):
         SkipLinting().step_order(None)

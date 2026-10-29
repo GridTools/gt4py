@@ -28,7 +28,7 @@ A **toolchain** is the complete route from DSL code to an optimized, runnable Py
 | Allocator         | Provides field buffers; the base accepts an array namespace or a field-buffer allocator (factory), while compiled backends require `FieldBufferAllocatorProtocol`. |
 | `CompiledBackend` | The backend kind that compiles: owns `compiler`, `loader` and the allocator for the target device.                                                                 |
 | Frontend          | Lowers a program definition and its arguments into a `CompilableProgram`.                                                                                          |
-| Global frontend   | `DEFAULT_TRANSFORMS`, shared by all backends; no backend owns or selects a frontend.                                                                               |
+| Global frontend   | `DEFAULT_FRONTEND`, shared by all backends; no backend owns or selects a frontend.                                                                                 |
 | Compiler          | Turns a `CompilableProgram` into a loadable `CompilationArtifact`, possibly in a worker process.                                                                   |
 | Loader            | Turns that artifact into an `ExecutableProgram` in the calling process; defaults to `artifacts.load_artifact`.                                                     |
 | `Toolchain`       | Internal composition of the global frontend with a `CompiledBackend`, created where compilation happens.                                                           |
@@ -53,7 +53,7 @@ class CompiledBackend(Backend):
 @dataclasses.dataclass(frozen=True)
 class Toolchain:  # internal
     backend: CompiledBackend
-    frontend: Step[ConcreteProgramDef, CompilableProgram] = DEFAULT_TRANSFORMS
+    frontend: Step[ConcreteProgramDef, CompilableProgram] = DEFAULT_FRONTEND
 ```
 
 `Backend` has no abstract methods; `__post_init__` enforces abstractness. `Toolchain` is not exported from
@@ -162,7 +162,7 @@ The previous `Backend(name, executor, allocator, transforms)` combined frontend 
 compilation, overridable loading and allocation. Users call the execution choice a backend,
 including the frontend, but its internal composition is a toolchain in ADR 0017's sense.
 
-- Every backend used `DEFAULT_TRANSFORMS`, except `roundtrip.gtir` (a #1569 leftover), which
+- Every backend used the default `Transforms`, except `roundtrip.gtir` (a #1569 leftover), which
   built identical transforms with separate in-memory caches. `Program` and `FieldOperator` used
   the default without a backend; `FieldOperator.__gt_itir__` ignored its backend's frontend to
   lower consistently inside programs. Per-backend frontend settings were inconsistently honoured.
@@ -199,6 +199,7 @@ including the frontend, but its internal composition is a toolchain in ADR 0017'
 | `ConcreteArtifact` / `.data`                   | `ProgramWithArgs` / `.definition`           |
 | `CompilableProgramDef`                         | `CompilableProgram`                         |
 | `ItirShim.definition`                          | `ItirShim.operator_def`                     |
+| `DEFAULT_TRANSFORMS`                           | `DEFAULT_FRONTEND`                          |
 
 The builders and config base are named for the `CompiledBackend` they build. The flat-keyword
 `make_dace_backend`, deprecated one release earlier (ADR 0028), is removed because the config-based

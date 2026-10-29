@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Final, NoReturn, Protocol, Self
+from typing import Any, Final, Generic, NoReturn, Protocol, Self
 
 import numpy as np
 
@@ -196,7 +196,7 @@ class Transforms:
         )
 
 
-DEFAULT_TRANSFORMS: Transforms = Transforms()
+DEFAULT_FRONTEND: Transforms = Transforms()
 
 
 @typing.runtime_checkable
@@ -353,7 +353,7 @@ class Backend:
 
 
 @dataclasses.dataclass(frozen=True)
-class CompiledBackend(Backend):
+class CompiledBackend(Backend, Generic[core_defs.DeviceTypeT]):
     """
     A backend that compiles programs before running them.
 
@@ -376,7 +376,7 @@ class CompiledBackend(Backend):
         loader: Loads an artifact into a directly-callable program.
     """
 
-    allocator: next_allocators.FieldBufferAllocatorProtocol
+    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     compiler: workflow.Step[stages.CompilableProgram, artifacts.CompilationArtifact]
     loader: workflow.Step[artifacts.CompilationArtifact, artifacts.ExecutableProgram] = (
         dataclasses.field(default=artifacts.load_artifact)
@@ -395,7 +395,9 @@ class CompiledBackend(Backend):
             )
 
     @property
-    def __gt_allocator__(self) -> next_allocators.FieldBufferAllocatorProtocol:
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
 
 
@@ -434,7 +436,7 @@ class EmbeddedBackend(Backend):
 
 
 @dataclasses.dataclass(frozen=True)
-class Toolchain:
+class Toolchain(Generic[core_defs.DeviceTypeT]):
     """
     Internal: the complete route from a program definition to an executable program.
 
@@ -444,10 +446,8 @@ class Toolchain:
     public API: gt4py builds it where a compilation happens.
     """
 
-    backend: CompiledBackend
-    frontend: workflow.Step[stages.ConcreteProgramDef, stages.CompilableProgram] = (
-        DEFAULT_TRANSFORMS
-    )
+    backend: CompiledBackend[core_defs.DeviceTypeT]
+    frontend: workflow.Step[stages.ConcreteProgramDef, stages.CompilableProgram] = DEFAULT_FRONTEND
 
     def compile(
         self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs

@@ -36,7 +36,7 @@ field operators / programs (ffront)
   kinds `CompiledBackend` (+ `compiler`, usually the `CompilePipeline`
   translate / bind / compile pipeline, and `loader`) and `EmbeddedBackend`
   (allocator = array namespace), the global frontend (the `Transforms`
-  definition pipeline, `DEFAULT_TRANSFORMS`) and the internal `Toolchain`
+  definition pipeline, `DEFAULT_FRONTEND`) and the internal `Toolchain`
   composing the frontend with a compiled backend.
 - `program_processors/runners/` — the backends: `embedded`
   (`embedded_numpy` / `embedded_cupy` / `embedded_jax`), `gtfn` (GridTools

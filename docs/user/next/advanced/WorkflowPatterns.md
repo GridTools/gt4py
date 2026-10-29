@@ -167,7 +167,7 @@ cached_calc(1)
 ### Example in the Wild
 
 ```python
-gtx.backend.DEFAULT_TRANSFORMS.past_lint??
+gtx.backend.DEFAULT_FRONTEND.past_lint??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
@@ -248,7 +248,7 @@ The replacement is used exactly as given. If the replaced step was wrapped in a 
 
 ```python editable=true slideshow={"slide_type": ""}
 ## The steps are plain attributes, so they can be run on their own ...
-transforms = gtx.backend.DEFAULT_TRANSFORMS
+transforms = gtx.backend.DEFAULT_FRONTEND
 transforms.past_lint
 ```
 
@@ -268,7 +268,7 @@ Both pipelines announce every step they run on the `gtx.otf.workflow.stage_hook`
 ### Example in the Wild
 
 ```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_TRANSFORMS??
+gtx.backend.DEFAULT_FRONTEND??
 ```
 
 ```python
