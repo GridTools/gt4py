@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-18
-- **Updated**: 2026-10-02
+- **Updated**: 2026-10-28
 
 A concrete dimension becomes a **class**, and an index along it an **instance** of
 that class — the shape `enum.Enum` uses, where the class is the collection and
@@ -30,9 +30,10 @@ IDim(0)  # an index into it -- annotated `IDim`
 so `gtx.Field[gtx.Dims[IDim], gtx.float64]` is valid for any PEP 484 checker with
 no gt4py mypy plugin.
 
-A dimension's **identity is the Python type**, and its `tag` — the string that
-crosses into the IR and the generated code — is its **qualified Python name**,
-`f"{cls.__module__}.{cls.__qualname__}"`. A Cartesian axis — a dimension with
+A dimension's **identity is the Python type** at the Python edge, and its `tag` — the
+string that crosses into the IR and the generated code — is its **qualified Python
+name**, `f"{cls.__module__}:{cls.__qualname__}"`. Below the frontend a dimension is a
+`DimensionRef` value naming that class (see *Two levels* below). A Cartesian axis — a dimension with
 index arithmetic and a staggered partner — is a subclass of `CartesianAxisIndex`;
 mesh locations subclass `DimensionIndex` directly.
 
@@ -78,21 +79,45 @@ equality the `typing` subscription cache aliases `Field[Dims[I]]` and
 runtime views disagree exactly there. Under type identity that aliasing
 disappears.
 
+### Two levels: classes at the Python edge, `DimensionRef` values below it
+
+Classes stay the identity in user code, in embedded execution and wherever a call
+enters gt4py. Type specifications, the IR and the backends instead carry a
+`DimensionRef`: an immutable, interned value with the class's module, qualname,
+`kind`, a `DimensionCategory` (Cartesian axis, local, other) and, for a staggered
+dimension, its base. The conversion happens once per class, where classes enter
+the toolchain (type translation of annotations and arguments, offset providers,
+the column axis).
+
+Below the frontend, two refs are equal if all their fields are: the same qualified
+name, `kind` and category is the same dimension. The IR is therefore
+self-contained -- an `AxisLiteral` carries its ref, so kind, category and staggered
+base need no import -- and a compile task ships no user classes (except, for now,
+inside the runtime offset provider, see below). The pretty printer and the backends read
+kind, category and staggered base off the ref, so neither tag parsing nor an
+import-free lookup is needed.
+
+Because a re-run notebook cell gives an *equal* ref for a *new* class, the Python
+edge still compares by class, in the same `__debug__`-only argument check as the type
+check: when a program, or a field operator called as one, receives a field,
+named-collection element or connectivity built on a different class of the same
+name as a dimension its annotations, scan axis or `FieldOffset`s declare, the call
+is rejected, embedded or compiled. Dimensions the definition does not declare are
+not compared.
+
+A ref never compares equal to a class. Such a comparison is always a missed
+conversion; a debug flag (`config.STRICT_DIMENSION_REF_COMPARISON`, on in gt4py's
+own tests) makes it raise. Hash-based lookups cannot be guarded.
+
 ### Consequences of the tag being a qualified name
 
-1. **Reconstruction from the IR is an import.** `common.resolve(tag)` imports the
-   module and walks the qualname; nested declarations resolve naturally. The IR
-   references a Python type exactly the way `pickle` references a class. It is
-   memoized, because type inference calls it once per `AxisLiteral`. An
-   `AxisLiteral` stores only the tag: its `kind` is the resolved dimension's, so the
-   two cannot disagree.
-
-   A purely dotted tag does not record where the module path ends and the
-   qualname begins, so `resolve` tries the *longest importable prefix* and walks
-   the remainder. A collision requires a module path and an attribute chain to
-   have the same spelling; a real module always wins. `pickle` avoids the
-   ambiguity by storing the two parts separately, and that remains available if
-   the residual ever bites.
+1. **Reconstruction from a tag is an exact import, only in the user's process.**
+   `common.resolve(tag)` imports the module before the `:` and walks the qualname,
+   as `pickle` references a class; the separator removes any ambiguity between
+   module path and attribute chain. It is used only where code runs in the user's
+   process on classes (the roundtrip backend), never on the compile path. It is not
+   memoized, so it sees a redefined class, and while a program loads it answers
+   with that program's own declared classes.
 
 2. **Types reaching the IR must be importable**, i.e. declared at module level.
    `__init_subclass__` rejects a `<locals>` qualname as an early heuristic; it is
@@ -107,7 +132,10 @@ disappears.
    notebooks declare dimensions interactively and are run in CI. Instead the
    process runner detects a job that references a class from an interactive
    `__main__` and compiles it in the calling thread, with a warning -- the same
-   fallback it already takes for an executor that cannot be pickled. A *script's*
+   fallback it already takes for an executor that cannot be pickled. With refs
+   below the frontend this only triggers for programs whose offset provider holds
+   runtime objects carrying classes (connectivities, or a named Cartesian offset
+   such as `{"Ioff": IDim}`): the compile task still ships the offset provider. A *script's*
    `__main__` is re-imported by spawn workers (as `__mp_main__`), so scripts keep
    parallel compilation, provided they have the `if __name__ == "__main__":` guard
    the worker pool already requires. `(tag, kind)` value identity with a registry
@@ -119,8 +147,8 @@ disappears.
    required for parametrized dimensions — see Staggered below.
 
 4. **Cache fingerprints depend on module paths.** A dimension is fingerprinted by
-   qualified name, so moving a declaration between modules invalidates compiled
-   artifacts. Its `kind` is fingerprinted too: it decides a field's layout order and
+   qualified name (a ref, by its fields), so moving a declaration between modules
+   invalidates compiled artifacts. Its `kind` is fingerprinted too: it decides a field's layout order and
    the scan axis, so a dimension redefined under the same name with another `kind`
    (a re-run notebook cell) does not reuse artifacts. A staggered dimension is
    fingerprinted through its base, and its base is fixed by interning. This is a consequence for the build cache of ADR 0023, not a
@@ -128,26 +156,16 @@ disappears.
    fingerprint variant; the STRICT variant rejects a parametrized dimension,
    which is not importable under its qualified name.
 
-5. **Generated identifiers need injective mangling.** A dot is illegal in a C++
-   identifier, in a DaCe symbol, and in `eve`'s `SymbolName`
-   (`^[a-zA-Z_]\w*$`). One shared pair, used by every backend:
-
-   ```python
-   def codegen_name(tag: Tag) -> str:
-       return tag.replace("_", "_u").replace(".", "_d").replace("[", "_l").replace("]", "_r")
-
-
-   def from_codegen_name(name: str) -> Tag:
-       return re.sub(
-           r"_([udlr])", lambda m: {"u": "_", "d": ".", "l": "[", "r": "]"}[m.group(1)], name
-       )
-   ```
+5. **Generated identifiers need injective mangling.** A dot or a colon is illegal
+   in a C++ identifier, in a DaCe symbol, and in `eve`'s `SymbolName`
+   (`^[a-zA-Z_]\w*$`). One shared pair, `codegen_name` / `from_codegen_name`, used by
+   every backend, escapes `_ . : [ ]` as `_u _d _c _l _r`.
 
    A *prefix* escape, not `_ -> __` followed by `. -> _`: the latter is **not
    injective**, since a dot becomes a single underscore and `".."` collides with
    an escaped `"_"`. Every `_` in the output is the first character of a
    two-character escape, so decoding is unambiguous. Brackets are escaped too: a
-   parametrized tag such as `Staggered[pkg.K]` contains them, and they would
+   parametrized tag such as `Staggered[pkg:K]` contains them, and they would
    otherwise survive into the identifier. Names grow, which is what
    gtfn's existing `TagDefinition.alias` mechanism is for.
 
@@ -168,9 +186,9 @@ disappears.
      `Staggered` itself derives from `AnyCartesianAxisIndex`, and its parameter is
      bounded on `CartesianAxisIndex` (see *Cartesian axes* below).
    - `is_staggered(dim)` is `"base" in dim.__dict__` and
-     `as_non_staggered(dim)` is `dim.base` — structural, no string sniffing.
-     `issubclass(dim, Staggered)` would be wrong, because it is also true of the
-     bare base, which has no `base`.
+     `as_non_staggered(dim)` is `dim.base` — structural, no string sniffing; on a
+     ref, the same is its `base` field. `issubclass(dim, Staggered)` would be
+     wrong, because it is also true of the bare base, which has no `base`.
    - `resolve` gains a `<qualname>[<tag>]` grammar and evaluates
      `Staggered[resolve(inner)]`, hitting the same intern table, so a staggered
      dimension round-trips through the IR to the *same* class object. This is the
@@ -299,8 +317,13 @@ dimension class is unhashable and `ts.DimensionType` fails at *import*.
   module level. Where two same-named function-local dimensions were silently the
   same dimension, they are now distinct — each resulting failure is a real
   finding.
-- `repr()` of a dimension is `I[horizontal]`; `str()` is unchanged, so error
-  messages are byte-identical.
+- `repr()` of a dimension is `pkg:I[horizontal]`; `str()` is unchanged, so error
+  messages are byte-identical. A ref's `str()` is the same display form; its
+  `repr()` is distinct (`DimensionRef(pkg:I, horizontal, cartesian_axis)`).
+- Configuration keyed by dimension name (`symbolic_domain_sizes`, offset-provider
+  entries for a local dimension) takes the dimension class or its tag.
+- Known limitation: a compile task still ships the runtime offset provider, and so
+  the classes of its connectivities (or named Cartesian offsets); see consequence 2.
 
 ## Alternatives considered
 
@@ -309,9 +332,11 @@ dimension class is unhashable and `ts.DimensionType` fails at *import*.
   dimensions must move to module level.
 - **Keeping the mypy plugin.** Serves one checker, caps distinct dimensions at
   four per run, and blocks `TypeVar`s over dimensions.
-- **`AxisLiteral` carrying the dimension class** instead of `value: str`. Would
-  remove `resolve` from the type-inference hot path, but changes IR node shape in
-  the same step as the dimension rewrite. Deferred.
+- **Classes all the way down** (type specifications, the IR and compile tasks
+  holding the classes, an `AxisLiteral` resolving its tag by import). Makes the IR
+  depend on importing user modules, so compile workers must import them and
+  interactive `__main__` cannot compile in parallel at all. Rejected for the two
+  levels above. An `AxisLiteral` carrying the *class* was likewise rejected.
 - **`Staggered` as a PEP 695 generic.** Does not produce a class; see Decision 6.
 - **A sibling root above `DimensionIndex`** for the staggered dimensions. Gives the
   same static ban on double staggering, but `Staggered[K]` stops being a
