@@ -210,3 +210,10 @@ if _dump_metrics_at_exit_env is not None:
 #: The default for whether to allow jit-compilation for a compiled program.
 #: This default can be overriden per program.
 ENABLE_JIT_DEFAULT: bool = env_flag_to_bool("GT4PY_ENABLE_JIT_DEFAULT", default=True)
+
+#: Debug aid: raise when a `common.DimensionRef` is compared (`==`, `!=`, either direction) with a
+#: dimension class, which is always a missed conversion at the Python edge. Off by default (the
+#: comparison is then simply `False`); gt4py's own test suite turns it on.
+STRICT_DIMENSION_REF_COMPARISON: bool = env_flag_to_bool(
+    "GT4PY_STRICT_DIMENSION_REF_COMPARISON", default=False
+)

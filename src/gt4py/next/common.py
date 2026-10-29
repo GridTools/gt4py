@@ -18,7 +18,9 @@ import importlib
 import math
 import re
 import sys
+import threading
 import types
+import weakref
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
@@ -63,15 +65,15 @@ DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 Tag: TypeAlias = str
 
 
-_CODEGEN_UNESCAPE: Final = {"u": "_", "d": ".", "l": "[", "r": "]"}
+_CODEGEN_UNESCAPE: Final = {"u": "_", "d": ".", "c": ":", "l": "[", "r": "]"}
 
 
 def codegen_name(tag: Tag) -> str:
     """
     Mangle a dimension or offset tag into a valid generated identifier.
 
-    A tag is a qualified Python name, so it contains dots, which are illegal in a C++
-    identifier, in a DaCe symbol, and in `eve`'s `SymbolName` (`^[a-zA-Z_]\\w*$`). Since a
+    A tag is a qualified Python name, `module:qualname`, so it contains dots and a colon, which
+    are illegal in a C++ identifier, in a DaCe symbol, and in `eve`'s `SymbolName` (`^[a-zA-Z_]\\w*$`). Since a
     generated identifier may only contain `[A-Za-z0-9_]`, the underscore is the only
     available separator, and escaping it is what makes the mapping reversible.
 
@@ -86,17 +88,24 @@ def codegen_name(tag: Tag) -> str:
         A valid identifier, unique for each distinct `tag`.
 
     Examples:
-        >>> codegen_name("mod.V2E.Local")
-        'mod_dV2E_dLocal'
+        >>> codegen_name("mod:V2E.Local")
+        'mod_cV2E_dLocal'
         >>> codegen_name("a_b.c")
         'a_ub_dc'
-        >>> from_codegen_name(codegen_name("my__mod.X"))
-        'my__mod.X'
+        >>> from_codegen_name(codegen_name("my__mod:X"))
+        'my__mod:X'
     """
     # NOTE: `_` first, so the underscores introduced by the other escapes are not re-escaped.
-    # A tag's alphabet is `[A-Za-z0-9_.[]]`: brackets come from a parametrized tag such as
-    # `Staggered[pkg.K]`, and would otherwise survive into the identifier.
-    return tag.replace("_", "_u").replace(".", "_d").replace("[", "_l").replace("]", "_r")
+    # A tag's alphabet is `[A-Za-z0-9_.:[]]`: the colon separates module and qualname, and
+    # brackets come from a parametrized tag such as `Staggered[pkg:K]`, and would otherwise
+    # survive into the identifier.
+    return (
+        tag.replace("_", "_u")
+        .replace(".", "_d")
+        .replace(":", "_c")
+        .replace("[", "_l")
+        .replace("]", "_r")
+    )
 
 
 def from_codegen_name(name: str) -> Tag:
@@ -113,10 +122,10 @@ def from_codegen_name(name: str) -> Tag:
         The original tag.
 
     Examples:
-        >>> from_codegen_name("mod_dV2E_dLocal")
-        'mod.V2E.Local'
+        >>> from_codegen_name("mod_cV2E_dLocal")
+        'mod:V2E.Local'
     """
-    return re.sub(r"_([udlr])", lambda m: _CODEGEN_UNESCAPE[m.group(1)], name)
+    return re.sub(r"_([udclr])", lambda m: _CODEGEN_UNESCAPE[m.group(1)], name)
 
 
 @enum.unique
@@ -130,6 +139,267 @@ class DimensionKind(StrEnum):
 
 
 _DIM_KIND_ORDER = {DimensionKind.HORIZONTAL: 0, DimensionKind.LOCAL: 1, DimensionKind.VERTICAL: 2}
+
+
+@enum.unique
+class DimensionCategory(StrEnum):
+    """
+    What a dimension is, beyond its `kind`: a property of each declaration (ADR 0029).
+
+    `IDim` and `Cell` are both `HORIZONTAL`, and only the first is a Cartesian axis, so this
+    cannot be derived from `kind`. Below the frontend it replaces `issubclass` checks against
+    the dimension class hierarchy; use the predicates `is_cartesian_axis` and
+    `is_local_dimension`, which accept a class or a `DimensionRef`.
+
+    Extensible: further categories (slot, label, ...) can be added as members.
+    """
+
+    #: Either cell class of a Cartesian axis: a `CartesianAxisIndex` or a `Staggered[...]`.
+    CARTESIAN_AXIS = "cartesian_axis"
+    #: A local (neighbor) dimension, including `ConstList`.
+    #: TODO: derived from `kind is LOCAL` in this version; a `LocalDimensionIndex` level in the
+    #: class hierarchy (later in the stack) will decide it instead.
+    LOCAL = "local"
+    #: Any other direct `DimensionIndex` subclass: mesh locations and index spaces without
+    #: geometry.
+    OTHER = "other"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+#: The module of the `Staggered` dimension constructor; the module of every staggered tag.
+_STAGGERED_MODULE: Final = __name__
+
+#: Interned refs, so equal refs are the identical object. This keeps `pickle`-based content
+#: hashes (`eve.utils.content_hash`) independent of how a structure was built: pickle memoizes
+#: by identity, so two equal-but-distinct refs would serialize differently from a shared one.
+_DIMENSION_REF_INTERN: weakref.WeakValueDictionary[tuple[Any, ...], DimensionRef] = (
+    weakref.WeakValueDictionary()
+)
+_DIMENSION_REF_INTERN_LOCK: Final = threading.RLock()
+
+
+class _InternedDimensionRefMeta(type):
+    """
+    Makes `DimensionRef(...)` an interning factory.
+
+    Arguments are coerced and checked *before* the lookup, and lookup, creation and registration
+    happen under one lock, so an existing ref is never re-initialized and a rejected call never
+    touches the table. `dataclasses.replace` and unpickling go through here too.
+    """
+
+    def __call__(  # a factory with the dataclass's signature
+        cls,
+        module: str,
+        qualname: str,
+        kind: DimensionKind | str,
+        category: DimensionCategory | str,
+        base: Optional[DimensionRef] = None,
+    ) -> DimensionRef:
+        if not isinstance(module, str) or not isinstance(qualname, str):
+            raise TypeError(f"Invalid dimension module or qualname: {module!r}, {qualname!r}.")
+        if base is not None and not isinstance(base, DimensionRef):
+            raise TypeError(f"Invalid staggered base: {base!r}.")
+        key = (module, qualname, DimensionKind(kind), DimensionCategory(category), base)
+        with _DIMENSION_REF_INTERN_LOCK:
+            if (ref := _DIMENSION_REF_INTERN.get(key)) is None:
+                ref = super().__call__(*key)  # validates in `__post_init__`, then registered
+                _DIMENSION_REF_INTERN[key] = ref
+        return ref
+
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class DimensionRef(metaclass=_InternedDimensionRefMeta):
+    """
+    An immutable, interned value referring to a dimension, for everything below the frontend.
+
+    The Python class stays a dimension's identity in user code, in embedded execution and at
+    the Python edge; type specifications, the IR and the backends carry this value instead, so
+    they are self-contained: kind, category and staggered base are in the value, and nothing
+    has to import the module that declared the class to recover them.
+
+    `dimension_ref(cls)` produces it, once per class. Equal refs are the identical object.
+
+    A ref never compares equal to a dimension class. Such a comparison is always a missed
+    conversion at the Python edge; with `config.STRICT_DIMENSION_REF_COMPARISON` it raises
+    (in both directions, for `==` and `!=`). Hash-based lookups (`cls in {ref}`, a dict keyed by
+    refs looked up with a class) never reach `__eq__` when the hashes differ, so they cannot be
+    guarded and are simply misses.
+
+    Examples:
+        >>> class I(CartesianAxisIndex): ...
+        >>> ref = dimension_ref(I)
+        >>> ref
+        DimensionRef(gt4py.next.common:I, horizontal, cartesian_axis)
+        >>> str(ref)  # the display form, same as the class's
+        'I[horizontal]'
+        >>> flip_staggered(ref) is dimension_ref(Staggered[I])
+        True
+    """
+
+    module: str
+    qualname: str
+    kind: DimensionKind
+    category: DimensionCategory
+    #: The base dimension of a staggered dimension, `None` otherwise.
+    base: Optional[DimensionRef] = None
+
+    def __post_init__(self) -> None:
+        if self.category is DimensionCategory.LOCAL and self.kind is not DimensionKind.LOCAL:
+            raise ValueError(f"A local dimension must have kind 'local': '{self!r}'.")
+        if self.base is not None:
+            base = self.base
+            if base.base is not None or base.category is not DimensionCategory.CARTESIAN_AXIS:
+                raise TypeError(
+                    f"'{base}' is not a declared Cartesian axis and cannot be staggered."
+                )
+            if (
+                self.module != _STAGGERED_MODULE
+                or self.qualname != f"Staggered[{base.qualname}]"
+                or self.kind is not base.kind
+                or self.category is not DimensionCategory.CARTESIAN_AXIS
+            ):
+                raise ValueError(f"'{self!r}' is not the staggered dimension of '{base!r}'.")
+        # NOTE: not a dataclass field, so neither pickled (see `__reduce__`) nor fingerprinted.
+        object.__setattr__(self, "_hash", hash(self._identity_key()))
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        # By value, through the constructor, so an unpickled ref is interned too.
+        return (DimensionRef, (self.module, self.qualname, self.kind, self.category, self.base))
+
+    @property
+    def tag(self) -> Tag:
+        """
+        The dimension's IR spelling: `module:qualname`, `<staggered>[<base tag>]` if staggered.
+
+        The colon records where the module path ends, so `resolve` needs no prefix search.
+        """
+        if self.base is not None:
+            return f"{self.module}:Staggered[{self.base.tag}]"
+        return f"{self.module}:{self.qualname}"
+
+    # NOTE: the single place deciding what makes two refs the same dimension: all fields. Two
+    # declarations with the same qualified name but a different kind or category (a re-run
+    # notebook cell) are different dimensions. Return `self.tag` for tag-only identity.
+    def _identity_key(self) -> tuple[Any, ...]:
+        return (self.module, self.qualname, self.kind, self.category, self.base)
+
+    def __eq__(self, other: object) -> bool:
+        if self is other:
+            return True
+        if isinstance(other, DimensionRef):
+            return self._identity_key() == other._identity_key()
+        if isinstance(other, DimensionMeta):
+            _check_ref_class_comparison(self, other)
+            return False
+        return NotImplemented
+
+    def __ne__(self, other: object) -> bool:
+        result = self.__eq__(other)
+        return result if result is NotImplemented else not result
+
+    def __hash__(self) -> int:
+        return self._hash  # type: ignore[attr-defined] # set in `__post_init__`
+
+    def __str__(self) -> str:
+        # The display form, same as `str()` of the class, so diagnostics stay byte-identical.
+        return f"{self.qualname}[{self.kind}]"
+
+    def __repr__(self) -> str:
+        # Distinct from a class's repr (`pkg:IDim[horizontal]`), so a message mixing the two does
+        # not read "IDim vs IDim".
+        return f"DimensionRef({self.tag}, {self.kind}, {self.category})"
+
+    def __copy__(self) -> Self:
+        return self
+
+    def __deepcopy__(self, memo: Any) -> Self:
+        return self
+
+    @classmethod
+    def from_tag(cls, tag: Tag, kind: DimensionKind, category: DimensionCategory) -> DimensionRef:
+        """
+        Rebuild a ref from its tag plus the two fields a tag does not spell, without importing.
+
+        Only `gt4py.next.common:Staggered[<base tag>]` is a staggered tag; its base has the same
+        kind and is a Cartesian axis by construction.
+        """
+        if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
+            if match["owner"] != f"{_STAGGERED_MODULE}:Staggered":
+                raise ValueError(
+                    f"'{tag}' is not a dimension tag: only 'Staggered' is parametrized."
+                )
+            base = cls.from_tag(match["base"], kind, DimensionCategory.CARTESIAN_AXIS)
+            return _staggered_ref(base)
+        module, sep, qualname = tag.partition(":")
+        if not sep or not module or not qualname or ":" in qualname:
+            raise ValueError(f"'{tag}' is not a dimension tag ('module:qualname').")
+        return cls(module=module, qualname=qualname, kind=kind, category=category)
+
+
+def _check_ref_class_comparison(ref: DimensionRef, cls: DimensionMeta) -> None:
+    # Imported lazily: `config` must stay importable without `common`, and the flag is read at
+    # call time so that tests can toggle it.
+    from gt4py.next import config
+
+    if config.STRICT_DIMENSION_REF_COMPARISON:
+        raise TypeError(
+            f"Comparing {ref!r} with the dimension class {cls!r}: one side missed its"
+            " conversion at the Python edge (use 'common.dimension_ref(cls)')."
+        )
+
+
+def _staggered_ref(base: DimensionRef) -> DimensionRef:
+    return DimensionRef(
+        module=_STAGGERED_MODULE,
+        qualname=f"Staggered[{base.qualname}]",
+        kind=base.kind,
+        category=DimensionCategory.CARTESIAN_AXIS,
+        base=base,
+    )
+
+
+#: The class attribute holding a dimension class's ref, computed once on first access.
+_REF_ATTR: Final = "_gt_dimension_ref_"
+
+
+def dimension_ref(dim: Dimension | DimensionRef) -> DimensionRef:
+    """
+    Return the value referring to `dim` (a dimension class or already a ref).
+
+    The conversion point from the Python edge to everything below the frontend. Memoized on
+    the class itself, so it is computed once per class (and a redefined class gets its own,
+    equal one if nothing but the class object changed).
+    """
+    if isinstance(dim, DimensionRef):
+        return dim
+    if not isinstance(dim, DimensionMeta):
+        raise TypeError(f"Expected a dimension, got '{dim!r}'.")
+    if (ref := dim.__dict__.get(_REF_ATTR)) is None:
+        if "base" in dim.__dict__:  # a staggered dimension, see `is_staggered`
+            ref = _staggered_ref(dimension_ref(dim.base))  # type: ignore[attr-defined] # staggered
+        else:
+            if issubclass(dim, AnyCartesianAxisIndex):
+                category = DimensionCategory.CARTESIAN_AXIS
+            elif dim.kind is DimensionKind.LOCAL:
+                category = DimensionCategory.LOCAL
+            else:
+                category = DimensionCategory.OTHER
+            ref = DimensionRef(
+                module=dim.__module__, qualname=dim.__qualname__, kind=dim.kind, category=category
+            )
+        type.__setattr__(dim, _REF_ATTR, ref)
+    return ref
+
+
+def dimension_refs(dims: Iterable[Dimension | DimensionRef]) -> list[DimensionRef]:
+    """`dimension_ref` over a sequence; a converter for type-specification fields."""
+    return [dimension_ref(dim) for dim in dims]
+
+
+def optional_dimension_ref(dim: Optional[Dimension | DimensionRef]) -> Optional[DimensionRef]:
+    return None if dim is None else dimension_ref(dim)
 
 
 class DimensionMeta(type):
@@ -156,9 +426,9 @@ class DimensionMeta(type):
         The dimension's identity: its qualified Python name, and its spelling in the IR.
 
         A property rather than a settable attribute, so it cannot drift from the type it
-        names. Use `__qualname__` for display; see `__str__`.
+        names. Use `__qualname__` for display; see `__str__`. Always the tag of its spec.
         """
-        return f"{cls.__module__}.{cls.__qualname__}"
+        return dimension_ref(cast(Dimension, cls)).tag
 
     @property
     def value(cls) -> NoReturn:
@@ -335,6 +605,9 @@ class DimensionIndex(metaclass=DimensionMeta):
 #: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0029.
 type Dimension = type[DimensionIndex]
 
+#: A dimension class (at the Python edge) or its `DimensionRef` (below the frontend).
+type DimensionLike = Dimension | DimensionRef
+
 
 class AnyCartesianAxisIndex(DimensionIndex):
     """
@@ -385,54 +658,45 @@ class CartesianAxisIndex(AnyCartesianAxisIndex):
 _STAGGERED_TAG_RE: Final = re.compile(r"^(?P<owner>[^\[\]]+)\[(?P<base>.+)\]$")
 
 
-def staggered_base_tag(tag: Tag) -> Optional[Tag]:
+def resolve(dim: Tag | DimensionRef) -> Dimension:
     """
-    Return the base dimension's tag if `tag` names a staggered dimension, else `None`.
+    Return the dimension class a tag or ref names, by importing it.
 
-    Reads the `<owner>[<base>]` grammar that `Staggered[D]` produces and `resolve` parses, so it
-    works on a bare tag without importing anything. That matters where tags of dimensions and
-    of offsets are mixed in one collection: an offset tag is not a dimension and cannot be
-    resolved, but it simply does not match.
+    Not memoized: the answer is the module's *current* attribute, so a dimension redefined in
+    a re-run notebook cell resolves to the new class (`importlib` already caches the module).
 
-    Examples:
-        >>> staggered_base_tag("gt4py.next.common.Staggered[pkg.KDim]")
-        'pkg.KDim'
-        >>> staggered_base_tag("pkg.KDim") is None
-        True
-    """
-    return match["base"] if (match := _STAGGERED_TAG_RE.match(tag)) is not None else None
+    Only for code running in the user's process that needs the class back: iterator-embedded
+    execution and the roundtrip backend. The compile path works on `DimensionRef` values.
 
-
-@functools.cache
-def resolve(tag: Tag) -> Dimension:
-    """
-    Return the dimension class a tag names, by importing it.
-
-    The counterpart of `DimensionMeta.tag`, for the IR boundaries that rebuild a dimension
-    from its name. A tag is a qualified Python name, so this is an import followed by an
-    attribute walk -- the same way `pickle` references a class.
-
-    A purely dotted tag does not record where the module path ends and the qualname begins,
-    so the longest importable prefix wins and the remainder is walked as attributes. A
-    collision would need a module path and an attribute chain to have the same spelling.
-
-    Parametrized dimensions such as `Staggered[K]` have no importable qualname; their tag
-    has the form `<owner tag>[<base tag>]` and is resolved by subscripting the owner, which
-    goes through its intern table and so returns the identical class.
+    A tag is `module:qualname` (`pkgutil.resolve_name` syntax), so this is an import followed by
+    an attribute walk -- the same way `pickle` references a class. Parametrized dimensions such
+    as `Staggered[K]` have no importable qualname; their tag has the form
+    `<owner tag>[<base tag>]` and is resolved by subscripting the owner, which goes through its
+    intern table and so returns the identical class.
 
     Args:
-        tag: A dimension tag, as produced by `DimensionMeta.tag`.
+        dim: A dimension tag, or a spec (whose kind and category must then match the class).
 
     Returns:
         The dimension class.
 
     Raises:
-        ValueError: If no prefix of `tag` is importable, or the attribute walk fails.
+        ValueError: If the module is not importable, the attribute walk fails, or a given spec
+            does not describe the class found (e.g. it was redefined with another kind).
 
     Examples:
-        >>> resolve("gt4py.next.common.DimensionIndex") is DimensionIndex
+        >>> resolve("gt4py.next.common:DimensionIndex") is DimensionIndex
         True
     """
+    if isinstance(dim, DimensionRef):
+        cls = resolve(dim.tag)
+        if (found := dimension_ref(cls)) != dim:
+            raise ValueError(
+                f"'{dim.tag}' resolves to '{found!r}', which does not match '{dim!r}'."
+            )
+        return cls
+
+    tag = dim
     if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
         owner = resolve(match["owner"])
         if not isinstance(owner, StaggeredMeta):
@@ -441,47 +705,27 @@ def resolve(tag: Tag) -> Dimension:
             )
         return owner[resolve(match["base"])]  # type: ignore[index] # a StaggeredMeta, checked
 
-    parts = tag.split(".")
-    for split in range(len(parts), 0, -1):
+    module_name, sep, qualname = tag.partition(":")
+    if not sep:
+        raise ValueError(f"'{tag}' is not a dimension tag ('module:qualname').")
+    try:
+        obj: Any = importlib.import_module(module_name)
+    except ImportError as ex:
+        raise ValueError(
+            f"Cannot resolve dimension tag '{tag}': module '{module_name}' is not importable. A"
+            " dimension referenced from the IR must be declared at module level in an importable"
+            " module."
+        ) from ex
+    for attr in qualname.split("."):
         try:
-            obj: Any = importlib.import_module(".".join(parts[:split]))
-        except ImportError:
-            continue
-        for attr in parts[split:]:
-            try:
-                obj = getattr(obj, attr)
-            except AttributeError as ex:
-                raise ValueError(
-                    f"Cannot resolve dimension tag '{tag}': '{'.'.join(parts[:split])}' has"
-                    f" no attribute '{attr}'."
-                ) from ex
-        if not isinstance(obj, DimensionMeta):
-            raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
-        return cast(Dimension, obj)
-    raise ValueError(
-        f"Cannot resolve dimension tag '{tag}': no importable module prefix. A dimension"
-        " referenced from the IR must be declared at module level in an importable module."
-    )
-
-
-def resolve_loaded(tag: Tag) -> Optional[Dimension]:
-    """
-    Return the dimension a tag names if its module is already loaded, else `None`.
-
-    Like `resolve`, but never imports: for code that must not have import side effects, such as
-    printing IR.
-    """
-    if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
-        owner, base = resolve_loaded(match["owner"]), resolve_loaded(match["base"])
-        return owner[base] if owner is not None and base is not None else None  # type: ignore[index] # parametrized dimension
-    parts = tag.split(".")
-    for split in range(len(parts) - 1, 0, -1):
-        if (obj := sys.modules.get(".".join(parts[:split]))) is None:
-            continue
-        for attr in parts[split:]:
-            obj = getattr(obj, attr, None)
-        return obj if isinstance(obj, DimensionMeta) else None
-    return None
+            obj = getattr(obj, attr)
+        except AttributeError as ex:
+            raise ValueError(
+                f"Cannot resolve dimension tag '{tag}': '{module_name}' has no attribute '{qualname}'."
+            ) from ex
+    if not isinstance(obj, DimensionMeta):
+        raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
+    return cast(Dimension, obj)
 
 
 class Infinity(enum.Enum):
@@ -823,14 +1067,15 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(self, index: Dimension) -> NamedRange: ...
+    def __getitem__(self, index: Dimension | DimensionRef) -> NamedRange: ...
 
-    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
-        if isinstance(index, DimensionMeta):
-            try:
-                index = self.dims.index(index)
-            except ValueError as ex:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
+    def __getitem__(self, index: int | slice | Dimension | DimensionRef) -> NamedRange | Domain:
+        if isinstance(index, (DimensionMeta, DimensionRef)):
+            # NOTE: a spec (from a type specification) matches the class it describes.
+            found = self.dim_index(index)
+            if found is None:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
+            index = found
         if isinstance(index, int):
             return NamedRange(dim=self.dims[index], unit_range=self.ranges[index])
         if isinstance(index, slice):
@@ -849,12 +1094,12 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             >>> class J(CartesianAxisIndex): ...
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
-            Domain(dims=(gt4py.next.common.I[horizontal],), ranges=(UnitRange(1, 3),))
+            Domain(dims=(gt4py.next.common:I[horizontal],), ranges=(UnitRange(1, 3),))
 
             >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
             ...     NamedRange(I, UnitRange(1, 6))
             ... )
-            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+            Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
@@ -906,7 +1151,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             >>> class J(CartesianAxisIndex): ...
             >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
             >>> domain.slice_at[2:3, 2:5]
-            Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
+            Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
         """
 
         def _domain_slicer(*args: slice) -> Domain:
@@ -929,17 +1174,23 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return any(rng.is_empty() for rng in self.ranges)
 
     @overload
-    def dim_index(self, dim: Dimension, *, allow_missing: Literal[False]) -> int: ...
+    def dim_index(self, dim: Dimension | DimensionRef, *, allow_missing: Literal[False]) -> int: ...
 
     @overload
     def dim_index(
-        self, dim: Dimension, *, allow_missing: Literal[True] = True
+        self, dim: Dimension | DimensionRef, *, allow_missing: Literal[True] = True
     ) -> Optional[int]: ...
 
-    def dim_index(self, dim: Dimension, *, allow_missing: bool = True) -> Optional[int]:
-        if dim in self.dims:
+    def dim_index(
+        self, dim: Dimension | DimensionRef, *, allow_missing: bool = True
+    ) -> Optional[int]:
+        if isinstance(dim, DimensionRef):
+            for i, d in enumerate(self.dims):
+                if dimension_ref(d) == dim:
+                    return i
+        elif dim in self.dims:
             return self.dims.index(dim)
-        elif allow_missing:
+        if allow_missing:
             return None
         else:
             raise ValueError(f"Dimension '{dim}' not found in Domain.")
@@ -998,16 +1249,16 @@ def domain(domain_like: DomainLike) -> Domain:
         >>> class J(CartesianAxisIndex): ...
 
         >>> domain(((I, (2, 4)), (J, (3, 5))))
-        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain({I: (2, 4), J: (3, 5)})
-        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
         >>> domain(((I, 2), (J, 4)))
-        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
 
         >>> domain({I: 2, J: 4})
-        Domain(dims=(gt4py.next.common.I[horizontal], gt4py.next.common.J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
@@ -1287,10 +1538,15 @@ class BufferInfo:
 
 @dataclasses.dataclass(frozen=True)
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
-    domain: tuple[Dimension, ...]
-    codomain: Dimension
+    #: Dimension specs; dimension classes passed to the constructor are converted.
+    domain: tuple[DimensionRef, ...]
+    codomain: DimensionRef
     skip_value: Optional[core_defs.IntegralScalar]
     dtype: core_defs.DType
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "domain", tuple(dimension_refs(self.domain)))
+        object.__setattr__(self, "codomain", dimension_ref(self.codomain))
 
     @property
     def has_skip_values(self) -> bool:
@@ -1303,11 +1559,11 @@ class NeighborConnectivityType(ConnectivityType):
     max_neighbors: int
 
     @property
-    def source_dim(self) -> Dimension:
+    def source_dim(self) -> DimensionRef:
         return self.domain[0]
 
     @property
-    def neighbor_dim(self) -> Dimension:
+    def neighbor_dim(self) -> DimensionRef:
         return self.domain[1]
 
 
@@ -1329,16 +1585,16 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
     def __gt_type__(self) -> ConnectivityType:
         if is_neighbor_table(self):
             return NeighborConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
+                domain=tuple(dimension_refs(self.domain.dims)),
+                codomain=dimension_ref(self.codomain),
                 dtype=self.dtype,
                 skip_value=self.skip_value,
                 max_neighbors=self.ndarray.shape[1],
             )
         else:
             return ConnectivityType(
-                domain=self.domain.dims,
-                codomain=self.codomain,
+                domain=tuple(dimension_refs(self.domain.dims)),
+                codomain=dimension_ref(self.codomain),
                 dtype=self.dtype,
                 skip_value=self.skip_value,
             )
@@ -1656,32 +1912,30 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
-    """Find the canonical ordering of the dimensions in `dims`."""
-    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
-        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
-    # NOTE: `__qualname__`, not `tag`. The tag is qualified, so ordering by it would make a
+def _dimension_order_key(dim: Dimension | DimensionRef) -> tuple[int, str, str]:
+    # NOTE: `qualname`, not `tag`. The tag is qualified, so ordering by it would make a
     # field's canonical dimension order depend on *which module* each dimension is declared in --
     # moving a declaration would silently reorder a field's dimensions. The unqualified name keeps
     # the ordering a property of the dimensions themselves; `tag` only breaks ties between
     # same-named dimensions from different modules, so the order stays total.
-    return sorted(
-        dims,
-        key=lambda dim: (
-            _DIM_KIND_ORDER[dim.kind],
-            as_non_staggered(dim).__qualname__,
-            as_non_staggered(dim).tag,
-        ),
-    )
+    base = as_non_staggered(dimension_ref(dim))
+    return (_DIM_KIND_ORDER[base.kind], base.qualname, base.tag)
 
 
-def check_dims(dims: Sequence[Dimension]) -> None:
+def order_dimensions(dims: Iterable[_AnyDimT]) -> list[_AnyDimT]:
+    """Find the canonical ordering of the dimensions in `dims` (classes or specs)."""
+    if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
+        raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
+    return sorted(dims, key=_dimension_order_key)
+
+
+def check_dims(dims: Sequence[Dimension] | Sequence[DimensionRef]) -> None:
     # A dimension and its staggered counterpart (i.e. sharing the same non-staggered base dimension)
     # denote different grid locations and must not appear together in the same field/domain: mixing
     # them is ambiguous (it makes `order_dimensions` non-total and produces duplicate backend tags).
-    seen: dict[Dimension, Dimension] = {}
+    seen: dict[DimensionRef, Dimension | DimensionRef] = {}
     for dim in dims:
-        base = as_non_staggered(dim)
+        base = as_non_staggered(dimension_ref(dim))
         if base in seen:
             raise ValueError(
                 f"Dimensions '{seen[base]}' and '{dim}' cannot be combined: a dimension and its "
@@ -1694,7 +1948,7 @@ def check_dims(dims: Sequence[Dimension]) -> None:
         )
 
 
-def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
+def promote_dims(*dims_list: Sequence[_AnyDimT]) -> list[_AnyDimT]:
     """
     Find an ordering of multiple lists of dimensions.
 
@@ -1724,11 +1978,11 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
 
     for dims in dims_list:
-        check_dims(list(dims))
+        check_dims(list(dims))  # type: ignore[arg-type] # homogeneous
     unique_dims = {dim for dims in dims_list for dim in dims}
 
     promoted_dims = order_dimensions(unique_dims)
-    check_dims(promoted_dims)
+    check_dims(promoted_dims)  # type: ignore[arg-type] # homogeneous
     return promoted_dims
 
 
@@ -1793,16 +2047,6 @@ class StaggeredMeta(DimensionMeta):
     #: Set by `__getitem__` on each parametrization. Its presence is what distinguishes a
     #: staggered dimension from the bare `Staggered` base, which is also a `StaggeredMeta`.
     base: Dimension
-
-    @property
-    def tag(cls) -> Tag:
-        # NOTE: overridden so that `__qualname__` can stay the short, readable form used in
-        # diagnostics while the tag carries the base's *full* tag, which `resolve` needs to find
-        # a base declared in another module. Display is `__qualname__` and identity is `tag`,
-        # for staggered dimensions exactly as for any other.
-        if "base" in cls.__dict__:
-            return f"{cls.__module__}.Staggered[{cls.base.tag}]"
-        return super().tag
 
     def __getitem__(cls, base: Dimension) -> Dimension:
         if "base" in cls.__dict__:
@@ -1915,28 +2159,60 @@ def _make_staggered(base: Dimension) -> Dimension:
 copyreg.pickle(StaggeredMeta, _reduce_staggered)
 
 
-def is_staggered(dim: Dimension) -> bool:
-    """
-    Return whether `dim` is a staggered dimension.
+_AnyDimT = TypeVar("_AnyDimT", bound="Dimension | DimensionRef")
 
-    Checks for the marker the metaclass sets, not `issubclass(dim, Staggered)`: the latter is
-    also true of the bare `Staggered` base, which has no base dimension to recover.
+
+def is_staggered(dim: Dimension | DimensionRef) -> bool:
     """
+    Return whether `dim` (a class or a spec) is a staggered dimension.
+
+    For a class, checks for the marker the metaclass sets, not `issubclass(dim, Staggered)`: the
+    latter is also true of the bare `Staggered` base, which has no base dimension to recover.
+    """
+    if isinstance(dim, DimensionRef):
+        return dim.base is not None
     return "base" in dim.__dict__
 
 
-def flip_staggered(dim: Dimension) -> Dimension:
-    """Return the staggered counterpart of `dim`."""
+@overload
+def flip_staggered(dim: DimensionRef) -> DimensionRef: ...
+@overload
+def flip_staggered(dim: Dimension) -> Dimension: ...
+def flip_staggered(dim: Dimension | DimensionRef) -> Dimension | DimensionRef:
+    """Return the staggered counterpart of `dim` (a class or a spec, answered in kind)."""
+    if isinstance(dim, DimensionRef):
+        if dim.base is not None:
+            return dim.base
+        if dim.category is not DimensionCategory.CARTESIAN_AXIS:
+            raise TypeError(
+                f"'{dim.qualname}' is not a declared Cartesian axis and cannot be staggered:"
+                " only a dimension declared as 'CartesianAxisIndex' has a staggered partner."
+            )
+        return _staggered_ref(dim)
     if is_staggered(dim):
         return cast(Dimension, dim.base)  # type: ignore[attr-defined] # guarded by is_staggered
     return Staggered[dim]  # type: ignore[valid-type] # runtime subscription
 
 
-def as_non_staggered(dim: Dimension) -> Dimension:
+@overload
+def as_non_staggered(dim: DimensionRef) -> DimensionRef: ...
+@overload
+def as_non_staggered(dim: Dimension) -> Dimension: ...
+def as_non_staggered(dim: Dimension | DimensionRef) -> Dimension | DimensionRef:
     """Return the non-staggered base dimension of `dim` (`dim` itself if already non-staggered)."""
     if is_staggered(dim):
         return flip_staggered(dim)
     return dim
+
+
+def is_cartesian_axis(dim: Dimension | DimensionRef) -> bool:
+    """Return whether `dim` is either cell class of a Cartesian axis (see `DimensionCategory`)."""
+    return dimension_ref(dim).category is DimensionCategory.CARTESIAN_AXIS
+
+
+def is_local_dimension(dim: Dimension | DimensionRef) -> bool:
+    """Return whether `dim` (a class or a ref) is a local (neighbor) dimension."""
+    return dimension_ref(dim).category is DimensionCategory.LOCAL
 
 
 def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> CartesianConnectivity:
@@ -1953,11 +2229,28 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
     staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
     `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.
     """
+    integral_offset, codomain = cartesian_shift(dim, offset)
+    return CartesianConnectivity(dim, integral_offset, codomain=codomain)
+
+
+@overload
+def cartesian_shift(dim: DimensionRef, offset: int | float) -> tuple[int, DimensionRef]: ...
+@overload
+def cartesian_shift(dim: Dimension, offset: int | float) -> tuple[int, Dimension]: ...
+def cartesian_shift(
+    dim: Dimension | DimensionRef, offset: int | float
+) -> tuple[int, Dimension | DimensionRef]:
+    """
+    Return the integral index offset and the codomain of shifting `dim` by `offset`.
+
+    Works on a class or a spec alike (answered in kind), so the frontend can type a Cartesian shift
+    without building an embedded `CartesianConnectivity`. See `connectivity_for_cartesian_shift`.
+    """
     integral_offset, staggered_offset = divmod(offset, 1)
     if staggered_offset == 0.5:
         if not is_staggered(dim):
             integral_offset += 1
-        return CartesianConnectivity(dim, int(integral_offset), codomain=flip_staggered(dim))
+        return int(integral_offset), flip_staggered(dim)
     else:
         assert staggered_offset == 0
-        return CartesianConnectivity(dim, int(integral_offset), codomain=dim)
+        return int(integral_offset), dim

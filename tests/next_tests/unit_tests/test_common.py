@@ -6,8 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
+import io
 import itertools
 import operator
+import pickle
 
 import numpy as np
 from typing import Optional, Pattern
@@ -848,12 +851,13 @@ class TestCodegenName:
         [
             ("IDim", "IDim"),
             ("mod.V2E.Local", "mod_dV2E_dLocal"),
+            ("mod:V2E.Local", "mod_cV2E_dLocal"),
             ("a.b_c", "a_db_uc"),
             ("a_b.c", "a_ub_dc"),
             ("my__mod.X", "my_u_umod_dX"),
             ("_CONST_DIM", "_uCONST_uDIM"),
             # a parametrized tag: the brackets must not survive into the identifier
-            ("gt4py.next.common.Staggered[pkg.K]", "gt4py_dnext_dcommon_dStaggered_lpkg_dK_r"),
+            ("gt4py.next.common:Staggered[pkg:K]", "gt4py_dnext_dcommon_cStaggered_lpkg_cK_r"),
         ],
     )
     def test_known_values(self, tag, expected):
@@ -861,7 +865,22 @@ class TestCodegenName:
         assert common.from_codegen_name(expected) == tag
 
     @pytest.mark.parametrize(
-        "tag", ["_u", "_d", "_l", "_r", "a_ud.b", "_ud_du", "..", "__", "[]", "a[b.c]", "_l[_r]"]
+        "tag",
+        [
+            "_u",
+            "_d",
+            "_c",
+            "_l",
+            "_r",
+            "a_ud.b",
+            "_ud_du",
+            "..",
+            "__",
+            "[]",
+            "a[b.c]",
+            "_l[_r]",
+            "a:_c",
+        ],
     )
     def test_roundtrip_adversarial(self, tag):
         """Tags that look like the escape sequences themselves must still round-trip."""
@@ -880,7 +899,7 @@ class TestCodegenName:
         because a dot becomes a single underscore and `'..'` collides with an escaped `'_'`.
         """
         # every character a tag can contain that needs escaping, plus the escape letters
-        alphabet = "a._[]udlr"
+        alphabet = "a._:[]udclr"
         seen: dict[str, str] = {}
         for length in range(1, 5):
             for tag in map("".join, itertools.product(alphabet, repeat=length)):
@@ -938,14 +957,155 @@ class TestStaggered:
             common.resolve(f"{KDim.tag}[{KDim.tag}]")
 
 
-def test_resolve_loaded():
-    # `resolve_loaded` never imports: it answers for what is loaded and gives up otherwise
-    assert common.resolve_loaded(IDim.tag) is IDim
-    assert common.resolve_loaded(common.Staggered[IDim].tag) is common.Staggered[IDim]
-    assert common.resolve_loaded("not_imported_anywhere.IDim") is None
-    assert common.resolve_loaded(f"{__name__}.does_not_exist") is None
-    assert common.resolve_loaded(f"{__name__}.test_resolve_loaded") is None  # not a dimension
+class TestDimensionRef:
+    def test_tag_format(self):
+        assert IDim.tag == f"{__name__}:IDim"
+        assert common.Staggered[KDim].tag == f"gt4py.next.common:Staggered[{KDim.tag}]"
 
+    def test_computed_once_per_class(self):
+        assert common.dimension_ref(IDim) is common.dimension_ref(IDim)
+
+    def test_fields(self):
+        spec = common.dimension_ref(common.Staggered[KDim])
+        assert spec.kind is common.DimensionKind.VERTICAL
+        assert spec.category is common.DimensionCategory.CARTESIAN_AXIS
+        assert spec.base == common.dimension_ref(KDim)
+        assert common.dimension_ref(ECDim).category is common.DimensionCategory.OTHER
+
+    def test_staggered_helpers_on_specs(self):
+        k = common.dimension_ref(KDim)
+        assert common.flip_staggered(k) == common.dimension_ref(common.Staggered[KDim])
+        assert common.flip_staggered(common.flip_staggered(k)) == k
+        assert common.as_non_staggered(common.flip_staggered(k)) == k
+        with pytest.raises(TypeError, match="is not a declared Cartesian axis"):
+            common.flip_staggered(common.dimension_ref(ECDim))
+
+    def test_from_tag_roundtrip(self):
+        for dim in (IDim, common.Staggered[KDim], ECDim):
+            spec = common.dimension_ref(dim)
+            assert common.DimensionRef.from_tag(spec.tag, spec.kind, spec.category) == spec
+
+    def test_resolve(self):
+        assert common.resolve(common.dimension_ref(IDim)) is IDim
+        assert common.resolve(common.Staggered[KDim].tag) is common.Staggered[KDim]
+        wrong_kind = dataclasses.replace(
+            common.dimension_ref(IDim), kind=common.DimensionKind.VERTICAL
+        )
+        with pytest.raises(ValueError, match="does not match"):
+            common.resolve(wrong_kind)
+
+    def test_pickles_by_value(self):
+        spec = common.dimension_ref(common.Staggered[KDim])
+        data = pickle.dumps(spec)
+        assert __name__.encode() in data  # the tag is a string in the stream...
+        assert pickle.loads(data) == spec
+
+        class _NoGlobals(pickle.Unpickler):
+            def find_class(self, module, name):
+                # ...and no class other than the spec's own machinery is referenced
+                assert module.startswith("gt4py.") or module in ("builtins", "copyreg"), module
+                return super().find_class(module, name)
+
+        assert _NoGlobals(io.BytesIO(data)).load() == spec
+
+    def test_local_category(self):
+        assert common.dimension_ref(V2E).category is common.DimensionCategory.LOCAL
+        assert common.is_local_dimension(common.dimension_ref(common.ConstList))
+        assert common.is_local_dimension(V2E) and not common.is_local_dimension(ECDim)
+        assert common.is_cartesian_axis(common.dimension_ref(IDim))
+        assert not common.is_cartesian_axis(common.dimension_ref(V2E))
+
+    def test_repr_is_distinct_from_the_class(self):
+        ref = common.dimension_ref(IDim)
+        assert repr(ref) == f"DimensionRef({IDim.tag}, horizontal, cartesian_axis)"
+        assert repr(ref) != repr(IDim)
+        assert str(ref) == str(IDim) == "IDim[horizontal]"  # the display form is shared
+
+    def test_interned(self):
+        ref = common.dimension_ref(common.Staggered[KDim])
+        fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}
+        assert common.DimensionRef(**fields) is ref
+        assert pickle.loads(pickle.dumps(ref)) is ref
+        assert common.DimensionRef.from_tag(ref.tag, ref.kind, ref.category) is ref
+        assert dataclasses.replace(ref) is ref
+
+    def test_rejected_construction_leaves_the_interned_ref_intact(self):
+        ref = common.dimension_ref(IDim)
+        # a string kind is coerced *before* the lookup: same interned object, still an enum
+        assert common.DimensionRef(ref.module, ref.qualname, "horizontal", "cartesian_axis") is ref
+        assert ref.kind is common.DimensionKind.HORIZONTAL
+        with pytest.raises(ValueError):
+            common.DimensionRef(ref.module, ref.qualname, "sideways", "cartesian_axis")
+        with pytest.raises(ValueError, match="must have kind 'local'"):
+            common.DimensionRef(ref.module, ref.qualname, "horizontal", "local")
+        assert ref.kind is common.DimensionKind.HORIZONTAL
+        assert ref.category is common.DimensionCategory.CARTESIAN_AXIS
+        assert common.dimension_ref(IDim) is ref
+
+    def test_interning_under_contention(self):
+        import concurrent.futures
+        import threading
+
+        barrier = threading.Barrier(8)
+
+        def build(i: int) -> common.DimensionRef:
+            barrier.wait()
+            return common.DimensionRef(
+                "contention_mod", f"Dim{i // 8}", "horizontal", "other"
+            )  # 8 threads race on each name
+
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            refs = list(pool.map(build, range(8 * 50)))
+        for i in range(0, len(refs), 8):
+            assert all(r is refs[i] for r in refs[i : i + 8])
+
+    def test_hash_is_not_pickled_or_fingerprinted(self):
+        from gt4py.next import fingerprinting
+
+        ref = common.dimension_ref(IDim)
+        assert [f.name for f in dataclasses.fields(ref)] == [
+            "module",
+            "qualname",
+            "kind",
+            "category",
+            "base",
+        ]
+        assert b"_hash" not in pickle.dumps(ref)
+        assert hash(ref) == hash(pickle.loads(pickle.dumps(ref)))
+        assert fingerprinting.make_fingerprinter()(ref)  # deterministic, by fields
+
+    def test_content_hash_does_not_depend_on_construction(self):
+        from gt4py.eve import utils as eve_utils
+        from gt4py.next.type_system import type_specifications as ts
+
+        dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+        ref = common.dimension_ref(IDim)
+        parsed = common.DimensionRef.from_tag(ref.tag, ref.kind, ref.category)
+        assert eve_utils.content_hash([ts.FieldType(dims=[IDim], dtype=dtype), ref]) == (
+            eve_utils.content_hash([ts.FieldType(dims=[parsed], dtype=dtype), parsed])
+        )
+
+    def test_from_tag_only_staggered_is_parametrized(self):
+        with pytest.raises(ValueError, match="only 'Staggered' is parametrized"):
+            common.DimensionRef.from_tag(
+                f"pkg:Other[{KDim.tag}]",
+                common.DimensionKind.VERTICAL,
+                common.DimensionCategory.CARTESIAN_AXIS,
+            )
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"module": "pkg"},
+            {"qualname": "Staggered[Other]"},
+            {"kind": common.DimensionKind.HORIZONTAL},
+        ],
+    )
+    def test_staggered_ref_is_validated_against_its_base(self, change):
+        ref = common.dimension_ref(common.Staggered[KDim])
+        fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}
+        with pytest.raises(ValueError, match="is not the staggered dimension"):
+            common.DimensionRef(**(fields | change))
 
 class TestCartesianAxisIndex:
     def test_axis_levels(self):
