@@ -83,7 +83,7 @@ def test_find_successor_state_non_terminal_loop_region():
 def test_collect_symbols_written_in_sdfg():
     sdfg = dace.SDFG(util.unique_name("collect_symbols_written_in_sdfg"))
     state1 = sdfg.add_state(is_start_block=True)
-    state2 = sdfg.add_state_after(state1)
+    state2 = sdfg.add_state()
     sdfg.add_edge(
         state1,
         state2,
