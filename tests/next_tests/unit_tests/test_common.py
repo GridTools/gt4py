@@ -1137,6 +1137,13 @@ class TestDimensionRef:
         with pytest.raises(ValueError, match="is not the staggered dimension"):
             common.DimensionRef(**(fields | change))
 
+    def test_same_tag_different_fields_is_rejected(self):
+        ref = common.dimension_ref(IDim)
+        redefined = dataclasses.replace(ref, kind=common.DimensionKind.VERTICAL)
+        common.check_consistent_dimension_refs([ref, ref, common.dimension_ref(JDim)])
+        with pytest.raises(ValueError, match="share the tag"):
+            common.check_consistent_dimension_refs([ref, redefined])
+
     def test_resolve_after_redefinition(self, monkeypatch):
         module = types.ModuleType("nbmod_spike")
         monkeypatch.setitem(sys.modules, "nbmod_spike", module)

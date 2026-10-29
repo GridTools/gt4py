@@ -464,6 +464,23 @@ def optional_dimension_ref(dim: Optional[Dimension | DimensionRef]) -> Optional[
     return None if dim is None else dimension_ref(dim)
 
 
+def check_consistent_dimension_refs(refs: Iterable[DimensionRef]) -> None:
+    """
+    Reject two different refs spelled with the same tag.
+
+    They would collide on every identifier derived from the tag (gtfn tag types, DaCe symbols,
+    offset-provider keys). Arises from a notebook cell re-run with a different `kind`, mixed with
+    fields or operators of the previous definition.
+    """
+    seen: dict[Tag, DimensionRef] = {}
+    for ref in refs:
+        if (other := seen.setdefault(ref.tag, ref)) != ref:
+            raise ValueError(
+                f"Two different dimensions share the tag '{ref.tag}': {other!r} and {ref!r}."
+                " Was a dimension redefined (e.g. a notebook cell re-run with another 'kind')?"
+            )
+
+
 class DimensionMeta(type):
     """
     Metaclass of all dimension classes.

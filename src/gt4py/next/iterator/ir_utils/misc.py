@@ -8,7 +8,7 @@
 
 import dataclasses
 from collections import ChainMap
-from typing import Callable, Iterable, TypeVar, cast
+from typing import Callable, Iterable, Optional, TypeVar, cast
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -17,7 +17,7 @@ from gt4py.next import common
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -279,3 +279,30 @@ def value_from_literal(literal: itir.Literal) -> core_defs.Scalar:
         assert literal.value in ["True", "False"]
         return literal.value == "True"
     return getattr(embedded, str(literal.type))(literal.value)
+
+
+def check_program_dimension_refs(
+    program: itir.Program,
+    offset_provider_type: common.OffsetProviderType,
+    column_axis: Optional[common.DimensionRef] = None,
+) -> None:
+    """
+    Reject a program in which two different `DimensionRef`s share a tag.
+
+    Collects the refs of the parameter types, the axis literals, the offset-provider types and
+    the column axis; see `common.check_consistent_dimension_refs`.
+    """
+    refs: list[common.DimensionRef] = [
+        axis.dim for axis in program.walk_values().if_isinstance(itir.AxisLiteral)
+    ]
+    for param in program.params:
+        if param.type is not None:
+            for type_ in type_info.primitive_constituents(param.type):
+                if isinstance(type_, ts.FieldType):
+                    refs.extend(type_.dims)
+    for conn_type in offset_provider_type.values():
+        if isinstance(conn_type, common.ConnectivityType):
+            refs.extend((*conn_type.domain, conn_type.codomain))
+    if column_axis is not None:
+        refs.append(column_axis)
+    common.check_consistent_dimension_refs(refs)

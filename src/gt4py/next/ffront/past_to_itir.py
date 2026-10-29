@@ -27,7 +27,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.stages import ConcretePASTProgramDef
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.transforms import remap_symbols, replace_get_domain_range_with_constants
 from gt4py.next.otf import arguments, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -139,6 +139,11 @@ def past_to_gtir(inp: ConcretePASTProgramDef) -> stages.CompilableProgramDef:
     }
     compile_time_args = dataclasses.replace(
         inp.args, args=args, kwargs=kwargs, column_axis=_column_axis(all_closure_vars)
+    )
+
+    # Two different dimensions spelled with one tag would collide on every generated name.
+    ir_misc.check_program_dimension_refs(
+        itir_program, compile_time_args.offset_provider_type, compile_time_args.column_axis
     )
 
     if config.DEBUG or inp.data.debug:
