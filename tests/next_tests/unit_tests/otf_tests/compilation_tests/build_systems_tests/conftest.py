@@ -11,6 +11,7 @@ import shutil
 import jinja2
 import pytest
 
+from gt4py.next import dimension_tags
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.next import common, config
@@ -57,7 +58,7 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
     )
     # NOTE: the tag types are named after the *mangled* dimension tags, which is what the
     # generated bindings reference; a dimension's tag is its qualified Python name (ADR 0029).
-    i_t, j_t = (common.codegen_name(d.tag) for d in (I, J))
+    i_t, j_t = (dimension_tags.codegen_name(d.tag) for d in (I, J))
     func = cpp_interface.render_function_declaration(
         entry_point,
         f"""\

@@ -13,6 +13,7 @@ import functools
 import numpy as np
 import pytest
 
+from gt4py.next import dimension_tags
 from gt4py import next as gtx
 from gt4py.eve import formatting
 from gt4py.next import common as gtx_common, int32, neighbor_sum
@@ -157,8 +158,8 @@ def {_bind_func_name}(device, sdfg_argtypes, args, sdfg_call_args, offset_provid
 
 # The generated binding names each table variable after the *mangled* offset key -- it has to be
 # a valid identifier -- but looks the table up in the offset provider by the real, qualified tag.
-_E2V_TABLE = f"table_{gtx_common.codegen_name(E2VDim.tag)}"
-_V2E_TABLE = f"table_{gtx_common.codegen_name(V2EDim.tag)}"
+_E2V_TABLE = f"table_{dimension_tags.codegen_name(E2VDim.tag)}"
+_V2E_TABLE = f"table_{dimension_tags.codegen_name(V2EDim.tag)}"
 
 
 def _binding_source_unstructured(use_metrics: bool) -> str:

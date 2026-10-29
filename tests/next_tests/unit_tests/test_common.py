@@ -8,36 +8,35 @@
 
 import dataclasses
 import io
-import itertools
 import operator
 import pickle
+import re
 import sys
 import types
-
-import numpy as np
 from typing import Optional, Pattern
 
+import numpy as np
 import pytest
-import re
 
+import gt4py.next.common as common
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-import gt4py.next.common as common
-from gt4py.next.iterator import builtins as itir_builtins
+from gt4py.next import dimension_tags
 from gt4py.next.common import (
-    Dimension,
     CartesianAxisIndex,
+    Dimension,
     DimensionIndex,
     DimensionKind,
+    DimensionRange,
     Domain,
     Infinity,
     UnitRange,
-    domain,
     dimension_range,
-    DimensionRange,
+    domain,
     promote_dims,
     unit_range,
 )
+from gt4py.next.iterator import builtins as itir_builtins
 
 
 class X(CartesianAxisIndex): ...
@@ -929,75 +928,6 @@ class TestDomainOrOperator:
             d1 | d2
 
 
-class TestCodegenName:
-    """`codegen_name` must be injective: a collision means two dimensions sharing a symbol."""
-
-    @pytest.mark.parametrize(
-        "tag, expected",
-        [
-            ("IDim", "IDim"),
-            ("mod.V2E.Local", "mod_dV2E_dLocal"),
-            ("mod:V2E.Local", "mod_cV2E_dLocal"),
-            ("a.b_c", "a_db_uc"),
-            ("a_b.c", "a_ub_dc"),
-            ("my__mod.X", "my_u_umod_dX"),
-            ("_CONST_DIM", "_uCONST_uDIM"),
-            # a parametrized tag: the brackets must not survive into the identifier
-            ("gt4py.next.common:Staggered[pkg:K]", "gt4py_dnext_dcommon_cStaggered_lpkg_cK_r"),
-        ],
-    )
-    def test_known_values(self, tag, expected):
-        assert common.codegen_name(tag) == expected
-        assert common.from_codegen_name(expected) == tag
-
-    @pytest.mark.parametrize(
-        "tag",
-        [
-            "_u",
-            "_d",
-            "_c",
-            "_l",
-            "_r",
-            "a_ud.b",
-            "_ud_du",
-            "..",
-            "__",
-            "[]",
-            "a[b.c]",
-            "_l[_r]",
-            "a:_c",
-        ],
-    )
-    def test_roundtrip_adversarial(self, tag):
-        """Tags that look like the escape sequences themselves must still round-trip."""
-        assert common.from_codegen_name(common.codegen_name(tag)) == tag
-
-    def test_output_is_a_valid_identifier(self):
-        for tag in ["mod.V2E.Local", "a.b_c", "_CONST_DIM", "pkg.sub.Dim", "mod.Staggered[mod.K]"]:
-            assert re.fullmatch(r"[A-Za-z_]\w*", common.codegen_name(tag)), tag
-
-    def test_injective_and_reversible_exhaustively(self):
-        """
-        Exhaustive over the characters that can actually collide, to a length that covers
-        every interaction between them.
-
-        The naive scheme -- `_` -> `__` then `.` -> `_` -- fails this with 686 collisions,
-        because a dot becomes a single underscore and `'..'` collides with an escaped `'_'`.
-        """
-        # every character a tag can contain that needs escaping, plus the escape letters
-        alphabet = "a._:[]udclr"
-        seen: dict[str, str] = {}
-        for length in range(1, 5):
-            for tag in map("".join, itertools.product(alphabet, repeat=length)):
-                mangled = common.codegen_name(tag)
-                assert mangled not in seen, (
-                    f"collision: {seen.get(mangled)!r} and {tag!r} both map to {mangled!r}"
-                )
-                seen[mangled] = tag
-                assert common.from_codegen_name(mangled) == tag
-        assert len(seen) == sum(len(alphabet) ** n for n in range(1, 5))
-
-
 def test_gt_dims_are_unqualified_names():
     """
     `__gt_dims__` is the interop protocol with `gt4py.cartesian`, which names axes by their bare
@@ -1040,7 +970,7 @@ class TestStaggered:
 
     def test_resolve_rejects_a_bracketed_tag_of_another_owner(self):
         with pytest.raises(ValueError, match="not a parametrized dimension"):
-            common.resolve(f"{KDim.tag}[{KDim.tag}]")
+            dimension_tags.resolve(f"{KDim.tag}[{KDim.tag}]")
 
 
 class TestDimensionRef:
@@ -1072,13 +1002,13 @@ class TestDimensionRef:
             assert common.DimensionRef.from_tag(spec.tag, spec.kind, spec.category) == spec
 
     def test_resolve(self):
-        assert common.resolve(common.dimension_ref(IDim)) is IDim
-        assert common.resolve(common.Staggered[KDim].tag) is common.Staggered[KDim]
+        assert dimension_tags.resolve(common.dimension_ref(IDim)) is IDim
+        assert dimension_tags.resolve(common.Staggered[KDim].tag) is common.Staggered[KDim]
         wrong_kind = dataclasses.replace(
             common.dimension_ref(IDim), kind=common.DimensionKind.VERTICAL
         )
         with pytest.raises(ValueError, match="does not match"):
-            common.resolve(wrong_kind)
+            dimension_tags.resolve(wrong_kind)
 
     def test_pickles_by_value(self):
         spec = common.dimension_ref(common.Staggered[KDim])
@@ -1243,15 +1173,15 @@ class TestDimensionRef:
 
         first = declare(kind=common.DimensionKind.VERTICAL)
         ref = common.dimension_ref(first)
-        assert common.resolve(ref) is first
+        assert dimension_tags.resolve(ref) is first
         # a re-run cell: same kind, so an equal ref, resolving to the *current* class
         second = declare(kind=common.DimensionKind.VERTICAL)
         assert common.dimension_ref(second) == ref
-        assert common.resolve(ref) is second
+        assert dimension_tags.resolve(ref) is second
         # a re-run cell with another kind: the old ref no longer describes the class
         declare()
         with pytest.raises(ValueError, match="does not match"):
-            common.resolve(ref)
+            dimension_tags.resolve(ref)
 
 
 class TestDimensionKeyedConfiguration:

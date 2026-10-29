@@ -24,7 +24,7 @@ from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils, xtyping
-from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, dimension_tags, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -499,7 +499,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     ) -> artifacts.ExecutableProgram:
         artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
-            with common.bind_dimension_classes(self.dimension_classes):
+            with dimension_tags.bind_dimension_classes(self.dimension_classes):
                 return self.backend.load_artifact(artifact)
         except Exception as e:
             raise RuntimeError(

@@ -9,11 +9,11 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal
+from typing import Final, Literal, Optional
 
 import dace
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, dimension_tags
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.lowering import gtir_python_codegen
@@ -53,23 +53,32 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
-def connectivity_identifier(name: str) -> str:
-    # NOTE: `name` is an offset-provider key, i.e. a qualified tag, which is not a valid SDFG
-    # array name; parse it back with `from_codegen_name` (see `is_connectivity_identifier`).
-    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{gtx_common.codegen_name(name)}"
+def connectivity_identifier(offset: str) -> str:
+    """Name of the SDFG array holding the connectivity of an offset-provider key."""
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{dimension_tags.codegen_name(offset)}"
+
+
+def connectivity_offset(name: str) -> Optional[str]:
+    """Offset-provider key of a connectivity array name, the inverse of `connectivity_identifier`.
+
+    Returns `None` if `name` is not a connectivity identifier.
+    """
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
+        return None
+    return dimension_tags.from_codegen_name(m[1])
 
 
 def is_connectivity_identifier(
     name: str, offset_provider_type: gtx_common.OffsetProviderType | None = None
 ) -> bool:
-    if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
+    if (offset := connectivity_offset(name)) is None:
         return False
     elif offset_provider_type is None:
         # If no offset provider type is provided, we assume there is a connectivity identifier
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
     else:
-        return gtx_common.has_offset(offset_provider_type, gtx_common.from_codegen_name(m[1]))
+        return gtx_common.has_offset(offset_provider_type, offset)
 
 
 def _field_symbol(
@@ -79,11 +88,10 @@ def _field_symbol(
     offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
     dim = gtx_common.dimension_ref(dim)  # orchestration passes the connectivity's classes
-    if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
-        name = f"__{field_name}_{gtx_common.codegen_name(dim.tag)}_{sym}"
+    if (offset := connectivity_offset(field_name)) is None:
+        name = f"__{field_name}_{dimension_tags.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
-        offset = gtx_common.from_codegen_name(m[1])
         assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         assert isinstance(conn_type, gtx_common.NeighborConnectivityType)

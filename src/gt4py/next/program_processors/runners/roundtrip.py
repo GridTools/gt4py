@@ -24,6 +24,7 @@ from gt4py.next import (
     common,
     config,
     custom_layout_allocators as next_allocators,
+    dimension_tags,
 )
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
@@ -65,14 +66,18 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     # that name to the real object, looked up by the unmangled tag.
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> str:
         # an integer offset literal is a shift amount, not a name
-        return common.codegen_name(node.value) if isinstance(node.value, str) else str(node.value)
+        return (
+            dimension_tags.codegen_name(node.value)
+            if isinstance(node.value, str)
+            else str(node.value)
+        )
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> str:
-        return common.codegen_name(node.value)
+        return dimension_tags.codegen_name(node.value)
 
     def visit_CartesianOffset(self, node: itir.CartesianOffset, **kwargs: Any) -> str:
-        domain = common.codegen_name(node.domain.value)
-        codomain = common.codegen_name(node.codomain.value)
+        domain = dimension_tags.codegen_name(node.domain.value)
+        codomain = dimension_tags.codegen_name(node.codomain.value)
         return f"gtx.CartesianConnectivity({domain}, codomain={codomain})"
 
     FunCall = as_fmt("{fun}({','.join(args)})")
@@ -184,11 +189,11 @@ def _generate_source(
     )
 
     offset_literals_src = "\n".join(
-        f'{common.codegen_name(o)} = offset("{o}")' for o in offset_literals
+        f'{dimension_tags.codegen_name(o)} = offset("{o}")' for o in offset_literals
     )
     # A dimension is not constructed from its name any more (ADR 0029): the loader binds each
     # mangled name to its class, see `RoundtripArtifact.load`.
-    axis_tags = {common.codegen_name(o.value): o.value for o in axis_literals_set}
+    axis_tags = {dimension_tags.codegen_name(o.value): o.value for o in axis_literals_set}
     source_code = f"{header}{offset_literals_src}\n{program}"
 
     assert isinstance(ir, itir.Program)
@@ -244,12 +249,12 @@ class RoundtripArtifact:
 
     def load(self) -> artifacts.ExecutableProgram:
         # NOTE: the generated program runs embedded, in the user's process, on dimension classes:
-        # the calling program's own (`common.bind_dimension_classes`), else imported by tag.
-        bindings = {name: common.resolve(tag) for name, tag in self.axis_tags.items()}
+        # the calling program's own (`dimension_tags.bind_dimension_classes`), else imported by tag.
+        bindings = {name: dimension_tags.resolve(tag) for name, tag in self.axis_tags.items()}
         mod = _load_module(self.source_code, self.debug, bindings)
         fencil = getattr(mod, self.entry_point_name)
         captured_column_axis = (
-            None if self.column_axis is None else common.resolve(self.column_axis)
+            None if self.column_axis is None else dimension_tags.resolve(self.column_axis)
         )
         dispatch_backend = self.dispatch_backend
 

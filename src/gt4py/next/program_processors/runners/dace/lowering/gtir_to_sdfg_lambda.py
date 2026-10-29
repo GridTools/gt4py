@@ -33,7 +33,7 @@ from dace.libraries import standard as dace_stdlib
 
 from gt4py import eve
 from gt4py.eve.xtyping import MaybeNestedInTuple, NestedTuple
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common, dimension_tags, utils as gtx_utils
 from gt4py.next.iterator import builtins as gtir_builtins, ir as gtir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -648,7 +648,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         assert len(field_desc.shape) == len(arg_expr.field_domain)
         field_indices = [(dim, arg_expr.indices[dim]) for dim, _ in arg_expr.field_domain]
         index_connectors = [
-            IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))
+            IndexConnectorFmt.format(dim=dimension_tags.codegen_name(dim.tag))
             for dim, index in field_indices
             if not isinstance(index, SymbolExpr)
         ]
@@ -658,7 +658,7 @@ class LambdaToDataflow(eve.NodeVisitor):
         index_internals = ",".join(
             str(index.value - offset)
             if isinstance(index := arg_expr.indices[dim], SymbolExpr)
-            else f"{IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))} - {offset}"
+            else f"{IndexConnectorFmt.format(dim=dimension_tags.codegen_name(dim.tag))} - {offset}"
             for (dim, offset) in arg_expr.field_domain
         )
         deref_node, connector_mapping = self._add_tasklet(
@@ -677,7 +677,7 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         # add termination points for the dynamic iterator indices
         for dim, index_expr in field_indices:
-            index_connector = IndexConnectorFmt.format(dim=gtx_common.codegen_name(dim.tag))
+            index_connector = IndexConnectorFmt.format(dim=dimension_tags.codegen_name(dim.tag))
             if isinstance(index_expr, MemletExpr):
                 self._add_input_data_edge(
                     index_expr.dc_node,
@@ -1183,7 +1183,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         self._add_mapped_tasklet(
-            name=f"{gtx_common.codegen_name(offset)}_neighbors",
+            name=f"{dimension_tags.codegen_name(offset)}_neighbors",
             map_ranges={neighbor_idx: f"0:{conn_type.max_neighbors}"},
             code=tasklet_expression,
             inputs=input_memlets,

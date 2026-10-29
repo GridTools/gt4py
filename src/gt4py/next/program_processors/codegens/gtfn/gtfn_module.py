@@ -14,7 +14,7 @@ from typing import Any, Final, Optional
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, dimension_tags
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import pass_manager
@@ -102,7 +102,7 @@ class GTFNTranslationStep(
                         connectivity = common.get_offset_type(offset_provider_type, dim_name)
                         assert isinstance(connectivity, common.NeighborConnectivityType)
                         size = connectivity.max_neighbors
-                        arg = f"gridtools::sid::dimension_to_tuple_like<generated::{common.codegen_name(dim_name)}_t, {size}>({arg})"
+                        arg = f"gridtools::sid::dimension_to_tuple_like<generated::{dimension_tags.codegen_name(dim_name)}_t, {size}>({arg})"
             arg_exprs.append(arg)
         return parameters, arg_exprs
 
@@ -122,7 +122,7 @@ class GTFNTranslationStep(
                 # NOTE: `name` is the offset-provider key, a qualified tag, so every identifier
                 # derived from it is mangled -- and identically, since the parameter name is
                 # referenced below and the `generated::<name>_t` tag type is declared elsewhere.
-                cname = common.codegen_name(name)
+                cname = dimension_tags.codegen_name(name)
                 param_name = GENERATED_CONNECTIVITY_PARAM_PREFIX + cname.lower()
 
                 # parameter
@@ -139,8 +139,8 @@ class GTFNTranslationStep(
                 # connectivity argument expression
                 nbtbl = (
                     f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{common.codegen_name(connectivity_type.domain[0].tag)}_t, "
-                    f"generated::{common.codegen_name(connectivity_type.domain[1].tag)}_t, "
+                    f"generated::{dimension_tags.codegen_name(connectivity_type.domain[0].tag)}_t, "
+                    f"generated::{dimension_tags.codegen_name(connectivity_type.domain[1].tag)}_t, "
                     f"{connectivity_type.max_neighbors}"
                     f">(std::forward<decltype({param_name})>({param_name}))"
                 )

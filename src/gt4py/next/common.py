@@ -16,7 +16,6 @@ import copyreg
 import dataclasses
 import enum
 import functools
-import importlib
 import math
 import re
 import sys
@@ -66,69 +65,6 @@ DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 _T = TypeVar("_T")
 
 Tag: TypeAlias = str
-
-
-_CODEGEN_UNESCAPE: Final = {"u": "_", "d": ".", "c": ":", "l": "[", "r": "]"}
-
-
-def codegen_name(tag: Tag) -> str:
-    """
-    Mangle a dimension or offset tag into a valid generated identifier.
-
-    A tag is a qualified Python name, `module:qualname`, so it contains dots and a colon, which
-    are illegal in a C++ identifier, in a DaCe symbol, and in `eve`'s `SymbolName` (`^[a-zA-Z_]\\w*$`). Since a
-    generated identifier may only contain `[A-Za-z0-9_]`, the underscore is the only
-    available separator, and escaping it is what makes the mapping reversible.
-
-    The escape is a *prefix* escape. The obvious alternative -- double every underscore,
-    then turn dots into single underscores -- is **not injective**: a dot becomes a single
-    underscore, so `'..'` and `'_'` both map to `'__'`.
-
-    Args:
-        tag: A dimension or offset tag, i.e. a qualified Python name.
-
-    Returns:
-        A valid identifier, unique for each distinct `tag`.
-
-    Examples:
-        >>> codegen_name("mod:V2E.Local")
-        'mod_cV2E_dLocal'
-        >>> codegen_name("a_b.c")
-        'a_ub_dc'
-        >>> from_codegen_name(codegen_name("my__mod:X"))
-        'my__mod:X'
-    """
-    # NOTE: `_` first, so the underscores introduced by the other escapes are not re-escaped.
-    # A tag's alphabet is `[A-Za-z0-9_.:[]]`: the colon separates module and qualname, and
-    # brackets come from a parametrized tag such as `Staggered[pkg:K]`, and would otherwise
-    # survive into the identifier.
-    return (
-        tag.replace("_", "_u")
-        .replace(".", "_d")
-        .replace(":", "_c")
-        .replace("[", "_l")
-        .replace("]", "_r")
-    )
-
-
-def from_codegen_name(name: str) -> Tag:
-    """
-    Recover a tag from the identifier `codegen_name` produced for it.
-
-    Needed wherever a backend parses a generated name back into the dimension or offset it
-    refers to.
-
-    Args:
-        name: An identifier produced by `codegen_name`.
-
-    Returns:
-        The original tag.
-
-    Examples:
-        >>> from_codegen_name("mod_cV2E_dLocal")
-        'mod:V2E.Local'
-    """
-    return re.sub(r"_([udclr])", lambda m: _CODEGEN_UNESCAPE[m.group(1)], name)
 
 
 @enum.unique
@@ -407,28 +343,6 @@ _DIMENSION_CLASS_CAPTURE: contextvars.ContextVar[Optional[list[tuple[DimensionRe
 def is_capturing_dimension_classes() -> bool:
     """Whether `capture_dimension_classes` is active (conversion caches must then be bypassed)."""
     return _DIMENSION_CLASS_CAPTURE.get() is not None
-
-
-#: Set while `bind_dimension_classes` is active: tag -> the class `resolve` must answer with.
-_DIMENSION_CLASS_BINDINGS: contextvars.ContextVar[Optional[dict[Tag, Dimension]]] = (
-    contextvars.ContextVar("_DIMENSION_CLASS_BINDINGS", default=None)
-)
-
-
-@contextlib.contextmanager
-def bind_dimension_classes(classes: Mapping[DimensionRef, Dimension]) -> Iterator[None]:
-    """
-    Make `resolve` answer with these classes (e.g. a program's own declarations) for their tags.
-
-    A program loaded after its dimensions were redefined (a re-run notebook cell) must run on
-    the classes it was declared with, not on whatever its tags import now. Other tags still
-    resolve by import.
-    """
-    token = _DIMENSION_CLASS_BINDINGS.set({ref.tag: cls for ref, cls in classes.items()})
-    try:
-        yield
-    finally:
-        _DIMENSION_CLASS_BINDINGS.reset(token)
 
 
 def replay_dimension_classes(pairs: Iterable[tuple[DimensionRef, Dimension]]) -> None:
@@ -799,80 +713,6 @@ class CartesianAxisIndex(AnyCartesianAxisIndex):
 
 
 _STAGGERED_TAG_RE: Final = re.compile(r"^(?P<owner>[^\[\]]+)\[(?P<base>.+)\]$")
-
-
-def resolve(dim: Tag | DimensionRef) -> Dimension:
-    """
-    Return the dimension class a tag or ref names, by importing it.
-
-    Not memoized: the answer is the module's *current* attribute, so a dimension redefined in
-    a re-run notebook cell resolves to the new class (`importlib` already caches the module).
-
-    Only for code running in the user's process that needs the class back: iterator-embedded
-    execution and the roundtrip backend. The compile path works on `DimensionRef` values.
-
-    A tag is `module:qualname` (`pkgutil.resolve_name` syntax), so this is an import followed by
-    an attribute walk -- the same way `pickle` references a class. Parametrized dimensions such
-    as `Staggered[K]` have no importable qualname; their tag has the form
-    `<owner tag>[<base tag>]` and is resolved by subscripting the owner, which goes through its
-    intern table and so returns the identical class.
-
-    Args:
-        dim: A dimension tag, or a spec (whose kind and category must then match the class).
-
-    Returns:
-        The dimension class.
-
-    Raises:
-        ValueError: If the module is not importable, the attribute walk fails, or a given spec
-            does not describe the class found (e.g. it was redefined with another kind).
-
-    Examples:
-        >>> resolve("gt4py.next.common:DimensionIndex") is DimensionIndex
-        True
-    """
-    if isinstance(dim, DimensionRef):
-        cls = resolve(dim.tag)
-        if (found := dimension_ref(cls)) != dim:
-            raise ValueError(
-                f"'{dim.tag}' resolves to '{found!r}', which does not match '{dim!r}'."
-            )
-        return cls
-
-    tag = dim
-    if (bindings := _DIMENSION_CLASS_BINDINGS.get()) is not None and (
-        bound := bindings.get(tag)
-    ) is not None:
-        return bound
-    if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
-        owner = resolve(match["owner"])
-        if not isinstance(owner, StaggeredMeta):
-            raise ValueError(
-                f"Cannot resolve tag '{tag}': '{match['owner']}' is not a parametrized dimension."
-            )
-        return owner[resolve(match["base"])]  # type: ignore[index] # a StaggeredMeta, checked
-
-    module_name, sep, qualname = tag.partition(":")
-    if not sep:
-        raise ValueError(f"'{tag}' is not a dimension tag ('module:qualname').")
-    try:
-        obj: Any = importlib.import_module(module_name)
-    except ImportError as ex:
-        raise ValueError(
-            f"Cannot resolve dimension tag '{tag}': module '{module_name}' is not importable. A"
-            " dimension referenced from the IR must be declared at module level in an importable"
-            " module."
-        ) from ex
-    for attr in qualname.split("."):
-        try:
-            obj = getattr(obj, attr)
-        except AttributeError as ex:
-            raise ValueError(
-                f"Cannot resolve dimension tag '{tag}': '{module_name}' has no attribute '{qualname}'."
-            ) from ex
-    if not isinstance(obj, DimensionMeta):
-        raise ValueError(f"Tag '{tag}' resolves to '{obj}', which is not a dimension.")
-    return cast(Dimension, obj)
 
 
 class Infinity(enum.Enum):

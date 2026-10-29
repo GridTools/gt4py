@@ -39,10 +39,10 @@ from .common import (
     domain,
     flip_staggered,
     is_staggered,
-    resolve,
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
+from .dimension_tags import resolve
 from .embedded import (  # Just for registering field implementations
     nd_array_field as _nd_array_field,
 )
