@@ -748,8 +748,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             raise TypeError(f"Unexpected {arg} as input argument.")
 
         if param_name not in sdfg.arrays:
-            inner_desc = gtir_to_sdfg_utils.as_global_desc(arg_desc)
-            sdfg.add_datadesc(param_name, inner_desc)
+            sdfg.add_datadesc(param_name, gtir_to_sdfg_utils.as_global_desc(arg_desc))
             input_memlets[param_name] = arg_expr
         else:
             # If the parameter name already exists in the nested SDFG, we assume that

@@ -718,20 +718,9 @@ def _configure_descending_point(
         parent: nested for nested, parent in nested_to_parent_name_mapping.items()
     }
 
-    # Symbols that the nested SDFG assigns itself, e.g. on an interstate edge, as a
-    #  loop variable of a `LoopRegion`, or as a map parameter. Such a symbol binds the
-    #  name inside the nested SDFG, so the name could mean something entirely different
-    #  than in the parent SDFG. Note that these symbols are not necessarily listed in
-    #  `nsdfg.symbols` and are thus unknown to `nsdfg.is_name_free()`.
-    inner_written_symbols: set[str] = set()
-    for isedge in nsdfg.all_interstate_edges():
-        inner_written_symbols.update(isedge.data.assignments.keys())
-    for region in nsdfg.all_control_flow_regions():
-        inner_written_symbols.update(region.new_symbols(nsdfg.symbols).keys())
-    for inner_state in nsdfg.states():
-        for inner_node in inner_state.nodes():
-            if isinstance(inner_node, dace_nodes.MapEntry):
-                inner_written_symbols.update(inner_node.params)
+    # Symbols assigned or bound inside the nested SDFG may have a different
+    #  meaning than in the parent SDFG.
+    inner_written_symbols = gtx_transformations.utils.gt_collect_symbols_written_in_sdfg(nsdfg)
 
     # Collect all the symbols that the producers use, e.g. in the shape of their data
     #  descriptors. They are mapped 1:1 into the nested SDFG, i.e. they have the same
@@ -759,22 +748,21 @@ def _configure_descending_point(
     #  conflicting symbols are first gathered and then applied in a single pass.
     rename_dict: dict[str, str] = {}
     symbols_to_map: set[str] = set()
-    taken_names: set[str] = inner_written_symbols | set(parent_symbol_types)
+    taken_names: set[str] = set(parent_symbol_types) | inner_written_symbols
     for psym in sorted(parent_symbol_types):
-        ptype = parent_symbol_types[psym]
-        if psym in nsdfg.arrays:
-            _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
         if (
-            psym not in inner_written_symbols
+            psym in nsdfg.symbols
             and psym in symbol_mapping
+            and psym not in inner_written_symbols
             and psym == str(symbol_mapping[psym])
-            and psym in nsdfg.symbols
-            and nsdfg.symbols[psym] == ptype
+            and nsdfg.symbols[psym] == parent_symbol_types[psym]
         ):
             # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
             continue
 
-        if psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
+        if psym in nsdfg.arrays:
+            _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
+        elif psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
             renamed_symbol = _find_new_nested_symbol(nsdfg, psym, taken_names)
             rename_dict[psym] = renamed_symbol
             taken_names.add(renamed_symbol)
@@ -1387,14 +1375,8 @@ def _find_consumer_specs_single_source_single_level(
     #  single element of the concat where data, only then it is a genuine consumer,
     #  i.e. the replacement is performed on this level: a tasklet is inserted here
     #  that produces the single consumed element.
-    #  A nested SDFG is different, it always opens up a deeper level, a "descending
-    #  point": in the SDFG IR the connector of a nested SDFG is not a view, it is
-    #  equivalent to the whole data connected to it, so the accesses inside use the
-    #  same coordinates as on this level, even if the nested SDFG only reads a single
-    #  element inside.
-    #  The replacement thus has to be performed inside it, which means that the
-    #  producers of the concat where data have to be mapped into the nested SDFG,
-    #  see `_configure_descending_point()`.
+    #  Before no-view NestedSDFG it was possible for a NestedSDFG to read a single element.
+    #  This is no longer possible, thus we descend into every NestedSDFG level.
     stairs_to_deeper_levels: list[_FinalConsumerSpec] = []  # Better name appreciated.
     consumer_specs: list[_FinalConsumerSpec] = []
     for consumer_spec in all_consumers:
