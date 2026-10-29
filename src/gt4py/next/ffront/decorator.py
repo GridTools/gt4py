@@ -238,8 +238,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
         connectivities: A dictionary holding static/compile-time information about the offset providers.
-            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
-            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
+            Used as the offset provider in `compile` when none is passed explicitly.
     """
 
     @classmethod
@@ -414,14 +413,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
-
-
-try:
-    from gt4py.next.program_processors.runners.dace.program import (  # type: ignore[assignment]
-        Program,
-    )
-except ImportError:
-    pass
 
 
 @dataclasses.dataclass(frozen=True)

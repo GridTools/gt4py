@@ -336,14 +336,14 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
 def test_step_builders_reach_all_step_settings():
     toolchain = dace_wf_backend.make_dace_toolchain(
         translation=functools.partial(
-            dace_wf_factory.make_dace_translator, disable_itir_transforms=True
+            dace_wf_factory.make_dace_translator, disable_field_origin_on_program_arguments=True
         ),
         compilation=functools.partial(
             dace_wf_factory.make_dace_compiler, add_gpu_trace_markers=True
         ),
     )
 
-    assert toolchain.executor.translation.step.disable_itir_transforms is True
+    assert toolchain.executor.translation.step.disable_field_origin_on_program_arguments is True
     assert toolchain.executor.compilation.add_gpu_trace_markers is True
 
 
