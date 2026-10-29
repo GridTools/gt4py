@@ -45,7 +45,6 @@ from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.otf import arguments
 
-from next_tests import definitions as test_definitions
 from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
@@ -67,6 +66,7 @@ from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-imp
     exec_alloc_descriptor,
     mesh_descriptor,
     MeshDescriptor,
+    no_backend,
     simple_cartesian_grid,
     CartesianGridDescriptor,
 )
@@ -540,41 +540,31 @@ def verify_with_default_data(
 
 @pytest.fixture
 def cartesian_case_no_backend():
-    return Case.from_cartesian_grid_descriptor(simple_cartesian_grid())
+    return Case.from_cartesian_grid_descriptor(simple_cartesian_grid(), backend=no_backend)
 
 
 @pytest.fixture
-def cartesian_case(
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
-):
+def cartesian_case(exec_alloc_descriptor: next_backend.Backend):
     return Case.from_cartesian_grid_descriptor(
         simple_cartesian_grid(),
-        backend=(
-            None
-            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-            else exec_alloc_descriptor
-        ),
+        backend=exec_alloc_descriptor,
         allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
 def unstructured_case_no_backend(mesh_descriptor: MeshDescriptor):
-    return Case.from_mesh_descriptor(mesh_descriptor)
+    return Case.from_mesh_descriptor(mesh_descriptor, backend=no_backend)
 
 
 @pytest.fixture
 def unstructured_case(
     mesh_descriptor: MeshDescriptor,
-    exec_alloc_descriptor: test_definitions.EmbeddedDummyBackend | next_backend.Backend,
+    exec_alloc_descriptor: next_backend.Backend,
 ):
     return Case.from_mesh_descriptor(
         mesh_descriptor,
-        backend=(
-            None
-            if isinstance(exec_alloc_descriptor, test_definitions.EmbeddedDummyBackend)
-            else exec_alloc_descriptor
-        ),
+        backend=exec_alloc_descriptor,
         allocator=exec_alloc_descriptor.allocator,
     )
 
@@ -712,11 +702,16 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    backend: Optional[next_backend.Backend]
+    backend: next_backend.Backend
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
-    allocator: next_allocators.FieldBufferAllocatorFactoryProtocol
+    allocator: constructors.Allocator
+
+    @property
+    def is_embedded(self) -> bool:
+        """Whether the case runs programs and operators embedded (in Python)."""
+        return isinstance(self.backend, next_backend.EmbeddedBackend)
 
     @property
     def as_field(self):
@@ -726,8 +721,8 @@ class Case:
     def from_cartesian_grid_descriptor(
         cls,
         grid_descriptor: CartesianGridDescriptor,
-        backend: Optional[next_backend.Backend] = None,
-        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+        backend: next_backend.Backend = no_backend,
+        allocator: Optional[constructors.Allocator] = None,
     ) -> Case:
         return cls(
             backend=backend,
@@ -748,8 +743,8 @@ class Case:
     def from_mesh_descriptor(
         cls,
         mesh_descriptor: MeshDescriptor,
-        backend: Optional[next_backend.Backend] = None,
-        allocator: Optional[next_allocators.FieldBufferAllocatorFactoryProtocol] = None,
+        backend: next_backend.Backend = no_backend,
+        allocator: Optional[constructors.Allocator] = None,
     ) -> Case:
         return cls(
             backend=backend,

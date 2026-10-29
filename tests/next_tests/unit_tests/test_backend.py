@@ -8,13 +8,20 @@
 
 """Tests for the backend kinds and the internal toolchain in `gt4py.next.backend`."""
 
+import copy
 import dataclasses
+import importlib.util
 
+import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import backend as next_backend, custom_layout_allocators as next_allocators
 from gt4py.next.otf import arguments, artifacts
+from gt4py.next.program_processors.runners import embedded as embedded_runners, gtfn
+
+
+IDim = gtx.Dimension("IDim")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -109,3 +116,118 @@ def test_toolchain_is_not_public():
     assert "Toolchain" not in gtx.__all__
     assert "Toolchain" not in gtx.typing.__all__
     assert "Backend" in gtx.typing.__all__
+
+
+def test_backend_allocator_unwraps_a_factory():
+    inner = next_allocators.StandardCPUFieldBufferAllocator()
+
+    class Factory:
+        __gt_allocator__ = inner
+
+    assert _OtherBackend(name="other", allocator=Factory()).__gt_allocator__ is inner
+    assert _OtherBackend(name="other", allocator=inner).__gt_allocator__ is inner
+    assert _OtherBackend(name="other", allocator=np).__gt_allocator__ is np
+
+
+def test_embedded_backend_defaults_to_numpy():
+    backend = next_backend.EmbeddedBackend(name="my_embedded")
+
+    assert isinstance(backend, next_backend.Backend)
+    assert not isinstance(backend, next_backend.CompiledBackend)
+    assert backend.allocator is np
+    assert backend.__gt_allocator__ is np
+    assert [field.name for field in dataclasses.fields(backend)] == ["name", "allocator"]
+
+
+def test_embedded_backend_rejects_a_non_namespace_allocator():
+    with pytest.raises(TypeError, match="must be an array namespace"):
+        next_backend.EmbeddedBackend(
+            name="bad", allocator=next_allocators.StandardCPUFieldBufferAllocator()
+        )
+
+
+def test_embedded_backend_instances():
+    assert gtx.embedded_numpy is embedded_runners.embedded_numpy
+    assert isinstance(gtx.embedded_numpy, next_backend.EmbeddedBackend)
+    assert gtx.embedded_numpy.name == "embedded_numpy"
+    assert gtx.embedded_numpy.allocator is np
+    assert "embedded_numpy" in gtx.__all__
+
+
+@pytest.mark.parametrize("name, package", [("embedded_cupy", "cupy"), ("embedded_jax", "jax")])
+def test_optional_embedded_backend(name, package):
+    if importlib.util.find_spec(package) is None:
+        with pytest.raises(AttributeError, match=f"requires the optional '{package}' package"):
+            getattr(embedded_runners, name)
+    else:
+        backend = getattr(embedded_runners, name)
+        assert isinstance(backend, next_backend.EmbeddedBackend)
+        assert backend.name == name
+        assert getattr(embedded_runners, name) is backend
+
+
+def test_embedded_runners_unknown_attribute():
+    with pytest.raises(AttributeError, match="no attribute 'embedded_foo'"):
+        embedded_runners.embedded_foo  # noqa: B018 [useless-expression]
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [gtx.embedded_numpy, gtfn.run_gtfn, _make_compiled_backend()],
+    ids=lambda backend: backend.name,
+)
+def test_deepcopy_of_a_backend_is_the_backend(backend):
+    assert copy.deepcopy(backend) is backend
+
+
+def _make_copy_program(backend):
+    @gtx.field_operator(backend=backend)
+    def identity(a: gtx.Field[[IDim], gtx.float64]) -> gtx.Field[[IDim], gtx.float64]:
+        return a
+
+    @gtx.program(backend=backend)
+    def copy_program(a: gtx.Field[[IDim], gtx.float64], out: gtx.Field[[IDim], gtx.float64]):
+        identity(a, out=out)
+
+    return copy_program
+
+
+@pytest.mark.parametrize(
+    "backend", [gtx.embedded_numpy, gtfn.run_gtfn], ids=lambda backend: backend.name
+)
+def test_deepcopy_of_a_program_shares_the_backend(backend):
+    program = _make_copy_program(backend)
+
+    program_copy = copy.deepcopy(program)
+
+    assert program_copy is not program
+    assert program_copy.backend is backend
+
+
+@pytest.mark.parametrize(
+    "backend", [gtx.embedded_numpy, gtfn.run_gtfn], ids=lambda backend: backend.name
+)
+def test_deepcopy_of_a_program_after_allocation(backend):
+    program = _make_copy_program(backend)
+    field = gtx.zeros({IDim: 3}, allocator=program)
+    assert isinstance(field.ndarray, np.ndarray)
+
+    program_copy = copy.deepcopy(program)
+
+    assert program_copy.backend is backend
+    assert "__gt_allocator__" not in program.__dict__
+
+
+def test_deepcopy_of_a_default_program():
+    @gtx.field_operator
+    def identity(a: gtx.Field[[IDim], gtx.float64]) -> gtx.Field[[IDim], gtx.float64]:
+        return a
+
+    @gtx.program
+    def copy_program(a: gtx.Field[[IDim], gtx.float64], out: gtx.Field[[IDim], gtx.float64]):
+        identity(a, out=out)
+
+    assert copy_program.backend is gtx.embedded_numpy
+    assert copy.deepcopy(copy_program).backend is gtx.embedded_numpy
+    gtx.zeros({IDim: 3}, allocator=copy_program)
+    assert copy.deepcopy(copy_program).backend is gtx.embedded_numpy

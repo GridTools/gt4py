@@ -38,6 +38,7 @@ Writing a new ADR is simple:
 ### Embedded Execution
 
 - [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
+- [0030 - Embedded Backends](0030-Embedded-Backends.md)
 
 ### Transformations
 

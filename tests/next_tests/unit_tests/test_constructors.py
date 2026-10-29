@@ -31,6 +31,17 @@ sizes = {I: 10, J: 10, K: 10}
 cp = core_defs.cp
 
 
+@dataclasses.dataclass(frozen=True)
+class ArrayNamespaceFactory:
+    """An allocator factory providing an array namespace, like an embedded backend."""
+
+    array_ns: ModuleType
+
+    @property
+    def __gt_allocator__(self) -> ModuleType:
+        return self.array_ns
+
+
 @dataclasses.dataclass
 class ConstructorTestSetup:
     allocator: gtx_typing.Allocator
@@ -52,6 +63,11 @@ def _constructor_test_cases():
         ),
         ConstructorTestSetup(
             allocator=np,
+            device=None,
+            expected_xp=np,
+        ),
+        ConstructorTestSetup(
+            allocator=ArrayNamespaceFactory(np),
             device=None,
             expected_xp=np,
         ),
@@ -157,6 +173,13 @@ def test_full(constructor_test_cases):
 def test_as_field():
     ref = np.random.rand(sizes[I]).astype(gtx.float32)
     a = gtx.as_field([I], ref)
+    assert np.array_equal(a.ndarray, ref)
+
+
+def test_as_field_with_array_namespace_factory():
+    ref = np.random.rand(sizes[I]).astype(gtx.float32)
+    a = gtx.as_field([I], ref, allocator=ArrayNamespaceFactory(np))
+    assert isinstance(a.ndarray, np.ndarray)
     assert np.array_equal(a.ndarray, ref)
 
 
@@ -291,6 +314,43 @@ class TestFieldConstructorInit:
         field = fc.zeros(self._domain)
         assert isinstance(field.ndarray, np.ndarray)
         assert not field.ndarray.flags["C_CONTIGUOUS"]  # custom layout
+
+    def test_array_namespace_factory(self):
+        """allocator=factory providing numpy → unwraps and uses array-API standard allocation."""
+        fc = constructors.FieldConstructor(allocator=ArrayNamespaceFactory(np))
+        field = fc.zeros(self._domain)
+        assert isinstance(field.ndarray, np.ndarray)
+        assert field.ndarray.flags["C_CONTIGUOUS"]  # standard array-API allocation
+
+    def test_array_namespace_factory_aligned_index_warns(self):
+        """allocator=factory providing numpy with aligned_index → warns as for numpy."""
+        aligned_index = [common.NamedIndex(I, 0)]
+        with pytest.warns(UserWarning, match="aligned_index"):
+            fc = constructors.FieldConstructor(
+                allocator=ArrayNamespaceFactory(np), aligned_index=aligned_index
+            )
+        field = fc.zeros(self._domain)
+        assert field.ndarray.flags["C_CONTIGUOUS"]
+
+    def test_array_namespace_factory_device_mismatch_raises(self):
+        """allocator=factory providing numpy, device=CUDA → raises ValueError as for numpy."""
+        device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
+        with pytest.raises(ValueError, match="NumPy does not support device type"):
+            constructors.FieldConstructor(allocator=np, device=device)
+        with pytest.raises(ValueError, match="NumPy does not support device type"):
+            constructors.FieldConstructor(allocator=ArrayNamespaceFactory(np), device=device)
+
+    def test_field_buffer_allocator_factory_device_mismatch_raises(self):
+        """allocator=factory providing a CPU allocator, device=CUDA → raises ValueError."""
+
+        class FakeFactory:
+            @property
+            def __gt_allocator__(self):
+                return next_allocators.StandardCPUFieldBufferAllocator()
+
+        device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
+        with pytest.raises(ValueError, match="device type"):
+            constructors.FieldConstructor(allocator=FakeFactory(), device=device)
 
     def test_field_buffer_allocator_device_mismatch_raises(self):
         """allocator=CPU allocator, device=CUDA → raises ValueError."""

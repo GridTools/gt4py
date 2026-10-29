@@ -60,7 +60,7 @@ class Toolchain:  # internal
 `gt4py.next` or `gtx.typing`; its frontend field is for GT4Py tests and future internal use, not
 user customization. Embedded execution remains `backend=None` in this PR. A sibling
 `EmbeddedBackend(Backend)`, rather than a mode of `CompiledBackend`, and retirement of `None`
-are decided separately in ADR 0030 (follow-up #2956).
+are decided separately in [ADR 0030](0030-Embedded-Backends.md) (follow-up #2956).
 
 ### From definition to callable
 
@@ -222,7 +222,7 @@ this argues against spreading it across releases. Backend restructuring itself r
 opaque compile path. #2742 adds stage observability, including `Toolchain.translate`; #2743
 replaces the combinators and renames `OTFCompileWorkflow` to `CompilePipeline`. Thus the pipeline
 and observability sections describe the target design, not APIs already available at #2741.
-Embedded backends follow separately under ADR 0030 (#2956).
+Embedded backends follow separately under [ADR 0030](0030-Embedded-Backends.md) (#2956).
 
 This partially supersedes [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md) (the
 workflow-combinator framework and the `otf.step_types` naming; its stage vocabulary and

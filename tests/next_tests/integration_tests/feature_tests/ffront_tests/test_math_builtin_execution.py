@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
-from typing import Callable, Optional
+from typing import Callable
 
 import numpy as np
 import pytest
@@ -39,7 +39,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Backend]):
+def make_builtin_field_operator(builtin_name: str, backend: next_backend.Backend):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -120,7 +120,7 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backen
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inputs):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         # TODO(havogt) find a way that works for embedded
         pytest.xfail("Test does not have a field view program.")
     if builtin_name == "gamma":

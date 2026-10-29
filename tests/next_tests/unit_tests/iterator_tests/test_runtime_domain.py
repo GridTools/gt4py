@@ -12,7 +12,13 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import common
 from gt4py.next.iterator.builtins import deref
-from gt4py.next.iterator.runtime import CartesianDomain, UnstructuredDomain, _deduce_domain, fundef
+from gt4py.next.iterator.runtime import (
+    CartesianDomain,
+    UnstructuredDomain,
+    _deduce_domain,
+    fendef,
+    fundef,
+)
 
 
 @fundef
@@ -45,3 +51,12 @@ def test_embedded_error_on_wrong_domain():
     out = gtx.as_field([I], np.zeros(1))
     with pytest.raises(RuntimeError, match="expected 'UnstructuredDomain'"):
         foo[dom](gtx.as_field([I], np.zeros((1,))), out=out, offset_provider={"bar": connectivity})
+
+
+def test_embedded_backend_is_rejected_by_iterator_programs():
+    @fendef
+    def fencil():
+        pass
+
+    with pytest.raises(ValueError, match="iterator-level embedded execution.*'backend=None'"):
+        fencil(backend=gtx.embedded_numpy)

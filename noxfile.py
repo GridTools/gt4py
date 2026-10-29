@@ -94,7 +94,10 @@ CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["uses_dace"]},
+    # No `jax` extra here, so exclude `requires_jax`: the only such items in the dace
+    # selection are the embedded JAX parameters of the backend matrix, which dace
+    # tests skip anyway, and which need `jax` to load the `embedded_jax` backend.
+    "dace": {"extras": [], "markers": ["uses_dace", "not requires_jax"]},
 }
 
 

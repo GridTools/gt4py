@@ -125,7 +125,7 @@ def compile_testee_scan(request, cartesian_case):
 
 
 def test_compile(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee.compile(offset_provider=cartesian_case.offset_provider)
@@ -144,7 +144,7 @@ def test_compile(cartesian_case, compile_testee):
 
 
 def test_precompile_and_jit_have_same_arg_descr_mapping(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     empty_static_args = {}
@@ -163,7 +163,7 @@ def test_precompile_and_jit_have_same_arg_descr_mapping(cartesian_case, compile_
 
 
 def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
     with pytest.raises(ValueError):
         compile_testee.compile(offset_provider=cartesian_case.offset_provider).compile(
@@ -172,7 +172,7 @@ def test_compile_twice_same_program_errors(cartesian_case, compile_testee):
 
 
 def test_compile_kwargs(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee.compile(offset_provider=cartesian_case.offset_provider)
@@ -188,7 +188,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
 
 @pytest.mark.uses_scan
 def test_compile_scan(cartesian_case, compile_testee_scan):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     if isinstance(compile_testee_scan, gtx.ffront.decorator.FieldOperator):
@@ -208,7 +208,7 @@ def test_compile_scan(cartesian_case, compile_testee_scan):
 
 
 def test_compile_domain(cartesian_case, compile_testee_domain):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee_domain.compile(offset_provider=cartesian_case.offset_provider)
@@ -229,7 +229,7 @@ def test_compile_domain(cartesian_case, compile_testee_domain):
 
 @pytest.fixture
 def compile_testee_unstructured(unstructured_case):
-    if unstructured_case.backend is None:
+    if unstructured_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     @gtx.field_operator
@@ -255,7 +255,7 @@ def compile_testee_unstructured_no_jit(compile_testee_unstructured):
 
 @pytest.mark.uses_unstructured_shift
 def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
-    if unstructured_case.backend is None:
+    if unstructured_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee_unstructured.compile(
@@ -291,7 +291,7 @@ def skip_value_mesh_descriptor(exec_alloc_descriptor):
 def test_compile_unstructured_wrong_offset_provider(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
-    if unstructured_case.backend is None:
+    if unstructured_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh
@@ -315,7 +315,7 @@ def test_compile_unstructured_wrong_offset_provider(
 def test_compile_unstructured_for_two_offset_providers(
     unstructured_case, compile_testee_unstructured_no_jit, skip_value_mesh_descriptor
 ):
-    if unstructured_case.backend is None:
+    if unstructured_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # compiled for skip_value_mesh and simple_mesh
@@ -364,7 +364,7 @@ def compile_variants_field_operator():
 def compile_variants_testee_not_compiled(
     cartesian_case, compile_variants_field_operator
 ) -> Program:
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     @gtx.program(backend=cartesian_case.backend)
@@ -528,7 +528,7 @@ def test_compile_variants_config_default_disable_jit(cartesian_case):
     """
     # One of the 2 cases will be the non-default. The program has to be defined after the config
     # has been altered in order for the value to take effect.
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     with mock.patch.object(config, "ENABLE_JIT_DEFAULT", True):
@@ -778,7 +778,7 @@ def test_compile_variants_with_static_params_jit(
 def test_compile_variants_decorator_static_params_jit(
     compile_variants_field_operator, cartesian_case
 ):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     @gtx.program(
@@ -849,7 +849,7 @@ def test_compile_variants_error_static_field(cartesian_case, compile_variants_te
 
 @pytest.fixture
 def compile_variants_testee_tuple(cartesian_case):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
     elif (
         cartesian_case.backend.name.startswith("run_dace_gpu")
@@ -933,7 +933,7 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
 
 @pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())
 def test_wait_for_compilation(cartesian_case, compile_testee, compile_testee_domain, mode):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     with (
@@ -960,7 +960,7 @@ def test_compile_local_program_offloads_to_worker_process(cartesian_case, compil
     the raw definition function, which is unpicklable for local definitions.
     A fallback to in-thread compilation would mean the boundary leaked.
     """
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     runner = compiled_program.runners.ProcessRunner(
@@ -989,7 +989,7 @@ def test_compile_local_program_offloads_to_worker_process(cartesian_case, compil
 
 
 def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     # Failing only once the gate opens keeps the future pending until after
@@ -1022,7 +1022,7 @@ def test_wait_for_compilation_raises_on_failed_compilation(cartesian_case, compi
 @pytest.mark.uses_tuple_args
 @pytest.mark.uses_tuple_returns
 def test_compile_variants_decorator_static_domains(cartesian_case):
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     captured_cargs: Optional[arguments.CompileTimeArgs] = None
@@ -1070,7 +1070,7 @@ def test_compile_variants_decorator_static_domains(cartesian_case):
 @pytest.fixture
 def scan_operator_testee(cartesian_case):
     """A scan operator called directly as a FieldOperator — the only case where _is_generic=True."""
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0, backend=cartesian_case.backend)
@@ -1105,7 +1105,7 @@ def test_warn_on_direct_scan_operator_call(cartesian_case, scan_operator_testee)
 
 def test_forbid_compilation_guard_is_effective(cartesian_case):
     """`_forbid_compilation` lets compiled variants run and makes any new compilation fail."""
-    if cartesian_case.backend is None:
+    if cartesian_case.is_embedded:
         pytest.skip("Embedded execution does not compile.")
 
     @gtx.field_operator

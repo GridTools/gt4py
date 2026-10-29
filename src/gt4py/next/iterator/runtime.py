@@ -82,10 +82,16 @@ class FendefDispatcher:
         column_axis = column_axis or self.column_axis
 
         if backend is not None:
-            itir_node = self.itir(*args)
-
             # TODO(tehrengruber): remove cirular dependency and place import at the top of the file
             from gt4py.next import backend as next_backend
+
+            if isinstance(backend, next_backend.EmbeddedBackend):
+                raise ValueError(
+                    f"Embedded backend '{backend.name}' runs field-view programs only:"
+                    " iterator-level embedded execution is selected with 'backend=None'."
+                )
+
+            itir_node = self.itir(*args)
 
             if isinstance(backend, next_backend.CompiledBackend):
                 compiled_program = next_backend.Toolchain(backend).compile(
