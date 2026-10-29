@@ -31,18 +31,18 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.runtime import set_at, fendef, fundef, offset
 
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
+    E2VDim,
+    Edge,
+    V2EDim,
+    Vertex,
     assert_close,
     nabla_setup,
 )
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-
-V2E = offset("V2E")
-E2V = offset("E2V")
+V2E = offset(V2EDim.tag)
+E2V = offset(E2VDim.tag)
 
 
 @fundef
@@ -119,7 +119,7 @@ def test_compute_zavgS(program_processor):
         zavgS,
         setup.input_field,
         setup.S_fields[0],
-        offset_provider={"E2V": setup.edges2node_connectivity},
+        offset_provider={E2VDim.tag: setup.edges2node_connectivity},
     )
 
     if validate:
@@ -133,7 +133,7 @@ def test_compute_zavgS(program_processor):
         zavgS,
         setup.input_field,
         setup.S_fields[1],
-        offset_provider={"E2V": setup.edges2node_connectivity},
+        offset_provider={E2VDim.tag: setup.edges2node_connectivity},
     )
     if validate:
         assert_close(-1000788897.3202186, np.min(zavgS.asnumpy()))
@@ -167,7 +167,7 @@ def test_compute_zavgS2(program_processor):
         zavgS,
         setup.input_field,
         setup.S_fields,
-        offset_provider={"E2V": setup.edges2node_connectivity},
+        offset_provider={E2VDim.tag: setup.edges2node_connectivity},
     )
 
     if validate:
@@ -203,8 +203,8 @@ def test_nabla(program_processor):
         setup.sign_field,
         setup.vol_field,
         offset_provider={
-            "E2V": setup.edges2node_connectivity,
-            "V2E": setup.nodes2edge_connectivity,
+            E2VDim.tag: setup.edges2node_connectivity,
+            V2EDim.tag: setup.nodes2edge_connectivity,
         },
     )
 
@@ -243,8 +243,8 @@ def test_nabla2(program_processor):
         setup.sign_field,
         setup.vol_field,
         offset_provider={
-            "E2V": setup.edges2node_connectivity,
-            "V2E": setup.nodes2edge_connectivity,
+            E2VDim.tag: setup.edges2node_connectivity,
+            V2EDim.tag: setup.nodes2edge_connectivity,
         },
     )
 
@@ -321,8 +321,8 @@ def test_nabla_sign(program_processor):
         vertex_index,  # TODO(havogt): should be an index function field
         setup.is_pole_edge_field,
         offset_provider={
-            "E2V": setup.edges2node_connectivity,
-            "V2E": setup.nodes2edge_connectivity,
+            E2VDim.tag: setup.edges2node_connectivity,
+            V2EDim.tag: setup.nodes2edge_connectivity,
         },
     )
 

@@ -19,12 +19,12 @@ import threading
 import types
 import warnings
 import weakref
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils, xtyping
-from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, dimension_tags, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -359,6 +359,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
+    #: The dimension classes the definition declares (the Python edge). Loading an artifact that
+    #: turns tags back into classes (in-process backends) binds them, see `_load_artifact`.
+    dimension_classes: Mapping[common.DimensionRef, common.Dimension] = dataclasses.field(
+        default_factory=dict
+    )
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, artifacts.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
@@ -399,6 +404,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
+        # NOTE: the one place keys of a class-keyed provider become tags, for calls and for
+        # `compile` alike (see `_compile_variant`), so both compute the same cache key.
+        offset_provider = common.normalize_offset_provider(offset_provider)
         canonical_args, canonical_kwargs = self._args_canonicalizer(*args, **kwargs)
         if (extractor := self._primitive_values_extractor) is not None:
             args, kwargs = extractor(*canonical_args, **canonical_kwargs)
@@ -491,7 +499,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     ) -> artifacts.ExecutableProgram:
         artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
-            return self.backend.load_artifact(artifact)
+            with dimension_tags.bind_dimension_classes(self.dimension_classes):
+                return self.backend.load_artifact(artifact)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load the compiled program '{self.definition.__name__}'."
@@ -635,6 +644,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
+        offset_provider = common.normalize_offset_provider(offset_provider)  # type: ignore[assignment] # same values
         if not common.is_offset_provider(offset_provider):
             if common.is_offset_provider_type(offset_provider):
                 raise ValueError(

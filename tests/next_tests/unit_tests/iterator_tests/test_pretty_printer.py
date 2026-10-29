@@ -8,6 +8,9 @@
 
 import pytest
 
+import gt4py.next as gtx
+
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir, pretty_printer
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
@@ -234,10 +237,8 @@ def test_shift():
 
 
 def test_cartesian_offset():
-    testee = ir.CartesianOffset(
-        domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
-    )
-    expected = "Iₕ→Jₕ"
+    testee = ir.CartesianOffset(domain=ir.AxisLiteral(dim=IDim), codomain=ir.AxisLiteral(dim=JDim))
+    expected = f"{IDim.tag}ₕᵃ→{JDim.tag}ₕᵃ"
     actual = pformat(testee)
     assert actual == expected
 
@@ -259,26 +260,46 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_axis_literal_horizontal():
-    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL)
-    expected = "Iₕ"
-    actual = pformat(testee)
-    assert actual == expected
+class IDim(gtx.CartesianAxisIndex): ...
 
 
-def test_axis_literal_vertical():
-    testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.VERTICAL)
-    expected = "Iᵥ"
-    actual = pformat(testee)
-    assert actual == expected
+class JDim(gtx.CartesianAxisIndex): ...
+
+
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class Vertex(gtx.DimensionIndex): ...
+
+
+class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+@pytest.mark.parametrize(
+    "dim, suffix", [(IDim, "ₕᵃ"), (KDim, "ᵥᵃ"), (Vertex, "ₕ"), (LocalDim, "ₗˡ")]
+)
+def test_axis_literal(dim, suffix):
+    # the suffixes are the spec's kind and category
+    assert pformat(ir.AxisLiteral(dim=dim)) == f"{dim.tag}{suffix}"
+
+
+def test_axis_literal_of_unimportable_spec():
+    # printing never imports: the literal carries its spec
+    spec = common.DimensionRef(
+        module="not.loaded",
+        qualname="KDim",
+        kind=common.DimensionKind.VERTICAL,
+        category=common.DimensionCategory.CARTESIAN_AXIS,
+    )
+    assert pformat(ir.AxisLiteral(dim=spec)) == "not.loaded:KDimᵥᵃ"
 
 
 def test_named_range_horizontal():
     testee = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
-        args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
+        args=[ir.AxisLiteral(dim=IDim), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDimₕ: [x, y["
+    expected = f"{IDim.tag}ₕᵃ: [x, y["
     actual = pformat(testee)
     assert actual == expected
 

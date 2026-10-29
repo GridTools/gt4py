@@ -347,7 +347,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
         # we would need to look inside the stencil to find out where the resulting iterator
         # is defined, e.g. using trace shift, instead just use an empty list which means
         # everywhere
-        defined_dims: list[common.Dimension] = []
+        defined_dims: list[common.DimensionRef] = []
         return it_ts.IteratorType(
             position_dims=position_dims, defined_dims=defined_dims, element_type=stencil_return_type
         )
@@ -355,7 +355,7 @@ def lift(stencil: TypeSynthesizer) -> TypeSynthesizer:
     return apply_lift
 
 
-def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.Dimension]:
+def _collect_and_check_dimensions(input_: ts.TypeSpec) -> list[common.DimensionRef]:
     """
     Extracts dimensions from non-zero-dimensional field inputs and ensures they match.
     """
@@ -405,15 +405,17 @@ def _canonicalize_nb_fields(
     Transform neighbor / sparse field type by removal of local dimension and addition of corresponding `ListType` dtype.
 
     Examples:
+    >>> class Vertex(common.DimensionIndex): ...
+    >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
     >>> input_field = ts.FieldType(
     ...     dims=[
-    ...         common.Dimension(value="Vertex"),
-    ...         common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL),
+    ...         Vertex,
+    ...         V2E,
     ...     ],
     ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
     ... )
     >>> _canonicalize_nb_fields(input_field)
-    FieldType(dims=[Dimension(value='Vertex', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=Dimension(value='V2E', kind=<DimensionKind.LOCAL: 'local'>)))
+    FieldType(dims=[DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:Vertex, horizontal, other)], dtype=ListType(element_type=ScalarType(kind=<ScalarKind.FLOAT64: 11>, shape=None), offset_type=DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:V2E, local, local)))
     """
     match input_:
         case tuple() | ts.TupleType():
@@ -447,10 +449,10 @@ def _canonicalize_nb_fields(
 
 
 def _resolve_dimensions(
-    input_dims: list[common.Dimension],
+    input_dims: list[common.DimensionRef],
     shift_tuple: tuple[itir.OffsetLiteral | itir.CartesianOffset, ...],
     offset_provider_type: common.OffsetProviderType,
-) -> list[common.Dimension]:
+) -> list[common.DimensionRef]:
     """
     Resolves the final dimensions by applying shifts from the given shift tuple.
 
@@ -474,12 +476,12 @@ def _resolve_dimensions(
         tells you the dimensions of the field returned by the `as_fieldop`, in this case
         `[Vertex, K]`.
 
-        >>> Edge = common.Dimension(value="Edge")
-        >>> Vertex = common.Dimension(value="Vertex")
-        >>> Cell = common.Dimension(value="Cell")
-        >>> K = common.Dimension(value="K", kind=common.DimensionKind.VERTICAL)
-        >>> V2E = common.Dimension(value="V2E")
-        >>> C2V = common.Dimension(value="C2V")
+        >>> class Edge(common.DimensionIndex): ...
+        >>> class Vertex(common.DimensionIndex): ...
+        >>> class Cell(common.DimensionIndex): ...
+        >>> class K(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
+        >>> class V2E(common.DimensionIndex): ...
+        >>> class C2V(common.DimensionIndex): ...
         >>> input_dims = [Edge, K]
         >>> shift_tuple = (
         ...     itir.OffsetLiteral(value="C2V"),
@@ -503,12 +505,17 @@ def _resolve_dimensions(
         ...         max_neighbors=4,
         ...     ),
         ... }
-        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
-        [Dimension(value='Cell', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='K', kind=<DimensionKind.VERTICAL: 'vertical'>)]
+        >>> _resolve_dimensions(
+        ...     common.dimension_refs(input_dims), shift_tuple, offset_provider_type
+        ... )
+        [DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:Cell, horizontal, other), DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:K, vertical, cartesian_axis)]
         >>> from gt4py.next.iterator.ir_utils import ir_makers as im
-        >>> IDim = common.Dimension(value="IDim")
+        >>> class IDim(common.CartesianAxisIndex): ...
         >>> IHalfDim = common.flip_staggered(IDim)
-        >>> JDim = common.Dimension(value="JDim")
+        >>> class JDim(common.CartesianAxisIndex): ...
+        >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
+        >>> # class declared in a doctest is not an attribute of the real module:
+        >>> import sys
         >>> JHalfDim = common.flip_staggered(JDim)
         >>> input_dims = [IDim, JDim]
         >>> shift_tuple = (
@@ -523,8 +530,10 @@ def _resolve_dimensions(
         ...     ),
         ...     itir.OffsetLiteral(value=0),
         ... )
-        >>> _resolve_dimensions(input_dims, shift_tuple, offset_provider_type)
-        [Dimension(value='JDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='IDim', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
+        >>> _resolve_dimensions(
+        ...     common.dimension_refs(input_dims), shift_tuple, offset_provider_type
+        ... )
+        [DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:JDim, horizontal, cartesian_axis), DimensionRef(gt4py.next.iterator.type_system.type_synthesizer:IDim, horizontal, cartesian_axis)]
 
     """
     resolved_dims = []
@@ -579,7 +588,7 @@ def as_fieldop(
 
         if not domain:
             deduced_domain = None
-            output_dims: list[common.Dimension] = []
+            output_dims: list[common.DimensionRef] = []
             if offset_provider_type is not None and shift_sequences_per_param is not None:
                 for field, shift_sequences in zip(
                     new_fields, shift_sequences_per_param, strict=True
@@ -594,7 +603,7 @@ def as_fieldop(
                                 ),
                             )
 
-                        assert all(isinstance(dim, common.Dimension) for dim in output_dims)
+                        assert all(isinstance(dim, common.DimensionRef) for dim in output_dims)
                         deduced_domain = ts.DomainType(dims=output_dims)
 
             if deduced_domain:
@@ -728,13 +737,13 @@ def shift(*offset_literals, offset_provider_type: common.OffsetProviderType) -> 
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it
-        new_position_dims: list[common.Dimension] | str
+        new_position_dims: list[common.DimensionRef] | str
         if offset_provider_type:
             new_position_dims = [*it.position_dims]
             assert len(offset_literals) % 2 == 0
             for offset_axis, _ in zip(offset_literals[:-1:2], offset_literals[1::2], strict=True):
-                source_dim: common.Dimension
-                target_dim: common.Dimension
+                source_dim: common.DimensionRef
+                target_dim: common.DimensionRef
                 if isinstance(offset_axis, it_ts.CartesianOffsetType):
                     source_dim, target_dim = offset_axis.domain, offset_axis.codomain
                 else:

@@ -9,11 +9,11 @@
 from __future__ import annotations
 
 import re
-from typing import Final, Literal
+from typing import Final, Literal, Optional
 
 import dace
 
-from gt4py.next import common as gtx_common
+from gt4py.next import common as gtx_common, dimension_tags
 from gt4py.next.iterator import builtins as gtir_builtins
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.lowering import gtir_python_codegen
@@ -53,35 +53,53 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
-def connectivity_identifier(name: str) -> str:
-    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
+def connectivity_identifier(offset: str) -> str:
+    """Name of the SDFG array holding the connectivity of an offset-provider key."""
+    return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{dimension_tags.codegen_name(offset)}"
+
+
+def connectivity_offset(name: str) -> Optional[str]:
+    """
+    Recover the offset-provider key from a connectivity array name.
+
+    The inverse of `connectivity_identifier`.
+
+    Args:
+        name: An SDFG array name.
+
+    Returns:
+        The offset-provider key (a tag), or `None` if `name` is not a connectivity identifier.
+    """
+    if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
+        return None
+    return dimension_tags.from_codegen_name(m[1])
 
 
 def is_connectivity_identifier(
     name: str, offset_provider_type: gtx_common.OffsetProviderType | None = None
 ) -> bool:
-    if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
+    if (offset := connectivity_offset(name)) is None:
         return False
     elif offset_provider_type is None:
         # If no offset provider type is provided, we assume there is a connectivity identifier
         # that matches the CONNECTIVITY_INDENTIFIER_RE.
         return True
     else:
-        return gtx_common.has_offset(offset_provider_type, m[1])
+        return gtx_common.has_offset(offset_provider_type, offset)
 
 
 def _field_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     sym: Literal["size", "stride"],
     offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
-    if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
-        name = f"__{field_name}_{dim.value}_{sym}"
+    dim = gtx_common.dimension_ref(dim)  # orchestration passes the connectivity's classes
+    if (offset := connectivity_offset(field_name)) is None:
+        name = f"__{field_name}_{dimension_tags.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
         assert offset_provider_type is not None
-        assert m[1] in offset_provider_type
-        offset = m[1]
+        assert offset in offset_provider_type
         conn_type = offset_provider_type[offset]
         assert isinstance(conn_type, gtx_common.NeighborConnectivityType)
         if dim == conn_type.source_dim:
@@ -95,7 +113,7 @@ def _field_symbol(
 
 def field_size_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "size", offset_provider_type)
@@ -103,28 +121,27 @@ def field_size_symbol(
 
 def field_stride_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     offset_provider_type: gtx_common.OffsetProviderType | None = None,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
-def _range_symbol_name(field_name: str, axis: str) -> str:
+def _range_symbol_name(field_name: str, dim: gtx_common.DimensionLike) -> str:
     """Common part of the name for the range start/stop symbols."""
-    dim = gtx_common.Dimension(axis)
     field_range = im.call("get_domain_range")(field_name, dim)
     return gtir_python_codegen.get_source(field_range)
 
 
-def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+def range_start_symbol(field_name: str, dim: gtx_common.DimensionLike) -> dace.symbol:
     """Format name of the start symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_0"
+    name = f"{_range_symbol_name(field_name, dim)}_0"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
-def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+def range_stop_symbol(field_name: str, dim: gtx_common.DimensionLike) -> dace.symbol:
     """Format name of the stop symbol for domain range."""
-    name = f"{_range_symbol_name(field_name, dim.value)}_1"
+    name = f"{_range_symbol_name(field_name, dim)}_1"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 

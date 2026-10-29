@@ -164,8 +164,8 @@ def test_tuple_return_2(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: [
-            np.sum(a[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
-            np.sum(b[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1),
+            np.sum(a[unstructured_case.offset_provider[V2EDim.tag].asnumpy()], axis=1),
+            np.sum(b[unstructured_case.offset_provider[V2EDim.tag].asnumpy()], axis=1),
         ],
         comparison=lambda a, tmp: (np.all(a[0] == tmp[0]), np.all(a[1] == tmp[1])),
     )

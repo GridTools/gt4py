@@ -18,11 +18,13 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors
 from gt4py.next.common import (
     Dimension,
+    CartesianAxisIndex,
+    DimensionIndex,
     DimensionKind,
     Domain,
     Field,
-    NamedIndex,
-    NamedRange,
+    DimensionIndex,
+    Staggered,
     UnitRange,
 )
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
@@ -33,9 +35,64 @@ from gt4py.next.ffront.experimental import as_offset
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 
-D0 = Dimension("D0")
-D1 = Dimension("D1")
-D2 = Dimension("D2")
+class I(CartesianAxisIndex): ...
+
+
+class J(CartesianAxisIndex): ...
+
+
+class V(DimensionIndex): ...
+
+
+class E(DimensionIndex): ...
+
+
+class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class V2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class C(DimensionIndex): ...
+
+
+class K(CartesianAxisIndex): ...
+
+
+class C2E2CO(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class A(DimensionIndex): ...
+
+
+class B(DimensionIndex): ...
+
+
+class X(CartesianAxisIndex): ...
+
+
+class Y(CartesianAxisIndex): ...
+
+
+class L(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class S(DimensionIndex): ...
+
+
+class T(DimensionIndex): ...
+
+
+class U(DimensionIndex): ...
+
+
+class M(DimensionIndex): ...
+
+
+class C2V(DimensionIndex): ...
+
+
+_DEFAULT_DIMS = (I, J, K)
 
 
 @pytest.fixture(
@@ -67,9 +124,25 @@ def unary_logical_op(request):
     yield request.param
 
 
+def _default_dim(i: int) -> Dimension:
+    """
+    Return the `i`-th default dimension: `I`, `J`, `K`, then `D3`, `D4`, ... created on first use.
+
+    The dimensions must be *stable across calls*: two domains built by separate calls are
+    compared by the tests, and a fresh class per call would be a different dimension. Each is
+    bound as a module attribute, so it is also importable by its qualified name.
+    """
+    if i < len(_DEFAULT_DIMS):
+        return _DEFAULT_DIMS[i]
+    name = f"D{i}"
+    if name not in globals():
+        globals()[name] = type(name, (common.DimensionIndex,), {"__module__": __name__})
+    return globals()[name]
+
+
 def _make_default_domain(shape: tuple[int, ...]) -> Domain:
     return common.Domain(
-        dims=tuple(Dimension(f"D{i}") for i in range(len(shape))),
+        dims=tuple(_default_dim(i) for i in range(len(shape))),
         ranges=tuple(UnitRange(0, s) for s in shape),
     )
 
@@ -108,7 +181,7 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
     data = nd_array_implementation.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    field = constructors.as_field((D0, D1), data)
+    field = constructors.as_field((I, J), data)
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
@@ -163,13 +236,13 @@ def test_where_builtin_different_domain(nd_array_implementation):
     true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
     false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
 
-    cond_field = common._field(nd_array_implementation.asarray(cond), domain=common.domain({D1: 2}))
+    cond_field = common._field(nd_array_implementation.asarray(cond), domain=common.domain({J: 2}))
     true_field = common._field(
         nd_array_implementation.asarray(true_),
-        domain=common.domain({D0: common.UnitRange(0, 2), D1: common.UnitRange(-1, 2)}),
+        domain=common.domain({I: common.UnitRange(0, 2), J: common.UnitRange(-1, 2)}),
     )
     false_field = common._field(
-        nd_array_implementation.asarray(false_), domain=common.domain({D1: common.UnitRange(-1, 3)})
+        nd_array_implementation.asarray(false_), domain=common.domain({J: common.UnitRange(-1, 3)})
     )
 
     expected = np.where(cond[np.newaxis, :], true_[:, 1:], false_[np.newaxis, 1:-1])
@@ -267,14 +340,14 @@ def test_unary_arithmetic_ops(unary_arithmetic_op, nd_array_implementation):
 
 
 @pytest.mark.parametrize(
-    "dims,expected_indices", [((D0,), (slice(5, 10), None)), ((D1,), (None, slice(5, 10)))]
+    "dims,expected_indices", [((I,), (slice(5, 10), None)), ((J,), (None, slice(5, 10)))]
 )
 def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expected_indices):
     arr1 = np.arange(10)
     arr1_domain = common.Domain(dims=dims, ranges=(UnitRange(0, 10),))
 
     arr2 = np.ones((5, 5))
-    arr2_domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
+    arr2_domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
 
     field1 = common._field(arr1, domain=arr1_domain)
     field2 = common._field(arr2, domain=arr2_domain)
@@ -348,14 +421,13 @@ def test_non_dispatched_function():
 
 def test_domain_premap():
     # Translation case
-    I = Dimension("I")
-    J = Dimension("J")
 
     N = 10
     data_field = common._field(
         0.1 * np.arange(N * N).reshape((N, N)),
         domain=common.Domain(
-            common.NamedRange(I, common.unit_range(N)), common.NamedRange(J, common.unit_range(N))
+            common.DimensionRange(I, common.unit_range(N)),
+            common.DimensionRange(J, common.unit_range(N)),
         ),
     )
     conn = common.CartesianConnectivity.for_translation(J, +1)
@@ -364,8 +436,8 @@ def test_domain_premap():
     expected = common._field(
         data_field.ndarray,
         domain=common.Domain(
-            common.NamedRange(I, common.unit_range(N)),
-            common.NamedRange(J, common.unit_range((-1, N - 1))),
+            common.DimensionRange(I, common.unit_range(N)),
+            common.DimensionRange(J, common.unit_range((-1, N - 1))),
         ),
     )
 
@@ -373,19 +445,18 @@ def test_domain_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
     # Relocation case
-    I_half = Dimension("I_half")
 
-    conn = common.CartesianConnectivity.for_relocation(I, I_half)
+    conn = common.CartesianConnectivity.for_relocation(I, Staggered[I])
 
     result = data_field.premap(conn)
     expected = common._field(
         data_field.ndarray,
         domain=common.Domain(
             dims=(
-                I_half,
+                Staggered[I],
                 J,
             ),
-            ranges=(data_field.domain[I].unit_range, data_field.domain[J].unit_range),
+            ranges=(data_field.domain[I].value, data_field.domain[J].value),
         ),
     )
 
@@ -394,8 +465,6 @@ def test_domain_premap():
 
 
 def test_reshuffling_premap():
-    I = Dimension("I")
-    J = Dimension("J")
 
     ij_field = common._field(
         np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]]),
@@ -422,8 +491,6 @@ def test_reshuffling_premap():
 
 
 def test_remapping_premap():
-    V = Dimension("V")
-    E = Dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
@@ -448,9 +515,6 @@ def test_remapping_premap():
 
 
 def test_remapping_premap_multineighbor():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -475,7 +539,6 @@ def test_remapping_premap_multineighbor():
 
 
 def test_remapping_premap_same_dim():
-    V = Dimension("V")
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -500,8 +563,6 @@ def test_remapping_premap_same_dim():
 
 def test_remapping_premap_same_dim_multineighbor():
     # Regression for #1583: source dim == target dim with a LOCAL neighbor dim (C2E2CO shape).
-    V = Dimension("V")
-    V2V = Dimension("V2V", kind=DimensionKind.LOCAL)
 
     V_START, V_STOP = 2, 7
     v_field = common._field(
@@ -535,9 +596,6 @@ def test_remapping_premap_same_dim_multineighbor():
 
 def test_premap_same_dim_multineighbor_with_extra_dim():
     # The actual #1583 bug shape: C2E2CO on a field with an extra (kept) dimension.
-    C = Dimension("C")
-    K = Dimension("K")
-    C2E2CO = Dimension("C2E2CO", kind=DimensionKind.LOCAL)
 
     NC, NK, NN = 5, 3, 4
     c_field = common._field(
@@ -561,10 +619,6 @@ def test_premap_same_dim_multineighbor_with_extra_dim():
 
 def test_gather_premap_multiple_connectivities():
     # Multiple gather connectivities introducing new dims in a single premap (was unsupported).
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
-    Y = Dimension("Y")
 
     NA, NB = 3, 4
     f = common._field(
@@ -589,8 +643,6 @@ def test_gather_premap_multiple_connectivities():
 def test_gather_premap_reshuffle_multiple_connectivities():
     # Simultaneous multi-axis reshuffle (the multi-axis `as_offset` shape): codomains stay in their
     # own domains, so out[i, j] = f[ci[i, j], cj[i, j]] (not a sequential composition).
-    I = Dimension("I")
-    J = Dimension("J")
 
     NI, NJ = 3, 4
     f = common._field(
@@ -611,9 +663,6 @@ def test_gather_premap_reshuffle_multiple_connectivities():
 
 def test_gather_premap_two_connectivities_same_new_dim():
     # Two connectivities introducing the *same* new dim -> diagonal gather out[x] = f[ca[x], cb[x]].
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
 
     NA, NB = 3, 4
     f = common._field(
@@ -637,9 +686,6 @@ def test_gather_premap_two_connectivities_same_new_dim():
 
 def test_gather_premap_reads_non_codomain_field_dim():
     # A connectivity that reads a field dim (B) other than its codomain (A): B is shared/narrowed.
-    A = Dimension("A")
-    B = Dimension("B")
-    L = Dimension("L", kind=DimensionKind.LOCAL)
 
     NA, NB = 3, 4
     f = common._field(
@@ -662,11 +708,6 @@ def test_gather_premap_reads_non_codomain_field_dim():
 
 def test_gather_premap_shared_domain_dim():
     # Two connectivities sharing a non-codomain domain dim (S): S is intersected and kept once.
-    A = Dimension("A")
-    B = Dimension("B")
-    S = Dimension("S")
-    T = Dimension("T")
-    U = Dimension("U")
 
     NA, NB = 3, 4
     f = common._field(
@@ -693,9 +734,6 @@ def test_gather_premap_shared_domain_dim():
 
 def test_gather_premap_mix_introducing_and_preserving():
     # One connectivity introduces a dim (X), another reshuffles a dim in place (B): allowed together.
-    A = Dimension("A")
-    B = Dimension("B")
-    X = Dimension("X")
 
     NA, NB = 3, 4
     f = common._field(
@@ -720,10 +758,6 @@ def test_gather_premap_mix_introducing_and_preserving():
 
 def test_premap_chained_connectivities_raises():
     # One connectivity reads a dim (B) that another remaps -> unsupported chained composition.
-    A = Dimension("A")
-    B = Dimension("B")
-    L = Dimension("L", kind=DimensionKind.LOCAL)
-    M = Dimension("M")
 
     f = common._field(
         np.arange(12).reshape(3, 4).astype(float),
@@ -746,8 +780,6 @@ def test_premap_chained_connectivities_raises():
 
 def test_premap_non_contiguous_inverse_image_raises():
     # A connectivity whose in-range indices are not a contiguous block cannot yield a contiguous domain.
-    V = Dimension("V")
-    E = Dimension("E")
 
     f = common._field(
         np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
@@ -763,8 +795,6 @@ def test_premap_non_contiguous_inverse_image_raises():
 
 
 def test_premap_disjoint_inverse_image_raises():
-    V = Dimension("V")
-    E = Dimension("E")
 
     f = common._field(
         np.arange(5).astype(float), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 5),))
@@ -781,7 +811,6 @@ def test_premap_disjoint_inverse_image_raises():
 
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
-    I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -798,7 +827,6 @@ def test_as_offset_1d():
 
 def test_as_offset_narrow_offset_dtype_no_wrap():
     # An int8 offset field over a domain larger than 128 must not wrap into the index table.
-    I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     N = 200
@@ -816,8 +844,6 @@ def test_as_offset_narrow_offset_dtype_no_wrap():
 
 def test_as_offset_2d_shift_one_keep_other():
     # Shift along I by a per-(i, j) offset, leave J: out[i, j] == f[i + off[i, j], j].
-    I = Dimension("I")
-    J = Dimension("J")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     NI, NJ = 4, 3
@@ -836,7 +862,6 @@ def test_as_offset_2d_shift_one_keep_other():
 
 def test_as_offset_boundary_narrows_domain():
     # A uniform out-of-bounds shift narrows the result to the contiguous in-range sub-domain.
-    I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -854,7 +879,6 @@ def test_as_offset_boundary_narrows_domain():
 
 def test_as_offset_scattered_oob_raises():
     # An out-of-bounds shift in the interior cannot yield a contiguous domain.
-    I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -871,8 +895,6 @@ def test_as_offset_scattered_oob_raises():
 
 def test_as_offset_introduces_dimension():
     # `off` carries a dim the field lacks: the result gains it, out[i, j] == f[i + off[i, j]].
-    I = Dimension("I")
-    J = Dimension("J")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     f = common._field(
@@ -891,7 +913,6 @@ def test_as_offset_introduces_dimension():
 
 def test_as_offset_nonzero_origin():
     # Field and offset over a domain that does not start at 0: indices must be shifted by the domain start.
-    I = Dimension("I")
     Ioff = fbuiltins.FieldOffset("Ioff", source=I, target=(I,))
 
     dom = common.Domain(dims=(I,), ranges=(UnitRange(2, 12),))
@@ -907,8 +928,6 @@ def test_as_offset_nonzero_origin():
 
 def test_as_offset_2d_shift_second_axis():
     # Shift along J (the non-leading axis) by a per-(i, j) offset, leave I: out[i, j] == f[i, j + off[i, j]].
-    I = Dimension("I")
-    J = Dimension("J")
     Joff = fbuiltins.FieldOffset("Joff", source=J, target=(J,))
 
     NI, NJ = 3, 4
@@ -927,23 +946,18 @@ def test_as_offset_2d_shift_second_axis():
 
 def test_as_offset_non_cartesian_offset_raises():
     # `as_offset` only supports Cartesian (self-shift) offsets: single target equal to source.
-    I = Dimension("I")
-    J = Dimension("J")
-    Vertex = Dimension("Vertex", kind=DimensionKind.HORIZONTAL)
-    Edge = Dimension("Edge", kind=DimensionKind.HORIZONTAL)
-    V2EDim = Dimension("V2EDim", kind=DimensionKind.LOCAL)
 
     off_I = common._field(
         np.zeros(3, dtype=int), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 3),))
     )
     off_V = common._field(
-        np.zeros(3, dtype=int), domain=common.Domain(dims=(Vertex,), ranges=(UnitRange(0, 3),))
+        np.zeros(3, dtype=int), domain=common.Domain(dims=(V,), ranges=(UnitRange(0, 3),))
     )
 
     # 2-element target (neighbor offset)
-    V2E = fbuiltins.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+    V2V_off = fbuiltins.FieldOffset(V2V.tag, source=V, target=(V, V2V))
     with pytest.raises(ValueError, match="Cartesian"):
-        as_offset(V2E, off_V)
+        as_offset(V2V_off, off_V)
 
     # 1-element target but source != target[0] (cross-dim)
     IfromJ = fbuiltins.FieldOffset("IfromJ", source=I, target=(J,))
@@ -956,39 +970,39 @@ def test_as_offset_non_cartesian_offset_raises():
     [
         (
             (
-                (D0,),
+                (I,),
                 common._field(
-                    np.arange(10), domain=common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),))
+                    np.arange(10), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(D0,), ranges=(UnitRange(0, 10),)),
+                Domain(dims=(I,), ranges=(UnitRange(0, 10),)),
             )
         ),
         (
             (
-                (D0, D1),
+                (I, J),
                 common._field(
-                    np.arange(10), domain=common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),))
+                    np.arange(10), domain=common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange.infinite())),
+                Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange.infinite())),
             )
         ),
         (
             (
-                (D0, D1),
+                (I, J),
                 common._field(
-                    np.arange(10), domain=common.Domain(dims=(D1,), ranges=(UnitRange(0, 10),))
+                    np.arange(10), domain=common.Domain(dims=(J,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(D0, D1), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
+                Domain(dims=(I, J), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
             )
         ),
         (
             (
-                (D0, D1, D2),
+                (I, J, K),
                 common._field(
-                    np.arange(10), domain=common.Domain(dims=(D1,), ranges=(UnitRange(0, 10),))
+                    np.arange(10), domain=common.Domain(dims=(J,), ranges=(UnitRange(0, 10),))
                 ),
                 Domain(
-                    dims=(D0, D1, D2),
+                    dims=(I, J, K),
                     ranges=(UnitRange.infinite(), UnitRange(0, 10), UnitRange.infinite()),
                 ),
             )
@@ -1002,11 +1016,11 @@ def test_field_broadcast(new_dims, field, expected_domain):
 
 @pytest.mark.parametrize(
     "domain_slice",
-    [(NamedRange(D0, UnitRange(0, 10)),), common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),))],
+    [(I.at(0, 10),), common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))],
 )
 def test_get_slices_with_named_indices_3d_to_1d(domain_slice):
     field_domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+        dims=(I, J, K), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
     slices = _get_slices_from_domain_slice(field_domain, domain_slice)
     assert slices == (slice(0, 10, None), slice(None), slice(None))
@@ -1014,18 +1028,18 @@ def test_get_slices_with_named_indices_3d_to_1d(domain_slice):
 
 def test_get_slices_with_named_index():
     field_domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+        dims=(I, J, K), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = (NamedRange(D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
+    named_index = (I.at(0, 10), J(2), K(3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
 
 def test_get_slices_invalid_type():
     field_domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+        dims=(I, J, K), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    new_domain = ((D0, "1"),)
+    new_domain = (I("1"),)
     with pytest.raises(ValueError):
         _get_slices_from_domain_slice(field_domain, new_domain)
 
@@ -1034,27 +1048,27 @@ def test_get_slices_invalid_type():
     "domain_slice,expected_dimensions,expected_shape",
     [
         (
-            (NamedRange(D0, UnitRange(7, 9)), NamedRange(D1, UnitRange(8, 10))),
-            (D0, D1, D2),
+            (I.at(7, 9), J.at(8, 10)),
+            (I, J, K),
             (2, 2, 15),
         ),
         (
-            (NamedRange(D0, UnitRange(7, 9)), NamedRange(D2, UnitRange(12, 20))),
-            (D0, D1, D2),
+            (I.at(7, 9), K.at(12, 20)),
+            (I, J, K),
             (2, 10, 8),
         ),
-        (common.Domain(dims=(D0,), ranges=(UnitRange(7, 9),)), (D0, D1, D2), (2, 10, 15)),
-        ((NamedIndex(D0, 8),), (D1, D2), (10, 15)),
-        ((NamedIndex(D1, 9),), (D0, D2), (5, 15)),
-        ((NamedIndex(D2, 11),), (D0, D1), (5, 10)),
-        ((NamedIndex(D0, 8), NamedRange(D1, UnitRange(8, 10))), (D1, D2), (2, 15)),
-        (NamedIndex(D0, 5), (D1, D2), (10, 15)),
-        (NamedRange(D0, UnitRange(5, 7)), (D0, D1, D2), (2, 10, 15)),
+        (common.Domain(dims=(I,), ranges=(UnitRange(7, 9),)), (I, J, K), (2, 10, 15)),
+        ((I(8),), (J, K), (10, 15)),
+        ((J(9),), (I, K), (5, 15)),
+        ((K(11),), (I, J), (5, 10)),
+        ((I(8), J.at(8, 10)), (J, K), (2, 15)),
+        (I(5), (J, K), (10, 15)),
+        (I.at(5, 7), (I, J, K), (2, 10, 15)),
     ],
 )
 def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(I, J, K), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
@@ -1066,13 +1080,13 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
 
 def test_absolute_indexing_dim_sliced():
     domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(I, J, K), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
+    indexed_field_1 = field[J(8) : J(10), I(5) : I(9)]
     expected = field[
-        NamedRange(dim=D0, unit_range=UnitRange(5, 9)),
-        NamedRange(dim=D1, unit_range=UnitRange(8, 10)),
+        I.at(5, 9),
+        J.at(8, 10),
     ]
 
     assert isinstance(indexed_field_1, common.Field)
@@ -1081,11 +1095,11 @@ def test_absolute_indexing_dim_sliced():
 
 def test_absolute_indexing_dim_sliced_single_slice():
     domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(I, J, K), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[D2(11)]
-    indexed_field_2 = field[NamedIndex(D2, 11)]
+    indexed_field_1 = field[K(11)]
+    indexed_field_2 = field[K(11)]
 
     assert isinstance(indexed_field_1, common.Field)
     assert are_equal_fields(indexed_field_1, indexed_field_2)
@@ -1093,28 +1107,77 @@ def test_absolute_indexing_dim_sliced_single_slice():
 
 def test_absolute_indexing_wrong_dim_sliced():
     domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(I, J, K), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
 
-    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'D1' and 'D0'."):
-        field[D1(8) : D0(10)]
+    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'J' and 'I'."):
+        field[J(8) : I(10)]
 
 
-def test_absolute_indexing_empty_dim_sliced():
-    domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
-    )
-    field = common._field(np.ones((5, 10, 15)), domain=domain)
-    with pytest.raises(IndexError, match="Lower bound needs to be specified"):
-        field[: D0(10)]
+@pytest.mark.parametrize(
+    "index, expected",
+    [
+        (slice(I(7), None), I.at(7, 10)),
+        (I.at(7, None), I.at(7, 10)),
+        (slice(None, I(7)), I.at(5, 7)),
+        (I.at(None, 7), I.at(5, 7)),
+        (I.at(None, None), I.at(5, 10)),
+        ((slice(I(7), None), slice(None, J(8))), (I.at(7, 10), J.at(5, 8))),
+    ],
+)
+def test_absolute_indexing_open_bound(index, expected):
+    # an open bound extends to the field's own bound, whether spelled as a slice or with `at`
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.arange(50).reshape((5, 10)), domain=domain)
+
+    assert are_equal_fields(field[index], field[expected])
+
+
+def test_absolute_indexing_infinite_domain():
+    # every infinite side is an open bound, also when indexing with a `Domain`
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.arange(50).reshape((5, 10)), domain=domain)
+
+    infinite = common.Domain(dims=(I,), ranges=(UnitRange.infinite(),))
+    assert are_equal_fields(field[infinite], field)
+    half_open = common.Domain(dims=(J,), ranges=(UnitRange(7, common.Infinity.POSITIVE),))
+    assert are_equal_fields(field[half_open], field[J.at(7, 15)])
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        slice(I(3), None),
+        I.at(11, None),
+        slice(None, I(11)),
+        I.at(None, 4),
+        slice(I(6), I(11)),
+        I.at(4, 7),
+    ],
+)
+def test_absolute_indexing_closed_bound_out_of_bounds(index):
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.ones((5, 10)), domain=domain)
+
+    with pytest.raises(embedded_exceptions.IndexOutOfBounds):
+        field[index]
+
+
+def test_absolute_indexing_slice_step():
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.ones((5, 10)), domain=domain)
+
+    assert are_equal_fields(field[I(6) : I(8) : 1], field[I.at(6, 8)])
+    with pytest.raises(IndexError, match="step"):
+        field[I(6) : I(8) : 2]
 
 
 def test_absolute_indexing_value_return():
-    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
-    named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
+    named_index = (I(12), J(6))
     assert isinstance(field, common.Field)
     value = field[named_index]
 
@@ -1128,24 +1191,24 @@ def test_absolute_indexing_value_return():
         (
             (slice(None, 5), slice(None, 2)),
             (5, 2),
-            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 4))),
+            Domain(I.at(5, 10), J.at(2, 4)),
         ),
         (
             (slice(None, 5),),
             (5, 10),
-            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 12))),
+            Domain(I.at(5, 10), J.at(2, 12)),
         ),
-        ((Ellipsis, 1), (10,), Domain(NamedRange(D0, UnitRange(5, 15)))),
+        ((Ellipsis, 1), (10,), Domain(I.at(5, 15))),
         (
             (slice(2, 3), slice(5, 7)),
             (1, 2),
-            Domain(NamedRange(D0, UnitRange(7, 8)), NamedRange(D1, UnitRange(7, 9))),
+            Domain(I.at(7, 8), J.at(7, 9)),
         ),
-        ((slice(1, 2), 0), (1,), Domain(NamedRange(D0, UnitRange(6, 7)))),
+        ((slice(1, 2), 0), (1,), Domain(I.at(6, 7))),
     ],
 )
 def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
-    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common._field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
@@ -1157,46 +1220,38 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
 @pytest.mark.parametrize(
     "index, expected_shape, expected_domain",
     [
-        ((1, slice(None), 2), (15,), Domain(dims=(D1,), ranges=(UnitRange(10, 25),))),
+        ((1, slice(None), 2), (15,), Domain(dims=(J,), ranges=(UnitRange(10, 25),))),
         (
             (slice(None), slice(None), 2),
             (10, 15),
-            Domain(dims=(D0, D1), ranges=(UnitRange(5, 15), UnitRange(10, 25))),
+            Domain(dims=(I, J), ranges=(UnitRange(5, 15), UnitRange(10, 25))),
         ),
         (
             (slice(None),),
             (10, 15, 10),
-            Domain(
-                dims=(D0, D1, D2), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
-            ),
+            Domain(dims=(I, J, K), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
         ),
         (
             (slice(None), slice(None), slice(None)),
             (10, 15, 10),
-            Domain(
-                dims=(D0, D1, D2), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
-            ),
+            Domain(dims=(I, J, K), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
         ),
         (
             (slice(None)),
             (10, 15, 10),
-            Domain(
-                dims=(D0, D1, D2), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
-            ),
+            Domain(dims=(I, J, K), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
         ),
-        ((0, Ellipsis, 0), (15,), Domain(dims=(D1,), ranges=(UnitRange(10, 25),))),
+        ((0, Ellipsis, 0), (15,), Domain(dims=(J,), ranges=(UnitRange(10, 25),))),
         (
             Ellipsis,
             (10, 15, 10),
-            Domain(
-                dims=(D0, D1, D2), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
-            ),
+            Domain(dims=(I, J, K), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
         ),
     ],
 )
 def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
     domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
+        dims=(I, J, K), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
     )
     field = common._field(np.ones((10, 15, 10)), domain=domain)
     indexed_field = field[index]
@@ -1208,7 +1263,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
 
 @pytest.mark.parametrize("index, expected_value", [((1, 0), 10), ((0, 1), 1)])
 def test_relative_indexing_value_return(index, expected_value):
-    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common._field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
     indexed_field = field[index]
 
@@ -1217,16 +1272,16 @@ def test_relative_indexing_value_return(index, expected_value):
 
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])
 def test_relative_indexing_out_of_bounds(lazy_slice):
-    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common._field(np.ones((10, 10)), domain=domain)
 
     with pytest.raises((embedded_exceptions.IndexOutOfBounds, IndexError)):
         lazy_slice(field)
 
 
-@pytest.mark.parametrize("index", [D0, "1", (D0, D1)])
+@pytest.mark.parametrize("index", [I, "1", (I, J)])
 def test_field_unsupported_index(index):
-    domain = common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),))
+    domain = common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))
     field = common._field(np.ones((10,)), domain=domain)
     with pytest.raises(IndexError, match="Unsupported index type"):
         field[index]
@@ -1239,16 +1294,14 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common._field(
-                np.ones((10,)) * 42.0, domain=common.Domain(NamedRange(D1, UnitRange(0, 10)))
-            ),
+            common._field(np.ones((10,)) * 42.0, domain=common.Domain(J.at(0, 10))),
         ),
     ],
 )
 def test_setitem(index, value):
     field = common._field(
         np.arange(100).reshape(10, 10),
-        domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
 
     expected = np.copy(field.asnumpy())
@@ -1262,12 +1315,10 @@ def test_setitem(index, value):
 def test_setitem_wrong_domain():
     field = common._field(
         np.arange(100).reshape(10, 10),
-        domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
 
-    value_incompatible = common._field(
-        np.ones((10,)) * 42.0, domain=common.Domain(NamedRange(D1, UnitRange(-5, 5)))
-    )
+    value_incompatible = common._field(np.ones((10,)) * 42.0, domain=common.Domain(J.at(-5, 5)))
 
     with pytest.raises(ValueError, match=r"Incompatible 'Domain'.*"):
         field[(1, slice(None))] = value_incompatible
@@ -1276,7 +1327,7 @@ def test_setitem_wrong_domain():
 def test_nd_array_field_getstate_excludes_cached_properties():
     """Test that __getstate__ only serializes dataclass fields, excluding cached properties."""
     data = np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    field = constructors.as_field((D0, D1), data)
+    field = constructors.as_field((I, J), data)
 
     # Access a cached property to populate the cache
     _ = field.__gt_buffer_info__
@@ -1294,7 +1345,7 @@ def test_nd_array_field_getstate_excludes_cached_properties():
 
 def test_nd_array_field_pickle_roundtrip():
     """Test that NdArrayField can be pickled and unpickled correctly using getstate/setstate."""
-    original = constructors.as_field((D0, D1), np.arange(12.0).reshape(3, 4))
+    original = constructors.as_field((I, J), np.arange(12.0).reshape(3, 4))
 
     # Access cached property to ensure it's not included in serialization
     _ = original.__gt_buffer_info__
@@ -1314,17 +1365,13 @@ def test_nd_array_field_pickle_roundtrip():
 
 
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
-    import dataclasses
-
-    V = Dimension("V")
-    E = Dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
         np.roll(np.arange(E_START, E_STOP), 1),
-        domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
+        domain=common.domain([common.dimension_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
 
@@ -1334,12 +1381,10 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
 
 
 def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
-    V = Dimension("V")
-    E = Dimension("E")
 
     e2v_conn = common._connectivity(
         np.asarray([2, 3, 4, 5]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
+        domain=common.domain([common.dimension_range((E, (0, 4)))]),
         codomain=V,
     )
 
@@ -1357,18 +1402,16 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
 
 
 def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
-    V = Dimension("V")
-    E = Dimension("E")
 
     original = common._connectivity(
         np.asarray([2, 3, 4, 5]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
+        domain=common.domain([common.dimension_range((E, (0, 4)))]),
         codomain=V,
         skip_value=-1,
     )
     restored = common._connectivity(
         np.asarray([0, 0, 0, 0]),
-        domain=common.domain([common.named_range((E, (0, 4)))]),
+        domain=common.domain([common.dimension_range((E, (0, 4)))]),
         codomain=V,
     )
 
@@ -1382,23 +1425,18 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
 
 
 def test_connectivity_field_inverse_image():
-    V = Dimension("V")
-    E = Dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
         np.roll(np.arange(E_START, E_STOP), 1),
-        domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
+        domain=common.domain([common.dimension_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
 
 
 def test_connectivity_field_inverse_image_2d_domain():
-    V = Dimension("V")
-    C = Dimension("C")
-    C2V = Dimension("C2V")
 
     V_START, V_STOP = 0, 3
     C_START, C_STOP = 0, 3
@@ -1408,8 +1446,8 @@ def test_connectivity_field_inverse_image_2d_domain():
         np.asarray([[0, 0, 2], [1, 1, 2], [2, 2, 2]]),
         domain=common.domain(
             [
-                common.named_range((C, (C_START, C_STOP))),
-                common.named_range((C2V, (C2V_START, C2V_STOP))),
+                common.dimension_range((C, (C_START, C_STOP))),
+                common.dimension_range((C2V, (C2V_START, C2V_STOP))),
             ]
         ),
         codomain=V,
@@ -1454,15 +1492,13 @@ def test_connectivity_field_inverse_image_2d_domain():
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
-    V = Dimension("V")
-    E = Dimension("E")
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
         np.asarray([0, 1, 2, 3, 4, 9, 7, 5, 8, 6]),
-        domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
+        domain=common.domain([common.dimension_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
 
@@ -1477,9 +1513,6 @@ def test_connectivity_field_inverse_image_non_contiguous():
 
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
-    V = Dimension("V")
-    C = Dimension("C")
-    C2V = Dimension("C2V")
 
     V_START, V_STOP = 0, 3
     C_START, C_STOP = 0, 4
@@ -1489,8 +1522,8 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
         np.asarray([[-1, 0, 2, -1], [1, 1, 2, 2], [2, 2, -1, -1], [-1, 2, -1, -1]]),
         domain=common.domain(
             [
-                common.named_range((C, (C_START, C_STOP))),
-                common.named_range((C2V, (C2V_START, C2V_STOP))),
+                common.dimension_range((C, (C_START, C_STOP))),
+                common.dimension_range((C2V, (C2V_START, C2V_STOP))),
             ]
         ),
         codomain=V,
@@ -1559,22 +1592,22 @@ def test_hyperslice(index_array, expected):
 @pytest.mark.parametrize(
     "cond, true_data, false_data, expected",
     [
-        (D0 == 0, ([0, 0], None), ([1, 1], None), ([0, 1], None)),
-        (D0 == -1, ([0, 0], {D0: (-1, 1)}), ([1, 1], {D0: (0, 2)}), ([0, 1, 1], {D0: (-1, 2)})),
-        (D0 < 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), ([0, 0, 1, 1], {D0: (-2, 2)})),
-        (D0 == 1, ([0, 0, 0], None), ([1, 1, 1], None), ([1, 0, 1], None)),
+        (I == 0, ([0, 0], None), ([1, 1], None), ([0, 1], None)),
+        (I == -1, ([0, 0], {I: (-1, 1)}), ([1, 1], {I: (0, 2)}), ([0, 1, 1], {I: (-1, 2)})),
+        (I < 0, ([0, 0], {I: (-2, 0)}), ([1, 1], {I: (0, 2)}), ([0, 0, 1, 1], {I: (-2, 2)})),
+        (I == 1, ([0, 0, 0], None), ([1, 1, 1], None), ([1, 0, 1], None)),
         # non-contiguous domain
-        (D0 <= 0, ([0, 0], {D0: (-2, 0)}), ([1, 1], {D0: (0, 2)}), None),
+        (I <= 0, ([0, 0], {I: (-2, 0)}), ([1, 1], {I: (0, 2)}), None),
         # empty result domain
         (
-            D0 < 0,
-            ([0, 0], {D0: (0, 2)}),
-            ([1, 1], {D0: (-2, 0)}),
-            ([], {D0: (0, 0)}),
+            I < 0,
+            ([0, 0], {I: (0, 2)}),
+            ([1, 1], {I: (-2, 0)}),
+            ([], {I: (0, 0)}),
         ),
         # broadcasting from scalar (needs infinite domain support)
         pytest.param(
-            D0 == 0,
+            I == 0,
             ([0, 0], None),
             (1, None),
             ([0, 1], None),
@@ -1631,42 +1664,42 @@ def test_concat_where(
     [
         # finite domain → two complement regions (left and right of the domain)
         (
-            common.Domain(dims=(D0,), ranges=(UnitRange(2, 5),)),
+            common.Domain(dims=(I,), ranges=(UnitRange(2, 5),)),
             (
-                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 2),)),
-                common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+                common.Domain(dims=(I,), ranges=(UnitRange(common.Infinity.NEGATIVE, 2),)),
+                common.Domain(dims=(I,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
             ),
         ),
         # single-point domain
         (
-            D0 == 3,
+            I == 3,
             (
-                common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 3),)),
-                common.Domain(dims=(D0,), ranges=(UnitRange(4, common.Infinity.POSITIVE),)),
+                common.Domain(dims=(I,), ranges=(UnitRange(common.Infinity.NEGATIVE, 3),)),
+                common.Domain(dims=(I,), ranges=(UnitRange(4, common.Infinity.POSITIVE),)),
             ),
         ),
-        # open on the left (D0 < 5) → only a right complement
+        # open on the left (I < 5) → only a right complement
         (
-            common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),
-            (common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),),
+            common.Domain(dims=(I,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),
+            (common.Domain(dims=(I,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),),
         ),
-        # open on the right (D0 >= 5) → only a left complement
+        # open on the right (I >= 5) → only a left complement
         (
-            common.Domain(dims=(D0,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
-            (common.Domain(dims=(D0,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),),
+            common.Domain(dims=(I,), ranges=(UnitRange(5, common.Infinity.POSITIVE),)),
+            (common.Domain(dims=(I,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)),),
         ),
         # full line (both infinite) → empty complement
         (
             common.Domain(
-                dims=(D0,),
+                dims=(I,),
                 ranges=(UnitRange(common.Infinity.NEGATIVE, common.Infinity.POSITIVE),),
             ),
             (),
         ),
         # empty domain → complement is the full line
         (
-            common.Domain(dims=(D0,), ranges=(UnitRange(3, 3),)),
-            (common.Domain(dims=(D0,), ranges=(UnitRange.infinite(),)),),
+            common.Domain(dims=(I,), ranges=(UnitRange(3, 3),)),
+            (common.Domain(dims=(I,), ranges=(UnitRange.infinite(),)),),
         ),
     ],
 )
@@ -1681,62 +1714,62 @@ def test_invert_domain(domain, expected):
     [
         # two adjacent fields, already ordered
         (
-            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (2, 4)})],
-            D0,
-            ([1, 2, 3, 4], {D0: (0, 4)}),
+            [([1, 2], {I: (0, 2)}), ([3, 4], {I: (2, 4)})],
+            I,
+            ([1, 2, 3, 4], {I: (0, 4)}),
             None,
         ),
         # two adjacent fields, reverse order → _concat sorts them
         (
-            [([3, 4], {D0: (2, 4)}), ([1, 2], {D0: (0, 2)})],
-            D0,
-            ([1, 2, 3, 4], {D0: (0, 4)}),
+            [([3, 4], {I: (2, 4)}), ([1, 2], {I: (0, 2)})],
+            I,
+            ([1, 2, 3, 4], {I: (0, 4)}),
             None,
         ),
         # three fields
         (
-            [([1], {D0: (0, 1)}), ([2], {D0: (1, 2)}), ([3], {D0: (2, 3)})],
-            D0,
-            ([1, 2, 3], {D0: (0, 3)}),
+            [([1], {I: (0, 1)}), ([2], {I: (1, 2)}), ([3], {I: (2, 3)})],
+            I,
+            ([1, 2, 3], {I: (0, 3)}),
             None,
         ),
         # single field (trivial concat)
         (
-            [([10, 20, 30], {D0: (5, 8)})],
-            D0,
-            ([10, 20, 30], {D0: (5, 8)}),
+            [([10, 20, 30], {I: (5, 8)})],
+            I,
+            ([10, 20, 30], {I: (5, 8)}),
             None,
         ),
         # gap between fields → NonContiguousDomain
         (
-            [([1, 2], {D0: (0, 2)}), ([3, 4], {D0: (3, 5)})],
-            D0,
+            [([1, 2], {I: (0, 2)}), ([3, 4], {I: (3, 5)})],
+            I,
             None,
             embedded_exceptions.NonContiguousDomain,
         ),
         # overlapping fields → ValueError
         (
-            [([1, 2, 3], {D0: (0, 3)}), ([4, 5, 6], {D0: (2, 5)})],
-            D0,
+            [([1, 2, 3], {I: (0, 3)}), ([4, 5, 6], {I: (2, 5)})],
+            I,
             None,
             ValueError,
         ),
         # three fields: first two overlap, third is disjoint from both
         (
             [
-                ([1, 2], {D0: (0, 2)}),
-                ([3, 4], {D0: (1, 3)}),
-                ([5, 6], {D0: (10, 12)}),
+                ([1, 2], {I: (0, 2)}),
+                ([3, 4], {I: (1, 3)}),
+                ([5, 6], {I: (10, 12)}),
             ],
-            D0,
+            I,
             None,
             ValueError,
         ),
         # negative domain indices
         (
-            [([1, 2], {D0: (-3, -1)}), ([3], {D0: (-1, 0)})],
-            D0,
-            ([1, 2, 3], {D0: (-3, 0)}),
+            [([1, 2], {I: (-3, -1)}), ([3], {I: (-1, 0)})],
+            I,
+            ([1, 2, 3], {I: (-3, 0)}),
             None,
         ),
     ],
@@ -1764,7 +1797,7 @@ def test_concat(fields_data, dim, expected_data, expect_error):
 def test_jax_jit_field_arguments():
     import jax
 
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    domain = common.domain({I: (1, 3), J: (2, 5)})
     a = common._field(
         jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
     )
@@ -1785,7 +1818,7 @@ def test_jax_jit_field_arguments():
 def test_jax_pytree_roundtrip():
     import jax
 
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    domain = common.domain({I: (1, 3), J: (2, 5)})
     field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
 
     children, treedef = jax.tree_util.tree_flatten(field)
@@ -1797,7 +1830,7 @@ def test_jax_pytree_roundtrip():
     assert restored.domain == domain
 
     other_field = common._field(
-        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
+        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({I: (0, 2), J: (2, 5)})
     )
     # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
     assert jax.tree_util.tree_structure(other_field) != treedef
@@ -1807,7 +1840,7 @@ def test_jax_pytree_roundtrip():
 def test_jax_traced_array_dispatch():
     import jax
 
-    domain = common.domain({D0: (0, 3)})
+    domain = common.domain({I: (0, 3)})
     x = jax.numpy.arange(3, dtype=np.float64)
 
     def loss(arr):
@@ -1819,9 +1852,9 @@ def test_jax_traced_array_dispatch():
     np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
 
     offsets = jax.numpy.asarray([[2, 0], [1, 2]])
-    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
+    codomain = common.domain({I: (0, 2), J: (0, 2)})
 
     def make_connectivity(arr):
-        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
+        return common._connectivity(arr, codomain=I, domain=codomain).ndarray
 
     np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)

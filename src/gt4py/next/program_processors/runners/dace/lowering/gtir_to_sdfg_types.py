@@ -65,7 +65,7 @@ class FieldopData:
             )
 
         if isinstance(self.gt_type, ts.FieldType):
-            it_indices: dict[gtx_common.Dimension, gtir_to_sdfg_lambda.DataExpr]
+            it_indices: dict[gtx_common.DimensionRef, gtir_to_sdfg_lambda.DataExpr]
             if isinstance(self.dc_node.desc(sdfg), dace.data.Scalar):
                 assert len(self.gt_type.dims) == 0  # zero-dimensional field
                 it_indices = {}

@@ -13,7 +13,7 @@ import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
 from gt4py.next import common, errors
-from gt4py.next.common import Dimension, DimensionKind, promote_dims
+from gt4py.next.common import DimensionKind, promote_dims
 from gt4py.next.ffront import (
     dialect_ast_enums,
     experimental,
@@ -41,9 +41,8 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(
-    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    ... )
+    >>> class I(common.CartesianAxisIndex): ...
+    >>> field_t = ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
     """
@@ -174,7 +173,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     >>> from gt4py.next import Field
     >>> from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-    >>> IDim = Dimension("IDim")
+    >>> from gt4py.next.common import CartesianAxisIndex, DimensionIndex
+    >>> class IDim(CartesianAxisIndex): ...
     >>> def example(a: "Field[[IDim], float]", b: "Field[[IDim], float]"):
     ...     return a + b
 
@@ -482,7 +482,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                                 " choose one."
                             )
                         ],
-                        hints=[f"Write the displacement directly, e.g. '{source.value} + 1'."],
+                        hints=[f"Write the displacement directly, e.g. '{source.qualname} + 1'."],
                     )
                 new_type = new_value.type
             case ts.FieldType(dims=dims, dtype=dtype):
@@ -697,6 +697,18 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and type_info.is_arithmetic(right.type)
         ):
             # e.g. `IDim+1` or `IDim+0.5`
+            if not common.is_cartesian_axis(left.type.dim):
+                raise errors.DSLError(
+                    left.location,
+                    f"'{left.type.dim.qualname}' is not a Cartesian axis, so it has no index "
+                    f"arithmetic and '{node.op}' cannot shift along it.",
+                    hints=[
+                        (
+                            "Declare a Cartesian axis as 'class IDim(gtx.CartesianAxisIndex): ...';"
+                            " shift along a mesh location with a connectivity instead."
+                        )
+                    ],
+                )
             if not isinstance(right, foast.Constant):
                 raise errors.DSLError(
                     right.location,
@@ -710,7 +722,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     right.location,
                     f"Invalid offset '{right.value}' for a Cartesian shift of dimension "
-                    f"'{left.type.dim.value}'.",
+                    f"'{left.type.dim.qualname}'.",
                     hints=[
                         (
                             "Use an integer offset to shift within the dimension, or a half-integer "
@@ -718,8 +730,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                         )
                     ],
                 )
-            conn = common.connectivity_for_cartesian_shift(left.type.dim, offset_index)
-            return ts.OffsetType(source=conn.codomain, target=(conn.domain_dim,))
+            _, codomain = common.cartesian_shift(left.type.dim, offset_index)
+            return ts.OffsetType(source=codomain, target=(left.type.dim,))
         else:
             raise errors.DSLError(node.location, err_msg)
 
@@ -989,12 +1001,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         assert isinstance(arg_0, ts.OffsetType)
         assert isinstance(arg_1, ts.FieldType)
         if not fbuiltins.is_cartesian_offset(arg_0):
-            target_dims = ", ".join(d.value for d in arg_0.target)
+            target_dims = ", ".join(d.qualname for d in arg_0.target)  # for the diagnostic
             raise errors.DSLError(
                 node.location,
                 f"'as_offset' is only supported for Cartesian offsets "
                 f"(single target dimension equal to source dimension); "
-                f"got source '{arg_0.source.value}' and target ({target_dims}).",
+                f"got source '{arg_0.source.qualname}' and target ({target_dims}).",
             )
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
@@ -1019,7 +1031,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def _deduce_where_return_type(
         self,
         func_name: str,
-        cond_dims: Sequence[Dimension],
+        cond_dims: Sequence[common.DimensionRef],
         true_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
         false_branch: ts.FieldType | ts.TupleType | ts.NamedCollectionType,
         location: eve.SourceLocation,

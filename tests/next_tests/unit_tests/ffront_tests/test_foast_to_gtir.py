@@ -41,20 +41,27 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.iterator import ir as itir
+from next_tests.toy_connectivity import Edge, V2EDim, Vertex
 
 
-Edge = gtx.Dimension("Edge")
-Vertex = gtx.Dimension("Vertex")
-V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
 
-TDim = gtx.Dimension("TDim")
+
+class TDim(gtx.CartesianAxisIndex): ...
+
+
 TOff = gtx.FieldOffset("TDim", source=TDim, target=(TDim,))
+
+
 #: An offset whose tag differs from the name of the Python variable it is bound to, and
 #: from the name of its local dimension. Lowering must emit the *tag*.
-RenamedV2EDim = gtx.Dimension("RenamedLocal", gtx.DimensionKind.LOCAL)
+class RenamedV2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
 renamed_v2e = gtx.FieldOffset("RenamedTag", source=Edge, target=(Vertex, RenamedV2EDim))
-UDim = gtx.Dimension("UDim")
+
+
+class UDim(gtx.CartesianAxisIndex): ...
 
 
 def test_return():
@@ -781,7 +788,7 @@ def test_premap_to_local_field():
     parsed = FieldOperatorParser.apply_to_function(foo)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.as_fieldop_neighbors("V2E", "edge_f")
+    reference = im.as_fieldop_neighbors(V2EDim.tag, "edge_f")
 
     assert lowered.expr == reference
 
@@ -826,7 +833,7 @@ def test_reduction_lowering_neighbor_sum():
             "plus",
             im.literal(value="0", type_="float64"),
         )
-    )(im.as_fieldop_neighbors("V2E", "edge_f"))
+    )(im.as_fieldop_neighbors(V2EDim.tag, "edge_f"))
 
     assert lowered.expr == reference
 
@@ -843,7 +850,7 @@ def test_reduction_lowering_max_over():
             "maximum",
             im.literal(value=str(np.finfo(np.float64).min), type_="float64"),
         )
-    )(im.as_fieldop_neighbors("V2E", "edge_f"))
+    )(im.as_fieldop_neighbors(V2EDim.tag, "edge_f"))
 
     assert lowered.expr == reference
 
@@ -860,7 +867,7 @@ def test_reduction_lowering_min_over():
             "minimum",
             im.literal(value=str(np.finfo(np.float64).max), type_="float64"),
         )
-    )(im.as_fieldop_neighbors("V2E", "edge_f"))
+    )(im.as_fieldop_neighbors(V2EDim.tag, "edge_f"))
 
     assert lowered.expr == reference
 
@@ -880,7 +887,7 @@ def test_reduction_lowering_expr():
 
     reference = im.let(
         ssa.unique_name("e1_nbh", 0),
-        im.as_fieldop_neighbors("V2E", "e1"),
+        im.as_fieldop_neighbors(V2EDim.tag, "e1"),
     )(
         im.op_as_fieldop(
             im.reduce(
@@ -970,7 +977,7 @@ def test_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         im.ref("inp"),
-        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(dim=dim) for dim in (TDim, UDim))),
     )
 
 
@@ -984,7 +991,7 @@ def test_scalar_broadcast():
     assert lowered.id == "foo"
     assert lowered.expr == im.call("broadcast")(
         1,
-        im.make_tuple(*(itir.AxisLiteral(value=dim.value, kind=dim.kind) for dim in (TDim, UDim))),
+        im.make_tuple(*(itir.AxisLiteral(dim=dim) for dim in (TDim, UDim))),
     )
 
 

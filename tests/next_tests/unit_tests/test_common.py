@@ -6,46 +6,99 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
+import io
 import operator
+import pickle
+import re
+import sys
+import types
 from typing import Optional, Pattern
 
+import numpy as np
 import pytest
-import re
 
+import gt4py.next.common as common
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-import gt4py.next.common as common
+from gt4py.next import dimension_tags
 from gt4py.next.common import (
+    CartesianAxisIndex,
     Dimension,
+    DimensionIndex,
     DimensionKind,
+    DimensionRange,
     Domain,
     Infinity,
     UnitRange,
+    dimension_range,
     domain,
-    named_range,
-    NamedRange,
     promote_dims,
     unit_range,
 )
+from gt4py.next.iterator import builtins as itir_builtins
 
-C2E = Dimension("C2E", kind=DimensionKind.LOCAL)
-V2E = Dimension("V2E", kind=DimensionKind.LOCAL)
-E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-E2C = Dimension("E2C", kind=DimensionKind.LOCAL)
-E2C2V = Dimension("E2C2V", kind=DimensionKind.LOCAL)
-ECDim = Dimension("ECDim")
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
+
+class X(CartesianAxisIndex): ...
+
+
+class Y(CartesianAxisIndex): ...
+
+
+class Z(CartesianAxisIndex): ...
+
+
+class Foo(DimensionIndex): ...
+
+
+class J(CartesianAxisIndex): ...
+
+
+class K(CartesianAxisIndex): ...
+
+
+class I(common.CartesianAxisIndex): ...
+
+
+class I_half(common.CartesianAxisIndex): ...
+
+
+class C2E(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class V2E(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2C(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class E2C2V(DimensionIndex, kind=DimensionKind.LOCAL): ...
+
+
+class ECDim(DimensionIndex): ...
+
+
+class IDim(CartesianAxisIndex): ...
+
+
+class JDim(CartesianAxisIndex): ...
+
+
+class KDim(CartesianAxisIndex, kind=DimensionKind.VERTICAL): ...
+
+
 IHalfDim = common.flip_staggered(IDim)
 
 
 @pytest.fixture
 def a_domain():
     return Domain(
-        NamedRange(IDim, UnitRange(0, 10)),
-        NamedRange(JDim, UnitRange(5, 15)),
-        NamedRange(KDim, UnitRange(20, 30)),
+        DimensionRange(IDim, UnitRange(0, 10)),
+        DimensionRange(JDim, UnitRange(5, 15)),
+        DimensionRange(KDim, UnitRange(20, 30)),
     )
 
 
@@ -253,8 +306,101 @@ def test_range_comparison(op, rng1, rng2, expected):
 @pytest.mark.parametrize(
     "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
-def test_named_range_like(named_rng_like):
-    assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
+def test_dimension_range_like(named_rng_like):
+    assert dimension_range(named_rng_like) == (IDim, UnitRange(2, 4))
+
+
+def test_dimension_range_unit_range_alias():
+    rng = IDim.at(2, 4)
+    assert rng.unit_range is rng.value
+
+
+@pytest.mark.parametrize(
+    "selection, expected",
+    [
+        (IDim(3), "IDim=3"),
+        (IDim.at(0, 9), "IDim=(0:9)"),
+        (IDim.at(None, 3), "IDim=(-inf:3)"),
+        (IDim.at(3, None), "IDim=(3:inf)"),
+    ],
+)
+def test_dimension_selection_str(selection, expected):
+    # a point and a range print alike, by the dimension's short name
+    assert str(selection) == expected
+
+
+class TestDimensionAt:
+    def test_one_integer_is_a_point(self):
+        point = IDim.at(3)
+        assert point == IDim(3) and type(point) is IDim
+
+    @pytest.mark.parametrize("value", [0, -3, np.int32(5)])
+    def test_point_is_absolute(self, value):
+        assert IDim.at(value) == IDim(int(value))
+
+    def test_point_on_a_staggered_dimension(self):
+        assert type(common.Staggered[IDim].at(1)) is common.Staggered[IDim]
+
+    @pytest.mark.parametrize(
+        "args, expected",
+        [
+            ((0, 10), UnitRange(0, 10)),
+            ((-5, -2), UnitRange(-5, -2)),
+            ((None, 10), UnitRange(Infinity.NEGATIVE, 10)),
+            ((0, None), UnitRange(0, Infinity.POSITIVE)),
+            ((None, None), UnitRange.infinite()),
+            ((UnitRange(2, 4),), UnitRange(2, 4)),
+            ((range(2, 4),), UnitRange(2, 4)),
+            ((range(2, 4, 1),), UnitRange(2, 4)),
+        ],
+    )
+    def test_range(self, args, expected):
+        assert IDim.at(*args) == DimensionRange(IDim, expected)
+
+    @pytest.mark.parametrize("args", [(), (0, 1, 2), (slice(0, 1),), ("0",), (1.0,), (0, "1")])
+    def test_invalid_arguments(self, args):
+        with pytest.raises(TypeError, match=r"'IDim.at\(\)' takes"):
+            IDim.at(*args)
+
+    def test_range_with_step(self):
+        with pytest.raises(ValueError, match="step"):
+            IDim.at(range(0, 10, 2))
+
+    def test_not_visible_on_an_index(self):
+        assert not hasattr(IDim(3), "at")
+
+    def test_cannot_be_shadowed(self):
+        with pytest.raises(TypeError, match="'at'"):
+
+            class _Shadowing(DimensionIndex):
+                def at(self) -> None: ...
+
+
+class TestDimensionSelection:
+    """A point (a `DimensionIndex` instance) and a range on a dimension are read alike."""
+
+    @pytest.mark.parametrize(
+        "selection, value",
+        [(IDim(3), 3), (IDim.at(3), 3), (IDim.at(0, 10), UnitRange(0, 10))],
+    )
+    def test_dim_and_value(self, selection, value):
+        assert selection.dim is IDim and selection.value == value
+
+    def test_dimension_slice(self):
+        assert common.is_dimension_slice(slice(IDim(0), IDim(10)))
+        assert common.is_dimension_slice(slice(IDim(0), None))
+        assert common.is_dimension_slice(slice(None, IDim(10)))
+        assert common.is_dimension_slice(slice(IDim(0), IDim(10), 1))
+        assert not common.is_dimension_slice(slice(IDim(0), IDim(10), 2))
+        assert not common.is_dimension_slice(slice(0, 10))
+        assert not common.is_dimension_slice(slice(None))
+        assert not common.is_dimension_slice(slice(IDim(0), 10))
+        assert not common.is_dimension_slice(IDim(0))
+
+    def test_dimension_slice_alias_is_lazy(self):
+        # `slice` is not subscriptable at runtime, so the alias must never be evaluated
+        assert common.DimensionSlice.__name__ == "DimensionSlice"
+        assert common.DimensionSlice[IDim] is not None
 
 
 def test_domain_length(a_domain):
@@ -265,10 +411,16 @@ def test_domain_length(a_domain):
     "empty_domain, expected",
     [
         (Domain(), False),
-        (Domain(NamedRange(IDim, UnitRange(0, 10))), False),
-        (Domain(NamedRange(IDim, UnitRange(0, 0))), True),
-        (Domain(NamedRange(IDim, UnitRange(0, 0)), NamedRange(JDim, UnitRange(0, 1))), True),
-        (Domain(NamedRange(IDim, UnitRange(0, 1)), NamedRange(JDim, UnitRange(0, 0))), True),
+        (Domain(DimensionRange(IDim, UnitRange(0, 10))), False),
+        (Domain(DimensionRange(IDim, UnitRange(0, 0))), True),
+        (
+            Domain(DimensionRange(IDim, UnitRange(0, 0)), DimensionRange(JDim, UnitRange(0, 1))),
+            True,
+        ),
+        (
+            Domain(DimensionRange(IDim, UnitRange(0, 1)), DimensionRange(JDim, UnitRange(0, 0))),
+            True,
+        ),
     ],
 )
 def test_empty_domain(empty_domain, expected):
@@ -393,7 +545,7 @@ def test_domain_dims_ranges_length_mismatch():
         ValueError,
         match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)",
     ):
-        dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+        dims = [X, Y, Z]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
 
@@ -401,26 +553,26 @@ def test_domain_dims_ranges_length_mismatch():
 def test_domain_slice_at():
     # Create a sample domain
     domain = Domain(
-        NamedRange(IDim, UnitRange(0, 10)),
-        NamedRange(JDim, UnitRange(5, 15)),
-        NamedRange(KDim, UnitRange(20, 30)),
+        DimensionRange(IDim, UnitRange(0, 10)),
+        DimensionRange(JDim, UnitRange(5, 15)),
+        DimensionRange(KDim, UnitRange(20, 30)),
     )
 
     # Test indexing with slices
     result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 5)),
-        NamedRange(JDim, UnitRange(10, 12)),
-        NamedRange(KDim, UnitRange(27, 30)),
+        DimensionRange(IDim, UnitRange(2, 5)),
+        DimensionRange(JDim, UnitRange(10, 12)),
+        DimensionRange(KDim, UnitRange(27, 30)),
     )
     assert result == expected_result
 
     # Test indexing with out-of-range slices
     result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 10)),
-        NamedRange(JDim, UnitRange(10, 12)),
-        NamedRange(KDim, UnitRange(27, 30)),
+        DimensionRange(IDim, UnitRange(2, 10)),
+        DimensionRange(JDim, UnitRange(10, 12)),
+        DimensionRange(KDim, UnitRange(27, 30)),
     )
     assert result == expected_result
 
@@ -434,21 +586,21 @@ def test_domain_slice_at():
 
 
 def test_domain_dim_index():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [X, Y, Z]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.dim_index(Dimension("Y")) == 1
+    domain.dim_index(Y) == 1
 
-    domain.dim_index(Dimension("Foo")) == None
+    domain.dim_index(Foo) == None
 
 
 def test_domain_pop():
-    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    dims = [X, Y, Z]
     ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
     domain = Domain(dims=dims, ranges=ranges)
 
-    domain.pop(Dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
+    domain.pop(X) == Domain(dims=dims[1:], ranges=ranges[1:])
 
     domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
 
@@ -461,92 +613,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
             ),
         ),
         (
-            Dimension("J"),
+            J,
             [
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(Z, UnitRange(100, 110)),
             ],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("X"), UnitRange(100, 110)),
-                NamedRange(Dimension("Z"), UnitRange(100, 110)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(Z, UnitRange(100, 110)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
-            Dimension("Foo"),
-            [NamedRange(Dimension("X"), UnitRange(100, 110))],
+            Foo,
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(Dimension("I"), UnitRange(0, 10)),
-                NamedRange(Dimension("J"), UnitRange(0, 10)),
-                NamedRange(Dimension("K"), UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             ValueError,
         ),
@@ -666,7 +818,6 @@ class TestBufferInfo:
 class TestCartesianConnectivity:
     def test_for_translation(self):
         offset = 5
-        I = common.Dimension("I")
 
         result = common.CartesianConnectivity.for_translation(I, offset)
         assert isinstance(result, common.CartesianConnectivity)
@@ -675,8 +826,6 @@ class TestCartesianConnectivity:
         assert result.offset == offset
 
     def test_for_relocation(self):
-        I = common.Dimension("I")
-        I_half = common.Dimension("I_half")
 
         result = common.CartesianConnectivity.for_relocation(I, I_half)
         assert isinstance(result, common.CartesianConnectivity)
@@ -793,3 +942,343 @@ class TestDomainOrOperator:
         d2 = Domain(dims=(JDim,), ranges=(UnitRange(3, 10),))
         with pytest.raises(NotImplementedError, match="different dimensions"):
             d1 | d2
+
+
+def test_gt_dims_are_unqualified_names():
+    """
+    `__gt_dims__` is the interop protocol with `gt4py.cartesian`, which names axes by their bare
+    names (`"I"`, `"J"`, `"K"`). A dimension's `tag` is its qualified name (ADR 0029), which
+    cartesian would not recognize, and would then transpose the array wrongly.
+    """
+    field = gtx.as_field([IDim, JDim], np.zeros((2, 3)))
+    assert field.__gt_dims__ == ("IDim", "JDim")
+
+
+class TestStaggered:
+    def test_interned(self):
+        assert common.Staggered[KDim] is common.Staggered[KDim]
+        assert common.is_staggered(common.Staggered[KDim])
+        assert common.flip_staggered(common.Staggered[KDim]) is KDim
+
+    def test_a_dimension_cannot_be_staggered_twice(self):
+        with pytest.raises(TypeError, match="is already staggered"):
+            common.Staggered[common.Staggered[KDim]]
+        with pytest.raises(TypeError, match="is already staggered"):
+            common.Staggered[KDim][KDim]
+
+    @pytest.mark.parametrize(
+        "dim, match",
+        [
+            (ECDim, "is not a declared Cartesian axis"),  # a mesh location
+            (V2E, "is not a declared Cartesian axis"),  # a local dimension
+            (DimensionIndex, "is not a declared Cartesian axis"),
+            (common.AnyCartesianAxisIndex, "is not a declared Cartesian axis"),
+        ],
+    )
+    def test_only_a_declared_axis_can_be_staggered(self, dim, match):
+        with pytest.raises(TypeError, match=match):
+            common.Staggered[dim]
+
+    def test_a_staggered_dimension_is_an_axis_but_not_a_declared_one(self):
+        assert issubclass(common.Staggered[KDim], common.AnyCartesianAxisIndex)
+        assert not issubclass(common.Staggered[KDim], common.CartesianAxisIndex)
+        assert not issubclass(common.Staggered[KDim], KDim)
+
+    def test_resolve_rejects_a_bracketed_tag_of_another_owner(self):
+        with pytest.raises(ValueError, match="not a parametrized dimension"):
+            dimension_tags.resolve(f"{KDim.tag}[{KDim.tag}]")
+
+
+class TestDimensionRef:
+    def test_tag_format(self):
+        assert IDim.tag == f"{__name__}:IDim"
+        assert common.Staggered[KDim].tag == f"gt4py.next.common:Staggered[{KDim.tag}]"
+
+    def test_computed_once_per_class(self):
+        assert common.dimension_ref(IDim) is common.dimension_ref(IDim)
+
+    def test_fields(self):
+        spec = common.dimension_ref(common.Staggered[KDim])
+        assert spec.kind is common.DimensionKind.VERTICAL
+        assert spec.category is common.DimensionCategory.CARTESIAN_AXIS
+        assert spec.base == common.dimension_ref(KDim)
+        assert common.dimension_ref(ECDim).category is common.DimensionCategory.OTHER
+
+    def test_staggered_helpers_on_specs(self):
+        k = common.dimension_ref(KDim)
+        assert common.flip_staggered(k) == common.dimension_ref(common.Staggered[KDim])
+        assert common.flip_staggered(common.flip_staggered(k)) == k
+        assert common.as_non_staggered(common.flip_staggered(k)) == k
+        with pytest.raises(TypeError, match="is not a declared Cartesian axis"):
+            common.flip_staggered(common.dimension_ref(ECDim))
+
+    def test_from_tag_roundtrip(self):
+        for dim in (IDim, common.Staggered[KDim], ECDim):
+            spec = common.dimension_ref(dim)
+            assert common.DimensionRef.from_tag(spec.tag, spec.kind, spec.category) == spec
+
+    def test_resolve(self):
+        assert dimension_tags.resolve(common.dimension_ref(IDim)) is IDim
+        assert dimension_tags.resolve(common.Staggered[KDim].tag) is common.Staggered[KDim]
+        wrong_kind = dataclasses.replace(
+            common.dimension_ref(IDim), kind=common.DimensionKind.VERTICAL
+        )
+        with pytest.raises(ValueError, match="does not match"):
+            dimension_tags.resolve(wrong_kind)
+
+    def test_pickles_by_value(self):
+        spec = common.dimension_ref(common.Staggered[KDim])
+        data = pickle.dumps(spec)
+        assert __name__.encode() in data  # the tag is a string in the stream...
+        assert pickle.loads(data) == spec
+
+        class _NoGlobals(pickle.Unpickler):
+            def find_class(self, module, name):
+                # ...and no class other than the spec's own machinery is referenced
+                assert module.startswith("gt4py.") or module in ("builtins", "copyreg"), module
+                return super().find_class(module, name)
+
+        assert _NoGlobals(io.BytesIO(data)).load() == spec
+
+    def test_local_category(self):
+        assert common.dimension_ref(V2E).category is common.DimensionCategory.LOCAL
+        assert common.is_local_dimension(common.dimension_ref(itir_builtins.ConstList))
+        assert common.is_local_dimension(V2E) and not common.is_local_dimension(ECDim)
+        assert common.is_cartesian_axis(common.dimension_ref(IDim))
+        assert not common.is_cartesian_axis(common.dimension_ref(V2E))
+
+    def test_repr_is_distinct_from_the_class(self):
+        ref = common.dimension_ref(IDim)
+        assert repr(ref) == f"DimensionRef({IDim.tag}, horizontal, cartesian_axis)"
+        assert repr(ref) != repr(IDim)
+        assert str(ref) == str(IDim) == "IDim[horizontal]"  # the display form is shared
+
+    def test_ref_vs_class_comparison_unguarded(self, monkeypatch):
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", False)
+        ref = common.dimension_ref(IDim)
+        assert not (ref == IDim) and not (IDim == ref)
+        assert ref != IDim and IDim != ref
+
+    @pytest.mark.parametrize(
+        "comparison",
+        [
+            lambda r, c: r == c,
+            lambda r, c: c == r,
+            lambda r, c: r != c,
+            lambda r, c: c != r,
+            lambda r, c: c in [r],
+        ],
+    )
+    def test_ref_vs_class_comparison_guarded(self, monkeypatch, comparison):
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", True)
+        with pytest.raises(TypeError, match="missed its conversion"):
+            comparison(common.dimension_ref(IDim), IDim)
+
+    def test_hash_based_lookups_cannot_be_guarded(self, monkeypatch):
+        # documented limitation: the hashes differ, so `__eq__` is never consulted
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", True)
+        ref = common.dimension_ref(IDim)
+        assert IDim not in {ref}
+        assert {ref: 1}.get(IDim) is None
+
+    def test_interned(self):
+        ref = common.dimension_ref(common.Staggered[KDim])
+        fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}
+        assert common.DimensionRef(**fields) is ref
+        assert pickle.loads(pickle.dumps(ref)) is ref
+        assert common.DimensionRef.from_tag(ref.tag, ref.kind, ref.category) is ref
+        assert dataclasses.replace(ref) is ref
+
+    def test_rejected_construction_leaves_the_interned_ref_intact(self):
+        ref = common.dimension_ref(IDim)
+        # a string kind is coerced *before* the lookup: same interned object, still an enum
+        assert common.DimensionRef(ref.module, ref.qualname, "horizontal", "cartesian_axis") is ref
+        assert ref.kind is common.DimensionKind.HORIZONTAL
+        with pytest.raises(ValueError):
+            common.DimensionRef(ref.module, ref.qualname, "sideways", "cartesian_axis")
+        with pytest.raises(ValueError, match="must have kind 'local'"):
+            common.DimensionRef(ref.module, ref.qualname, "horizontal", "local")
+        assert ref.kind is common.DimensionKind.HORIZONTAL
+        assert ref.category is common.DimensionCategory.CARTESIAN_AXIS
+        assert common.dimension_ref(IDim) is ref
+
+    def test_interning_under_contention(self):
+        import concurrent.futures
+        import threading
+
+        barrier = threading.Barrier(8)
+
+        def build(i: int) -> common.DimensionRef:
+            barrier.wait()
+            return common.DimensionRef(
+                "contention_mod", f"Dim{i // 8}", "horizontal", "other"
+            )  # 8 threads race on each name
+
+        with concurrent.futures.ThreadPoolExecutor(8) as pool:
+            refs = list(pool.map(build, range(8 * 50)))
+        for i in range(0, len(refs), 8):
+            assert all(r is refs[i] for r in refs[i : i + 8])
+
+    def test_hash_is_not_pickled_or_fingerprinted(self):
+        from gt4py.next import fingerprinting
+
+        ref = common.dimension_ref(IDim)
+        assert [f.name for f in dataclasses.fields(ref)] == [
+            "module",
+            "qualname",
+            "kind",
+            "category",
+            "base",
+        ]
+        assert b"_hash" not in pickle.dumps(ref)
+        assert hash(ref) == hash(pickle.loads(pickle.dumps(ref)))
+        assert fingerprinting.make_fingerprinter()(ref)  # deterministic, by fields
+
+    def test_content_hash_does_not_depend_on_construction(self):
+        from gt4py.eve import utils as eve_utils
+        from gt4py.next.type_system import type_specifications as ts
+
+        dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+        ref = common.dimension_ref(IDim)
+        parsed = common.DimensionRef.from_tag(ref.tag, ref.kind, ref.category)
+        assert eve_utils.content_hash([ts.FieldType(dims=[IDim], dtype=dtype), ref]) == (
+            eve_utils.content_hash([ts.FieldType(dims=[parsed], dtype=dtype), parsed])
+        )
+
+    def test_from_tag_only_staggered_is_parametrized(self):
+        with pytest.raises(ValueError, match="only 'Staggered' is parametrized"):
+            common.DimensionRef.from_tag(
+                f"pkg:Other[{KDim.tag}]",
+                common.DimensionKind.VERTICAL,
+                common.DimensionCategory.CARTESIAN_AXIS,
+            )
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"module": "pkg"},
+            {"qualname": "Staggered[Other]"},
+            {"kind": common.DimensionKind.HORIZONTAL},
+        ],
+    )
+    def test_staggered_ref_is_validated_against_its_base(self, change):
+        ref = common.dimension_ref(common.Staggered[KDim])
+        fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}
+        with pytest.raises(ValueError, match="is not the staggered dimension"):
+            common.DimensionRef(**(fields | change))
+
+    def test_same_tag_different_fields_is_rejected(self):
+        ref = common.dimension_ref(IDim)
+        redefined = dataclasses.replace(ref, kind=common.DimensionKind.VERTICAL)
+        common.check_consistent_dimension_refs([ref, ref, common.dimension_ref(JDim)])
+        with pytest.raises(ValueError, match="share the tag"):
+            common.check_consistent_dimension_refs([ref, redefined])
+
+    def test_resolve_after_redefinition(self, monkeypatch):
+        module = types.ModuleType("nbmod_spike")
+        monkeypatch.setitem(sys.modules, "nbmod_spike", module)
+
+        def declare(**kwargs):
+            module.KDim = common.DimensionMeta(
+                "KDim",
+                (common.CartesianAxisIndex,),
+                {"__module__": "nbmod_spike", "__qualname__": "KDim", "__slots__": ()},
+                **kwargs,
+            )
+            return module.KDim
+
+        first = declare(kind=common.DimensionKind.VERTICAL)
+        ref = common.dimension_ref(first)
+        assert dimension_tags.resolve(ref) is first
+        # a re-run cell: same kind, so an equal ref, resolving to the *current* class
+        second = declare(kind=common.DimensionKind.VERTICAL)
+        assert common.dimension_ref(second) == ref
+        assert dimension_tags.resolve(ref) is second
+        # a re-run cell with another kind: the old ref no longer describes the class
+        declare()
+        with pytest.raises(ValueError, match="does not match"):
+            dimension_tags.resolve(ref)
+
+
+class TestDimensionKeyedConfiguration:
+    """String-keyed configuration naming dimensions: `symbolic_domain_sizes`, offset providers."""
+
+    def test_symbolic_domain_sizes_accept_dimensions(self):
+        sizes = common.normalize_symbolic_domain_sizes(
+            {ECDim: "n_cells", common.dimension_ref(IDim): "n_i", KDim.tag: "n_k"}
+        )
+        assert sizes == {ECDim.tag: "n_cells", IDim.tag: "n_i", KDim.tag: "n_k"}
+
+    @pytest.mark.parametrize("key", ["Cell", "pkg.mod.Cell"])  # bare names never match a tag
+    def test_symbolic_domain_sizes_reject_keys_that_never_match(self, key):
+        with pytest.raises(ValueError, match="symbolic_domain_sizes"):
+            common.normalize_symbolic_domain_sizes({key: "n"})
+
+    def test_offset_provider_keys(self):
+        conn = object()
+        assert common.normalize_offset_provider({V2E: conn, "E2V": conn}) == {
+            V2E.tag: conn,
+            "E2V": conn,
+        }
+        provider = {"E2V": conn, "pkg.V2E": conn}  # plain offset names, dots included, are kept
+        assert common.normalize_offset_provider(provider) is provider  # no copy in the common case
+
+    def test_gtfn_symbolic_domain_sizes_are_normalized(self):
+        from gt4py._core import definitions as core_defs
+        from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+
+        step = gtfn_module.GTFNTranslationStep(
+            device_type=core_defs.DeviceType.CPU, symbolic_domain_sizes={ECDim: "n_cells"}
+        )
+        assert step.symbolic_domain_sizes == {ECDim.tag: "n_cells"}
+        with pytest.raises(ValueError, match="never match"):
+            gtfn_module.GTFNTranslationStep(
+                device_type=core_defs.DeviceType.CPU, symbolic_domain_sizes={"Cell": "n_cells"}
+            )
+
+
+class TestCartesianAxisIndex:
+    def test_axis_levels(self):
+        assert issubclass(IDim, common.CartesianAxisIndex)
+        assert issubclass(common.CartesianAxisIndex, common.AnyCartesianAxisIndex)
+        assert issubclass(common.AnyCartesianAxisIndex, DimensionIndex)
+        assert not issubclass(ECDim, common.AnyCartesianAxisIndex)
+
+    @pytest.mark.parametrize("dim", [IDim, IHalfDim])
+    def test_shift_along_an_axis(self, dim):
+        assert (dim + 1).codomain is dim
+        assert (dim - 1).codomain is dim
+        assert (dim + 0.5).codomain is common.flip_staggered(dim)
+
+    @pytest.mark.parametrize("dim", [ECDim, V2E])
+    @pytest.mark.parametrize("op", [lambda d: d + 1, lambda d: d - 1, lambda d: d + 0.5])
+    def test_no_index_arithmetic_off_an_axis(self, dim, op):
+        with pytest.raises(TypeError, match="is not a Cartesian axis"):
+            op(dim)
+
+    def test_comparisons_stay_on_every_dimension(self):
+        # `concat_where(EdgeDim < n, ...)` over a mesh location must keep working
+        assert (ECDim < 5) == Domain(
+            dims=(ECDim,), ranges=(UnitRange(common.Infinity.NEGATIVE, 5),)
+        )
+        assert (ECDim == 3) == Domain(dims=(ECDim,), ranges=(UnitRange(3, 4),))
+
+
+def test_a_dimension_fingerprint_includes_its_kind():
+    # `kind` sets the layout order, so a dimension redefined under the same name with another kind
+    # (a re-run notebook cell) must not reuse artifacts; a staggered dimension follows its base.
+    from gt4py.next import fingerprinting
+
+    def declare(source: str) -> type:
+        namespace = {"__name__": __name__, "common": common}
+        exec(source, namespace)
+        return namespace["Redefined"]
+
+    horizontal = declare("class Redefined(common.CartesianAxisIndex): ...")
+    vertical = declare(
+        "class Redefined(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ..."
+    )
+    fingerprint = fingerprinting.lenient_fingerprinter
+    assert fingerprint(horizontal) != fingerprint(vertical)
+    assert fingerprint(common.Staggered[horizontal]) != fingerprint(common.Staggered[vertical])
+    assert fingerprinting.strict_fingerprinter(KDim) == fingerprinting.strict_fingerprinter(KDim)

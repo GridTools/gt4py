@@ -35,9 +35,11 @@ from gt4py.next import (
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
+    fbuiltins,
     field_operator_ast as foast,
     foast_to_gtir,
     past_process_args,
+    source_utils,
     stages as ffront_stages,
     transform_utils,
     type_info as ffront_type_info,
@@ -66,7 +68,13 @@ def program_call_context(
     enable_jit: bool,
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
-    """Hook called at the beginning and end of a program call."""
+    """
+    Hook called at the beginning and end of a program call.
+
+    `offset_provider` is passed as the user gave it: its keys may still be dimension classes
+    (normalization to tags happens later, in the compiled-program pool or before embedded
+    execution).
+    """
     return ProgramCallMetricsCollector()
 
 
@@ -79,6 +87,29 @@ def embedded_program_call_context(
 ) -> contextlib.AbstractContextManager:
     """Hook called at the beginning and end of an embedded program call."""
     return metrics.metrics_source_key_setter(f"{program.__name__}<'embedded'>")
+
+
+def _capture_referenced_dimensions(definition_stage: Any, seen: set[int]) -> None:
+    """
+    Convert (and so capture) the dimensions a definition references beyond its annotations.
+
+    The scan axis, and the source and targets of each `FieldOffset` among the closure variables
+    of the definition and, recursively, of the field operators it calls -- e.g. a local
+    dimension no annotation names. Uses the *current* closure variables of each function, not
+    the (fingerprint-cached) frontend stages.
+    """
+    definition = getattr(definition_stage, "definition", None)
+    if definition is None or id(definition) in seen:
+        return
+    seen.add(id(definition))
+    if (axis := (getattr(definition_stage, "attributes", None) or {}).get("axis")) is not None:
+        common.dimension_ref(axis)  # a scan operator's axis
+    for value in source_utils.get_closure_vars_from_function(definition).values():
+        if isinstance(value, fbuiltins.FieldOffset):
+            common.dimension_ref(value.source)
+            common.dimension_refs(value.target)
+        elif (stage := getattr(value, "definition_stage", None)) is not None:
+            _capture_referenced_dimensions(stage, seen)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -118,6 +149,78 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         )
 
     @functools.cached_property
+    def _declared_dimension_classes(self) -> dict[common.DimensionRef, common.Dimension]:
+        """
+        The dimension classes the definition declares, by ref (the Python edge).
+
+        Captured from the very conversions the frontend does (`type_translation.from_type_hint`
+        of each annotation), so every annotation form is covered by construction, plus the
+        dimensions referenced beyond annotations (`_capture_referenced_dimensions`).
+        Computed per program-like *object*, not cached by fingerprint: a redefined class has an
+        equal fingerprint, and its identity is the point.
+        """
+        definition = getattr(self.definition_stage, "definition", None)
+        if definition is None:
+            return {}
+        with common.capture_dimension_classes() as captured:
+            try:
+                hints = typing.get_type_hints(definition)
+            except Exception:  # unresolvable annotations are reported by the frontend
+                hints = {}
+            for hint in hints.values():
+                try:
+                    type_translation.from_type_hint(hint)
+                except Exception:  # not a translatable annotation: reported by the frontend
+                    continue
+            _capture_referenced_dimensions(self.definition_stage, seen=set())
+        return {ref: cls for ref, cls in reversed(captured)}  # first declaration wins
+
+    def _check_dimension_identity(
+        self, name: str, captured: Sequence[tuple[common.DimensionRef, common.Dimension]]
+    ) -> None:
+        """
+        Compare the argument dimensions `captured` while translating the arguments (see
+        `common.capture_dimension_classes`) with the declared ones, by class identity.
+
+        Below the frontend dimensions are `DimensionRef` values, and a dimension redefined with
+        the same kind (a re-run notebook cell) has an *equal* ref. At the Python edge the class
+        is the identity, so an argument built on the previous class is rejected here.
+        """
+        declared = self._declared_dimension_classes
+        for ref, cls in captured:
+            if (expected := declared.get(ref)) is not None and expected is not cls:
+                raise errors.DSLError(
+                    None,
+                    f"Invalid argument types in call to '{name}'.\n"
+                    f"An argument uses dimension '{cls.__qualname__}', and the definition uses"
+                    f" '{expected.__qualname__}': they are two different classes named"
+                    f" '{ref.tag}'. Was the dimension redefined (e.g. a notebook cell re-run)?"
+                    " Re-create the argument, or re-define the program, with the current class.",
+                )
+
+    def _capture_argument_dimensions(
+        self, args: Sequence[Any], kwargs: dict[str, Any], offset_provider: Any
+    ) -> tuple[
+        list[ts.TypeSpec],
+        dict[str, ts.TypeSpec],
+        list[tuple[common.DimensionRef, common.Dimension]],
+    ]:
+        """Translate the arguments (as the type check does) and capture their dimension classes."""
+        with common.capture_dimension_classes() as captured:
+            arg_types = [type_translation.from_value(arg) for arg in args]
+            kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
+            for conn in (offset_provider or {}).values():
+                # NOTE: duck-typed: `isinstance(conn, common.Connectivity)` is a slow runtime
+                # protocol check. Domain (incl. a local dimension) and codomain are converted at
+                # the edge like everything else; a bare dimension is a named Cartesian offset.
+                if isinstance(conn, common.DimensionMeta):
+                    common.dimension_ref(conn)  # type: ignore[arg-type] # a dimension class
+                elif (codomain := getattr(conn, "codomain", None)) is not None:
+                    common.dimension_ref(codomain)
+                    common.dimension_refs(conn.domain.dims)
+        return arg_types, kwarg_types, captured
+
+    @functools.cached_property
     def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
         # This cached property initializer is only called when JITting the first
         # program variant of the pool. If the program is compiled by directly
@@ -155,6 +258,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             definition_stage=self.definition_stage,
             program_type=program_type,
             argument_descriptor_mapping=argument_descriptor_mapping,
+            dimension_classes=self._declared_dimension_classes,
         )
 
     def compile(
@@ -391,11 +495,15 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             kwargs=kwargs,
         ):
             if __debug__:
+                arg_types, kwarg_types, captured = self._capture_argument_dimensions(
+                    args, kwargs, offset_provider
+                )
+                # The Python edge: dimensions are compared by class identity before the type check
+                # below compares them as (equal-by-value) `DimensionRef`s.
+                self._check_dimension_identity(self.definition_stage.definition.__name__, captured)
                 # TODO: remove or make dependency on self.past_stage optional
                 past_process_args._validate_args(
-                    self.past_stage.past_node,
-                    arg_types=[type_translation.from_value(arg) for arg in args],
-                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+                    self.past_stage.past_node, arg_types=arg_types, kwarg_types=kwarg_types
                 )
 
             if self.backend is not None:
@@ -411,6 +519,8 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
+                # NOTE: the compiled path normalizes in `CompiledProgramsPool`
+                offset_provider = common.normalize_offset_provider(offset_provider)
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
@@ -652,6 +762,14 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
+        if __debug__ and not next_embedded.context.within_valid_context() and self.definition_stage:
+            # called as a program: the Python edge, see `_check_dimension_identity`
+            *_, captured = self._capture_argument_dimensions(
+                args,
+                {k: v for k, v in kwargs.items() if k not in ("offset_provider", "domain")},
+                kwargs.get("offset_provider"),
+            )
+            self._check_dimension_identity(self.definition_stage.definition.__name__, captured)
         if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
@@ -676,7 +794,9 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         else:
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
-                kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
+                kwargs["offset_provider"] = {
+                    **common.normalize_offset_provider(kwargs.pop("offset_provider", {}))
+                }
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
@@ -844,7 +964,7 @@ def scan_operator(
         >>> import gt4py.next as gtx
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
         >>> inp = gtx.as_field([KDim], np.ones((10,)))
         >>> out = gtx.as_field([KDim], np.zeros((10,)))
         >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.0)

@@ -88,7 +88,7 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
         setup.input_field,
         setup.S_fields[0],
         out=zavgS,
-        offset_provider={"E2V": setup.edges2node_connectivity},
+        offset_provider={E2VDim.tag: setup.edges2node_connectivity},
     )
 
     assert_close(-199755464.25741270, np.min(zavgS.asnumpy()))
@@ -113,8 +113,8 @@ def test_ffront_nabla(exec_alloc_descriptor):
         setup.vol_field,
         out=(pnabla_MXX, pnabla_MYY),
         offset_provider={
-            "E2V": setup.edges2node_connectivity,
-            "V2E": setup.nodes2edge_connectivity,
+            E2VDim.tag: setup.edges2node_connectivity,
+            V2EDim.tag: setup.nodes2edge_connectivity,
         },
     )
 

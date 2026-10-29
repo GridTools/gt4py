@@ -384,7 +384,7 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
-    def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
+    def is_column_axis(self, dim: gtx_common.DimensionRef) -> bool:
         """Check if the given dimension is the column axis."""
         ...
 
@@ -556,7 +556,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     """
 
     offset_provider_type: gtx_common.OffsetProviderType
-    column_axis: Optional[gtx_common.Dimension]
+    column_axis: Optional[gtx_common.DimensionRef]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
     )
@@ -578,7 +578,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             # the local dimension is converted into `ListType` data element
             if not isinstance(data_type.dtype, ts.ScalarType):
                 raise ValueError(f"Invalid field type {data_type}.")
-            if not gtx_common.has_offset(self.offset_provider_type, local_dim.value):
+            if not gtx_common.has_offset(self.offset_provider_type, local_dim.tag):
                 raise ValueError(
                     f"The provided local dimension {local_dim} does not match any offset provider type."
                 )
@@ -595,7 +595,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
         return gtir_to_sdfg_types.FieldopData(data_node, field_type, field_origin)
 
-    def is_column_axis(self, dim: gtx_common.Dimension) -> bool:
+    def is_column_axis(self, dim: gtx_common.DimensionRef) -> bool:
         assert self.column_axis
         return dim == self.column_axis
 
@@ -818,7 +818,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         return f"{next(self.uids[lib_node_type])}"
 
     def _make_array_shape_and_strides(
-        self, name: str, dims: Sequence[gtx_common.Dimension]
+        self, name: str, dims: Sequence[gtx_common.DimensionRef]
     ) -> tuple[list[dace.symbolic.SymbolicType], list[dace.symbolic.SymbolicType]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
@@ -839,7 +839,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         for dim in dims:
             if dim.kind == gtx_common.DimensionKind.LOCAL:
                 # for local dimension, the size is taken from the associated connectivity type
-                shape.append(neighbor_table_types[dim.value].max_neighbors)
+                shape.append(neighbor_table_types[dim.tag].max_neighbors)
             elif gtx_dace_args.is_connectivity_identifier(name, self.offset_provider_type):
                 # we use symbolic size for the global dimension of a connectivity
                 shape.append(gtx_dace_args.field_size_symbol(name, dim, neighbor_table_types))
@@ -1387,7 +1387,7 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 def lower_program_to_sdfg(
     ir: gtir.Program,
     offset_provider_type: gtx_common.OffsetProviderType,
-    column_axis: Optional[gtx_common.Dimension] = None,
+    column_axis: Optional[gtx_common.DimensionLike] = None,
 ) -> dace.SDFG:
     """
     Receives a GTIR program and lowers it to a DaCe SDFG.
@@ -1418,7 +1418,9 @@ def lower_program_to_sdfg(
     # Here we find new names for invalid symbols present in the IR.
     ir = gtir_to_sdfg_utils.replace_invalid_symbols(ir)
 
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
+    sdfg_genenerator = GTIRToSDFG(
+        offset_provider_type, gtx_common.optional_dimension_ref(column_axis)
+    )
     sdfg = sdfg_genenerator.visit(ir)
     assert isinstance(sdfg, dace.SDFG)
 

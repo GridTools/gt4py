@@ -17,6 +17,7 @@ from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    C2EDim,
     C2E,
     E2V,
     V2E,
@@ -52,7 +53,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     inp = cases.allocate(unstructured_case, testee, "edge_f", strategy=strategy)()
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     ref = np.max(
         inp.asnumpy()[v2e_table],
         axis=1,
@@ -69,7 +70,7 @@ def test_minover_execution(unstructured_case):
         out = min_over(edge_f(V2E), axis=V2EDim)
         return out
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         minover,
@@ -99,7 +100,7 @@ def reduction_ek_field(
     "fop", [reduction_e_field, reduction_ek_field], ids=lambda fop: fop.__name__
 )
 def test_neighbor_sum(unstructured_case_3d, fop):
-    v2e_table = unstructured_case_3d.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case_3d.offset_provider[V2EDim.tag].asnumpy()
 
     edge_f = cases.allocate(unstructured_case_3d, fop, "edge_f")()
 
@@ -151,7 +152,7 @@ def test_reduction_execution_with_offset(unstructured_case_3d):
     def fencil(edge_f: EKField, out: VKField):
         fencil_op(edge_f, out=out)
 
-    v2e_table = unstructured_case_3d.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case_3d.offset_provider[V2EDim.tag].asnumpy()
     field = cases.allocate(unstructured_case_3d, fencil, "edge_f", sizes={KDim: 2})()
     out = cases.allocate(unstructured_case_3d, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
@@ -184,7 +185,7 @@ def test_reduction_expression_in_call(unstructured_case):
     def fencil(edge_f: cases.EField, out: cases.VField):
         reduce_expr(edge_f, out=out)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         fencil,
@@ -206,7 +207,7 @@ def test_reduction_with_common_expression(unstructured_case):
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         testee,
@@ -222,7 +223,7 @@ def test_reduction_expression_with_where(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, inp(V2E), inp(V2E)), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
@@ -251,7 +252,7 @@ def test_reduction_expression_with_where_and_tuples(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(where(mask, (inp(V2E), inp(V2E)), (inp(V2E), inp(V2E)))[1], axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
@@ -280,7 +281,7 @@ def test_reduction_expression_with_where_and_scalar(unstructured_case):
     def testee(mask: cases.VBoolField, inp: cases.EField) -> cases.VField:
         return neighbor_sum(inp(V2E) + where(mask, inp(V2E), 1), axis=V2EDim)
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
 
     mask = unstructured_case.as_field(
         [Vertex], np.random.choice(a=[False, True], size=unstructured_case.default_sizes[Vertex])
@@ -325,7 +326,7 @@ def test_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: a[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
+        ref=lambda a: a[unstructured_case.offset_provider[E2VDim.tag].asnumpy()[:, 0]],
     )
 
 
@@ -346,7 +347,7 @@ def test_unstructured_shift_with_non_zero_origin(unstructured_case):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
-    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    e2v_table = unstructured_case.offset_provider[E2VDim.tag].asnumpy()
     neighbor_0_iter = iter(enumerate(e2v_table[:, 0]))
     edge_start = next(i for i, v in neighbor_0_iter if v >= ORIGIN)
     edge_stop = next(i for i, v in neighbor_0_iter if v < ORIGIN)
@@ -391,16 +392,16 @@ def test_composed_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured_flat,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
-            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider[E2VDim.tag].asnumpy()[:, 0]][
+            unstructured_case.offset_provider[C2EDim.tag].asnumpy()[:, 0]
         ],
     )
 
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured_intermediate_result,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
-            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider[E2VDim.tag].asnumpy()[:, 0]][
+            unstructured_case.offset_provider[C2EDim.tag].asnumpy()[:, 0]
         ],
         comparison=lambda inp, tmp: np.all(inp == tmp),
     )
@@ -408,8 +409,8 @@ def test_composed_unstructured_shift(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         composed_shift_unstructured,
-        ref=lambda inp: inp[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]][
-            unstructured_case.offset_provider["C2E"].asnumpy()[:, 0]
+        ref=lambda inp: inp[unstructured_case.offset_provider[E2VDim.tag].asnumpy()[:, 0]][
+            unstructured_case.offset_provider[C2EDim.tag].asnumpy()[:, 0]
         ],
     )
 
@@ -431,7 +432,7 @@ def test_neighbor_sum_with_non_zero_origin(unstructured_case):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     ORIGIN = 2
-    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    e2v_table = unstructured_case.offset_provider[E2VDim.tag].asnumpy()
     neighbor_iter = iter(enumerate(e2v_table))
     edge_start = next(i for i, v in neighbor_iter if all(v >= ORIGIN))
     edge_stop = next(i for i, v in neighbor_iter if any(v < ORIGIN))
@@ -452,11 +453,12 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["E2V"].asnumpy()], axis=1, initial=0)[
-                unstructured_case.offset_provider["V2E"].asnumpy()
+            np.sum(a[unstructured_case.offset_provider[E2VDim.tag].asnumpy()], axis=1, initial=0)[
+                unstructured_case.offset_provider[V2EDim.tag].asnumpy()
             ],
             axis=1,
-            where=unstructured_case.offset_provider["V2E"].asnumpy() != common._DEFAULT_SKIP_VALUE,
+            where=unstructured_case.offset_provider[V2EDim.tag].asnumpy()
+            != common._DEFAULT_SKIP_VALUE,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
     )
@@ -477,8 +479,8 @@ def test_nested_reduction_shift_first(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda inp: np.sum(
-            np.sum(inp[unstructured_case.offset_provider["V2E"].asnumpy()], axis=1)[
-                unstructured_case.offset_provider["E2V"].asnumpy()
+            np.sum(inp[unstructured_case.offset_provider[V2EDim.tag].asnumpy()], axis=1)[
+                unstructured_case.offset_provider[E2VDim.tag].asnumpy()
             ],
             axis=1,
         ),
@@ -495,7 +497,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         tmp = red(E2V[0])
         return tmp
 
-    v2e = unstructured_case.offset_provider["V2E"]
+    v2e = unstructured_case.offset_provider[V2EDim.tag]
     cases.verify_with_default_data(
         unstructured_case,
         reduce_tuple_element,
@@ -504,7 +506,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
             axis=1,
             initial=0,
             where=v2e.asnumpy() != common._DEFAULT_SKIP_VALUE,
-        )[unstructured_case.offset_provider["E2V"].asnumpy()[:, 0]],
+        )[unstructured_case.offset_provider[E2VDim.tag].asnumpy()[:, 0]],
     )
 
 
@@ -516,7 +518,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     cases.verify_with_default_data(
         unstructured_case,
         testee,
@@ -538,7 +540,7 @@ def test_local_index_premapped_field(request, unstructured_case):
 
     inp = cases.allocate(unstructured_case, testee, "inp")()
 
-    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    v2e_table = unstructured_case.offset_provider[V2EDim.tag].asnumpy()
     cases.verify(
         unstructured_case,
         testee,

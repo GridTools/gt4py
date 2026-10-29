@@ -14,7 +14,7 @@ import dace
 
 from gt4py import eve
 from gt4py.eve.xtyping import NestedTuple
-from gt4py.next import common as gtx_common, utils as gtx_utils
+from gt4py.next import common as gtx_common, dimension_tags, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace.lowering import gtir_python_codegen
@@ -41,7 +41,14 @@ def debug_info(
     return default
 
 
-def get_map_variable(dim: gtx_common.Dimension) -> str:
+def as_map_variable(param: gtx_common.DimensionLike | str) -> str:
+    """A map-parameter option (DaCe transformations): a dimension becomes its map variable."""
+    if isinstance(param, (gtx_common.DimensionMeta, gtx_common.DimensionRef)):
+        return get_map_variable(param)
+    return param
+
+
+def get_map_variable(dim: gtx_common.DimensionLike) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
@@ -51,7 +58,7 @@ def get_map_variable(dim: gtx_common.Dimension) -> str:
     # dimensions and decide whether two maps have the same iteration space.
     dim = gtx_common.as_non_staggered(dim)
     suffix = "dim" if dim.kind == gtx_common.DimensionKind.LOCAL else ""
-    return f"i_{dim.value}_gtx_{dim.kind}{suffix}"
+    return f"i_{dimension_tags.codegen_name(dim.tag)}_gtx_{dim.kind}{suffix}"
 
 
 def make_tasklet_connector_for(name: str) -> str:

@@ -13,16 +13,20 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
 from gt4py.next import common, constructors
+from next_tests.toy_connectivity import E2VDim, Edge, V2EDim, V2VDim, Vertex
 
-I = common.Dimension("I")
+
+class I(common.CartesianAxisIndex): ...
+
+
 IHalf = common.flip_staggered(I)
-J = common.Dimension("J")
-K = common.Dimension("J", kind=common.DimensionKind.VERTICAL)
-Vertex = common.Dimension("Vertex")
-Edge = common.Dimension("Edge")
-V2EDim = common.Dimension("V2E", kind=common.DimensionKind.LOCAL)
-E2VDim = common.Dimension("E2V", kind=common.DimensionKind.LOCAL)
-V2VDim = common.Dimension("V2V", kind=common.DimensionKind.LOCAL)
+
+
+class J(common.CartesianAxisIndex): ...
+
+
+class K(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
+
 
 a_range = domain_utils.SymbolicRange(0, 10)
 another_range = domain_utils.SymbolicRange(5, 15)
@@ -103,7 +107,7 @@ def test_domain_union_all_empty():
 
 def test_unstructured_translate_empty_range():
     offset_provider = {
-        "V2E": constructors.as_connectivity(
+        V2EDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 4), V2EDim: 1},
             codomain=Edge,
             data=np.asarray([0, 1, 2, 3], dtype=fbuiltins.IndexType).reshape((4, 1)),
@@ -113,10 +117,10 @@ def test_unstructured_translate_empty_range():
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (2, 2)})  # empty
     )
     translated = domain.translate(
-        [itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0)], offset_provider
+        [itir.OffsetLiteral(value=V2EDim.tag), itir.OffsetLiteral(value=0)], offset_provider
     )
     assert translated.empty()
-    assert set(translated.ranges.keys()) == {Edge}
+    assert set(translated.ranges.keys()) == {common.dimension_ref(Edge)}
 
 
 def test_domain_intersection():
@@ -150,7 +154,7 @@ def test_domain_intersection_empty_with_infinite_range():
 
     result = domain_utils.domain_intersection(empty, half_infinite)
     assert result.empty()
-    assert result.ranges[I].stop != itir.InfinityLiteral.POSITIVE
+    assert result.ranges[common.dimension_ref(I)].stop != itir.InfinityLiteral.POSITIVE
 
 
 def test_domain_union_then_intersection():
@@ -242,19 +246,19 @@ def test_is_finite_symbolic_domain(ranges, expected):
 @pytest.mark.parametrize(
     "shift_chain, expected_end_domain",
     [
-        (("V2V", 0), {Vertex: (0, 4)}),
-        (("V2V", 1), {Vertex: (0, 4)}),
-        (("V2V", 2), {Vertex: (0, 1)}),
-        (("V2V", 3), {Vertex: (1, 4)}),
-        (("V2V", 0, "V2V", 3, "V2V", 0), {Vertex: (1, 4)}),
-        (("V2E", 0), {Edge: (0, 4)}),
-        (("V2E", 0, "E2V", 0), {Vertex: (0, 4)}),
-        (("V2V", 3, "V2E", 0), {Edge: (1, 4)}),
+        ((V2VDim.tag, 0), {Vertex: (0, 4)}),
+        ((V2VDim.tag, 1), {Vertex: (0, 4)}),
+        ((V2VDim.tag, 2), {Vertex: (0, 1)}),
+        ((V2VDim.tag, 3), {Vertex: (1, 4)}),
+        ((V2VDim.tag, 0, V2VDim.tag, 3, V2VDim.tag, 0), {Vertex: (1, 4)}),
+        ((V2EDim.tag, 0), {Edge: (0, 4)}),
+        ((V2EDim.tag, 0, E2VDim.tag, 0), {Vertex: (0, 4)}),
+        ((V2VDim.tag, 3, V2EDim.tag, 0), {Edge: (1, 4)}),
     ],
 )
 def test_unstructured_translate(shift_chain, expected_end_domain):
     offset_provider = {
-        "V2V": constructors.as_connectivity(
+        V2VDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 4), V2VDim: 5},
             codomain=Vertex,
             data=np.asarray(
@@ -262,7 +266,7 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
                 dtype=fbuiltins.IndexType,
             ),
         ),
-        "V2E": constructors.as_connectivity(
+        V2EDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 4), V2EDim: 1},
             codomain=Edge,
             data=np.asarray(
@@ -272,7 +276,7 @@ def test_unstructured_translate(shift_chain, expected_end_domain):
                 dtype=fbuiltins.IndexType,
             ).reshape((4, 1)),
         ),
-        "E2V": constructors.as_connectivity(
+        E2VDim.tag: constructors.as_connectivity(
             domain={Edge: (0, 4), E2VDim: 1},
             codomain=Vertex,
             data=np.asarray(
@@ -299,7 +303,7 @@ def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
     # expression instead of the connectivity table. This makes `translate` work for a type-only
     # `OffsetProviderType` (which has no table) as well as a runtime `OffsetProvider`.
     offset_provider = {
-        "V2E": constructors.as_connectivity(
+        V2EDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 4), V2EDim: 1},
             codomain=Edge,
             data=np.asarray([0, 1, 2, 3], dtype=fbuiltins.IndexType).reshape((4, 1)),
@@ -312,9 +316,9 @@ def test_unstructured_translate_with_symbolic_domain_sizes(as_type):
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 4)})
     )
     translated = domain.translate(
-        [itir.OffsetLiteral(value="V2E"), itir.OffsetLiteral(value=0)],
+        [itir.OffsetLiteral(value=V2EDim.tag), itir.OffsetLiteral(value=0)],
         offset_provider,
-        symbolic_domain_sizes={"Edge": im.ref("num_edges")},
+        symbolic_domain_sizes={Edge.tag: im.ref("num_edges")},
     )
 
     expected = im.domain(common.GridType.UNSTRUCTURED, {Edge: (0, im.ref("num_edges"))})
@@ -338,13 +342,13 @@ def test_non_contiguous_domain_warning(monkeypatch):
     monkeypatch.setattr(domain_utils, "_NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS", set())
 
     offset_provider = {
-        "V2V": constructors.as_connectivity(
+        V2VDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 100), V2VDim: 1},
             codomain=Vertex,
             data=np.asarray([0] + [99] * 99, dtype=fbuiltins.IndexType).reshape((100, 1)),
         )
     }
-    shift_chain = ("V2V", 0)
+    shift_chain = (V2VDim.tag, 0)
     shift_chain = [im.ensure_offset(o) for o in shift_chain]
     domain = domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 2)})
@@ -358,13 +362,13 @@ def test_non_contiguous_domain_warning(monkeypatch):
 
 def test_oob_error():
     offset_provider = {
-        "V2V": constructors.as_connectivity(
+        V2VDim.tag: constructors.as_connectivity(
             domain={Vertex: (0, 3), V2VDim: 1},
             codomain=Vertex,
             data=np.asarray([0, -1, 1], dtype=fbuiltins.IndexType).reshape((3, 1)),
         )
     }
-    shift_chain = ("V2V", 0)
+    shift_chain = (V2VDim.tag, 0)
     shift_chain = [im.ensure_offset(o) for o in shift_chain]
     domain = domain_utils.SymbolicDomain.from_expr(
         im.domain(common.GridType.UNSTRUCTURED, {Vertex: (0, 3)})

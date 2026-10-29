@@ -8,12 +8,13 @@
 
 from typing import Literal
 
+from gt4py.eve import datamodels as eve_datamodels
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
 
 class NamedRangeType(ts.TypeSpec):
-    dim: common.Dimension
+    dim: common.DimensionRef = ts.dimension_field()
 
 
 class OffsetLiteralType(ts.TypeSpec):
@@ -21,13 +22,15 @@ class OffsetLiteralType(ts.TypeSpec):
 
 
 class CartesianOffsetType(ts.TypeSpec):
-    domain: common.Dimension
-    codomain: common.Dimension
+    domain: common.DimensionRef = ts.dimension_field()
+    codomain: common.DimensionRef = ts.dimension_field()
 
 
 class IteratorType(ts.DataType, ts.CallableType):
-    position_dims: list[common.Dimension] | Literal["unknown"]
-    defined_dims: list[common.Dimension]
+    position_dims: list[common.DimensionRef] | Literal["unknown"] = eve_datamodels.field(
+        converter=lambda dims: dims if dims == "unknown" else common.dimension_refs(dims)
+    )
+    defined_dims: list[common.DimensionRef] = ts.dimension_list_field()
     element_type: ts.DataType
 
 

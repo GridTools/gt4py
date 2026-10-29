@@ -15,6 +15,12 @@ from gt4py.eve import formatting
 from gt4py.next.otf.binding import interface
 
 
+class bar(gtx.DimensionIndex): ...
+
+
+class foo(gtx.DimensionIndex): ...
+
+
 @pytest.fixture
 def function_scalar_example():
     return interface.Function(
@@ -54,15 +60,13 @@ def function_buffer_example():
             interface.Parameter(
                 name="a_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
+                    dims=[bar, foo],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                 ),
             ),
             interface.Parameter(
                 name="b_buf",
-                type_=ts.FieldType(
-                    dims=[gtx.Dimension("bar")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
-                ),
+                type_=ts.FieldType(dims=[bar], dtype=ts.ScalarType(ts.ScalarKind.INT64)),
             ),
         ],
     )
@@ -99,11 +103,11 @@ def function_tuple_example():
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
+                            dims=[bar, foo],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                         ts.FieldType(
-                            dims=[gtx.Dimension("bar"), gtx.Dimension("foo")],
+                            dims=[bar, foo],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                     ]

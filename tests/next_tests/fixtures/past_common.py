@@ -13,9 +13,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import float64
 
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+from next_tests.integration_tests.cases_utils import IDim
 
 
 # TODO(tehrengruber): Improve test structure. Identity needs to be decorated

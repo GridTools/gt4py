@@ -54,7 +54,7 @@ class InferDomainOps(PreserveLocationVisitor, NodeTranslator):
 
             inference.reinfer(arg1)
             assert isinstance(arg1.type, ts.DimensionType)
-            dim: common.Dimension = arg1.type.dim
+            dim: common.DimensionRef = arg1.type.dim
             value: itir.Expr = arg2
 
             if cpm.is_call_to(node, ("less", "less_equal", "greater", "greater_equal", "eq")):

@@ -25,9 +25,9 @@ import gt4py.next as gtx
 from gt4py.next import errors, float32, float64
 from gt4py.next.ffront import dialect_parser
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+from next_tests.integration_tests.cases_utils import IDim
 
 
-IDim = gtx.Dimension("IDim")
 IOff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
 # A PEP 695 alias whose value raises when it is evaluated, standing in for the

@@ -49,8 +49,29 @@ class VoidType(TypeSpec):
     """
 
 
+# NOTE: type specifications store only `common.DimensionRef` values. The constructors accept
+# dimension classes too and convert them, so the Python edge can pass what it has.
+def dimension_field() -> typing.Any:
+    """A datamodel field holding a `common.DimensionRef`, converting a dimension class."""
+    return eve_datamodels.field(converter=common.dimension_ref)
+
+
+def dimension_list_field() -> typing.Any:
+    """A datamodel field holding a list of `common.DimensionRef`, converting dimension classes."""
+    return eve_datamodels.field(converter=_dims_list)
+
+
+def _dims_list(dims: typing.Any) -> typing.Any:
+    # NOTE: `FieldType.dims` may be `...` (see `FieldType.__str__`), which passes through.
+    return dims if dims is Ellipsis else common.dimension_refs(dims)
+
+
+def _dims_tuple(dims: typing.Iterable[common.Dimension | common.DimensionRef]) -> tuple:
+    return tuple(common.dimension_refs(dims))
+
+
 class DimensionType(TypeSpec):
-    dim: common.Dimension
+    dim: common.DimensionRef = dimension_field()
 
     def __str__(self) -> str:
         return str(self.dim)
@@ -61,7 +82,7 @@ class IndexType(TypeSpec):
     Represents the type of an index into a dimension.
     """
 
-    dim: common.Dimension
+    dim: common.DimensionRef = dimension_field()
 
     def __str__(self) -> str:
         return f"Index[{self.dim}]"
@@ -69,8 +90,10 @@ class IndexType(TypeSpec):
 
 class OffsetType(TypeSpec):
     # TODO(havogt): replace by ConnectivityType
-    source: common.Dimension
-    target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
+    source: common.DimensionRef = dimension_field()
+    target: tuple[common.DimensionRef] | tuple[common.DimensionRef, common.DimensionRef] = (
+        eve_datamodels.field(converter=_dims_tuple)
+    )
     #: The offset-provider key; `None` for the untagged Cartesian `Dim + offset`.
     tag: Optional[common.Tag] = None
 
@@ -114,20 +137,28 @@ class ListType(DataType):
     """
 
     element_type: DataType
-    offset_type: common.Dimension | None
+    #: The local dimension the list runs along. `None` where type inference does not know it,
+    #: which is how it spells the result of `make_const_list`; embedded execution and the DaCe
+    #: lowering use `iterator.builtins.ConstList` for the same thing.
+    #: TODO(egparedes): use `iterator.builtins.ConstList` in type inference too, and drop `None`.
+    offset_type: common.DimensionRef | None = eve_datamodels.field(
+        converter=common.optional_dimension_ref
+    )
 
 
 class FieldType(DataType, CallableType):
-    dims: list[common.Dimension]
+    dims: list[common.DimensionRef] = dimension_list_field()
     dtype: ScalarType | ListType
 
     def __str__(self) -> str:
-        dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
+        dims = (
+            "..." if self.dims is Ellipsis else f"[{', '.join(dim.qualname for dim in self.dims)}]"
+        )
         return f"Field[{dims}, {self.dtype}]"
 
     @eve_datamodels.validator("dims")
     def _dims_validator(
-        self, attribute: eve_datamodels.Attribute, dims: list[common.Dimension]
+        self, attribute: eve_datamodels.Attribute, dims: list[common.DimensionRef]
     ) -> None:
         common.check_dims(dims)
 
@@ -227,4 +258,4 @@ class ConstructorType(CallableType):
 
 
 class DomainType(DataType):
-    dims: list[common.Dimension]
+    dims: list[common.DimensionRef] = dimension_list_field()

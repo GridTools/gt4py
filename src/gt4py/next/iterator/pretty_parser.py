@@ -16,11 +16,16 @@ from lark import (
     visitors as lark_visitors,
 )
 
+from gt4py.next import common
 from gt4py.next.iterator import ir, pretty_printer
 from gt4py.next.type_system import type_specifications as ts
 
 
-GRAMMAR = """
+_AXIS_KIND_FROM_SUFFIX = {v: k for k, v in pretty_printer._AXIS_KIND_SUFFIX.items()}
+_AXIS_CATEGORY_FROM_SUFFIX = {v: k for k, v in pretty_printer._AXIS_CATEGORY_SUFFIX.items() if v}
+
+
+GRAMMAR = r"""
     start: fencil_definition
         | function_definition
         | declaration
@@ -35,8 +40,13 @@ GRAMMAR = """
     TYPE_LITERAL: CNAME
     INT_LITERAL: SIGNED_INT
     FLOAT_LITERAL: SIGNED_FLOAT
-    OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
-    AXIS_LITERAL: CNAME ("ᵥ" | "ₕ")
+    // A dimension tag is `module:qualname` (ADR 0029), and -- for a parametrized dimension
+    // such as `Staggered[pkg:K]` -- with one bracketed tag. An offset tag is a (dotted) name.
+    // Unambiguous here: a tag starts with a letter (a float does not), and the literal's
+    // suffix terminates it.
+    TAG: /[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?::[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?(?:\[[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?::[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)?\])?/
+    OFFSET_LITERAL: ( INT_LITERAL | TAG ) "ₒ"
+    AXIS_LITERAL: TAG ("ᵥ" | "ₕ" | "ₗ") ("ᵃ" | "ˡ")?
     INFINITY_LITERAL: "∞" | "-∞"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL | AXIS_LITERAL | INFINITY_LITERAL
     ID_NAME: CNAME
@@ -172,9 +182,14 @@ class ToIrTransformer(lark_visitors.Transformer):
         return ir.InfinityLiteral.POSITIVE
 
     def AXIS_LITERAL(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        name = value.value[:-1]
-        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
-        return ir.AxisLiteral(value=name, kind=kind)
+        # NOTE: the suffixes are the kind and (optionally) the category; with the tag they
+        # rebuild the `DimensionRef` without importing the declaring module.
+        text = value.value
+        category = _AXIS_CATEGORY_FROM_SUFFIX.get(text[-1], common.DimensionCategory.OTHER)
+        if text[-1] in _AXIS_CATEGORY_FROM_SUFFIX:
+            text = text[:-1]
+        kind, tag = _AXIS_KIND_FROM_SUFFIX[text[-1]], text[:-1]
+        return ir.AxisLiteral(dim=common.DimensionRef.from_tag(tag, kind, category))
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args

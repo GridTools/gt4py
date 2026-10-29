@@ -122,8 +122,8 @@ class StridedConnectivityField(common.Connectivity):
 
     def __gt_type__(self) -> common.NeighborConnectivityType:
         return common.NeighborConnectivityType(
-            domain=self.domain_dims,
-            codomain=self.codomain_dim,
+            domain=tuple(common.dimension_refs(self.domain_dims)),
+            codomain=common.dimension_ref(self.codomain_dim),
             max_neighbors=self._max_neighbors,
             skip_value=self.skip_value,
             dtype=self.dtype,
@@ -176,8 +176,8 @@ class StridedConnectivityField(common.Connectivity):
     __getitem__ = restrict  # type: ignore[assignment]
 
     def inverse_image(
-        self, image_range: common.UnitRange | common.NamedRange
-    ) -> Sequence[common.NamedRange]:
+        self, image_range: common.UnitRange | common.DimensionRange
+    ) -> Sequence[common.DimensionRange]:
         raise NotImplementedError
 
     @property
@@ -209,12 +209,6 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 MaybePosition: TypeAlias = Optional[Position]
 
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
-
-
-# Magic local dimension for the result of a `make_const_list`.
-# A clean implementation will probably involve to tag the `make_const_list`
-# with the neighborhood it is meant to be used with.
-_CONST_DIM = common.Dimension(value="_CONST_DIM", kind=common.DimensionKind.LOCAL)
 
 
 @runtime_checkable
@@ -274,10 +268,8 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))
-        column_range: common.NamedRange = embedded_context.get_closure_column_range()
-        self.data = (
-            data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
-        )
+        column_range: common.DimensionRange = embedded_context.get_closure_column_range()
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range.value), data)
 
     @property
     def dtype(self) -> np.dtype:
@@ -446,16 +438,16 @@ def lift(stencil):
     return impl
 
 
-NamedRange: TypeAlias = tuple[Tag | common.Dimension, range]
+TaggedRange: TypeAlias = tuple[Tag | common.Dimension, range]
 
 
 @builtins.cartesian_domain.register(EMBEDDED)
-def cartesian_domain(*args: NamedRange) -> runtime.CartesianDomain:
+def cartesian_domain(*args: TaggedRange) -> runtime.CartesianDomain:
     return runtime.CartesianDomain(args)
 
 
 @builtins.unstructured_domain.register(EMBEDDED)
-def unstructured_domain(*args: NamedRange) -> runtime.UnstructuredDomain:
+def unstructured_domain(*args: TaggedRange) -> runtime.UnstructuredDomain:
     return runtime.UnstructuredDomain(args)
 
 
@@ -465,7 +457,7 @@ Domain: TypeAlias = (
 
 
 @builtins.named_range.register(EMBEDDED)
-def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange:
+def named_range(tag: Tag | common.Dimension, start: int, end: int) -> TaggedRange:
     # TODO revisit this pattern after the discussion of 0d-field vs scalar
     if isinstance(start, ConstantField):
         start = start.value
@@ -565,13 +557,13 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
-                if tag == _CONST_DIM.value:
+                if tag == builtins.ConstList.tag:
                     new_entry[i] = 0
                 else:
                     offset_implementation = common.get_offset(offset_provider, tag)
                     assert common.is_neighbor_table(offset_implementation)
                     source_dim = offset_implementation.__gt_type__().source_dim
-                    cur_index = pos[source_dim.value]
+                    cur_index = pos[source_dim.tag]
                     assert common.is_int_index(cur_index)
                     if offset_implementation[cur_index, index].as_scalar() in [
                         None,
@@ -586,17 +578,17 @@ def execute_shift(
 
     if isinstance(tag, common.CartesianConnectivity):
         new_pos = copy.copy(pos)
-        value = new_pos.pop(tag.domain_dim.value)
+        value = new_pos.pop(tag.domain_dim.tag)
         assert common.is_int_index(value)
-        new_pos[tag.codomain.value] = value + index + tag.offset
+        new_pos[tag.codomain.tag] = value + index + tag.offset
         return new_pos
     offset_implementation = common.get_offset(offset_provider, tag)
     if common.is_neighbor_table(offset_implementation):
         source_dim = offset_implementation.__gt_type__().source_dim
-        assert source_dim.value in pos
+        assert source_dim.tag in pos
         new_pos = pos.copy()
-        new_pos.pop(source_dim.value)
-        cur_index = pos[source_dim.value]
+        new_pos.pop(source_dim.tag)
+        cur_index = pos[source_dim.tag]
         assert common.is_int_index(cur_index)
         if offset_implementation[cur_index, index].as_scalar() in [
             None,
@@ -606,7 +598,7 @@ def execute_shift(
         else:
             new_index = offset_implementation[cur_index, index].as_scalar()
             assert new_index is not None
-            new_pos[offset_implementation.codomain.value] = int(new_index)
+            new_pos[offset_implementation.codomain.tag] = int(new_index)
 
         return new_pos
 
@@ -729,15 +721,15 @@ def _get_axes(
     In case all arguments are zero-dimensional return an empty sequence.
 
     >>> from gt4py import next as gtx
-    >>> IDim = gtx.Dimension("I")
+    >>> class IDim(gtx.CartesianAxisIndex): ...
     >>> i_field: LocatedField = _wrap_field(
     ...     gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )
 
     >>> _get_axes((i_field, i_field))
-    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    (gt4py.next.iterator.embedded:IDim[horizontal],)
 
-    >>> JDim = gtx.Dimension("J")
+    >>> class JDim(gtx.CartesianAxisIndex): ...
     >>> j_field: LocatedField = _wrap_field(
     ...     gtx.empty({JDim: range(3, 10)}, allocator=gtx.itir_python)
     ... )
@@ -753,7 +745,7 @@ def _get_axes(
     ValueError: Fields are defined on different axes.
 
     >>> _get_axes((i_field, zero_dim_field), ignore_zero_dims=True)
-    (Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),)
+    (gt4py.next.iterator.embedded:IDim[horizontal],)
     """
     if isinstance(field_or_tuple, tuple):
         els_axes = []
@@ -828,7 +820,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         assert column_range is not None
 
         col: list[
@@ -895,7 +887,7 @@ class MDIterator:
         axes = _get_axes(self.field, ignore_zero_dims=True)
 
         if __debug__:
-            if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
+            if not all(axis.tag in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
         if self.column_axis is not None:
@@ -905,7 +897,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.unit_range))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.value))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -916,7 +908,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[common.Dime
     return [
         axis
         for axis in axes
-        if isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL
+        if isinstance(axis, common.DimensionMeta) and axis.kind == common.DimensionKind.LOCAL
     ]
 
 
@@ -937,18 +929,18 @@ def make_in_iterator(
     new_pos: Position = pos.copy()
     for sparse_dim in set(sparse_dimensions):
         init = [None] * sparse_dimensions.count(sparse_dim)
-        new_pos[sparse_dim.value] = init  # type: ignore[assignment] # looks like mypy is confused
+        new_pos[sparse_dim.tag] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_dimension is not None:
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
-        new_pos[column_dimension.value] = column_range.start
+        new_pos[column_dimension.tag] = column_range.start
     it = MDIterator(
-        inp, new_pos, column_axis=column_dimension.value if column_dimension is not None else None
+        inp, new_pos, column_axis=column_dimension.tag if column_dimension is not None else None
     )
     if len(sparse_dimensions) >= 1:
         if len(sparse_dimensions) == 1:
-            return SparseListIterator(it, sparse_dimensions[0].value)
+            return SparseListIterator(it, sparse_dimensions[0].tag)
         else:
             raise NotImplementedError(
                 f"More than one local dimension is currently not supported, got {sparse_dimensions}."
@@ -972,23 +964,23 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
-    ) -> common.AbsoluteIndexSequence:
+    ) -> common.CanonicalAbsoluteIndexSequence:
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
-            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_domain__.dims
+            d: _named_indices[d.tag] for d in self._ndarrayfield.__gt_domain__.dims
         }
-        domain_slice: list[common.NamedRange | common.NamedIndex] = []
+        domain_slice: list[common.DimensionRange | common.DimensionIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
-                domain_slice.append(common.NamedRange(d, common.UnitRange(v.start, v.stop)))
+                domain_slice.append(common.DimensionRange(d, common.UnitRange(v.start, v.stop)))
             elif isinstance(v, list):
                 assert len(v) == 1  # only 1 sparse dimension is supported
                 assert common.is_int_index(
                     v[0]
                 )  # derefing a concrete element in a sparse field, not a slice
-                domain_slice.append(common.NamedIndex(d, v[0]))
+                domain_slice.append(d(v[0]))
             else:
                 assert common.is_int_index(v)
-                domain_slice.append(common.NamedIndex(d, v))
+                domain_slice.append(d(v))
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
@@ -1003,7 +995,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
                     ] = v
             elif isinstance(value, _ConstList):
                 self._ndarrayfield[
-                    self._translate_named_indices({**named_indices, _CONST_DIM.value: 0})
+                    self._translate_named_indices({**named_indices, builtins.ConstList.tag: 0})
                 ] = value.value
             else:
                 self._ndarrayfield[self._translate_named_indices(named_indices)] = value
@@ -1016,7 +1008,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    return isinstance(axis, FieldAxis)
+    return isinstance(axis, common.DimensionMeta)
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
@@ -1037,13 +1029,13 @@ def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[F
             res.append(slice(None))
         else:
             assert _is_field_axis(axis)
-            assert axis.value in pos
-            assert isinstance(axis.value, str)
-            elem = pos[axis.value]
+            assert axis.tag in pos
+            assert isinstance(axis.tag, str)
+            elem = pos[axis.tag]
             if _is_sparse_position_entry(elem):
-                sparse_position_tracker.setdefault(axis.value, 0)
-                res.append(elem[sparse_position_tracker[axis.value]])
-                sparse_position_tracker[axis.value] += 1
+                sparse_position_tracker.setdefault(axis.tag, 0)
+                res.append(elem[sparse_position_tracker[axis.tag]])
+                sparse_position_tracker[axis.tag] += 1
             else:
                 assert isinstance(elem, (int, np.integer, slice, range))
                 res.append(elem)
@@ -1118,7 +1110,9 @@ class IndexField(common.Field):
     @property
     def domain(self) -> common.Domain:
         if self._cur_index is None:
-            return common.Domain(common.NamedRange(self._dimension, common.UnitRange.infinite()))
+            return common.Domain(
+                common.DimensionRange(self._dimension, common.UnitRange.infinite())
+            )
         else:
             return common.Domain()
 
@@ -1154,10 +1148,12 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
-        if isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item):
+        if isinstance(item, Sequence) and all(isinstance(e, common.DimensionIndex) for e in item):
             assert len(item) == 1
-            assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
-            d, r = item[0]
+            assert isinstance(
+                item[0], common.DimensionIndex
+            )  # for mypy errors on multiple lines below
+            d, r = item[0].dim, item[0].value
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
             # TODO(tehrengruber): Use a regular zero dimensional field instead.
@@ -1425,7 +1421,7 @@ class _ConstList(Generic[DT]):
         assert isinstance(element_type, ts.DataType)
         return ts.ListType(
             element_type=element_type,
-            offset_type=_CONST_DIM,
+            offset_type=builtins.ConstList,
         )
 
 
@@ -1507,7 +1503,7 @@ class SparseListIterator:
     offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
-        if self.list_offset == _CONST_DIM.value:
+        if self.list_offset == builtins.ConstList.tag:
             return _ConstList(
                 value=self.it.shift(*self.offsets, SparseTag(self.list_offset), 0).deref()
             )
@@ -1632,7 +1628,7 @@ def _elem_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = embedded_context.get_closure_column_range().unit_range
+        column_range = embedded_context.get_closure_column_range().value
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1651,7 +1647,7 @@ def scan(scan_pass, is_forward: bool, init):
 def _dimension_to_tag(
     domain: runtime.CartesianDomain | runtime.UnstructuredDomain,
 ) -> dict[Tag, range]:
-    return {k.value: v for k, v in domain.items()}
+    return {k.tag: v for k, v in domain.items()}
 
 
 def _validate_domain(domain: Domain, offset_provider_type: common.OffsetProviderType) -> None:
@@ -1674,7 +1670,7 @@ def set_at(
 
 @runtime.get_domain_range.register(EMBEDDED)
 def get_domain_range(field: common.Field, dim: common.Dimension) -> tuple[int, int]:
-    return (field.domain[dim].unit_range.start, field.domain[dim].unit_range.stop)
+    return (field.domain[dim].value.start, field.domain[dim].value.stop)
 
 
 @runtime.if_stmt.register(EMBEDDED)
@@ -1722,16 +1718,16 @@ def _compute_at_position(
     return sten(*ins_iters)
 
 
-def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
+def _extract_column_range(domain) -> common.DimensionRange | eve.NothingType:
     if (col_range_placeholder := embedded_context.get_closure_column_range(None)) is not None:
         assert (
-            col_range_placeholder.unit_range.is_empty()
+            col_range_placeholder.value.is_empty()
         )  # check it's just the placeholder with empty range
         column_axis = col_range_placeholder.dim
-        if column_axis is not None and column_axis.value in domain:
-            return common.NamedRange(
+        if column_axis is not None and column_axis.tag in domain:
+            return common.DimensionRange(
                 column_axis,
-                common.UnitRange(domain[column_axis.value].start, domain[column_axis.value].stop),
+                common.UnitRange(domain[column_axis.tag].start, domain[column_axis.tag].stop),
             )
     return eve.NOTHING
 
@@ -1745,9 +1741,9 @@ def _get_output_type(
     col_range = _extract_column_range(domain)
 
     col_dim: Optional[common.Dimension] = None
-    if isinstance(col_range, common.NamedRange):
+    if isinstance(col_range, common.DimensionRange):
         col_dim = col_range.dim
-        del domain[col_range.dim.value]
+        del domain[col_range.dim.tag]
 
     # determine dtype by computing result at one point
     pos_in_domain = next(iter(_domain_iterator(domain)))
@@ -1762,19 +1758,23 @@ def _fieldspec_list_to_value(
 ) -> tuple[common.Domain, ts.TypeSpec]:
     """Translate the list element type into the domain."""
     if isinstance(type_, ts.ListType):
-        if type_.offset_type == _CONST_DIM:
+        if type_.offset_type == common.dimension_ref(builtins.ConstList):
             return domain.insert(
-                len(domain), common.named_range((_CONST_DIM, 1))
+                len(domain), common.dimension_range((builtins.ConstList, 1))
             ), type_.element_type
         else:
             offset_provider = embedded_context.get_offset_provider()
             offset_type = type_.offset_type
-            assert isinstance(offset_type, common.Dimension)
-            connectivity = common.get_offset(offset_provider, offset_type.value)
+            assert isinstance(offset_type, common.DimensionRef)
+            connectivity = common.get_offset(offset_provider, offset_type.tag)
             assert common.is_neighbor_table(connectivity)
+            # NOTE: the type carries a ref; the embedded field needs the class, which the
+            # connectivity (a runtime object) has.
+            local_dim = connectivity.domain.dims[1]
+            assert common.dimension_ref(local_dim) == offset_type
             return domain.insert(
                 len(domain),
-                common.named_range((offset_type, connectivity.__gt_type__().max_neighbors)),
+                common.dimension_range((local_dim, connectivity.__gt_type__().max_neighbors)),
             ), type_.element_type
     return domain, type_
 
@@ -1819,12 +1819,12 @@ def closure(
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")
 
-    column_range: common.NamedRange | eve.NothingType = _extract_column_range(domain)
+    column_range: common.DimensionRange | eve.NothingType = _extract_column_range(domain)
 
     column_dim = None
-    if isinstance(column_range, common.NamedRange):
+    if isinstance(column_range, common.DimensionRange):
         column_dim = column_range.dim
-        del domain[column_range.dim.value]
+        del domain[column_range.dim.tag]
 
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
     promoted_ins = [promote_scalars(inp) for inp in ins]
@@ -1837,10 +1837,10 @@ def closure(
                 assert _is_concrete_position(pos)
                 out.field_setitem(pos, res)
             else:
-                column_range = cast(common.NamedRange, column_range)
+                column_range = cast(common.DimensionRange, column_range)
                 col_pos = pos.copy()
-                for k in column_range.unit_range:
-                    col_pos[column_range.dim.value] = k
+                for k in column_range.value:
+                    col_pos[column_range.dim.tag] = k
                     assert _is_concrete_position(col_pos)
                     out.field_setitem(col_pos, res[k])  # type: ignore[index]
 
@@ -1851,7 +1851,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
     context_vars = {"offset_provider": kwargs["offset_provider"]}
     if "column_axis" in kwargs:
-        context_vars["closure_column_range"] = common.NamedRange(
+        context_vars["closure_column_range"] = common.DimensionRange(
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )

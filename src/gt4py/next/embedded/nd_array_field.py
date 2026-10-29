@@ -169,7 +169,7 @@ class NdArrayField(
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
-        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert all(isinstance(d, common.DimensionMeta) for d in domain.dims), domain
         assert len(domain) == array.ndim
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
@@ -533,11 +533,11 @@ class NdArrayConnectivityField(
 
         assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
 
-        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert all(isinstance(d, common.DimensionMeta) for d in domain.dims), domain
         assert len(domain) == array.ndim
         assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
-        assert isinstance(codomain, common.Dimension)
+        assert isinstance(codomain, common.DimensionMeta)
 
         return cls(domain, array, codomain, _skip_value=skip_value)
 
@@ -560,7 +560,7 @@ class NdArrayConnectivityField(
     def _cache(self) -> dict:
         return {}
 
-    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+    def inverse_image(self, image_range: common.UnitRange | common.DimensionRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
@@ -572,7 +572,7 @@ class NdArrayConnectivityField(
                         f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                     )
 
-                image_range = image_range.unit_range
+                image_range = image_range.value
 
             assert isinstance(image_range, common.UnitRange)
             assert common.UnitRange.is_finite(image_range)
@@ -615,7 +615,7 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
                 f"but got '{data.domain}'."
             )
 
-        current_range: common.UnitRange = data.domain[dim_idx].unit_range
+        current_range: common.UnitRange = data.domain[dim_idx].value
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = new_domain.replace(dim_idx, *new_ranges)
 
@@ -631,21 +631,21 @@ def _gather_output_domain(
     for conn in connectivities:
         cod = conn.codomain
         # the connectivity's domain, restricted to where it maps into the codomain's range
-        narrowed = {
-            nr.dim: nr.unit_range for nr in conn.inverse_image(field_domain[cod].unit_range)
-        }
+        narrowed = {nr.dim: nr.value for nr in conn.inverse_image(field_domain[cod].value)}
         # dimensions the connectivity adds that are not in the field yet
         introduced = [
-            common.NamedRange(dim, rng) for dim, rng in narrowed.items() if dim not in domain.dims
+            common.DimensionRange(dim, rng)
+            for dim, rng in narrowed.items()
+            if dim not in domain.dims
         ]
-        result: list[common.NamedRange] = []
+        result: list[common.DimensionRange] = []
         for nr in domain:
             if nr.dim == cod:  # the codomain expands into the connectivity's domain dimensions
                 if cod in narrowed:  # keep the codomain itself when it maps to itself
-                    result.append(common.NamedRange(cod, nr.unit_range & narrowed[cod]))
+                    result.append(common.DimensionRange(cod, nr.value & narrowed[cod]))
                 result.extend(introduced)
             elif nr.dim in narrowed:  # a dimension shared with the connectivity: narrow it
-                result.append(common.NamedRange(nr.dim, nr.unit_range & narrowed[nr.dim]))
+                result.append(common.DimensionRange(nr.dim, nr.value & narrowed[nr.dim]))
             else:
                 result.append(nr)
         domain = common.Domain(*result)
@@ -666,7 +666,7 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
             if dim in conn_by_codomain
             else _identity_index_array(new_domain, dim, xp)
         )
-        - data.domain[dim].unit_range.start
+        - data.domain[dim].value.start
         for dim in data.domain.dims
     )
     new_buffer = data._ndarray[take_indices]
@@ -706,7 +706,7 @@ def _identity_index_array(
 ) -> core_defs.NDArrayObject:
     """Index array selecting `dim` unchanged over `domain`, in the field's index space."""
     d_idx = domain.dim_index(dim, allow_missing=False)
-    unit_range = domain[d_idx].unit_range
+    unit_range = domain[d_idx].value
     indices = xp.arange(unit_range.start, unit_range.stop, dtype=dtype)
     shape = tuple(len(indices) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
@@ -829,19 +829,21 @@ def _intersect_fields(
 def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> common.Domain:
     if not domains:
         return common.Domain()
-    dim_start = domains[0][dim].unit_range.start
-    dim_stop = domains[-1][dim].unit_range.stop
-    return domains[0].replace(dim, common.NamedRange(dim, common.UnitRange(dim_start, dim_stop)))
+    dim_start = domains[0][dim].value.start
+    dim_stop = domains[-1][dim].value.stop
+    return domains[0].replace(
+        dim, common.DimensionRange(dim, common.UnitRange(dim_start, dim_stop))
+    )
 
 
 def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
     # TODO(havogt): this function could be extended to a general concat
     # currently only concatenate along the given dimension
-    sorted_fields = sorted(fields, key=lambda f: f.domain[dim].unit_range.start)
+    sorted_fields = sorted(fields, key=lambda f: f.domain[dim].value.start)
 
     for prev, curr in itertools.pairwise(sorted_fields):
-        left = prev.domain[dim].unit_range.stop
-        right = curr.domain[dim].unit_range.start
+        left = prev.domain[dim].value.stop
+        right = curr.domain[dim].value.start
         if left > right:
             raise ValueError("Fields to concatenate must not overlap.")
         if left < right:
@@ -934,11 +936,11 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
     if not fbuiltins.is_cartesian_offset(offset):
-        target_dims = ", ".join(d.value for d in offset.target)
+        target_dims = ", ".join(d.__qualname__ for d in offset.target)  # for the diagnostic
         raise ValueError(
             f"'as_offset' is only supported for Cartesian offsets "
             f"(single target dimension equal to source dimension); "
-            f"got source '{offset.source.value}' and target ({target_dims})."
+            f"got source '{offset.source.__qualname__}' and target ({target_dims})."
         )
     source_dim = offset.source
     coords = _identity_index_array(
@@ -972,7 +974,7 @@ def _make_reduction(
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
-            current_offset_provider, axis.value
+            current_offset_provider, axis.tag
         )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
@@ -1106,15 +1108,17 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
     if field.domain.dims == new_dimensions:
         return field
     domain_slice: list[slice | None] = []
-    named_ranges = []
+    dimension_ranges = []
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            named_ranges.append(common.NamedRange(dim, field.domain[pos].unit_range))
+            dimension_ranges.append(common.DimensionRange(dim, field.domain[pos].value))
         else:
             domain_slice.append(None)  # np.newaxis
-            named_ranges.append(common.NamedRange(dim, common.UnitRange.infinite()))
-    return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+            dimension_ranges.append(common.DimensionRange(dim, common.UnitRange.infinite()))
+    return common._field(
+        field.ndarray[tuple(domain_slice)], domain=common.Domain(*dimension_ranges)
+    )
 
 
 def _builtins_broadcast(
@@ -1139,7 +1143,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[ar
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex],
+    domain_slice: common.Domain | Sequence[common.DimensionRange | common.DimensionIndex],
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -1159,8 +1163,7 @@ def _get_slices_from_domain_slice(
 
     for pos_old, (dim, _) in enumerate(domain):
         if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
-            _, index_or_range = domain_slice[pos]
-            slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
+            slice_indices.append(_compute_slice(domain_slice[pos].value, domain, pos_old))
         else:
             slice_indices.append(slice(None))
     return tuple(slice_indices)
@@ -1183,14 +1186,17 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
+        # an open side of `rng` selects up to the field's own bound, i.e. the buffer's end
         start = (
             rng.start - domain.ranges[pos].start
             if common.UnitRange.is_left_finite(domain.ranges[pos])
+            and common.UnitRange.is_left_finite(rng)
             else None
         )
         stop = (
             rng.stop - domain.ranges[pos].start
             if common.UnitRange.is_right_finite(domain.ranges[pos])
+            and common.UnitRange.is_right_finite(rng)
             else None
         )
         return slice(start, stop)

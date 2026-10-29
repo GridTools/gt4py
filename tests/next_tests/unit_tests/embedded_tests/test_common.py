@@ -11,7 +11,7 @@ from typing import Sequence
 import pytest
 
 from gt4py.next import common
-from gt4py.next.common import UnitRange, NamedIndex, NamedRange
+from gt4py.next.common import UnitRange, DimensionIndex
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import (
     _slice_range,
@@ -37,9 +37,13 @@ def test_slice_range(rng, slce, expected):
     assert result == expected
 
 
-I = common.Dimension("I")
-J = common.Dimension("J")
-K = common.Dimension("K")
+class I(common.CartesianAxisIndex): ...
+
+
+class J(common.CartesianAxisIndex): ...
+
+
+class K(common.CartesianAxisIndex): ...
 
 
 @pytest.mark.parametrize(
@@ -47,12 +51,12 @@ K = common.Dimension("K")
     [
         ([(I, (2, 5))], 1, []),
         ([(I, (2, 5))], slice(1, 2), [(I, (3, 4))]),
-        ([(I, (2, 5))], NamedIndex(I, 2), []),
-        ([(I, (2, 5))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (2, 5))], I(2), []),
+        ([(I, (2, 5))], I.at(2, 3), [(I, (2, 3))]),
         ([(I, (-2, 3))], 1, []),
         ([(I, (-2, 3))], slice(1, 2), [(I, (-1, 0))]),
-        ([(I, (-2, 3))], NamedIndex(I, 1), []),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (-2, 3))], I(1), []),
+        ([(I, (-2, 3))], I.at(2, 3), [(I, (2, 3))]),
         ([(I, (-2, 3))], -5, []),
         ([(I, (-2, 3))], -6, IndexError),
         ([(I, (-2, 3))], slice(-7, -6), IndexError),
@@ -61,36 +65,45 @@ K = common.Dimension("K")
         ([(I, (-2, 3))], 5, IndexError),
         ([(I, (-2, 3))], slice(4, 5), [(I, (2, 3))]),
         ([(I, (-2, 3))], slice(5, 6), IndexError),
-        ([(I, (-2, 3))], NamedIndex(I, -3), IndexError),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(-3, -2)), IndexError),
-        ([(I, (-2, 3))], NamedIndex(I, 3), IndexError),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(3, 4)), IndexError),
+        ([(I, (-2, 3))], I(-3), IndexError),
+        ([(I, (-2, 3))], I.at(-3, -2), IndexError),
+        ([(I, (-2, 3))], I(3), IndexError),
+        ([(I, (-2, 3))], I.at(3, 4), IndexError),
+        # an open bound extends to the domain's own bound
+        ([(I, (2, 5))], I.at(3, None), [(I, (3, 5))]),
+        ([(I, (2, 5))], I.at(None, 4), [(I, (2, 4))]),
+        ([(I, (2, 5))], I.at(None, None), [(I, (2, 5))]),
+        ([(I, (2, 5))], I.at(5, None), [(I, (5, 5))]),
+        ([(I, (2, 5))], I.at(6, None), IndexError),
+        ([(I, (2, 5))], I.at(1, None), IndexError),
+        ([(I, (2, 5))], I.at(None, 6), IndexError),
+        ([(I, (2, 5))], I.at(None, 1), IndexError),
         ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], 2, [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             slice(2, 3),
             [(I, (4, 5)), (J, (3, 6)), (K, (4, 7))],
         ),
-        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], NamedIndex(I, 2), [(J, (3, 6)), (K, (4, 7))]),
+        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], I(2), [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedRange(I, UnitRange(2, 3)),
+            I.at(2, 3),
             [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
         ),
-        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], NamedIndex(J, 3), [(I, (2, 5)), (K, (4, 7))]),
+        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], J(3), [(I, (2, 5)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedRange(J, UnitRange(4, 5)),
+            J.at(4, 5),
             [(I, (2, 5)), (J, (4, 5)), (K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (NamedIndex(J, 3), NamedIndex(I, 2)),
+            (J(3), I(2)),
             [(K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (NamedRange(J, UnitRange(4, 5)), NamedIndex(I, 2)),
+            (J.at(4, 5), I(2)),
             [(J, (4, 5)), (K, (4, 7))],
         ),
         (
@@ -129,9 +142,9 @@ def test_sub_domain(domain, index, expected):
 def test_iterate_domain():
     domain = common.domain({I: 2, J: 3})
     ref = []
-    for i in domain[I].unit_range:
-        for j in domain[J].unit_range:
-            ref.append(((I, i), (J, j)))
+    for i in domain[I].value:
+        for j in domain[J].value:
+            ref.append((I(i), J(j)))
 
     testee = list(iterate_domain(domain))
 
@@ -141,19 +154,26 @@ def test_iterate_domain():
 @pytest.mark.parametrize(
     "slices, expected",
     [
-        [slice(I(3), I(4)), (NamedRange(I, common.UnitRange(3, 4)),)],
+        [slice(I(3), I(4)), (I.at(3, 4),)],
         [
             (slice(J(3), J(6)), slice(I(3), I(5))),
-            (NamedRange(J, common.UnitRange(3, 6)), NamedRange(I, common.UnitRange(3, 5))),
+            (J.at(3, 6), I.at(3, 5)),
         ],
-        [slice(I(1), J(7)), IndexError],
-        [slice(I(1), None), IndexError],
-        [slice(None, K(8)), IndexError],
+        [slice(I(1), None), (I.at(1, None),)],
+        [slice(None, K(8)), (K.at(None, 8),)],
+        [slice(I(1), I(3), 1), (I.at(1, 3),)],
+        [(I(2), slice(J(3), J(6))), (I(2), J.at(3, 6))],
+        [(slice(1, 2), slice(2, 3)), (slice(1, 2), slice(2, 3))],  # relative: unchanged
+        [slice(I(1), J(7)), (IndexError, "mismatch between 'I' and 'J'")],
+        [slice(I(1), I(7), 2), (IndexError, "step")],
+        [slice(I(1), 7), (IndexError, "both bounds must be indices")],
+        [(slice(I(1), I(7)), 2), (IndexError, "Cannot mix relative index")],
+        [(slice(I(1), I(3)), slice(0, 2)), (IndexError, "Cannot mix relative index")],
     ],
 )
 def test_slicing(slices, expected):
-    if expected is IndexError:
-        with pytest.raises(IndexError):
+    if isinstance(expected, tuple) and expected[0] is IndexError:
+        with pytest.raises(IndexError, match=expected[1]):
             canonicalize_any_index_sequence(slices)
     else:
         testee = canonicalize_any_index_sequence(slices)

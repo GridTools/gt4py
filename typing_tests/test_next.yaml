@@ -4,7 +4,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -16,7 +16,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None, backend=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -26,7 +26,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator(grid_type=None)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -36,7 +36,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -49,7 +49,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
       def somescanop(
@@ -64,7 +64,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -85,7 +85,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -106,7 +106,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -127,8 +127,8 @@
       import typing
       from gt4py import next as gtx
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
 
@@ -145,8 +145,8 @@
       import typing
       from gt4py import next as gtx
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
       CKTuple: typing.TypeAlias = tuple[CellKField[T], CellKField[T]]
@@ -163,8 +163,8 @@
       from gt4py import next as gtx
       from gt4py.next import where
 
-      CellDim = gtx.Dimension("CellDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CellDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
       T = typing.TypeVar("T", float, gtx.float32, gtx.float64, bool, gtx.int32, gtx.int64)
       CellField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim], T]
       CellKField: typing.TypeAlias = gtx.Field[gtx.Dims[CellDim, KDim], T]
@@ -205,7 +205,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -218,7 +218,7 @@
     main: |
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.scan_operator(axis=KDim)
       def somescanop(
@@ -236,7 +236,7 @@
       import typing
       from gt4py import next as gtx
 
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
@@ -260,8 +260,8 @@
       import typing
       from gt4py import next as gtx
 
-      CDim = gtx.Dimension("CDim", kind=gtx.DimensionKind.HORIZONTAL)
-      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+      class CDim(gtx.DimensionIndex, kind=gtx.DimensionKind.HORIZONTAL): ...
+      class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
       @gtx.field_operator
       def foo(
@@ -275,3 +275,83 @@
     main: |
       import xarray
       a: xarray.NamedArray
+
+  - case: cartesian_axis_levels
+    main: |
+      from gt4py import next as gtx
+
+      class K(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+      class C(gtx.DimensionIndex): ...
+
+      def any_dimension(d: gtx.Dimension) -> None: ...
+      def any_axis(d: type[gtx.AnyCartesianAxisIndex]) -> None: ...
+
+      any_dimension(gtx.Staggered[K])
+      any_axis(gtx.Staggered[K])
+      ok_dims: gtx.Field[gtx.Dims[C, gtx.Staggered[K]], float] | None = None
+      ok_shift = K + 1
+      ok_half = gtx.Staggered[K] - 0.5
+      any_axis(C)
+      bad_doubly: gtx.Field[gtx.Dims[gtx.Staggered[gtx.Staggered[K]]], float] | None = None
+      bad_location: gtx.Field[gtx.Dims[gtx.Staggered[C]], float] | None = None
+      bad_shift = C + 1
+      bad_shift_back = C - 1
+    out: |
+      main:14:10: error: Argument 1 to "any_axis" has incompatible type "type[C]"; expected "type[AnyCartesianAxisIndex]"  [arg-type]
+      main:15:46: error: Type argument "Staggered[K]" of "Staggered" must be a subtype of "CartesianAxisIndex"  [type-var]
+      main:16:48: error: Type argument "C" of "Staggered" must be a subtype of "CartesianAxisIndex"  [type-var]
+      main:17:13: error: Unsupported operand types for + ("type[C]" and "int")  [operator]
+      main:18:18: error: Unsupported operand types for - ("type[C]" and "int")  [operator]
+
+  - case: dimension_selection
+    main: |
+      import numpy as np
+      from gt4py import next as gtx
+      from gt4py.next import common
+
+      class I(gtx.CartesianAxisIndex): ...
+      class J(gtx.CartesianAxisIndex): ...
+
+      point_i: I = I.at(3)
+      point_np: I = I.at(np.int32(3))
+      point_half: gtx.Staggered[I] = gtx.Staggered[I].at(3)
+      point: common.DimensionSelection[int] = I.at(3)
+      closed: common.DimensionSelection[common.UnitRange] = I.at(0, 10)
+      open_left: common.DimensionRange = I.at(None, 10)
+      from_range: common.DimensionSelection[common.UnitRange] = I.at(range(0, 10))
+      dim_slice: common.DimensionSlice[I] = slice(I(0), I(10))
+      open_slice: common.DimensionSlice[I] = slice(I(0), None)
+
+      def index(f: gtx.Field[gtx.Dims[I, J], gtx.float64]) -> None:
+          f[I(1), J(2) : J(4)]
+          f[I(1) : I(3), J.at(2)]
+          f[I(1) :]
+          f[I.at(1, None), J.at(None, 4)]
+
+      I.at()
+      I.at(0, 1, 2)
+      I.at(slice(0, 1))
+      not_a_dim_slice: common.DimensionSlice[I] = slice(0, 10)
+      wrong_dim: J = I.at(3)
+      not_any: str = I.at(0, 10).value
+      not_any_alias: str = I.at(0, 10).unit_range
+    out: |
+      main:24:1: error: All overload variants of "at" of "DimensionMeta" require at least one argument  [call-overload]
+      main:24:1: note: Possible overload variants:
+      main:24:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit], /) -> I
+      main:24:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:24:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:25:1: error: No overload variant of "at" of "DimensionMeta" matches argument types "int", "int", "int"  [call-overload]
+      main:25:1: note: Possible overload variants:
+      main:25:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit], /) -> I
+      main:25:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:25:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:26:1: error: No overload variant of "at" of "DimensionMeta" matches argument type "slice[int, int, Any]"  [call-overload]
+      main:26:1: note: Possible overload variants:
+      main:26:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit], /) -> I
+      main:26:1: note:     def at(cls, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, int | int | int | int | unsignedinteger[_8Bit] | unsignedinteger[_16Bit] | unsignedinteger[_32Bit] | unsignedinteger[_64Bit] | None, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:26:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[UnitRange[Any, Any]]
+      main:27:45: error: Incompatible types in assignment (expression has type "slice[int, int, Any]", variable has type "slice[I, I, Literal[1] | None] | slice[I, None, Literal[1] | None] | slice[None, I, Literal[1] | None]")  [assignment]
+      main:28:16: error: Incompatible types in assignment (expression has type "I", variable has type "J")  [assignment]
+      main:29:16: error: Incompatible types in assignment (expression has type "UnitRange[Any, Any]", variable has type "str")  [assignment]
+      main:30:22: error: Incompatible types in assignment (expression has type "UnitRange[Any, Any]", variable has type "str")  [assignment]

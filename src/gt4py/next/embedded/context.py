@@ -19,7 +19,7 @@ import gt4py.next.embedded as gtx_embedded
 import gt4py.next.errors.exceptions as exceptions
 
 
-_closure_column_range: contextvars.ContextVar[common.NamedRange] = contextvars.ContextVar(
+_closure_column_range: contextvars.ContextVar[common.DimensionRange] = contextvars.ContextVar(
     "_column_range"
 )
 _offset_provider: contextvars.ContextVar[common.OffsetProvider] = contextvars.ContextVar(
@@ -34,14 +34,14 @@ _NO_DEFAULT_SENTINEL: Any = object()
 
 
 @overload
-def get_closure_column_range() -> common.NamedRange: ...
+def get_closure_column_range() -> common.DimensionRange: ...
 
 
 @overload
-def get_closure_column_range(default: _T) -> common.NamedRange | _T: ...
+def get_closure_column_range(default: _T) -> common.DimensionRange | _T: ...
 
 
-def get_closure_column_range(default: _T = _NO_DEFAULT_SENTINEL) -> common.NamedRange | _T:
+def get_closure_column_range(default: _T = _NO_DEFAULT_SENTINEL) -> common.DimensionRange | _T:
     """Column range used in 'column mode' in the current embedded iterator closure execution context."""
     result = _closure_column_range.get(default)
     if result is _NO_DEFAULT_SENTINEL:
@@ -72,7 +72,7 @@ def get_offset_provider(default: _T = _NO_DEFAULT_SENTINEL) -> common.OffsetProv
 @contextlib.contextmanager
 def update(
     *,
-    closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
+    closure_column_range: common.DimensionRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
 ) -> Generator[None, None, None]:
     """Context handler updating the current embedded context with the provided values."""

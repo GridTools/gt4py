@@ -15,12 +15,11 @@ import pytest
 from gt4py.next import common, constructors
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.type_system import type_specifications as ts
+from next_tests.integration_tests.cases_utils import IDim
 
 
 # values inside the domain of every unary math builtin (0.5 is invalid for `arccosh`)
 _SAFE_INPUT = {"arccosh": 2.0}
-
-IDim = common.Dimension("IDim")
 
 
 @dataclasses.dataclass

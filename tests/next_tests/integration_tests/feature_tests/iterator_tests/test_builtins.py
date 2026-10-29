@@ -54,6 +54,13 @@ from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.integration_tests.cases_utils import IDim
+
+
+class Node(gtx.DimensionIndex): ...
+
+
+class NeighDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
 
 
 def array_maker(*lists):
@@ -65,9 +72,6 @@ def array_maker(*lists):
 
     res = list(map(lambda val: np.asarray(_listify(val)), lists))
     return res
-
-
-IDim = gtx.Dimension("IDim")
 
 
 def field_maker(*arrays):
@@ -244,9 +248,6 @@ def _can_deref_lifted(inp):
 @pytest.mark.uses_can_deref
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
-
-    Node = gtx.Dimension("Node")
-    NeighDim = gtx.Dimension("Neighbor", kind=gtx.DimensionKind.LOCAL)
 
     inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
     out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))

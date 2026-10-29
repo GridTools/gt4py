@@ -62,7 +62,7 @@ def _deduce_grid_type(
         if isinstance(o, fbuiltins.FieldOffset) and not fbuiltins.is_cartesian_offset(o):
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
-        if isinstance(o, common.Dimension) and o.kind == common.DimensionKind.LOCAL:
+        if isinstance(o, common.DimensionMeta) and o.kind == common.DimensionKind.LOCAL:
             deduced_grid_type = common.GridType.UNSTRUCTURED
             break
 

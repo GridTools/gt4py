@@ -37,7 +37,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         domain: common.Domain,
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Optional[Sequence[common.DimensionIndex]] = None,  # absolute position
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
 
 
@@ -86,7 +86,7 @@ def is_field_allocation_tool_for(
 
 
 def _absolute_to_relative_index(
-    indices: Sequence[common.NamedIndex], domain: common.Domain
+    indices: Sequence[common.DimensionIndex], domain: common.Domain
 ) -> Sequence[int]:
     """Convert absolute indices to relative indices based on the domain's dimensions.
 
@@ -96,15 +96,15 @@ def _absolute_to_relative_index(
 
     dim_to_index = {named_idx.dim: int(named_idx.value) for named_idx in indices}
     result = []
-    for named_range in domain:
-        dim = named_range.dim
-        abs_idx = dim_to_index.get(dim, named_range.unit_range.start)
-        if abs_idx < named_range.unit_range.start or abs_idx >= named_range.unit_range.stop:
+    for dim_range in domain:
+        dim = dim_range.dim
+        abs_idx = dim_to_index.get(dim, dim_range.value.start)
+        if abs_idx < dim_range.value.start or abs_idx >= dim_range.value.stop:
             raise ValueError(
                 f"Absolute index for dimension '{dim}' is {abs_idx}, "
-                f"which is outside the domain range [{named_range.unit_range.start}, {named_range.unit_range.stop})."
+                f"which is outside the domain range [{dim_range.value.start}, {dim_range.value.stop})."
             )
-        result.append(abs_idx - named_range.unit_range.start)
+        result.append(abs_idx - dim_range.value.start)
     return result
 
 
@@ -130,7 +130,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         domain: common.Domain,
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Optional[Sequence[common.DimensionIndex]] = None,  # absolute position
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
@@ -214,7 +214,7 @@ class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceT
         domain: common.Domain,
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
-        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        aligned_index: Optional[Sequence[common.DimensionIndex]] = None,  # absolute position
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         raise self.exception
 

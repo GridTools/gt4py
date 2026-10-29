@@ -8,23 +8,24 @@
 
 """Test the translation stage of the dace backend workflow."""
 
-import dace
-import pytest
-
 import re
 import uuid
 from typing import Callable
 from unittest import mock
+
+import dace
+import pytest
+from dace import nodes as dace_nodes
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common as gtx_common, fingerprinting
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments as otf_arguments, workflow as otf_workflow
-from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.workflow import (
-    translation as dace_wf_translation,
     common as dace_wf_common,
+    translation as dace_wf_translation,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -32,11 +33,10 @@ from next_tests.integration_tests.cases_utils import (
     V2E,
     Edge,
     IDim,
+    V2EDim,
     Vertex,
     skip_value_mesh,
 )
-
-from dace import nodes as dace_nodes
 
 
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
@@ -120,14 +120,14 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     expected = {}
     if has_unit_stride:
         expected |= {
-            "__x_Edge_stride": 1,
-            "__y_Vertex_stride": 1,
-            "__gt_conn_V2E_source_stride": 1,
+            gtx_dace_args.field_stride_symbol("x", Edge).name: 1,
+            gtx_dace_args.field_stride_symbol("y", Vertex).name: 1,
+            f"__{gtx_dace_args.connectivity_identifier(V2EDim.tag)}_source_stride": 1,
         }
     if disable_field_origin:
         expected |= {
-            "__x_Edge_range_0": 0,
-            "__y_Vertex_range_0": 0,
+            gtx_dace_args.range_start_symbol("x", Edge).name: 0,
+            gtx_dace_args.range_start_symbol("y", Vertex).name: 0,
         }
     assert constant_symbols == expected
 

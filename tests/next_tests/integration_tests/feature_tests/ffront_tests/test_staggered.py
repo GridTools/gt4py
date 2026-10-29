@@ -13,6 +13,7 @@ from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
+    E2VDim,
     E2V,
     Edge,
     IDim,
@@ -222,7 +223,7 @@ def test_unstructured_shift_half_shift_as_offset(unstructured_case_3d):
     )()
     out = cases.allocate(unstructured_case_3d, testee, cases.RETURN)()
 
-    e2v_table = unstructured_case_3d.offset_provider["E2V"].asnumpy()
+    e2v_table = unstructured_case_3d.offset_provider[E2VDim.tag].asnumpy()
     cases.verify(
         unstructured_case_3d,
         testee,

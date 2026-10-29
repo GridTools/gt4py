@@ -103,16 +103,21 @@ class LoopBlocking(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         blocking_size: Optional[int] = None,
-        blocking_parameters: Optional[Sequence[Union[gtx_common.Dimension, str]]] = None,
+        blocking_parameters: Optional[
+            Union[gtx_common.DimensionLike, str, Sequence[Union[gtx_common.DimensionLike, str]]]
+        ] = None,
         require_independent_nodes: Optional[bool] = None,
         promote_independent_memlets: Optional[bool] = None,
         independent_node_threshold: Optional[int] = None,
     ) -> None:
         super().__init__()
         if blocking_parameters is not None:
+            if isinstance(blocking_parameters, (str, gtx_common.DimensionMeta)) or isinstance(
+                blocking_parameters, gtx_common.DimensionRef
+            ):
+                blocking_parameters = [blocking_parameters]
             self.blocking_parameters = [
-                gtx_dace_lowering.get_map_variable(p) if isinstance(p, gtx_common.Dimension) else p
-                for p in blocking_parameters
+                gtx_dace_lowering.as_map_variable(p) for p in blocking_parameters
             ]
         else:
             self.blocking_parameters = None

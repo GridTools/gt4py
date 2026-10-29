@@ -22,6 +22,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import constructors
 
 from next_tests.artifacts import custom_named_collections as cnc
+from next_tests.integration_tests.cases_utils import IDim, JDim
 
 
 class CustomInt32DType:
@@ -29,9 +30,6 @@ class CustomInt32DType:
     def dtype(self) -> np.dtype:
         return np.dtype(np.int32)
 
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
 
 # -- PEP 695 type aliases --
 type IFloatFieldAlias = gtx.Field[gtx.Dims[IDim], float]
@@ -100,7 +98,7 @@ def _make_type_string_for_container(cls: type) -> str:
         (
             gtx.Field[[IDim, JDim], float],
             ts.FieldType(
-                dims=[gtx.Dimension("IDim"), gtx.Dimension("JDim")],
+                dims=[IDim, JDim],
                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ),
@@ -264,7 +262,9 @@ def test_generic_variadic_dims(value, expected_dims):
         with pytest.raises(ValueError, match="Invalid field dimension definition"):
             type_translation.from_type_hint(gtx.Field[value, np.int32])
     else:
-        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims
+        assert type_translation.from_type_hint(
+            gtx.Field[value, np.int32]
+        ).dims == common.dimension_refs(expected_dims)
 
 
 @pytest.mark.parametrize(

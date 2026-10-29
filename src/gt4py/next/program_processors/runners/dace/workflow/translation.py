@@ -388,7 +388,7 @@ class DaCeTranslator(
         self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
-        column_axis: Optional[common.Dimension],
+        column_axis: Optional[common.DimensionRef],
     ) -> dace.SDFG:
         if not self.disable_itir_transforms:
             ir = itir_transforms.apply_fieldview_transforms(

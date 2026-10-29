@@ -23,6 +23,12 @@ from gt4py.next.program_processors import program_formatter
 import next_tests
 
 
+class dummy_origin(gtx.DimensionIndex): ...
+
+
+class dummy_neighbor(gtx.DimensionIndex): ...
+
+
 ProgramProcessor: TypeAlias = backend.Backend | program_formatter.ProgramFormatter
 
 
@@ -95,8 +101,8 @@ def run_processor(
 class DummyConnectivity(common.Connectivity):
     max_neighbors: int
     has_skip_values: int
-    source_dim: gtx.Dimension = gtx.Dimension("dummy_origin")
-    codomain: gtx.Dimension = gtx.Dimension("dummy_neighbor")
+    source_dim: gtx.Dimension = dummy_origin
+    codomain: gtx.Dimension = dummy_neighbor
 
 
 def nd_array_implementation_params():

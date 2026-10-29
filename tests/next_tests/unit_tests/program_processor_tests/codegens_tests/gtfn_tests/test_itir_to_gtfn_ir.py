@@ -38,8 +38,11 @@ def test_unapplied_funcall_to_function_object():
     assert expected == actual
 
 
+class D(gtx.CartesianAxisIndex): ...
+
+
 def test_get_domains():
-    domain = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(value="D"), 1, 2))
+    domain = im.call("cartesian_domain")(im.named_range(itir.AxisLiteral(dim=D), 1, 2))
     testee = itir.Program(
         id="foo",
         function_definitions=[],

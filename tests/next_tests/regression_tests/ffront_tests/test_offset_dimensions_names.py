@@ -36,15 +36,23 @@ from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-imp
 )
 
 
-V = gtx.Dimension("V")
-E = gtx.Dimension("E")
+class V(gtx.DimensionIndex): ...
 
-#: N1 == N3 == N4, but N2 differs: the tag is `TaggedOff`, the variable is `off_a`.
-TaggedOffDim = gtx.Dimension("TaggedOff", kind=common.DimensionKind.LOCAL)
-off_a = gtx.FieldOffset("TaggedOff", source=E, target=(V, TaggedOffDim))
+
+class E(gtx.DimensionIndex): ...
+
+
+#: N1 == N3 == N4, but N2 differs: the tag is `TaggedOffDim.tag`, the variable is `off_a`.
+class TaggedOffDim(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
+off_a = gtx.FieldOffset(TaggedOffDim.tag, source=E, target=(V, TaggedOffDim))
+
 
 #: N1 == N2 == N4, but N3 differs: the local dimension is `Neigh`, the tag is `OffB`.
-Neigh = gtx.Dimension("Neigh", kind=common.DimensionKind.LOCAL)
+class Neigh(gtx.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
+
+
 OffB = gtx.FieldOffset("OffB", source=E, target=(V, Neigh))
 
 
@@ -61,7 +69,7 @@ def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases
     mesh = cases_utils.simple_mesh(exec_alloc_descriptor.allocator)
     # NOTE: `.asnumpy()`, not `.ndarray`: under a GPU allocator the latter is a device
     # array, and `simple_mesh` builds the table from NumPy anyway.
-    v2e_arr = mesh.offset_provider["V2E"].asnumpy()
+    v2e_arr = mesh.offset_provider[cases_utils.V2EDim.tag].asnumpy()
     return cases.Case(
         (
             None
@@ -85,7 +93,7 @@ def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases
 
 @pytest.fixture
 def case_tag_vs_variable_name(exec_alloc_descriptor):
-    return _case(exec_alloc_descriptor, "TaggedOff", TaggedOffDim)
+    return _case(exec_alloc_descriptor, TaggedOffDim.tag, TaggedOffDim)
 
 
 @pytest.fixture
@@ -110,7 +118,7 @@ def test_shift_tag_differs_from_variable_name(case_tag_vs_variable_name):
     cases.verify_with_default_data(
         case_tag_vs_variable_name,
         foo,
-        lambda a: a[_neighbor_table(case_tag_vs_variable_name, "TaggedOff")[:, 1]],
+        lambda a: a[_neighbor_table(case_tag_vs_variable_name, TaggedOffDim.tag)[:, 1]],
     )
 
 
@@ -122,7 +130,7 @@ def test_reduction_tag_differs_from_variable_name(case_tag_vs_variable_name):
     cases.verify_with_default_data(
         case_tag_vs_variable_name,
         foo,
-        lambda a: np.sum(a[_neighbor_table(case_tag_vs_variable_name, "TaggedOff")], axis=1),
+        lambda a: np.sum(a[_neighbor_table(case_tag_vs_variable_name, TaggedOffDim.tag)], axis=1),
     )
 
 

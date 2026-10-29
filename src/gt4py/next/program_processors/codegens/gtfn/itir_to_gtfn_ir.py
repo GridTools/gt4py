@@ -14,7 +14,7 @@ from ordered_set import OrderedSet
 
 import gt4py.eve as eve
 from gt4py.eve.concepts import SymbolName
-from gt4py.next import common, utils
+from gt4py.next import common, dimension_tags, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import (
     common_pattern_matcher as cpm,
@@ -107,7 +107,9 @@ def _collect_dimensions_from_domain(
             for nr in domain.args:
                 assert isinstance(nr, itir.FunCall)
                 dim_name = _name_from_named_range(nr)
-                offset_definitions[dim_name] = TagDefinition(name=Sym(id=dim_name))
+                offset_definitions[dim_name] = TagDefinition(
+                    name=Sym(id=dimension_tags.codegen_name(dim_name))
+                )
         elif domain.fun == itir.SymRef(id="unstructured_domain"):
             if len(domain.args) > 2:
                 raise ValueError("Unstructured_domain must not have more than 2 arguments.")
@@ -116,14 +118,16 @@ def _collect_dimensions_from_domain(
                 assert isinstance(horizontal_range, itir.FunCall)
                 horizontal_name = _name_from_named_range(horizontal_range)
                 offset_definitions[horizontal_name] = TagDefinition(
-                    name=Sym(id=horizontal_name), alias=_horizontal_dimension
+                    name=Sym(id=dimension_tags.codegen_name(horizontal_name)),
+                    alias=_horizontal_dimension,
                 )
             if len(domain.args) > 1:
                 vertical_range = domain.args[1]
                 assert isinstance(vertical_range, itir.FunCall)
                 vertical_name = _name_from_named_range(vertical_range)
                 offset_definitions[vertical_name] = TagDefinition(
-                    name=Sym(id=vertical_name), alias=_vertical_dimension
+                    name=Sym(id=dimension_tags.codegen_name(vertical_name)),
+                    alias=_vertical_dimension,
                 )
         else:
             raise AssertionError(
@@ -148,7 +152,9 @@ def _collect_dimensions_from_params(
         for type_ in type_info.primitive_constituents(param.type):
             if isinstance(type_, ts.FieldType):
                 for dim in type_.dims:
-                    offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                    offset_definitions[dim.tag] = TagDefinition(
+                        name=Sym(id=dimension_tags.codegen_name(dim.tag))
+                    )
     return offset_definitions
 
 
@@ -170,31 +176,35 @@ def _collect_offset_definitions(
         ]
         for dim in dims:
             if grid_type == common.GridType.CARTESIAN:
-                offset_definitions[dim.value] = TagDefinition(name=Sym(id=dim.value))
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=dimension_tags.codegen_name(dim.tag))
+                )
             else:
                 assert grid_type == common.GridType.UNSTRUCTURED
                 if dim.kind != common.DimensionKind.VERTICAL:
                     raise ValueError(
                         "Mapping an offset to a horizontal dimension in unstructured is not allowed."
                     )
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_vertical_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=dimension_tags.codegen_name(dim.tag)), alias=_vertical_dimension
                 )
 
     for offset_name, connectivity_type in offset_provider_type.items():
         if isinstance(connectivity_type, common.NeighborConnectivityType):
             assert grid_type == common.GridType.UNSTRUCTURED
-            offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
-            if offset_name != connectivity_type.neighbor_dim.value:
-                offset_definitions[connectivity_type.neighbor_dim.value] = TagDefinition(
-                    name=Sym(id=connectivity_type.neighbor_dim.value)
+            offset_definitions[offset_name] = TagDefinition(
+                name=Sym(id=dimension_tags.codegen_name(offset_name))
+            )
+            if offset_name != connectivity_type.neighbor_dim.tag:
+                offset_definitions[connectivity_type.neighbor_dim.tag] = TagDefinition(
+                    name=Sym(id=dimension_tags.codegen_name(connectivity_type.neighbor_dim.tag))
                 )
 
             for dim in [connectivity_type.source_dim, connectivity_type.codomain]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
-                offset_definitions[dim.value] = TagDefinition(
-                    name=Sym(id=dim.value), alias=_horizontal_dimension
+                offset_definitions[dim.tag] = TagDefinition(
+                    name=Sym(id=dimension_tags.codegen_name(dim.tag)), alias=_horizontal_dimension
                 )
         else:
             raise AssertionError(
@@ -203,18 +213,37 @@ def _collect_offset_definitions(
     return offset_definitions
 
 
+def _collect_staggered_bases(node: itir.Program) -> dict[str, str]:
+    """Map the tag of every staggered dimension in `node` to the tag of its base."""
+    refs: set[common.DimensionRef] = {
+        axis.dim for axis in node.walk_values().if_isinstance(itir.AxisLiteral)
+    }
+    for param in node.params:
+        if param.type is not None:
+            for type_ in type_info.primitive_constituents(param.type):
+                if isinstance(type_, ts.FieldType):
+                    refs.update(type_.dims)
+    return {ref.tag: ref.base.tag for ref in refs if ref.base is not None}
+
+
 def _add_staggered_aliases(
-    offset_definitions: dict[str, TagDefinition],
+    offset_definitions: dict[str, TagDefinition], staggered_bases: dict[str, str]
 ) -> dict[str, TagDefinition]:
     """Turn every staggered dimension tag into a alias of its base dimension."""
     result: dict[str, TagDefinition] = {}
     aliases: dict[str, TagDefinition] = {}
     for name, tag_def in offset_definitions.items():
-        if tag_def.alias is None and common.is_staggered(common.Dimension(value=name)):
-            base_name = common.as_non_staggered(common.Dimension(value=name)).value
+        # NOTE: this dict mixes dimension tags with offset tags; only dimension refs found in
+        # the program (which carry their staggered base) are looked up.
+        if tag_def.alias is None and (base_name := staggered_bases.get(name)) is not None:
             # ensure the base tag exists (as alias target and loop dimension) in this position
-            result.setdefault(base_name, TagDefinition(name=Sym(id=base_name)))
-            aliases[name] = TagDefinition(name=Sym(id=name), alias=SymRef(id=base_name))
+            result.setdefault(
+                base_name, TagDefinition(name=Sym(id=dimension_tags.codegen_name(base_name)))
+            )
+            aliases[name] = TagDefinition(
+                name=Sym(id=dimension_tags.codegen_name(name)),
+                alias=SymRef(id=dimension_tags.codegen_name(base_name)),
+            )
         else:
             result[name] = tag_def
     return {**result, **aliases}
@@ -242,11 +271,16 @@ class _CannonicalizeUnstructuredDomain(eve.NodeTranslator):
             assert isinstance(node.args[0], itir.FunCall)
             first_axis_literal = node.args[0].args[0]
             assert isinstance(first_axis_literal, itir.AxisLiteral)
-            if first_axis_literal.kind == itir.DimensionKind.VERTICAL:
+            if ir_utils_misc.dim_from_axis_literal(first_axis_literal).kind == (
+                itir.DimensionKind.VERTICAL
+            ):
                 assert len(node.args) == 2
                 assert isinstance(node.args[1], itir.FunCall)
                 assert isinstance(node.args[1].args[0], itir.AxisLiteral)
-                assert node.args[1].args[0].kind == itir.DimensionKind.HORIZONTAL
+                assert (
+                    ir_utils_misc.dim_from_axis_literal(node.args[1].args[0]).kind
+                    == itir.DimensionKind.HORIZONTAL
+                )
                 return itir.FunCall(fun=node.fun, args=[node.args[1], node.args[0]])
         return node
 
@@ -323,7 +357,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
     offset_provider_type: common.OffsetProviderType
-    column_axis: Optional[common.Dimension]
+    column_axis: Optional[common.DimensionRef]
     grid_type: common.GridType
 
     # we use one UID generator per instance such that the generated ids are
@@ -338,7 +372,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         node: itir.Program,
         *,
         offset_provider_type: common.OffsetProviderType,
-        column_axis: Optional[common.Dimension],
+        column_axis: Optional[common.DimensionLike],
     ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
@@ -348,7 +382,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(
-            offset_provider_type=offset_provider_type, column_axis=column_axis, grid_type=grid_type
+            offset_provider_type=offset_provider_type,
+            column_axis=common.optional_dimension_ref(column_axis),
+            grid_type=grid_type,
         ).visit(node)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
@@ -406,7 +442,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         assert isinstance(node.type, ts.DimensionType)
-        return Literal(value=node.type.dim.value, type="axis_literal")
+        return Literal(value=node.type.dim.tag, type="axis_literal")
 
     def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
@@ -491,7 +527,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                     common.get_offset_type(self.offset_provider_type, o),
                     common.NeighborConnectivityType,
                 ):
-                    connectivities.append(SymRef(id=o))
+                    # `o` is an offset-provider key, i.e. a qualified tag: mangle it exactly as
+                    # its `TagDefinition` was, or the reference names an undeclared tag type.
+                    connectivities.append(SymRef(id=dimension_tags.codegen_name(o)))
         return UnstructuredDomain(
             tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )
@@ -673,12 +711,13 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 init=self.visit(stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
-            assert isinstance(column_axis, common.Dimension)
+            assert isinstance(column_axis, common.DimensionRef)
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
                 args=[self._visit_output_argument(node.target), *lowered_inputs],
-                axis=SymRef(id=column_axis.value),
+                # the column axis names its `generated::<name>_t` tag type: mangle as declared
+                axis=SymRef(id=dimension_tags.codegen_name(column_axis.tag)),
             )
         assert projector is None  # only scans have projectors
         return StencilExecution(
@@ -703,7 +742,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
-        offset_definitions = _add_staggered_aliases(offset_definitions)
+        offset_definitions = _add_staggered_aliases(
+            offset_definitions, _collect_staggered_bases(node)
+        )
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),

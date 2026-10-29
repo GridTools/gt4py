@@ -653,7 +653,7 @@ def get_param_types(
 def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> int:
     match param_type:
         case ts.FieldType(dims=dims):
-            return int(np.prod([sizes[dim] for dim in sizes if dim in dims]))
+            return int(np.prod([sizes[dim] for dim in sizes if common.dimension_ref(dim) in dims]))
         case ts.ScalarType(shape=shape):
             return int(np.prod(shape)) if shape else 1
         case ts.TupleType(types=types):
@@ -673,12 +673,12 @@ def extend_domain(
         for dim, (lower, upper) in extend.items():
             domain = domain.replace(
                 dim,
-                common.named_range(
+                common.dimension_range(
                     (
                         dim,
                         (
-                            domain[dim].unit_range.start - lower,
-                            domain[dim].unit_range.stop + upper,
+                            domain[dim].value.start - lower,
+                            domain[dim].value.stop + upper,
                         ),
                     )
                 ),

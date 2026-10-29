@@ -101,6 +101,7 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         field_params = {
             str(param.id): param for param in program.params if isinstance(param.type, ts.FieldType)
         }
+        declared = self._declared_dimension_classes
 
         def single_horizontal_dim_per_field(
             fields: typing.Iterable[itir.Sym],
@@ -116,7 +117,13 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 # or without horizontal dimensions
                 # this is only meant for use with unstructured grids
                 if len(horizontal_dims) == 1:
-                    yield str(field.id), horizontal_dims[0]
+                    # NOTE: user-facing metadata (halo exchange): hand back the dimension class the
+                    # program's annotations declare (captured at the Python edge), rather than
+                    # importing it by tag. `__sdfg__` gets DaCe descriptors, not the fields, so the
+                    # declaration is the edge available here. A ref is returned only if no
+                    # annotation names the dimension (not expected for a field parameter).
+                    ref = horizontal_dims[0]
+                    yield str(field.id), declared.get(ref, ref)  # type: ignore[arg-type] # ref fallback
 
         input_fields = (
             field_params[name] for name in extractors.InputNamesExtractor.only_fields(program)

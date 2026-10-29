@@ -90,10 +90,19 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
-    # TODO(havogt): Refactor to use declare Axis/Dimension at the Program level.
-    # Now every use of the literal has to provide the kind, where usually we only care of the name.
-    value: str
-    kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
+    #: The dimension, as a self-contained value: kind, category and staggered base are in the
+    #: IR, so nothing below the frontend imports the module that declared it. A dimension class
+    #: passed to the constructor is converted.
+    dim: common.DimensionRef = eve.field(converter=common.dimension_ref, kw_only=True)
+
+    @property
+    def value(self) -> common.Tag:
+        """The dimension's tag, its IR spelling."""
+        return self.dim.tag
+
+    @property
+    def kind(self) -> common.DimensionKind:
+        return self.dim.kind
 
 
 class CartesianOffset(Expr):

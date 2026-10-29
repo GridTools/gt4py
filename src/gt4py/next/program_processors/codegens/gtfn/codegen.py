@@ -10,7 +10,7 @@ from typing import Any, Collection, Final, Union
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import common
+from gt4py.next import common, dimension_tags
 from gt4py.next.otf import cpp_utils
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir
 
@@ -117,7 +117,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case "bool":
                 return node.value.lower()
             case "axis_literal":
-                return node.value
+                # a qualified tag names a `generated::<name>_t` tag type: mangle it as declared
+                return dimension_tags.codegen_name(node.value)
             case _:
                 # TODO(tehrengruber): we should probably shouldn't just allow anything here. Revisit.
                 return node.value
@@ -145,7 +146,13 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     )
 
     def visit_OffsetLiteral(self, node: gtfn_ir.OffsetLiteral, **kwargs: Any) -> str:
-        return node.value if isinstance(node.value, str) else f"{node.value}_c"
+        # NOTE: a string offset literal names a tag type declared as `generated::<name>_t`, so
+        # it must be mangled exactly as the declaration was (see `dimension_tags.codegen_name`).
+        return (
+            dimension_tags.codegen_name(node.value)
+            if isinstance(node.value, str)
+            else f"{node.value}_c"
+        )
 
     SidComposite = as_mako(
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"

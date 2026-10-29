@@ -12,18 +12,31 @@ import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 
 
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-Cell = gtx.Dimension("Cell")
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+class Vertex(gtx.DimensionIndex): ...
 
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
-V2V = gtx.FieldOffset("V2V", source=Vertex, target=(Vertex, V2VDim))
+
+class Edge(gtx.DimensionIndex): ...
+
+
+class Cell(gtx.DimensionIndex): ...
+
+
+class V2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+class E2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+class C2EDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+class V2VDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
+
+
+V2E = gtx.FieldOffset(V2EDim.tag, source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset(E2VDim.tag, source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset(C2EDim.tag, source=Edge, target=(Cell, C2EDim))
+V2V = gtx.FieldOffset(V2VDim.tag, source=Vertex, target=(Vertex, V2VDim))
 
 # 3x3 periodic   edges        cells
 # 0 - 1 - 2 -    0 1 2

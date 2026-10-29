@@ -136,12 +136,19 @@ class CompileTimeArgs:
     args: tuple[ts.TypeSpec, ...]
     kwargs: dict[str, ts.TypeSpec]
     offset_provider: common.OffsetProvider  # TODO(havogt): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
-    column_axis: Optional[common.Dimension]
+    #: A `DimensionRef`; a dimension class passed to the constructor is converted.
+    column_axis: Optional[common.DimensionRef]
     #: A mapping from an argument descriptor type to a context containing the actual descriptors.
     #: If an argument or element of an argument has no descriptor, the respective value is `None`.
     #: E.g., for a tuple argument `a` with type `ts.TupleTupe(types=[field_t, int32_t])` a possible
     #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
     argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "column_axis", common.optional_dimension_ref(self.column_axis))
+        object.__setattr__(
+            self, "offset_provider", common.normalize_offset_provider(self.offset_provider)
+        )
 
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:

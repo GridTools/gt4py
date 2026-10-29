@@ -55,7 +55,7 @@ from unittest import mock
 import xxhash
 
 from gt4py.eve import concepts, datamodels, utils as eve_utils
-from gt4py.next import utils as next_utils
+from gt4py.next import common, utils as next_utils
 
 
 _T = TypeVar("_T")
@@ -222,6 +222,15 @@ _COMMON_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
         *((member.name, member.value) for member in obj),
         state=b"enum_class\0" + eve_utils.get_fully_qualified_name(obj).encode(),
     ),
+    # A parametrized dimension such as `Staggered[K]` has no importable qualified name (its
+    # `__qualname__` contains brackets), so the by-reference `type` deconstruction rejects it.
+    # It is fully determined by its base dimension, which *is* importable -- the same reduction
+    # its `copyreg` registration uses. The bare `Staggered` base is an ordinary class. See ADR 0029.
+    common.StaggeredMeta: lambda obj: (
+        Deconstruction.from_pieces(obj.base, state=b"staggered_dimension")
+        if "base" in obj.__dict__
+        else EmptyDeconstruction.from_reference(obj)
+    ),
     type(None): lambda obj: EmptyDeconstruction.from_typed_value(type(None)),
     bool: lambda obj: EmptyDeconstruction.from_typed_value(bool, b"1" if obj else b"0"),
     int: lambda obj: EmptyDeconstruction.from_typed_value(type(obj), str(int(obj)).encode()),
@@ -326,8 +335,18 @@ def object_deconstruct_fallback(obj: Any) -> Deconstruction:
     )
 
 
+def _dimension_deconstruction(obj: common.DimensionMeta, *, strict: bool = True) -> Deconstruction:
+    # NOTE: by reference, like any class, plus the declaration-time `kind`. It decides a field's
+    # layout order (`order_dimensions`) and the scan axis, so a dimension redefined under the same
+    # name with another `kind` (a re-run notebook cell) must not reuse compiled artifacts. A
+    # staggered dimension goes through its base (see above), so it inherits this. See ADR 0029.
+    reference = Deconstruction.from_reference(obj, strict=strict).state
+    return Deconstruction.from_pieces(obj.kind, state=b"dimension\0" + reference)
+
+
 #: Strict deconstructors map used by `strict_fingerprinter`
 STRICT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = _COMMON_DECONSTRUCTORS | {
+    common.DimensionMeta: _dimension_deconstruction,
     type: EmptyDeconstruction.from_reference,
     types.FunctionType: EmptyDeconstruction.from_reference,
     types.BuiltinFunctionType: EmptyDeconstruction.from_reference,
@@ -387,6 +406,7 @@ _lenient_reference = functools.partial(Deconstruction.from_reference, strict=Fal
 
 #: Tolerant deconstructors map used by `lenient_fingerprinter`
 LENIENT_DECONSTRUCTORS: Final[dict[type, Deconstructor]] = {
+    common.DimensionMeta: functools.partial(_dimension_deconstruction, strict=False),
     types.FunctionType: _lenient_function_deconstruction,
     types.BuiltinFunctionType: _lenient_reference,
     types.ModuleType: _lenient_reference,

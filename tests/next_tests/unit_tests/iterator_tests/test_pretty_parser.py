@@ -7,11 +7,26 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import pytest
+from lark import exceptions as lark_exceptions
 
+import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.type_system import type_specifications as ts
+
+
+class I(gtx.CartesianAxisIndex): ...
+
+
+class J(gtx.CartesianAxisIndex): ...
+
+
+class IDim(gtx.CartesianAxisIndex): ...
+
+
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
 
 
 def test_symref():
@@ -87,13 +102,13 @@ def test_only_a_literal_can_be_annotated():
 
 
 def test_typed_literal_does_not_shadow_named_range():
-    assert pparse("c⟨ IDimₕ: [0:i64, 4:i64[ ⟩") == ir.FunCall(
+    assert pparse(f"c⟨ {IDim.tag}ₕᵃ: [0:i64, 4:i64[ ⟩") == ir.FunCall(
         fun=ir.SymRef(id="cartesian_domain"),
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="named_range"),
                 args=[
-                    ir.AxisLiteral(value="IDim"),
+                    ir.AxisLiteral(dim=IDim),
                     im.literal("0", "int64"),
                     im.literal("4", "int64"),
                 ],
@@ -186,11 +201,11 @@ def test_infinity_literal():
 
 
 def test_named_range_unbounded():
-    testee = "KDimᵥ: [-∞, ∞["
+    testee = f"{KDim.tag}ᵥᵃ: [-∞, ∞["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[
-            ir.AxisLiteral(value="KDim", kind=ir.DimensionKind.VERTICAL),
+            ir.AxisLiteral(dim=KDim),
             ir.InfinityLiteral.NEGATIVE,
             ir.InfinityLiteral.POSITIVE,
         ],
@@ -215,10 +230,8 @@ def test_subtraction_of_infinity_is_not_a_negative_literal(testee, rhs):
 
 
 def test_cartesian_offset():
-    testee = "Iₕ→Jₕ"
-    expected = ir.CartesianOffset(
-        domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
-    )
+    testee = f"{I.tag}ₕᵃ→{J.tag}ₕᵃ"
+    expected = ir.CartesianOffset(domain=ir.AxisLiteral(dim=I), codomain=ir.AxisLiteral(dim=J))
     actual = pparse(testee)
     assert actual == expected
 
@@ -243,27 +256,41 @@ def test_make_tuple():
 
 
 def test_named_range_horizontal():
-    testee = "IDimₕ: [x, y["
+    testee = f"{IDim.tag}ₕᵃ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
-        args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
+        args=[ir.AxisLiteral(dim=IDim), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
     actual = pparse(testee)
     assert actual == expected
 
 
-def test_named_range_vertical():
-    testee = "IDimᵥ: [x, y["
+def test_axis_literal_spec_from_suffixes_without_import():
+    # the suffixes are the kind and category: with the tag, they rebuild the spec, and nothing is
+    # imported (the module does not exist)
+    testee = "not.imported:Outer.Localₗˡ: [x, y["
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[
-            ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL),
+            ir.AxisLiteral(
+                dim=common.DimensionRef(
+                    module="not.imported",
+                    qualname="Outer.Local",
+                    kind=common.DimensionKind.LOCAL,
+                    category=common.DimensionCategory.LOCAL,
+                )
+            ),
             ir.SymRef(id="x"),
             ir.SymRef(id="y"),
         ],
     )
     actual = pparse(testee)
     assert actual == expected
+
+
+def test_staggered_axis_literal():
+    testee = f"{common.Staggered[KDim].tag}ᵥᵃ"
+    assert pparse(testee) == ir.AxisLiteral(dim=common.Staggered[KDim])
 
 
 def test_cartesian_domain():
@@ -419,3 +446,16 @@ def test_program():
 def test_transformer_error_is_not_wrapped():
     with pytest.raises(ValueError, match="nonesuch"):
         pparse("t = temporary(domain=cartesian_domain(), dtype=nonesuch);")
+
+
+@pytest.mark.parametrize("testee", ["IDimₕ", "pkg.mod.IDimₕ"])
+def test_axis_literal_without_module_is_rejected(testee):
+    # a bare name cannot be rebuilt into a `DimensionRef`
+    with pytest.raises(ValueError, match="is not a dimension tag"):
+        pparse(testee)
+
+
+@pytest.mark.parametrize("testee", ["pkg:Other[pkg:K]ᵥᵃ", "pkg:A:Bₕ"])
+def test_malformed_dimension_tag_is_rejected(testee):
+    with pytest.raises((ValueError, lark_exceptions.LarkError)):
+        pparse(testee)

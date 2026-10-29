@@ -32,12 +32,12 @@ def test_symbolic_domain():
 
     assert gtx_dace_domain.get_field_domain(domain) == [
         gtx_dace_domain.FieldopDomainRange(
-            Vertex,
+            gtx_common.dimension_ref(Vertex),
             dace.symbolic.SymExpr(gtx_dace_args.range_start_symbol("arg", Vertex)),
             dace.symbolic.SymExpr(gtx_dace_args.range_stop_symbol("arg", Vertex)),
         ),
         gtx_dace_domain.FieldopDomainRange(
-            KDim,
+            gtx_common.dimension_ref(KDim),
             dace.symbolic.SymExpr(gtx_dace_args.range_start_symbol("arg", KDim)),
             dace.symbolic.SymExpr(gtx_dace_args.range_stop_symbol("arg", KDim)),
         ),

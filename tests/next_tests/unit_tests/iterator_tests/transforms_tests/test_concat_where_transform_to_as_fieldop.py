@@ -12,10 +12,9 @@ from gt4py.next.iterator.transforms import concat_where, inline_lambdas
 from gt4py.next.iterator.transforms.concat_where import transform_to_as_fieldop
 from gt4py.next.iterator.transforms.concat_where.transform_to_as_fieldop import _in
 from gt4py.next.type_system import type_specifications as ts
+from next_tests.integration_tests.cases_utils import IDim, JDim
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
-IDim = common.Dimension(value="IDim", kind=common.DimensionKind.HORIZONTAL)
-JDim = common.Dimension(value="JDim", kind=common.DimensionKind.HORIZONTAL)
 
 
 def test_in_helper():

@@ -14,9 +14,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import set_at, fendef, fundef
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
-
-
-IDim = gtx.Dimension("IDim")
+from next_tests.integration_tests.cases_utils import IDim
 
 
 @fundef
