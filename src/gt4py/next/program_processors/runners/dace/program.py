@@ -61,17 +61,24 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
             program, offset_provider=offset_provider
         )
-        object.__setattr__(
+        # `gtir_stage` is the cached result of the shared frontend: build a new stage
+        # instead of mutating it, otherwise every later compilation of this program
+        # (on any backend) would get the transformed definition and offset provider types.
+        # TODO(ricoh): the offset provider types isolate DaCe from the runtime tables in
+        # connectivities.offset_provider, which are needed at the time of writing for
+        # mandatory GTIR passes. Remove this as soon as Program does not expect
+        # connectivity tables anymore.
+        gtir_stage = dataclasses.replace(
             gtir_stage,
-            "definition",
-            program,
+            definition=program,
+            args=dataclasses.replace(
+                gtir_stage.args,
+                # `CompileTimeArgs.offset_provider` is still typed as the runtime
+                # mapping, even though the mandatory GTIR passes are the only
+                # consumers needing the tables and they already ran above.
+                offset_provider=gtir_stage.args.offset_provider_type,  # type: ignore[arg-type]
+            ),
         )
-        object.__setattr__(
-            gtir_stage.args, "offset_provider", gtir_stage.args.offset_provider_type
-        )  # TODO(ricoh): currently this is circumventing the frozenness of CompileTimeArgs
-        # in order to isolate DaCe from the runtime tables in connectivities.offset_provider.
-        # These are needed at the time of writing for mandatory GTIR passes.
-        # Remove this as soon as Program does not expect connectivity tables anymore.
 
         _crosscheck_dace_parsing(
             dace_parsed_args=[*args, *kwargs.values()],
