@@ -27,7 +27,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, artifacts, stages, toolchain, workflow
+from gt4py.next.otf import arguments, artifacts, recipes, stages, toolchain, workflow
 
 
 def jit_to_aot_args(
@@ -284,6 +284,48 @@ class Toolchain(Generic[core_defs.DeviceTypeT]):
             stages.ConcreteProgramDef(definition=definition, args=compile_time_args)
         )
         return self.backend.loader(self.backend.compiler(compilable))
+
+    def translate(
+        self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+    ) -> artifacts.ProgramSource:
+        """
+        Run the frontend and the translation step only.
+
+        This is the sanctioned partial run for stage inspection: the program
+        definition goes through the full `frontend` pipeline and the
+        `translation` step of the backend's compile pipeline, stopping before
+        bindings generation and compilation. Per-call step options are
+        deliberately not offered; a caller needing a variant translation step
+        builds a variant backend with
+        `dataclasses.replace(backend, compiler=dataclasses.replace(...))`.
+
+        Args:
+            definition: A program definition in any stage the frontend accepts.
+            compile_time_args: Compile-time arguments for the frontend
+                transforms and the translation step.
+
+        Returns:
+            The `ProgramSource` produced by the translation step.
+
+        Raises:
+            NotImplementedError: If the backend's `compiler` is not the standard
+                `OTFCompileWorkflow` pipeline shape.
+        """
+        compiler = self.backend.compiler
+        if not isinstance(compiler, recipes.OTFCompileWorkflow):
+            raise NotImplementedError(
+                f"Backend '{self.backend.name}' does not support partial runs: 'translate'"
+                " requires the standard 'OTFCompileWorkflow' compile pipeline"
+                " ('translation' / 'bindings' / 'compilation' steps), but this"
+                f" backend's compiler is a '{type(compiler).__name__}'."
+                " Monolithic compilers execute in a single step and produce no"
+                " intermediate 'ProgramSource'."
+            )
+        source = compiler.translation(
+            self.frontend(stages.ConcreteProgramDef(definition=definition, args=compile_time_args))
+        )
+        workflow.stage_hook("translation", source)
+        return source
 
 
 @dataclasses.dataclass(frozen=True)

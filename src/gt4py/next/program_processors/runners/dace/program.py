@@ -18,9 +18,12 @@ from gt4py.next import backend as gtx_backend, common as gtx_common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
-from gt4py.next.otf import arguments, workflow
+from gt4py.next.otf import arguments, recipes, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
-from gt4py.next.program_processors.runners.dace.workflow import backend as gtx_dace_backend
+from gt4py.next.program_processors.runners.dace.workflow import (
+    backend as gtx_dace_backend,
+    translation as gtx_dace_translation,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -57,27 +60,21 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
                 ),
             )
         )
-        program = gtir_stage.definition
-        program = itir_transforms.apply_fieldview_transforms(  # run the transforms separately because they require the runtime info
-            program, offset_provider=offset_provider
+        # Run the field-view transforms separately: they need the runtime
+        # connectivity tables, which the SDFG itself must not capture. The
+        # translation step then receives an already-transformed program whose
+        # args only carry the offset-provider *types*.
+        # TODO(ricoh): remove this workaround as soon as the mandatory GTIR
+        #   passes do not need the connectivity tables anymore.
+        program = itir_transforms.apply_fieldview_transforms(
+            gtir_stage.definition, offset_provider=offset_provider
         )
-        # `gtir_stage` is the cached result of the shared frontend: build a new stage
-        # instead of mutating it, otherwise every later compilation of this program
-        # (on any backend) would get the transformed definition and offset provider types.
-        # TODO(ricoh): the offset provider types isolate DaCe from the runtime tables in
-        # connectivities.offset_provider, which are needed at the time of writing for
-        # mandatory GTIR passes. Remove this as soon as Program does not expect
-        # connectivity tables anymore.
-        gtir_stage = dataclasses.replace(
-            gtir_stage,
-            definition=program,
-            args=dataclasses.replace(
-                gtir_stage.args,
-                # `CompileTimeArgs.offset_provider` is still typed as the runtime
-                # mapping, even though the mandatory GTIR passes are the only
-                # consumers needing the tables and they already ran above.
-                offset_provider=gtir_stage.args.offset_provider_type,  # type: ignore[arg-type]
-            ),
+        aot_args = dataclasses.replace(
+            gtir_stage.args,
+            # `CompileTimeArgs.offset_provider` is still typed as the runtime
+            # mapping, even though the mandatory GTIR passes are the only
+            # consumers needing the tables and they already ran above.
+            offset_provider=gtir_stage.args.offset_provider_type,  # type: ignore[arg-type]
         )
 
         _crosscheck_dace_parsing(
@@ -85,22 +82,10 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
             gt4py_program_args=[p.type for p in program.params],
         )
 
-        otf_workflow = self.backend.compiler
-        assert hasattr(otf_workflow, "translation")
-        otf_workflow_translation = (
-            otf_workflow.translation.step
-            if isinstance(otf_workflow.translation, workflow.CachedStep)
-            else otf_workflow.translation
-        )  # Same for the translation stage, which could be a `CachedStep` depending on backend configuration.
-        # TODO(ricoh): switch 'disable_itir_transforms=True' because we ran them separately previously
-        # and so we can ensure the SDFG does not know any runtime info it shouldn't know. Remove with
-        # the other parts of the workaround when possible.
         sdfg = dace.SDFG.from_json(
-            otf_workflow_translation.replace(  # type: ignore[union-attr]
-                disable_itir_transforms=True,
-                disable_field_origin_on_program_arguments=True,
-                use_metrics=False,
-            )(gtir_stage).source_code
+            gtx_backend.Toolchain(_translation_only_backend(self.backend))
+            .translate(program, aot_args)
+            .source_code
         )
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
@@ -207,6 +192,59 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
 
     def __sdfg_signature__(self) -> tuple[Sequence[str], Sequence[str]]:
         return [p.id for p in self.past_stage.past_node.params], []
+
+
+def _translation_only_backend(backend: gtx_backend.CompiledBackend) -> gtx_backend.CompiledBackend:
+    """
+    Derive the translate-only backend variant used for SDFG conversion.
+
+    The variant reuses the translation settings of `backend` but disables the
+    ITIR transforms (the caller runs them separately, with the runtime
+    connectivity tables), the field origins and the metrics instrumentation,
+    and bypasses the persistent translation cache.
+
+    Args:
+        backend: The dace backend the program is bound to.
+
+    Returns:
+        A backend whose `Toolchain.translate` produces an SDFG source for an
+        already-transformed program.
+
+    Raises:
+        NotImplementedError: If the compiler of `backend` is not shaped like the
+            standard dace one, i.e. an 'OTFCompileWorkflow' whose translation
+            step is a 'DaCeTranslator' (optionally wrapped in a 'CachedStep').
+    """
+    pipeline = backend.compiler
+    if not isinstance(pipeline, recipes.OTFCompileWorkflow):
+        raise NotImplementedError(
+            f"Backend '{backend.name}' cannot be converted to an SDFG: SDFG"
+            " conversion requires the standard 'OTFCompileWorkflow' compile"
+            f" pipeline, but this backend's compiler is a '{type(pipeline).__name__}'."
+        )
+    translation: workflow.Workflow[Any, Any] = pipeline.translation
+    if isinstance(translation, workflow.CachedStep):
+        # The persistent translation cache is keyed on the untransformed program,
+        # so it must not see the pre-transformed one handed to this variant.
+        translation = translation.step
+    if not isinstance(translation, gtx_dace_translation.DaCeTranslator):
+        raise NotImplementedError(
+            f"Backend '{backend.name}' cannot be converted to an SDFG: SDFG"
+            " conversion requires a 'DaCeTranslator' translation step, but this"
+            f" backend's is a '{type(translation).__name__}'."
+        )
+    return dataclasses.replace(
+        backend,
+        compiler=dataclasses.replace(
+            pipeline,
+            translation=dataclasses.replace(
+                translation,
+                disable_itir_transforms=True,
+                disable_field_origin_on_program_arguments=True,
+                use_metrics=False,
+            ),
+        ),
+    )
 
 
 def _crosscheck_dace_parsing(dace_parsed_args: list[Any], gt4py_program_args: list[Any]) -> None:
