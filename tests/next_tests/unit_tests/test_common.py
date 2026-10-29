@@ -1135,6 +1135,43 @@ class TestDimensionRef:
         with pytest.raises(ValueError, match="is not the staggered dimension"):
             common.DimensionRef(**(fields | change))
 
+class TestDimensionKeyedConfiguration:
+    """String-keyed configuration naming dimensions: `symbolic_domain_sizes`, offset providers."""
+
+    def test_symbolic_domain_sizes_accept_dimensions(self):
+        sizes = common.normalize_symbolic_domain_sizes(
+            {ECDim: "n_cells", common.dimension_ref(IDim): "n_i", KDim.tag: "n_k"}
+        )
+        assert sizes == {ECDim.tag: "n_cells", IDim.tag: "n_i", KDim.tag: "n_k"}
+
+    @pytest.mark.parametrize("key", ["Cell", "pkg.mod.Cell"])  # bare names never match a tag
+    def test_symbolic_domain_sizes_reject_keys_that_never_match(self, key):
+        with pytest.raises(ValueError, match="symbolic_domain_sizes"):
+            common.normalize_symbolic_domain_sizes({key: "n"})
+
+    def test_offset_provider_keys(self):
+        conn = object()
+        assert common.normalize_offset_provider({V2E: conn, "E2V": conn}) == {
+            V2E.tag: conn,
+            "E2V": conn,
+        }
+        provider = {"E2V": conn, "pkg.V2E": conn}  # plain offset names, dots included, are kept
+        assert common.normalize_offset_provider(provider) is provider  # no copy in the common case
+
+    def test_gtfn_symbolic_domain_sizes_are_normalized(self):
+        from gt4py._core import definitions as core_defs
+        from gt4py.next.program_processors.codegens.gtfn import gtfn_module
+
+        step = gtfn_module.GTFNTranslationStep(
+            device_type=core_defs.DeviceType.CPU, symbolic_domain_sizes={ECDim: "n_cells"}
+        )
+        assert step.symbolic_domain_sizes == {ECDim.tag: "n_cells"}
+        with pytest.raises(ValueError, match="never match"):
+            gtfn_module.GTFNTranslationStep(
+                device_type=core_defs.DeviceType.CPU, symbolic_domain_sizes={"Cell": "n_cells"}
+            )
+
+
 class TestCartesianAxisIndex:
     def test_axis_levels(self):
         assert issubclass(IDim, common.CartesianAxisIndex)

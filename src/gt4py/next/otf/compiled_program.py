@@ -399,6 +399,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         (defined by 'static_params') in case `enable_jit` is True. Otherwise,
         it is an error.
         """
+        # NOTE: the one place keys of a class-keyed provider become tags, for calls and for
+        # `compile` alike (see `_compile_variant`), so both compute the same cache key.
+        offset_provider = common.normalize_offset_provider(offset_provider)
         canonical_args, canonical_kwargs = self._args_canonicalizer(*args, **kwargs)
         if (extractor := self._primitive_values_extractor) is not None:
             args, kwargs = extractor(*canonical_args, **canonical_kwargs)
@@ -635,6 +638,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         # key computed here
         call_key: CompiledProgramsKey | None = None,
     ) -> None:
+        offset_provider = common.normalize_offset_provider(offset_provider)  # type: ignore[assignment] # same values
         if not common.is_offset_provider(offset_provider):
             if common.is_offset_provider_type(offset_provider):
                 raise ValueError(

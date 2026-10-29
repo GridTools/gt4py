@@ -19,7 +19,7 @@ from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowe
 def gt_set_iteration_order(
     sdfg: dace.SDFG,
     unit_strides_dim: Optional[
-        Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+        Union[str, gtx_common.DimensionLike, list[Union[str, gtx_common.DimensionLike]]]
     ] = None,
     unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
     validate: bool = True,
@@ -115,7 +115,7 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
     def __init__(
         self,
         unit_strides_dims: Optional[
-            Union[str, gtx_common.Dimension, list[Union[str, gtx_common.Dimension]]]
+            Union[str, gtx_common.DimensionLike, list[Union[str, gtx_common.DimensionLike]]]
         ] = None,
         unit_strides_kind: Optional[gtx_common.DimensionKind] = None,
         *args: Any,
@@ -125,12 +125,12 @@ class MapIterationOrder(dace_transformation.SingleStateTransformation):
         if unit_strides_dims is not None and unit_strides_kind is not None:
             raise ValueError("Specified both 'unit_strides_dims' and 'unit_strides_kind'.")
         elif unit_strides_dims is not None:
-            if isinstance(unit_strides_dims, (gtx_common.DimensionMeta, str)):
+            if isinstance(
+                unit_strides_dims, (gtx_common.DimensionMeta, gtx_common.DimensionRef, str)
+            ):
                 unit_strides_dims = [unit_strides_dims]
             self.unit_strides_dims = [
-                unit_strides_dim
-                if isinstance(unit_strides_dim, str)
-                else gtx_dace_lowering.get_map_variable(unit_strides_dim)
+                gtx_dace_lowering.as_map_variable(unit_strides_dim)
                 for unit_strides_dim in unit_strides_dims
             ]
         elif unit_strides_kind is not None:

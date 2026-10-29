@@ -1810,6 +1810,52 @@ def is_offset_provider_type(obj: Any) -> TypeGuard[OffsetProviderType]:
     return all(isinstance(el, OffsetProviderTypeElem) for el in obj.values())
 
 
+def dimension_tag_key(key: str | Dimension | DimensionRef, *, what: str) -> str:
+    """
+    Normalize a key of a string-keyed configuration mapping that may name a dimension.
+
+    A dimension class or ref becomes its tag; a string is kept as is.
+    """
+    if isinstance(key, (DimensionMeta, DimensionRef)):
+        return dimension_ref(key).tag
+    if not isinstance(key, str):
+        raise TypeError(f"{what} key must be a string or a dimension, got '{key!r}'.")
+    return key
+
+
+_V = TypeVar("_V")
+
+
+def normalize_offset_provider(offset_provider: Mapping[Any, _V]) -> dict[str, _V]:
+    """Key an offset provider by strings: a dimension key (a local dimension) becomes its tag."""
+    if all(isinstance(k, str) for k in offset_provider):
+        return offset_provider  # type: ignore[return-value] # the common case, no copy
+    return {dimension_tag_key(k, what="Offset provider"): v for k, v in offset_provider.items()}
+
+
+def normalize_symbolic_domain_sizes(
+    sizes: Optional[Mapping[Any, _V]],
+) -> Optional[dict[str, _V]]:
+    """
+    Key `symbolic_domain_sizes` by dimension tag; dimension classes and refs are accepted.
+
+    Every key must name a dimension, so a string that is not a tag (`module:qualname`, e.g. a bare
+    name like `"Cell"`) could never match and is rejected rather than silently ignored.
+    """
+    if sizes is None:
+        return None
+    result: dict[str, _V] = {}
+    for key, value in sizes.items():
+        tag = dimension_tag_key(key, what="'symbolic_domain_sizes'")
+        if ":" not in tag:
+            raise ValueError(
+                f"'symbolic_domain_sizes' key '{tag}' is not a dimension tag ('module:qualname')"
+                " and would never match; use the dimension class as the key."
+            )
+        result[tag] = value
+    return result
+
+
 def offset_provider_to_type(
     offset_provider: OffsetProvider | OffsetProviderType,
 ) -> OffsetProviderType:

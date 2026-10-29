@@ -50,8 +50,16 @@ class GTFNTranslationStep(
     # No default: the device must agree with the other steps of the pipeline, so
     # forgetting to pass it must fail instead of silently targeting the CPU.
     device_type: core_defs.DeviceType = dataclasses.field(kw_only=True)
+    #: Keyed by dimension (class, ref or tag); normalized to tags.
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "symbolic_domain_sizes",
+            common.normalize_symbolic_domain_sizes(self.symbolic_domain_sizes),
+        )
 
     def _default_code_spec(self) -> artifacts.HeaderAndSourceCodeSpec:
         match self.device_type:

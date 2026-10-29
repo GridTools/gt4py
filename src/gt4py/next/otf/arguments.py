@@ -144,6 +144,12 @@ class CompileTimeArgs:
     #  context would be `{"a": (FieldDomainDescriptor(...), None)}`.
     argument_descriptor_contexts: ArgStaticDescriptorsContextsByType
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "column_axis", common.optional_dimension_ref(self.column_axis))
+        object.__setattr__(
+            self, "offset_provider", common.normalize_offset_provider(self.offset_provider)
+        )
+
     @property
     def offset_provider_type(self) -> common.OffsetProviderType:
         return common.offset_provider_to_type(self.offset_provider)

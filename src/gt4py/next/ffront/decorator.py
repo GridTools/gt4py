@@ -68,7 +68,13 @@ def program_call_context(
     enable_jit: bool,
     kwargs: dict[str, Any],
 ) -> contextlib.AbstractContextManager:
-    """Hook called at the beginning and end of a program call."""
+    """
+    Hook called at the beginning and end of a program call.
+
+    `offset_provider` is passed as the user gave it: its keys may still be dimension classes
+    (normalization to tags happens later, in the compiled-program pool or before embedded
+    execution).
+    """
     return ProgramCallMetricsCollector()
 
 
@@ -512,6 +518,8 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
+                # NOTE: the compiled path normalizes in `CompiledProgramsPool`
+                offset_provider = common.normalize_offset_provider(offset_provider)
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
@@ -785,7 +793,9 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         else:
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
-                kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
+                kwargs["offset_provider"] = {
+                    **common.normalize_offset_provider(kwargs.pop("offset_provider", {}))
+                }
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage

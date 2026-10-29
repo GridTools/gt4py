@@ -111,7 +111,7 @@ def _process_symbolic_domains_option(
     """
     if symbolic_domain_sizes:
         assert not use_max_domain_range_on_unstructured_shift, "Options are mutually exclusive."
-        return symbolic_domain_sizes
+        return common.normalize_symbolic_domain_sizes(symbolic_domain_sizes)
 
     if use_max_domain_range_on_unstructured_shift is None:
         use_max_domain_range_on_unstructured_shift = _has_dynamic_domains(ir)

@@ -462,8 +462,10 @@ def infer_expr(
     - domain: The domain `expr` is read at.
 
     Keyword Arguments:
-    - symbolic_domain_sizes: A dictionary mapping axes names, e.g., `I`, `Vertex`, to a symbol
-      name or expression that evaluates to the length of that axis.
+    - symbolic_domain_sizes: A dictionary mapping dimension tags (`module:qualname`, e.g.
+      `IDim.tag`) to a symbol name or expression that evaluates to the length of that axis.
+      Not normalized here: callers pass tags (`infer_program` and the pass manager accept
+      dimension classes too, see `common.normalize_symbolic_domain_sizes`).
     - allow_uninferred: Allow `as_fieldop` expressions whose domain is either unknown (e.g.
       because of a dynamic shift) or never accessed.
     - keep_existing_domains: If `True`, keep existing domains in `as_fieldop` expressions and
@@ -587,6 +589,7 @@ def infer_program(
     assert not program.function_definitions, (
         "Domain propagation does not support function definitions."
     )
+    symbolic_domain_sizes = common.normalize_symbolic_domain_sizes(symbolic_domain_sizes)
 
     program = itir_type_inference.infer(
         program, offset_provider_type=common.offset_provider_to_type(offset_provider)

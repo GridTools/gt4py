@@ -9,12 +9,14 @@
 
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import lower_program_to_sdfg
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_utils import (
+    as_map_variable,
     flatten_tuple_fields,
     get_map_variable,
 )
 
 
 __all__ = [
+    "as_map_variable",
     "flatten_tuple_fields",
     "get_map_variable",
     "lower_program_to_sdfg",

@@ -41,7 +41,14 @@ def debug_info(
     return default
 
 
-def get_map_variable(dim: gtx_common.Dimension) -> str:
+def as_map_variable(param: gtx_common.DimensionLike | str) -> str:
+    """A map-parameter option (DaCe transformations): a dimension becomes its map variable."""
+    if isinstance(param, (gtx_common.DimensionMeta, gtx_common.DimensionRef)):
+        return get_map_variable(param)
+    return param
+
+
+def get_map_variable(dim: gtx_common.DimensionLike) -> str:
     """
     Format map variable name based on the naming convention for application-specific SDFG transformations.
     """
