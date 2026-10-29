@@ -100,7 +100,7 @@ class _CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
         path = _table_path(self._digest)
         _write_table(table, path)
         return (
-            _connectivity_from_file,
+            type(self)._from_file,
             (
                 str(path),
                 self._digest,
@@ -111,10 +111,6 @@ class _CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
                 table.dtype.str,
             ),
         )
-
-
-def _connectivity_from_file(*args: Any) -> _CompileTimeConnectivity:
-    return _CompileTimeConnectivity._from_file(*args)
 
 
 def _table_path(digest: str) -> pathlib.Path:
@@ -180,13 +176,8 @@ def _to_compile_time_connectivity(value: common.GatherConnectivity) -> _CompileT
 
 def compile_time_offset_provider(offset_provider: common.OffsetProvider) -> common.OffsetProvider:
     """
-    Return the compile-time view of `offset_provider`.
-
-    Every gather connectivity is replaced by a read-only, C-contiguous host
-    copy of it, memory-mapped from a file named by the digest of its content,
-    so that compilation depends neither on the device nor on the memory layout
-    of the tables, and does not read device memory after the conversion. Other
-    entries and the order of the entries are kept.
+    Return `offset_provider` with every gather connectivity replaced by its
+    `_CompileTimeConnectivity`; other entries and their order are kept.
     """
     return {
         name: typing.cast(common.OffsetProviderElem, _to_compile_time_connectivity(value))
