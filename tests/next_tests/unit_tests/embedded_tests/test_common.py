@@ -164,15 +164,16 @@ def test_iterate_domain():
         [slice(I(1), I(3), 1), (I.at(1, 3),)],
         [(I(2), slice(J(3), J(6))), (I(2), J.at(3, 6))],
         [(slice(1, 2), slice(2, 3)), (slice(1, 2), slice(2, 3))],  # relative: unchanged
-        [slice(I(1), J(7)), IndexError],
-        [slice(I(1), I(7), 2), IndexError],
-        [slice(I(1), 7), IndexError],
-        [(slice(I(1), I(7)), 2), IndexError],
+        [slice(I(1), J(7)), (IndexError, "mismatch between 'I' and 'J'")],
+        [slice(I(1), I(7), 2), (IndexError, "step")],
+        [slice(I(1), 7), (IndexError, "both bounds must be indices")],
+        [(slice(I(1), I(7)), 2), (IndexError, "Cannot mix relative index")],
+        [(slice(I(1), I(3)), slice(0, 2)), (IndexError, "Cannot mix relative index")],
     ],
 )
 def test_slicing(slices, expected):
-    if expected is IndexError:
-        with pytest.raises(IndexError):
+    if isinstance(expected, tuple) and expected[0] is IndexError:
+        with pytest.raises(IndexError, match=expected[1]):
             canonicalize_any_index_sequence(slices)
     else:
         testee = canonicalize_any_index_sequence(slices)

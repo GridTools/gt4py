@@ -315,6 +315,20 @@ def test_dimension_range_unit_range_alias():
     assert rng.unit_range is rng.value
 
 
+@pytest.mark.parametrize(
+    "selection, expected",
+    [
+        (IDim(3), "IDim=3"),
+        (IDim.at(0, 9), "IDim=(0:9)"),
+        (IDim.at(None, 3), "IDim=(-inf:3)"),
+        (IDim.at(3, None), "IDim=(3:inf)"),
+    ],
+)
+def test_dimension_selection_str(selection, expected):
+    # a point and a range print alike, by the dimension's short name
+    assert str(selection) == expected
+
+
 class TestDimensionAt:
     def test_one_integer_is_a_point(self):
         point = IDim.at(3)
@@ -376,6 +390,8 @@ class TestDimensionSelection:
         assert common.is_dimension_slice(slice(IDim(0), IDim(10)))
         assert common.is_dimension_slice(slice(IDim(0), None))
         assert common.is_dimension_slice(slice(None, IDim(10)))
+        assert common.is_dimension_slice(slice(IDim(0), IDim(10), 1))
+        assert not common.is_dimension_slice(slice(IDim(0), IDim(10), 2))
         assert not common.is_dimension_slice(slice(0, 10))
         assert not common.is_dimension_slice(slice(None))
         assert not common.is_dimension_slice(slice(IDim(0), 10))

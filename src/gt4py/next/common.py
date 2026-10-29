@@ -450,11 +450,13 @@ class DimensionMeta(type):
     # (`type[_D]` with `_D: DimensionIndex`) is not a supertype of the metaclass, which mypy
     # rejects at the definition. At a call site `_T` still binds to the dimension class.
     @overload
-    def at(cls: type[_T], value: int, /) -> _T: ...
+    def at(cls: type[_T], value: IntIndex, /) -> _T: ...
     @overload
-    def at(cls, start: Optional[int], stop: Optional[int], /) -> DimensionRange: ...
+    def at(
+        cls, start: Optional[IntIndex], stop: Optional[IntIndex], /
+    ) -> DimensionRange[UnitRange]: ...
     @overload
-    def at(cls, range_: UnitRange | range, /) -> DimensionRange: ...
+    def at(cls, range_: UnitRange | range, /) -> DimensionRange[UnitRange]: ...
     def at(cls, *args: Any) -> Any:
         """
         Select a point or a range on this dimension, in absolute coordinates.
@@ -865,7 +867,9 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(self.start - other, self.stop - other)
 
     def __str__(self) -> str:
-        return f"({self.start}:{self.stop})"
+        start = "-inf" if self.start is Infinity.NEGATIVE else self.start
+        stop = "inf" if self.stop is Infinity.POSITIVE else self.stop
+        return f"({start}:{stop})"
 
 
 FiniteUnitRange: TypeAlias = UnitRange[int, int]
@@ -877,6 +881,9 @@ _Rng = TypeVar(
     UnitRange[int, Infinity],
     UnitRange[Infinity, Infinity],
 )
+
+#: The range of a `DimensionRange`: any `UnitRange` (a `Domain` narrows it to an `_Rng`).
+_RangeT_co = TypeVar("_RangeT_co", bound="UnitRange", covariant=True)
 
 RangeLike: TypeAlias = (
     _Rng
@@ -933,7 +940,7 @@ class DimensionSelection(Protocol[_SelectionValueT_co]):
     def value(self) -> _SelectionValueT_co: ...
 
 
-class DimensionRange(NamedTuple, Generic[_Rng]):
+class DimensionRange(NamedTuple, Generic[_RangeT_co]):
     """
     A range on one dimension, in absolute coordinates.
 
@@ -942,16 +949,17 @@ class DimensionRange(NamedTuple, Generic[_Rng]):
     """
 
     dim: Dimension
-    value: _Rng
+    value: _RangeT_co
 
     @property
-    def unit_range(self) -> _Rng:
+    def unit_range(self) -> _RangeT_co:
         """Alias of `value`."""
         # TODO(egparedes): deprecate once downstream code (ICON4Py) reads `value`.
         return self.value
 
     def __str__(self) -> str:
-        return f"{self.dim}={self.value}"
+        # the same short form as a point (`I=3`)
+        return f"{self.dim.__qualname__}={self.value}"
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
@@ -960,14 +968,20 @@ IntIndex: TypeAlias = int | core_defs.IntegralScalar
 FiniteDimensionRange: TypeAlias = DimensionRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 
-#: Slice syntax for a range on a dimension, `field[I(5):I(10)]`; a missing bound is open.
+#: Slice syntax for a range on a dimension, `field[I(5):I(10)]`; a missing bound is open, and
+#: the only step is 1. A PEP 695 alias, evaluated lazily: `slice` is not subscriptable at
+#: runtime, so evaluating `DimensionSlice.__value__` raises (nothing needs to).
 type DimensionSlice[D: DimensionIndex] = (
-    slice[D, D, None] | slice[D, None, None] | slice[None, D, None]
+    slice[D, D, Literal[1] | None]
+    | slice[D, None, Literal[1] | None]
+    | slice[None, D, Literal[1] | None]
 )
 
 AbsoluteIndexElement: TypeAlias = DimensionSelection | DimensionSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
-AbsoluteIndexSequence: TypeAlias = Sequence[DimensionRange | DimensionIndex]
+AbsoluteIndexSequence: TypeAlias = Sequence[DimensionRange | DimensionIndex | DimensionSlice]
+#: An absolute index after `embedded.common.canonicalize_any_index_sequence`: no slices.
+CanonicalAbsoluteIndexSequence: TypeAlias = Sequence[DimensionRange | DimensionIndex]
 RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
@@ -987,11 +1001,12 @@ def is_finite_dimension_range(v: DimensionRange) -> TypeGuard[FiniteDimensionRan
 
 def is_dimension_slice(obj: object) -> TypeIs[DimensionSlice[DimensionIndex]]:
     """
-    Check whether `obj` is a slice whose bounds are dimension indices (or `None` for open).
+    Check whether `obj` is a `DimensionSlice`.
 
-    Only the bounds are checked: the step is validated where the slice is converted.
+    That is a slice whose bounds are dimension indices (or `None` for an open bound, but not
+    both) and whose step is `None` or 1.
     """
-    if not isinstance(obj, slice):
+    if not isinstance(obj, slice) or obj.step not in (None, 1):
         return False
     bounds = (obj.start, obj.stop)
     return any(isinstance(b, DimensionIndex) for b in bounds) and all(
@@ -1005,7 +1020,7 @@ def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
     )
 
 
-def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
+def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[CanonicalAbsoluteIndexSequence]:
     return isinstance(v, Sequence) and all(
         isinstance(e, (DimensionRange, DimensionIndex)) for e in v
     )
@@ -1237,15 +1252,15 @@ class Domain(Sequence[DimensionRange[_Rng]], Generic[_Rng]):
     def pop(self, index: int | Dimension = -1) -> Domain:
         return self.replace(index)
 
-    def insert(self, index: int | Dimension, *named_ranges: DimensionRange) -> Domain:
+    def insert(self, index: int | Dimension, *dimension_ranges: DimensionRange) -> Domain:
         if isinstance(index, int) and index == len(self.dims):
-            new_dims, new_ranges = zip(*named_ranges)
+            new_dims, new_ranges = zip(*dimension_ranges)
             return Domain(dims=self.dims + new_dims, ranges=self.ranges + new_ranges)
         else:
-            return self.replace(index, *named_ranges)
+            return self.replace(index, *dimension_ranges)
 
-    def replace(self, index: int | Dimension, *named_ranges: DimensionRange) -> Domain:
-        assert all(isinstance(nr, DimensionRange) for nr in named_ranges)
+    def replace(self, index: int | Dimension, *dimension_ranges: DimensionRange) -> Domain:
+        assert all(isinstance(nr, DimensionRange) for nr in dimension_ranges)
         if isinstance(index, DimensionMeta):
             dim_index = self.dim_index(index)
             if dim_index is None:
@@ -1257,8 +1272,8 @@ class Domain(Sequence[DimensionRange[_Rng]], Generic[_Rng]):
             )
         if index < 0:
             index += len(self.dims)
-        new_dims = (arg.dim for arg in named_ranges) if len(named_ranges) > 0 else ()
-        new_ranges = (arg.value for arg in named_ranges) if len(named_ranges) > 0 else ()
+        new_dims = (arg.dim for arg in dimension_ranges) if len(dimension_ranges) > 0 else ()
+        new_ranges = (arg.value for arg in dimension_ranges) if len(dimension_ranges) > 0 else ()
         dims = self.dims[:index] + tuple(new_dims) + self.dims[index + 1 :]
         ranges = self.ranges[:index] + tuple(new_ranges) + self.ranges[index + 1 :]
 

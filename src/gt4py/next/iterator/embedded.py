@@ -438,16 +438,16 @@ def lift(stencil):
     return impl
 
 
-NamedRange: TypeAlias = tuple[Tag | common.Dimension, range]
+TaggedRange: TypeAlias = tuple[Tag | common.Dimension, range]
 
 
 @builtins.cartesian_domain.register(EMBEDDED)
-def cartesian_domain(*args: NamedRange) -> runtime.CartesianDomain:
+def cartesian_domain(*args: TaggedRange) -> runtime.CartesianDomain:
     return runtime.CartesianDomain(args)
 
 
 @builtins.unstructured_domain.register(EMBEDDED)
-def unstructured_domain(*args: NamedRange) -> runtime.UnstructuredDomain:
+def unstructured_domain(*args: TaggedRange) -> runtime.UnstructuredDomain:
     return runtime.UnstructuredDomain(args)
 
 
@@ -457,7 +457,7 @@ Domain: TypeAlias = (
 
 
 @builtins.named_range.register(EMBEDDED)
-def named_range(tag: Tag | common.Dimension, start: int, end: int) -> NamedRange:
+def named_range(tag: Tag | common.Dimension, start: int, end: int) -> TaggedRange:
     # TODO revisit this pattern after the discussion of 0d-field vs scalar
     if isinstance(start, ConstantField):
         start = start.value
@@ -964,7 +964,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
-    ) -> common.AbsoluteIndexSequence:
+    ) -> common.CanonicalAbsoluteIndexSequence:
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
             d: _named_indices[d.tag] for d in self._ndarrayfield.__gt_domain__.dims
         }

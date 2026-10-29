@@ -1108,15 +1108,17 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
     if field.domain.dims == new_dimensions:
         return field
     domain_slice: list[slice | None] = []
-    named_ranges = []
+    dimension_ranges = []
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            named_ranges.append(common.DimensionRange(dim, field.domain[pos].value))
+            dimension_ranges.append(common.DimensionRange(dim, field.domain[pos].value))
         else:
             domain_slice.append(None)  # np.newaxis
-            named_ranges.append(common.DimensionRange(dim, common.UnitRange.infinite()))
-    return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+            dimension_ranges.append(common.DimensionRange(dim, common.UnitRange.infinite()))
+    return common._field(
+        field.ndarray[tuple(domain_slice)], domain=common.Domain(*dimension_ranges)
+    )
 
 
 def _builtins_broadcast(

@@ -59,9 +59,16 @@ def connectivity_identifier(offset: str) -> str:
 
 
 def connectivity_offset(name: str) -> Optional[str]:
-    """Offset-provider key of a connectivity array name, the inverse of `connectivity_identifier`.
+    """
+    Recover the offset-provider key from a connectivity array name.
 
-    Returns `None` if `name` is not a connectivity identifier.
+    The inverse of `connectivity_identifier`.
+
+    Args:
+        name: An SDFG array name.
+
+    Returns:
+        The offset-provider key (a tag), or `None` if `name` is not a connectivity identifier.
     """
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(name)) is None:
         return None

@@ -24,7 +24,6 @@ from gt4py.next.common import (
     Domain,
     Field,
     DimensionIndex,
-    DimensionRange,
     Staggered,
     UnitRange,
 )
@@ -1135,6 +1134,17 @@ def test_absolute_indexing_open_bound(index, expected):
     assert are_equal_fields(field[index], field[expected])
 
 
+def test_absolute_indexing_infinite_domain():
+    # every infinite side is an open bound, also when indexing with a `Domain`
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.arange(50).reshape((5, 10)), domain=domain)
+
+    infinite = common.Domain(dims=(I,), ranges=(UnitRange.infinite(),))
+    assert are_equal_fields(field[infinite], field)
+    half_open = common.Domain(dims=(J,), ranges=(UnitRange(7, common.Infinity.POSITIVE),))
+    assert are_equal_fields(field[half_open], field[J.at(7, 15)])
+
+
 @pytest.mark.parametrize(
     "index",
     [
@@ -1355,7 +1365,6 @@ def test_nd_array_field_pickle_roundtrip():
 
 
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
-    import dataclasses
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10

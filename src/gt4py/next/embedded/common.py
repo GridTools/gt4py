@@ -12,7 +12,7 @@ import functools
 import itertools
 import operator
 from collections.abc import Iterator, Sequence
-from typing import Any, Optional, cast
+from typing import Any, Optional, TypeGuard, cast
 
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
@@ -33,7 +33,7 @@ def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Doma
 def _relative_sub_domain(
     domain: common.Domain, index: common.RelativeIndexSequence
 ) -> common.Domain:
-    named_ranges: list[common.DimensionRange] = []
+    dimension_ranges: list[common.DimensionRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
@@ -45,7 +45,7 @@ def _relative_sub_domain(
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(rng, idx)
-                named_ranges.append(common.DimensionRange(dim, sliced))
+                dimension_ranges.append(common.DimensionRange(dim, sliced))
             except IndexError as ex:
                 raise embedded_exceptions.IndexOutOfBounds(
                     domain=domain, indices=index, index=idx, dim=dim
@@ -60,13 +60,13 @@ def _relative_sub_domain(
                     domain=domain, indices=index, index=idx, dim=dim
                 )
 
-    return common.Domain(*named_ranges)
+    return common.Domain(*dimension_ranges)
 
 
 def _absolute_sub_domain(
-    domain: common.Domain, index: common.AbsoluteIndexSequence
+    domain: common.Domain, index: common.CanonicalAbsoluteIndexSequence
 ) -> common.Domain:
-    named_ranges: list[common.DimensionRange] = []
+    dimension_ranges: list[common.DimensionRange] = []
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
@@ -78,7 +78,7 @@ def _absolute_sub_domain(
                         domain=domain, indices=index, index=named_idx, dim=dim
                     )
 
-                named_ranges.append(common.DimensionRange(dim, clipped))
+                dimension_ranges.append(common.DimensionRange(dim, clipped))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
@@ -88,9 +88,9 @@ def _absolute_sub_domain(
                     )
         else:
             # dimension not mentioned in slice
-            named_ranges.append(common.DimensionRange(dim, domain.ranges[i]))
+            dimension_ranges.append(common.DimensionRange(dim, domain.ranges[i]))
 
-    return common.Domain(*named_ranges)
+    return common.Domain(*dimension_ranges)
 
 
 def _clip_open_bounds(
@@ -99,7 +99,9 @@ def _clip_open_bounds(
     """
     Replace the open (infinite) sides of `selection` by the corresponding sides of `bounds`.
 
-    Indexing a field with an open bound selects up to the field's own bound on that side.
+    Indexing a field with an open bound selects up to the field's own bound on that side. Every
+    infinite side is an open bound, also that of an infinite `Domain` or `DimensionRange` used
+    as an index.
 
     Returns:
         The clipped range, or `None` if a closed bound of `selection` lies outside `bounds`.
@@ -218,7 +220,7 @@ def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyInd
         return index
     result: list[common.DimensionRange | common.DimensionIndex] = []
     for e in elements:
-        if isinstance(e, slice):
+        if _is_slice_with_dimension_bound(e):
             result.append(_dimension_slice_to_range(e))
         elif isinstance(e, (common.DimensionRange, common.DimensionIndex)):
             result.append(e)
@@ -227,20 +229,20 @@ def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyInd
     return tuple(result)
 
 
-def _is_slice_with_dimension_bound(idx: object) -> bool:
+def _is_slice_with_dimension_bound(idx: object) -> TypeGuard[slice]:
     return isinstance(idx, slice) and (
         isinstance(idx.start, common.DimensionIndex) or isinstance(idx.stop, common.DimensionIndex)
     )
 
 
 def _dimension_slice_to_range(idx: slice) -> common.DimensionRange:
+    if idx.step not in (None, 1):
+        raise IndexError(f"Invalid slice '{idx}': only a step of 1 is supported.")
     if not common.is_dimension_slice(idx):
         raise IndexError(
             f"Invalid slice '{idx}': both bounds must be indices on one dimension, or 'None' for"
             " an open bound."
         )
-    if idx.step not in (None, 1):
-        raise IndexError(f"Invalid slice '{idx}': only a step of 1 is supported.")
     start, stop = idx.start, idx.stop
     if start is not None and stop is not None and start.dim != stop.dim:
         raise IndexError(
