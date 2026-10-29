@@ -184,6 +184,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.ERFC: "std::erfc",
                 NativeFunction.ROUND: "std::nearbyint",
                 NativeFunction.ROUND_AWAY_FROM_ZERO: "std::round",
+                NativeFunction.RAND: "__gt_rand",
             }[func]
         except KeyError as error:
             raise NotImplementedError(
@@ -291,6 +292,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     Program = as_mako(
         """
         #include <cstdint>
+        #include <cstdlib>
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/common/array.hpp>
@@ -302,6 +304,11 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             using namespace gridtools::stencil;
             using namespace gridtools::stencil::cartesian;
             using gridtools::array;
+
+            template <typename T>
+            GT_FUNCTION T __gt_rand(T lower, T upper) {
+                return lower + static_cast<T>(std::rand()) / static_cast<T>(RAND_MAX) * (upper - lower);
+            }
 
             ${'\\n'.join(functors)}
 
