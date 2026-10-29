@@ -108,7 +108,10 @@ def _unstructured_translate_range_statically(
 
     new_start, new_stop = accessed.min(), accessed.max() + 1  # type: ignore[attr-defined]  # TODO(havogt): improve typing for NDArrayObject
 
-    fraction_accessed = np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
+    # GPU reductions can return a zero-dimensional array; use a Python scalar.
+    fraction_accessed = float(
+        np.unique(accessed).size / (new_stop - new_start)  # type: ignore[call-overload]  # TODO(havogt): improve typing for NDArrayObject
+    )
 
     if fraction_accessed < _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD and (
         tag not in _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS
@@ -118,7 +121,7 @@ def _unstructured_translate_range_statically(
             UserWarning(
                 f"Translating '{expr}' using '{tag}' requires "
                 f"computations on many additional points "
-                f"({round(float((1 - fraction_accessed) * 100))}%) in order to get a contiguous "
+                f"({round((1 - fraction_accessed) * 100)}%) in order to get a contiguous "
                 f"domain. Please consider reordering your mesh."
             ),
             stacklevel=2,
