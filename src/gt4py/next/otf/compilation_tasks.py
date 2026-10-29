@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Preparation of runner-ready compilation tasks from a backend and a program definition.
+"""Preparation of runner-ready compilation tasks from a toolchain and a program definition.
 
 This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
@@ -29,7 +29,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend as gtx_backend, common, constructors
-from gt4py.next.otf import arguments, artifacts, runners, stages
+from gt4py.next.otf import arguments, runners, stages
 
 
 def _connectivity_from_file(
@@ -123,41 +123,16 @@ def _offset_provider_with_file_refs(
     }
 
 
-@dataclasses.dataclass(frozen=True)
-class _PreloadedArtifact:
-    """Wraps the already-loaded program of a backend with a customized ``compile``."""
-
-    program: artifacts.ExecutableProgram
-
-    def load(self) -> artifacts.ExecutableProgram:
-        return self.program
-
-
 def make_compilation_task(
-    backend: gtx_backend.Toolchain,
+    toolchain: gtx_backend.Toolchain,
     definition_stage: Any,
     compile_time_args: arguments.CompileTimeArgs,
 ) -> runners.CompilationTask:
-    """Prepare the compilation of `definition_stage` with `backend` as a task for a runner."""
-    name = getattr(backend, "name", type(backend).__name__)
-    if getattr(type(backend), "compile", None) is not gtx_backend.Toolchain.compile:
-        # A customized `compile` is opaque: it cannot be decomposed into the
-        # standard frontend/backend workflow (and yields an already-loaded
-        # program instead of an artifact), so the executor closes over
-        # everything and ignores the compilable.
-        return runners.CompilationTask(
-            name=name,
-            construct_compilable=lambda with_refs: None,
-            executor=lambda _: _PreloadedArtifact(
-                backend.compile(definition_stage, compile_time_args=compile_time_args)
-            ),
-            no_offload_reason="it does not use the standard compilation workflow"
-            " (customized 'compile')",
-        )
+    """Prepare the compilation of `definition_stage` with `toolchain` as a task for a runner."""
     # Frontend lowering happens here, main-side: decorators rebind the user's
     # function module attribute, so the raw `types.FunctionType` must not cross
     # a process boundary; the lowered `CompilableProgram` is pickle-safe.
-    compilable = backend.frontend(
+    compilable = toolchain.frontend(
         stages.ConcreteProgramDef(definition=definition_stage, args=compile_time_args)
     )
 
@@ -176,5 +151,7 @@ def make_compilation_task(
         )
 
     return runners.CompilationTask(
-        name=name, construct_compilable=construct_compilable, executor=backend.backend
+        name=toolchain.backend.name,
+        construct_compilable=construct_compilable,
+        executor=toolchain.backend.compiler,
     )

@@ -9,6 +9,13 @@ from gt4py.next.otf import workflow
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"><script src="https://spcl.github.io/dace/webclient2/dist/sdfv.js"></script>
 <link href="https://spcl.github.io/dace/webclient2/sdfv.css" rel="stylesheet">
 
+> [!NOTE]
+> The frontend (`gtx.backend.Transforms`, the definition transformations shown in the next two
+> sections) is global and not a user customization point: a backend does not carry a frontend
+> (ADR 0029). A modified `Transforms` can only be used through the internal
+> `gtx.backend.Toolchain`, e.g. in gt4py's own tests. What a backend does is customized through
+> its `compiler` and `loader`, see "Alternative Pipeline" below.
+
 ## Replace Steps
 
 Pipelines are frozen dataclasses whose fields are the steps, so a variant is built with `dataclasses.replace`.
@@ -33,7 +40,7 @@ skip_linting_transforms = dataclasses.replace(
 
 ## Alternative Pipeline
 
-A toolchain is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
+A compiled backend is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
 which holds the settings all steps must agree on: the device, the build type,
 the cache lifetime, the data layout. Each step is created by a step builder
 that receives that configuration. To change a single setting of one step, pass
@@ -45,7 +52,7 @@ import functools
 
 gtfn = gtx.program_processors.runners.gtfn
 
-debug_gpu_no_transforms = gtfn.make_gtfn_toolchain(
+debug_gpu_no_transforms = gtfn.make_gtfn_backend(
     gtfn.GTFNConfig(gpu=True, cmake_build_type=gtx.config.CMakeBuildType.DEBUG),
     name_postfix="_debug_no_transforms",
     translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
@@ -71,15 +78,15 @@ pure_cpp2_pipeline = gtfn.make_gtfn_compile_workflow(
 )
 ```
 
-An existing pipeline, such as the one of a pre-built toolchain, can also be varied after the fact with `dataclasses.replace`. Unlike a step builder, a step passed this way is used exactly as given, with two consequences:
+An existing pipeline, such as the `compiler` of a pre-built backend, can also be varied after the fact with `dataclasses.replace`. Unlike a step builder, a step passed this way is used exactly as given, with two consequences:
 
 - **Caching is not carried over.** The builders wrap the translation step in a persistent `CachedStep`. Replacing `translation` replaces that wrapper as well, so the variant does not cache translations unless you wrap the new step yourself. Passing a step builder instead keeps the caching.
-- **Device agreement is checked, but only for steps that declare a device.** If a step has a `device_type` attribute, it must match every other step that declares one, and the toolchain's allocator. `CompilePipeline` and `Toolchain` check this whenever they are constructed, `dataclasses.replace` included, and raise a `ValueError` on a mismatch. Steps without a `device_type`, like `MyCodeGen` above, are not checked, so keeping them consistent is up to you.
+- **Device agreement is checked, but only for steps that declare a device.** If a step has a `device_type` attribute, it must match every other step that declares one, and the backend's allocator. `CompilePipeline` and `CompiledBackend` check this whenever they are constructed, `dataclasses.replace` included, and raise a `ValueError` on a mismatch. Steps without a `device_type`, like `MyCodeGen` above, are not checked, so keeping them consistent is up to you.
 
 ```python
 from gt4py.next import fingerprinting
 
-gtfn_pipeline = gtx.program_processors.runners.gtfn.run_gtfn.backend
+gtfn_pipeline = gtx.program_processors.runners.gtfn.run_gtfn.compiler
 cached_translation = gtfn_pipeline.translation  # a `CachedStep` around the translation step
 no_transforms = dataclasses.replace(cached_translation.step, enable_itir_transforms=False)
 

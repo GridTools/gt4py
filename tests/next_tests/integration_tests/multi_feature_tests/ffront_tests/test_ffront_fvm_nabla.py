@@ -13,9 +13,9 @@ import pytest
 from packaging import version
 
 from gt4py import next as gtx
-from gt4py.next import neighbor_sum
+from gt4py._core import definitions as core_defs
+from gt4py.next import backend as next_backend, neighbor_sum
 
-from next_tests import definitions as test_definitions
 from next_tests.integration_tests.cases_utils import (
     exec_alloc_descriptor,
 )
@@ -32,8 +32,12 @@ from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
 
 
 def _skip_if_cupy_14_0_1_hip(exec_alloc_descriptor) -> None:
-    if exec_alloc_descriptor is test_definitions.cupy_execution:
-        cp = test_definitions.cupy_execution.allocator
+    if (
+        isinstance(exec_alloc_descriptor, next_backend.EmbeddedBackend)
+        and core_defs.cp is not None
+        and exec_alloc_descriptor.allocator is core_defs.cp
+    ):
+        cp = core_defs.cp
         if cp.cuda.runtime.is_hip:
             cp_version = version.parse(cp.__version__)
             if cp_version.major == 14 and cp_version.minor == 0 and cp_version.micro < 2:
@@ -82,9 +86,7 @@ def test_ffront_compute_zavgS(exec_alloc_descriptor):
 
     zavgS = gtx.zeros({Edge: setup.edges_size}, allocator=exec_alloc_descriptor.allocator)
 
-    compute_zavgS.with_backend(
-        None if exec_alloc_descriptor.backend is None else exec_alloc_descriptor
-    )(
+    compute_zavgS.with_backend(exec_alloc_descriptor)(
         setup.input_field,
         setup.S_fields[0],
         out=zavgS,
@@ -106,7 +108,7 @@ def test_ffront_nabla(exec_alloc_descriptor):
     pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
     pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=exec_alloc_descriptor.allocator)
 
-    pnabla.with_backend(None if exec_alloc_descriptor.backend is None else exec_alloc_descriptor)(
+    pnabla.with_backend(exec_alloc_descriptor)(
         setup.input_field,
         setup.S_fields,
         setup.sign_field,

@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
+
 import dace
 import pytest
 
@@ -25,7 +27,7 @@ from next_tests.integration_tests.cases_utils import (
     mesh_descriptor,  # noqa: F401
 )
 
-from gt4py.next.program_processors.runners import dace as dace_backends
+from gt4py.next.program_processors.runners import dace as dace_backends, gtfn
 
 
 # Override the exec_alloc_descriptor with a custom Backend,
@@ -164,7 +166,7 @@ def test_sdfg_conversion_does_not_mutate_gtir_cache(
             argument_descriptor_contexts={},
         ),
     )
-    past_to_itir = program.backend.frontend.past_to_itir
+    past_to_itir = program._frontend_transforms.past_to_itir
     cached_stage = past_to_itir(stage_input)
     definition_before = str(cached_stage.definition)
     offset_provider_before = cached_stage.args.offset_provider
@@ -183,3 +185,29 @@ def test_sdfg_conversion_does_not_mutate_gtir_cache(
             common.is_neighbor_table(connectivity)
             for connectivity in cached_stage.args.offset_provider.values()
         )
+
+
+def test_sdfg_conversion_requires_a_dace_backend():
+    @gtx.program(backend=gtfn.run_gtfn)
+    def testee(a: gtx.Field[[Vertex], gtx.int], out: gtx.Field[[Vertex], gtx.int]):
+        _copy(a, out=out)
+
+    with pytest.raises(ValueError, match="only for the DaCe backend"):
+        testee.__sdfg__()
+
+
+def test_sdfg_conversion_does_not_depend_on_the_backend_name(exec_alloc_descriptor):
+    renamed = dataclasses.replace(exec_alloc_descriptor, name="custom")
+
+    @gtx.program(backend=renamed)
+    def testee(a: gtx.Field[[Vertex], gtx.int], out: gtx.Field[[Vertex], gtx.int]):
+        _copy(a, out=out)
+
+    sdfg = testee.__sdfg__()
+
+    assert isinstance(sdfg, dace.SDFG)
+
+
+@gtx.field_operator
+def _copy(a: gtx.Field[[Vertex], gtx.int]) -> gtx.Field[[Vertex], gtx.int]:
+    return a

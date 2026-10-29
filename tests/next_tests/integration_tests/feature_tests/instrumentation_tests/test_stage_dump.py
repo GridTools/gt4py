@@ -73,9 +73,9 @@ def clean_stage_hook(monkeypatch):
     runners.reset_default_runner()
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: getattr(b, "name", str(b)))
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def test_dump_stages_end_to_end(
-    backend: gtx_typing.Toolchain, tmp_path, monkeypatch, clean_stage_hook
+    backend: gtx_typing.Backend, tmp_path, monkeypatch, clean_stage_hook
 ):
     monkeypatch.setattr(config, "DUMP_STAGES", tmp_path)
 

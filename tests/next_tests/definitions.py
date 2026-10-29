@@ -8,14 +8,10 @@
 
 """Contains definition of test-exclusion matrices, see ADR 15."""
 
-import dataclasses
 import enum
 import importlib
 from typing import Final
 import pytest
-
-from gt4py.next.embedded import nd_array_field
-from gt4py.next import constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -50,22 +46,10 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-@dataclasses.dataclass(frozen=True)
-class EmbeddedDummyBackend:
-    name: str
-    allocator: constructors.Allocator
-    backend: Final = None
-
-
-numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
-cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
-jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
-
-
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
-    NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
-    CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
-    JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
+    NUMPY_EXECUTION = "gt4py.next.program_processors.runners.embedded.embedded_numpy"
+    CUPY_EXECUTION = "gt4py.next.program_processors.runners.embedded.embedded_cupy"
+    JAX_NUMPY_EXECUTION = "gt4py.next.program_processors.runners.embedded.embedded_jax"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):

@@ -9,6 +9,7 @@
 from collections.abc import Sequence
 from typing import Optional
 
+import numpy as np
 import pytest
 
 import gt4py._core.definitions as core_defs
@@ -32,6 +33,12 @@ class DummyAllocator(next_allocators.FieldBufferAllocatorProtocol):
 
 class DummyAllocatorFactory(next_allocators.FieldBufferAllocatorFactoryProtocol):
     __gt_allocator__ = DummyAllocator()
+
+
+class ArrayNamespaceFactory:
+    """A factory providing an array namespace instead of a field buffer allocator."""
+
+    __gt_allocator__ = np
 
 
 def test_is_field_allocator():
@@ -91,6 +98,15 @@ def test_is_field_allocator_factory_for(test_function):
     # Test with an object that is not a field allocator factory
     invalid_obj = "not an allocator factory"
     assert not test_function(invalid_obj, core_defs.DeviceType.CPU)
+
+    # A factory providing an array namespace is not specific to any device type
+    assert not test_function(ArrayNamespaceFactory(), core_defs.DeviceType.CPU)
+
+
+def test_array_namespace_factory_is_field_allocator_factory():
+    assert next_allocators.is_field_allocator_factory(ArrayNamespaceFactory())
+    assert next_allocators.is_field_allocation_tool(ArrayNamespaceFactory())
+    assert not next_allocators.is_field_allocator(ArrayNamespaceFactory())
 
 
 def test_horizontal_first_layout_mapper():

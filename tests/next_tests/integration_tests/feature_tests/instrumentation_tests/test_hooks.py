@@ -15,16 +15,16 @@ from typing import Any
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common, config, Dims, gtfn_cpu, typing as gtx_typing
+from gt4py.next import backend as next_backend, common, config, Dims, gtfn_cpu, typing as gtx_typing
 from gt4py.next.instrumentation import gpu_profiler, hooks
 from gt4py.next.otf import runners
 
 try:
     from gt4py.next.program_processors.runners import dace as dace_backends
 
-    BACKENDS = [None, gtfn_cpu, dace_backends.run_dace_cpu]
+    BACKENDS = [gtx.embedded_numpy, gtfn_cpu, dace_backends.run_dace_cpu]
 except ImportError:
-    BACKENDS = [None, gtfn_cpu]
+    BACKENDS = [gtx.embedded_numpy, gtfn_cpu]
 
 
 IDim = gtx.Dimension("IDim")
@@ -126,8 +126,8 @@ def custom_compiled_program_callback(
     )
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: getattr(b, "name", str(b)))
-def test_program_call_hooks(backend: gtx_typing.Toolchain):
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+def test_program_call_hooks(backend: gtx_typing.Backend):
     size = 10
     a_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
     b_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
@@ -162,7 +162,7 @@ def test_program_call_hooks(backend: gtx_typing.Toolchain):
     assert hook_name == "custom_program_callback"
     assert hook_call_info["program"] == test_program.__name__
 
-    if backend is None:
+    if isinstance(backend, next_backend.EmbeddedBackend):
         # The embedded program call hook should have also been called
         # with the embedded backend
         assert len(embedded_callback_results) == 2
@@ -207,13 +207,15 @@ def test_program_call_hooks(backend: gtx_typing.Toolchain):
 
 
 @pytest.mark.parametrize(
-    "backend", [b for b in BACKENDS if b is not None], ids=lambda b: getattr(b, "name", str(b))
+    "backend",
+    [b for b in BACKENDS if isinstance(b, next_backend.CompiledBackend)],
+    ids=lambda b: b.name,
 )
-def test_compile_variant_hook(backend: gtx_typing.Toolchain):
+def test_compile_variant_hook(backend: gtx_typing.Backend):
     def custom_compile_variant_hook(
         program_pool: "CompiledProgramsPool",
         key: gtx_typing.CompiledProgramsKey,
-        backend: gtx_typing.Toolchain,
+        backend: gtx_typing.Backend,
         argument_descriptors: dict[type, dict[str, Any]],
         offset_provider: common.OffsetProviderType | common.OffsetProvider,
     ) -> None:
@@ -245,9 +247,11 @@ def test_compile_variant_hook(backend: gtx_typing.Toolchain):
 
 
 @pytest.mark.parametrize(
-    "backend", [b for b in BACKENDS if b is not None], ids=lambda b: getattr(b, "name", str(b))
+    "backend",
+    [b for b in BACKENDS if isinstance(b, next_backend.CompiledBackend)],
+    ids=lambda b: b.name,
 )
-def test_stage_hook(backend: gtx_typing.Toolchain, monkeypatch):
+def test_stage_hook(backend: gtx_typing.Backend, monkeypatch):
     emitted: list[tuple[str, str]] = []
 
     def stage_callback(name: str, artifact: Any) -> None:

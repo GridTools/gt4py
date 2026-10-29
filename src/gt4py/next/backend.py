@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import dataclasses
 import typing
-from typing import Any, Generic, NoReturn, Protocol
+from typing import Any, Final, NoReturn, Protocol, Self
 
-from gt4py._core import definitions as core_defs
-from gt4py.next import config, custom_layout_allocators as next_allocators
+import numpy as np
+
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py.next import config, constructors, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -65,8 +67,8 @@ class Transforms:
     )
 
     # Not part of the pipeline: `__call__` never runs this step. It is kept as a
-    # configuration point for downstream code (and for `roundtrip`, its only
-    # in-repo writer) that needs to pin the FOAST -> ITIR lowering of a toolchain.
+    # configuration point for code that builds a variant frontend for the
+    # internal `Toolchain` and needs to pin its FOAST -> ITIR lowering.
     foast_to_itir: workflow.Step[ffront_stages.FOASTOperatorDef, itir.FunctionDefinition] = (
         dataclasses.field(default_factory=foast_to_gtir.foast_to_gtir_factory)
     )
@@ -302,49 +304,159 @@ class CompilePipeline:
 
 
 @dataclasses.dataclass(frozen=True)
-class Toolchain(Generic[core_defs.DeviceTypeT]):
+class Backend:
     """
-    Complete pipeline from a program definition to an executable program.
+    Abstract base of the objects passed as `backend=` to programs and operators.
 
-    The `frontend` workflow transforms any supported program definition into a
-    `CompilableProgram`, which the `backend` workflow then compiles into a
-    loadable compilation artifact. The `loading` step turns that artifact into a
-    directly-callable program; toolchains needing to inject backend-specific
-    runtime data supply their own step here. The `allocator` describes the
-    device the compiled program expects its buffers on.
+    A backend decides how a program runs and where the buffers of its fields are
+    allocated. This class is abstract: instantiate a concrete kind, such as
+    `CompiledBackend` or `EmbeddedBackend`.
 
-    If both the allocator and the `backend` declare a device (for a
-    `CompilePipeline`, see `CompilePipeline.device_type`), they must be the
-    same. This is checked on construction, so it also holds for a variant built
-    with `dataclasses.replace`.
+    Backends are immutable configuration objects: a deep copy of a backend is the
+    backend itself, so deep copies of programs share their backend, including any
+    caller-owned state it holds (e.g. a DaCe external workspace).
+
+    Attributes:
+        name: Human-readable label used in metrics, logs and diagnostics. It is
+            expected to be unique among the backends used in a process; backends
+            sharing a name are reported under the same label. gt4py does not use
+            it to identify a backend: not as a cache key and not in fingerprints.
+            Code that needs the kind of a backend should check its type, not its
+            name.
+        allocator: Allocates the buffers of fields used with this backend.
     """
 
     name: str
-    backend: workflow.Step[stages.CompilableProgram, artifacts.CompilationArtifact]
-    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    frontend: workflow.Step[stages.ConcreteProgramDef, stages.CompilableProgram]
-    loading: workflow.Step[artifacts.CompilationArtifact, artifacts.ExecutableProgram] = (
+    allocator: constructors.Allocator
+
+    def __post_init__(self) -> None:
+        if type(self) is Backend:
+            raise TypeError(
+                "'Backend' is abstract: instantiate a concrete kind such as 'CompiledBackend'"
+                " or 'EmbeddedBackend'."
+            )
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> Self:
+        # Immutable configuration object: share its fields (array namespaces,
+        # compile pipelines with caches, caller-owned buffers) instead of copying them.
+        return self
+
+    @property
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol | core_ndarray_utils.ArrayNamespace:
+        """The allocator for fields used with this backend (unwrapping an allocator factory)."""
+        allocator = self.allocator
+        if next_allocators.is_field_allocator_factory(allocator):
+            return allocator.__gt_allocator__
+        return allocator
+
+
+@dataclasses.dataclass(frozen=True)
+class CompiledBackend(Backend):
+    """
+    A backend that compiles programs before running them.
+
+    Programs are lowered by the (global) frontend to a `CompilableProgram`, turned
+    into a loadable `CompilationArtifact` by `compiler` (possibly in a worker
+    process, see `config.BuildJobsMode`), and made directly callable by `loader`
+    (always in the calling process). Backends needing backend-specific runtime
+    data in the loaded program supply their own `loader`. Customize either step
+    with `dataclasses.replace`.
+
+    If both the allocator and the `compiler` declare a device (for a
+    `CompilePipeline`, see `CompilePipeline.device_type`), they must be the
+    same. This is checked on construction, so it also holds for a variant built
+    with `dataclasses.replace`.
+
+    Attributes:
+        allocator: The field buffer allocator for the device the compiled
+            programs expect their buffers on.
+        compiler: Compiles a lowered program into a loadable artifact.
+        loader: Loads an artifact into a directly-callable program.
+    """
+
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    compiler: workflow.Step[stages.CompilableProgram, artifacts.CompilationArtifact]
+    loader: workflow.Step[artifacts.CompilationArtifact, artifacts.ExecutableProgram] = (
         dataclasses.field(default=artifacts.load_artifact)
     )
 
     def __post_init__(self) -> None:
+        super().__post_init__()
         if not next_allocators.is_field_allocator(self.allocator):
             return
         allocator_device = self.allocator.__gt_device_type__
-        backend_device = _declared_device_type(self.backend)
-        if backend_device is not None and allocator_device is not backend_device:
+        compiler_device = _declared_device_type(self.compiler)
+        if compiler_device is not None and allocator_device is not compiler_device:
             raise ValueError(
-                f"Toolchain '{self.name}' allocates buffers on '{allocator_device.name}',"
-                f" but its backend targets '{backend_device.name}'."
+                f"Backend '{self.name}' allocates buffers on '{allocator_device.name}',"
+                f" but its compiler targets '{compiler_device.name}'."
             )
 
+    @property
+    def __gt_allocator__(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        return self.allocator
+
+
+_NUMPY_NAMESPACE: Final = typing.cast(core_ndarray_utils.ArrayNamespace, np)
+
+
+@dataclasses.dataclass(frozen=True)
+class EmbeddedBackend(Backend):
+    """
+    A backend that runs the Python definition directly on fields, without lowering.
+
+    Execution is the same for every instance: embedded operators dispatch on the
+    array types of their arguments. The allocator only decides where gt4py
+    allocates the buffers of fields for this backend, e.g. in
+    `gtx.zeros(..., allocator=program)`. The instances live in
+    `gt4py.next.program_processors.runners.embedded`.
+
+    Attributes:
+        allocator: The array namespace (e.g. `numpy`, `cupy`, `jax.numpy`) used
+            to allocate field buffers. Defaults to NumPy.
+    """
+
+    allocator: core_ndarray_utils.ArrayNamespace = _NUMPY_NAMESPACE
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not core_ndarray_utils.is_array_namespace(self.allocator):
+            raise TypeError(
+                f"The allocator of embedded backend '{self.name}' must be an array namespace"
+                f" (e.g. 'numpy'), got '{self.allocator}'."
+            )
+
+    @property
+    def __gt_allocator__(self) -> core_ndarray_utils.ArrayNamespace:
+        return self.allocator
+
+
+@dataclasses.dataclass(frozen=True)
+class Toolchain:
+    """
+    Internal: the complete route from a program definition to an executable program.
+
+    Composes the frontend, which transforms any supported program definition into
+    a `CompilableProgram`, with a compiled backend, whose `compiler` turns it into
+    a compilation artifact and whose `loader` makes that callable. Not part of the
+    public API: gt4py builds it where a compilation happens.
+    """
+
+    backend: CompiledBackend
+    frontend: workflow.Step[stages.ConcreteProgramDef, stages.CompilableProgram] = (
+        DEFAULT_TRANSFORMS
+    )
+
     def compile(
-        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+        self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
     ) -> artifacts.ExecutableProgram:
-        artifact = self.backend(
-            self.frontend(stages.ConcreteProgramDef(definition=program, args=compile_time_args))
+        """Lower, compile and load `definition` in the calling thread."""
+        compilable = self.frontend(
+            stages.ConcreteProgramDef(definition=definition, args=compile_time_args)
         )
-        return self.loading(artifact)
+        return self.backend.loader(self.backend.compiler(compilable))
 
     def translate(
         self, definition: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
@@ -352,12 +464,13 @@ class Toolchain(Generic[core_defs.DeviceTypeT]):
         """
         Run the frontend and the translation step only.
 
-        This is the sanctioned partial run of the toolchain for stage
-        inspection: the program definition goes through the full `frontend`
-        pipeline and the `translation` step of the compile pipeline, stopping
-        before bindings generation and compilation. Per-call step options are
+        This is the sanctioned partial run for stage inspection: the program
+        definition goes through the full `frontend` pipeline and the
+        `translation` step of the backend's compile pipeline, stopping before
+        bindings generation and compilation. Per-call step options are
         deliberately not offered; a caller needing a variant translation step
-        builds a variant pipeline with `dataclasses.replace`.
+        builds a variant backend with
+        `dataclasses.replace(backend, compiler=dataclasses.replace(...))`.
 
         Args:
             definition: A program definition in any stage the frontend accepts.
@@ -368,44 +481,39 @@ class Toolchain(Generic[core_defs.DeviceTypeT]):
             The `ProgramSource` produced by the translation step.
 
         Raises:
-            NotImplementedError: If this toolchain's `backend` is not the
-                standard `CompilePipeline` pipeline shape.
+            NotImplementedError: If the backend's `compiler` is not the standard
+                `CompilePipeline` shape.
         """
-        if not isinstance(self.backend, CompilePipeline):
+        compiler = self.backend.compiler
+        if not isinstance(compiler, CompilePipeline):
             raise NotImplementedError(
-                f"Toolchain '{self.name}' does not support partial runs: 'translate'"
+                f"Backend '{self.backend.name}' does not support partial runs: 'translate'"
                 " requires the standard 'CompilePipeline' compile pipeline"
                 " ('translation' / 'bindings' / 'compilation' steps), but this"
-                f" toolchain's backend is a '{type(self.backend).__name__}'."
-                " Monolithic backends execute in a single step and produce no"
+                f" backend's compiler is a '{type(compiler).__name__}'."
+                " Monolithic compilers execute in a single step and produce no"
                 " intermediate 'ProgramSource'."
             )
-        source = self.backend.translation(
+        source = compiler.translation(
             self.frontend(stages.ConcreteProgramDef(definition=definition, args=compile_time_args))
         )
         workflow.stage_hook("translation", source)
         return source
 
-    @property
-    def __gt_allocator__(
-        self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
-        return self.allocator
-
 
 @dataclasses.dataclass(frozen=True)
-class ToolchainConfig:
+class CompiledBackendConfig:
     """
-    Settings that describe what a compiled toolchain builds for.
+    Settings that describe what a compiled backend builds for.
 
-    A toolchain builder creates every step from one config, so steps that must
+    A backend builder creates every step from one config, so steps that must
     agree on a setting (the target device, the build type, the cache lifetime,
     the data layout) read it from the same place and cannot drift apart.
     Settings that only tune how a single step does its job are not part of the
     config: they are keyword arguments of that step's builder.
 
     Defaults are read from `gt4py.next.config` when the config is created, not
-    when this module is imported, so the toolchains built from a default config
+    when this module is imported, so the backends built from a default config
     follow the current user configuration.
     """
 
@@ -432,7 +540,7 @@ class ToolchainConfig:
 
     @property
     def device_name(self) -> str:
-        """Device part of the toolchain name."""
+        """Device part of the backend name."""
         return "gpu" if self.gpu else "cpu"
 
     def make_allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
