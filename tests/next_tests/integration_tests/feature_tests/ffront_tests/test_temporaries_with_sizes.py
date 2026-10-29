@@ -32,7 +32,7 @@ from next_tests.toy_connectivity import Cell, Edge
 # see https://docs.pytest.org/en/latest/how-to/fixtures.html#override-a-fixture-on-a-test-module-level
 @pytest.fixture
 def exec_alloc_descriptor():
-    return gtfn.make_gtfn_toolchain(
+    return gtfn.make_gtfn_backend(
         gtfn.GTFNConfig(cached_translation=False),
         name_postfix="_with_temporaries_and_sizes",
         translation=functools.partial(

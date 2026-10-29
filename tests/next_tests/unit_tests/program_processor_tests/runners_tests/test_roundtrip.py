@@ -10,8 +10,12 @@ import os
 
 import pytest
 
+import gt4py.next as gtx
+from gt4py.next import backend as next_backend
+from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import arguments, stages
 from gt4py.next.program_processors.runners import roundtrip
 
 
@@ -70,3 +74,39 @@ def test_load_module_caches_by_debug_flag(debug_order, monkeypatch):
             assert roundtrip._load_module(source_code, debug) is modules[debug]
     finally:
         os.remove(modules[True].__file__)
+
+
+def _former_gtir_frontend() -> next_backend.Transforms:
+    """The frontend `roundtrip.gtir` used to build for itself (before ADR 0029)."""
+    return next_backend.Transforms(
+        past_to_itir=past_to_itir.past_to_gtir_factory(),
+        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        field_view_op_to_prog=foast_to_past.operator_to_program_factory(
+            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory()
+        ),
+    )
+
+
+def test_gtir_uses_the_default_frontend_without_changing_the_lowering():
+    IDim = gtx.Dimension("IDim")
+
+    @gtx.field_operator
+    def double(a: gtx.Field[[IDim], gtx.float64]) -> gtx.Field[[IDim], gtx.float64]:
+        return a + a
+
+    @gtx.program
+    def double_program(a: gtx.Field[[IDim], gtx.float64], out: gtx.Field[[IDim], gtx.float64]):
+        double(a, out=out)
+
+    a = gtx.zeros({IDim: 4})
+    out = gtx.zeros({IDim: 4})
+    default_frontend = next_backend.Toolchain(roundtrip.gtir).frontend
+    assert default_frontend is next_backend.DEFAULT_TRANSFORMS
+
+    # A field operator is lowered as the program wrapping it, so `out` is positional.
+    compile_time_args = arguments.CompileTimeArgs.from_concrete(a, out, offset_provider={})
+    for definition_stage in [double_program.definition_stage, double.definition_stage]:
+        inp = stages.ConcreteProgramDef(definition=definition_stage, args=compile_time_args)
+        lowered = default_frontend(inp).definition
+        assert isinstance(lowered, itir.Program)
+        assert lowered == _former_gtir_frontend()(inp).definition

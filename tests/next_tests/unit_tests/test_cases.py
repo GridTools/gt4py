@@ -10,12 +10,13 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import errors
+from gt4py.next import backend as next_backend, errors
 
 from next_tests import definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (  # noqa: F401 [unused-import]
     cartesian_case,
+    cartesian_case_no_backend,
     exec_alloc_descriptor,
     tree_mapped_np_allclose,
 )
@@ -130,3 +131,25 @@ def test_verify_with_default_data_fails_with_wrong_reference(cartesian_case):
 
     with pytest.raises(AssertionError):
         cases.verify_with_default_data(cartesian_case, addition, ref=wrong_ref)
+
+
+def test_case_backend_is_the_exec_alloc_descriptor(cartesian_case, exec_alloc_descriptor):
+    assert cartesian_case.backend is exec_alloc_descriptor
+    assert cartesian_case.allocator is exec_alloc_descriptor.allocator
+    assert cartesian_case.is_embedded == isinstance(
+        exec_alloc_descriptor, next_backend.EmbeddedBackend
+    )
+
+
+@pytest.mark.parametrize("embedded_id", list(definitions.EmbeddedIds))
+def test_embedded_ids_load_the_embedded_backends(embedded_id):
+    try:
+        backend = embedded_id.load()
+    except AttributeError as error:
+        pytest.skip(str(error))  # the optional array library is not installed
+    assert isinstance(backend, next_backend.EmbeddedBackend)
+
+
+def test_no_backend_cases(cartesian_case_no_backend):
+    assert cartesian_case_no_backend.backend is cases.no_backend
+    assert not cartesian_case_no_backend.is_embedded

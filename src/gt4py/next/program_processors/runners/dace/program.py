@@ -20,7 +20,10 @@ from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import extractors as extractors
 from gt4py.next.otf import arguments, recipes, workflow
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
-from gt4py.next.program_processors.runners.dace.workflow import translation as gtx_dace_translation
+from gt4py.next.program_processors.runners.dace.workflow import (
+    backend as gtx_dace_backend,
+    translation as gtx_dace_translation,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -37,14 +40,15 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
     ] = {}  # symbolically defined
 
     def __sdfg__(self, *args: Any, **kwargs: Any) -> dace.sdfg.sdfg.SDFG:
-        if (self.backend is None) or "dace" not in self.backend.name.lower():
+        if not gtx_dace_backend.is_dace_backend(self.backend):
             raise ValueError("The SDFG can be generated only for the DaCe backend.")
 
         offset_provider: gtx_common.OffsetProvider = self.compilation_options.connectivities or {}
         column_axis = kwargs.get("column_axis", None)
 
         # TODO(ricoh): connectivity tables required here for now.
-        gtir_stage = typing.cast(gtx_backend.Transforms, self.backend.frontend).past_to_itir(
+        assert isinstance(self.backend, gtx_backend.CompiledBackend)
+        gtir_stage = self._frontend_transforms.past_to_itir(
             workflow.ProgramWithArgs(
                 definition=self.past_stage,
                 args=arguments.CompileTimeArgs(
@@ -79,7 +83,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         )
 
         sdfg = dace.SDFG.from_json(
-            _translation_only_toolchain(self.backend).translate(program, aot_args).source_code
+            gtx_backend.Toolchain(_translation_only_backend(self.backend))
+            .translate(program, aot_args)
+            .source_code
         )
 
         self.sdfg_closure_cache["arrays"] = sdfg.arrays
@@ -188,9 +194,9 @@ class Program(decorator.Program, dace.frontend.python.common.SDFGConvertible):
         return [p.id for p in self.past_stage.past_node.params], []
 
 
-def _translation_only_toolchain(backend: gtx_backend.Toolchain) -> gtx_backend.Toolchain:
+def _translation_only_backend(backend: gtx_backend.CompiledBackend) -> gtx_backend.CompiledBackend:
     """
-    Derive the translate-only toolchain variant used for SDFG conversion.
+    Derive the translate-only backend variant used for SDFG conversion.
 
     The variant reuses the translation settings of `backend` but disables the
     ITIR transforms (the caller runs them separately, with the runtime
@@ -198,23 +204,23 @@ def _translation_only_toolchain(backend: gtx_backend.Toolchain) -> gtx_backend.T
     and bypasses the persistent translation cache.
 
     Args:
-        backend: The dace toolchain the program is bound to.
+        backend: The dace backend the program is bound to.
 
     Returns:
-        A toolchain whose `translate` produces an SDFG source for an
+        A backend whose `Toolchain.translate` produces an SDFG source for an
         already-transformed program.
 
     Raises:
-        NotImplementedError: If `backend` is not shaped like the standard dace
-            toolchain, i.e. an 'OTFCompileWorkflow' whose translation step is a
-            'DaCeTranslator' (optionally wrapped in a 'CachedStep').
+        NotImplementedError: If the compiler of `backend` is not shaped like the
+            standard dace one, i.e. an 'OTFCompileWorkflow' whose translation
+            step is a 'DaCeTranslator' (optionally wrapped in a 'CachedStep').
     """
-    pipeline = backend.backend
+    pipeline = backend.compiler
     if not isinstance(pipeline, recipes.OTFCompileWorkflow):
         raise NotImplementedError(
-            f"Toolchain '{backend.name}' cannot be converted to an SDFG: SDFG"
+            f"Backend '{backend.name}' cannot be converted to an SDFG: SDFG"
             " conversion requires the standard 'OTFCompileWorkflow' compile"
-            f" pipeline, but this toolchain's backend is a '{type(pipeline).__name__}'."
+            f" pipeline, but this backend's compiler is a '{type(pipeline).__name__}'."
         )
     translation: workflow.Workflow[Any, Any] = pipeline.translation
     if isinstance(translation, workflow.CachedStep):
@@ -223,13 +229,13 @@ def _translation_only_toolchain(backend: gtx_backend.Toolchain) -> gtx_backend.T
         translation = translation.step
     if not isinstance(translation, gtx_dace_translation.DaCeTranslator):
         raise NotImplementedError(
-            f"Toolchain '{backend.name}' cannot be converted to an SDFG: SDFG"
+            f"Backend '{backend.name}' cannot be converted to an SDFG: SDFG"
             " conversion requires a 'DaCeTranslator' translation step, but this"
-            f" toolchain's is a '{type(translation).__name__}'."
+            f" backend's is a '{type(translation).__name__}'."
         )
     return dataclasses.replace(
         backend,
-        backend=dataclasses.replace(
+        compiler=dataclasses.replace(
             pipeline,
             translation=dataclasses.replace(
                 translation,

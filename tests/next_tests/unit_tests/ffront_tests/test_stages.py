@@ -183,10 +183,10 @@ def test_fingerprint_excludes_backend():
     def copy(a: gtx.Field[[IDim], gtx.int32]) -> gtx.Field[[IDim], gtx.int32]:
         return a
 
-    without_backend = stages.fingerprinter(copy.with_backend(None))
-    with_backend = stages.fingerprinter(copy.with_backend(gtx.gtfn_cpu))
-    assert without_backend == with_backend
+    embedded = stages.fingerprinter(copy.with_backend(gtx.embedded_numpy))
+    compiled = stages.fingerprinter(copy.with_backend(gtx.gtfn_cpu))
+    assert embedded == compiled
 
     # A non-fingerprintable backend (here a `Mock`) must not crash fingerprinting.
     object.__setattr__(copy, "backend", mock.Mock())
-    assert stages.fingerprinter(copy) == without_backend
+    assert stages.fingerprinter(copy) == embedded

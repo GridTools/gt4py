@@ -185,7 +185,7 @@ cached_calc(1)
 ### Example in the Wild
 
 ```python
-gtx.backend.DEFAULT_PROG_TRANSFORMS.past_lint??
+gtx.backend.DEFAULT_TRANSFORMS.past_lint??
 ```
 
 <!-- #region editable=true slideshow={"slide_type": ""} -->
@@ -395,13 +395,13 @@ proc.hexify_colors("blue")
 ### Example in the Wild
 
 ```python editable=true slideshow={"slide_type": ""}
-gtx.backend.DEFAULT_PROG_TRANSFORMS??
+gtx.backend.DEFAULT_TRANSFORMS??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.run_gtfn_gpu.backend??
+gtx.program_processors.runners.gtfn.run_gtfn_gpu.compiler??
 ```
 
 ```python
-gtx.program_processors.runners.gtfn.make_gtfn_toolchain??
+gtx.program_processors.runners.gtfn.make_gtfn_backend??
 ```

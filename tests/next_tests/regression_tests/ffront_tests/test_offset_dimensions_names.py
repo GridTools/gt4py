@@ -28,7 +28,6 @@ import pytest
 from gt4py import next as gtx
 from gt4py.next import Dims, Field, common, constructors, neighbor_sum
 
-from next_tests import definitions as test_defs
 from next_tests.integration_tests import cases
 from next_tests.integration_tests import cases_utils
 from next_tests.integration_tests.cases_utils import (  # noqa: F401 [unused-import] # fixture
@@ -63,11 +62,7 @@ def _case(exec_alloc_descriptor, tag: str, local_dim: common.Dimension) -> cases
     # array, and `simple_mesh` builds the table from NumPy anyway.
     v2e_arr = mesh.offset_provider["V2E"].asnumpy()
     return cases.Case(
-        (
-            None
-            if isinstance(exec_alloc_descriptor, test_defs.EmbeddedDummyBackend)
-            else exec_alloc_descriptor
-        ),
+        exec_alloc_descriptor,
         offset_provider={
             tag: constructors.as_connectivity(
                 domain={V: v2e_arr.shape[0], local_dim: v2e_arr.shape[1]},

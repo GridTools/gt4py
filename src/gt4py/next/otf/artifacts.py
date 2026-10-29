@@ -179,7 +179,7 @@ class CompilationArtifact(Protocol):
     arguments.
 
     The one current exception is ``RoundtripArtifact`` when it is configured
-    with a ``dispatch_backend``: that field holds a ``Toolchain`` reference
+    with a ``dispatch_backend``: that field holds a ``CompiledBackend`` reference
     whose role belongs at the runner / load-time seam, not in the artifact
     itself.
     """
@@ -191,12 +191,12 @@ def load_artifact(artifact: CompilationArtifact) -> ExecutableProgram:
     """
     Load a compilation artifact into a directly-callable program.
 
-    This is the default loading step of a `Toolchain`. Toolchains that need to
-    inject backend-specific runtime data into the loaded program supply their
-    own step instead of overriding a method.
+    This is the default `CompiledBackend.loader`. Backends that need to inject
+    backend-specific runtime data into the loaded program supply their own
+    loader instead of overriding a method.
 
     Args:
-        artifact: The artifact produced by the toolchain's compile pipeline.
+        artifact: The artifact produced by the backend's compiler.
 
     Returns:
         The loaded, directly-callable program.

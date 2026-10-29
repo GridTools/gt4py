@@ -18,7 +18,7 @@
 
       KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 
-      @gtx.field_operator(grid_type=None, backend=None)
+      @gtx.field_operator(grid_type=None, backend=gtx.embedded_numpy)
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
           return a
 
@@ -91,7 +91,7 @@
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
           return a
 
-      @gtx.program(backend=None, grid_type=gtx.common.GridType.UNSTRUCTURED)
+      @gtx.program(backend=gtx.embedded_numpy, grid_type=gtx.common.GridType.UNSTRUCTURED)
       def foo_prg(
           a: gtx.Field[gtx.Dims[KDim], gtx.int32],
           b: gtx.Field[gtx.Dims[KDim], gtx.int32],
@@ -211,8 +211,22 @@
       def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
           return a
 
-      def foo_with_backend(backend: gtx.typing.Toolchain | None) -> None:
+      def foo_with_backend(backend: gtx.typing.Backend) -> None:
           _ = foo.with_backend(backend)
+
+  - case: with_backend_none_is_rejected
+    main: |
+      from gt4py import next as gtx
+
+      KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+
+      @gtx.field_operator
+      def foo(a: gtx.Field[gtx.Dims[KDim], gtx.int32]) -> gtx.Field[gtx.Dims[KDim], gtx.int32]:
+          return a
+
+      _ = foo.with_backend(None)
+    out: |
+      main:9:22: error: Argument 1 to "with_backend" of "_CompilableGTEntryPointMixin" has incompatible type "None"; expected "Backend"  [arg-type]
 
   - case: with_backend_scanop
     main: |
@@ -227,7 +241,7 @@
       ) -> float:
           return carry + val
 
-      def somescanop_with_backend(backend: gtx.typing.Toolchain | None) -> None:
+      def somescanop_with_backend(backend: gtx.typing.Backend) -> None:
           _ = somescanop.with_backend(backend)
 
   - case: with_backend_program
@@ -251,7 +265,7 @@
       ) -> None:
           foo(a, out=b, domain={KDim: (start, end)})
 
-      def foo_prg_with_backend(backend: gtx.typing.Toolchain | None) -> None:
+      def foo_prg_with_backend(backend: gtx.typing.Backend) -> None:
           _ = foo_prg.with_backend(backend)
 
   - case: astype_return_type

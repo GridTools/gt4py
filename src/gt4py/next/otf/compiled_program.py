@@ -89,7 +89,7 @@ def metrics_source_key(pool: CompiledProgramsPool, key: CompiledProgramsKey) -> 
 def compile_variant_hook(
     program_pool: CompiledProgramsPool,
     key: CompiledProgramsKey,
-    backend: gtx_backend.Toolchain,
+    backend: gtx_backend.CompiledBackend,
     argument_descriptors: ArgStaticDescriptorsByType,
     offset_provider: common.OffsetProviderType | common.OffsetProvider,
 ) -> None:
@@ -350,7 +350,9 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     to `compile` before it can be used.
     """
 
-    backend: gtx_backend.Toolchain
+    #: The route used to compile the variants: the global frontend and the
+    #: program's compiled backend.
+    toolchain: gtx_backend.Toolchain
     definition_stage: ffront_stages.DSLDefinitionT
     # Note: This type can be incomplete, i.e. contain DeferredType, whenever the operator is a
     #  scan operator. In the future it could also be the type of a generic program.
@@ -367,6 +369,10 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     _compilation_jobs: dict[
         CompiledProgramsKey, concurrent.futures.Future[artifacts.CompilationArtifact]
     ] = dataclasses.field(default_factory=dict, init=False)
+
+    @property
+    def backend(self) -> gtx_backend.CompiledBackend:
+        return self.toolchain.backend
 
     @functools.cached_property
     def root(self) -> tuple[str, str]:
@@ -491,7 +497,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     ) -> artifacts.ExecutableProgram:
         artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
-            return self.backend.loading(artifact)
+            return self.backend.loader(artifact)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load the compiled program '{self.definition.__name__}'."
@@ -692,7 +698,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         runner = runners.get_default_runner()
         future = runner.submit(
             compilation_tasks.make_compilation_task(
-                self.backend, self.definition_stage, compile_time_args
+                self.toolchain, self.definition_stage, compile_time_args
             )
         )
         if future.done():
@@ -702,7 +708,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         else:
             self._compilation_jobs[key] = future
             _ongoing_compilations[future] = (
-                f"{self.definition_stage.definition.__name__} ({getattr(self.backend, 'name', type(self.backend).__name__)})"
+                f"{self.definition_stage.definition.__name__} ({self.backend.name})"
             )
 
     # TODO(tehrengruber): Rework the interface to allow precompilation with compile time

@@ -124,11 +124,11 @@ class GTFNCompiler(compiler.CPPCompiler):
 
 
 @dataclasses.dataclass(frozen=True)
-class GTFNConfig(backend.ToolchainConfig):
-    """Settings shared by the steps of a GTFN toolchain, see `ToolchainConfig`."""
+class GTFNConfig(backend.CompiledBackendConfig):
+    """Settings shared by the steps of a GTFN backend, see `CompiledBackendConfig`."""
 
 
-#: Step builders: callables creating a step from the toolchain configuration.
+#: Step builders: callables creating a step from the backend configuration.
 GTFNTranslationBuilder: TypeAlias = Callable[[GTFNConfig], stages.TranslationStep]
 GTFNBindingsBuilder: TypeAlias = Callable[
     [GTFNConfig], workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]
@@ -150,7 +150,7 @@ def make_gtfn_translation(
     Build the GTIR -> C++ translation step.
 
     Args:
-        cfg: The toolchain configuration.
+        cfg: The backend configuration.
         enable_itir_transforms: Run the GTIR transformation passes before code
             generation.
         symbolic_domain_sizes: Symbolic sizes of the domains, by dimension name.
@@ -191,7 +191,7 @@ def make_gtfn_build_system(
     Build the build-system project generator used by the GTFN compiler.
 
     Args:
-        cfg: The toolchain configuration.
+        cfg: The backend configuration.
         cmake_extra_flags: Extra flags passed to CMake.
         renew_compiledb: Regenerate the compilation database even if one exists.
 
@@ -218,7 +218,7 @@ def make_gtfn_compiler(
     Build the compilation step.
 
     Args:
-        cfg: The toolchain configuration.
+        cfg: The backend configuration.
         build_system: Builder of the build-system project generator.
         force_recompile: Recompile even if a cached build exists.
 
@@ -255,7 +255,7 @@ def make_gtfn_compile_workflow(
     responsible for configuring its step from `cfg`.
 
     Args:
-        cfg: The toolchain configuration. Defaults to `GTFNConfig()`.
+        cfg: The backend configuration. Defaults to `GTFNConfig()`.
         translation: Builder of the translation step.
         bindings: Builder of the bindings step.
         compilation: Builder of the compilation step.
@@ -279,7 +279,7 @@ def make_gtfn_compile_workflow(
     )
 
 
-def make_gtfn_toolchain(
+def make_gtfn_backend(
     cfg: GTFNConfig | None = None,
     /,
     *,
@@ -287,39 +287,40 @@ def make_gtfn_toolchain(
     translation: GTFNTranslationBuilder = make_gtfn_translation,
     bindings: GTFNBindingsBuilder = make_gtfn_bindings,
     compilation: GTFNCompilationBuilder = make_gtfn_compiler,
-) -> backend.Toolchain:
+) -> backend.CompiledBackend:
     """
-    Build a GTFN toolchain.
+    Build a compiled GTFN backend.
 
     Args:
-        cfg: The toolchain configuration. Defaults to `GTFNConfig()`.
-        name_postfix: Appended to the toolchain name, which must stay unique.
+        cfg: The backend configuration. Defaults to `GTFNConfig()`.
+        name_postfix: Appended to the generated name. The generated name encodes
+            only the device; pass a postfix to tell other variants apart in
+            metrics and logs.
         translation: Builder of the translation step, see
             `make_gtfn_compile_workflow`.
         bindings: Builder of the bindings step.
         compilation: Builder of the compilation step.
 
     Returns:
-        The configured toolchain.
+        The configured backend.
     """
     if cfg is None:
         cfg = GTFNConfig()
 
-    return backend.Toolchain(
+    return backend.CompiledBackend(
         name=f"run_gtfn_{cfg.device_name}{name_postfix}",
-        backend=make_gtfn_compile_workflow(
+        compiler=make_gtfn_compile_workflow(
             cfg, translation=translation, bindings=bindings, compilation=compilation
         ),
         allocator=cfg.make_allocator(),
-        frontend=backend.DEFAULT_TRANSFORMS,
     )
 
 
-run_gtfn = make_gtfn_toolchain()
+run_gtfn = make_gtfn_backend()
 
-run_gtfn_gpu = make_gtfn_toolchain(GTFNConfig(gpu=True))
+run_gtfn_gpu = make_gtfn_backend(GTFNConfig(gpu=True))
 
-run_gtfn_no_transforms = make_gtfn_toolchain(
+run_gtfn_no_transforms = make_gtfn_backend(
     name_postfix="_no_transforms",
     translation=functools.partial(make_gtfn_translation, enable_itir_transforms=False),
 )

@@ -11,6 +11,13 @@ from gt4py import eve
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"><script src="https://spcl.github.io/dace/webclient2/dist/sdfv.js"></script>
 <link href="https://spcl.github.io/dace/webclient2/sdfv.css" rel="stylesheet">
 
+> [!NOTE]
+> The frontend (`gtx.backend.Transforms`, the definition transformations shown in the next two
+> sections) is global and not a user customization point: a backend does not carry a frontend
+> (ADR 0029). A modified `Transforms` can only be used through the internal
+> `gtx.backend.Toolchain`, e.g. in gt4py's own tests. What a backend does is customized through
+> its `compiler` and `loader`, see "Alternative Workflow" below.
+
 ## Replace Steps
 
 ```python
@@ -48,7 +55,7 @@ skip_linting_transforms.step_order(DUMMY_FOP)
 
 ## Alternative Workflow
 
-A toolchain is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
+A compiled backend is built from one configuration, `GTFNConfig` (or `DaCeConfig`),
 which holds the settings all steps must agree on: the device, the build type,
 the cache lifetime, the data layout. Each step is created by a step builder
 that receives that configuration. To change a single setting of one step, pass
@@ -60,7 +67,7 @@ import functools
 
 gtfn = gtx.program_processors.runners.gtfn
 
-debug_gpu_no_transforms = gtfn.make_gtfn_toolchain(
+debug_gpu_no_transforms = gtfn.make_gtfn_backend(
     gtfn.GTFNConfig(gpu=True, cmake_build_type=gtx.config.CMakeBuildType.DEBUG),
     name_postfix="_debug_no_transforms",
     translation=functools.partial(gtfn.make_gtfn_translation, enable_itir_transforms=False),
