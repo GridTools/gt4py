@@ -307,8 +307,85 @@ def test_range_comparison(op, rng1, rng2, expected):
 @pytest.mark.parametrize(
     "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
-def test_named_range_like(named_rng_like):
+def test_dimension_range_like(named_rng_like):
     assert dimension_range(named_rng_like) == (IDim, UnitRange(2, 4))
+
+
+def test_dimension_range_unit_range_alias():
+    rng = IDim.at(2, 4)
+    assert rng.unit_range is rng.value
+
+
+class TestDimensionAt:
+    def test_one_integer_is_a_point(self):
+        point = IDim.at(3)
+        assert point == IDim(3) and type(point) is IDim
+
+    @pytest.mark.parametrize("value", [0, -3, np.int32(5)])
+    def test_point_is_absolute(self, value):
+        assert IDim.at(value) == IDim(int(value))
+
+    def test_point_on_a_staggered_dimension(self):
+        assert type(common.Staggered[IDim].at(1)) is common.Staggered[IDim]
+
+    @pytest.mark.parametrize(
+        "args, expected",
+        [
+            ((0, 10), UnitRange(0, 10)),
+            ((-5, -2), UnitRange(-5, -2)),
+            ((None, 10), UnitRange(Infinity.NEGATIVE, 10)),
+            ((0, None), UnitRange(0, Infinity.POSITIVE)),
+            ((None, None), UnitRange.infinite()),
+            ((UnitRange(2, 4),), UnitRange(2, 4)),
+            ((range(2, 4),), UnitRange(2, 4)),
+            ((range(2, 4, 1),), UnitRange(2, 4)),
+        ],
+    )
+    def test_range(self, args, expected):
+        assert IDim.at(*args) == DimensionRange(IDim, expected)
+
+    @pytest.mark.parametrize("args", [(), (0, 1, 2), (slice(0, 1),), ("0",), (1.0,), (0, "1")])
+    def test_invalid_arguments(self, args):
+        with pytest.raises(TypeError, match=r"'IDim.at\(\)' takes"):
+            IDim.at(*args)
+
+    def test_range_with_step(self):
+        with pytest.raises(ValueError, match="step"):
+            IDim.at(range(0, 10, 2))
+
+    def test_not_visible_on_an_index(self):
+        assert not hasattr(IDim(3), "at")
+
+    def test_cannot_be_shadowed(self):
+        with pytest.raises(TypeError, match="'at'"):
+
+            class _Shadowing(DimensionIndex):
+                def at(self) -> None: ...
+
+
+class TestDimensionSelection:
+    """A point (a `DimensionIndex` instance) and a range on a dimension are read alike."""
+
+    @pytest.mark.parametrize(
+        "selection, value",
+        [(IDim(3), 3), (IDim.at(3), 3), (IDim.at(0, 10), UnitRange(0, 10))],
+    )
+    def test_dim_and_value(self, selection, value):
+        assert selection.dim is IDim and selection.value == value
+
+    def test_dimension_slice(self):
+        assert common.is_dimension_slice(slice(IDim(0), IDim(10)))
+        assert common.is_dimension_slice(slice(IDim(0), None))
+        assert common.is_dimension_slice(slice(None, IDim(10)))
+        assert not common.is_dimension_slice(slice(0, 10))
+        assert not common.is_dimension_slice(slice(None))
+        assert not common.is_dimension_slice(slice(IDim(0), 10))
+        assert not common.is_dimension_slice(IDim(0))
+
+    def test_dimension_slice_alias_is_lazy(self):
+        # `slice` is not subscriptable at runtime, so the alias must never be evaluated
+        assert common.DimensionSlice.__name__ == "DimensionSlice"
+        assert common.DimensionSlice[IDim] is not None
 
 
 def test_domain_length(a_domain):

@@ -1033,10 +1033,7 @@ def test_field_broadcast(new_dims, field, expected_domain):
 
 @pytest.mark.parametrize(
     "domain_slice",
-    [
-        (DimensionRange(D0, UnitRange(0, 10)),),
-        common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),)),
-    ],
+    [(D0.at(0, 10),), common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),))],
 )
 def test_get_slices_with_named_indices_3d_to_1d(domain_slice):
     field_domain = common.Domain(
@@ -1050,7 +1047,7 @@ def test_get_slices_with_named_index():
     field_domain = common.Domain(
         dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = (DimensionRange(D0, UnitRange(0, 10)), D1(2), D2(3))
+    named_index = (D0.at(0, 10), D1(2), D2(3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
@@ -1068,12 +1065,12 @@ def test_get_slices_invalid_type():
     "domain_slice,expected_dimensions,expected_shape",
     [
         (
-            (DimensionRange(D0, UnitRange(7, 9)), DimensionRange(D1, UnitRange(8, 10))),
+            (D0.at(7, 9), D1.at(8, 10)),
             (D0, D1, D2),
             (2, 2, 15),
         ),
         (
-            (DimensionRange(D0, UnitRange(7, 9)), DimensionRange(D2, UnitRange(12, 20))),
+            (D0.at(7, 9), D2.at(12, 20)),
             (D0, D1, D2),
             (2, 10, 8),
         ),
@@ -1081,9 +1078,9 @@ def test_get_slices_invalid_type():
         ((D0(8),), (D1, D2), (10, 15)),
         ((D1(9),), (D0, D2), (5, 15)),
         ((D2(11),), (D0, D1), (5, 10)),
-        ((D0(8), DimensionRange(D1, UnitRange(8, 10))), (D1, D2), (2, 15)),
+        ((D0(8), D1.at(8, 10)), (D1, D2), (2, 15)),
         (D0(5), (D1, D2), (10, 15)),
-        (DimensionRange(D0, UnitRange(5, 7)), (D0, D1, D2), (2, 10, 15)),
+        (D0.at(5, 7), (D0, D1, D2), (2, 10, 15)),
     ],
 )
 def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
@@ -1105,8 +1102,8 @@ def test_absolute_indexing_dim_sliced():
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
     expected = field[
-        DimensionRange(dim=D0, value=UnitRange(5, 9)),
-        DimensionRange(dim=D1, value=UnitRange(8, 10)),
+        D0.at(5, 9),
+        D1.at(8, 10),
     ]
 
     assert isinstance(indexed_field_1, common.Field)
@@ -1135,13 +1132,51 @@ def test_absolute_indexing_wrong_dim_sliced():
         field[D1(8) : D0(10)]
 
 
-def test_absolute_indexing_empty_dim_sliced():
-    domain = common.Domain(
-        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
-    )
-    field = common._field(np.ones((5, 10, 15)), domain=domain)
-    with pytest.raises(IndexError, match="Lower bound needs to be specified"):
-        field[: D0(10)]
+@pytest.mark.parametrize(
+    "index, expected",
+    [
+        (slice(D0(7), None), D0.at(7, 10)),
+        (D0.at(7, None), D0.at(7, 10)),
+        (slice(None, D0(7)), D0.at(5, 7)),
+        (D0.at(None, 7), D0.at(5, 7)),
+        (D0.at(None, None), D0.at(5, 10)),
+        ((slice(D0(7), None), slice(None, D1(8))), (D0.at(7, 10), D1.at(5, 8))),
+    ],
+)
+def test_absolute_indexing_open_bound(index, expected):
+    # an open bound extends to the field's own bound, whether spelled as a slice or with `at`
+    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.arange(50).reshape((5, 10)), domain=domain)
+
+    assert are_equal_fields(field[index], field[expected])
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        slice(D0(3), None),
+        D0.at(11, None),
+        slice(None, D0(11)),
+        D0.at(None, 4),
+        slice(D0(6), D0(11)),
+        D0.at(4, 7),
+    ],
+)
+def test_absolute_indexing_closed_bound_out_of_bounds(index):
+    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.ones((5, 10)), domain=domain)
+
+    with pytest.raises(embedded_exceptions.IndexOutOfBounds):
+        field[index]
+
+
+def test_absolute_indexing_slice_step():
+    domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(5, 10), UnitRange(5, 15)))
+    field = common._field(np.ones((5, 10)), domain=domain)
+
+    assert are_equal_fields(field[D0(6) : D0(8) : 1], field[D0.at(6, 8)])
+    with pytest.raises(IndexError, match="step"):
+        field[D0(6) : D0(8) : 2]
 
 
 def test_absolute_indexing_value_return():
@@ -1162,20 +1197,20 @@ def test_absolute_indexing_value_return():
         (
             (slice(None, 5), slice(None, 2)),
             (5, 2),
-            Domain(DimensionRange(D0, UnitRange(5, 10)), DimensionRange(D1, UnitRange(2, 4))),
+            Domain(D0.at(5, 10), D1.at(2, 4)),
         ),
         (
             (slice(None, 5),),
             (5, 10),
-            Domain(DimensionRange(D0, UnitRange(5, 10)), DimensionRange(D1, UnitRange(2, 12))),
+            Domain(D0.at(5, 10), D1.at(2, 12)),
         ),
-        ((Ellipsis, 1), (10,), Domain(DimensionRange(D0, UnitRange(5, 15)))),
+        ((Ellipsis, 1), (10,), Domain(D0.at(5, 15))),
         (
             (slice(2, 3), slice(5, 7)),
             (1, 2),
-            Domain(DimensionRange(D0, UnitRange(7, 8)), DimensionRange(D1, UnitRange(7, 9))),
+            Domain(D0.at(7, 8), D1.at(7, 9)),
         ),
-        ((slice(1, 2), 0), (1,), Domain(DimensionRange(D0, UnitRange(6, 7)))),
+        ((slice(1, 2), 0), (1,), Domain(D0.at(6, 7))),
     ],
 )
 def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
@@ -1273,9 +1308,7 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common._field(
-                np.ones((10,)) * 42.0, domain=common.Domain(DimensionRange(D1, UnitRange(0, 10)))
-            ),
+            common._field(np.ones((10,)) * 42.0, domain=common.Domain(D1.at(0, 10))),
         ),
     ],
 )
@@ -1299,9 +1332,7 @@ def test_setitem_wrong_domain():
         domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
 
-    value_incompatible = common._field(
-        np.ones((10,)) * 42.0, domain=common.Domain(DimensionRange(D1, UnitRange(-5, 5)))
-    )
+    value_incompatible = common._field(np.ones((10,)) * 42.0, domain=common.Domain(D1.at(-5, 5)))
 
     with pytest.raises(ValueError, match=r"Incompatible 'Domain'.*"):
         field[(1, slice(None))] = value_incompatible

@@ -47,7 +47,7 @@ from typing import (
 )
 
 import numpy as np
-from typing_extensions import Protocol, runtime_checkable
+from typing_extensions import Protocol, TypeIs, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils, xtyping
@@ -63,6 +63,7 @@ class Dims(tuple[Unpack[ShapeTs]]): ...
 
 
 DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
+_T = TypeVar("_T")
 
 Tag: TypeAlias = str
 
@@ -533,6 +534,64 @@ class DimensionMeta(type):
         # display name; `repr` carries the module and disambiguates when it matters.
         return f"{cls.__qualname__}[{cls.kind}]"
 
+    # The self-type is an unbounded `TypeVar`, as in typeshed's `EnumMeta.__iter__`: a bound
+    # (`type[_D]` with `_D: DimensionIndex`) is not a supertype of the metaclass, which mypy
+    # rejects at the definition. At a call site `_T` still binds to the dimension class.
+    @overload
+    def at(cls: type[_T], value: int, /) -> _T: ...
+    @overload
+    def at(cls, start: Optional[int], stop: Optional[int], /) -> DimensionRange: ...
+    @overload
+    def at(cls, range_: UnitRange | range, /) -> DimensionRange: ...
+    def at(cls, *args: Any) -> Any:
+        """
+        Select a point or a range on this dimension, in absolute coordinates.
+
+        One integer is always a point; two bounds or a range are a range. Bounds are
+        absolute coordinates (a negative number is not counted from the end), and a `None`
+        bound is open: indexing a field with it extends to the field's own bound.
+
+        Args:
+            *args: Either one integer (a point), two bounds `start, stop` (each an integer
+                or `None`), or one `UnitRange` or `range` with step 1.
+
+        Returns:
+            The point `cls(value)`, or a `DimensionRange` on `cls`.
+
+        Raises:
+            TypeError: If the arguments are none of the forms above.
+            ValueError: If a `range` has a step other than 1.
+
+        Examples:
+            >>> class I(CartesianAxisIndex): ...
+            >>> I.at(3)
+            I=3
+            >>> I.at(0, 10)
+            DimensionRange(dim=gt4py.next.common:I[horizontal], value=UnitRange(0, 10))
+            >>> I.at(5, None).value
+            UnitRange(5, Infinity.POSITIVE)
+            >>> I.at(range(2, 4)) == I.at(UnitRange(2, 4)) == I.at(2, 4)
+            True
+        """
+        dim = cast(Dimension, cls)
+        match args:
+            case (value,) if is_int_index(value):
+                return dim(int(value))
+            case (UnitRange() | range() as rng,):
+                return DimensionRange(dim, unit_range(rng))
+            case (start, stop) if all(b is None or is_int_index(b) for b in args):
+                return DimensionRange(
+                    dim,
+                    UnitRange(
+                        Infinity.NEGATIVE if start is None else start,
+                        Infinity.POSITIVE if stop is None else stop,
+                    ),
+                )
+        raise TypeError(
+            f"'{cls.__qualname__}.at()' takes a point ('at(3)'), two bounds ('at(0, 10)',"
+            f" 'None' for an open bound) or a range ('at(range(0, 10))'), got {args!r}."
+        )
+
     # NOTE: the self-type restricts index arithmetic to a Cartesian axis for the type checkers:
     # both bind it correctly at every call site (`C + 1` is an error for a mesh location `C`),
     # and both reject it at the definition site, each with its own diagnostic -- mypy `[misc]`
@@ -638,6 +697,11 @@ class DimensionIndex(metaclass=DimensionMeta):
             raise TypeError(
                 f"'{cls.__qualname__}' sets 'tag' in its class body, which has no effect:"
                 " a dimension's tag is its qualified Python name. Rename the class instead."
+            )
+        if "at" in cls.__dict__:
+            raise TypeError(
+                f"'{cls.__qualname__}' defines 'at', which would shadow 'Dimension.at', the"
+                " selection of a point or a range on the dimension."
             )
         if "<locals>" in cls.__qualname__:
             raise TypeError(
@@ -1011,13 +1075,34 @@ def unit_range(r: RangeLike) -> UnitRange:
     raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
+_SelectionValueT_co = TypeVar("_SelectionValueT_co", covariant=True)
+
+
+class DimensionSelection(Protocol[_SelectionValueT_co]):
+    """
+    A point or a range on one dimension, in absolute coordinates.
+
+    `dim` is the dimension and `value` the selection on it: an `int` for a point (a
+    `DimensionIndex` instance, e.g. `IDim(3)`) or a `UnitRange` for a range (a
+    `DimensionRange`, e.g. `IDim.at(0, 10)`).
+
+    This unifies *access*, not semantics: indexing a field with a point removes the
+    dimension, while indexing it with a range keeps it.
+    """
+
+    @property
+    def dim(self) -> Dimension: ...
+
+    @property
+    def value(self) -> _SelectionValueT_co: ...
+
+
 class DimensionRange(NamedTuple, Generic[_Rng]):
     """
-    A range along one dimension.
+    A range on one dimension, in absolute coordinates.
 
-    The range counterpart of a `DimensionIndex` instance, which is a point along its
-    dimension: both expose `dim` and `value`, so an element of an absolute index is read the
-    same way whether it is a point (`value` is an `int`) or a range (`value` is a `UnitRange`).
+    The range counterpart of a `DimensionIndex` instance, which is a point on its dimension:
+    both are a `DimensionSelection`. `Dimension.at(start, stop)` builds one.
     """
 
     dim: Dimension
@@ -1038,8 +1123,13 @@ IntIndex: TypeAlias = int | core_defs.IntegralScalar
 
 FiniteDimensionRange: TypeAlias = DimensionRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[DimensionIndex, DimensionIndex, Literal[1]], see https://peps.python.org/pep-0696/
-AbsoluteIndexElement: TypeAlias = DimensionIndex | DimensionRange | NamedSlice
+
+#: Slice syntax for a range on a dimension, `field[I(5):I(10)]`; a missing bound is open.
+type DimensionSlice[D: DimensionIndex] = (
+    slice[D, D, None] | slice[D, None, None] | slice[None, D, None]
+)
+
+AbsoluteIndexElement: TypeAlias = DimensionSelection | DimensionSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[DimensionRange | DimensionIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -1059,9 +1149,17 @@ def is_finite_dimension_range(v: DimensionRange) -> TypeGuard[FiniteDimensionRan
     return UnitRange.is_finite(v.value)
 
 
-def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
-    return isinstance(obj, slice) and (
-        isinstance(obj.start, DimensionIndex) and isinstance(obj.stop, DimensionIndex)
+def is_dimension_slice(obj: object) -> TypeIs[DimensionSlice[DimensionIndex]]:
+    """
+    Check whether `obj` is a slice whose bounds are dimension indices (or `None` for open).
+
+    Only the bounds are checked: the step is validated where the slice is converted.
+    """
+    if not isinstance(obj, slice):
+        return False
+    bounds = (obj.start, obj.stop)
+    return any(isinstance(b, DimensionIndex) for b in bounds) and all(
+        b is None or isinstance(b, DimensionIndex) for b in bounds
     )
 
 

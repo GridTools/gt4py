@@ -72,12 +72,13 @@ def _absolute_sub_domain(
             named_idx = index[pos]
             idx = named_idx.value
             if isinstance(idx, common.UnitRange):
-                if not idx <= rng:
+                clipped = _clip_open_bounds(idx, rng)
+                if clipped is None:
                     raise embedded_exceptions.IndexOutOfBounds(
                         domain=domain, indices=index, index=named_idx, dim=dim
                     )
 
-                named_ranges.append(common.DimensionRange(dim, idx))
+                named_ranges.append(common.DimensionRange(dim, clipped))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
@@ -90,6 +91,29 @@ def _absolute_sub_domain(
             named_ranges.append(common.DimensionRange(dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
+
+
+def _clip_open_bounds(
+    selection: common.UnitRange, bounds: common.UnitRange
+) -> Optional[common.UnitRange]:
+    """
+    Replace the open (infinite) sides of `selection` by the corresponding sides of `bounds`.
+
+    Indexing a field with an open bound selects up to the field's own bound on that side.
+
+    Returns:
+        The clipped range, or `None` if a closed bound of `selection` lies outside `bounds`.
+    """
+    start, stop = selection.start, selection.stop
+    if start is common.Infinity.NEGATIVE:
+        start = bounds.start
+    elif not bounds.start <= start <= bounds.stop:
+        return None
+    if stop is common.Infinity.POSITIVE:
+        stop = bounds.stop
+    elif not bounds.start <= stop <= bounds.stop:
+        return None
+    return common.UnitRange(start, stop)
 
 
 def domain_intersection(*domains: common.Domain) -> common.Domain:
@@ -188,28 +212,43 @@ def _find_index_of_dim(
 
 
 def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyIndexSpec:
-    # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
-    new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
-    if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
-        new_index = tuple([_named_slice_to_named_range(i) for i in new_index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
-    return new_index
+    # A `DimensionRange` is the canonical absolute form; a dimension slice is only input syntax.
+    elements = index if isinstance(index, tuple) else (index,)
+    if not any(_is_slice_with_dimension_bound(e) for e in elements):
+        return index
+    result: list[common.DimensionRange | common.DimensionIndex] = []
+    for e in elements:
+        if isinstance(e, slice):
+            result.append(_dimension_slice_to_range(e))
+        elif isinstance(e, (common.DimensionRange, common.DimensionIndex)):
+            result.append(e)
+        else:
+            raise IndexError(f"Cannot mix relative index '{e}' with absolute indices in '{index}'.")
+    return tuple(result)
 
 
-def _named_slice_to_named_range(
-    idx: common.NamedSlice,
-) -> common.DimensionRange | common.NamedSlice:
-    assert hasattr(idx, "start") and hasattr(idx, "stop")
-    if common.is_named_slice(idx):
-        start_dim, start_value = idx.start.dim, idx.start.value
-        stop_dim, stop_value = idx.stop.dim, idx.stop.value
-        if start_dim != stop_dim:
-            raise IndexError(
-                f"Dimensions slicing mismatch between '{start_dim.__qualname__}' and '{stop_dim.__qualname__}'."
-            )
-        assert isinstance(start_value, int) and isinstance(stop_value, int)
-        return common.DimensionRange(start_dim, common.UnitRange(start_value, stop_value))
-    if isinstance(idx.start, common.DimensionIndex) and idx.stop is None:
-        raise IndexError(f"Upper bound needs to be specified for {idx}.")
-    if isinstance(idx.stop, common.DimensionIndex) and idx.start is None:
-        raise IndexError(f"Lower bound needs to be specified for {idx}.")
-    return idx
+def _is_slice_with_dimension_bound(idx: object) -> bool:
+    return isinstance(idx, slice) and (
+        isinstance(idx.start, common.DimensionIndex) or isinstance(idx.stop, common.DimensionIndex)
+    )
+
+
+def _dimension_slice_to_range(idx: slice) -> common.DimensionRange:
+    if not common.is_dimension_slice(idx):
+        raise IndexError(
+            f"Invalid slice '{idx}': both bounds must be indices on one dimension, or 'None' for"
+            " an open bound."
+        )
+    if idx.step not in (None, 1):
+        raise IndexError(f"Invalid slice '{idx}': only a step of 1 is supported.")
+    start, stop = idx.start, idx.stop
+    if start is not None and stop is not None and start.dim != stop.dim:
+        raise IndexError(
+            "Dimensions slicing mismatch between"
+            f" '{start.dim.__qualname__}' and '{stop.dim.__qualname__}'."
+        )
+    bound = start if start is not None else stop
+    assert bound is not None  # `is_dimension_slice` requires at least one bound
+    return bound.dim.at(
+        None if start is None else start.value, None if stop is None else stop.value
+    )

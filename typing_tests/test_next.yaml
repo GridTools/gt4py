@@ -302,3 +302,43 @@
       main:16:48: error: Type argument "C" of "Staggered" must be a subtype of "CartesianAxisIndex"  [type-var]
       main:17:13: error: Unsupported operand types for + ("type[C]" and "int")  [operator]
       main:18:18: error: Unsupported operand types for - ("type[C]" and "int")  [operator]
+
+  - case: dimension_selection
+    main: |
+      from gt4py import next as gtx
+      from gt4py.next import common
+
+      class I(gtx.CartesianAxisIndex): ...
+      class J(gtx.CartesianAxisIndex): ...
+
+      point_i: I = I.at(3)
+      point_half: gtx.Staggered[I] = gtx.Staggered[I].at(3)
+      point: common.DimensionSelection[int] = I.at(3)
+      closed: common.DimensionRange = I.at(0, 10)
+      open_left: common.DimensionRange = I.at(None, 10)
+      from_range: common.DimensionSelection[common.UnitRange] = I.at(range(0, 10))
+      dim_slice: common.DimensionSlice[I] = slice(I(0), I(10))
+      open_slice: common.DimensionSlice[I] = slice(I(0), None)
+      I.at()
+      I.at(0, 1, 2)
+      I.at(slice(0, 1))
+      not_a_dim_slice: common.DimensionSlice[I] = slice(0, 10)
+      wrong_dim: J = I.at(3)
+    out: |
+      main:15:1: error: All overload variants of "at" of "DimensionMeta" require at least one argument  [call-overload]
+      main:15:1: note: Possible overload variants:
+      main:15:1: note:     def at(cls, int, /) -> I
+      main:15:1: note:     def at(cls, int | None, int | None, /) -> DimensionRange[Any]
+      main:15:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[Any]
+      main:16:1: error: No overload variant of "at" of "DimensionMeta" matches argument types "int", "int", "int"  [call-overload]
+      main:16:1: note: Possible overload variants:
+      main:16:1: note:     def at(cls, int, /) -> I
+      main:16:1: note:     def at(cls, int | None, int | None, /) -> DimensionRange[Any]
+      main:16:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[Any]
+      main:17:1: error: No overload variant of "at" of "DimensionMeta" matches argument type "slice[int, int, Any]"  [call-overload]
+      main:17:1: note: Possible overload variants:
+      main:17:1: note:     def at(cls, int, /) -> I
+      main:17:1: note:     def at(cls, int | None, int | None, /) -> DimensionRange[Any]
+      main:17:1: note:     def at(cls, UnitRange[Any, Any] | range, /) -> DimensionRange[Any]
+      main:18:45: error: Incompatible types in assignment (expression has type "slice[int, int, Any]", variable has type "slice[I, I, None] | slice[I, None, None] | slice[None, I, None]")  [assignment]
+      main:19:16: error: Incompatible types in assignment (expression has type "I", variable has type "J")  [assignment]

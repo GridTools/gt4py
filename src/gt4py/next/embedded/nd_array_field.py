@@ -1184,14 +1184,17 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
+        # an open side of `rng` selects up to the field's own bound, i.e. the buffer's end
         start = (
             rng.start - domain.ranges[pos].start
             if common.UnitRange.is_left_finite(domain.ranges[pos])
+            and common.UnitRange.is_left_finite(rng)
             else None
         )
         stop = (
             rng.stop - domain.ranges[pos].start
             if common.UnitRange.is_right_finite(domain.ranges[pos])
+            and common.UnitRange.is_right_finite(rng)
             else None
         )
         return slice(start, stop)
