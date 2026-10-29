@@ -22,7 +22,7 @@ import copy
 from . import util
 
 
-class boden(gtx_common.CartesianAxisIndex): ...
+class I(gtx_common.CartesianAxisIndex): ...
 
 
 class K(gtx_common.CartesianAxisIndex, kind=gtx_common.DimensionKind.VERTICAL): ...
@@ -319,7 +319,7 @@ def _make_horizontal_promoter_sdfg(
     sdfg = dace.SDFG(util.unique_name("serial_map_promoter_tester"))
     state = sdfg.add_state(is_start_block=True)
 
-    h_idx = gtx_dace_lowering.get_map_variable(boden)
+    h_idx = gtx_dace_lowering.get_map_variable(I)
     v_idx = gtx_dace_lowering.get_map_variable(K)
 
     if d1_map_is_vertical:
