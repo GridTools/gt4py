@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import shutil
 
 import jinja2
 import pytest
@@ -14,10 +13,9 @@ import pytest
 from gt4py.next import dimension_tags
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common, config
+from gt4py.next import config
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
-from gt4py.next.otf.compilation import cache
 
 
 class I(gtx.CartesianAxisIndex): ...

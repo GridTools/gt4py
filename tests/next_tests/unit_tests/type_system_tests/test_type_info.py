@@ -11,10 +11,7 @@ from typing import Optional
 import pytest
 
 from gt4py.next import (
-    Dimension,
     CartesianAxisIndex,
-    DimensionIndex,
-    DimensionKind,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.ffront import type_specifications as ts_ffront

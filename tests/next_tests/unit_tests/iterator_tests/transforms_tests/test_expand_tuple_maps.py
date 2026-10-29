@@ -8,7 +8,7 @@
 
 import pytest
 
-from gt4py.next import common, utils
+from gt4py.next import utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple

@@ -7,12 +7,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import pytest
 
-from gt4py.next import common, utils
+from gt4py.next import utils
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
-from next_tests.toy_connectivity import Vertex
 
 
 int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)

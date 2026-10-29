@@ -10,7 +10,6 @@ from typing import Optional
 import pytest
 import functools
 from gt4py.next import utils
-from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.transforms import (
     global_tmps,
@@ -24,7 +23,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_utils_misc,
 )
-from next_tests.integration_tests.cases_utils import IDim, JDim, KDim
+from next_tests.integration_tests.cases_utils import IDim
 
 
 index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, builtins.INTEGER_INDEX_BUILTIN.upper()))
