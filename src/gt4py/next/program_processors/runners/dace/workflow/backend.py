@@ -14,7 +14,7 @@ from collections.abc import Callable
 from typing import Any, Final, ParamSpec
 
 from gt4py.next import backend
-from gt4py.next.otf import artifacts, recipes, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -60,7 +60,7 @@ def is_dace_backend(backend_: Any) -> bool:
     if not isinstance(backend_, backend.CompiledBackend):
         return False
     compiler = backend_.compiler
-    if not isinstance(compiler, recipes.OTFCompileWorkflow):
+    if not isinstance(compiler, backend.CompilePipeline):
         return False
     translation: Any = compiler.translation
     if isinstance(translation, workflow.CachedStep):

@@ -80,9 +80,9 @@ def _former_gtir_frontend() -> next_backend.Transforms:
     """The frontend `roundtrip.gtir` used to build for itself (before ADR 0029)."""
     return next_backend.Transforms(
         past_to_itir=past_to_itir.past_to_gtir_factory(),
-        foast_to_itir=foast_to_gtir.adapted_foast_to_gtir_factory(cached=True),
+        foast_to_itir=foast_to_gtir.foast_to_gtir_factory(cached=True),
         field_view_op_to_prog=foast_to_past.operator_to_program_factory(
-            foast_to_itir_step=foast_to_gtir.adapted_foast_to_gtir_factory()
+            foast_to_itir_step=foast_to_gtir.foast_to_gtir_factory()
         ),
     )
 

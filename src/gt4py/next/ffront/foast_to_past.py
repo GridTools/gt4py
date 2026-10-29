@@ -34,7 +34,7 @@ class ItirShim:
     """
 
     operator_def: ConcreteFOASTOperatorDef
-    foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
+    foast_to_itir: workflow.Step[ffront_stages.FOASTOperatorDef, itir.FunctionDefinition]
 
     def __gt_closure_vars__(self) -> Optional[dict[str, Any]]:
         return self.operator_def.definition.closure_vars
@@ -44,20 +44,20 @@ class ItirShim:
         return self.operator_def.definition.foast_node.type
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        return self.foast_to_itir(self.operator_def)
+        return self.foast_to_itir(self.operator_def.definition)
 
     # FIXME[#1582](tehrengruber): remove after refactoring to GTIR
     def __gt_gtir__(self) -> itir.FunctionDefinition:
         # backend should have self.foast_to_itir set to foast_to_gtir
-        return self.foast_to_itir(self.operator_def)
+        return self.foast_to_itir(self.operator_def.definition)
 
 
 @dataclasses.dataclass(frozen=True)
-class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef]):
+class OperatorToProgram:
     """
     Generate a PAST program definition from a FOAST operator definition.
 
-    This workflow step must must be given a FOAST -> ITIR lowering step so that it can place
+    This step must be given a FOAST -> ITIR lowering step so that it can place
     valid `ItirShim` instances into the closure variables of the generated program.
 
     Example:
@@ -69,7 +69,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ... def copy(a: gtx.Field[[IDim], gtx.float32]) -> gtx.Field[[IDim], gtx.float32]:
         ...     return a
 
-        >>> op_to_prog = OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
+        >>> op_to_prog = OperatorToProgram(foast_to_gtir.foast_to_gtir_factory())
 
         >>> compile_time_args = arguments.CompileTimeArgs(
         ...     args=(
@@ -93,7 +93,7 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
         ... )
     """
 
-    foast_to_itir: workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
+    foast_to_itir: workflow.Step[ffront_stages.FOASTOperatorDef, itir.FunctionDefinition]
 
     def __call__(self, inp: ConcreteFOASTOperatorDef) -> ConcretePASTProgramDef:
         # TODO(tehrengruber): implement mechanism to deduce default values
@@ -186,13 +186,13 @@ class OperatorToProgram(workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePAST
 
 def operator_to_program_factory(
     foast_to_itir_step: Optional[
-        workflow.Workflow[ConcreteFOASTOperatorDef, itir.FunctionDefinition]
+        workflow.Step[ffront_stages.FOASTOperatorDef, itir.FunctionDefinition]
     ] = None,
     cached: bool = True,
-) -> workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef]:
+) -> workflow.Step[ConcreteFOASTOperatorDef, ConcretePASTProgramDef]:
     """Optionally wrap `OperatorToProgram` in a `CachedStep`."""
-    wf: workflow.Workflow[ConcreteFOASTOperatorDef, ConcretePASTProgramDef] = OperatorToProgram(
-        foast_to_itir_step or foast_to_gtir.adapted_foast_to_gtir_factory()
+    wf: workflow.Step[ConcreteFOASTOperatorDef, ConcretePASTProgramDef] = OperatorToProgram(
+        foast_to_itir_step or foast_to_gtir.foast_to_gtir_factory()
     )
     if cached:
         wf = workflow.CachedStep.in_memory(

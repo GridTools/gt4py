@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Tests for the backend kinds and the internal toolchain in `gt4py.next.backend`."""
+"""Tests for the backend kinds, the internal toolchain and the pipelines in `gt4py.next.backend`."""
 
 import copy
 import dataclasses
@@ -17,9 +17,11 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.next import backend as next_backend, custom_layout_allocators as next_allocators
+from gt4py.next.ffront import stages as ffront_stages
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, artifacts, recipes, stages, workflow
+from gt4py.next.otf import arguments, artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners import embedded as embedded_runners, gtfn
 from gt4py.next.type_system import type_specifications as ts
@@ -286,7 +288,7 @@ def test_translate_returns_program_source(compile_time_args):
     toolchain = next_backend.Toolchain(
         _make_compiled_backend(
             name="fake",
-            compiler=recipes.OTFCompileWorkflow(
+            compiler=next_backend.CompilePipeline(
                 translation=fake_translation,
                 bindings=_unreachable_step,
                 compilation=_unreachable_step,
@@ -312,7 +314,7 @@ def test_translate_emits_stage_hook(compile_time_args):
     toolchain = next_backend.Toolchain(
         _make_compiled_backend(
             name="fake",
-            compiler=recipes.OTFCompileWorkflow(
+            compiler=next_backend.CompilePipeline(
                 translation=lambda inp: SENTINEL_SOURCE,
                 bindings=_unreachable_step,
                 compilation=_unreachable_step,
@@ -345,10 +347,306 @@ def test_translate_rejects_monolithic_backend(compile_time_args):
         frontend=recording_frontend,
     )
 
-    with pytest.raises(NotImplementedError, match="OTFCompileWorkflow") as exc_info:
+    with pytest.raises(NotImplementedError, match="CompilePipeline") as exc_info:
         toolchain.translate(copy_prog.definition_stage, compile_time_args)
 
     message = str(exc_info.value)
     assert "monolithic" in message  # names the backend
     assert "function" in message  # names the offending compiler type
     assert frontend_calls == []  # fails fast, before running the frontend
+
+
+@pytest.fixture
+def emitted_stages():
+    """Record every `stage_hook` event raised while the fixture is active."""
+    emitted: list[tuple[str, Any]] = []
+
+    def stage_callback(name: str, artifact: Any) -> None:
+        emitted.append((name, artifact))
+
+    workflow.stage_hook.register(stage_callback)
+    try:
+        yield emitted
+    finally:
+        workflow.stage_hook.remove(stage_callback)
+
+
+def _empty_itir_program() -> itir.Program:
+    return itir.Program(id="noop", function_definitions=[], params=[], declarations=[], body=[])
+
+
+def test_compile_pipeline_runs_steps_in_order_and_emits_hooks(emitted_stages):
+    called: list[str] = []
+
+    def translation(inp: Any) -> str:
+        called.append("translation")
+        return "source"
+
+    def bindings(inp: str) -> str:
+        called.append("bindings")
+        return "extension"
+
+    def compilation(inp: str) -> str:
+        called.append("compilation")
+        return "artifact"
+
+    pipeline = next_backend.CompilePipeline(
+        translation=translation, bindings=bindings, compilation=compilation
+    )
+
+    result = pipeline(_empty_itir_program())
+
+    assert called == ["translation", "bindings", "compilation"]
+    assert result == "artifact"
+    assert emitted_stages == [
+        ("translation", "source"),
+        ("bindings", "extension"),
+        ("compilation", "artifact"),
+    ]
+
+
+CPU = core_defs.DeviceType.CPU
+CUDA = core_defs.DeviceType.CUDA
+
+# Allocates nothing, so a CUDA allocator can be built without `cupy`.
+CUDA_ALLOCATOR = next_allocators.InvalidFieldBufferAllocator(
+    device_type=CUDA, exception=RuntimeError("Unit tests must not allocate.")
+)
+
+
+def _identity_step(inp: Any) -> Any:
+    return inp
+
+
+@dataclasses.dataclass(frozen=True)
+class _DeviceStep:
+    """A pass-through step that declares the device it is configured for."""
+
+    device_type: core_defs.DeviceType
+
+    def __call__(self, inp: Any) -> Any:
+        return inp
+
+
+def _cached(step: workflow.Step) -> workflow.CachedStep:
+    return workflow.CachedStep.in_memory(step=step, input_fingerprinter=id)
+
+
+def _pipeline_on(device_type: core_defs.DeviceType) -> next_backend.CompilePipeline:
+    return next_backend.CompilePipeline(
+        translation=_cached(_DeviceStep(device_type)),
+        bindings=_identity_step,
+        compilation=_DeviceStep(device_type),
+    )
+
+
+def _compiled_backend(compiler: Any, allocator: Any) -> next_backend.CompiledBackend:
+    return next_backend.CompiledBackend(name="fake", compiler=compiler, allocator=allocator)
+
+
+def test_compile_pipeline_rejects_steps_on_different_devices():
+    with pytest.raises(ValueError, match="must target the same device") as exc_info:
+        next_backend.CompilePipeline(
+            translation=_DeviceStep(CPU), bindings=_identity_step, compilation=_DeviceStep(CUDA)
+        )
+
+    message = str(exc_info.value)
+    assert "'translation' for 'CPU'" in message
+    assert "'compilation' for 'CUDA'" in message
+
+
+def test_compile_pipeline_device_check_looks_through_cached_step():
+    with pytest.raises(ValueError, match="'translation' for 'CUDA'"):
+        next_backend.CompilePipeline(
+            translation=_cached(_cached(_DeviceStep(CUDA))),
+            bindings=_identity_step,
+            compilation=_DeviceStep(CPU),
+        )
+
+
+def test_compile_pipeline_device_check_covers_replace():
+    pipeline = _pipeline_on(CPU)
+
+    # `dataclasses.replace` is the documented customization route: it must not
+    # bypass the check a builder would have done.
+    with pytest.raises(ValueError, match="must target the same device"):
+        dataclasses.replace(pipeline, translation=_DeviceStep(CUDA))
+
+
+@pytest.mark.parametrize(
+    ("translation", "compilation", "expected"),
+    [
+        (_identity_step, _identity_step, None),
+        (_DeviceStep(CUDA), _identity_step, CUDA),
+        (_identity_step, _DeviceStep(CPU), CPU),
+        (_cached(_DeviceStep(CUDA)), _DeviceStep(CUDA), CUDA),
+    ],
+)
+def test_compile_pipeline_device_type(translation, compilation, expected):
+    pipeline = next_backend.CompilePipeline(
+        translation=translation, bindings=_identity_step, compilation=compilation
+    )
+
+    assert pipeline.device_type is expected
+
+
+@pytest.mark.parametrize(
+    ("compiler", "allocator"),
+    [
+        (_pipeline_on(CPU), CUDA_ALLOCATOR),
+        (_pipeline_on(CUDA), next_allocators.StandardCPUFieldBufferAllocator()),
+        # A monolithic compiler is checked too if it declares a device.
+        (_cached(_DeviceStep(CPU)), CUDA_ALLOCATOR),
+    ],
+)
+def test_compiled_backend_rejects_allocator_on_another_device(compiler, allocator):
+    with pytest.raises(ValueError, match="allocates buffers on '.*', but its compiler targets"):
+        _compiled_backend(compiler, allocator)
+
+
+def test_compiled_backend_device_check_covers_replace():
+    backend = _compiled_backend(
+        _pipeline_on(CPU), next_allocators.StandardCPUFieldBufferAllocator()
+    )
+
+    with pytest.raises(ValueError, match="allocates buffers on 'CUDA'"):
+        dataclasses.replace(backend, allocator=CUDA_ALLOCATOR)
+    with pytest.raises(ValueError, match="its compiler targets 'CUDA'"):
+        dataclasses.replace(backend, compiler=_pipeline_on(CUDA))
+
+
+@pytest.mark.parametrize(
+    ("compiler", "allocator"),
+    [
+        (_pipeline_on(CUDA), CUDA_ALLOCATOR),
+        # Nothing to compare: the compiler or the allocator declares no device.
+        (_identity_step, CUDA_ALLOCATOR),
+        (
+            next_backend.CompilePipeline(
+                translation=_identity_step, bindings=_identity_step, compilation=_identity_step
+            ),
+            CUDA_ALLOCATOR,
+        ),
+        (_pipeline_on(CUDA), None),
+    ],
+)
+def test_compiled_backend_accepts_agreeing_or_undeclared_devices(compiler, allocator):
+    backend = _compiled_backend(compiler, allocator)
+
+    assert backend.compiler is compiler
+
+
+def test_transforms_emits_stages_for_dsl_program(compile_time_args, emitted_stages):
+    result = next_backend.DEFAULT_FRONTEND(
+        workflow.ProgramWithArgs(copy_prog.definition_stage, compile_time_args)
+    )
+
+    assert [name for name, _ in emitted_stages] == [
+        "func_to_past",
+        "past_lint",
+        "field_view_prog_args_transform",
+        "past_to_itir",
+    ]
+    assert all(isinstance(artifact, workflow.ProgramWithArgs) for _, artifact in emitted_stages)
+    assert isinstance(result, workflow.ProgramWithArgs)
+    assert isinstance(result.definition, itir.Program)
+
+
+def test_transforms_emits_stages_for_dsl_field_operator(compile_time_args, emitted_stages):
+    result = next_backend.DEFAULT_FRONTEND(
+        workflow.ProgramWithArgs(copy_op.definition_stage, compile_time_args)
+    )
+
+    assert [name for name, _ in emitted_stages] == [
+        "func_to_foast",
+        "field_view_op_to_prog",
+        "past_lint",
+        "field_view_prog_args_transform",
+        "past_to_itir",
+    ]
+    assert isinstance(result.definition, itir.Program)
+
+
+def test_transforms_emits_stages_for_foast_operator(compile_time_args, emitted_stages):
+    result = next_backend.DEFAULT_FRONTEND(
+        workflow.ProgramWithArgs(copy_op.foast_stage, compile_time_args)
+    )
+
+    assert [name for name, _ in emitted_stages] == [
+        "field_view_op_to_prog",
+        "past_lint",
+        "field_view_prog_args_transform",
+        "past_to_itir",
+    ]
+    assert isinstance(result.definition, itir.Program)
+
+
+def test_transforms_emits_stages_for_past_program(compile_time_args, emitted_stages):
+    result = next_backend.DEFAULT_FRONTEND(
+        workflow.ProgramWithArgs(copy_prog.past_stage, compile_time_args)
+    )
+
+    assert [name for name, _ in emitted_stages] == [
+        "past_lint",
+        "field_view_prog_args_transform",
+        "past_to_itir",
+    ]
+    assert isinstance(result.definition, itir.Program)
+
+
+def test_transforms_itir_program_is_passthrough(compile_time_args, emitted_stages):
+    pair = workflow.ProgramWithArgs(_empty_itir_program(), compile_time_args)
+
+    assert next_backend.DEFAULT_FRONTEND(pair) is pair
+    assert emitted_stages == []
+
+
+def test_transforms_aotify_and_replace(compile_time_args, emitted_stages):
+    transforms = dataclasses.replace(
+        next_backend.DEFAULT_FRONTEND, aotify_args=lambda jit_args: compile_time_args
+    )
+    pair = workflow.ProgramWithArgs(_empty_itir_program(), arguments.JITArgs(args=(), kwargs={}))
+
+    result = transforms(pair)
+
+    assert [name for name, _ in emitted_stages] == ["aotify_args"]
+    assert result.args is compile_time_args
+    assert result.definition is pair.definition
+
+
+def test_transforms_rejects_unexpected_input(compile_time_args, emitted_stages):
+    with pytest.raises(ValueError, match="Unexpected input"):
+        next_backend.DEFAULT_FRONTEND(workflow.ProgramWithArgs(42, compile_time_args))
+
+    # The type guard runs before `aotify_args`, so nothing is emitted either.
+    with pytest.raises(ValueError, match="Unexpected input"):
+        next_backend.DEFAULT_FRONTEND(
+            workflow.ProgramWithArgs(42, arguments.JITArgs(args=(), kwargs={}))
+        )
+
+    assert emitted_stages == []
+
+
+def test_transforms_steps_are_plain_callables():
+    """The pipeline fields hold bare callables, not combinator instances."""
+    assert callable(next_backend.DEFAULT_FRONTEND.past_lint)
+    assert isinstance(next_backend.DEFAULT_FRONTEND.past_lint, workflow.CachedStep)
+    # A data-only step consumes the bare stage, not the `ProgramWithArgs` pair.
+    linted = next_backend.DEFAULT_FRONTEND.past_lint(copy_prog.past_stage)
+    assert isinstance(linted, ffront_stages.PASTProgramDef)
+
+
+def test_transforms_step_order_fails_loudly():
+    """Overriding the removed step-order hook must break, not silently no-op."""
+
+    @dataclasses.dataclass(frozen=True)
+    class SkipLinting(next_backend.Transforms):
+        def step_order(self, inp):
+            order = super().step_order(inp)
+            return [step for step in order if step != "past_lint"]
+
+    with pytest.raises(TypeError, match="'Transforms.step_order' was removed"):
+        next_backend.DEFAULT_FRONTEND.step_order(None)
+
+    with pytest.raises(TypeError, match="'Transforms.step_order' was removed"):
+        SkipLinting().step_order(None)

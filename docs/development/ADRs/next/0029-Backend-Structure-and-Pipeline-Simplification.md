@@ -122,6 +122,27 @@ methods and callable steps (`Step[S, T] = Callable[[S], T]`). The standard compi
 | Steps compose across backends               | `Step[S, T]` is a `Callable` — every existing step already satisfies it |
 | Linear workflows                            | unchanged (`Transforms` keeps its input-dependent step *selection*)     |
 
+Static checking covers the stage types a step consumes and produces, not the language of their
+code: the `CompilePipeline` fields use unparameterized `ProgramSource` / `ExtensionSource`, so mypy
+accepts a pipeline mixing C++ and SDFG steps. Parameterizing `CompilePipeline` over the code spec
+only helps once the builders return parameterized pipelines, so it is left to a follow-up.
+
+### Cross-step agreement is checked on construction
+
+The builders of [0028](0028-Plain-Builders-Instead-of-Factories.md) keep default and partially
+customized steps in sync, but fully custom steps and `dataclasses.replace` can assemble a pipeline
+or a backend without any builder. The assembling objects therefore check device agreement
+themselves, in `__post_init__`, which `dataclasses.replace` re-runs:
+
+- `CompilePipeline`: all steps that declare a device (the `backend.DeviceConfigurable` protocol,
+  looking through `CachedStep`) declare the same one, exposed as `CompilePipeline.device_type`.
+- `CompiledBackend`: the allocator's `__gt_device_type__` matches the device the `compiler`
+  declares.
+
+The checks never mutate and only see components that declare a device; a custom step without
+`device_type` is not checked. Settings shared by the steps of one backend family, such as the DaCe
+external workspace and its `transient_memory_mode`, are that family's responsibility.
+
 ### Stage observability
 
 In the target design, a `stage_hook(name, artifact)` event hook on `instrumentation.hook_machinery` is
@@ -198,7 +219,8 @@ The overridable `compile`/`load_artifact` methods, `DaCeBackend` subclass, opaqu
 compile” path and `CompilationTask.no_offload_reason` are removed. The pipeline PR removes the
 combinator framework (both mixins, `NamedStepSequence`, `MultiWorkflow`, `StepSequence`,
 `make_step`, `.chain` and the three adapters), and dissolves `otf.definitions`, `otf.code_specs`,
-`otf.recipes` and `otf.toolchain`. `CachedStep` remains unchanged.
+`otf.recipes` and `otf.toolchain`. `CachedStep` is kept, minus the mixin-provided `.replace` /
+`.chain`.
 
 ### Cache-key rotation
 
@@ -219,10 +241,11 @@ this argues against spreading it across releases. Backend restructuring itself r
 ### Phasing and earlier decisions
 
 #2741 lands the backend structure, loader, naming except `CompilePipeline`, and removal of the
-opaque compile path. #2742 adds stage observability, including `Toolchain.translate`; #2743
-replaces the combinators and renames `OTFCompileWorkflow` to `CompilePipeline`. Thus the pipeline
-and observability sections describe the target design, not APIs already available at #2741.
-Embedded backends follow separately under [ADR 0030](0030-Embedded-Backends.md) (#2956).
+opaque compile path. Embedded backends follow, decided separately in
+[ADR 0030](0030-Embedded-Backends.md) (#2956). #2742 adds stage observability, including
+`Toolchain.translate`; #2743 replaces the combinators, renames `OTFCompileWorkflow` to
+`CompilePipeline` and adds the construction-time device checks. Thus the pipeline, agreement and
+observability sections describe the target design, not APIs already available at #2741.
 
 This partially supersedes [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md) (the
 workflow-combinator framework and the `otf.step_types` naming; its stage vocabulary and

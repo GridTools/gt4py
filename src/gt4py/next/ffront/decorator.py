@@ -306,8 +306,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     # TODO(ricoh): linting should become optional.
     def __post_init__(self) -> None:
         _check_backend(self.backend)
-        no_args_past = workflow.ProgramWithArgs(self.past_stage, arguments.CompileTimeArgs.empty())
-        _ = next_backend.DEFAULT_FRONTEND.past_lint(no_args_past).definition
+        _ = next_backend.DEFAULT_FRONTEND.past_lint(self.past_stage)
 
     @property
     def __name__(self) -> str:
@@ -331,11 +330,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
-        # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = workflow.ProgramWithArgs(
-            self.definition_stage, arguments.CompileTimeArgs.empty()
-        )
-        return next_backend.DEFAULT_FRONTEND.func_to_past(no_args_def).definition
+        return next_backend.DEFAULT_FRONTEND.func_to_past(self.definition_stage)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -644,11 +639,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
-        return next_backend.DEFAULT_FRONTEND.func_to_foast(
-            workflow.ProgramWithArgs(
-                definition=self.definition_stage, args=arguments.CompileTimeArgs.empty()
-            )
-        ).definition
+        return next_backend.DEFAULT_FRONTEND.func_to_foast(self.definition_stage)
 
     @property
     def __name__(self) -> str:
