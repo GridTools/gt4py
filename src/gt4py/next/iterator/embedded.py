@@ -1008,8 +1008,6 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    # `FieldAxis` is `common.Dimension`, a PEP 695 alias, which `isinstance` rejects; a
-    # dimension is a class, i.e. an instance of its metaclass.
     return isinstance(axis, common.DimensionMeta)
 
 
@@ -1770,7 +1768,7 @@ def _fieldspec_list_to_value(
             assert isinstance(offset_type, common.DimensionRef)
             connectivity = common.get_offset(offset_provider, offset_type.tag)
             assert common.is_neighbor_table(connectivity)
-            # NOTE: the type carries a spec; the embedded field needs the class, which the
+            # NOTE: the type carries a ref; the embedded field needs the class, which the
             # connectivity (a runtime object) has.
             local_dim = connectivity.domain.dims[1]
             assert common.dimension_ref(local_dim) == offset_type

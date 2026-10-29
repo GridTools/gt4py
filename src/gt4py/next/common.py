@@ -242,7 +242,7 @@ class DimensionRef(metaclass=_InternedDimensionRefMeta):
         return self._hash  # type: ignore[attr-defined] # set in `__post_init__`
 
     def __str__(self) -> str:
-        # The display form, same as `str()` of the class, so diagnostics stay byte-identical.
+        # the display form, same as `str()` of the class
         return f"{self.qualname}[{self.kind}]"
 
     def __repr__(self) -> str:
@@ -398,11 +398,10 @@ def check_consistent_dimension_refs(refs: Iterable[DimensionRef]) -> None:
 
 class DimensionMeta(type):
     """
-    Metaclass of all dimension classes.
+    Metaclass of all dimension classes: the behaviour of a dimension, which is a class.
 
-    Holds the behaviour that used to live on `Dimension` *instances*, but on the class
-    object itself. Binary operators applied to a class object dispatch through its
-    metaclass, so this is the only place they can live.
+    Operators applied to a class object (`I + 1`, `I < 5`) dispatch through its metaclass,
+    so this is the only place they can live.
     """
 
     kind: DimensionKind
@@ -420,20 +419,19 @@ class DimensionMeta(type):
         The dimension's identity: its qualified Python name, and its spelling in the IR.
 
         A property rather than a settable attribute, so it cannot drift from the type it
-        names. Use `__qualname__` for display; see `__str__`. Always the tag of its spec.
+        names. Use `__qualname__` for display; see `__str__`. Always the tag of its ref.
         """
         return dimension_ref(cast(Dimension, cls)).tag
 
     @property
     def value(cls) -> NoReturn:
         """
-        Reject `SomeDim.value`, which used to be the dimension's name and is now `tag`.
+        Reject `SomeDim.value`: a dimension's name is `tag`, `value` is an index position.
 
         Without this the read silently returns the `value` slot descriptor of the *instance*
-        attribute rather than raising, and the nonsense value only surfaces much later -- as
-        a missing offset-provider key, or an `AxisLiteral` validation failure. Instance
-        access (`SomeDim(0).value`) is unaffected: a metaclass attribute is not on an
-        instance's lookup path.
+        attribute, a nonsense value that only surfaces much later (e.g. as a missing
+        offset-provider key). Instance access (`SomeDim(0).value`) is unaffected: a metaclass
+        attribute is not on an instance's lookup path.
         """
         raise AttributeError(
             f"'{cls.__qualname__}' is a dimension and has no 'value': its name is '.tag',"
@@ -650,16 +648,14 @@ class DimensionIndex(metaclass=DimensionMeta):
 
 #: A concrete dimension, i.e. the *class* itself rather than an index into it.
 #:
-#: NOTE: a PEP 695 `type` statement, not a plain `TypeAlias`, so that the removed
-#: `Dimension("I")` spelling fails loudly. A plain alias for `type[X]` is a
-#: `types.GenericAlias`, and calling one forwards to its `__origin__` while discarding the
-#: arguments -- so `Dimension("I")` would evaluate to `type("I")`, i.e. `str`, with no error
-#: at all. A `TypeAliasType` is simply not callable.
+#: NOTE: a PEP 695 `type` statement, not a plain `TypeAlias`, so that `Dimension("I")` fails
+#: loudly: a plain alias for `type[X]` is a `types.GenericAlias`, and calling one forwards to
+#: `type("I")`, i.e. `str`, with no error. A `TypeAliasType` is not callable.
 #:
 #: The cost is that `get_origin()` of a PEP 695 alias is `None` rather than the aliased
 #: origin, so a site dispatching on an annotation's shape must resolve it first (see
 #: `xtyping.resolve_annotation`). `eve.datamodels` stores annotations *unresolved*, so this
-#: applies to anything reading `__datamodel_fields__[...].type` too. See #2841 and ADR 0029.
+#: applies to anything reading `__datamodel_fields__[...].type` too.
 type Dimension = type[DimensionIndex]
 
 #: A dimension class (at the Python edge) or its `DimensionRef` (below the frontend).
@@ -1110,7 +1106,7 @@ class Domain(Sequence[DimensionRange[_Rng]], Generic[_Rng]):
 
     def __getitem__(self, index: int | slice | Dimension | DimensionRef) -> DimensionRange | Domain:
         if isinstance(index, (DimensionMeta, DimensionRef)):
-            # NOTE: a spec (from a type specification) matches the class it describes.
+            # a ref (from a type specification) matches the class it describes
             found = self.dim_index(index)
             if found is None:
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
@@ -1581,7 +1577,7 @@ class BufferInfo:
 
 @dataclasses.dataclass(frozen=True)
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
-    #: Dimension specs; dimension classes passed to the constructor are converted.
+    #: Dimension refs; dimension classes passed to the constructor are converted.
     domain: tuple[DimensionRef, ...]
     codomain: DimensionRef
     skip_value: Optional[core_defs.IntegralScalar]
@@ -2014,7 +2010,7 @@ def _dimension_order_key(dim: Dimension | DimensionRef) -> tuple[int, str, str]:
 
 
 def order_dimensions(dims: Iterable[_AnyDimT]) -> list[_AnyDimT]:
-    """Find the canonical ordering of the dimensions in `dims` (classes or specs)."""
+    """Find the canonical ordering of the dimensions in `dims` (classes or refs)."""
     if sum(1 for dim in dims if dim.kind == DimensionKind.LOCAL) > 1:
         raise ValueError("There are more than one dimension with DimensionKind 'LOCAL'.")
     return sorted(dims, key=_dimension_order_key)
@@ -2241,7 +2237,7 @@ _AnyDimT = TypeVar("_AnyDimT", bound="Dimension | DimensionRef")
 
 def is_staggered(dim: Dimension | DimensionRef) -> bool:
     """
-    Return whether `dim` (a class or a spec) is a staggered dimension.
+    Return whether `dim` (a class or a ref) is a staggered dimension.
 
     For a class, checks for the marker the metaclass sets, not `issubclass(dim, Staggered)`: the
     latter is also true of the bare `Staggered` base, which has no base dimension to recover.
@@ -2256,7 +2252,7 @@ def flip_staggered(dim: DimensionRef) -> DimensionRef: ...
 @overload
 def flip_staggered(dim: Dimension) -> Dimension: ...
 def flip_staggered(dim: Dimension | DimensionRef) -> Dimension | DimensionRef:
-    """Return the staggered counterpart of `dim` (a class or a spec, answered in kind)."""
+    """Return the staggered counterpart of `dim` (a class or a ref, answered in kind)."""
     if isinstance(dim, DimensionRef):
         if dim.base is not None:
             return dim.base
@@ -2320,7 +2316,7 @@ def cartesian_shift(
     """
     Return the integral index offset and the codomain of shifting `dim` by `offset`.
 
-    Works on a class or a spec alike (answered in kind), so the frontend can type a Cartesian shift
+    Works on a class or a ref alike (answered in kind), so the frontend can type a Cartesian shift
     without building an embedded `CartesianConnectivity`. See `connectivity_for_cartesian_shift`.
     """
     integral_offset, staggered_offset = divmod(offset, 1)

@@ -30,9 +30,9 @@ The documentation for how to write tests in that format is at https://github.com
 
 The documentation on mypy plugins is at https://mypy.readthedocs.io/en/latest/extending_mypy.html
 
-Dimensions no longer need plugin support: a concrete dimension is a class
+Dimensions need no plugin support: a concrete dimension is a class
 ('class IDim(gtx.CartesianAxisIndex): ...'), which is a valid annotation for any type checker. See ADR
-0029. Only the mixed-precision hooks below remain; this plugin is scheduled for removal once
+0029. The plugin only provides the mixed-precision hooks below; it is scheduled for removal once
 dtype-generic fields land.
 """
 

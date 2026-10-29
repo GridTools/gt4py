@@ -241,7 +241,7 @@ class PrettyPrinter(NodeTranslator):
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
         # NOTE: the literal carries its `DimensionRef`, so printing needs no import, and the
-        # suffixes make the printed form complete: the parser rebuilds the spec from them.
+        # suffixes make the printed form complete: the parser rebuilds the ref from them.
         dim = node.dim
         return [dim.tag + _AXIS_KIND_SUFFIX[dim.kind] + _AXIS_CATEGORY_SUFFIX[dim.category]]
 

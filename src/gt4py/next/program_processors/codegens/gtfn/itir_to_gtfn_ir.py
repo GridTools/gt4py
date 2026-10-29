@@ -215,15 +215,15 @@ def _collect_offset_definitions(
 
 def _collect_staggered_bases(node: itir.Program) -> dict[str, str]:
     """Map the tag of every staggered dimension in `node` to the tag of its base."""
-    specs: set[common.DimensionRef] = {
+    refs: set[common.DimensionRef] = {
         axis.dim for axis in node.walk_values().if_isinstance(itir.AxisLiteral)
     }
     for param in node.params:
         if param.type is not None:
             for type_ in type_info.primitive_constituents(param.type):
                 if isinstance(type_, ts.FieldType):
-                    specs.update(type_.dims)
-    return {spec.tag: spec.base.tag for spec in specs if spec.base is not None}
+                    refs.update(type_.dims)
+    return {ref.tag: ref.base.tag for ref in refs if ref.base is not None}
 
 
 def _add_staggered_aliases(
@@ -233,7 +233,7 @@ def _add_staggered_aliases(
     result: dict[str, TagDefinition] = {}
     aliases: dict[str, TagDefinition] = {}
     for name, tag_def in offset_definitions.items():
-        # NOTE: this dict mixes dimension tags with offset tags; only dimension specs found in
+        # NOTE: this dict mixes dimension tags with offset tags; only dimension refs found in
         # the program (which carry their staggered base) are looked up.
         if tag_def.alias is None and (base_name := staggered_bases.get(name)) is not None:
             # ensure the base tag exists (as alias target and loop dimension) in this position

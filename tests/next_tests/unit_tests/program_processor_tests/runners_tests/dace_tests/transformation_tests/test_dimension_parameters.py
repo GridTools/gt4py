@@ -34,7 +34,7 @@ _K_VAR = gtx_dace_lowering.get_map_variable(KDim)
     "param", [IDim, gtx_common.dimension_ref(IDim), _I_VAR], ids=["class", "ref", "map_variable"]
 )
 def test_loop_blocking_parameter(param):
-    # a ref used to fall through as-is, silently disabling blocking
+    # a ref must be converted too, or blocking is silently disabled
     assert gtx_transformations.LoopBlocking(blocking_parameters=[param]).blocking_parameters == [
         _I_VAR
     ]

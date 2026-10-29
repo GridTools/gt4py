@@ -13,9 +13,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import float64
 
-# NOTE: imported, not redeclared. Under nominal identity (ADR 0029) a same-named declaration
-# here would be a different dimension from the one `cases_utils` declares, where the old
-# `Dimension("...")` values compared equal -- and tests mix objects from both modules.
 from next_tests.integration_tests.cases_utils import IDim
 
 

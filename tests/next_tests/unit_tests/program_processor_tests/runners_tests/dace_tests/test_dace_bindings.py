@@ -23,9 +23,7 @@ from gt4py.next.program_processors.runners.dace import workflow as dace_workflow
 
 from next_tests.integration_tests import cases, cases_utils
 
-# NOTE: from `cases`, not `test_common`: the `cartesian_case` fixture is sized on the `cases`
-# dimensions, and under nominal identity (ADR 0029) another module's same-named `IDim` is a
-# different dimension -- it used to compare equal.
+# the dimensions the `cartesian_case` fixture is sized on
 from next_tests.integration_tests.cases import E2V, V2E, E2VDim, IDim, JDim, KDim, V2EDim
 
 
@@ -246,9 +244,8 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    # NOTE: both sides go through the same formatter. The generated side is emitted unformatted;
-    # formatting the reference too makes the comparison independent of where long lines happen
-    # to wrap, which the mangled (qualified) connectivity names in the binding now make them do.
+    # both sides go through the same formatter, so the comparison does not depend on where
+    # the long (mangled) connectivity names happen to wrap
     assert formatting.format_python_source(
         binding_source_pruned
     ) == formatting.format_python_source(binding_source_ref)

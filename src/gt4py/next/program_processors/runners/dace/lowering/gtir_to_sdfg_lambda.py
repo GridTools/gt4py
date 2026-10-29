@@ -1149,10 +1149,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             self.sdfg, (conn_type.max_neighbors,), field_desc.dtype
         )
         neighbors_node = self.state.add_access(neighbors_temp)
-        # NOTE: the connectivity's own local dimension, not one synthesized from the offset
-        # tag. The latter named a local dimension after the *offset*, which only coincided with
-        # the real one under the old `V2EDim = Dimension("V2E")` convention, and under nominal
-        # identity (ADR 0029) a tag string cannot be turned back into a dimension at all.
+        # the connectivity's own local dimension: an offset tag does not name a dimension
         offset_type = conn_type.neighbor_dim
         neighbor_idx = gtir_to_sdfg_utils.get_map_variable(offset_type)
 

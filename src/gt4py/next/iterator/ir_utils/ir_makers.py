@@ -492,11 +492,11 @@ def get_field_domain(
     field: str | itir.Expr,
     dims: Iterable[common.DimensionLike] | None = None,
 ) -> itir.Expr:
-    specs = None if dims is None else common.dimension_refs(dims)
+    refs = None if dims is None else common.dimension_refs(dims)
     if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
-        assert specs is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, specs, strict=True))
-        specs = field.type.dims
-    elif specs is None:
+        assert refs is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, refs, strict=True))
+        refs = field.type.dims
+    elif refs is None:
         raise ValueError("Field expression must be typed if 'dims' is not given.")
 
     return domain(
@@ -506,7 +506,7 @@ def get_field_domain(
                 tuple_get(0, call("get_domain_range")(field, dim)),
                 tuple_get(1, call("get_domain_range")(field, dim)),
             )
-            for dim in specs
+            for dim in refs
         },
     )
 

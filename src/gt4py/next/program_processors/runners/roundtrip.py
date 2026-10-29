@@ -191,8 +191,7 @@ def _generate_source(
     offset_literals_src = "\n".join(
         f'{dimension_tags.codegen_name(o)} = offset("{o}")' for o in offset_literals
     )
-    # A dimension is not constructed from its name any more (ADR 0029): the loader binds each
-    # mangled name to its class, see `RoundtripArtifact.load`.
+    # the loader binds each mangled axis name to its dimension class, see `RoundtripArtifact.load`
     axis_tags = {dimension_tags.codegen_name(o.value): o.value for o in axis_literals_set}
     source_code = f"{header}{offset_literals_src}\n{program}"
 

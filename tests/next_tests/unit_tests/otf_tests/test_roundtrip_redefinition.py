@@ -9,9 +9,8 @@
 """
 `resolve` must answer with the *current* class after a notebook-style redefinition.
 
-It used to be memoized, so the roundtrip backend (which resolves tags back to classes to run
-embedded) kept the previous `KDim` after the defining module was re-executed, and the second
-run failed with a `KeyError` on the column axis.
+The roundtrip backend resolves tags back to classes to run embedded; with a stale class, a
+second run after re-executing the defining module fails with a `KeyError` on the column axis.
 """
 
 import importlib
