@@ -408,6 +408,28 @@ def is_capturing_dimension_classes() -> bool:
     return _DIMENSION_CLASS_CAPTURE.get() is not None
 
 
+#: Set while `bind_dimension_classes` is active: tag -> the class `resolve` must answer with.
+_DIMENSION_CLASS_BINDINGS: contextvars.ContextVar[Optional[dict[Tag, Dimension]]] = (
+    contextvars.ContextVar("_DIMENSION_CLASS_BINDINGS", default=None)
+)
+
+
+@contextlib.contextmanager
+def bind_dimension_classes(classes: Mapping[DimensionRef, Dimension]) -> Iterator[None]:
+    """
+    Make `resolve` answer with these classes (e.g. a program's own declarations) for their tags.
+
+    A program loaded after its dimensions were redefined (a re-run notebook cell) must run on
+    the classes it was declared with, not on whatever its tags import now. Other tags still
+    resolve by import.
+    """
+    token = _DIMENSION_CLASS_BINDINGS.set({ref.tag: cls for ref, cls in classes.items()})
+    try:
+        yield
+    finally:
+        _DIMENSION_CLASS_BINDINGS.reset(token)
+
+
 def replay_dimension_classes(pairs: Iterable[tuple[DimensionRef, Dimension]]) -> None:
     """Record `(ref, class)` pairs captured earlier (e.g. by a cached conversion), if capturing."""
     if (sink := _DIMENSION_CLASS_CAPTURE.get()) is not None:
@@ -737,6 +759,10 @@ def resolve(dim: Tag | DimensionRef) -> Dimension:
         return cls
 
     tag = dim
+    if (bindings := _DIMENSION_CLASS_BINDINGS.get()) is not None and (
+        bound := bindings.get(tag)
+    ) is not None:
+        return bound
     if (match := _STAGGERED_TAG_RE.match(tag)) is not None:
         owner = resolve(match["owner"])
         if not isinstance(owner, StaggeredMeta):

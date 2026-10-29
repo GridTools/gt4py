@@ -118,9 +118,12 @@ def ${id}(${','.join(params)}):
 
 
 # Caches the generated source by IR hash so re-codegen is skipped within a process.
-_SOURCE_CACHE: dict[int, tuple[str, str]] = {}
-# Caches the loaded module by source string so re-exec is skipped within a process.
-_MODULE_CACHE: dict[str, types.ModuleType] = {}
+_SOURCE_CACHE: dict[int, tuple[str, str, dict[str, str]]] = {}
+# Caches the loaded module by source string and the identities of the dimension classes bound
+# into it, so re-exec is skipped within a process. A dimension redefined since (a re-run notebook
+# cell) has the same tag but a new class, and gets its own module: a cached module is never
+# mutated, so a program loaded earlier keeps working with its classes.
+_MODULE_CACHE: dict[tuple[str, tuple[int, ...]], types.ModuleType] = {}
 
 
 def _generate_source(
@@ -129,8 +132,13 @@ def _generate_source(
     use_embedded: bool,
     offset_provider: common.OffsetProvider,
     transforms: itir_transforms.GTIRTransform,
-) -> tuple[str, str]:
-    """Generate the Python source for an ITIR program. Returns ``(source_code, entry_point_name)``."""
+) -> tuple[str, str, dict[str, str]]:
+    """
+    Generate the Python source for an ITIR program.
+
+    Returns ``(source_code, entry_point_name, axis_tags)``: the source refers to each dimension by
+    its mangled name, which `RoundtripArtifact.load` binds to the class its tag resolves to.
+    """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
     cache_key = hash(
@@ -184,23 +192,24 @@ def _generate_source(
     offset_literals_src = "\n".join(
         f'{common.codegen_name(o)} = offset("{o}")' for o in offset_literals
     )
-    # A dimension is not constructed from its name any more: its tag is its qualified Python
-    # name, so the emitted program imports it (ADR 0029).
-    axis_literals_src = "\n".join(
-        f'{common.codegen_name(o.value)} = gtx.resolve("{o.value}")' for o in axis_literals_set
-    )
-    source_code = f"{header}{offset_literals_src}\n{axis_literals_src}\n{program}"
+    # A dimension is not constructed from its name any more (ADR 0029): the loader binds each
+    # mangled name to its class, see `RoundtripArtifact.load`.
+    axis_tags = {common.codegen_name(o.value): o.value for o in axis_literals_set}
+    source_code = f"{header}{offset_literals_src}\n{program}"
 
     assert isinstance(ir, itir.Program)
     entry_point_name = ir.id
 
-    _SOURCE_CACHE[cache_key] = (source_code, entry_point_name)
-    return source_code, entry_point_name
+    _SOURCE_CACHE[cache_key] = (source_code, entry_point_name, axis_tags)
+    return source_code, entry_point_name, axis_tags
 
 
-def _load_module(source_code: str, debug: bool) -> types.ModuleType:
-    if source_code in _MODULE_CACHE:
-        return _MODULE_CACHE[source_code]
+def _load_module(
+    source_code: str, debug: bool, bindings: dict[str, common.Dimension]
+) -> types.ModuleType:
+    key = (source_code, tuple(id(cls) for cls in bindings.values()))
+    if (cached := _MODULE_CACHE.get(key)) is not None:
+        return cached
 
     if debug:
         # Write to a real .py so debuggers/tracebacks have file/line info.
@@ -212,13 +221,14 @@ def _load_module(source_code: str, debug: bool) -> types.ModuleType:
         print(source_file_name)
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        mod.__dict__.update(bindings)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]
     else:
         mod = types.ModuleType("roundtrip_module")
+        mod.__dict__.update(bindings)
         exec(compile(source_code, "<roundtrip>", "exec"), mod.__dict__)
 
-    _MODULE_CACHE[source_code] = mod
-    return mod
+    return _MODULE_CACHE.setdefault(key, mod)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -232,14 +242,21 @@ class RoundtripArtifact:
 
     source_code: str
     entry_point_name: str
-    column_axis: common.Dimension | None
+    #: Mangled name in `source_code` -> dimension tag, bound to the current class on `load`.
+    axis_tags: dict[str, str]
+    column_axis: common.DimensionRef | None
     dispatch_backend: next_backend.Backend | None
     debug: bool
 
     def load(self) -> artifacts.ExecutableProgram:
-        mod = _load_module(self.source_code, self.debug)
+        # NOTE: the generated program runs embedded, in the user's process, on dimension classes:
+        # the calling program's own (`common.bind_dimension_classes`), else imported by tag.
+        bindings = {name: common.resolve(tag) for name, tag in self.axis_tags.items()}
+        mod = _load_module(self.source_code, self.debug, bindings)
         fencil = getattr(mod, self.entry_point_name)
-        captured_column_axis = self.column_axis
+        captured_column_axis = (
+            None if self.column_axis is None else common.resolve(self.column_axis)
+        )
         dispatch_backend = self.dispatch_backend
 
         def decorated_fencil(
@@ -274,7 +291,7 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact
     def __call__(self, inp: stages.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
-        source_code, entry_point_name = _generate_source(
+        source_code, entry_point_name, axis_tags = _generate_source(
             inp.data,
             offset_provider=inp.args.offset_provider,
             debug=debug,
@@ -285,7 +302,8 @@ class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact
         return RoundtripArtifact(
             source_code=source_code,
             entry_point_name=entry_point_name,
-            column_axis=inp.args.column_axis,
+            axis_tags=axis_tags,
+            column_axis=common.optional_dimension_ref(inp.args.column_axis),
             dispatch_backend=self.dispatch_backend,
             debug=debug,
         )

@@ -258,6 +258,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             definition_stage=self.definition_stage,
             program_type=program_type,
             argument_descriptor_mapping=argument_descriptor_mapping,
+            dimension_classes=self._declared_dimension_classes,
         )
 
     def compile(

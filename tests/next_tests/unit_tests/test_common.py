@@ -11,6 +11,8 @@ import io
 import itertools
 import operator
 import pickle
+import sys
+import types
 
 import numpy as np
 from typing import Optional, Pattern
@@ -1134,6 +1136,32 @@ class TestDimensionRef:
         fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}
         with pytest.raises(ValueError, match="is not the staggered dimension"):
             common.DimensionRef(**(fields | change))
+
+    def test_resolve_after_redefinition(self, monkeypatch):
+        module = types.ModuleType("nbmod_spike")
+        monkeypatch.setitem(sys.modules, "nbmod_spike", module)
+
+        def declare(**kwargs):
+            module.KDim = common.DimensionMeta(
+                "KDim",
+                (common.CartesianAxisIndex,),
+                {"__module__": "nbmod_spike", "__qualname__": "KDim", "__slots__": ()},
+                **kwargs,
+            )
+            return module.KDim
+
+        first = declare(kind=common.DimensionKind.VERTICAL)
+        ref = common.dimension_ref(first)
+        assert common.resolve(ref) is first
+        # a re-run cell: same kind, so an equal ref, resolving to the *current* class
+        second = declare(kind=common.DimensionKind.VERTICAL)
+        assert common.dimension_ref(second) == ref
+        assert common.resolve(ref) is second
+        # a re-run cell with another kind: the old ref no longer describes the class
+        declare()
+        with pytest.raises(ValueError, match="does not match"):
+            common.resolve(ref)
+
 
 class TestDimensionKeyedConfiguration:
     """String-keyed configuration naming dimensions: `symbolic_domain_sizes`, offset providers."""

@@ -19,7 +19,7 @@ import threading
 import types
 import warnings
 import weakref
-from collections.abc import Callable, Hashable, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
@@ -359,6 +359,11 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     #: e.g. `{arguments.StaticArg: ["static_int_param"]}`
     #: Note: The list is not ordered.
     argument_descriptor_mapping: dict[type[arguments.ArgStaticDescriptor], Sequence[str]] | None
+    #: The dimension classes the definition declares (the Python edge). Loading an artifact that
+    #: turns tags back into classes (in-process backends) binds them, see `_load_artifact`.
+    dimension_classes: Mapping[common.DimensionRef, common.Dimension] = dataclasses.field(
+        default_factory=dict
+    )
     # store for the compiled programs
     compiled_programs: dict[CompiledProgramsKey, artifacts.ExecutableProgram] = dataclasses.field(
         default_factory=dict, init=False
@@ -494,7 +499,8 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     ) -> artifacts.ExecutableProgram:
         artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
-            return self.backend.load_artifact(artifact)
+            with common.bind_dimension_classes(self.dimension_classes):
+                return self.backend.load_artifact(artifact)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load the compiled program '{self.definition.__name__}'."
