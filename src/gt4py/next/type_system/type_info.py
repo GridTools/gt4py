@@ -382,7 +382,7 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
     return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
 
-def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
+def extract_dims(symbol_type: ts.TypeSpec) -> list[common.DimensionRef]:
     """
     Try to extract field dimensions if possible.
 
@@ -394,7 +394,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
         >>> class I(common.CartesianAxisIndex): ...
         >>> class J(common.CartesianAxisIndex): ...
         >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
-        [gt4py.next.type_system.type_info.I[horizontal], gt4py.next.type_system.type_info.J[horizontal]]
+        [DimensionRef(gt4py.next.type_system.type_info:I, horizontal, cartesian_axis), DimensionRef(gt4py.next.type_system.type_info:J, horizontal, cartesian_axis)]
     """
     if isinstance(symbol_type, ts.ScalarType):
         return []
@@ -578,13 +578,13 @@ def promote(
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[I, J, K], dtype=dtype), dtype
     ... )
-    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    >>> promoted.dims == common.dimension_refs([I, J, K]) and promoted.dtype == dtype
     True
 
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
     ... )
-    >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
+    >>> promoted.dims == common.dimension_refs([I, J, K]) and promoted.dtype == dtype
     True
 
     >>> class V2E(common.DimensionIndex, kind=common.DimensionKind.LOCAL): ...
@@ -907,8 +907,8 @@ def function_signature_incompatibilities_field(
     if field_type.dims and source_dim not in field_type.dims:
         yield (
             f"Incompatible offset can not shift field defined on "
-            f"{', '.join([dim.__qualname__ for dim in field_type.dims])} from "
-            f"{source_dim.__qualname__} to target dim(s): "
+            f"{', '.join([dim.qualname for dim in field_type.dims])} from "
+            f"{source_dim.qualname} to target dim(s): "
             f"{', '.join([dim.tag for dim in target_dims])}"
         )
 

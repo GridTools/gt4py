@@ -74,10 +74,11 @@ def is_connectivity_identifier(
 
 def _field_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     sym: Literal["size", "stride"],
     offset_provider_type: gtx_common.OffsetProviderType | None,
 ) -> dace.symbol:
+    dim = gtx_common.dimension_ref(dim)  # orchestration passes the connectivity's classes
     if (m := CONNECTIVITY_INDENTIFIER_RE.match(field_name)) is None:
         name = f"__{field_name}_{gtx_common.codegen_name(dim.tag)}_{sym}"
     else:  # a connectivity field
@@ -97,7 +98,7 @@ def _field_symbol(
 
 def field_size_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     offset_provider_type: gtx_common.OffsetProviderType,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "size", offset_provider_type)
@@ -105,25 +106,25 @@ def field_size_symbol(
 
 def field_stride_symbol(
     field_name: str,
-    dim: gtx_common.Dimension,
+    dim: gtx_common.DimensionLike,
     offset_provider_type: gtx_common.OffsetProviderType | None = None,
 ) -> dace.symbol:
     return _field_symbol(field_name, dim, "stride", offset_provider_type)
 
 
-def _range_symbol_name(field_name: str, dim: gtx_common.Dimension) -> str:
+def _range_symbol_name(field_name: str, dim: gtx_common.DimensionLike) -> str:
     """Common part of the name for the range start/stop symbols."""
     field_range = im.call("get_domain_range")(field_name, dim)
     return gtir_python_codegen.get_source(field_range)
 
 
-def range_start_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+def range_start_symbol(field_name: str, dim: gtx_common.DimensionLike) -> dace.symbol:
     """Format name of the start symbol for domain range."""
     name = f"{_range_symbol_name(field_name, dim)}_0"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)
 
 
-def range_stop_symbol(field_name: str, dim: gtx_common.Dimension) -> dace.symbol:
+def range_stop_symbol(field_name: str, dim: gtx_common.DimensionLike) -> dace.symbol:
     """Format name of the stop symbol for domain range."""
     name = f"{_range_symbol_name(field_name, dim)}_1"
     return dace.symbol(name, FIELD_SYMBOL_DTYPE)

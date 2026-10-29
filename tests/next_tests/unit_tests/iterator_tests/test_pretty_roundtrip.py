@@ -16,11 +16,25 @@ union of the terms those two files use, plus the ones that exposed a gap.
 
 import pytest
 
+import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.iterator.pretty_printer import pformat
 from gt4py.next.type_system import type_specifications as ts
+
+
+class I(gtx.CartesianAxisIndex): ...
+
+
+class J(gtx.CartesianAxisIndex): ...
+
+
+class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class Vertex(gtx.DimensionIndex): ...
 
 
 _SET_AT = ir.SetAt(expr=im.ref("x"), domain=im.call("cartesian_domain")(), target=im.ref("y"))
@@ -65,15 +79,28 @@ ROUNDTRIP_CASES = [
         id="shift",
     ),
     pytest.param(
-        ir.CartesianOffset(domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")),
+        ir.CartesianOffset(domain=ir.AxisLiteral(dim=I), codomain=ir.AxisLiteral(dim=J)),
         id="cartesian_offset",
     ),
     pytest.param(
         im.tuple_get(im.literal("42", builtins.INTEGER_INDEX_BUILTIN), "x"), id="tuple_get"
     ),
     pytest.param(im.make_tuple("x", "y"), id="make_tuple"),
-    pytest.param(ir.AxisLiteral(value="I"), id="axis_literal"),
-    pytest.param(im.named_range(ir.AxisLiteral(value="IDim"), "x", "y"), id="named_range"),
+    pytest.param(ir.AxisLiteral(dim=I), id="axis_literal"),
+    pytest.param(ir.AxisLiteral(dim=Vertex), id="axis_literal_location"),
+    pytest.param(ir.AxisLiteral(dim=common.Staggered[KDim]), id="axis_literal_staggered"),
+    pytest.param(
+        ir.AxisLiteral(
+            dim=common.DimensionRef(
+                module="not.imported",
+                qualname="Outer.Local",
+                kind=common.DimensionKind.LOCAL,
+                category=common.DimensionCategory.LOCAL,
+            )
+        ),
+        id="axis_literal_not_importable",
+    ),
+    pytest.param(im.named_range(ir.AxisLiteral(dim=I), "x", "y"), id="named_range"),
     pytest.param(im.call("cartesian_domain")("x"), id="cartesian_domain"),
     pytest.param(im.call("unstructured_domain")("x"), id="unstructured_domain"),
     pytest.param(im.if_("x", "y", "z"), id="if_short"),
@@ -150,7 +177,7 @@ ROUNDTRIP_CASES = [
     pytest.param(ir.InfinityLiteral.NEGATIVE, id="infinity_negative"),
     pytest.param(
         im.named_range(
-            ir.AxisLiteral(value="KDim"),
+            ir.AxisLiteral(dim=KDim),
             ir.InfinityLiteral.NEGATIVE,
             im.literal("5", "int32"),
         ),

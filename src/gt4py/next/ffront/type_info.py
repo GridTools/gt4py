@@ -193,7 +193,7 @@ def _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
     ...     ts.FieldType(dims=[I], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
     ... )
-    FieldType(dims=[gt4py.next.ffront.type_info.I[horizontal]], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
+    FieldType(dims=[DimensionRef(gt4py.next.ffront.type_info:I, horizontal, cartesian_axis)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
     def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:

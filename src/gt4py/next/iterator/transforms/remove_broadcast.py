@@ -30,18 +30,17 @@ class RemoveBroadcast(PreserveLocationVisitor, NodeTranslator):
     >>> # class declared in a doctest is not an attribute of the real module:
     >>> class JDim(CartesianAxisIndex): ...
     >>> import sys
-    >>> sys.modules[__name__].IDim, sys.modules[__name__].JDim = IDim, JDim
     >>> domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 10)})
     >>> expr = im.call("broadcast")(
     ...     im.ref("inp"),
-    ...     im.make_tuple(*(itir.AxisLiteral(value=dim.tag) for dim in (IDim, JDim))),
+    ...     im.make_tuple(*(itir.AxisLiteral(dim=dim) for dim in (IDim, JDim))),
     ... )
     >>> expr.annex.domain = domain_utils.SymbolicDomain.from_expr(domain)
     >>> transformed = RemoveBroadcast.apply(expr)
     >>> print(transformed)
     as_fieldop(
       deref,
-      c⟨ gt4py.next.iterator.transforms.remove_broadcast.IDimₕ: [0, 10[, gt4py.next.iterator.transforms.remove_broadcast.JDimₕ: [0, 10[ ⟩
+      c⟨ gt4py.next.iterator.transforms.remove_broadcast:IDimₕᵃ: [0, 10[, gt4py.next.iterator.transforms.remove_broadcast:JDimₕᵃ: [0, 10[ ⟩
     )(inp)
     """
 

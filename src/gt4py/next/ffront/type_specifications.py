@@ -20,5 +20,5 @@ class FieldOperatorType(ts.CallableType):
 
 
 class ScanOperatorType(ts.CallableType):
-    axis: common.Dimension
+    axis: common.DimensionRef = ts.dimension_field()
     definition: ts.FunctionType

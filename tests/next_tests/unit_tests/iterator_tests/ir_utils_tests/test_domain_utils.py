@@ -134,7 +134,7 @@ def test_unstructured_translate_empty_range():
         [itir.OffsetLiteral(value=V2EDim.tag), itir.OffsetLiteral(value=0)], offset_provider
     )
     assert translated.empty()
-    assert set(translated.ranges.keys()) == {Edge}
+    assert set(translated.ranges.keys()) == {common.dimension_ref(Edge)}
 
 
 def test_domain_intersection():
@@ -168,7 +168,7 @@ def test_domain_intersection_empty_with_infinite_range():
 
     result = domain_utils.domain_intersection(empty, half_infinite)
     assert result.empty()
-    assert result.ranges[I].stop != itir.InfinityLiteral.POSITIVE
+    assert result.ranges[common.dimension_ref(I)].stop != itir.InfinityLiteral.POSITIVE
 
 
 def test_domain_union_then_intersection():

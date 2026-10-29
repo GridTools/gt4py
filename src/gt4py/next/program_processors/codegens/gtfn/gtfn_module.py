@@ -166,7 +166,7 @@ class GTFNTranslationStep(
         self,
         program: itir.Program,
         offset_provider: common.OffsetProvider | common.OffsetProviderType,
-        column_axis: Optional[common.Dimension],
+        column_axis: Optional[common.DimensionRef],
     ) -> str:
         if self.enable_itir_transforms:
             new_program = self._preprocess_program(program, offset_provider)

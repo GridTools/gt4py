@@ -80,7 +80,7 @@ def _process_args(
 def _field_constituents_range_and_dims(
     arg: Any,  # TODO(havogt): improve typing
     arg_type: ts.DataType,
-) -> Iterator[tuple[tuple[tuple[int, int], ...], list[common.Dimension]]]:
+) -> Iterator[tuple[tuple[tuple[int, int], ...], list[common.DimensionRef]]]:
     match arg_type:
         case ts.TupleType():
             for el, el_type in zip(arg, arg_type.types):

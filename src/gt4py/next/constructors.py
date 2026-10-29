@@ -661,7 +661,7 @@ def as_connectivity(
                [1, 2],
                [2, 0]])
         >>> conn.domain
-        Domain(dims=(gt4py.next.constructors.Vertex[horizontal], gt4py.next.constructors.V2EDim[local]), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
+        Domain(dims=(gt4py.next.constructors:Vertex[horizontal], gt4py.next.constructors:V2EDim[local]), ranges=(UnitRange(0, 3), UnitRange(0, 2)))
     """
     if skip_value is eve.NOTHING:
         skip_value = (

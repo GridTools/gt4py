@@ -210,7 +210,7 @@ def from_type_hint(
         case common.Field:
             if (n_args := len(args)) != 2:
                 raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
-            dims: list[common.Dimension] = []
+            dims: list[common.DimensionRef] = []
             dim_arg, dtype_arg = args
             dim_arg = (
                 list(typing.get_args(dim_arg))
@@ -221,7 +221,9 @@ def from_type_hint(
                 for d in dim_arg:
                     if not isinstance(d, common.DimensionMeta):
                         raise ValueError(f"Invalid field dimension definition '{d}'.")
-                    dims.append(cast(common.Dimension, d))
+                    dims.append(
+                        common.dimension_ref(cast(common.Dimension, d))
+                    )  # edge: class -> value
             else:
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
@@ -343,9 +345,9 @@ def from_value(value: Any) -> ts.TypeSpec:
             )
         return candidate_type
     elif isinstance(value, common.DimensionMeta):
-        symbol_type = ts.DimensionType(dim=value)
+        symbol_type = ts.DimensionType(dim=common.dimension_ref(cast(common.Dimension, value)))
     elif isinstance(value, common.Field):
-        dims = list(value.domain.dims)
+        dims = common.dimension_refs(value.domain.dims)
         dtype = from_type_hint(value.dtype.scalar_type)
         assert isinstance(dtype, ts.ScalarType)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)

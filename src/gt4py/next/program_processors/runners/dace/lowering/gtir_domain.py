@@ -33,7 +33,7 @@ class FieldopDomainRange:
         stop: symbolic expression for upper bound (exclusive)
     """
 
-    dim: gtx_common.Dimension
+    dim: gtx_common.DimensionRef
     start: dace.symbolic.SymbolicType
     stop: dace.symbolic.SymbolicType
 
@@ -85,7 +85,7 @@ def extract_target_domain(node: gtir.Expr) -> TargetDomain:
 
 
 def get_element_subset(
-    dims: Sequence[gtx_common.Dimension], origin: Optional[Sequence[dace.symbolic.SymExpr]]
+    dims: Sequence[gtx_common.DimensionRef], origin: Optional[Sequence[dace.symbolic.SymExpr]]
 ) -> dace_subsets.Range:
     """
     Helper function to construct the Memlet subset to access an element in the field
@@ -114,7 +114,7 @@ def get_element_subset(
 
 def get_field_layout(
     field_domain: FieldopDomain,
-) -> tuple[list[gtx_common.Dimension], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
+) -> tuple[list[gtx_common.DimensionRef], list[dace.symbolic.SymExpr], list[dace.symbolic.SymExpr]]:
     """
     Parse the field operator domain and generate the shape of the result field.
 

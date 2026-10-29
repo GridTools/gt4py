@@ -133,7 +133,14 @@ def _unstructured_translate_range_statically(
 @dataclasses.dataclass(frozen=True)
 class SymbolicDomain:
     grid_type: common.GridType
-    ranges: dict[common.Dimension, SymbolicRange]
+    #: Keyed by `DimensionRef`; dimension classes passed to the constructor are converted.
+    ranges: dict[common.DimensionRef, SymbolicRange]
+
+    def __post_init__(self) -> None:
+        if not all(isinstance(dim, common.DimensionRef) for dim in self.ranges):
+            object.__setattr__(
+                self, "ranges", {common.dimension_ref(dim): r for dim, r in self.ranges.items()}
+            )
 
     def __hash__(self) -> int:
         return hash((self.grid_type, frozenset(self.ranges.items())))
@@ -149,17 +156,17 @@ class SymbolicDomain:
     def from_expr(cls, node: itir.Node) -> SymbolicDomain:
         assert cpm.is_call_to(node, ("unstructured_domain", "cartesian_domain"))
 
-        ranges: dict[common.Dimension, SymbolicRange] = {}
+        ranges: dict[common.DimensionRef, SymbolicRange] = {}
         for named_range in node.args:
             assert cpm.is_call_to(named_range, "named_range")
             axis_literal, lower_bound, upper_bound = named_range.args
             assert isinstance(axis_literal, itir.AxisLiteral)
 
-            ranges[common.resolve(axis_literal.value)] = SymbolicRange(lower_bound, upper_bound)
+            ranges[axis_literal.dim] = SymbolicRange(lower_bound, upper_bound)
         return cls(_GRID_TYPE_MAPPING[node.fun.id], ranges)
 
     def as_expr(self) -> itir.FunCall:
-        converted_ranges: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] = {
+        converted_ranges: dict[common.DimensionLike, tuple[itir.Expr, itir.Expr]] = {
             key: (value.start, value.stop) for key, value in self.ranges.items()
         }
         return im.domain(self.grid_type, converted_ranges)
@@ -211,8 +218,8 @@ class SymbolicDomain:
                 connectivity: common.NeighborTable | common.NeighborConnectivityType
                 if common.is_offset_provider(offset_provider):
                     connectivity = common.get_offset(offset_provider, off.value)
-                    old_dim = connectivity.domain.dims[0]
-                    new_dim = connectivity.codomain
+                    old_dim = common.dimension_ref(connectivity.domain.dims[0])
+                    new_dim = common.dimension_ref(connectivity.codomain)
                 else:
                     assert common.is_offset_provider_type(offset_provider)
                     connectivity = common.get_offset_type(offset_provider, off.value)
@@ -338,9 +345,10 @@ def domain_complement(domain: SymbolicDomain) -> SymbolicDomain:
 
 
 def promote_domain(
-    domain: SymbolicDomain, target_dims: Iterable[common.Dimension]
+    domain: SymbolicDomain, target_dims: Iterable[common.DimensionLike]
 ) -> SymbolicDomain:
     """Return a domain that is extended with the dimensions of target_dims."""
+    target_dims = common.dimension_refs(target_dims)
     assert set(domain.ranges.keys()).issubset(target_dims)
     dims_dict = {
         dim: domain.ranges[dim]

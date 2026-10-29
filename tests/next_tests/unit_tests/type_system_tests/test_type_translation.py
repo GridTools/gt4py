@@ -267,7 +267,9 @@ def test_generic_variadic_dims(value, expected_dims):
         with pytest.raises(ValueError, match="Invalid field dimension definition"):
             type_translation.from_type_hint(gtx.Field[value, np.int32])
     else:
-        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims
+        assert type_translation.from_type_hint(
+            gtx.Field[value, np.int32]
+        ).dims == common.dimension_refs(expected_dims)
 
 
 @pytest.mark.parametrize(

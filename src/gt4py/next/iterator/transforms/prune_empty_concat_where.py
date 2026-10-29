@@ -24,7 +24,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 PRG = TypeVar("PRG", bound=itir.Program | itir.Expr)
 
 
-def _broadcast_to(expr: itir.Expr, target_dims: list[common.Dimension]) -> itir.Expr:
+def _broadcast_to(expr: itir.Expr, target_dims: list[common.DimensionRef]) -> itir.Expr:
     """Broadcast `expr` to `target_dims` if it does not have these dimensions already."""
     assert isinstance(expr.type, (ts.FieldType, ts.ScalarType))
     if type_info.extract_dims(expr.type) != target_dims:
@@ -88,7 +88,6 @@ class _PruneEmptyConcatWhere(PreserveLocationVisitor, NodeTranslator):
     >>> # IR passes rebuild a dimension from its tag by importing it (ADR 0029), and a
     >>> # class declared in a doctest is not an attribute of the real module:
     >>> import sys
-    >>> sys.modules[__name__].IDim = IDim
     >>> field_t = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
     >>> expr = im.concat_where(
     ...     im.domain(common.GridType.CARTESIAN, {IDim: (10, itir.InfinityLiteral.POSITIVE)}),

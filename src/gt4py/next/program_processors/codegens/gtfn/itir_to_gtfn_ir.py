@@ -211,16 +211,29 @@ def _collect_offset_definitions(
     return offset_definitions
 
 
+def _collect_staggered_bases(node: itir.Program) -> dict[str, str]:
+    """Map the tag of every staggered dimension in `node` to the tag of its base."""
+    specs: set[common.DimensionRef] = {
+        axis.dim for axis in node.walk_values().if_isinstance(itir.AxisLiteral)
+    }
+    for param in node.params:
+        if param.type is not None:
+            for type_ in type_info.primitive_constituents(param.type):
+                if isinstance(type_, ts.FieldType):
+                    specs.update(type_.dims)
+    return {spec.tag: spec.base.tag for spec in specs if spec.base is not None}
+
+
 def _add_staggered_aliases(
-    offset_definitions: dict[str, TagDefinition],
+    offset_definitions: dict[str, TagDefinition], staggered_bases: dict[str, str]
 ) -> dict[str, TagDefinition]:
     """Turn every staggered dimension tag into a alias of its base dimension."""
     result: dict[str, TagDefinition] = {}
     aliases: dict[str, TagDefinition] = {}
     for name, tag_def in offset_definitions.items():
-        # NOTE: read from the tag grammar, not by resolving `name`: this dict mixes dimension
-        # tags with offset tags, and an offset tag is not a dimension and cannot be resolved.
-        if tag_def.alias is None and (base_name := common.staggered_base_tag(name)) is not None:
+        # NOTE: this dict mixes dimension tags with offset tags; only dimension specs found in
+        # the program (which carry their staggered base) are looked up.
+        if tag_def.alias is None and (base_name := staggered_bases.get(name)) is not None:
             # ensure the base tag exists (as alias target and loop dimension) in this position
             result.setdefault(base_name, TagDefinition(name=Sym(id=common.codegen_name(base_name))))
             aliases[name] = TagDefinition(
@@ -340,7 +353,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _unary_op_map: ClassVar[dict[str, str]] = {"not_": "!"}
 
     offset_provider_type: common.OffsetProviderType
-    column_axis: Optional[common.Dimension]
+    column_axis: Optional[common.DimensionRef]
     grid_type: common.GridType
 
     # we use one UID generator per instance such that the generated ids are
@@ -355,7 +368,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         node: itir.Program,
         *,
         offset_provider_type: common.OffsetProviderType,
-        column_axis: Optional[common.Dimension],
+        column_axis: Optional[common.DimensionLike],
     ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
@@ -365,7 +378,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if grid_type == common.GridType.UNSTRUCTURED:
             node = _CannonicalizeUnstructuredDomain.apply(node)
         return cls(
-            offset_provider_type=offset_provider_type, column_axis=column_axis, grid_type=grid_type
+            offset_provider_type=offset_provider_type,
+            column_axis=common.optional_dimension_ref(column_axis),
+            grid_type=grid_type,
         ).visit(node)
 
     def visit_Sym(self, node: itir.Sym, **kwargs: Any) -> Sym:
@@ -692,7 +707,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 init=self.visit(stencil.args[2], **kwargs),
             )
             column_axis = self.column_axis
-            assert isinstance(column_axis, common.DimensionMeta)
+            assert isinstance(column_axis, common.DimensionRef)
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
@@ -723,7 +738,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider_type),
         }
-        offset_definitions = _add_staggered_aliases(offset_definitions)
+        offset_definitions = _add_staggered_aliases(
+            offset_definitions, _collect_staggered_bases(node)
+        )
         return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),

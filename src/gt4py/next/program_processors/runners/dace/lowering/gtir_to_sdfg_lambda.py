@@ -139,8 +139,8 @@ class IteratorExpr:
 
     field: dace_nodes.AccessNode
     gt_dtype: ts.ListType | ts.ScalarType
-    field_domain: list[tuple[gtx_common.Dimension, dace.symbolic.SymbolicType]]
-    indices: dict[gtx_common.Dimension, DataExpr]
+    field_domain: list[tuple[gtx_common.DimensionRef, dace.symbolic.SymbolicType]]
+    indices: dict[gtx_common.DimensionRef, DataExpr]
 
     def __post_init__(self) -> None:
         gtx_common.check_dims([dim for dim, _ in self.field_domain])
@@ -162,7 +162,7 @@ class IteratorExpr:
         field_desc = self.field.desc(sdfg)
         if isinstance(self.gt_dtype, ts.ListType):
             assert len(field_desc.shape) == len(self.field_domain) + 1
-            local_dim: gtx_common.Dimension = self.gt_dtype.offset_type  # type: ignore[assignment]  # checked in __post_init__
+            local_dim: gtx_common.DimensionRef = self.gt_dtype.offset_type  # type: ignore[assignment]  # checked in __post_init__
             # construct the full subset according to the canonical field domain
             sorted_dims = gtx_common.order_dimensions(
                 [dim for dim, _ in self.field_domain] + [local_dim]
@@ -1183,7 +1183,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             )
 
         self._add_mapped_tasklet(
-            name=f"{offset}_neighbors",
+            name=f"{gtx_common.codegen_name(offset)}_neighbors",
             map_ranges={neighbor_idx: f"0:{conn_type.max_neighbors}"},
             code=tasklet_expression,
             inputs=input_memlets,
@@ -1210,8 +1210,8 @@ class LambdaToDataflow(eve.NodeVisitor):
             assert len(src_desc.shape) == len(src_arg.subset)
             src_subset = src_arg.subset
             local_dim = src_arg.gt_dtype.offset_type
-            all_dims = gtx_common.order_dimensions([*src_arg.gt_field.dims, local_dim])  # type: ignore[list-item]  # checked in MemletExpr.__post_init__
-            local_dim_index = all_dims.index(local_dim)  # type: ignore[arg-type]  # checked in MemletExpr.__post_init__
+            all_dims = gtx_common.order_dimensions([*src_arg.gt_field.dims, local_dim])  # type: ignore[type-var]  # checked in MemletExpr.__post_init__
+            local_dim_index = all_dims.index(local_dim)
         elif isinstance(src_arg, ValueExpr):
             assert len(src_desc.shape) == 1
             src_subset = dace_subsets.Range.from_array(src_desc)
@@ -1307,12 +1307,12 @@ class LambdaToDataflow(eve.NodeVisitor):
         tasklet_expression = f"{output_connector} = {fun_python_code}"
 
         input_args = [self.visit(arg) for arg in node.args]
-        input_conn_types: dict[gtx_common.Dimension, gtx_common.NeighborConnectivityType] = {}
+        input_conn_types: dict[gtx_common.DimensionRef, gtx_common.NeighborConnectivityType] = {}
         for input_arg in input_args:
             assert isinstance(input_arg.gt_dtype, ts.ListType)
             assert input_arg.gt_dtype.offset_type is not None
             offset_type = input_arg.gt_dtype.offset_type
-            if offset_type is gtx_common.ConstList:
+            if offset_type == gtx_common.dimension_ref(gtx_common.ConstList):
                 # this input argument is the result of `make_const_list`
                 continue
             offset_provider_t = self.subgraph_builder.get_offset_provider_type(offset_type.tag)
@@ -1353,7 +1353,9 @@ class LambdaToDataflow(eve.NodeVisitor):
                 raise ValueError(f"More than one local dimension in map expression {node}.")
             input_size = input_desc.shape[0]
             if input_size == 1:
-                assert input_arg.gt_dtype.offset_type is gtx_common.ConstList
+                assert input_arg.gt_dtype.offset_type == gtx_common.dimension_ref(
+                    gtx_common.ConstList
+                )
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset="0")
             elif input_size == local_size:
                 input_memlets[conn] = dace.Memlet(data=input_node.data, subset=map_index)
@@ -1917,7 +1919,7 @@ class LambdaToDataflow(eve.NodeVisitor):
             and node.expr.type.offset_type is not None
             and isinstance(result, (MemletExpr, ValueExpr))
             and isinstance(result.gt_dtype, ts.ListType)
-            and result.gt_dtype.offset_type is gtx_common.ConstList
+            and result.gt_dtype.offset_type == gtx_common.dimension_ref(gtx_common.ConstList)
         ):
             result = self._broadcast_const_list(result, node.expr.type)
 

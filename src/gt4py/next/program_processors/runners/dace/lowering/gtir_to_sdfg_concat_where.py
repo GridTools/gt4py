@@ -41,7 +41,7 @@ def _translate_concat_where_branch(
     sdfg_builder: gtir_to_sdfg.SDFGBuilder,
     source_expr: gtir.Expr,
     is_lower: bool,
-    concat_dim: gtx_common.Dimension,
+    concat_dim: gtx_common.DimensionRef,
     concat_dim_bound_expr: gtir.Expr,
     output_domain: domain_utils.SymbolicDomain,
     output_type: ts.FieldType,

@@ -238,7 +238,7 @@ def test_prune_concat_where(accessed_domain, cond_domain, true_branch, false_bra
                 {
                     dim: bounds
                     for dim, bounds in accessed_domain.items()
-                    if dim in type_info.extract_dims(inner.type)
+                    if common.dimension_ref(dim) in type_info.extract_dims(inner.type)
                 },
             )
         )

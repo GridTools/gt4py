@@ -90,18 +90,18 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
-    #: The dimension's tag, its qualified Python name (ADR 0029).
-    value: str
+    #: The dimension, as a self-contained value: kind, category and staggered base are in the
+    #: IR, so nothing below the frontend imports the module that declared it. A dimension class
+    #: passed to the constructor is converted.
+    dim: common.DimensionRef = eve.field(converter=common.dimension_ref, kw_only=True)
 
     @property
-    def dim(self) -> common.Dimension:
-        """The dimension the literal names, resolved from its tag."""
-        return common.resolve(self.value)
+    def value(self) -> common.Tag:
+        """The dimension's tag, its IR spelling."""
+        return self.dim.tag
 
     @property
     def kind(self) -> common.DimensionKind:
-        # NOTE: derived, not stored: the dimension class carries its kind, so a stored copy could
-        # only disagree with it (it used to, for local dimensions printed as vertical).
         return self.dim.kind
 
 

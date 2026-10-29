@@ -161,8 +161,8 @@ def _extract_accessed_domains(
 
 def _filter_domain_dimensions(
     domain: domain_utils.SymbolicDomain,
-    dims: list[common.Dimension],
-    additional_dims: Optional[dict[common.Dimension, domain_utils.SymbolicRange]] = None,
+    dims: list[common.DimensionRef],
+    additional_dims: Optional[dict[common.DimensionRef, domain_utils.SymbolicRange]] = None,
 ) -> domain_utils.SymbolicDomain:
     assert isinstance(domain, domain_utils.SymbolicDomain)
     retained = {dim: domain.ranges[dim] for dim in dims if dim in domain.ranges}
@@ -173,7 +173,7 @@ def _filter_domain_dimensions(
 
 def _extract_vertical_dims(
     domain: domain_utils.SymbolicDomain,
-) -> dict[common.Dimension, domain_utils.SymbolicRange]:
+) -> dict[common.DimensionRef, domain_utils.SymbolicRange]:
     assert isinstance(domain, domain_utils.SymbolicDomain)
     return {
         dim: range_

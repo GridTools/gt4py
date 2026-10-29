@@ -107,7 +107,7 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
         >>> domain_intersection(
         ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
         ... )  # doctest: +ELLIPSIS
-        Domain(dims=(gt4py.next.embedded.common.I[horizontal],), ranges=(UnitRange(1, 3),))
+        Domain(dims=(gt4py.next.embedded.common:I[horizontal],), ranges=(UnitRange(1, 3),))
     """
     return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
 

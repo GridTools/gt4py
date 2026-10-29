@@ -10,6 +10,7 @@ import pytest
 
 import gt4py.next as gtx
 
+from gt4py.next import common
 from gt4py.next.iterator import builtins, ir, pretty_printer
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
@@ -236,10 +237,8 @@ def test_shift():
 
 
 def test_cartesian_offset():
-    testee = ir.CartesianOffset(
-        domain=ir.AxisLiteral(value="I"), codomain=ir.AxisLiteral(value="J")
-    )
-    expected = "Iₕ→Jₕ"
+    testee = ir.CartesianOffset(domain=ir.AxisLiteral(dim=IDim), codomain=ir.AxisLiteral(dim=JDim))
+    expected = f"{IDim.tag}ₕᵃ→{JDim.tag}ₕᵃ"
     actual = pformat(testee)
     assert actual == expected
 
@@ -264,36 +263,43 @@ def test_make_tuple():
 class IDim(gtx.CartesianAxisIndex): ...
 
 
+class JDim(gtx.CartesianAxisIndex): ...
+
+
 class KDim(gtx.CartesianAxisIndex, kind=gtx.DimensionKind.VERTICAL): ...
+
+
+class Vertex(gtx.DimensionIndex): ...
 
 
 class LocalDim(gtx.DimensionIndex, kind=gtx.DimensionKind.LOCAL): ...
 
 
-@pytest.mark.parametrize("dim, suffix", [(IDim, "ₕ"), (KDim, "ᵥ"), (LocalDim, "ₗ")])
+@pytest.mark.parametrize(
+    "dim, suffix", [(IDim, "ₕᵃ"), (KDim, "ᵥᵃ"), (Vertex, "ₕ"), (LocalDim, "ₗˡ")]
+)
 def test_axis_literal(dim, suffix):
-    # the suffix is the resolved dimension's kind
-    assert pformat(ir.AxisLiteral(value=dim.tag)) == f"{dim.tag}{suffix}"
+    # the suffixes are the spec's kind and category
+    assert pformat(ir.AxisLiteral(dim=dim)) == f"{dim.tag}{suffix}"
 
 
-def test_axis_literal_of_unresolvable_tag():
-    # printing does not import modules: a tag naming no loaded dimension prints as horizontal,
-    # so text -> IR -> text is not the identity for such tags (the parser ignores the suffix)
-    assert pformat(ir.AxisLiteral(value="I")) == "Iₕ"
-    assert pformat(ir.AxisLiteral(value="this.I")) == "this.Iₕ"
-
-
-def test_axis_literal_kind_from_type():
-    typed = ir.AxisLiteral(value="not.loaded.KDim", type=ts.DimensionType(dim=KDim))
-    assert pformat(typed) == "not.loaded.KDimᵥ"
+def test_axis_literal_of_unimportable_spec():
+    # printing never imports: the literal carries its spec
+    spec = common.DimensionRef(
+        module="not.loaded",
+        qualname="KDim",
+        kind=common.DimensionKind.VERTICAL,
+        category=common.DimensionCategory.CARTESIAN_AXIS,
+    )
+    assert pformat(ir.AxisLiteral(dim=spec)) == "not.loaded:KDimᵥᵃ"
 
 
 def test_named_range_horizontal():
     testee = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
-        args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
+        args=[ir.AxisLiteral(dim=IDim), ir.SymRef(id="x"), ir.SymRef(id="y")],
     )
-    expected = "IDimₕ: [x, y["
+    expected = f"{IDim.tag}ₕᵃ: [x, y["
     actual = pformat(testee)
     assert actual == expected
 

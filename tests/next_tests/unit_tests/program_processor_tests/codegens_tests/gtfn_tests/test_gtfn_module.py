@@ -44,7 +44,7 @@ def program_example():
             itir.FunCall(
                 fun=itir.SymRef(id="named_range"),
                 args=[
-                    itir.AxisLiteral(value=IDim.tag),
+                    itir.AxisLiteral(dim=IDim),
                     im.literal("0", builtins.INTEGER_INDEX_BUILTIN),
                     im.literal("10", builtins.INTEGER_INDEX_BUILTIN),
                 ],

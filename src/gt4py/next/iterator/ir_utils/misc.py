@@ -231,8 +231,8 @@ def grid_type_from_domain(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
-def dim_from_axis_literal(axis_literal: itir.AxisLiteral) -> common.Dimension:
-    return common.resolve(axis_literal.value)
+def dim_from_axis_literal(axis_literal: itir.AxisLiteral) -> common.DimensionRef:
+    return axis_literal.dim
 
 
 def _flatten_tuple_expr(expr: itir.Expr) -> tuple[itir.Expr]:

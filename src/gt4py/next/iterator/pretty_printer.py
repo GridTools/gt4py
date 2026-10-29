@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import types as _types
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Final, Optional
+from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next import common
@@ -140,6 +140,13 @@ _AXIS_KIND_SUFFIX: Final = {
     common.DimensionKind.VERTICAL: "ᵥ",
     common.DimensionKind.LOCAL: "ₗ",
 }
+#: Printed after the kind suffix; the default category prints nothing. Together with the tag
+#: and the kind it is enough to rebuild the `DimensionRef` without importing anything.
+_AXIS_CATEGORY_SUFFIX: Final = {
+    common.DimensionCategory.CARTESIAN_AXIS: "ᵃ",
+    common.DimensionCategory.LOCAL: "ˡ",
+    common.DimensionCategory.OTHER: "",
+}
 
 
 class PrettyPrinter(NodeTranslator):
@@ -233,15 +240,10 @@ class PrettyPrinter(NodeTranslator):
         return [f"{domain}→{codomain}"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        # NOTE: printing must not import modules (`str()` of any node prints it), so the kind is
-        # taken from the inferred type, or from an already loaded dimension. A tag naming neither,
-        # e.g. in IR built by hand, prints as horizontal; the parser ignores the suffix anyway.
-        if isinstance(node.type, ts.DimensionType):
-            dim: Optional[common.Dimension] = node.type.dim
-        else:
-            dim = common.resolve_loaded(node.value)
-        kind = _AXIS_KIND_SUFFIX[dim.kind] if dim is not None else "ₕ"
-        return [str(node.value) + kind]
+        # NOTE: the literal carries its `DimensionRef`, so printing needs no import, and the
+        # suffixes make the printed form complete: the parser rebuilds the spec from them.
+        dim = node.dim
+        return [dim.tag + _AXIS_KIND_SUFFIX[dim.kind] + _AXIS_CATEGORY_SUFFIX[dim.category]]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
         return [node.id]

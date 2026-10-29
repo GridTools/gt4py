@@ -207,6 +207,7 @@ def apply_margin_on_field_domain(
     to the range start, the second to be substracted from the range end.
     """
     domain = domain_utils.SymbolicDomain.from_expr(node)
+    dim = gtx_common.dimension_ref(dim)
     domain.ranges[dim] = domain_utils.SymbolicRange(
         im.plus(domain.ranges[dim].start, margin[0]), im.minus(domain.ranges[dim].stop, margin[1])
     )
@@ -1778,7 +1779,10 @@ def test_gtir_let_lambda_scalar_expression():
                 expr=im.let(
                     "size_inner",
                     im.plus(
-                        domain_utils.SymbolicDomain.from_expr(domain_outer).ranges[IDim].stop, 1
+                        domain_utils.SymbolicDomain.from_expr(domain_outer)
+                        .ranges[gtx_common.dimension_ref(IDim)]
+                        .stop,
+                        1,
                     ),
                 )(
                     im.let("tmp", im.multiplies_("a", "b"))(

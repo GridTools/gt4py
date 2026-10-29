@@ -56,9 +56,6 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
         >>> from gt4py import next as gtx
         >>> class KDim(common.CartesianAxisIndex, kind=common.DimensionKind.VERTICAL): ...
         >>> class Vertex(common.DimensionIndex, kind=common.DimensionKind.HORIZONTAL): ...
-        >>> import sys  # register the dimensions where their tags point, as a module would
-        >>> sys.modules[__name__].KDim = KDim
-        >>> sys.modules[__name__].Vertex = Vertex
 
         >>> sizes = {
         ...     "out": gtx.domain({Vertex: (0, 10), KDim: (0, 20)}),
@@ -92,7 +89,7 @@ class ReplaceGetDomainRangeWithConstants(PreserveLocationVisitor, NodeTranslator
         >>> result = ReplaceGetDomainRangeWithConstants.apply(ir, sizes=sizes)
         >>> print(result)
         test(inp, out) {
-          out @ u⟨ gt4py.next.iterator.transforms.replace_get_domain_range_with_constants.Vertexₕ: [{0, 10}[0], {0, 10}[1][, gt4py.next.iterator.transforms.replace_get_domain_range_with_constants.KDimᵥ: [{0, 20}[0], {0, 20}[1][ ⟩
+          out @ u⟨ gt4py.next.iterator.transforms.replace_get_domain_range_with_constants:Vertexₕ: [{0, 10}[0], {0, 10}[1][, gt4py.next.iterator.transforms.replace_get_domain_range_with_constants:KDimᵥᵃ: [{0, 20}[0], {0, 20}[1][ ⟩
                ← (⇑deref)(inp);
         }
     """

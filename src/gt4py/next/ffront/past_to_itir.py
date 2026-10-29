@@ -158,11 +158,11 @@ def past_to_gtir_factory(
     return wf
 
 
-def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:
+def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.DimensionRef]:
     # construct mapping from column axis to scan operators defined on
     #  that dimension. only one column axis is allowed, but we can use
     #  this mapping to provide good error messages.
-    scanops_per_axis: dict[common.Dimension, list[str]] = {}
+    scanops_per_axis: dict[common.DimensionRef, list[str]] = {}
     for name, gt_callable in transform_utils._filter_closure_vars_by_type(
         all_closure_vars, gtcallable.GTCallable
     ).items():
@@ -174,8 +174,7 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
 
     if len(scanops_per_axis.values()) != 1:
         scanops_per_axis_str = "\n".join(
-            f"- {dim.__qualname__}: {', '.join(scanops)}"
-            for dim, scanops in scanops_per_axis.items()
+            f"- {dim.qualname}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
         )
 
         raise TypeError(
@@ -383,7 +382,7 @@ class ProgramLowering(
         domain_args = []
         for dim_i, dim in enumerate(out_type.dims):
             # an expression for the range of a dimension
-            dim_range = im.call("get_domain_range")(out_expr, itir.AxisLiteral(value=dim.tag))
+            dim_range = im.call("get_domain_range")(out_expr, itir.AxisLiteral(dim=dim))
 
             dim_start, dim_stop = im.tuple_get(0, dim_range), im.tuple_get(1, dim_range)
             # bounds
@@ -407,11 +406,11 @@ class ProgramLowering(
                 )
 
             if dim.kind == common.DimensionKind.LOCAL:
-                raise ValueError(f"common.Dimension '{dim.__qualname__}' must not be local.")
+                raise ValueError(f"common.DimensionRef '{dim.qualname}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.tag), lower, upper],
+                    args=[itir.AxisLiteral(dim=dim), lower, upper],
                 )
             )
 
@@ -429,7 +428,7 @@ class ProgramLowering(
         )
 
     def _construct_itir_initialized_domain_arg(
-        self, dim_i: int, dim: common.Dimension, node_domain: past.Dict
+        self, dim_i: int, dim: common.DimensionRef, node_domain: past.Dict
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim

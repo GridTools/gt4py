@@ -1453,7 +1453,7 @@ def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_o
 
 
 def test_broadcast():
-    testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(value=IDim.tag)))
+    testee = im.call("broadcast")("in_field", im.make_tuple(itir.AxisLiteral(dim=IDim)))
     domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 10)})
     expected_domains = {
         "in_field": {IDim: (0, 10)},

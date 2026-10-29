@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import typing
-from typing import Any, Callable, Iterable, Optional, TypeAlias, Union
+from typing import Any, Callable, Iterable, Mapping, Optional, TypeAlias, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -15,7 +15,7 @@ from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-ExprLike: TypeAlias = Union[str, core_defs.Scalar, common.Dimension, itir.Expr]
+ExprLike: TypeAlias = Union[str, core_defs.Scalar, common.Dimension, common.DimensionRef, itir.Expr]
 
 
 def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = None) -> itir.Sym:
@@ -90,7 +90,7 @@ def ensure_expr(expr_like: ExprLike) -> itir.Expr:
         return ref(expr_like)
     elif core_defs.is_scalar_type(expr_like):
         return literal_from_value(expr_like)
-    elif isinstance(expr_like, common.DimensionMeta):
+    elif isinstance(expr_like, (common.DimensionMeta, common.DimensionRef)):
         return axis_literal(expr_like)
     assert isinstance(expr_like, itir.Expr), expr_like
     return expr_like
@@ -451,18 +451,18 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
 
 def domain(
     grid_type: Union[common.GridType, str],
-    ranges_or_domain: dict[common.Dimension, tuple[itir.Expr, itir.Expr]] | common.Domain,
+    ranges_or_domain: Mapping[common.DimensionLike, tuple[itir.Expr, itir.Expr]] | common.Domain,
 ) -> itir.FunCall:
     """
     >>> class IDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
     >>> class JDim(common.CartesianAxisIndex, kind=common.DimensionKind.HORIZONTAL): ...
     >>> str(domain(common.GridType.CARTESIAN, {IDim: (0, 10), JDim: (0, 20)}))
-    'c⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
+    'c⟨ gt4py.next.iterator.ir_utils.ir_makers:IDimₕᵃ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers:JDimₕᵃ: [0, 20[ ⟩'
     >>> str(domain(common.GridType.UNSTRUCTURED, {IDim: (0, 10), JDim: (0, 20)}))
-    'u⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
+    'u⟨ gt4py.next.iterator.ir_utils.ir_makers:IDimₕᵃ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers:JDimₕᵃ: [0, 20[ ⟩'
     >>> ij_domain = common.domain({IDim: (0, 10), JDim: (0, 20)})
     >>> str(domain(common.GridType.UNSTRUCTURED, ij_domain))
-    'u⟨ gt4py.next.iterator.ir_utils.ir_makers.IDimₕ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers.JDimₕ: [0, 20[ ⟩'
+    'u⟨ gt4py.next.iterator.ir_utils.ir_makers:IDimₕᵃ: [0, 10[, gt4py.next.iterator.ir_utils.ir_makers:JDimₕᵃ: [0, 20[ ⟩'
     """
     if isinstance(ranges_or_domain, common.Domain):
         domain = ranges_or_domain
@@ -490,14 +490,14 @@ def domain(
 def get_field_domain(
     grid_type: Union[common.GridType, str],
     field: str | itir.Expr,
-    dims: Iterable[common.Dimension] | None = None,
+    dims: Iterable[common.DimensionLike] | None = None,
 ) -> itir.Expr:
+    specs = None if dims is None else common.dimension_refs(dims)
     if isinstance(field, itir.Expr) and isinstance(field.type, ts.FieldType):
-        assert dims is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, dims, strict=True))
-        dims = field.type.dims
-    else:
-        if dims is None:
-            raise ValueError("Field expression must be typed if 'dims' is not given.")
+        assert specs is None or all(d1 == d2 for d1, d2 in zip(field.type.dims, specs, strict=True))
+        specs = field.type.dims
+    elif specs is None:
+        raise ValueError("Field expression must be typed if 'dims' is not given.")
 
     return domain(
         grid_type,
@@ -506,13 +506,13 @@ def get_field_domain(
                 tuple_get(0, call("get_domain_range")(field, dim)),
                 tuple_get(1, call("get_domain_range")(field, dim)),
             )
-            for dim in dims
+            for dim in specs
         },
     )
 
 
 def named_range(
-    dim: itir.AxisLiteral | common.Dimension, start: itir.Expr, stop: itir.Expr
+    dim: itir.AxisLiteral | common.DimensionLike, start: itir.Expr, stop: itir.Expr
 ) -> itir.FunCall:
     return call("named_range")(dim, start, stop)
 
@@ -582,11 +582,11 @@ def op_as_fieldop(
     return _impl
 
 
-def axis_literal(dim: common.Dimension) -> itir.AxisLiteral:
-    return itir.AxisLiteral(value=dim.tag)
+def axis_literal(dim: common.DimensionLike) -> itir.AxisLiteral:
+    return itir.AxisLiteral(dim=dim)
 
 
-def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
+def broadcast(expr: ExprLike, dims: Iterable[common.DimensionLike]) -> itir.FunCall:
     """
     Create a broadcast FunCall of `expr` to `dims`.
 
@@ -594,13 +594,13 @@ def broadcast(expr: ExprLike, dims: Iterable[common.Dimension]) -> itir.FunCall:
     --------
     >>> class IDim(common.CartesianAxisIndex): ...
     >>> str(broadcast("a", (IDim,)))
-    'broadcast(a, {gt4py.next.iterator.ir_utils.ir_makers.IDimₕ})'
+    'broadcast(a, {gt4py.next.iterator.ir_utils.ir_makers:IDimₕᵃ})'
     """
     return call("broadcast")(expr, make_tuple(*(axis_literal(dim) for dim in dims)))
 
 
 def cartesian_offset(
-    domain: common.Dimension, codomain: Optional[common.Dimension] = None
+    domain: common.DimensionLike, codomain: Optional[common.DimensionLike] = None
 ) -> itir.CartesianOffset:
     if codomain is None:
         codomain = domain
@@ -629,7 +629,7 @@ def cast_as_fieldop(type_: str, domain: Optional[itir.FunCall] = None):
     return _impl
 
 
-def index(dim: common.Dimension) -> itir.FunCall:
+def index(dim: common.DimensionLike) -> itir.FunCall:
     """
     Create a call to the `index` builtin, shorthand for `call("index")(axis)`,
     after converting the given dimension to `itir.AxisLiteral`.
@@ -640,7 +640,7 @@ def index(dim: common.Dimension) -> itir.FunCall:
     Returns:
         A function that constructs a Field of indices in the given dimension.
     """
-    return call("index")(itir.AxisLiteral(value=dim.tag))
+    return call("index")(itir.AxisLiteral(dim=dim))
 
 
 def map_list(op):

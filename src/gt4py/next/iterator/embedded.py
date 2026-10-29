@@ -122,8 +122,8 @@ class StridedConnectivityField(common.Connectivity):
 
     def __gt_type__(self) -> common.NeighborConnectivityType:
         return common.NeighborConnectivityType(
-            domain=self.domain_dims,
-            codomain=self.codomain_dim,
+            domain=tuple(common.dimension_refs(self.domain_dims)),
+            codomain=common.dimension_ref(self.codomain_dim),
             max_neighbors=self._max_neighbors,
             skip_value=self.skip_value,
             dtype=self.dtype,
@@ -729,7 +729,7 @@ def _get_axes(
     ... )
 
     >>> _get_axes((i_field, i_field))
-    (gt4py.next.iterator.embedded.IDim[horizontal],)
+    (gt4py.next.iterator.embedded:IDim[horizontal],)
 
     >>> class JDim(gtx.CartesianAxisIndex): ...
     >>> j_field: LocatedField = _wrap_field(
@@ -747,7 +747,7 @@ def _get_axes(
     ValueError: Fields are defined on different axes.
 
     >>> _get_axes((i_field, zero_dim_field), ignore_zero_dims=True)
-    (gt4py.next.iterator.embedded.IDim[horizontal],)
+    (gt4py.next.iterator.embedded:IDim[horizontal],)
     """
     if isinstance(field_or_tuple, tuple):
         els_axes = []
@@ -1761,19 +1761,23 @@ def _fieldspec_list_to_value(
 ) -> tuple[common.Domain, ts.TypeSpec]:
     """Translate the list element type into the domain."""
     if isinstance(type_, ts.ListType):
-        if type_.offset_type is common.ConstList:
+        if type_.offset_type == common.dimension_ref(common.ConstList):
             return domain.insert(
                 len(domain), common.named_range((common.ConstList, 1))
             ), type_.element_type
         else:
             offset_provider = embedded_context.get_offset_provider()
             offset_type = type_.offset_type
-            assert isinstance(offset_type, common.DimensionMeta)
+            assert isinstance(offset_type, common.DimensionRef)
             connectivity = common.get_offset(offset_provider, offset_type.tag)
             assert common.is_neighbor_table(connectivity)
+            # NOTE: the type carries a spec; the embedded field needs the class, which the
+            # connectivity (a runtime object) has.
+            local_dim = connectivity.domain.dims[1]
+            assert common.dimension_ref(local_dim) == offset_type
             return domain.insert(
                 len(domain),
-                common.named_range((offset_type, connectivity.__gt_type__().max_neighbors)),
+                common.named_range((local_dim, connectivity.__gt_type__().max_neighbors)),
             ), type_.element_type
     return domain, type_
 
