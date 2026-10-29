@@ -7,7 +7,7 @@ tags: []
 - **Status**: proposed
 - **Authors**: Enrique González Paredes (@egparedes)
 - **Created**: 2026-09-18
-- **Updated**: 2026-10-28
+- **Updated**: 2026-10-29
 
 A concrete dimension becomes a **class**, and an index along it an **instance** of
 that class — the shape `enum.Enum` uses, where the class is the collection and
@@ -112,7 +112,7 @@ own tests) makes it raise. Hash-based lookups cannot be guarded.
 ### Consequences of the tag being a qualified name
 
 1. **Reconstruction from a tag is an exact import, only in the user's process.**
-   `common.resolve(tag)` imports the module before the `:` and walks the qualname,
+   `gtx.resolve(tag)` imports the module before the `:` and walks the qualname,
    as `pickle` references a class; the separator removes any ambiguity between
    module path and attribute chain. It is used only where code runs in the user's
    process on classes (the roundtrip backend), never on the compile path. It is not
@@ -156,18 +156,9 @@ own tests) makes it raise. Hash-based lookups cannot be guarded.
    fingerprint variant; the STRICT variant rejects a parametrized dimension,
    which is not importable under its qualified name.
 
-5. **Generated identifiers need injective mangling.** A dot or a colon is illegal
-   in a C++ identifier, in a DaCe symbol, and in `eve`'s `SymbolName`
-   (`^[a-zA-Z_]\w*$`). One shared pair, `codegen_name` / `from_codegen_name`, used by
-   every backend, escapes `_ . : [ ]` as `_u _d _c _l _r`.
-
-   A *prefix* escape, not `_ -> __` followed by `. -> _`: the latter is **not
-   injective**, since a dot becomes a single underscore and `".."` collides with
-   an escaped `"_"`. Every `_` in the output is the first character of a
-   two-character escape, so decoding is unambiguous. Brackets are escaped too: a
-   parametrized tag such as `Staggered[pkg:K]` contains them, and they would
-   otherwise survive into the identifier. Names grow, which is what
-   gtfn's existing `TagDefinition.alias` mechanism is for.
+5. **Generated identifiers need injective mangling.** A tag is not a valid C++,
+   DaCe or `eve` identifier, so all backends share one reversible escape
+   (`dimension_tags.codegen_name` / `from_codegen_name`).
 
 6. **Staggered dimensions become a real parametrized type.** ADR 0026's
    `_Staggered` *name prefix* cannot survive type identity: `Dimension(f"_Staggered{name}")`
@@ -243,6 +234,13 @@ Whether a dimension is an axis or a mesh location is a decision per declaration 
 be derived from `kind`. `CartesianAxisIndex` and `AnyCartesianAxisIndex` are both
 exported as `gtx.*`.
 
+**Open question (a follow-up, not decided here).** The hierarchy says what a dimension
+is, not how dimensions relate to each other: the Cartesian axes `I` and `J` are
+orthogonal factors of a product grid, each its own horizontal direction, while the
+mesh locations `Cell`, `Edge` and `Vertex` of a typical model are different entity
+sets on *one* shared horizontal space. Expressing that relation belongs with a future
+entity level (e.g. a `LocationIndex`) and is left to a later ADR.
+
 ### `Dimension` is annotation-only
 
 `common.Dimension` becomes a PEP 695 alias for `type[DimensionIndex]`, so the
@@ -306,7 +304,9 @@ dimension class is unhashable and `ts.DimensionType` fails at *import*.
 ## Consequences
 
 - `common.NamedIndex` is deleted; `.dim` and `.value` keep working, on the index
-  instance.
+  instance. A range on a dimension, `DimensionRange` (formerly `NamedRange`), has the
+  same two fields, so a point and a range are read alike (`DimensionSelection`); both
+  are built with `Dim.at(...)` (`IDim.at(3)`, `IDim.at(0, 10)`).
 - The dimension half of `mypy_plugin.py` is deleted; only the mixed-precision
   hooks remain. Static checking is now available to pyright as well as mypy.
 - Every declaration in the tree — including docs, workshop notebooks and
