@@ -23,8 +23,14 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
         index: common.AnyIndexElement,
         dim: common.Dimension,
     ):
+        # `str` of each element: the `repr` of a tuple would show qualified dimension tags
+        indices_str = (
+            f"({', '.join(str(i) for i in indices)})"
+            if isinstance(indices, tuple)
+            else str(indices)
+        )
         super().__init__(
-            f"Out of bounds: slicing {domain} with index `{indices}`, `{index}` is out of bounds in dimension `{dim}`."
+            f"Out of bounds: slicing {domain} with index `{indices_str}`, `{index}` is out of bounds in dimension `{dim}`."
         )
         self.domain = domain
         self.indices = indices
