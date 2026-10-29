@@ -1011,7 +1011,7 @@ def unit_range(r: RangeLike) -> UnitRange:
     raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
-class NamedRange(NamedTuple, Generic[_Rng]):
+class DimensionRange(NamedTuple, Generic[_Rng]):
     """
     A range along one dimension.
 
@@ -1036,12 +1036,12 @@ class NamedRange(NamedTuple, Generic[_Rng]):
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 
 
-FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
+FiniteDimensionRange: TypeAlias = DimensionRange[FiniteUnitRange]
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[DimensionIndex, DimensionIndex, Literal[1]], see https://peps.python.org/pep-0696/
-AbsoluteIndexElement: TypeAlias = DimensionIndex | NamedRange | NamedSlice
+AbsoluteIndexElement: TypeAlias = DimensionIndex | DimensionRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
-AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | DimensionIndex]
+AbsoluteIndexSequence: TypeAlias = Sequence[DimensionRange | DimensionIndex]
 RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
@@ -1055,7 +1055,7 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
 
 
-def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
+def is_finite_dimension_range(v: DimensionRange) -> TypeGuard[FiniteDimensionRange]:
     return UnitRange.is_finite(v.value)
 
 
@@ -1066,11 +1066,15 @@ def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
-    return is_int_index(v) or isinstance(v, (NamedRange, DimensionIndex, slice)) or v is Ellipsis
+    return (
+        is_int_index(v) or isinstance(v, (DimensionRange, DimensionIndex, slice)) or v is Ellipsis
+    )
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, DimensionIndex)) for e in v)
+    return isinstance(v, Sequence) and all(
+        isinstance(e, (DimensionRange, DimensionIndex)) for e in v
+    )
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -1084,22 +1088,22 @@ def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
     return cast(AnyIndexSequence, (index,) if is_any_index_element(index) else index)
 
 
-def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
-    if isinstance(v, NamedRange):
+def dimension_range(v: tuple[Dimension, RangeLike]) -> DimensionRange:
+    if isinstance(v, DimensionRange):
         return v
-    return NamedRange(v[0], unit_range(v[1]))
+    return DimensionRange(v[0], unit_range(v[1]))
 
 
 @dataclasses.dataclass(frozen=True, init=False)
-class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
-    """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
+class Domain(Sequence[DimensionRange[_Rng]], Generic[_Rng]):
+    """Describes the `Domain` of a `Field` as a `Sequence` of `DimensionRange` s."""
 
     dims: tuple[Dimension, ...]
     ranges: tuple[_Rng, ...]
 
     def __init__(
         self,
-        *args: NamedRange[_Rng],
+        *args: DimensionRange[_Rng],
         dims: Optional[Sequence[Dimension]] = None,
         ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
@@ -1128,9 +1132,9 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
-            if not all(isinstance(arg, NamedRange) for arg in args):
+            if not all(isinstance(arg, DimensionRange) for arg in args):
                 raise ValueError(
-                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                    f"Elements of 'Domain' need to be instances of 'DimensionRange', got '{args}'."
                 )
             dims, ranges = zip(*args) if args else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
@@ -1158,15 +1162,15 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return f"Domain({', '.join(f'{e}' for e in self)})"
 
     @overload
-    def __getitem__(self, index: int) -> NamedRange: ...
+    def __getitem__(self, index: int) -> DimensionRange: ...
 
     @overload
     def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(self, index: Dimension | DimensionRef) -> NamedRange: ...
+    def __getitem__(self, index: Dimension | DimensionRef) -> DimensionRange: ...
 
-    def __getitem__(self, index: int | slice | Dimension | DimensionRef) -> NamedRange | Domain:
+    def __getitem__(self, index: int | slice | Dimension | DimensionRef) -> DimensionRange | Domain:
         if isinstance(index, (DimensionMeta, DimensionRef)):
             # NOTE: a spec (from a type specification) matches the class it describes.
             found = self.dim_index(index)
@@ -1174,7 +1178,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
             index = found
         if isinstance(index, int):
-            return NamedRange(dim=self.dims[index], value=self.ranges[index])
+            return DimensionRange(dim=self.dims[index], value=self.ranges[index])
         if isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
@@ -1190,12 +1194,14 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             >>> class I(CartesianAxisIndex): ...
             >>> class J(CartesianAxisIndex): ...
 
-            >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
+            >>> Domain(DimensionRange(I, UnitRange(-1, 3))) & Domain(
+            ...     DimensionRange(I, UnitRange(1, 6))
+            ... )
             Domain(dims=(gt4py.next.common:I[horizontal],), ranges=(UnitRange(1, 3),))
 
-            >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
-            ...     NamedRange(I, UnitRange(1, 6))
-            ... )
+            >>> Domain(
+            ...     DimensionRange(I, UnitRange(-1, 3)), DimensionRange(J, UnitRange(2, 4))
+            ... ) & Domain(DimensionRange(I, UnitRange(1, 6)))
             Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
@@ -1246,7 +1252,9 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Examples:
             >>> class I(CartesianAxisIndex): ...
             >>> class J(CartesianAxisIndex): ...
-            >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
+            >>> domain = Domain(
+            ...     DimensionRange(I, UnitRange(0, 10)), DimensionRange(J, UnitRange(5, 15))
+            ... )
             >>> domain.slice_at[2:3, 2:5]
             Domain(dims=(gt4py.next.common:I[horizontal], gt4py.next.common:J[horizontal]), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
         """
@@ -1295,15 +1303,15 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def pop(self, index: int | Dimension = -1) -> Domain:
         return self.replace(index)
 
-    def insert(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
+    def insert(self, index: int | Dimension, *named_ranges: DimensionRange) -> Domain:
         if isinstance(index, int) and index == len(self.dims):
             new_dims, new_ranges = zip(*named_ranges)
             return Domain(dims=self.dims + new_dims, ranges=self.ranges + new_ranges)
         else:
             return self.replace(index, *named_ranges)
 
-    def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
-        assert all(isinstance(nr, NamedRange) for nr in named_ranges)
+    def replace(self, index: int | Dimension, *named_ranges: DimensionRange) -> Domain:
+        assert all(isinstance(nr, DimensionRange) for nr in named_ranges)
         if isinstance(index, DimensionMeta):
             dim_index = self.dim_index(index)
             if dim_index is None:
@@ -1334,7 +1342,7 @@ FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 
 DomainLike: TypeAlias = (
     Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
-)  # `Domain` is `Sequence[NamedRange]` and therefore a subset
+)  # `Domain` is `Sequence[DimensionRange]` and therefore a subset
 
 
 def domain(domain_like: DomainLike) -> Domain:
@@ -1360,7 +1368,7 @@ def domain(domain_like: DomainLike) -> Domain:
     if isinstance(domain_like, Domain):
         return domain_like
     if isinstance(domain_like, Sequence):
-        return Domain(*tuple(named_range(d) for d in domain_like))
+        return Domain(*tuple(dimension_range(d) for d in domain_like))
     if isinstance(domain_like, Mapping):
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
@@ -1697,7 +1705,9 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
             )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+    def inverse_image(
+        self, image_range: UnitRange | DimensionRange
+    ) -> Sequence[DimensionRange]: ...
 
     @property
     @abc.abstractmethod
@@ -2022,7 +2032,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
         return cls(new, codomain=old)
 
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
+    def inverse_image(self, image_range: UnitRange | DimensionRange) -> Sequence[DimensionRange]:
         if not isinstance(image_range, UnitRange):
             if image_range.dim != self.codomain:
                 raise ValueError(
@@ -2032,7 +2042,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
             image_range = image_range.value
 
         assert isinstance(image_range, UnitRange)
-        return (named_range((self.domain_dim, image_range - self.offset)),)
+        return (dimension_range((self.domain_dim, image_range - self.offset)),)
 
     def premap(
         self,

@@ -673,7 +673,7 @@ def extend_domain(
         for dim, (lower, upper) in extend.items():
             domain = domain.replace(
                 dim,
-                common.named_range(
+                common.dimension_range(
                     (
                         dim,
                         (

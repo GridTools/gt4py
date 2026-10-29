@@ -176,8 +176,8 @@ class StridedConnectivityField(common.Connectivity):
     __getitem__ = restrict  # type: ignore[assignment]
 
     def inverse_image(
-        self, image_range: common.UnitRange | common.NamedRange
-    ) -> Sequence[common.NamedRange]:
+        self, image_range: common.UnitRange | common.DimensionRange
+    ) -> Sequence[common.DimensionRange]:
         raise NotImplementedError
 
     @property
@@ -268,7 +268,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))
-        column_range: common.NamedRange = embedded_context.get_closure_column_range()
+        column_range: common.DimensionRange = embedded_context.get_closure_column_range()
         self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range.value), data)
 
     @property
@@ -968,10 +968,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
             d: _named_indices[d.tag] for d in self._ndarrayfield.__gt_domain__.dims
         }
-        domain_slice: list[common.NamedRange | common.DimensionIndex] = []
+        domain_slice: list[common.DimensionRange | common.DimensionIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
-                domain_slice.append(common.NamedRange(d, common.UnitRange(v.start, v.stop)))
+                domain_slice.append(common.DimensionRange(d, common.UnitRange(v.start, v.stop)))
             elif isinstance(v, list):
                 assert len(v) == 1  # only 1 sparse dimension is supported
                 assert common.is_int_index(
@@ -1112,7 +1112,9 @@ class IndexField(common.Field):
     @property
     def domain(self) -> common.Domain:
         if self._cur_index is None:
-            return common.Domain(common.NamedRange(self._dimension, common.UnitRange.infinite()))
+            return common.Domain(
+                common.DimensionRange(self._dimension, common.UnitRange.infinite())
+            )
         else:
             return common.Domain()
 
@@ -1718,14 +1720,14 @@ def _compute_at_position(
     return sten(*ins_iters)
 
 
-def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
+def _extract_column_range(domain) -> common.DimensionRange | eve.NothingType:
     if (col_range_placeholder := embedded_context.get_closure_column_range(None)) is not None:
         assert (
             col_range_placeholder.value.is_empty()
         )  # check it's just the placeholder with empty range
         column_axis = col_range_placeholder.dim
         if column_axis is not None and column_axis.tag in domain:
-            return common.NamedRange(
+            return common.DimensionRange(
                 column_axis,
                 common.UnitRange(domain[column_axis.tag].start, domain[column_axis.tag].stop),
             )
@@ -1741,7 +1743,7 @@ def _get_output_type(
     col_range = _extract_column_range(domain)
 
     col_dim: Optional[common.Dimension] = None
-    if isinstance(col_range, common.NamedRange):
+    if isinstance(col_range, common.DimensionRange):
         col_dim = col_range.dim
         del domain[col_range.dim.tag]
 
@@ -1760,7 +1762,7 @@ def _fieldspec_list_to_value(
     if isinstance(type_, ts.ListType):
         if type_.offset_type == common.dimension_ref(builtins.ConstList):
             return domain.insert(
-                len(domain), common.named_range((builtins.ConstList, 1))
+                len(domain), common.dimension_range((builtins.ConstList, 1))
             ), type_.element_type
         else:
             offset_provider = embedded_context.get_offset_provider()
@@ -1774,7 +1776,7 @@ def _fieldspec_list_to_value(
             assert common.dimension_ref(local_dim) == offset_type
             return domain.insert(
                 len(domain),
-                common.named_range((local_dim, connectivity.__gt_type__().max_neighbors)),
+                common.dimension_range((local_dim, connectivity.__gt_type__().max_neighbors)),
             ), type_.element_type
     return domain, type_
 
@@ -1819,10 +1821,10 @@ def closure(
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")
 
-    column_range: common.NamedRange | eve.NothingType = _extract_column_range(domain)
+    column_range: common.DimensionRange | eve.NothingType = _extract_column_range(domain)
 
     column_dim = None
-    if isinstance(column_range, common.NamedRange):
+    if isinstance(column_range, common.DimensionRange):
         column_dim = column_range.dim
         del domain[column_range.dim.tag]
 
@@ -1837,7 +1839,7 @@ def closure(
                 assert _is_concrete_position(pos)
                 out.field_setitem(pos, res)
             else:
-                column_range = cast(common.NamedRange, column_range)
+                column_range = cast(common.DimensionRange, column_range)
                 col_pos = pos.copy()
                 for k in column_range.value:
                     col_pos[column_range.dim.tag] = k
@@ -1851,7 +1853,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
     context_vars = {"offset_provider": kwargs["offset_provider"]}
     if "column_axis" in kwargs:
-        context_vars["closure_column_range"] = common.NamedRange(
+        context_vars["closure_column_range"] = common.DimensionRange(
             kwargs["column_axis"],
             common.UnitRange(0, 0),  # empty: indicates column operation, will update later
         )

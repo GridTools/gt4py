@@ -47,7 +47,7 @@ def test_column_ufunc():
 
         with embedded_context.update(
             offset_provider={},
-            closure_column_range=common.NamedRange(K, range(0, 3)),
+            closure_column_range=common.DimensionRange(K, range(0, 3)),
         ):
             test_func(2, 3)
 

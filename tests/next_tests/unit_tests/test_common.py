@@ -33,8 +33,8 @@ from gt4py.next.common import (
     Infinity,
     UnitRange,
     domain,
-    named_range,
-    NamedRange,
+    dimension_range,
+    DimensionRange,
     promote_dims,
     unit_range,
 )
@@ -97,9 +97,9 @@ IHalfDim = common.flip_staggered(IDim)
 @pytest.fixture
 def a_domain():
     return Domain(
-        NamedRange(IDim, UnitRange(0, 10)),
-        NamedRange(JDim, UnitRange(5, 15)),
-        NamedRange(KDim, UnitRange(20, 30)),
+        DimensionRange(IDim, UnitRange(0, 10)),
+        DimensionRange(JDim, UnitRange(5, 15)),
+        DimensionRange(KDim, UnitRange(20, 30)),
     )
 
 
@@ -308,7 +308,7 @@ def test_range_comparison(op, rng1, rng2, expected):
     "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
 def test_named_range_like(named_rng_like):
-    assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
+    assert dimension_range(named_rng_like) == (IDim, UnitRange(2, 4))
 
 
 def test_domain_length(a_domain):
@@ -319,10 +319,16 @@ def test_domain_length(a_domain):
     "empty_domain, expected",
     [
         (Domain(), False),
-        (Domain(NamedRange(IDim, UnitRange(0, 10))), False),
-        (Domain(NamedRange(IDim, UnitRange(0, 0))), True),
-        (Domain(NamedRange(IDim, UnitRange(0, 0)), NamedRange(JDim, UnitRange(0, 1))), True),
-        (Domain(NamedRange(IDim, UnitRange(0, 1)), NamedRange(JDim, UnitRange(0, 0))), True),
+        (Domain(DimensionRange(IDim, UnitRange(0, 10))), False),
+        (Domain(DimensionRange(IDim, UnitRange(0, 0))), True),
+        (
+            Domain(DimensionRange(IDim, UnitRange(0, 0)), DimensionRange(JDim, UnitRange(0, 1))),
+            True,
+        ),
+        (
+            Domain(DimensionRange(IDim, UnitRange(0, 1)), DimensionRange(JDim, UnitRange(0, 0))),
+            True,
+        ),
     ],
 )
 def test_empty_domain(empty_domain, expected):
@@ -455,26 +461,26 @@ def test_domain_dims_ranges_length_mismatch():
 def test_domain_slice_at():
     # Create a sample domain
     domain = Domain(
-        NamedRange(IDim, UnitRange(0, 10)),
-        NamedRange(JDim, UnitRange(5, 15)),
-        NamedRange(KDim, UnitRange(20, 30)),
+        DimensionRange(IDim, UnitRange(0, 10)),
+        DimensionRange(JDim, UnitRange(5, 15)),
+        DimensionRange(KDim, UnitRange(20, 30)),
     )
 
     # Test indexing with slices
     result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 5)),
-        NamedRange(JDim, UnitRange(10, 12)),
-        NamedRange(KDim, UnitRange(27, 30)),
+        DimensionRange(IDim, UnitRange(2, 5)),
+        DimensionRange(JDim, UnitRange(10, 12)),
+        DimensionRange(KDim, UnitRange(27, 30)),
     )
     assert result == expected_result
 
     # Test indexing with out-of-range slices
     result = domain.slice_at[slice(2, 15), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
-        NamedRange(IDim, UnitRange(2, 10)),
-        NamedRange(JDim, UnitRange(10, 12)),
-        NamedRange(KDim, UnitRange(27, 30)),
+        DimensionRange(IDim, UnitRange(2, 10)),
+        DimensionRange(JDim, UnitRange(10, 12)),
+        DimensionRange(KDim, UnitRange(27, 30)),
     )
     assert result == expected_result
 
@@ -515,92 +521,92 @@ def test_domain_pop():
         # Valid index and named ranges
         (
             0,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(X, UnitRange(100, 110)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             1,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(X, UnitRange(100, 110)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         (
             -1,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(X, UnitRange(100, 110)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
             ),
         ),
         (
             J,
             [
-                NamedRange(X, UnitRange(100, 110)),
-                NamedRange(Z, UnitRange(100, 110)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(Z, UnitRange(100, 110)),
             ],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(X, UnitRange(100, 110)),
-                NamedRange(Z, UnitRange(100, 110)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(X, UnitRange(100, 110)),
+                DimensionRange(Z, UnitRange(100, 110)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
         ),
         # Invalid indices
         (
             3,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             -4,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             IndexError,
         ),
         (
             Foo,
-            [NamedRange(X, UnitRange(100, 110))],
+            [DimensionRange(X, UnitRange(100, 110))],
             Domain(
-                NamedRange(I, UnitRange(0, 10)),
-                NamedRange(J, UnitRange(0, 10)),
-                NamedRange(K, UnitRange(0, 10)),
+                DimensionRange(I, UnitRange(0, 10)),
+                DimensionRange(J, UnitRange(0, 10)),
+                DimensionRange(K, UnitRange(0, 10)),
             ),
             ValueError,
         ),

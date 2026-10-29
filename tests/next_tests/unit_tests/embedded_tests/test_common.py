@@ -11,7 +11,7 @@ from typing import Sequence
 import pytest
 
 from gt4py.next import common
-from gt4py.next.common import UnitRange, DimensionIndex, NamedRange
+from gt4py.next.common import UnitRange, DimensionIndex, DimensionRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import (
     _slice_range,
@@ -52,11 +52,11 @@ class K(common.CartesianAxisIndex): ...
         ([(I, (2, 5))], 1, []),
         ([(I, (2, 5))], slice(1, 2), [(I, (3, 4))]),
         ([(I, (2, 5))], I(2), []),
-        ([(I, (2, 5))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (2, 5))], DimensionRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
         ([(I, (-2, 3))], 1, []),
         ([(I, (-2, 3))], slice(1, 2), [(I, (-1, 0))]),
         ([(I, (-2, 3))], I(1), []),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (-2, 3))], DimensionRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
         ([(I, (-2, 3))], -5, []),
         ([(I, (-2, 3))], -6, IndexError),
         ([(I, (-2, 3))], slice(-7, -6), IndexError),
@@ -66,9 +66,9 @@ class K(common.CartesianAxisIndex): ...
         ([(I, (-2, 3))], slice(4, 5), [(I, (2, 3))]),
         ([(I, (-2, 3))], slice(5, 6), IndexError),
         ([(I, (-2, 3))], I(-3), IndexError),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(-3, -2)), IndexError),
+        ([(I, (-2, 3))], DimensionRange(I, UnitRange(-3, -2)), IndexError),
         ([(I, (-2, 3))], I(3), IndexError),
-        ([(I, (-2, 3))], NamedRange(I, UnitRange(3, 4)), IndexError),
+        ([(I, (-2, 3))], DimensionRange(I, UnitRange(3, 4)), IndexError),
         ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], 2, [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
@@ -78,13 +78,13 @@ class K(common.CartesianAxisIndex): ...
         ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], I(2), [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedRange(I, UnitRange(2, 3)),
+            DimensionRange(I, UnitRange(2, 3)),
             [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
         ),
         ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], J(3), [(I, (2, 5)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedRange(J, UnitRange(4, 5)),
+            DimensionRange(J, UnitRange(4, 5)),
             [(I, (2, 5)), (J, (4, 5)), (K, (4, 7))],
         ),
         (
@@ -94,7 +94,7 @@ class K(common.CartesianAxisIndex): ...
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (NamedRange(J, UnitRange(4, 5)), I(2)),
+            (DimensionRange(J, UnitRange(4, 5)), I(2)),
             [(J, (4, 5)), (K, (4, 7))],
         ),
         (
@@ -145,10 +145,10 @@ def test_iterate_domain():
 @pytest.mark.parametrize(
     "slices, expected",
     [
-        [slice(I(3), I(4)), (NamedRange(I, common.UnitRange(3, 4)),)],
+        [slice(I(3), I(4)), (DimensionRange(I, common.UnitRange(3, 4)),)],
         [
             (slice(J(3), J(6)), slice(I(3), I(5))),
-            (NamedRange(J, common.UnitRange(3, 6)), NamedRange(I, common.UnitRange(3, 5))),
+            (DimensionRange(J, common.UnitRange(3, 6)), DimensionRange(I, common.UnitRange(3, 5))),
         ],
         [slice(I(1), J(7)), IndexError],
         [slice(I(1), None), IndexError],

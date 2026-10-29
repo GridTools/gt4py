@@ -33,7 +33,7 @@ def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Doma
 def _relative_sub_domain(
     domain: common.Domain, index: common.RelativeIndexSequence
 ) -> common.Domain:
-    named_ranges: list[common.NamedRange] = []
+    named_ranges: list[common.DimensionRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
@@ -45,7 +45,7 @@ def _relative_sub_domain(
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(rng, idx)
-                named_ranges.append(common.NamedRange(dim, sliced))
+                named_ranges.append(common.DimensionRange(dim, sliced))
             except IndexError as ex:
                 raise embedded_exceptions.IndexOutOfBounds(
                     domain=domain, indices=index, index=idx, dim=dim
@@ -66,7 +66,7 @@ def _relative_sub_domain(
 def _absolute_sub_domain(
     domain: common.Domain, index: common.AbsoluteIndexSequence
 ) -> common.Domain:
-    named_ranges: list[common.NamedRange] = []
+    named_ranges: list[common.DimensionRange] = []
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
@@ -77,7 +77,7 @@ def _absolute_sub_domain(
                         domain=domain, indices=index, index=named_idx, dim=dim
                     )
 
-                named_ranges.append(common.NamedRange(dim, idx))
+                named_ranges.append(common.DimensionRange(dim, idx))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
@@ -87,7 +87,7 @@ def _absolute_sub_domain(
                     )
         else:
             # dimension not mentioned in slice
-            named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
+            named_ranges.append(common.DimensionRange(dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
 
@@ -179,7 +179,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
 
 def _find_index_of_dim(
     dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.DimensionIndex | Any],
+    domain_slice: common.Domain | Sequence[common.DimensionRange | common.DimensionIndex | Any],
 ) -> Optional[int]:
     for i, elem in enumerate(domain_slice):
         if dim == elem.dim:
@@ -195,7 +195,9 @@ def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyInd
     return new_index
 
 
-def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
+def _named_slice_to_named_range(
+    idx: common.NamedSlice,
+) -> common.DimensionRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
         start_dim, start_value = idx.start.dim, idx.start.value
@@ -205,7 +207,7 @@ def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | c
                 f"Dimensions slicing mismatch between '{start_dim.__qualname__}' and '{stop_dim.__qualname__}'."
             )
         assert isinstance(start_value, int) and isinstance(stop_value, int)
-        return common.NamedRange(start_dim, common.UnitRange(start_value, stop_value))
+        return common.DimensionRange(start_dim, common.UnitRange(start_value, stop_value))
     if isinstance(idx.start, common.DimensionIndex) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
     if isinstance(idx.stop, common.DimensionIndex) and idx.start is None:

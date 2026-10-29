@@ -36,7 +36,7 @@ def test_update_with_both_parameters():
     assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
     assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
-    initial_column_range = common.NamedRange(IDim, common.UnitRange(0, 4))
+    initial_column_range = common.DimensionRange(IDim, common.UnitRange(0, 4))
     initial_offset_provider = {}
 
     with ctx.update(
@@ -45,7 +45,7 @@ def test_update_with_both_parameters():
         assert ctx.get_closure_column_range() is initial_column_range
         assert ctx.get_offset_provider() is initial_offset_provider
 
-        test_column_range = common.NamedRange(NewDim, common.UnitRange(-1, 1))
+        test_column_range = common.DimensionRange(NewDim, common.UnitRange(-1, 1))
         test_offset_provider = {"I": "NewDim"}
 
         with ctx.update(
@@ -66,7 +66,7 @@ def test_update_with_no_parameters():
     assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
     assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
-    initial_column_range = common.NamedRange(IDim, common.UnitRange(0, 4))
+    initial_column_range = common.DimensionRange(IDim, common.UnitRange(0, 4))
     initial_offset_provider = {}
 
     with ctx.update(
@@ -91,7 +91,7 @@ def test_update_with_exception():
     assert ctx.get_closure_column_range(DEFAULT) is DEFAULT
     assert ctx.get_offset_provider(DEFAULT) is DEFAULT
 
-    initial_column_range = common.NamedRange(IDim, common.UnitRange(0, 4))
+    initial_column_range = common.DimensionRange(IDim, common.UnitRange(0, 4))
     initial_offset_provider = {}
 
     with pytest.raises(RuntimeError, match="Outer exception"):
@@ -101,7 +101,7 @@ def test_update_with_exception():
             assert ctx.get_closure_column_range() is initial_column_range
             assert ctx.get_offset_provider() is initial_offset_provider
 
-            test_column_range = common.NamedRange(NewDim, common.UnitRange(-1, 1))
+            test_column_range = common.DimensionRange(NewDim, common.UnitRange(-1, 1))
             test_offset_provider = {"I": "NewDim"}
 
             with pytest.raises(RuntimeError, match="Inner exception"):

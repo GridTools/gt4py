@@ -560,7 +560,7 @@ class NdArrayConnectivityField(
     def _cache(self) -> dict:
         return {}
 
-    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+    def inverse_image(self, image_range: common.UnitRange | common.DimensionRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
@@ -634,16 +634,18 @@ def _gather_output_domain(
         narrowed = {nr.dim: nr.value for nr in conn.inverse_image(field_domain[cod].value)}
         # dimensions the connectivity adds that are not in the field yet
         introduced = [
-            common.NamedRange(dim, rng) for dim, rng in narrowed.items() if dim not in domain.dims
+            common.DimensionRange(dim, rng)
+            for dim, rng in narrowed.items()
+            if dim not in domain.dims
         ]
-        result: list[common.NamedRange] = []
+        result: list[common.DimensionRange] = []
         for nr in domain:
             if nr.dim == cod:  # the codomain expands into the connectivity's domain dimensions
                 if cod in narrowed:  # keep the codomain itself when it maps to itself
-                    result.append(common.NamedRange(cod, nr.value & narrowed[cod]))
+                    result.append(common.DimensionRange(cod, nr.value & narrowed[cod]))
                 result.extend(introduced)
             elif nr.dim in narrowed:  # a dimension shared with the connectivity: narrow it
-                result.append(common.NamedRange(nr.dim, nr.value & narrowed[nr.dim]))
+                result.append(common.DimensionRange(nr.dim, nr.value & narrowed[nr.dim]))
             else:
                 result.append(nr)
         domain = common.Domain(*result)
@@ -829,7 +831,9 @@ def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> common.Dom
         return common.Domain()
     dim_start = domains[0][dim].value.start
     dim_stop = domains[-1][dim].value.stop
-    return domains[0].replace(dim, common.NamedRange(dim, common.UnitRange(dim_start, dim_stop)))
+    return domains[0].replace(
+        dim, common.DimensionRange(dim, common.UnitRange(dim_start, dim_stop))
+    )
 
 
 def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
@@ -1108,10 +1112,10 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            named_ranges.append(common.NamedRange(dim, field.domain[pos].value))
+            named_ranges.append(common.DimensionRange(dim, field.domain[pos].value))
         else:
             domain_slice.append(None)  # np.newaxis
-            named_ranges.append(common.NamedRange(dim, common.UnitRange.infinite()))
+            named_ranges.append(common.DimensionRange(dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -1137,7 +1141,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[ar
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.DimensionIndex],
+    domain_slice: common.Domain | Sequence[common.DimensionRange | common.DimensionIndex],
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
