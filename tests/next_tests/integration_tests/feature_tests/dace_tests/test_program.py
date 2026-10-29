@@ -9,6 +9,7 @@
 import dataclasses
 
 import dace
+import numpy as np
 import pytest
 
 from gt4py import next as gtx
@@ -19,6 +20,7 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases_utils import (
     Cell,
     E2V,
+    E2VDim,
     Edge,
     IDim,
     JDim,
@@ -27,7 +29,7 @@ from next_tests.integration_tests.cases_utils import (
     mesh_descriptor,  # noqa: F401
 )
 
-from gt4py.next.program_processors.runners import dace as dace_backends, gtfn
+from gt4py.next.program_processors.runners import dace as dace_backends, gtfn, roundtrip
 
 
 # Override the exec_alloc_descriptor with a custom Backend,
@@ -208,6 +210,33 @@ def test_sdfg_conversion_does_not_depend_on_the_backend_name(exec_alloc_descript
     assert isinstance(sdfg, dace.SDFG)
 
 
+def test_sdfg_conversion_does_not_alter_the_cached_lowering(exec_alloc_descriptor):
+    # `__sdfg__` lowers through the shared frontend, whose results are cached: it must
+    # not change the cached result, which later compilations on any backend reuse.
+    e2v = gtx.as_connectivity(
+        [Edge, E2VDim], Vertex, np.array([[0, 1], [1, 2], [2, 0]], dtype=gtx.IndexType)
+    )
+    offset_provider = {"E2V": e2v}
+
+    @gtx.program(backend=exec_alloc_descriptor)
+    def testee(a: gtx.Field[[Vertex], gtx.float64], out: gtx.Field[[Edge], gtx.float64]):
+        _first_vertex(a, out=out)
+
+    testee = testee.with_compilation_options(connectivities=offset_provider)
+    testee.__sdfg__()
+
+    a = gtx.as_field([Vertex], np.arange(3.0))
+    out = gtx.zeros({Edge: 3})
+    testee.with_backend(roundtrip.default)(a, out, offset_provider=offset_provider)
+
+    np.testing.assert_array_equal(out.asnumpy(), a.asnumpy())
+
+
 @gtx.field_operator
 def _copy(a: gtx.Field[[Vertex], gtx.int]) -> gtx.Field[[Vertex], gtx.int]:
     return a
+
+
+@gtx.field_operator
+def _first_vertex(a: gtx.Field[[Vertex], gtx.float64]) -> gtx.Field[[Edge], gtx.float64]:
+    return a(E2V[0])
