@@ -702,30 +702,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
 GTEntryPoint: TypeAlias = Program | FieldOperator
 
 
-# TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't
-#  have a field operator definition. Currently implementation is merely a hack to keep the only
-#  test relying on this working. Revisit.
-@dataclasses.dataclass(frozen=True)
-class FieldOperatorFromFoast(FieldOperator):
-    """
-    This version of the field operator does not have a DSL definition.
-
-    FieldOperator AST nodes can be programmatically built, which may be
-    particularly useful in testing and debugging.
-    This class provides the appropriate toolchain entry points.
-    """
-
-    foast_stage: ffront_stages.FOASTOperatorDef
-
-    @override
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        assert self.backend is not None
-        compiled_fo = self.backend.compile(
-            self.foast_stage, arguments.CompileTimeArgs.from_concrete(*args, **kwargs)
-        )
-        return compiled_fo(*args, **kwargs)
-
-
 @typing.overload
 def field_operator(
     definition: Callable,

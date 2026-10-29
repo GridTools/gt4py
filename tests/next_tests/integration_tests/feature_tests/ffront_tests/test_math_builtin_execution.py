@@ -7,21 +7,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
-from typing import Callable, Optional
+from typing import Callable
 
 import numpy as np
 import pytest
 
 from gt4py.next.ffront import (
-    decorator,
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
     stages as ffront_stages,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next import backend as next_backend
-from gt4py.next.otf import options
+from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
@@ -39,7 +37,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backend.Backend]):
+def make_builtin_field_operator(builtin_name: str) -> ffront_stages.FOASTOperatorDef:
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -106,15 +104,10 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[next_backen
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
-    return decorator.FieldOperatorFromFoast(
-        definition_stage=None,
-        foast_stage=ffront_stages.FOASTOperatorDef(
-            foast_node=typed_foast_node,
-            closure_vars=closure_vars,
-            grid_type=None,
-        ),
-        compilation_options=options.CompilationOptions(),
-        backend=backend,
+    return ffront_stages.FOASTOperatorDef(
+        foast_node=typed_foast_node,
+        closure_vars=closure_vars,
+        grid_type=None,
     )
 
 
@@ -133,8 +126,10 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     expected = ref_impl(*inputs)
     out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
-
-    builtin_field_op(*inps, out, offset_provider={})
+    foast_stage = make_builtin_field_operator(builtin_name)
+    compiled = cartesian_case.backend.compile(
+        foast_stage, arguments.CompileTimeArgs.from_concrete(*inps, out, offset_provider={})
+    )
+    compiled(*inps, out, offset_provider={})
 
     assert np.allclose(out.asnumpy(), expected)
