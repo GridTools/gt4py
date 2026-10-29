@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import builtins
 import collections.abc
+import contextvars
 import dataclasses
 import enum
 import functools
@@ -113,6 +114,12 @@ def make_type(type_: type) -> ts.TypeSpec:
             )
 
         keys = [*named_collections.elements_keys(type_)]
+        if any(
+            isinstance(annotation, (str, ForwardRef))
+            for class_ in type_.__mro__
+            for annotation in getattr(class_, "__annotations__", {}).values()
+        ):
+            _note_namespace_lookup()  # postponed annotations, resolved in the module namespace
         hints = named_collections.elements_types(
             type_, globalns=sys.modules[type_.__module__].__dict__
         )
@@ -130,7 +137,10 @@ def make_type(type_: type) -> ts.TypeSpec:
 def _resolve_type_alias(type_hint: Any) -> Any:
     """Resolve a PEP 695 type alias, reporting its failures the way annotations do."""
     try:
-        return xtyping.eval_type_alias(type_hint)
+        resolved = xtyping.eval_type_alias(type_hint)
+        if resolved is not type_hint:
+            _note_namespace_lookup()  # an alias's value is looked up lazily, by name
+        return resolved
     except NameError as error:
         raise ValueError(
             f"Type annotation '{type_hint}' has undefined forward references."
@@ -155,6 +165,7 @@ def canonicalize_type_hint(
     if isinstance(type_hint, str):
         type_hint = ForwardRef(type_hint)
     if isinstance(type_hint, ForwardRef):
+        _note_namespace_lookup()
         try:
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
         except Exception as error:
@@ -183,7 +194,6 @@ def canonicalize_type_hint(
     return canonical_type, args, tuple(extra_args)
 
 
-@eve_utils.optional_lru_cache(maxsize=None, typed=False)
 def from_type_hint(
     type_hint: Any,
     *,
@@ -191,6 +201,74 @@ def from_type_hint(
     localns: Optional[dict[str, Any]] = None,
 ) -> ts.TypeSpec:
     """Convert any kind of Python type hint to a GT4Py TypeSpec."""
+    # NOTE: cached together with the dimension classes the conversion captured, which are
+    # replayed into an active capture (see `common.capture_dimension_classes`). A conversion
+    # that looked names up in a namespace (string or forward-ref annotations, type aliases)
+    # depends on the namespace's current contents, not only on the hint: its entry is only
+    # reused while every dimension class it captured is still the one its module defines (a
+    # re-run notebook cell redefining a dimension invalidates it).
+    key = (type_hint, globalns, localns) if globalns is None and localns is None else None
+    try:
+        cached = _FROM_TYPE_HINT_CACHE.get(key) if key is not None else None
+    except TypeError:  # an unhashable hint
+        key = cached = None
+    if cached is not None:
+        type_spec, captured_pairs, namespace_dependent = cached
+        if not namespace_dependent or all(
+            _is_current_dimension_class(cls) for _, cls in captured_pairs
+        ):
+            if captured_pairs:
+                common.replay_dimension_classes(captured_pairs)
+            return type_spec
+
+    outer = _NAMESPACE_LOOKUPS.get()
+    looked_up = [False]
+    token = _NAMESPACE_LOOKUPS.set(looked_up)
+    try:
+        with common.capture_dimension_classes() as captured:
+            type_spec = _from_type_hint(type_hint, globalns=globalns, localns=localns)
+    finally:
+        _NAMESPACE_LOOKUPS.reset(token)
+    if looked_up[0] and outer is not None:
+        outer[0] = True  # the enclosing conversion depends on the namespace too
+    if key is not None:
+        _FROM_TYPE_HINT_CACHE[key] = (type_spec, tuple(captured), looked_up[0])
+    common.replay_dimension_classes(captured)
+    return type_spec
+
+
+_FROM_TYPE_HINT_CACHE: dict[
+    Any, tuple[ts.TypeSpec, tuple[tuple[common.DimensionRef, common.Dimension], ...], bool]
+] = {}
+
+
+def _is_current_dimension_class(cls: common.Dimension) -> bool:
+    """Whether `cls` is still what its (loaded) module defines under its qualname."""
+    if common.is_staggered(cls):
+        return _is_current_dimension_class(cls.base)  # type: ignore[attr-defined] # staggered
+    obj: Any = sys.modules.get(cls.__module__)
+    for attr in cls.__qualname__.split("."):
+        obj = getattr(obj, attr, None)
+    return obj is cls
+
+
+#: Set during a `from_type_hint` conversion: whether it looked names up in a namespace.
+_NAMESPACE_LOOKUPS: contextvars.ContextVar[Optional[list[bool]]] = contextvars.ContextVar(
+    "_NAMESPACE_LOOKUPS", default=None
+)
+
+
+def _note_namespace_lookup() -> None:
+    if (looked_up := _NAMESPACE_LOOKUPS.get()) is not None:
+        looked_up[0] = True
+
+
+def _from_type_hint(
+    type_hint: Any,
+    *,
+    globalns: Optional[dict[str, Any]] = None,
+    localns: Optional[dict[str, Any]] = None,
+) -> ts.TypeSpec:
     from_type_hint_same_ns = functools.partial(from_type_hint, globalns=globalns, localns=localns)
 
     canonical_type, args, extra_args = canonicalize_type_hint(
@@ -366,6 +444,13 @@ def from_value(value: Any) -> ts.TypeSpec:
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
+        if common.is_capturing_dimension_classes() and isinstance(
+            value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES
+        ):
+            # The type comes from the collection's annotations; at the Python edge, the classes
+            # of the *values* matter too (see `common.capture_dimension_classes`).
+            for key in named_collections.elements_keys(type(value)):
+                from_value(getattr(value, key))  # type: ignore[arg-type] # str keys
 
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type

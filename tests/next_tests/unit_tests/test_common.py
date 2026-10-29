@@ -1021,6 +1021,34 @@ class TestDimensionRef:
         assert repr(ref) != repr(IDim)
         assert str(ref) == str(IDim) == "IDim[horizontal]"  # the display form is shared
 
+    def test_ref_vs_class_comparison_unguarded(self, monkeypatch):
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", False)
+        ref = common.dimension_ref(IDim)
+        assert not (ref == IDim) and not (IDim == ref)
+        assert ref != IDim and IDim != ref
+
+    @pytest.mark.parametrize(
+        "comparison",
+        [
+            lambda r, c: r == c,
+            lambda r, c: c == r,
+            lambda r, c: r != c,
+            lambda r, c: c != r,
+            lambda r, c: c in [r],
+        ],
+    )
+    def test_ref_vs_class_comparison_guarded(self, monkeypatch, comparison):
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", True)
+        with pytest.raises(TypeError, match="missed its conversion"):
+            comparison(common.dimension_ref(IDim), IDim)
+
+    def test_hash_based_lookups_cannot_be_guarded(self, monkeypatch):
+        # documented limitation: the hashes differ, so `__eq__` is never consulted
+        monkeypatch.setattr(gtx.config, "STRICT_DIMENSION_REF_COMPARISON", True)
+        ref = common.dimension_ref(IDim)
+        assert IDim not in {ref}
+        assert {ref: 1}.get(IDim) is None
+
     def test_interned(self):
         ref = common.dimension_ref(common.Staggered[KDim])
         fields = {f.name: getattr(ref, f.name) for f in dataclasses.fields(ref)}

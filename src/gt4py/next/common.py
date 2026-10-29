@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import abc
 import collections
+import contextlib
+import contextvars
 import copyreg
 import dataclasses
 import enum
@@ -21,7 +23,7 @@ import sys
 import threading
 import types
 import weakref
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -390,7 +392,45 @@ def dimension_ref(dim: Dimension | DimensionRef) -> DimensionRef:
                 module=dim.__module__, qualname=dim.__qualname__, kind=dim.kind, category=category
             )
         type.__setattr__(dim, _REF_ATTR, ref)
+    if (sink := _DIMENSION_CLASS_CAPTURE.get()) is not None:
+        sink.append((ref, dim))
     return ref
+
+
+#: Set while `capture_dimension_classes` is active: the `(ref, class)` pairs converted so far.
+_DIMENSION_CLASS_CAPTURE: contextvars.ContextVar[Optional[list[tuple[DimensionRef, Dimension]]]] = (
+    contextvars.ContextVar("_DIMENSION_CLASS_CAPTURE", default=None)
+)
+
+
+def is_capturing_dimension_classes() -> bool:
+    """Whether `capture_dimension_classes` is active (conversion caches must then be bypassed)."""
+    return _DIMENSION_CLASS_CAPTURE.get() is not None
+
+
+def replay_dimension_classes(pairs: Iterable[tuple[DimensionRef, Dimension]]) -> None:
+    """Record `(ref, class)` pairs captured earlier (e.g. by a cached conversion), if capturing."""
+    if (sink := _DIMENSION_CLASS_CAPTURE.get()) is not None:
+        sink.extend(pairs)
+
+
+@contextlib.contextmanager
+def capture_dimension_classes() -> Iterator[list[tuple[DimensionRef, Dimension]]]:
+    """
+    Record the `(ref, class)` pair of every dimension class converted to a ref in the block.
+
+    `dimension_ref` is *the* conversion point from the Python edge, so wrapping a conversion
+    (`type_translation.from_type_hint` of a declaration, `from_value` of an argument) in this
+    yields exactly the classes it used, for every annotation and value form the conversion
+    supports. The Python edge uses it to compare dimensions by class identity, below which only
+    (equal-by-value) refs remain.
+    """
+    sink: list[tuple[DimensionRef, Dimension]] = []
+    token = _DIMENSION_CLASS_CAPTURE.set(sink)
+    try:
+        yield sink
+    finally:
+        _DIMENSION_CLASS_CAPTURE.reset(token)
 
 
 def dimension_refs(dims: Iterable[Dimension | DimensionRef]) -> list[DimensionRef]:
