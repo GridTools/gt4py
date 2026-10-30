@@ -19,7 +19,7 @@ import pkgutil
 import sys
 import types
 import typing
-from typing import Any, ForwardRef, Optional, TypeAlias
+from typing import Any, ForwardRef, Optional, TypeAlias, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -72,6 +72,16 @@ def make_constructor_type(type_spec: ts.TypeSpec) -> ts.ConstructorType:
                     pos_or_kw_args={},
                     kw_only_args={},
                     returns=type_spec,
+                )
+            )
+
+        case ts.DeferredType(constraint=ts.TupleType):
+            return ts.ConstructorType(
+                definition=ts.FunctionType(
+                    pos_only_args=[ts.DeferredType(constraint=None)],
+                    pos_or_kw_args={},
+                    kw_only_args={},
+                    returns=ts.DeferredType(constraint=ts.VarLenTupleType),
                 )
             )
 
@@ -147,7 +157,7 @@ def canonicalize_type_hint(
     *,
     globalns: Optional[dict[str, Any]] = None,
     localns: Optional[dict[str, Any]] = None,
-) -> tuple[Any, tuple[Any, ...], tuple[Any, ...]]:
+) -> tuple[Any, tuple[Any, ...] | None, tuple[Any, ...]]:
     """
     Canonicalize python type annotations as a tuple of (canonical_type, type_args, annotated_extra_args).
     """
@@ -178,7 +188,14 @@ def canonicalize_type_hint(
         type_hint = _resolve_type_alias(type_hint)
 
     canonical_type = typing.get_origin(type_hint) or type_hint
-    args = typing.get_args(type_hint)
+    # `None` (rather than `()`) marks an unparametrized annotation, distinguishing bare
+    # `tuple` / `typing.Tuple` from the empty-tuple annotation `tuple[()]`. Unsubscripted
+    # `typing` aliases have a truthy origin but no `__args__` attribute.
+    args = (
+        typing.get_args(type_hint)
+        if typing.get_origin(type_hint) and hasattr(type_hint, "__args__")
+        else None
+    )
 
     return canonical_type, args, tuple(extra_args)
 
@@ -199,17 +216,46 @@ def from_type_hint(
 
     match canonical_type:
         case builtins.tuple:
-            if not args:
-                raise ValueError(f"Tuple annotation '{type_hint}' requires at least one argument.")
-            if Ellipsis in args:
-                raise ValueError(f"Unbound tuples '{type_hint}' are not allowed.")
-            tuple_types = [from_type_hint_same_ns(arg) for arg in args]
-            assert all(isinstance(elem, ts.DataType) for elem in tuple_types)
-            return ts.TupleType(types=tuple_types)
+            # Fixed-length tuple, e.g. `tuple[int32, float64]`
+            if (
+                isinstance(args, tuple)
+                and len(args) > 0
+                and not any(arg is Ellipsis for arg in args)
+            ):
+                tuple_types = [from_type_hint_same_ns(arg) for arg in args]
+                if not all(isinstance(elem, ts.DataType) for elem in tuple_types):
+                    raise ValueError(
+                        f"Tuple annotation '{type_hint}' contains invalid element types."
+                    )
+                return ts.TupleType(types=tuple_types)
+            # Variable-length tuple, e.g. `tuple[int32, ...]`
+            elif isinstance(args, tuple) and len(args) == 2 and args[1] is Ellipsis:
+                element_type = from_type_hint_same_ns(args[0])
+                if not isinstance(element_type, ts.DataType):
+                    raise ValueError(
+                        f"Tuple annotation '{type_hint}' contains an invalid element type."
+                    )
+                return ts.VarLenTupleType(element_type=element_type)
+            # Unparametrized annotation, i.e. bare `tuple` / `typing.Tuple` (the
+            # empty-tuple annotation `tuple[()]` has `args == ()` and is rejected below)
+            elif args is None:
+                # TODO(tehrengruber): We use `DeferredType` until we have an actual representation
+                #  for a generic type.
+                return ts.DeferredType(constraint=ts.TupleType)
+            else:
+                raise ValueError(
+                    f"Tuple annotation '{type_hint}' must either "
+                    f"be a list of concrete arguments (e.g. 'tuple[int]'), "
+                    f"be a variadic tuple (e.g. 'tuple[int, ...]'), "
+                    f"or have no arguments (e.g. 'tuple')."
+                )
 
         case common.Field:
-            if (n_args := len(args)) != 2:
-                raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
+            # `args` is `None` for an unparametrized `Field` annotation
+            if args is None or len(args) != 2:
+                raise ValueError(
+                    f"Field type requires two arguments, got {len(args or ())}: '{type_hint}'."
+                )
             dims: list[common.Dimension] = []
             dim_arg, dtype_arg = args
             dim_arg = (
@@ -359,6 +405,30 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)
+    elif isinstance(value, named_collections.CUSTOM_NAMED_COLLECTION_TYPES):
+        # Take the member types from the runtime values — the annotated types may be
+        # generic, e.g. a variable-length tuple, whose concrete type is only known from
+        # the value. Members whose type is incompatible with the annotation are rejected
+        # later, by the signature checks against the (annotated) parameter types; in
+        # debug mode reject them already here, with a more precise error.
+        annotated_type = from_type_hint(xtyping.infer_type(value))
+        assert isinstance(annotated_type, ts.NamedCollectionType)
+        member_types = [from_value(getattr(value, key)) for key in annotated_type.keys]
+        if __debug__:
+            for key, annotated_member_type, member_type in zip(
+                annotated_type.keys, annotated_type.types, member_types, strict=True
+            ):
+                if not type_info.is_concretizable(annotated_member_type, to_type=member_type):
+                    raise ValueError(
+                        f"Member '{key}' of '{type(value).__name__}' has type '{member_type}',"
+                        f" which is incompatible with its annotation '{annotated_member_type}'."
+                    )
+        assert all(isinstance(t, (ts.DataType, ts.DimensionType)) for t in member_types)
+        return ts.NamedCollectionType(
+            types=cast(list[ts.DataType], member_types),
+            keys=list(annotated_type.keys),
+            original_python_type=annotated_type.original_python_type,
+        )
     elif isinstance(value, PythonNamespaceObject):
         return NamespaceProxy(value)
     else:

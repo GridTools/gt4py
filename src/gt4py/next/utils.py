@@ -26,7 +26,7 @@ from typing import (
     overload,
 )
 
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import NOTHING, utils as eve_utils
 
 
 _T = TypeVar("_T")
@@ -153,6 +153,9 @@ def tree_map(
           reconstruct a collection, since `result_collection_constructor` receives the original
           collection and can recover them from there.
         result_collection_constructor: Type of the collection to be returned. If `None` the same type as `collection_type` is used.
+          `fun` is guaranteed to have been applied to every element before the constructor
+          is called (the mapped elements are materialized eagerly), so a constructor may
+          discard the results, e.g. for validation-only maps.
         unpack: Replicate tuple structure returned from `fun` to the mapped result, i.e. return
           tuple of result collections instead of result collections of tuples.
         with_path_arg: Pass the path to access the current element to `fun`.
@@ -298,13 +301,14 @@ _T2 = TypeVar("_T2")
 
 
 def equalize_tuple_structure(
-    d1: _T1, d2: _T2, *, fill_value: Any, bidirectional: bool = True
+    d1: _T1, d2: _T2, *, fill_value: Any = NOTHING, bidirectional: bool = True
 ) -> tuple[_T1, _T2]:
     """
     Given two values or tuples thereof equalize their structure.
 
     If one of the arguments is a tuple the argument will be promoted to a tuple of the same
-    structure.
+    structure. By default only the structure is equalized and differing tuple lengths are
+    an error; pass `fill_value` to instead pad the shorter tuple with it.
 
     >>> equalize_tuple_structure((1,), (2, 3), fill_value=None) == (
     ...     (1, None),
@@ -342,6 +346,8 @@ def equalize_tuple_structure(
     if d1_is_tuple and d2_is_tuple:
         if not bidirectional and len(d1) < len(d2):  # type: ignore[arg-type] # ensured by condition above
             raise ValueError(f"Expected `{d2!s}` to be longer than or equal to `{d1!s}`.")
+        if fill_value is NOTHING and len(d1) != len(d2):  # type: ignore[arg-type] # ensured by condition above
+            raise ValueError(f"Expected `{d1!s}` and `{d2!s}` to have equal lengths.")
         return tuple(  # type: ignore[return-value] # mypy not smart enough
             zip(
                 *(

@@ -125,6 +125,16 @@ class Stmt(Node): ...
 
 
 class SetAt(Stmt):  # from JAX array.at[...].set()
+    """
+    Write `expr`, computed on `domain`, into `target`.
+
+    For a tuple-valued `target` the `domain` is a matching tuple of domains (built with
+    `make_tuple`), except that a single domain may also apply to an entire tuple subtree
+    of the target, i.e. to each of its elements. This shallower structure is needed for
+    variable-length tuple outputs, whose concrete length is unknown when the domain
+    expression is constructed.
+    """
+
     expr: Expr  # only `as_fieldop(stencil)(inp0, ...)` in first refactoring
     domain: Expr
     target: Expr  # `make_tuple` or SymRef
@@ -153,6 +163,13 @@ class Program(Node, ValidatedSymbolTableTrait):
         Sym(id=name) for name in sorted(BUILTINS)
     ]  # sorted for serialization stability
 
+    def __hash__(self) -> int:
+        # Only here do types contribute to the hash as they are the starting point for
+        # type inference, whereas in all other places the types can be recovered. Note
+        # that equality still ignores types, so equal programs may have different hashes;
+        # the users only consume the hash value itself, never using programs as dict keys.
+        return hash((Node.__hash__(self), tuple(str(param.type) for param in self.params)))
+
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
 Sym.__hash__ = Node.__hash__  # type: ignore[method-assign]
@@ -165,7 +182,6 @@ SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
 Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
-Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
 SetAt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 IfStmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
 InfinityLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]

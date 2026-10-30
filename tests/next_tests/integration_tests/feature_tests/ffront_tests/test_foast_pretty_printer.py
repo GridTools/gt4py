@@ -84,3 +84,15 @@ def test_scanop():
     ).strip()
 
     assert pretty_format(scan.foast_stage.foast_node) == expected
+
+
+def test_tuple_comprehension_multi_target():
+    I = Dimension("I")
+
+    @field_operator
+    def foo(
+        b: tuple[tuple[Field[[I], int64], Field[[I], int64]], ...],
+    ) -> tuple[Field[[I], int64], ...]:
+        return tuple(x + y for x, y in b)
+
+    assert "for (x, y) in b" in pretty_format(foo.foast_stage.foast_node)
