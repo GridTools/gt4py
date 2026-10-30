@@ -533,7 +533,7 @@ class NdArrayConnectivityField(
             assert isinstance(image_range, common.UnitRange)
             assert common.UnitRange.is_finite(image_range)
 
-            slices = self._image_slices(image_range)
+            slices = _hyperslice(self._index_table, image_range, self.array_ns, self.skip_value)
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
@@ -548,10 +548,11 @@ class NdArrayConnectivityField(
         # the jax subclass answers with the concrete table behind the tracer
         return self._ndarray
 
-    @property
-    def _image_unknown(self) -> bool:
-        """Whether the table's values are not available for domain inference."""
-        return False
+    def _gather_index(
+        self, index: core_defs.NDArrayObject, image_range: common.UnitRange
+    ) -> core_defs.NDArrayObject:
+        """The 0-based buffer indices the gather reads for `index` from a field on `image_range`."""
+        return index
 
     def __setitem__(
         self,
@@ -559,9 +560,6 @@ class NdArrayConnectivityField(
         value: common.Field | core_defs.NDArrayObject | core_defs.IntegralScalar,
     ) -> Never:
         raise TypeError("'Connectivity' does not support item assignment.")
-
-    def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
-        return _hyperslice(self._index_table, image_range, self.array_ns, self.skip_value)
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
@@ -646,13 +644,11 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
             return _identity_index_array(new_domain, dim, xp) - start
         # skip entries read the domain start instead of wrapping around to an arbitrary element;
         # what is gathered there, and its cotangent, is left to the reduction mask to discard
+        assert isinstance(conn, NdArrayConnectivityField)
         index = (
             _connectivity_index_array(conn, new_domain, xp, skip_value_replacement=start) - start
         )
-        if getattr(conn, "_image_unknown", False):
-            # the output domain assumed all targets inside the field; out-of-range ones read its boundary
-            index = xp.clip(index, 0, len(data.domain[dim].unit_range) - 1)
-        return index
+        return conn._gather_index(index, data.domain[dim].unit_range)
 
     new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
@@ -1097,12 +1093,20 @@ if jnp:
         def _image_unknown(self) -> bool:
             return self._table_handle is None and isinstance(self._ndarray, jax.core.Tracer)
 
-        def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
+        def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
             if self._image_unknown:
                 # values computed inside a trace: assume every target lies in `image_range`
-                return tuple(slice(0, n) for n in self._ndarray.shape)
+                return self.domain
             with jax.ensure_compile_time_eval():
-                return super()._image_slices(image_range)
+                return super().inverse_image(image_range)
+
+        def _gather_index(
+            self, index: core_defs.NDArrayObject, image_range: common.UnitRange
+        ) -> core_defs.NDArrayObject:
+            if self._image_unknown:
+                # the output domain assumed all targets inside the field; out-of-range ones read its boundary
+                return jnp.clip(index, 0, len(image_range) - 1)
+            return index
 
         def _restrict_buffer(
             self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence

@@ -2019,6 +2019,13 @@ def test_jax_jit_premap_with_as_offset_computed_in_trace():
     np.testing.assert_array_equal(
         jax.jit(shifted)(field, beyond).asnumpy(), np.repeat(values[:, -1:], 4, axis=1)
     )
+    below = common._field(jax.numpy.asarray(np.full((2, 4), -3, dtype=np.int32)), domain=domain)
+    np.testing.assert_array_equal(
+        jax.jit(shifted)(field, below).asnumpy(),
+        np.take_along_axis(
+            values, np.maximum(np.arange(4) - 3, 0)[None, :].repeat(2, axis=0), axis=1
+        ),
+    )
 
 
 @pytest.mark.requires_jax
