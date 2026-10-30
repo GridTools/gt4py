@@ -751,7 +751,6 @@ def _configure_descending_point(
             ):
                 nested_symbol = psym
             else:
-                reserved_names = taken_names
                 if (
                     nsdfg.is_name_free(psym)
                     and psym not in inner_written_symbols
@@ -759,7 +758,7 @@ def _configure_descending_point(
                 ):
                     nested_symbol = psym
                 else:
-                    nested_symbol = _find_new_nested_symbol(nsdfg, psym, reserved_names)
+                    nested_symbol = _find_new_nested_symbol(nsdfg, psym, taken_names)
                 nsdfg.add_symbol(nested_symbol, ptype)
                 assert nested_symbol not in symbol_mapping
                 symbol_mapping[nested_symbol] = psym
