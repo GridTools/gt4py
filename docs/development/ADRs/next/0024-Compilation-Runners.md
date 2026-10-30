@@ -155,8 +155,8 @@ connectivity, is fingerprinted by the digest instead of the table, and pickles
 as a reference to its file; a worker unpickles the compilable inside the task,
 so an unreadable file fails that task only. All runners thus compile the same
 input with the same key, and the host tables are shared with the workers
-through the page cache. The dace orchestration path uses the same view.
-Compilation that bypasses both still sees the runtime tables: a direct
+through the page cache. Compilation that bypasses `make_compilation_task`
+still sees the runtime tables: a direct
 `Backend.compile`, and backends with a customized `compile`, whose tasks are
 opaque. Execution always receives the runtime connectivities.
 
