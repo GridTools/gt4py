@@ -1017,7 +1017,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
             )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+    def _inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
 
     @property
     @abc.abstractmethod
@@ -1296,7 +1296,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
         return cls(new, codomain=old)
 
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
+    def _inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):
             if image_range.dim != self.codomain:
                 raise ValueError(

@@ -510,13 +510,13 @@ class NdArrayConnectivityField(
         return self._skip_value
 
     # This embedded run-time cache is only used to speed up repeated calls to
-    # `inverse_image` and `restrict`, and it should not be considered part of
+    # `_inverse_image` and `restrict`, and it should not be considered part of
     # the connectivity field definition, and therefore it should not be serialized.
     @functools.cached_property
     def _cache(self) -> dict:
         return {}
 
-    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+    def _inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
@@ -594,7 +594,7 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
             )
 
         current_range: common.UnitRange = data.domain[dim_idx].unit_range
-        new_ranges = connectivity.inverse_image(current_range)
+        new_ranges = connectivity._inverse_image(current_range)
         new_domain = new_domain.replace(dim_idx, *new_ranges)
 
     return data.__class__.from_array(data._ndarray, domain=new_domain, dtype=data.dtype)
@@ -610,7 +610,7 @@ def _gather_output_domain(
         cod = conn.codomain
         # the connectivity's domain, restricted to where it maps into the codomain's range
         narrowed = {
-            nr.dim: nr.unit_range for nr in conn.inverse_image(field_domain[cod].unit_range)
+            nr.dim: nr.unit_range for nr in conn._inverse_image(field_domain[cod].unit_range)
         }
         # dimensions the connectivity adds that are not in the field yet
         introduced = [
@@ -1093,12 +1093,14 @@ if jnp:
         def _image_unknown(self) -> bool:
             return self._table_handle is None and isinstance(self._ndarray, jax.core.Tracer)
 
-        def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+        def _inverse_image(
+            self, image_range: common.UnitRange | common.NamedRange
+        ) -> common.Domain:
             if self._image_unknown:
                 # values computed inside a trace: assume every target lies in `image_range`
                 return self.domain
             with jax.ensure_compile_time_eval():
-                return super().inverse_image(image_range)
+                return super()._inverse_image(image_range)
 
         def _gather_index(
             self, index: core_defs.NDArrayObject, image_range: common.UnitRange

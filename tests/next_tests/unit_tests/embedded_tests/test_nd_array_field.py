@@ -1348,7 +1348,7 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
         codomain=V,
     )
 
-    _ = e2v_conn.inverse_image(UnitRange(2, 5))
+    _ = e2v_conn._inverse_image(UnitRange(2, 5))
     assert "_cache" in e2v_conn.__dict__
 
     _ = e2v_conn.__gt_buffer_info__
@@ -1430,32 +1430,32 @@ def test_connectivity_field_inverse_image_2d_domain():
     # For the 'c2v_conn' defined above, the only valid range including 2
     # is [0, 3). Otherwise, the inverse image would be non-contiguous.
     image_range = UnitRange(V_START, V_STOP)
-    result = c2v_conn.inverse_image(image_range)
+    result = c2v_conn._inverse_image(image_range)
 
     assert len(result) == 2
     assert result[0] == (C, UnitRange(C_START, C_STOP))
     assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn._inverse_image(UnitRange(0, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn._inverse_image(UnitRange(0, 1))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 1))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn._inverse_image(UnitRange(1, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn._inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn._inverse_image(UnitRange(2, 3))
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
@@ -1471,14 +1471,14 @@ def test_connectivity_field_inverse_image_non_contiguous():
         codomain=V,
     )
 
-    result = e2v_conn.inverse_image(UnitRange(V_START, 5))
+    result = e2v_conn._inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, 6))
+        e2v_conn._inverse_image(UnitRange(V_START, 6))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
+        e2v_conn._inverse_image(UnitRange(V_START, V_STOP))
 
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
@@ -1510,32 +1510,32 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     #  | [-1  2 -1 -1]]
 
     image_range = UnitRange(V_START, V_STOP)
-    result = c2v_conn.inverse_image(image_range)
+    result = c2v_conn._inverse_image(image_range)
 
     assert len(result) == 2
     assert result[0] == (C, UnitRange(C_START, C_STOP))
     assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn._inverse_image(UnitRange(0, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn._inverse_image(UnitRange(0, 1))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 1))
     assert result[1] == (C2V, UnitRange(1, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn._inverse_image(UnitRange(1, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn._inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn._inverse_image(UnitRange(2, 3))
 
 
 @pytest.mark.parametrize(
@@ -1893,8 +1893,8 @@ def test_inverse_image_range_containing_skip_value_selects_skip_only_rows():
         skip_value=-1,
     )
 
-    assert conn.inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 1), D2: (0, 2)})
-    assert conn.inverse_image(UnitRange(-1, 2)) == common.domain({D1: (0, 2), D2: (0, 2)})
+    assert conn._inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 1), D2: (0, 2)})
+    assert conn._inverse_image(UnitRange(-1, 2)) == common.domain({D1: (0, 2), D2: (0, 2)})
 
 
 @pytest.mark.requires_jax
@@ -1917,7 +1917,7 @@ def test_jax_connectivity_pytree_roundtrip():
     assert restored.domain == domain
     assert restored.codomain == V
     assert restored.skip_value == -1
-    assert restored.inverse_image(UnitRange(0, 2)) == common.domain({E: (0, 1), E2VDim: (0, 2)})
+    assert restored._inverse_image(UnitRange(0, 2)) == common.domain({E: (0, 1), E2VDim: (0, 2)})
 
     same_table = common._connectivity(table, codomain=V, domain=domain, skip_value=-1)
     assert jax.tree_util.tree_structure(same_table) == treedef
@@ -2100,7 +2100,7 @@ def test_inverse_image_empty_table_raises():
     )
 
     with pytest.raises(ValueError, match="non-contiguous or empty"):
-        conn.inverse_image(UnitRange(0, 4))
+        conn._inverse_image(UnitRange(0, 4))
 
 
 def test_neighbor_sum_with_transposed_table_dims():

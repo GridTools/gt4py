@@ -175,7 +175,7 @@ class StridedConnectivityField(common.Connectivity):
 
     __getitem__ = restrict  # type: ignore[assignment]
 
-    def inverse_image(
+    def _inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
     ) -> Sequence[common.NamedRange]:
         raise NotImplementedError

@@ -15,7 +15,7 @@ In the context of running embedded `premap` under `jax.jit`, facing a neighbor t
 
 `premap` uses the table in two ways that pull in opposite directions:
 
-- The **output domain** comes from `inverse_image`, which depends on the table's values. Under a trace it needs concrete values, and Python `slice`s cannot be staged.
+- The **output domain** comes from `_inverse_image`, which depends on the table's values. Under a trace it needs concrete values, and Python `slice`s cannot be staged.
 - The **gather** should take the table as an argument of the compiled program. A closed-over table is inlined as a constant, which does not scale to large meshes.
 
 Narrowing is the common case: the field usually covers only part of the connectivity's image, so a solution that handles only covering ranges is not sufficient.
