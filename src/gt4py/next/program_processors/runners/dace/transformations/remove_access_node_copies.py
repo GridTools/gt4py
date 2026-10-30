@@ -28,7 +28,6 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
-    strides as gtx_transformations_strides,
     utils as gtx_transformations_utils,
 )
 
@@ -259,8 +258,28 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
         second_node.data = first_node.data
         third_node.data = first_node.data
 
-        # Update strides after changing the data of access nodes
-        for modified_node in [second_node, third_node]:
-            gtx_transformations_strides.gt_propagate_strides_from_access_node(
-                sdfg, graph, modified_node
-            )
+        # Restate the connectors of any NestedSDFG whose edge data was changed
+        #  above: the transformation connected different (larger) data to the
+        #  connector, so the inner descriptor has to adopt the new outer one and
+        #  the memlets inside have to be shifted by the offset of the old data
+        #  within the new.  This must happen *before* stride propagation, because
+        #  `_gt_map_strides_into_nested_sdfg()` validates the connector and
+        #  raises if it is still windowed (inner shape != outer shape).
+        outer_desc = sdfg.arrays[first_node.data]
+        for node in graph.nodes():
+            if not isinstance(node, dace_nodes.NestedSDFG) or node.sdfg is None:
+                continue
+            for edge in graph.all_edges(node):
+                if edge.data.data != first_node.data:
+                    continue
+                connector = edge.dst_conn if edge.dst is node else edge.src_conn
+                if not connector or connector not in node.sdfg.arrays:
+                    continue
+                assert not node.sdfg.arrays[connector].transient
+                gtx_transformations_utils.restate_nested_sdfg_connector(
+                    node,
+                    connector,
+                    outer_desc,
+                    ss_offset=tuple(node_offset),
+                )
+                node.integrate_into_parent()

@@ -104,7 +104,12 @@ def _translate_concat_where_branch(
     """
     assert isinstance(source_expr.type, (ts.FieldType, ts.ScalarType))
 
-    source_domain = source_expr.annex.domain
+    # The annex domain of the expression node is read-only here: the local copy is
+    #  specialized below to the region of this `concat_where` branch, but the node
+    #  itself has to keep the original domain.
+    source_domain = domain_utils.SymbolicDomain(
+        source_expr.annex.domain.grid_type, dict(source_expr.annex.domain.ranges)
+    )
     if source_expr.type != output_type:
         # We promote the input expression to a field defined on the output domain,
         # refer to the function documentation for examples of such field operators.

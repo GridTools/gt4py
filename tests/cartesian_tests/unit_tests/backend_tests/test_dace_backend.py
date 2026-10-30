@@ -110,7 +110,7 @@ def test_dace_cpu_loop_structure():
     manager = SDFGManager(builder)
 
     sdfg = manager.sdfg_via_schedule_tree()
-    state = sdfg.states()[0]
+    state = next(iter(sdfg.states()))
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
     assert loop_indices[0] == [
@@ -125,7 +125,7 @@ def test_dace_cpu_kfirst_loop_structure():
     manager = SDFGManager(builder)
 
     sdfg = manager.sdfg_via_schedule_tree()
-    state = sdfg.states()[0]
+    state = next(iter(sdfg.states()))
 
     loop_indices = [node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)]
     assert loop_indices[0] == [
@@ -139,7 +139,7 @@ def test_dace_cpu_kfirst_loop_structure():
 
     sdfg = manager.sdfg_via_schedule_tree()
     assert len(list(sdfg.states())) == 1, "expect one state"
-    state = sdfg.states()[0]
+    state = next(iter(sdfg.states()))
 
     # Expect a Map for IJ outside
     map_entry_nodes = [node for node in state.nodes() if isinstance(node, nodes.MapEntry)]
@@ -165,7 +165,7 @@ def test_dace_cpu_KJI_loop_structure():
         manager = SDFGManager(builder)
 
         sdfg = manager.sdfg_via_schedule_tree()
-        state = sdfg.states()[0]
+        state = next(iter(sdfg.states()))
 
         loop_indices = [
             node.map.params for node in state.nodes() if isinstance(node, nodes.MapEntry)
@@ -203,7 +203,7 @@ def test_dace_cpu_KJI_loop_structure_parallel():
 
         sdfg = manager.sdfg_via_schedule_tree()
         assert len(list(sdfg.states())) == 1, "expect one state"
-        state = sdfg.states()[0]
+        state = next(iter(sdfg.states()))
 
         # Expect a Map for IJ outside
         map_entry_nodes = [node for node in state.nodes() if isinstance(node, nodes.MapEntry)]

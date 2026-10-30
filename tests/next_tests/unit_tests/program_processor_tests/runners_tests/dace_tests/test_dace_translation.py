@@ -174,7 +174,7 @@ def _check_sdfg_with_async_call(sdfg: dace.SDFG) -> None:
 
 
 def _check_sdfg_without_async_call(sdfg: dace.SDFG) -> None:
-    states = sdfg.states()
+    states = list(sdfg.states())
     sink_states = sdfg.sink_nodes()
 
     # Test if the distinctive sink node is present.
