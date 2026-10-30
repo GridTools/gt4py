@@ -8,6 +8,7 @@
 
 import copy
 import dataclasses
+import functools
 from typing import Any, Collection, Literal, Mapping, Optional, Sequence, TypeAlias, Union, overload
 
 import dace
@@ -19,7 +20,6 @@ from dace import (
     transformation as dace_transformation,
 )
 from dace.sdfg import graph as dace_graph, nodes as dace_nodes
-from dace.sdfg.replace import replace_datadesc_names as dace_replace_datadesc_names
 from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
@@ -719,75 +719,55 @@ def _configure_descending_point(
     }
 
     # Symbols assigned or bound inside the nested SDFG may have a different
-    #  meaning than in the parent SDFG.
+    #  meaning than in the parent SDFG. Keep those names unchanged and instead map
+    #  parent symbols to fresh names inside the nested SDFG.
     inner_written_symbols = gtx_transformations.utils.gt_collect_symbols_written_in_sdfg(nsdfg)
-
-    # Collect all the symbols that the producers use, e.g. in the shape of their data
-    #  descriptors. They are mapped 1:1 into the nested SDFG, i.e. they have the same
-    #  name and meaning inside. Note that a connector is not a view: the descriptor
-    #  inside the nested SDFG is equivalent to the parent data once the symbol mapping
-    #  of the node is applied, so instead of mapping 1:1, the symbols could also be
-    #  renamed to fresh names that are mapped back onto the parent symbols, which is
-    #  what previous versions of this code did. However, with renamed symbols, each
-    #  object that crosses the scope boundary, e.g. a descriptor, an offset or a
-    #  subset, would have to be rewritten through that rename map, and so on for each
-    #  level of nesting. The 1:1 mapping avoids all of these rewrites: it is the reason
-    #  why we can simply insert the objects, e.g. the data descriptors and the access
-    #  patterns, from the parent SDFG into the nested SDFG as they are. The price is
-    #  that a name clash, i.e. the nested SDFG uses the name of a symbol for something
-    #  else, either a data container or a symbol, including one it assigns itself or
-    #  binds as a map parameter, has to be resolved by renaming that symbol inside,
-    #  which is done below.
     parent_symbol_types: dict[str, dace.dtypes.typeclass] = {
         psym: state.sdfg.symbols[psym]
         for parent_prod_spec in parent_producer_specs
         for psym in parent_prod_spec.free_symbols
     }
 
-    # In order to not scan the whole nested SDFG once per symbol, the renames of all
-    #  conflicting symbols are first gathered and then applied in a single pass.
-    rename_dict: dict[str, str] = {}
-    symbols_to_map: set[str] = set()
-    taken_names: set[str] = set(parent_symbol_types) | inner_written_symbols
-    for psym in sorted(parent_symbol_types):
-        if (
-            psym in nsdfg.symbols
-            and psym in symbol_mapping
-            and psym not in inner_written_symbols
-            and psym == str(symbol_mapping[psym])
-            and nsdfg.symbols[psym] == parent_symbol_types[psym]
-        ):
-            # The symbol is already mapped 1:1 into the nested sdfg -> nothing to do.
-            continue
-
-        if psym in nsdfg.arrays:
-            _rename_nested_data(state, nsdfg_node, psym, parent_to_nested_name_mapping)
-        elif psym in nsdfg.symbols or psym in symbol_mapping or psym in inner_written_symbols:
-            renamed_symbol = _find_new_nested_symbol(nsdfg, psym, taken_names)
-            rename_dict[psym] = renamed_symbol
-            taken_names.add(renamed_symbol)
-        symbols_to_map.add(psym)
-
-    if rename_dict:
-        # A single pass renames all the conflicting symbols inside the nested SDFG. Note
-        #  that if the nested SDFG bound the name as a map parameter, then the parameter
-        #  is renamed together with all the uses of it inside its scope.
-        nsdfg.replace_dict(rename_dict)
-        for psym, renamed_symbol in rename_dict.items():
-            if psym in symbol_mapping:
-                symbol_mapping[renamed_symbol] = symbol_mapping.pop(psym)
-            if psym in inner_written_symbols:
-                inner_written_symbols.discard(psym)
-                inner_written_symbols.add(renamed_symbol)
-
-    for psym in sorted(symbols_to_map):
-        nsdfg.add_symbol(psym, parent_symbol_types[psym])
-        symbol_mapping[psym] = psym
+    full_repl_dict: dict[str, str] = {}
+    taken_names: set[str] = set(parent_symbol_types) | inner_written_symbols | set(symbol_mapping)
 
     nested_initial_producer_specs: list[_ProducerSpec] = []
     handled_data: dict[str, _ProducerSpec] = {}
     for parent_prod_spec in parent_producer_specs:
         parent_data_name = parent_prod_spec.data_name
+
+        repl_dict: dict[str, str] = {}
+        for psym in sorted(parent_prod_spec.free_symbols):
+            ptype = parent_symbol_types[psym]
+            if psym in full_repl_dict:
+                nested_symbol = full_repl_dict[psym]
+                assert nested_symbol in nsdfg.symbols and nsdfg.symbols[nested_symbol] == ptype
+            elif (
+                psym not in inner_written_symbols
+                and psym in symbol_mapping
+                and psym == str(symbol_mapping[psym])
+                and psym in nsdfg.symbols
+                and nsdfg.symbols[psym] == ptype
+            ):
+                nested_symbol = psym
+            else:
+                reserved_names = taken_names
+                if (
+                    nsdfg.is_name_free(psym)
+                    and psym not in inner_written_symbols
+                    and psym not in symbol_mapping
+                ):
+                    nested_symbol = psym
+                else:
+                    nested_symbol = _find_new_nested_symbol(nsdfg, psym, reserved_names)
+                nsdfg.add_symbol(nested_symbol, ptype)
+                assert nested_symbol not in symbol_mapping
+                symbol_mapping[nested_symbol] = psym
+                taken_names.add(nested_symbol)
+
+            if psym != nested_symbol:
+                repl_dict[psym] = nested_symbol
+                full_repl_dict.setdefault(psym, nested_symbol)
 
         # Compute the nested data descriptor.
         if parent_data_name in handled_data:
@@ -804,11 +784,17 @@ def _configure_descending_point(
 
         else:
             # The data is not yet mapped into the nested SDFG, so we have to create
-            #  a new one, and we have to make sure that it is a global. Per the policy
-            #  described above, the descriptor is written with the parent's symbols as
-            #  is. The symbol clashes have been handled there, so this is safe.
+            #  a new one, and we have to make sure that it is a global. Its symbols are
+            #  renamed to the corresponding nested symbols.
             nested_desc = parent_prod_spec.desc.clone()
             nested_desc.transient = False
+            if repl_dict:
+                dace_sym.safe_replace(
+                    mapping=repl_dict,
+                    replace_callback=functools.partial(
+                        dace.sdfg.replace_properties_dict, nested_desc
+                    ),
+                )
             nested_data_name = nsdfg.add_datadesc(parent_data_name, nested_desc, find_new_name=True)
 
             # We also need to map it into the nested SDFG.
@@ -828,11 +814,17 @@ def _configure_descending_point(
                 nested_data_name, dtype=dace.pointer(nested_desc.dtype)
             )
 
+        nested_offset = copy.deepcopy(parent_prod_spec.offset)
+        nested_subset = copy.deepcopy(parent_prod_spec.subset)
+        if repl_dict:
+            for nested_set in [nested_offset, nested_subset]:
+                dace_sym.safe_replace(mapping=repl_dict, replace_callback=nested_set.replace)
+
         nested_initial_producer_specs.append(
             _ProducerSpec(
                 data_name=nested_data_name,
-                offset=copy.deepcopy(parent_prod_spec.offset),
-                subset=copy.deepcopy(parent_prod_spec.subset),
+                offset=nested_offset,
+                subset=nested_subset,
                 desc=nested_desc,
                 data_source={},  # Intentionally empty.
             )
@@ -856,50 +848,6 @@ def _find_new_nested_symbol(nsdfg: dace.SDFG, name: str, reserved: Collection[st
         if nsdfg.is_name_free(new_name):
             return new_name
         taken.add(new_name)
-
-
-def _rename_nested_data(
-    state: dace.SDFGState,
-    nsdfg_node: dace_nodes.NestedSDFG,
-    data_name: str,
-    parent_to_nested_name_mapping: dict[str, str],
-) -> None:
-    """Renames the data container `data_name` inside the nested SDFG `nsdfg_node`.
-
-    If the data is mapped into the nested SDFG, the connector of `nsdfg_node` is
-    renamed as well. The edges in `state` are modified in place, thus references to
-    them, such as `_FinalConsumerSpec.edge`, remain valid. `parent_to_nested_name_mapping`
-    is updated in place.
-
-    Args:
-        state: The state containing `nsdfg_node`.
-        nsdfg_node: The nested SDFG in which the data should be renamed.
-        data_name: The name of the data inside the nested SDFG.
-        parent_to_nested_name_mapping: Maps the names of the data in the parent SDFG
-            to the names of the data inside the nested SDFG.
-    """
-    nsdfg: dace.SDFG = nsdfg_node.sdfg
-    new_data_name = _find_new_nested_symbol(nsdfg, data_name, nsdfg.arrays.keys())
-    dace_replace_datadesc_names(nsdfg, {data_name: new_data_name})
-
-    for parent_data_name, nested_data_name in parent_to_nested_name_mapping.items():
-        if nested_data_name == data_name:
-            parent_to_nested_name_mapping[parent_data_name] = new_data_name
-
-    if data_name in nsdfg_node.in_connectors:
-        conn_type = nsdfg_node.in_connectors[data_name]
-        nsdfg_node.remove_in_connector(data_name)
-        nsdfg_node.add_in_connector(new_data_name, dtype=conn_type)
-        for iedge in state.in_edges(nsdfg_node):
-            if iedge.dst_conn == data_name:
-                iedge.dst_conn = new_data_name
-    if data_name in nsdfg_node.out_connectors:
-        conn_type = nsdfg_node.out_connectors[data_name]
-        nsdfg_node.remove_out_connector(data_name)
-        nsdfg_node.add_out_connector(new_data_name, dtype=conn_type)
-        for oedge in state.out_edges(nsdfg_node):
-            if oedge.src_conn == data_name:
-                oedge.src_conn = new_data_name
 
 
 def _map_data_into_nested_scopes(

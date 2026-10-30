@@ -1545,15 +1545,14 @@ def test_concat_where_nested_symbolic_bound(
     assert state.in_degree(nested_sdfg) == 2
 
     if has_blocking_symbol:
-        # `split_sym` is mapped 1:1 into the nested SDFG, so the symbol that the nested
-        #  SDFG used under this name, for the increment, has been renamed.
+        # The nested symbol keeps its original mapping, and the parent symbol is mapped
+        #  through a fresh name.
         assert len(nested_sdfg.symbol_mapping) == 2
-        assert str(nested_sdfg.symbol_mapping[split_sym]) == split_sym
-
-        renamed_inc_symb = next(
+        assert str(nested_sdfg.symbol_mapping[split_sym]) == inc_symb
+        mapped_parent_symb = next(
             iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != split_sym)
         )
-        assert str(nested_sdfg.symbol_mapping[renamed_inc_symb]) == inc_symb
+        assert str(nested_sdfg.symbol_mapping[mapped_parent_symb]) == split_sym
 
     else:
         assert nested_sdfg.symbol_mapping.keys() == {nested_inc_symb, split_sym}
@@ -1659,15 +1658,14 @@ def test_concat_where_with_symbolic_top_size():
     assert concat_node.data not in sdfg.arrays
     assert state.in_degree(nested_sdfg) == 2
 
-    # `symbolic_size` is mapped 1:1 into the nested SDFG, so the symbol that the nested
-    #  SDFG used under this name, for the increment, has been renamed.
+    # The nested symbol keeps its original mapping, and the parent symbol is mapped
+    #  through a fresh name.
     assert len(nested_sdfg.symbol_mapping) == 2
-    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
-
-    renamed_inc_symb = next(
-        iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != symbolic_size)
+    assert str(nested_sdfg.symbol_mapping[nested_inc_symb]) == inc_symb
+    mapped_parent_symb = next(
+        iter(ss for s in nested_sdfg.symbol_mapping if (ss := str(s)) != nested_inc_symb)
     )
-    assert str(nested_sdfg.symbol_mapping[renamed_inc_symb]) == inc_symb
+    assert str(nested_sdfg.symbol_mapping[mapped_parent_symb]) == symbolic_size
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
@@ -1722,12 +1720,14 @@ def test_concat_where_with_symbolic_size_clashing_with_nested_data():
 
     assert c.data not in sdfg.arrays
     assert state.in_degree(nested_sdfg) == 2
-    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
-    assert symbolic_size in nested_sdfg.sdfg.symbols
-
-    # The output connector, and the data inside the nested SDFG, has been renamed.
-    assert symbolic_size not in nested_sdfg.sdfg.arrays
-    assert symbolic_size not in nested_sdfg.out_connectors
+    # The nested data and connector keep their names; the imported symbol uses a fresh
+    #  name instead.
+    mapped_parent_symb = next(
+        sym for sym, value in nested_sdfg.symbol_mapping.items() if str(value) == symbolic_size
+    )
+    assert str(mapped_parent_symb) != symbolic_size
+    assert symbolic_size in nested_sdfg.sdfg.arrays
+    assert symbolic_size in nested_sdfg.out_connectors
     oedge = next(iter(state.out_edges(nested_sdfg)))
     assert oedge.dst is d
     assert oedge.src_conn in nested_sdfg.out_connectors
@@ -1785,15 +1785,18 @@ def test_concat_where_with_symbolic_size_clashing_with_nested_assignment():
     sdfg.validate()
 
     assert c.data not in sdfg.arrays
-    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
+    mapped_parent_symb = next(
+        sym for sym, value in nested_sdfg.symbol_mapping.items() if str(value) == symbolic_size
+    )
+    assert str(mapped_parent_symb) != symbolic_size
 
-    # The symbol assigned inside the nested SDFG has been renamed.
+    # The symbol assigned inside the nested SDFG keeps its name and meaning.
     (assignments,) = [
         isedge.data.assignments
         for isedge in nested_sdfg.sdfg.all_interstate_edges()
         if isedge.data.assignments
     ]
-    assert symbolic_size not in assignments
+    assert symbolic_size in assignments
     assert list(assignments.values()) == ["7"]
 
     util.compile_and_run_sdfg(sdfg, **res)
@@ -1802,11 +1805,9 @@ def test_concat_where_with_symbolic_size_clashing_with_nested_assignment():
 
 def test_concat_where_with_symbolic_size_clashing_with_nested_map_param():
     # The symbol `n`, that defines the size of the producer `a`, has to be mapped into
-    #  the nested SDFG, which binds `n` as the parameter of one of its maps. A map
-    #  parameter shadows any outer symbol of the same name, so the map parameter has to
-    #  be renamed inside the nested SDFG, together with all its uses, this also tests
-    #  that `replace_dict()` performs these renames consistently (in particular the
-    #  parameter of the map itself).
+    #  the nested SDFG, which binds `n` as the parameter of one of its maps. Since map
+    #  parameters shadow symbols with the same name, the imported symbol must use a
+    #  distinct name and leave the map parameter and its uses unchanged.
     symbolic_size = "n"
 
     nested = dace.SDFG("nested")
@@ -1853,31 +1854,19 @@ def test_concat_where_with_symbolic_size_clashing_with_nested_map_param():
     assert c.data not in sdfg.arrays
     assert state.in_degree(nested_sdfg) == 2
 
-    # `n` is now mapped 1:1 into the nested SDFG...
-    assert str(nested_sdfg.symbol_mapping[symbolic_size]) == symbolic_size
-    assert nested_sdfg.sdfg.symbols[symbolic_size] == dace.int32
+    # The parent symbol is mapped through a fresh name, leaving the map parameter alone.
+    mapped_parent_symb = next(
+        sym for sym, value in nested_sdfg.symbol_mapping.items() if str(value) == symbolic_size
+    )
+    assert str(mapped_parent_symb) != symbolic_size
+    assert nested_sdfg.sdfg.symbols[mapped_parent_symb] == dace.int32
 
-    # ... and the map parameter, which used the name inside the nested SDFG, has been
-    #  renamed, together with all of its uses. The consistency of the renaming (in
-    #  particular of the uses inside the map scope) is verified by the compile and run.
+    # The map parameter and all its uses retain their names. The imported symbol uses a
+    #  distinct name and is exercised by the compile and run below.
     map_entries = util.count_nodes(nested_sdfg.sdfg, dace_nodes.MapEntry, True)
     assert len(map_entries) >= 1
-    renamed_params = {param for me in map_entries for param in me.params}
-    assert symbolic_size not in renamed_params
-    assert all(param.startswith(symbolic_size + "_") for param in renamed_params)
-    (renamed_param,) = renamed_params
-    used_inside = {
-        str(fs)
-        for state_ in nested_sdfg.sdfg.states()
-        for edge in state_.edges()
-        for fs in edge.data.free_symbols
-    }
-    used_inside |= {
-        str(fs)
-        for tlet in util.count_nodes(nested_sdfg.sdfg, dace_nodes.Tasklet, True)
-        for fs in tlet.free_symbols
-    }
-    assert renamed_param in used_inside
+    map_params = {param for me in map_entries for param in me.params}
+    assert symbolic_size in map_params
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
