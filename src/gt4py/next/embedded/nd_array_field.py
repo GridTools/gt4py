@@ -560,39 +560,7 @@ class NdArrayConnectivityField(
     ) -> Never:
         raise TypeError("'Connectivity' does not support item assignment.")
 
-    @functools.cached_property
-    def _image_bounds(self) -> Optional[tuple[int, int, tuple[slice, ...]]]:
-        """Smallest value, largest value and bounding hyperslice of the non-skip entries."""
-        xp = self.array_ns
-        table = self._index_table
-        if math.prod(table.shape) == 0:
-            return None
-        if self.skip_value is None:
-            return int(xp.min(table)), int(xp.max(table)), tuple(slice(0, n) for n in table.shape)
-        valid = table != self.skip_value
-        if not xp.any(valid):
-            return None
-        support = []
-        for axis in range(table.ndim):
-            other_axes = tuple(a for a in range(table.ndim) if a != axis)
-            (nonzero,) = xp.nonzero(xp.any(valid, axis=other_axes))
-            support.append(slice(int(nonzero[0]), int(nonzero[-1]) + 1))
-        info = xp.iinfo(table.dtype)
-        value_min = int(xp.min(xp.where(valid, table, info.max)))
-        value_max = int(xp.max(xp.where(valid, table, info.min)))
-        return value_min, value_max, tuple(support)
-
     def _image_slices(self, image_range: common.UnitRange) -> Optional[tuple[slice, ...]]:
-        if (bounds := self._image_bounds) is not None:
-            value_min, value_max, support = bounds
-            # with the skip value inside the range, skip-only rows would be selected as well
-            skip_selected = self.skip_value is not None and self.skip_value in image_range
-            if (
-                image_range.start <= value_min
-                and value_max < image_range.stop
-                and not skip_selected
-            ):
-                return support
         return _hyperslice(self._index_table, image_range, self.array_ns, self.skip_value)
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:

@@ -1885,48 +1885,6 @@ def _skip_value_e2v_table(num_vertices: int) -> np.ndarray:
     return table
 
 
-@pytest.mark.parametrize("skip_value", [None, -1])
-def test_inverse_image_bounds_shortcut_matches_hyperslice(skip_value, monkeypatch):
-    hyperslice = nd_array_field._hyperslice
-    hyperslice_calls = 0
-
-    def counting_hyperslice(*args, **kwargs):
-        nonlocal hyperslice_calls
-        hyperslice_calls += 1
-        return hyperslice(*args, **kwargs)
-
-    monkeypatch.setattr(nd_array_field, "_hyperslice", counting_hyperslice)
-
-    rng = np.random.default_rng(0)
-    high = 6
-    covering_cases = 0
-    for _ in range(150):
-        table = rng.integers(-1 if skip_value is not None else 0, high, size=(4, 3))
-        conn = common._connectivity(
-            table,
-            codomain=D0,
-            domain=common.domain({D1: (0, 4), D2: (0, 3)}),
-            skip_value=skip_value,
-        )
-        for start in range(-1, high):
-            for stop in range(start + 1, high + 1):
-                image_range = UnitRange(start, stop)
-                expected = hyperslice(table, image_range, np, skip_value)
-                valid = table[table != skip_value] if skip_value is not None else table
-                covering = valid.size > 0 and bool(np.all((valid >= start) & (valid < stop)))
-                covering &= skip_value is None or skip_value not in image_range
-                calls_before = hyperslice_calls
-                if expected is None:
-                    with pytest.raises(ValueError, match="non-contiguous or empty"):
-                        conn.inverse_image(image_range)
-                else:
-                    assert conn.inverse_image(image_range) == conn.domain.slice_at[expected]
-                # the shortcut answers exactly the covering cases without scanning the table
-                assert (hyperslice_calls == calls_before) == covering
-                covering_cases += covering
-    assert covering_cases > 0
-
-
 def test_inverse_image_range_containing_skip_value_selects_skip_only_rows():
     conn = common._connectivity(
         np.asarray([[0, 1], [-1, -1]]),
