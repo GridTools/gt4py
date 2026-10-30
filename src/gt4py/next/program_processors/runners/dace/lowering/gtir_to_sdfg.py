@@ -563,6 +563,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     from where to continue building the SDFG.
     """
 
+    # The root SDFG, created by the caller and extended in place by the lowering.
+    # Used to decide when a let-lambda's nested SDFG should be integrated into its
+    # parent: only the top-level ones are, the rest are integrated by dace's
+    # top-down cascade.
+    sdfg: dace.SDFG
     offset_provider_type: gtx_common.OffsetProviderType
     column_axis: Optional[gtx_common.Dimension]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
@@ -1061,8 +1066,11 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         # the list of all sdfg arguments (aka non-transient arrays) which include tuple-element fields
         return [arg_name for arg_name, _ in sdfg_args]
 
-    def visit_Program(self, node: gtir.Program) -> dace.SDFG:
-        """Translates `ir.Program` to `dace.SDFG`.
+    def lower_program(self, node: gtir.Program) -> None:
+        """Lowers `ir.Program` to `dace.SDFG`. This is the entry point of the lowering.
+
+        The root SDFG is created by the caller and passed to the constructor;
+        the translation extends it in place.
 
         First, it will allocate field and scalar storage for global data. The storage
         represents global data, available everywhere in the SDFG, either containing
@@ -1070,30 +1078,27 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         The temporary data is global, therefore available everywhere in the SDFG
         but not outside. Then, all statements are translated, one after the other.
         """
-        sdfg = dace.SDFG(str(node.id))
-        sdfg.debuginfo = gtir_to_sdfg_utils.debug_info(node)
-
         # start block of the stateful graph
-        head_state = sdfg.add_state("program_entry", is_start_block=True)
+        head_state = self.sdfg.add_state("program_entry", is_start_block=True)
 
         # By passing `symbolic_arguments=None` all scalars are represented as dace symbols.
         #   We do this to allow lowering of scalar expressions in let-statements,
         #   that only depend on scalar parameters, as dace symbolic expressions
         #   mapped to symbols on a nested SDFG.
         sdfg_arg_names = self._add_sdfg_params(
-            sdfg, node.params, symbolic_params=None, use_transient_storage=False
+            self.sdfg, node.params, symbolic_params=None, use_transient_storage=False
         )
 
         # visit one statement at a time and expand the SDFG from the current head state
         scope_symbols = {str(p.id): p.type for p in node.params if isinstance(p.type, ts.DataType)}
         for i, stmt in enumerate(node.body):
             # include `debuginfo` only for `ir.Program` and `ir.Stmt` nodes: finer granularity would be too messy
-            head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            head_state._debuginfo = gtir_to_sdfg_utils.debug_info(stmt, default=sdfg.debuginfo)
-            head_state = self.visit(stmt, ctx=SubgraphContext(sdfg, head_state, scope_symbols))
+            head_state = self.sdfg.add_state_after(head_state, f"stmt_{i}")
+            head_state._debuginfo = gtir_to_sdfg_utils.debug_info(stmt, default=self.sdfg.debuginfo)
+            head_state = self.visit(stmt, ctx=SubgraphContext(self.sdfg, head_state, scope_symbols))
 
         # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
-        for nsdfg in sdfg.all_sdfgs_recursive():
+        for nsdfg in self.sdfg.all_sdfgs_recursive():
             unused_connectivities = [
                 data
                 for data, datadesc in nsdfg.arrays.items()
@@ -1108,9 +1113,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         #  Only the arguments required by the GT4Py program, i.e. `node.params`, are added
         #  as positional arguments. The implicit arguments, such as the offset providers or
         #  the arguments created by the translation process, must be passed as keyword arguments.
-        sdfg.arg_names = sdfg_arg_names
+        self.sdfg.arg_names = sdfg_arg_names
 
-        return sdfg
+        self.sdfg.validate()
 
     def visit_SetAt(self, stmt: gtir.SetAt, ctx: SubgraphContext) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
@@ -1393,7 +1398,16 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         # Now that the nested SDFG is connected, its connectors are made equivalent to
         #  the data connected to them, by applying the symbol mapping inside it.
-        nsdfg_node.integrate_into_parent()
+        #
+        # Only the top-level let-lambda nested SDFGs (those whose parent is the root
+        # SDFG) are integrated here. Nested lets whose parent is itself a nested SDFG
+        # are left for dace to integrate through the top-down cascade triggered by the
+        # top-level integration (`fold_symbol_mapping` -> `integrate_nested_sdfgs_within`).
+        # Integrating every level eagerly, bottom-up, would reprocess the whole subtree
+        # below each level once per nesting level, which is quadratic in the let-chain
+        # depth.
+        if ctx.sdfg is self.sdfg:
+            nsdfg_node.integrate_into_parent()
 
         return result
 
@@ -1446,9 +1460,9 @@ def lower_program_to_sdfg(
     # Here we find new names for invalid symbols present in the IR.
     ir = gtir_to_sdfg_utils.replace_invalid_symbols(ir)
 
-    sdfg_genenerator = GTIRToSDFG(offset_provider_type, column_axis)
-    sdfg = sdfg_genenerator.visit(ir)
-    assert isinstance(sdfg, dace.SDFG)
-
-    sdfg.validate()
+    # The root SDFG is created here and passed to the lowering visitor, which
+    # extends it in place while translating the program.
+    sdfg = dace.SDFG(str(ir.id))
+    sdfg_generator = GTIRToSDFG(sdfg, offset_provider_type, column_axis)
+    sdfg_generator.lower_program(ir)
     return sdfg
