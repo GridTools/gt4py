@@ -10,10 +10,13 @@ from typing import Optional, TypeAlias
 
 import dace
 from dace import data as dace_data
-from dace.sdfg import dealias as dace_dealias, nodes as dace_nodes
+from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next import common as gtx_common
-from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
+from gt4py.next.program_processors.runners.dace import (
+    lowering as gtx_dace_lowering,
+    transformations as gtx_transformations,
+)
 
 
 PropagatedStrideRecord: TypeAlias = tuple[str, dace_nodes.NestedSDFG]
@@ -460,16 +463,17 @@ def _gt_map_strides_into_nested_sdfg(
             inside the NestedSDFG.
     """
     nsdfg: dace.SDFG = nsdfg_node.sdfg
-    if inner_data not in dace_dealias.windowed_connectors(nsdfg):
-        return
-
     inner_desc = nsdfg.arrays[inner_data]
     outer_desc = sdfg.arrays[edge.data.data]
+    if inner_desc.is_equivalent(outer_desc, symbol_mapping=nsdfg_node.symbol_mapping):
+        return
+
     if (
         isinstance(inner_desc, dace_data.Array)
         and not isinstance(inner_desc, dace_data.View)
         and len(inner_desc.shape) == len(outer_desc.strides)
     ):
+        replace_dict: dict[str, str] = {}
         for sym in sorted(
             str(fsym)
             for stride in outer_desc.strides
@@ -479,18 +483,22 @@ def _gt_map_strides_into_nested_sdfg(
             if sym not in nsdfg.symbols:
                 nsdfg.add_symbol(sym, sdfg.symbols[sym])
                 nsdfg_node.symbol_mapping[sym] = dace.symbolic.pystr_to_symbolic(sym)
-            elif str(nsdfg_node.symbol_mapping.get(sym, "")) != sym:
-                raise ValueError(
-                    f"Can not map the stride symbol '{sym}' into NestedSDFG"
-                    f" '{nsdfg_node.label}', because it has a different meaning there."
+            elif str(nsdfg_node.symbol_mapping[sym]) != sym:
+                inner_sym = next(
+                    (k for k, v in nsdfg_node.symbol_mapping.items() if str(v) == sym), None
                 )
-        inner_desc.set_shape(inner_desc.shape, outer_desc.strides)
-
-    if inner_data in dace_dealias.windowed_connectors(nsdfg):
-        raise ValueError(
-            f"The connector '{inner_data}' of NestedSDFG '{nsdfg_node.label}' is not"
-            f" equivalent to the data '{edge.data.data}' connected to it."
-        )
+                if inner_sym is None:
+                    raise ValueError(
+                        f"Can not map the stride symbol '{sym}' into NestedSDFG"
+                        f" '{nsdfg_node.label}', because it has a different meaning there."
+                    )
+                else:
+                    replace_dict[sym] = inner_sym
+        inner_strides = [
+            gtx_dace_lowering.safe_replace_symbolic(stride, replace_dict)
+            for stride in outer_desc.strides
+        ]
+        inner_desc.set_shape(inner_desc.shape, inner_strides)
 
 
 def _gt_find_toplevel_data_accesses(

@@ -28,7 +28,6 @@ from dace.transformation.passes import analysis as dace_analysis
 
 from gt4py.next.program_processors.runners.dace.transformations import (
     splitting_tools as gtx_dace_split,
-    strides as gtx_transformations_strides,
     utils as gtx_transformations_utils,
 )
 
@@ -283,16 +282,4 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                     outer_desc,
                     ss_offset=tuple(node_offset),
                 )
-
-        # Update strides after changing the data of access nodes
-        for modified_node in [second_node, third_node]:
-            gtx_transformations_strides.gt_propagate_strides_from_access_node(
-                sdfg, graph, modified_node
-            )
-
-        # Restate connectors of NestedSDFGs whose edge data was changed above.
-        # Without this the nested SDFG contract is violated because the
-        # connector descriptors no longer match the parent data.
-        for node in graph.nodes():
-            if isinstance(node, dace_nodes.NestedSDFG) and node.sdfg is not None:
                 node.integrate_into_parent()

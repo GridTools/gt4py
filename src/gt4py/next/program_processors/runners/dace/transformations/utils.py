@@ -667,6 +667,8 @@ def restate_nested_sdfg_connector(
                 f" because the symbol '{sym}' has a different meaning inside it."
             )
 
+    # TODO(phimuell): The `reduce_connector()` function should be replaced with something
+    #  that does not create views as a side effect.
     dace_dealias.reduce_connector(
         nsdfg,
         connector,
