@@ -8,14 +8,14 @@ requires = ['cython>=3.0.0', 'setuptools>=77.0.3', 'versioningit>=3.1.1', 'wheel
 [dependency-groups]
 build = ['cython>=3.0.0', 'pip>=22.1.1', 'setuptools>=77.0.3', 'wheel>=0.33.6']
 dev = [
-  {include-group = 'build'},
-  {include-group = 'docs'},
-  {include-group = 'frameworks'},
-  {include-group = 'lint'},
-  {include-group = 'profiling'},
-  {include-group = 'scripts'},
-  {include-group = 'test'},
-  {include-group = 'typing'}
+  { include-group = 'build' },
+  { include-group = 'docs' },
+  { include-group = 'frameworks' },
+  { include-group = 'lint' },
+  { include-group = 'profiling' },
+  { include-group = 'scripts' },
+  { include-group = 'test' },
+  { include-group = 'typing' }
 ]
 docs = [
   'esbonio>=0.16.0',
@@ -43,10 +43,13 @@ profiling = [
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
+  'black>=25.11',
+  'clang-format>=18.1',
+  'factory-boy>=3.3.3',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
-  'pytest>=8.0.1',
+  'pytest>=8.0.1, <9.2.0',  # TODO(edopao): remove upper bound once https://github.com/ionelmc/pytest-benchmark/issues/321 is fixed
   'pytest-benchmark>=5.0.0',
   'pytest-cache>=1.0',
   'pytest-factoryboy>=2.6.1',
@@ -63,7 +66,7 @@ typing = [
 ]
 typing_exports = [
   # to test typing with gt4py in downstream code
-  {include-group = "typing"},
+  { include-group = "typing" },
   'types-six>=1.17.0.20251009',  # can not let mypy auto-install types as that leads to unexpected stderr output (which means test failure)
   'pytest-mypy-plugins>=4.0.0',  # pytest plugin for running mypy on code snippets
   "xarray>=2024.1.0"  # one of the regression tests requires xarray
@@ -71,7 +74,7 @@ typing_exports = [
 
 # -- Standard project description options (PEP 621) --
 [project]
-authors = [{name = 'ETH Zurich', email = 'gridtools@cscs.ch'}]
+authors = [{ name = 'ETH Zurich', email = 'gridtools@cscs.ch' }]
 classifiers = [
   'Development Status :: 4 - Beta',
   'Environment :: Console',
@@ -90,16 +93,14 @@ classifiers = [
 dependencies = [
   'attrs>=21.3',
   'array-api-compat>=1.13',
-  'black>=25.11',
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
   'cytoolz>=1.0.1',
-  'dace>=2.0.0a7,<2.0.0a8',
+  'dace==2.0.0a10',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
-  'factory-boy>=3.3.3',
   "filelock>=3.18.0",
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.9,==2.*',
@@ -111,7 +112,7 @@ dependencies = [
   'numpy>=2.0.0 ; python_version < "3.14"',
   'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
   'ordered-set>=4.1.0',
-  'packaging>=20.0',
+  'packaging>=24.2',
   'pybind11>=3.0.3',
   'setuptools>=77.0.3',
   'tabulate>=0.8.10',
@@ -142,7 +143,7 @@ readme = 'README.md'
 requires-python = '>=3.12, <3.15, !=3.13.10, !=3.14.1'
 
 [project.optional-dependencies]
-cartesian = ['gt4py[jax,standard,testing]']
+cartesian = ['black>=25.11', 'clang-format>=18.1', 'gt4py[jax,standard,testing]']
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
 jax = [
@@ -154,7 +155,7 @@ jax-cuda13 = ['jax[cuda13-local]>=0.7.0', 'gt4py[cuda13]']
 next = ['gt4py[jax,standard,testing]']
 rocm6 = ['cupy>=13.4.1,<14.0']
 rocm7 = ['cupy-rocm-7-0>=14.0']
-standard = ['clang-format>=18.1', 'scipy>=1.16.1']
+standard = ['scipy>=1.16.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]
@@ -216,10 +217,6 @@ disable_error_code = "call-arg"
 module = 'gt4py.cartesian.frontend.defir_to_gtir'
 
 [[tool.mypy.overrides]]
-module = 'gt4py.eve.extended_typing'
-warn_unused_ignores = false
-
-[[tool.mypy.overrides]]
 # TODO: Make this false and fix errors
 disallow_untyped_defs = false
 follow_imports = 'silent'
@@ -234,12 +231,6 @@ module = 'gt4py.next.iterator.*'
 [[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
-
-[[tool.mypy.overrides]]
-ignore_missing_imports = true
-implicit_reexport = true
-# factory-boy is broken, see https://github.com/FactoryBoy/factory_boy/pull/1114
-module = "factory.*"
 
 # -- pytest --
 [tool.pytest]
@@ -262,6 +253,8 @@ markers = [
   'uses_ir_if_stmts',
   'uses_lift: tests that require backend support for lift builtin function',
   'uses_negative_modulo: tests that require backend support for modulo on negative numbers',
+  'uses_offset_tag_differing_from_local_dim: tests that shift with an offset tag that differs from the name of its local dimension',
+  'uses_offset_tag_differing_from_local_dim_in_reduction: tests that reduce over an offset whose tag differs from the name of its local dimension',
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduce_with_lambda: tests that use lambdas as reduce functions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
@@ -346,7 +339,6 @@ ignore = [
 ]
 preview = true  # use only with explicit-preview-rules=true
 select = ['A', 'B', 'CPY', 'E', 'ERA', 'F', 'FA100', 'I', 'ISC', 'NPY', 'Q', 'RUF', 'T10', 'YTT']
-typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
 [tool.ruff.lint.flake8-builtins]
@@ -413,16 +405,16 @@ sdist = "versioningit.cmdclass.sdist"
 'gt4py' = ['py.typed', '*.md', '*.rst']
 
 [tool.setuptools.packages]
-find = {namespaces = false, where = ['src']}
+find = { namespaces = false, where = ['src'] }
 
 # -- uv: packages & workspace --
 [tool.uv]
 conflicts = [
   [
-    {extra = 'cuda12'},
-    {extra = 'jax-cuda13'},
-    {extra = 'rocm6'},
-    {extra = 'rocm7'}
+    { extra = 'cuda12' },
+    { extra = 'jax-cuda13' },
+    { extra = 'rocm6' },
+    { extra = 'rocm7' }
   ]
 ]
 default-groups = ["dev"]
@@ -441,11 +433,11 @@ url = 'https://gridtools.github.io/pypi/'
 # Add the uv source below to pull dace from the gridtools index instead of PyPI:
 # dace = {index = "gridtools"}
 [tool.uv.sources]
-atlas4py = {index = "test.pypi"}
+atlas4py = { index = "test.pypi" }
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.2.2+unknown.version.details"
+default-version = "1.2.3+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

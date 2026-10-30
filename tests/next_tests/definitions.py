@@ -98,6 +98,10 @@ USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT = "uses_lift"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
+USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM = "uses_offset_tag_differing_from_local_dim"
+USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION = (
+    "uses_offset_tag_differing_from_local_dim_in_reduction"
+)
 USES_ORIGIN = "uses_origin"
 USES_REDUCE_WITH_LAMBDA = "uses_reduce_with_lambda"
 USES_SCAN = "uses_scan"
@@ -134,6 +138,14 @@ BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings
 REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
     "We cannot unroll a reduction on a sparse field only (not clear if it is legal ITIR)"
 )
+#: An offset and its local dimension must currently share a name on most backends, because
+#: the connectivity is looked up in the offset provider by the *local dimension's* name.
+#: Lifted for the gtfn shift path by #1789; see
+#: `regression_tests/ffront_tests/test_offset_dimensions_names.py`.
+OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE = (
+    "'{marker}': '{backend}' looks the connectivity up by the local dimension's name,"
+    " so it must equal the offset tag"
+)
 # Index-only vs. consequential markers:
 # A `uses_*` marker only affects execution if it appears in one of the skip lists below (and thus
 # in `BACKEND_SKIP_TEST_MATRIX`); such a marker is "consequential" -- it applies the listed
@@ -169,6 +181,16 @@ DACE_SKIP_TEST_LIST = (
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
     ]
 )
 EMBEDDED_SKIP_LIST = [
@@ -180,6 +202,11 @@ EMBEDDED_SKIP_LIST = [
     ),  # we can't extract the field type from scan args
     (EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
     (EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (
+        USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+        XFAIL,
+        OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+    ),
 ]
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -190,7 +217,15 @@ ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_CONCAT_WHERE, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-GTIR_EMBEDDED_SKIP_LIST = ROUNDTRIP_SKIP_LIST + []
+GTIR_EMBEDDED_SKIP_LIST = ROUNDTRIP_SKIP_LIST + [
+    # NOTE: not in `ROUNDTRIP_SKIP_LIST`: the roundtrip backend passes this, only the
+    # lower-level `iterator/embedded.py` execution keys on the local dimension's name.
+    (
+        USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+        XFAIL,
+        OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+    ),
+]
 GTFN_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST
     + DOMAIN_INFERENCE_SKIP_LIST
@@ -201,6 +236,12 @@ GTFN_SKIP_TEST_LIST = (
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
         (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
+        # NOTE: only the reduction; #1789 lifted this for the shift path.
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
     ]
 )
 

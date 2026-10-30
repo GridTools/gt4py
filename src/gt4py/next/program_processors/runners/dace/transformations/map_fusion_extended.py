@@ -442,37 +442,37 @@ class HorizontalSplitMapRange(SplitMapRange):
 
         # Ensure that the Maps are in the same scope.
         scope_dict = graph.scope_dict()
-        if scope_dict[self.first_map_entry] is not scope_dict[self.second_map_entry]:
+        if scope_dict[first_map_entry] is not scope_dict[second_map_entry]:
             return False
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = scope_dict[self.first_map_entry]
+        map_scope: Union[dace_nodes.Node, None] = scope_dict[first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
         first_map_src_data = {
             iedge.src.label
-            for iedge in graph.in_edges(self.first_map_entry)
+            for iedge in graph.in_edges(first_map_entry)
             if isinstance(iedge.src, dace_nodes.AccessNode)
         }
         second_map_src_data = {
             iedge.src.label
-            for iedge in graph.in_edges(self.second_map_entry)
+            for iedge in graph.in_edges(second_map_entry)
             if isinstance(iedge.src, dace_nodes.AccessNode)
         }
 
-        # Test if the Maps are parallel.
-        if not dace_mfhelper.is_parallel(
-            graph=graph, node1=first_map_entry, node2=second_map_entry
-        ):
-            return False
-
+        # The pattern matches every pair of Maps in the state, so the cheap checks come
+        #  before `is_parallel()`, which traverses the state twice.
         if len(first_map_src_data.intersection(second_map_src_data)) == 0:
-            # no common source access node
             return False
 
         splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
+            return False
+
+        if not dace_mfhelper.is_parallel(
+            graph=graph, node1=first_map_entry, node2=second_map_entry
+        ):
             return False
 
         return True

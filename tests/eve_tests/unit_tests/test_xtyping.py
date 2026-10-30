@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import __future__
 import builtins
 import collections
 import collections.abc
@@ -16,21 +17,17 @@ import re
 import sys
 import types
 import typing
+from collections.abc import Callable, Mapping, Sequence
+from typing import Annotated, Any, ForwardRef, Optional, TypeVar, Union
 
 import pytest
 import typing_extensions
 
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
-    Annotated,
-    Any,
-    Callable,
-    ForwardRef,
-    Mapping,
-    Optional,
-    Sequence,
-    TypeVar,
-    Union,
+from gt4py.eve import xtyping
+from gt4py.eve.xtyping import (
+    supports_array_interface,
+    supports_cuda_array_interface,
+    supports_dlpack,
 )
 
 
@@ -108,7 +105,6 @@ class IncompleteClass:
 
 
 def test_supports_array_interface():
-    from gt4py.eve.extended_typing import supports_array_interface
 
     class ArrayInterface:
         __array_interface__ = "interface"
@@ -123,7 +119,6 @@ def test_supports_array_interface():
 
 
 def test_supports_cuda_array_interface():
-    from gt4py.eve.extended_typing import supports_cuda_array_interface
 
     class CudaArray:
         def __cuda_array_interface__(self):
@@ -139,7 +134,6 @@ def test_supports_cuda_array_interface():
 
 
 def test_supports_dlpack():
-    from gt4py.eve.extended_typing import supports_dlpack
 
     class DummyDLPackBuffer:
         def __dlpack__(self):
@@ -180,38 +174,41 @@ DEPRECATED_TYPING_ALIASES = [
 ]
 
 
-@pytest.mark.parametrize(["name", "replacement"], DEPRECATED_TYPING_ALIASES)
-def test_deprecated_typing_alias_is_not_exported(name, replacement):
-    # These names are still bound by the 'typing' / 'typing_extensions' star imports in
-    # 'extended_typing', and its module '__getattr__' would otherwise forward them. Pin
-    # the rejection: dropping the guard would not make the names disappear, it would
-    # silently resolve them to the deprecated 'typing' objects instead of the builtins.
-    with pytest.raises(AttributeError, match=f"'{name}' is a deprecated 'typing' alias"):
-        getattr(xtyping, name)
+def test_module_does_not_re_export_typing():
+    """`xtyping` must export only definitions the standard modules do not provide.
 
-    assert replacement in str(pytest.raises(AttributeError, lambda: getattr(xtyping, name)).value)
+    A re-export makes the module a second, non-standard spelling of `typing`, which
+    ruff only sees through when told to (`typing-modules`).
+    """
+    borrowed = (
+        __future__,
+        typing,
+        typing_extensions,
+        collections.abc,
+        collections,
+        contextlib,
+        re,
+    )
+    re_exported = sorted(
+        name
+        for name in xtyping.__all__
+        if any(getattr(module, name, object()) is getattr(xtyping, name) for module in borrowed)
+    )
+    assert re_exported == [], (
+        f"'xtyping' exports {re_exported}, which it does not define; import "
+        f"those from 'typing', 'typing_extensions' or 'collections.abc' at the use "
+        f"site instead."
+    )
 
-    with pytest.raises(ImportError):
-        exec(f"from gt4py.eve.extended_typing import {name}")
 
-    assert name not in dir(xtyping)
+def test_module_has_no_getattr_fallback():
+    """An unknown name must raise, not be forwarded to `typing`.
 
-
-@pytest.mark.parametrize(
-    ["name", "expected"],
-    [
-        ("Sequence", collections.abc.Sequence),
-        ("Callable", collections.abc.Callable),
-        ("AbstractSet", collections.abc.Set),
-        ("Match", re.Match),
-        ("ContextManager", contextlib.AbstractContextManager),
-        ("deque", collections.deque),
-    ],
-)
-def test_non_deprecated_aliases_are_still_re_exported(name, expected):
-    # Unlike the builtin generics above, these names are not deprecated -- only their
-    # 'typing' home is -- so 'extended_typing' keeps pointing them at the modern object.
-    assert getattr(xtyping, name) is expected
+    The forwarding `__getattr__` is what made every `xtyping.X` reference
+    unverifiable: a typo resolved to `Any` and type-checked clean.
+    """
+    with pytest.raises(AttributeError):
+        xtyping.ThisNameDoesNotExist
 
 
 @pytest.mark.parametrize(
@@ -231,14 +228,47 @@ def test_deprecated_typing_alias_still_resolves_in_forward_refs(name, replacemen
     for ref in (f"{name}[{args}]", f"typing.{name}[{args}]"):
         resolved = xtyping.eval_forward_ref(ref)
 
-        assert xtyping.get_origin(resolved) is getattr(builtins, replacement)
-        assert xtyping.get_args(resolved) == expected_args
+        assert typing.get_origin(resolved) is getattr(builtins, replacement)
+        assert typing.get_args(resolved) == expected_args
         # A builtin generic alias, not the deprecated 'typing._GenericAlias' object.
         assert type(resolved) is types.GenericAlias
 
     # An explicit 'globalns' is left alone, so the bare name is not injected there.
     with pytest.raises(NameError):
         xtyping.eval_forward_ref(f"{name}[{args}]", globalns={})
+
+
+@pytest.mark.parametrize("prefix", ["", "typing."])
+def test_forward_ref_default_namespace(prefix):
+    # Public 'typing_extensions' names win over their 'typing' namesakes ...
+    resolved = xtyping.eval_forward_ref(f"{prefix}TypeAliasType")
+    assert resolved is typing_extensions.TypeAliasType
+    # ... the container protocols come from 'collections.abc' ...
+    assert xtyping.eval_forward_ref(f"{prefix}ByteString") is collections.abc.ByteString
+    assert xtyping.eval_forward_ref(f"{prefix}Sequence") is collections.abc.Sequence
+    # ... and this module's own definitions are available too.
+    assert xtyping.eval_forward_ref(f"{prefix}NestedTuple") is xtyping.NestedTuple
+
+
+@pytest.mark.parametrize("name", ["sys", "abc", "T", "_socket", "annotations", "npt"])
+def test_forward_ref_default_namespace_has_only_public_names(name):
+    # Only the public names of 'typing' and 'typing_extensions' resolve unqualified,
+    # not their (or this module's) private module-level imports and helpers.
+    with pytest.raises(NameError):
+        xtyping.eval_forward_ref(name)
+
+
+def test_forward_ref_typing_attribute_reaches_non_public_names():
+    # Like attribute access on the real modules, 'typing.X' is not limited to '__all__'.
+    assert "T" not in typing.__all__
+    assert xtyping.eval_forward_ref("typing.T") is typing_extensions.T
+
+
+@pytest.mark.parametrize("ref", ["typing.Sequenc[int]", "typing.__NotADunder__"])
+def test_forward_ref_typing_attribute_typo_raises(ref):
+    # A misspelled 'typing.' name must fail loudly, not resolve to a fallback.
+    with pytest.raises(AttributeError, match="no attribute"):
+        xtyping.eval_forward_ref(ref)
 
 
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
@@ -312,22 +342,22 @@ def test_is_protocol():
     class NotProtocol(AProtocol):
         def do_something_else(self, value: float) -> float: ...
 
-    class AXProtocol(xtyping.Protocol):
+    class AXProtocol(typing_extensions.Protocol):
         A = 1
 
     class NotXProtocol(AXProtocol):
         A = 1
 
-    class AgainProtocol(AProtocol, xtyping.Protocol):
+    class AgainProtocol(AProtocol, typing_extensions.Protocol):
         def do_something_else(self, value: float) -> float: ...
 
-    assert xtyping.is_protocol(AProtocol)
-    assert xtyping.is_protocol(AXProtocol)
+    assert typing_extensions.is_protocol(AProtocol)
+    assert typing_extensions.is_protocol(AXProtocol)
 
-    assert not xtyping.is_protocol(NotProtocol)
-    assert not xtyping.is_protocol(NotXProtocol)
+    assert not typing_extensions.is_protocol(NotProtocol)
+    assert not typing_extensions.is_protocol(NotXProtocol)
 
-    assert xtyping.is_protocol(AgainProtocol)
+    assert typing_extensions.is_protocol(AgainProtocol)
 
 
 def test_get_partial_type_hints():
@@ -476,7 +506,8 @@ def test_infer_type():
     assert (
         xtyping.infer_type(f4, annotate_callable_kwargs=True)
         == Annotated[
-            Callable[[int, float], type(None)], xtyping.CallableKwargsInfo({"foo": tuple[str, ...]})
+            Callable[[int, float], type(None)],
+            xtyping.CallableKwargsInfo({"foo": tuple[str, ...]}),
         ]
     )
 
@@ -522,7 +553,7 @@ def test_eval_type_alias():
 
 
 def test_eval_type_alias_passes_through_non_aliases():
-    for annotation in (int, list[int], xtyping.Any, None):
+    for annotation in (int, list[int], typing.Any, None):
         assert xtyping.eval_type_alias(annotation) is annotation
 
 

@@ -20,12 +20,11 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, Sequence, TypeAlias
+from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self, Unpack, override
+from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
     common,
@@ -239,8 +238,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
         connectivities: A dictionary holding static/compile-time information about the offset providers.
-            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
-            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
+            Used as the offset provider in `compile` when none is passed explicitly.
     """
 
     @classmethod
@@ -335,44 +333,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             ),
         )
 
-    def with_bound_args(self, **kwargs: Any) -> ProgramWithBoundArgs:
-        """
-        Bind scalar, i.e. non field, program arguments.
-
-        Example (pseudo-code):
-
-        >>> import gt4py.next as gtx
-        >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
-        ...     sample_field_operator(condition, out=out)  # noqa: F821 [undefined-name]
-
-        Create a new program from `program` with the `condition` parameter set to `True`:
-
-        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
-
-        The resulting program is equivalent to
-
-        >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
-        ...     sample_field_operator(condition=True, out=out)  # noqa: F821 [undefined-name]
-
-        and can be executed without passing `condition`.
-
-        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
-        """
-        for key in kwargs.keys():
-            if all(key != param.id for param in self.past_stage.past_node.params):
-                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
-
-        return ProgramWithBoundArgs(
-            bound_args=kwargs,
-            **{
-                field.name: getattr(self, field.name)
-                for field in dataclasses.fields(self)
-                if field.init
-            },
-        )
-
     def __call__(
         self,
         *args: Any,
@@ -415,86 +375,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
-
-
-try:
-    from gt4py.next.program_processors.runners.dace.program import (  # type: ignore[assignment]
-        Program,
-    )
-except ImportError:
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgramWithBoundArgs(Program):
-    bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
-
-    @override
-    def __call__(
-        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
-    ) -> None:
-        if offset_provider is None:
-            offset_provider = {}
-        type_ = self.past_stage.past_node.type
-        assert isinstance(type_, ts_ffront.ProgramType)
-        new_type = ts_ffront.ProgramType(
-            definition=ts.FunctionType(
-                kw_only_args={
-                    k: v
-                    for k, v in type_.definition.kw_only_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                pos_only_args=type_.definition.pos_only_args,
-                pos_or_kw_args={
-                    k: v
-                    for k, v in type_.definition.pos_or_kw_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                returns=type_.definition.returns,
-            )
-        )
-
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
-
-        try:
-            # This error is also catched using `accepts_args`, but we do it manually here to give
-            # a better error message.
-            for name in self.bound_args.keys():
-                if name in kwargs:
-                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
-
-            type_info.accepts_args(
-                new_type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
-            )
-        except ValueError as err:
-            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
-            raise TypeError(
-                f"Invalid argument types in call to program '{self.past_stage.past_node.id}' with "
-                f"bound arguments '{bound_arg_names}'."
-            ) from err
-
-        full_args = [*args]
-        full_kwargs = {**kwargs}
-        for index, param in enumerate(self.past_stage.past_node.params):
-            if param.id in self.bound_args.keys():
-                if index < len(full_args):
-                    full_args.insert(index, self.bound_args[param.id])
-                else:
-                    full_kwargs[str(param.id)] = self.bound_args[param.id]
-
-        return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
-
-    @override
-    def compile(
-        self,
-        offset_provider: common.OffsetProviderType
-        | common.OffsetProvider
-        | list[common.OffsetProviderType | common.OffsetProvider]
-        | None = None,
-        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
-    ) -> Self:
-        raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
 @typing.overload
