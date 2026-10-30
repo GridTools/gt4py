@@ -9,6 +9,7 @@
 import concurrent.futures
 import dataclasses
 import gc
+import hashlib
 import multiprocessing
 import os
 import pickle
@@ -19,7 +20,8 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import backend as next_backend, config
+from gt4py._core import definitions as core_defs
+from gt4py.next import backend as next_backend, common, config, fingerprinting
 from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners
 
 from next_tests.fixtures import compilation as fixtures_compilation
@@ -41,7 +43,7 @@ class _NoOpArtifact:
 def _decomposed_task(executor):
     return runners.CompilationTask(
         name="test_task",
-        construct_compilable=lambda with_refs: "compilable",
+        compilable="compilable",
         executor=executor,
     )
 
@@ -87,7 +89,7 @@ def test_process_runner_propagates_recursion_limit(process_runner):
 def test_process_runner_falls_back_on_non_offloadable_task(process_runner):
     task = runners.CompilationTask(
         name="opaque",
-        construct_compilable=lambda with_refs: None,
+        compilable=None,
         executor=lambda _: _NoOpArtifact(),
         no_offload_reason="it does not use the standard compilation workflow",
     )
@@ -146,13 +148,176 @@ def test_make_compilation_task_is_opaque_for_customized_compile():
     assert backend.compile_called
 
 
-def test_offloaded_task_ships_connectivities_as_file_refs():
+_xp_params = pytest.mark.parametrize(
+    "xp",
+    [np, pytest.param(core_defs.cp, id="cupy", marks=pytest.mark.requires_gpu)],
+    ids=lambda xp: getattr(xp, "__name__", "cupy"),
+)
+
+
+def _v2e_tables(xp):
     Vertex = gtx.Dimension("Vertex")
     Edge = gtx.Dimension("Edge")
     V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-    conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
+    table = np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+    c_order = gtx.as_connectivity([Vertex, V2EDim], Edge, xp.asarray(table))
+    f_order = type(c_order).from_array(
+        xp.asarray(np.asfortranarray(table)), Edge, domain=c_order.domain
+    )
+    assert f_order.ndarray.flags.f_contiguous
+    return table, {"V2E": c_order, "V2EF": f_order, "Vertex": Vertex}
+
+
+@_xp_params
+def test_compile_time_offset_provider_is_canonical_and_memoized(xp):
+    table, offset_provider = _v2e_tables(xp)
+
+    compile_time = compilation_tasks.compile_time_offset_provider(offset_provider)
+
+    assert list(compile_time) == list(offset_provider)
+    assert compile_time["Vertex"] is offset_provider["Vertex"]
+    for name in ("V2E", "V2EF"):
+        conn, original = compile_time[name], offset_provider[name]
+        assert type(conn) is compilation_tasks._CompileTimeConnectivity
+        assert conn.ndarray.flags.c_contiguous
+        assert not conn.ndarray.flags.writeable
+        assert np.array_equal(conn.ndarray, table)
+        assert conn.domain == original.domain
+        assert conn.codomain == original.codomain
+        assert conn.skip_value == original.skip_value
+        assert compilation_tasks.compile_time_offset_provider(offset_provider)[name] is conn
+        assert compilation_tasks.compile_time_offset_provider(compile_time)[name] is conn
+
+
+@_xp_params
+def test_compile_time_connectivity_copies_each_table_once(xp, monkeypatch):
+    _, offset_provider = _v2e_tables(xp)
+    conn_type = type(offset_provider["V2E"])
+    asnumpy = mock.Mock(side_effect=conn_type.asnumpy)
+    monkeypatch.setattr(conn_type, "asnumpy", lambda self: asnumpy(self))
+
+    for _ in range(2):
+        compile_time = compilation_tasks.compile_time_offset_provider(offset_provider)
+        pickle.loads(pickle.dumps(compile_time))
+        fingerprinting.strict_fingerprinter(compile_time)
+
+    assert asnumpy.call_count == 2  # once per table
+
+
+def test_compile_time_connectivity_fingerprint_depends_only_on_content():
+    _, offset_provider = _v2e_tables(np)
+    conn = offset_provider["V2E"]
+    Vertex, Edge = offset_provider["Vertex"], conn.codomain
+    variants = {
+        "content": gtx.as_connectivity(
+            conn.domain, Edge, np.array([[0, 1], [1, 2], [2, 2]], dtype=np.int32)
+        ),
+        "skip_value": gtx.as_connectivity(
+            conn.domain, Edge, np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32), skip_value=-1
+        ),
+        "codomain": gtx.as_connectivity(
+            conn.domain, Vertex, np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+        ),
+        "domain": gtx.as_connectivity(
+            [gtx.Dimension("Cell"), conn.domain.dims[1]],
+            Edge,
+            np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int32),
+        ),
+        "dtype": gtx.as_connectivity(
+            conn.domain, Edge, np.array([[0, 1], [1, 2], [2, 0]], dtype=np.int64)
+        ),
+    }
+
+    def fingerprint(c):
+        return fingerprinting.strict_fingerprinter(
+            compilation_tasks.compile_time_offset_provider({"X": c})["X"]
+        )
+
+    assert fingerprint(conn) == fingerprint(offset_provider["V2EF"])
+    for name, other in variants.items():
+        assert fingerprint(other) != fingerprint(conn), name
+
+
+def test_compile_time_connectivity_pickles_as_file_reference():
+    Vertex = gtx.Dimension("Vertex")
+    V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+    table = np.arange(4000, dtype=np.int32).reshape(1000, 4) % 1000
+    table[::7, 3] = -1
+    conn = compilation_tasks.compile_time_offset_provider(
+        {"V2V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table, skip_value=-1)}
+    )["V2V"]
+
+    data = pickle.dumps(conn)
+    restored = pickle.loads(data)
+
+    assert len(data) < table.nbytes
+    assert isinstance(restored.ndarray.base, np.memmap)
+    assert np.array_equal(restored.ndarray, table)
+    assert restored.domain == conn.domain
+    assert restored.codomain == conn.codomain
+    assert restored.skip_value == conn.skip_value == -1
+    assert fingerprinting.strict_fingerprinter(restored) == fingerprinting.strict_fingerprinter(
+        conn
+    )
+
+
+def test_compile_time_connectivity_copies_are_valid():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+
+    rebuilt = type(conn)(conn.domain, conn.ndarray, conn.codomain, conn.skip_value)
+    restricted = conn.restrict((slice(0, 2),))
+
+    assert fingerprinting.strict_fingerprinter(rebuilt) == fingerprinting.strict_fingerprinter(conn)
+    assert np.array_equal(pickle.loads(pickle.dumps(restricted)).ndarray, conn.ndarray[0:2])
+    assert fingerprinting.strict_fingerprinter(restricted) != fingerprinting.strict_fingerprinter(
+        conn
+    )
+
+
+def test_compile_time_table_files_are_content_addressed_and_kept(tmp_path, monkeypatch):
+    monkeypatch.setattr(compilation_tasks._cache, "_session_cache_dir_path", tmp_path)
+    Vertex = gtx.Dimension("Vertex")
+    V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
+    table = np.array([[0, 1], [1, 0]], dtype=np.int32)
+    sources = [gtx.as_connectivity([Vertex, V2VDim], Vertex, table) for _ in range(8)]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        views = list(
+            pool.map(
+                lambda c: compilation_tasks.compile_time_offset_provider({"V": c})["V"], sources
+            )
+        )
+    (path,) = (tmp_path / "connectivities").iterdir()
+    inode = path.stat().st_ino
+    compilation_tasks.compile_time_offset_provider(
+        {"V": gtx.as_connectivity([Vertex, V2VDim], Vertex, table)}
+    )
+
+    assert len({view._digest for view in views}) == 1
+    assert path.name == f"{views[0]._digest}.npy"
+    assert path.stat().st_ino == inode
+    assert [p.name for p in (tmp_path / "connectivities").iterdir()] == [path.name]
+
+
+def test_compile_time_table_write_failure_leaves_no_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(compilation_tasks._cache, "_session_cache_dir_path", tmp_path)
+
+    def failing_save(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(compilation_tasks.np, "save", failing_save)
+    _, offset_provider = _v2e_tables(np)
+
+    with pytest.raises(OSError, match="disk full"):
+        compilation_tasks.compile_time_offset_provider(offset_provider)
+    assert list((tmp_path / "connectivities").iterdir()) == []
+
+
+def test_make_compilation_task_compiles_against_compile_time_view():
+    _, offset_provider = _v2e_tables(np)
     compile_time_args = dataclasses.replace(
-        arguments.CompileTimeArgs.empty(), offset_provider={"V2E": conn}
+        arguments.CompileTimeArgs.empty(), offset_provider=offset_provider
     )
     backend = next_backend.Backend(
         name="test_backend",
@@ -165,41 +330,142 @@ def test_offloaded_task_ships_connectivities_as_file_refs():
         backend, definition_stage=None, compile_time_args=compile_time_args
     )
 
-    # without refs the original compilable is used as is
-    assert task.construct_compilable(False).args.offset_provider["V2E"] is conn
-    shipped = task.construct_compilable(True)
-    ref = shipped.args.offset_provider["V2E"]
-    assert isinstance(ref, compilation_tasks._ConnectivityFileRef)
-    # task preparation is pure: nothing is dumped until a runner ships the task
-    assert id(conn) not in compilation_tasks._connectivity_files
-    # unpickling (as in a worker) yields the memory-mapped connectivity
-    restored = pickle.loads(pickle.dumps(ref))
-    assert np.array_equal(restored.asnumpy(), conn.asnumpy())
-    assert restored.domain == conn.domain
-    assert restored.codomain == conn.codomain
-    assert restored.skip_value == conn.skip_value
-    # the same connectivity is dumped only once across tasks
-    path = compilation_tasks._connectivity_files[id(conn)][1]
-    task2 = compilation_tasks.make_compilation_task(
-        backend, definition_stage=None, compile_time_args=compile_time_args
-    )
-    pickle.dumps(task2.construct_compilable(True).args.offset_provider["V2E"])
-    assert compilation_tasks._connectivity_files[id(conn)][1] == path
+    compiled_against = task.compilable.args.offset_provider
+    assert type(compiled_against["V2E"]) is compilation_tasks._CompileTimeConnectivity
+    assert type(compiled_against["V2EF"]) is compilation_tasks._CompileTimeConnectivity
+    assert compiled_against["Vertex"] is offset_provider["Vertex"]
 
 
-def test_connectivity_file_registry_prunes_on_gc():
-    Vertex = gtx.Dimension("Vertex")
-    Edge = gtx.Dimension("Edge")
-    V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-    conn = gtx.as_connectivity([Vertex, V2EDim], Edge, np.array([[0, 1], [1, 2], [2, 0]]))
-
-    compilation_tasks._dump_connectivity(conn)
+def test_compile_time_connectivity_registry_prunes_on_gc():
+    _, offset_provider = _v2e_tables(np)
+    conn = offset_provider.pop("V2EF")
     key = id(conn)
-    assert key in compilation_tasks._connectivity_files
-
+    compilation_tasks.compile_time_offset_provider({"V2EF": conn})
+    assert key in compilation_tasks._compile_time_connectivities
     del conn
     gc.collect()
-    assert key not in compilation_tasks._connectivity_files
+    assert key not in compilation_tasks._compile_time_connectivities
+
+
+def test_compile_time_connectivity_digest_is_derived_from_table():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+
+    replaced = dataclasses.replace(
+        conn, _ndarray=np.array([[0, 1], [1, 2], [2, 2]], dtype=np.int32)
+    )
+
+    assert replaced._digest != conn._digest
+    with pytest.raises(TypeError):
+        type(conn)(conn.domain, conn.ndarray, conn.codomain, conn.skip_value, conn._digest)
+
+
+def test_compile_time_connectivity_rejects_mismatching_table_file():
+    _, offset_provider = _v2e_tables(np)
+    conn = compilation_tasks.compile_time_offset_provider(offset_provider)["V2E"]
+    reconstruct, args = conn.__reduce__()
+    path, digest, domain, codomain, skip_value, shape, dtype = args
+
+    with pytest.raises(ValueError, match="expected"):
+        reconstruct(path, digest, domain, codomain, skip_value, (shape[0] + 1, shape[1]), dtype)
+    with pytest.raises(ValueError, match="expected"):
+        reconstruct(path, digest, domain, codomain, skip_value, shape, "<i8")
+
+
+def _fail_to_unpickle():
+    raise FileNotFoundError("connectivity table file is gone")
+
+
+class _FailsToUnpickle:
+    def __reduce__(self):
+        return (_fail_to_unpickle, ())
+
+
+def test_process_runner_fails_only_the_task_whose_compilable_cannot_be_unpickled(process_runner):
+    broken = runners.CompilationTask(
+        name="broken", compilable=_FailsToUnpickle(), executor=_RecursingExecutor(0)
+    )
+
+    with pytest.raises(FileNotFoundError, match="is gone"):
+        process_runner.submit(broken).result(timeout=120)
+    assert callable(
+        process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
+        .result(timeout=120)
+        .load()
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class _CompilableSummaryArtifact:
+    fingerprint: str
+    tables: tuple
+    contents: tuple
+
+    def load(self):
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class _SummarizingExecutor:
+    def __call__(self, compilable):
+        return _CompilableSummaryArtifact(
+            fingerprinting.strict_fingerprinter(compilable),
+            tuple(
+                (name, type(conn).__name__, conn.ndarray.flags.c_contiguous)
+                for name, conn in compilable.args.offset_provider.items()
+                if isinstance(conn, common.GatherConnectivity)
+            ),
+            tuple(
+                (name, _sha256(conn.ndarray))
+                for name, conn in compilable.args.offset_provider.items()
+                if isinstance(conn, common.GatherConnectivity)
+            ),
+        )
+
+
+def _sha256(table) -> str:
+    table = np.ascontiguousarray(np.asarray(table))
+    return hashlib.sha256(
+        table.dtype.str.encode() + repr(table.shape).encode() + table.tobytes()
+    ).hexdigest()
+
+
+@_xp_params
+def test_compilable_is_identical_in_every_runner(xp, tmp_path):
+    table, offset_provider = _v2e_tables(xp)
+    compile_time_args = dataclasses.replace(
+        arguments.CompileTimeArgs.empty(),
+        offset_provider=compilation_tasks.compile_time_offset_provider(offset_provider),
+    )
+    backend = next_backend.Backend(
+        name="test_backend",
+        executor=_SummarizingExecutor(),
+        allocator=None,
+        transforms=lambda inp: inp,
+    )
+    task = compilation_tasks.make_compilation_task(
+        backend, definition_stage=None, compile_time_args=compile_time_args
+    )
+
+    all_runners = [
+        runners.SerialRunner(),
+        runners.ThreadRunner(max_workers=1),
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)),
+    ]
+    try:
+        summaries = [runner.submit(task).result(timeout=120) for runner in all_runners]
+    finally:
+        for runner in all_runners:
+            runner.shutdown(wait=True)
+
+    assert len({summary.fingerprint for summary in summaries}) == 1
+    expected = (
+        ("V2E", "_CompileTimeConnectivity", True),
+        ("V2EF", "_CompileTimeConnectivity", True),
+    )
+    assert [summary.tables for summary in summaries] == [expected] * 3
+    expected_contents = (("V2E", _sha256(table)), ("V2EF", _sha256(table)))
+    assert [summary.contents for summary in summaries] == [expected_contents] * 3
 
 
 def test_wait_for_compilation_untracks_successful_futures():

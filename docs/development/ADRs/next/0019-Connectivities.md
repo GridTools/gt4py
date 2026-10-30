@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2024-11-08
-- **Updated**: 2026-05-27
+- **Updated**: 2026-10-27
 
 The representation of Connectivities (neighbor tables, `NeighborTableOffsetProvider`) and their identifier (offset tag, `FieldOffset`, etc.) was extended and modified based on the needs of different parts of the toolchain. Here we outline the ideas for consolidating the different closely-related concepts.
 
@@ -51,6 +51,11 @@ Embedded execution of iterator (local) view supports only `NeighborTable`s.
 All transformations and code-generation should use `ConnectivityType`, not the `Connectivity` which contains the runtime mapping.
 
 Note, currently the `global_tmps` pass uses runtime information, therefore this is not strictly enforced.
+Since 2026-10, compilation through `make_compilation_task`
+sees the tables only as read-only host copies identified by a
+digest of their content, independent of the device and memory layout of the
+runtime connectivities (see ADR 0024, amendment). Domain inference still reads
+their contents, so this rule remains not strictly enforced.
 
 The only supported `Connectivity`s in compiled backends (currently) are `NeighborTable`s.
 
