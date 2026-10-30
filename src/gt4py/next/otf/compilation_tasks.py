@@ -11,8 +11,9 @@
 This is the layer between the compiled-programs pool and the compilation
 runners: it decides what runs main-side (frontend lowering, since the raw
 user function cannot cross a process boundary), whether the task can be
-decomposed for offloading at all, and what may cross the process boundary
-(connectivity tables travel as memory-mapped file references).
+decomposed for offloading at all, and what compilation sees of the offset
+provider (compile-time views of the connectivity tables, which travel as
+memory-mapped file references).
 """
 
 from __future__ import annotations
@@ -26,99 +27,162 @@ import weakref
 from typing import Any, Callable
 
 import numpy as np
+import xxhash
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import backend as gtx_backend, common, constructors
+from gt4py.next import backend as gtx_backend, common, utils as next_utils
+from gt4py.next.embedded import nd_array_field
 from gt4py.next.otf import arguments, artifacts, runners, stages
+from gt4py.next.otf.compilation import cache as _cache
 
 
-def _connectivity_from_file(
-    path: str,
-    domain: common.Domain,
-    codomain: common.Dimension,
-    skip_value: core_defs.IntegralScalar | None,
-) -> common.Connectivity:
-    """Rehydrate a `_ConnectivityFileRef`: memory-mapped, so unpickling the same
-    file in many worker processes shares the physical pages instead of copying."""
-    data = np.load(path, mmap_mode="r")
-    return constructors.as_connectivity(
-        domain=domain, codomain=codomain, data=data, skip_value=skip_value
-    )
+def _table_digest(table: np.ndarray) -> str:
+    """Digest of the content of a C-contiguous `table`, hashed in place."""
+    hasher = xxhash.xxh3_128(b"table\0")
+    hasher.update(table.dtype.str.encode())
+    hasher.update(repr(table.shape).encode())
+    hasher.update(table.data)
+    return hasher.hexdigest()
 
 
-@dataclasses.dataclass(frozen=True)
-class _ConnectivityFileRef:
-    """Lazy stand-in for a connectivity table in the compilation part of a load task.
+@dataclasses.dataclass(frozen=True, eq=False)
+class _CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
+    """
+    Compile-time view of a connectivity: a read-only, C-contiguous host table,
+    memory-mapped from a file named by the digest of its content.
 
-    Construction is pure. On first pickling the table is dumped (memoized) to an
-    ``.npy`` file, and unpickling yields the memory-mapped `Connectivity`, so the
-    table crosses the process boundary through the page cache instead of the
-    pickle stream. A task that is never shipped to a worker never dumps anything.
+    It is fingerprinted by its digest instead of by the table, and pickled as a
+    reference to the file, so it crosses process boundaries through the page
+    cache. Each runtime connectivity is converted once: tables must not be
+    modified in place after they have been used for compilation.
     """
 
-    connectivity: common.Connectivity
+    _ndarray: core_defs.NDArrayObject = dataclasses.field(
+        metadata=next_utils.gt4py_metadata(fingerprint=False)
+    )
+    _digest: str = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        table = np.ascontiguousarray(np.asarray(self._ndarray))
+        object.__setattr__(self, "_digest", _table_digest(table))
+
+    @classmethod
+    def _from_file(
+        cls,
+        path: str,
+        digest: str,
+        domain: common.Domain,
+        codomain: common.Dimension,
+        skip_value: core_defs.IntegralScalar | None,
+        shape: tuple[int, ...],
+        dtype: str,
+    ) -> _CompileTimeConnectivity:
+        """Map the table file written for `digest`, without hashing the table again."""
+        table = np.asarray(np.load(path, mmap_mode="r"))
+        if table.shape != shape or table.dtype.str != dtype:
+            raise ValueError(
+                f"Connectivity table file '{path}' holds a '{table.dtype.str}' table of shape"
+                f" {table.shape}, expected '{dtype}' and {shape}."
+            )
+        result = object.__new__(cls)
+        for name, value in (
+            ("_domain", domain),
+            ("_ndarray", table),
+            ("_codomain", codomain),
+            ("_skip_value", skip_value),
+            ("_digest", digest),
+        ):
+            object.__setattr__(result, name, value)
+        return result
 
     def __reduce__(self) -> tuple[Callable, tuple]:
+        table = np.asarray(self._ndarray)
+        path = _table_path(self._digest)
+        _write_table(table, path)
         return (
-            _connectivity_from_file,
+            type(self)._from_file,
             (
-                _dump_connectivity(self.connectivity),
-                self.connectivity.domain,
-                self.connectivity.codomain,
-                self.connectivity.skip_value,
+                str(path),
+                self._digest,
+                self.domain,
+                self.codomain,
+                self.skip_value,
+                table.shape,
+                table.dtype.str,
             ),
         )
 
 
-#: Files already written for a connectivity, keyed by its id (validated against
-#: a weakref, since ids can be reused). Main-process only, consulted when a
-#: task's connectivity is first pickled: the same mesh object appears in the
-#: tasks of many programs and variants and must be dumped only once per run.
-_connectivity_files: dict[int, tuple[weakref.ref, str]] = {}
-
-_dump_dir: tempfile.TemporaryDirectory | None = None
+def _table_path(digest: str) -> pathlib.Path:
+    return _cache._session_cache_dir_path / "connectivities" / f"{digest}.npy"
 
 
-def _get_dump_dir() -> pathlib.Path:
-    """Directory holding the connectivity shipping buffers; removed at process exit."""
-    global _dump_dir
-    if _dump_dir is None:
-        _dump_dir = tempfile.TemporaryDirectory(prefix="gt4py_connectivities_")
-    return pathlib.Path(_dump_dir.name)
+def _write_table(table: np.ndarray, path: pathlib.Path) -> None:
+    if path.exists():
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Written aside and renamed, so a reader never maps a partially written file.
+    with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".npy", delete=False) as f:
+        temporary = f.name
+        try:
+            np.save(f, np.ascontiguousarray(table))
+        except BaseException:
+            f.close()
+            os.unlink(temporary)
+            raise
+    try:
+        os.replace(temporary, path)
+    except BaseException:
+        os.unlink(temporary)
+        raise
 
 
-def _dump_connectivity(value: common.Connectivity) -> str:
-    entry = _connectivity_files.get(id(value))
+#: Compile-time views of runtime connectivities, keyed by the `id` of the
+#: runtime connectivity (validated against a weakref, since ids can be reused).
+_compile_time_connectivities: dict[int, tuple[weakref.ref, _CompileTimeConnectivity]] = {}
+
+
+def _to_compile_time_connectivity(value: common.GatherConnectivity) -> _CompileTimeConnectivity:
+    if isinstance(value, _CompileTimeConnectivity):
+        return value
+    entry = _compile_time_connectivities.get(id(value))
     if entry is not None and entry[0]() is value:
         return entry[1]
-    # One writer per path and files are write-once: `mkstemp` uniqueness is what
-    # makes concurrent dumps and the workers' mmap readers safe. A racing double
-    # dump costs a duplicate file, nothing else.
-    fd, path = tempfile.mkstemp(suffix=".npy", prefix="connectivity_", dir=_get_dump_dir())
-    os.close(fd)
-    np.save(path, value.asnumpy())
+    table = np.ascontiguousarray(value.asnumpy())
+    digest = _table_digest(table)
+    path = _table_path(digest)
+    _write_table(table, path)
+    result = _CompileTimeConnectivity._from_file(
+        str(path),
+        digest,
+        value.domain,
+        value.codomain,
+        value.skip_value,
+        table.shape,
+        table.dtype.str,
+    )
+    del table
 
     def _prune(ref: weakref.ref, key: int = id(value)) -> None:
-        # Only the registry entry: the file may still be referenced by
-        # in-flight tasks. The guard protects a reused id already
-        # re-registered by a new owner.
-        if (current := _connectivity_files.get(key)) is not None and current[0] is ref:
-            del _connectivity_files[key]
+        if (current := _compile_time_connectivities.get(key)) is not None and current[0] is ref:
+            del _compile_time_connectivities[key]
 
     try:
-        _connectivity_files[id(value)] = (weakref.ref(value, _prune), path)
-    except TypeError:  # not weakref-able: correct but re-dumped per task
+        _compile_time_connectivities[id(value)] = (weakref.ref(value, _prune), result)
+    except TypeError:  # not weakref-able: correct but converted per call
         pass
-    return path
+    return result
 
 
-def _offset_provider_with_file_refs(
-    offset_provider: common.OffsetProvider,
-) -> common.OffsetProvider:
+def compile_time_offset_provider(offset_provider: common.OffsetProvider) -> common.OffsetProvider:
+    """
+    Return `offset_provider` with every gather connectivity replaced by its
+    `_CompileTimeConnectivity`; other entries and their order are kept.
+    """
     return {
-        name: value
-        if isinstance(value, common.Dimension)
-        else typing.cast(common.OffsetProviderElem, _ConnectivityFileRef(value))
+        name: typing.cast(common.OffsetProviderElem, _to_compile_time_connectivity(value))
+        if isinstance(value, common.GatherConnectivity)
+        else value
         for name, value in offset_provider.items()
     }
 
@@ -147,12 +211,19 @@ def make_compilation_task(
         # everything and ignores the compilable.
         return runners.CompilationTask(
             name=name,
-            construct_compilable=lambda with_refs: None,
+            compilable=None,
             executor=lambda _: _PreloadedArtifact(
                 backend.compile(definition_stage, compile_time_args=compile_time_args)
             ),
             no_offload_reason="it does not use the standard compilation workflow"
             " (customized 'compile')",
+        )
+    # Compilation runs against the compile-time view of the offset provider,
+    # whichever runner executes it.
+    if compile_time_args.offset_provider:
+        compile_time_args = dataclasses.replace(
+            compile_time_args,
+            offset_provider=compile_time_offset_provider(compile_time_args.offset_provider),
         )
     # Frontend lowering happens here, main-side: decorators rebind the user's
     # function module attribute, so the raw `types.FunctionType` must not cross
@@ -160,21 +231,4 @@ def make_compilation_task(
     compilable = backend.transforms(
         stages.ConcreteProgramDef(data=definition_stage, args=compile_time_args)
     )
-
-    def construct_compilable(with_refs: bool) -> stages.CompilableProgramDef:
-        if not with_refs or not compilable.args.offset_provider:
-            return compilable
-        # The shipped copy must not carry the connectivity buffers: they may
-        # live on a device the worker cannot see, and shipping them through the
-        # pickle queue would serialize the full tables once per task.
-        return dataclasses.replace(
-            compilable,
-            args=dataclasses.replace(
-                compilable.args,
-                offset_provider=_offset_provider_with_file_refs(compilable.args.offset_provider),
-            ),
-        )
-
-    return runners.CompilationTask(
-        name=name, construct_compilable=construct_compilable, executor=backend.executor
-    )
+    return runners.CompilationTask(name=name, compilable=compilable, executor=backend.executor)
