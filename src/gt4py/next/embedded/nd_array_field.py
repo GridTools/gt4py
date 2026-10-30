@@ -42,11 +42,6 @@ except ImportError:
     jax: Optional[ModuleType] = None  # type: ignore[no-redef]
     jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
-try:
-    import dace
-except ImportError:
-    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
-
 
 def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
     for f in fields:
@@ -467,40 +462,6 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
-
-    if dace:
-
-        def _dace_data_ptr(self) -> int:
-            return self.__gt_buffer_info__.data_ptr
-
-        def _dace_descriptor(self) -> dace.data.Data:
-            return dace.data.create_datadescriptor(self.ndarray)
-
-    else:
-
-        def _dace_data_ptr(self) -> int:
-            raise NotImplementedError(
-                "data_ptr is only supported when the 'dace' module is available."
-            )
-
-        def _dace_descriptor(self) -> dace.data.Data:
-            raise NotImplementedError(
-                "__descriptor__ is only supported when the 'dace' module is available."
-            )
-
-    data_ptr = _dace_data_ptr
-    """
-    Returns the pointer of the underlying data buffer.
-
-    Fully equivalent to `self.__gt_buffer_info__.data_ptr`. It is only defined to emulate the
-    PyTorch API for DaCe interoperability.
-
-    Note:
-        This method is experimental and will be likely removed in future versions.
-    """
-
-    __descriptor__ = _dace_descriptor
-    """Extension of NdArrayField adding SDFGConvertible support in GT4Py Programs."""
 
 
 @dataclasses.dataclass(frozen=True)
