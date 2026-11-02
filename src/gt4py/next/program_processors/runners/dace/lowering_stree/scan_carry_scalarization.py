@@ -73,7 +73,7 @@ def _scalar_point_accesses(nsdfg: dace.SDFG, name: str) -> list | None:
     does not describe it).
     """
     memlets = []
-    for state in nsdfg.all_states():
+    for state in nsdfg.states():
         for edge in state.edges():
             if edge.data.data != name:
                 continue
@@ -110,7 +110,7 @@ def _symbols_varying_inside(nsdfg: dace.SDFG) -> set[str]:
 
 def find_carry_candidates(top_sdfg: dace.SDFG) -> list[_CarryCandidate]:
     candidates = []
-    for state in top_sdfg.all_states():
+    for state in top_sdfg.states():
         scope_dict = state.scope_dict()
         for node in state.nodes():
             if not isinstance(node, dace_nodes.NestedSDFG):
@@ -148,7 +148,7 @@ def scalarize_scan_carries(top_sdfg: dace.SDFG) -> set[str]:
     scalarized = set()
     for cand in find_carry_candidates(top_sdfg):
         nsdfg, name = cand.nsdfg, cand.name
-        for state in nsdfg.all_states():
+        for state in nsdfg.states():
             for edge in state.edges():
                 if edge.data.data != name:
                     continue

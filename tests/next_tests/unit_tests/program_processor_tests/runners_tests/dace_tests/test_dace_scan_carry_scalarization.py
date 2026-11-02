@@ -33,7 +33,7 @@ def _make_scan_sdfg(carry_index: str) -> dace.SDFG:
     nsdfg = dace.SDFG("scan_body")
     nsdfg.add_symbol("__i", dace.int32)
     nsdfg.add_symbol("__origin", dace.int32)
-    nsdfg.add_array("__out", [10], dace.float64)
+    nsdfg.add_array("__out", [10, 10], dace.float64)
     nsdfg.add_transient("carry", [10], dace.float64)
 
     loop = dace.sdfg.state.LoopRegion(
@@ -52,7 +52,7 @@ def _make_scan_sdfg(carry_index: str) -> dace.SDFG:
         inputs={"__carry": dace.Memlet(data="carry", subset=carry_index)},
         outputs={
             "__carry_w": dace.Memlet(data="carry", subset=carry_index),
-            "__o": dace.Memlet(data="__out", subset="__k"),
+            "__o": dace.Memlet(data="__out", subset="__i, __k"),
         },
         external_edges=True,
     )
@@ -98,7 +98,7 @@ def test_scalarize_carry_indexed_by_map_param_and_origin():
     assert scalarized == {"carry"}
     nsdfg = next(
         node.sdfg
-        for state in sdfg.all_states()
+        for state in sdfg.states()
         for node in state.nodes()
         if isinstance(node, dace.sdfg.nodes.NestedSDFG)
     )
@@ -131,7 +131,7 @@ def _make_2d_scan_sdfg() -> dace.SDFG:
     nsdfg.add_symbol("__i", dace.int32)
     nsdfg.add_symbol("__j", dace.int32)
     nsdfg.add_symbol("__origin", dace.int32)
-    nsdfg.add_array("__out", [10], dace.float64)
+    nsdfg.add_array("__out", [10, 10, 10], dace.float64)
     nsdfg.add_transient("carry", [10, 10], dace.float64)
 
     loop = dace.sdfg.state.LoopRegion(
@@ -150,7 +150,7 @@ def _make_2d_scan_sdfg() -> dace.SDFG:
         inputs={"__carry": dace.Memlet(data="carry", subset="__i - __origin, __j - __origin")},
         outputs={
             "__carry_w": dace.Memlet(data="carry", subset="__i - __origin, __j - __origin"),
-            "__o": dace.Memlet(data="__out", subset="__k"),
+            "__o": dace.Memlet(data="__out", subset="__i, __j, __k"),
         },
         external_edges=True,
     )
@@ -194,7 +194,7 @@ def test_scalarize_carry_of_scan_over_two_horizontal_dimensions():
 
     nsdfg = next(
         node.sdfg
-        for state in sdfg.all_states()
+        for state in sdfg.states()
         for node in state.nodes()
         if isinstance(node, dace.sdfg.nodes.NestedSDFG)
     )
