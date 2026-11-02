@@ -33,11 +33,18 @@ def _round_away_from_zero(num):
     return np.copysign(np.floor(np.abs(num) + 0.5), num)
 
 
+def _random(lower_bound, upper_bound) -> float:
+    return np.random.uniform(lower_bound, upper_bound)  # noqa: NPY002
+
+
 round_ = np.round
 round_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
 
 round_away_from_zero_ = _round_away_from_zero
 round_away_from_zero_.types = ["f->f", "d->d", "F->F", "D->D"]  # type: ignore[attr-defined]
+
+rand_ = _random
+rand_.types = ["ff->d", "dd->d"]  # type: ignore[attr-defined]
 
 positive: np.ufunc = np.positive
 negative: np.ufunc = np.negative
@@ -91,3 +98,4 @@ erf: np.ufunc = erf_
 erfc: np.ufunc = erfc_
 round: np.ufunc = round_  # type: ignore # noqa: A001
 round_away_from_zero: np.ufunc = round_away_from_zero_  # type: ignore
+rand: np.ufunc = rand_  # type: ignore

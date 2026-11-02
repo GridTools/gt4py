@@ -462,6 +462,8 @@ class NativeFunction(enum.Enum):
     FLOAT32 = enum.auto()
     FLOAT64 = enum.auto()
 
+    RAND = enum.auto()
+
     @property
     def arity(self):
         return type(self).IR_OP_TO_NUM_ARGS[self]
@@ -504,6 +506,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {  # type: ignore[attr-defined]
     NativeFunction.ERFC: 1,
     NativeFunction.ROUND: 1,
     NativeFunction.ROUND_AWAY_FROM_ZERO: 1,
+    NativeFunction.RAND: 2,
 }
 
 

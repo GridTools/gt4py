@@ -223,6 +223,7 @@ class OIRToTasklet(eve.NodeVisitor):
             common.NativeFunction.ABS: "abs",
             common.NativeFunction.MIN: "min",
             common.NativeFunction.MAX: "max",
+            common.NativeFunction.RAND: "dace.math.rand",
             common.NativeFunction.MOD: "dace.math.fmod",
             common.NativeFunction.SIN: "dace.math.sin",
             common.NativeFunction.COS: "dace.math.cos",
