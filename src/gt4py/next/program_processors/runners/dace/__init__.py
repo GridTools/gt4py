@@ -10,6 +10,7 @@
 from gt4py.next.program_processors.runners.dace.sdfg_callable import get_sdfg_args
 from gt4py.next.program_processors.runners.dace.workflow.backend import (
     make_dace_backend,
+    make_dace_toolchain,
     run_dace_cpu,
     run_dace_cpu_gt,
     run_dace_cpu_gt_noopt,
@@ -17,11 +18,30 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
     run_dace_gpu,
     run_dace_gpu_noopt,
 )
+from gt4py.next.program_processors.runners.dace.workflow.factory import (
+    DaCeBindingsBuilder,
+    DaCeCompilationBuilder,
+    DaCeConfig,
+    DaCeTranslationBuilder,
+    make_dace_bindings,
+    make_dace_compile_workflow,
+    make_dace_compiler,
+    make_dace_translator,
+)
 
 
 __all__ = [
+    "DaCeBindingsBuilder",
+    "DaCeCompilationBuilder",
+    "DaCeConfig",
+    "DaCeTranslationBuilder",
     "get_sdfg_args",
     "make_dace_backend",
+    "make_dace_bindings",
+    "make_dace_compile_workflow",
+    "make_dace_compiler",
+    "make_dace_toolchain",
+    "make_dace_translator",
     "run_dace_cpu",
     "run_dace_cpu_gt",
     "run_dace_cpu_gt_noopt",

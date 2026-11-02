@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import copy
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic, Optional, TypeVar, Union
 
-from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
+from . import datamodels, exceptions, trees, utils, xtyping
 from .datamodels import validators as _validators
-from .extended_typing import TYPE_CHECKING, Any, ClassVar, Final, Iterable, Optional, TypeVar, Union
 from .type_definitions import ConstrainedStr, IntEnum, StrEnum
 
 
@@ -144,7 +144,7 @@ register_annex_user = AnnexManager.register_user
 _NodeParamsT = TypeVar("_NodeParamsT")
 
 
-class Node(datamodels.DataModel, xtyping.Generic[_NodeParamsT], kw_only=True):  # type: ignore[call-arg]
+class Node(datamodels.DataModel, Generic[_NodeParamsT], kw_only=True):  # type: ignore[call-arg]
     """Base class representing a node in a syntax tree.
 
     Implemented as a :class:`eve.datamodels.DataModel` with some extra features.

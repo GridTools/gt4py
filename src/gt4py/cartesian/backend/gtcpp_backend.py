@@ -24,7 +24,7 @@ from gt4py.cartesian.gtc.gtcpp import gtcpp, gtcpp_codegen
 from gt4py.cartesian.gtc.gtcpp.oir_to_gtcpp import OIRToGTCpp
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes.oir_pipeline import DefaultPipeline
-from gt4py.eve import codegen
+from gt4py.eve import codegen, formatting
 from gt4py.storage.cartesian import layout, layout_registry
 
 
@@ -117,7 +117,7 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def apply(cls, root, *, module_name="stencil", **kwargs) -> str:
         generated_code = cls(kwargs.get("backend")).visit(root, module_name=module_name, **kwargs)
         if kwargs.get("format_source", True):
-            generated_code = codegen.format_source("cpp", generated_code, style="LLVM")
+            generated_code = formatting.format_cpp_source(generated_code)
 
         return generated_code
 

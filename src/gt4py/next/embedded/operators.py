@@ -11,7 +11,7 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVa
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
+from gt4py.eve import xtyping
 from gt4py.next import common, errors, field_utils, named_collections, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.field_utils import get_array_ns
@@ -117,7 +117,10 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
         # We currently apply the extract on both the rhs (`res`) computed by the operator and the lhs (`out`, provided by the user)
         # without checking if the types are consistent. However, these errors are caught in linting if enabled.
         container_extracted_out = arguments.extract(out)
-        assert xtyping.is_maybe_nested_in_tuple_of(container_extracted_out, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        assert xtyping.is_maybe_nested_in_tuple_of(
+            container_extracted_out,
+            common.MutableField,  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        )
         out_domain = (
             utils.tree_map(common.domain)(domain)
             if domain is not None

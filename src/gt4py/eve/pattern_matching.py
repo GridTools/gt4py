@@ -10,9 +10,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from functools import singledispatch
-
-from .extended_typing import Any, Iterator
+from typing import Any
 
 
 class ObjectPattern:

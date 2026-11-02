@@ -10,10 +10,9 @@ import ast
 import textwrap
 import typing
 from dataclasses import dataclass
-from typing import Callable, ClassVar, Collection
+from typing import Any, Callable, ClassVar, Collection, Generic, TypeVar
 
 from gt4py.eve.concepts import SourceLocation
-from gt4py.eve.extended_typing import Any, Generic, TypeVar
 from gt4py.next import errors
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings

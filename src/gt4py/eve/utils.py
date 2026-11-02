@@ -24,6 +24,19 @@ import pprint
 import re
 import types
 import typing
+from collections.abc import Callable, Collection, Iterable, Iterator
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Literal,
+    Optional,
+    ParamSpec,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import deepdiff
 import xxhash
@@ -42,25 +55,9 @@ from boltons.strutils import (
     unwrap_text as unwrap_text,
 )
 
-from . import extended_typing as xtyping
-from .extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    ArgsOnlyCallable,
-    Callable,
-    Collection,
-    Generic,
-    Iterable,
-    Iterator,
-    Literal,
-    Optional,
-    ParamSpec,
-    TypeVar,
-    Union,
-    cast,
-    overload,
-)
+from . import xtyping
 from .type_definitions import NOTHING, NothingType
+from .xtyping import ArgsOnlyCallable
 
 
 try:

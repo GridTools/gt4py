@@ -11,6 +11,7 @@ from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import low
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_utils import (
     flatten_tuple_fields,
     get_map_variable,
+    safe_replace_symbolic,
 )
 
 
@@ -18,4 +19,5 @@ __all__ = [
     "flatten_tuple_fields",
     "get_map_variable",
     "lower_program_to_sdfg",
+    "safe_replace_symbolic",
 ]

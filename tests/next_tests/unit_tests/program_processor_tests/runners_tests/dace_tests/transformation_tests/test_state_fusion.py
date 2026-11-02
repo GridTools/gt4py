@@ -780,3 +780,106 @@ def test_hidden_double_producer():
     sdfg.validate()
 
     assert nb_applied == 0
+
+
+def _make_global_read_up_and_downstream_of_messenger() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
+    """The second state writes a global that the first state also reads downstream of the messenger.
+
+    The first state reads the global `g` twice; once to produce the transient
+    messenger `t` (`t = g + 1`) and once together with the messenger
+    (`u = t / g`). Note that both computations share the same AccessNodes and
+    therefore form a single concurrent subgraph. The second state then performs
+    the write back `g = t`.
+
+    This models in-place update field operators of the form
+
+    ```python
+    z_g = g
+    g_new = g + incr
+    o = g_new / z_g
+    ```
+
+    where the second state performs the write back of `g_new` into `g`.
+    """
+    sdfg = dace.SDFG(util.unique_name("global_read_up_and_downstream_of_messenger"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state_after(state1)
+
+    for name in ["g", "t", "u"]:
+        sdfg.add_array(
+            name,
+            shape=(10,),
+            dtype=dace.float64,
+            transient=name in {"t", "u"},
+        )
+
+    # The AccessNodes are shared between the two computations, such that the
+    #  dataflow of the first state forms a single concurrent subgraph.
+    g = state1.add_access("g")
+    t = state1.add_access("t")
+
+    # Upstream computation: `t = g + 1`, `t` is the messenger.
+    state1.add_mapped_tasklet(
+        "comp1",
+        map_ranges={"__i": "0:10"},
+        inputs={"__in": dace.Memlet("g[__i]")},
+        code="__out = __in + 1.",
+        outputs={"__out": dace.Memlet("t[__i]")},
+        input_nodes={g},
+        output_nodes={t},
+        external_edges=True,
+    )
+    # Downstream computation: `u = t / g`, i.e. `g` is read a second time,
+    #  downstream of the messenger `t`.
+    state1.add_mapped_tasklet(
+        "comp2",
+        map_ranges={"__i": "0:10"},
+        inputs={
+            "__in1": dace.Memlet("t[__i]"),
+            "__in2": dace.Memlet("g[__i]"),
+        },
+        code="__out = __in1 / __in2",
+        outputs={"__out": dace.Memlet("u[__i]")},
+        input_nodes={t, g},
+        external_edges=True,
+    )
+
+    # Second state: write back `g = t`.
+    state2.add_nedge(
+        state2.add_access("t"),
+        state2.add_access("g"),
+        dace.Memlet("t[0:10] -> [0:10]"),
+    )
+
+    return sdfg, state1, state2
+
+
+def test_global_read_up_and_downstream_of_messenger():
+    """Fusing the states would create a WAR hazard on `g`, so it must not happen.
+
+    In the merged state the write `g = t` is dataflow-ordered after the
+    computation of the messenger `t`, and thus after the *first* read of `g`.
+    However, it is not ordered with respect to the *second* read of `g`: the
+    computation `u = t / g` depends on the messenger as well and is therefore
+    concurrent with the write back.
+    """
+    sdfg, state1, state2 = _make_global_read_up_and_downstream_of_messenger()
+    assert sdfg.number_of_nodes() == 2
+    # Both computations of the first state form a single concurrent subgraph.
+    assert len(dace.sdfg.utils.concurrent_subgraphs(state1)) == 1
+    assert util.count_nodes(state1, dace_nodes.AccessNode) == 3
+
+    nb_applied = sdfg.apply_transformations_repeated(gtx_transformations.GT4PyStateFusion)
+    sdfg.validate()
+
+    assert nb_applied == 0
+    assert sdfg.number_of_nodes() == 2
+
+    # Ensure that the unfused SDFG computes the intended result, i.e. the write
+    #  back `g = t` happened only after all reads of `g` in the first state.
+    g_orig = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    g = g_orig.copy()
+    sdfg(g=g)
+    assert np.allclose(g, g_orig + 1.0)

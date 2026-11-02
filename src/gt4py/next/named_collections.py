@@ -13,18 +13,13 @@ import functools
 import inspect
 import pkgutil
 import typing
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import Any, Final, TypeAlias, TypeGuard, TypeVar
 
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
-    Any,
-    Final,
-    Mapping,
-    NestedTuple,
-    TypeAlias,
-    TypeGuard,
-    TypeVar,
-)
+import typing_extensions
+
+from gt4py.eve import xtyping
+from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common, utils
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -71,7 +66,7 @@ NamedCollectionKey = str | int
 
 def named_collection_type(type_hint: xtyping.TypeAnnotation) -> type[NamedCollection] | None:
     """Get the type if the given type hint represents a supported Python named collection type."""
-    class_ = xtyping.get_origin(type_hint) or type_hint
+    class_ = typing.get_origin(type_hint) or type_hint
     if class_ is tuple or (
         isinstance(class_, type) and issubclass(class_, CUSTOM_NAMED_COLLECTION_TYPES)
     ):
@@ -79,7 +74,9 @@ def named_collection_type(type_hint: xtyping.TypeAnnotation) -> type[NamedCollec
     return None
 
 
-def is_named_collection_type(type_hint: xtyping.TypeAnnotation) -> TypeGuard[type[NamedCollection]]:
+def is_named_collection_type(
+    type_hint: xtyping.TypeAnnotation,
+) -> TypeGuard[type[NamedCollection]]:
     """Check if a type annotation represents a supported Python named collection type."""
     return named_collection_type(type_hint) is not None
 
@@ -88,9 +85,9 @@ def elements_keys(
     named_collection_type_hint: xtyping.SingleTypeAnnotation,
 ) -> tuple[NamedCollectionKey, ...]:
     """Get the keys of the elements in a named collection type."""
-    class_ = xtyping.get_origin(named_collection_type_hint) or named_collection_type_hint
+    class_ = typing.get_origin(named_collection_type_hint) or named_collection_type_hint
     if class_ is tuple:
-        return tuple(range(len(xtyping.get_args(named_collection_type_hint))))
+        return tuple(range(len(typing.get_args(named_collection_type_hint))))
 
     # TODO(egparedes): consider using "__match_args__" as general custom named collection marker
     return tuple(getattr(class_, "__annotations__", {}).keys()) if isinstance(class_, type) else ()
@@ -104,13 +101,13 @@ def elements_types(
 ) -> Mapping[NamedCollectionKey, type]:
     """Get the types of the elements of a named collection type."""
 
-    if xtyping.get_origin(named_collection_type_hint) is tuple:
-        return {i: value for i, value in enumerate(xtyping.get_args(named_collection_type_hint))}
+    if typing.get_origin(named_collection_type_hint) is tuple:
+        return {i: value for i, value in enumerate(typing.get_args(named_collection_type_hint))}
 
     type_ = named_collection_type(named_collection_type_hint)
     if type_ is not None:
         keys = elements_keys(named_collection_type_hint)
-        all_hints = xtyping.get_type_hints(
+        all_hints = typing_extensions.get_type_hints(
             named_collection_type_hint, globalns=globalns, localns=localns
         )
         if not {*keys} <= all_hints.keys():
@@ -155,18 +152,18 @@ def make_extractor_expr(named_collection_type_hint: xtyping.TypeAnnotation, valu
 
     children_type_hints: dict[str, xtyping.TypeAnnotation] = {}
     expr_parts: list[str] = []
-    actual_type = xtyping.get_origin(named_collection_type_hint) or named_collection_type_hint
+    actual_type = typing.get_origin(named_collection_type_hint) or named_collection_type_hint
 
     if isinstance(actual_type, type):
         if issubclass(actual_type, CUSTOM_NAMED_COLLECTION_TYPES):
-            children_type_hints = xtyping.get_type_hints(named_collection_type_hint)
+            children_type_hints = typing_extensions.get_type_hints(named_collection_type_hint)
             assert len(children_type_hints)
             expr_parts = [
                 make_extractor_expr(value, f"{value_expr}.{key}")
                 for key, value in children_type_hints.items()
             ]
         elif issubclass(actual_type, tuple) and (
-            tuple_arg_hints := xtyping.get_args(named_collection_type_hint)
+            tuple_arg_hints := typing.get_args(named_collection_type_hint)
         ):
             # This is a `tuple` with type arguments
             expr_parts = [
@@ -212,9 +209,9 @@ def make_extractor_expr_from_type_spec(type_: ts.TypeSpec, value_expr: str) -> s
 def _get_named_collection_constructor_args_info(
     named_collection_type_hint: xtyping.SingleTypeAnnotation,
 ) -> tuple[int, list[str]]:
-    if xtyping.get_origin(named_collection_type_hint) is tuple:
+    if typing.get_origin(named_collection_type_hint) is tuple:
         # For plain tuples, we assume all arguments are positional
-        args_count = len(xtyping.get_args(named_collection_type_hint))
+        args_count = len(typing.get_args(named_collection_type_hint))
         return args_count, []
 
     assert isinstance(named_collection_type_hint, type)
@@ -311,7 +308,7 @@ def make_constructor_expr(
         global_ns: The global namespace where the unique named collection type aliases are
             stored for final evaluation of the constructor expression.
     """
-    actual_type = xtyping.get_origin(named_collection_type_hint) or named_collection_type_hint
+    actual_type = typing.get_origin(named_collection_type_hint) or named_collection_type_hint
     nested_types: dict[int | str, xtyping.TypeAnnotation] = {}
     if isinstance(actual_type, type):
         if issubclass(actual_type, CUSTOM_NAMED_COLLECTION_TYPES):
@@ -322,7 +319,7 @@ def make_constructor_expr(
             # Get the type hints of the named collection's members
             named_collection_type = typing.cast(str | type, named_collection_type_hint)
             named_collection_keys = elements_keys(named_collection_type)
-            type_hints = xtyping.get_type_hints(named_collection_type)
+            type_hints = typing_extensions.get_type_hints(named_collection_type)
             assert {*named_collection_keys} <= type_hints.keys(), (
                 "Mismatch between keys and type hints"
             )
@@ -331,7 +328,7 @@ def make_constructor_expr(
             }
 
         elif issubclass(actual_type, tuple) and (
-            tuple_args_hint := xtyping.get_args(named_collection_type_hint)
+            tuple_args_hint := typing.get_args(named_collection_type_hint)
         ):
             named_collection_type_alias = ""
             nested_types = {i: type_hint for i, type_hint in enumerate(tuple_args_hint)}
