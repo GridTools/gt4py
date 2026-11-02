@@ -27,13 +27,14 @@ Narrowing is the common case: the field usually covers only part of the connecti
 How a `premap` behaves under `jit` depends on how its connectivity reaches the compiled function:
 
 - **Passed as a jit argument** (`jax.jit(lambda f, c: f.premap(c))(field, conn)`), the recommended way. The table is a tracer, and flattening attached the handle. Domain inference reads the concrete table through the handle, and the gather takes the table as a runtime argument.
-- **Closed over** (`jax.jit(lambda f: f.premap(conn))(field)`). The table stays concrete, also after `restrict`. Domain inference reads it directly, but the table is inlined into the compiled program as a constant.
-- **Computed inside the trace** (`as_offset(Koff, offset_field)`, where the offsets are data). The table is a tracer with no handle, because no concrete values exist at trace time. Domain inference assumes every target lies inside the field, so the output domain is not narrowed, and the gather clips its indices to the field.
+- **Closed over** (`jax.jit(lambda f: f.premap(conn))(field)`). The table stays concrete, also after `restrict`. Domain inference reads it directly, but the table is inlined into the compiled program as a constant. `as_offset` of a closed-over offset field behaves the same way.
+- **Computed from traced values** (`as_offset(Koff, offset_field)` with a traced offset field). The table is a tracer with no handle, because no concrete values exist at trace time. Domain inference assumes every target lies inside the field, so the output domain is not narrowed, and the gather clips its indices to the field.
 
 ## Consequences
 
 - Domains under `jit` match eager execution when the table is concrete or has a handle.
-- For a table computed in the trace, an out-of-range target raises in eager execution, but under `jit` reads the field's boundary value without an error and the domain is not narrowed. Such values are data, so no concrete bounds exist at trace time.
+- A table computed from traced values behaves differently from eager execution when a target is out of range. Eagerly, a uniform offset narrows the domain and a non-contiguous one raises. Under `jit` the domain stays as it is and those targets read the field's boundary value, without an error.
+- Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached per buffer.
 
 Open questions, all caused by the handle:
