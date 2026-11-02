@@ -516,21 +516,10 @@ class NdArrayConnectivityField(
     def _cache(self) -> dict:
         return {}
 
-    def _inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+    def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
-            if not isinstance(
-                image_range, common.UnitRange
-            ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
-                if image_range.dim != self.codomain:
-                    raise ValueError(
-                        f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
-                    )
-
-                image_range = image_range.unit_range
-
-            assert isinstance(image_range, common.UnitRange)
             assert common.UnitRange.is_finite(image_range)
 
             slices = _hyperslice(self._index_table, image_range, self.array_ns, self.skip_value)
@@ -1093,9 +1082,7 @@ if jnp:
         def _image_unknown(self) -> bool:
             return self._table_handle is None and isinstance(self._ndarray, jax.core.Tracer)
 
-        def _inverse_image(
-            self, image_range: common.UnitRange | common.NamedRange
-        ) -> common.Domain:
+        def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
             if self._image_unknown:
                 # values computed inside a trace: assume every target lies in `image_range`
                 return self.domain
