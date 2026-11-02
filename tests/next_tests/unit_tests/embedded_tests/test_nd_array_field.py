@@ -1963,7 +1963,9 @@ def test_jax_jit_premap_with_connectivity_argument(num_field_vertices):
     stablehlo = jitted.lower(field, conn).as_text()
     main_arguments = re.search(r"@main\(([^)]*)\)", stablehlo).group(1)
     assert f"tensor<{table.shape[0]}x2xi32>" in main_arguments
-    assert "dense<[" not in stablehlo  # the table is not inlined as a constant
+    # large constants print as hex
+    assert 'dense<"0x' not in stablehlo
+    assert 'dense<"0x' in jax.jit(lambda field: field.premap(conn)).lower(field).as_text()
 
 
 @pytest.mark.requires_jax
@@ -1973,17 +1975,18 @@ def test_jax_jit_premap_with_closed_over_restricted_connectivity():
     V = Dimension("V")
     E = Dimension("E")
     E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    table = np.asarray([[0, 1], [1, 2], [2, 0]], dtype=np.int32)
+    table = np.asarray([[0, 1], [1, 0], [2, 2]], dtype=np.int32)
     conn = common._connectivity(
         jax.numpy.asarray(table),
         codomain=V,
         domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
     )
-    field = common._field(jax.numpy.arange(3, dtype=np.float64), domain=common.domain({V: (0, 3)}))
+    field = common._field(jax.numpy.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
 
     result = jax.jit(lambda field: field.premap(conn[common.NamedIndex(E2VDim, 1)]))(field)
 
-    np.testing.assert_array_equal(result.asnumpy(), table[:, 1])
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [20.0, 10.0])
 
 
 @pytest.mark.requires_jax
@@ -2000,7 +2003,7 @@ def test_jax_jit_premap_with_as_offset_computed_in_trace():
     offsets = np.asarray([[1, 1, 0, -1], [0, 2, 1, 0]], dtype=np.int32)
 
     def shifted(field, offset_field):
-        return field.premap(experimental.as_offset(Koff, offset_field + 0))
+        return field.premap(experimental.as_offset(Koff, offset_field))
 
     field = common._field(jax.numpy.asarray(values), domain=domain)
     offset_field = common._field(jax.numpy.asarray(offsets), domain=domain)
@@ -2026,6 +2029,112 @@ def test_jax_jit_premap_with_as_offset_computed_in_trace():
             values, np.maximum(np.arange(4) - 3, 0)[None, :].repeat(2, axis=0), axis=1
         ),
     )
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_closed_over_as_offset_narrows_like_eager():
+    import jax
+
+    from gt4py.next.ffront import experimental
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({K: (0, 4)})
+    field = common._field(jax.numpy.asarray([0.0, 1.0, 2.0, 3.0]), domain=domain)
+    offset_field = common._field(jax.numpy.ones(4, dtype=np.int32), domain=domain)
+
+    result = jax.jit(lambda field: field.premap(experimental.as_offset(Koff, offset_field)))(field)
+
+    assert result.domain == common.domain({K: (0, 3)})
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_field_offset_does_not_leak_tracers():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    E2V = fbuiltins.FieldOffset("E2V", source=V, target=(E, E2VDim))
+    conn = common._connectivity(
+        jax.numpy.asarray([[0, 1], [2, 3]], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.arange(4, dtype=np.float64), domain=common.domain({V: (0, 4)}))
+
+    def shifted(field, conn):
+        with embedded_context.update(offset_provider={"E2V": conn}):
+            return field(E2V)
+
+    with jax.checking_leaks():
+        result = jax.jit(shifted)(field, conn)
+
+    np.testing.assert_array_equal(result.asnumpy(), [[0.0, 1.0], [2.0, 3.0]])
+
+
+@pytest.mark.requires_jax
+def test_nested_jax_jit_premap_narrows():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        jax.numpy.asarray([[0, 1], [2, 3], [4, 5]], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.arange(4, dtype=np.float64), domain=common.domain({V: (0, 4)}))
+
+    inner = jax.jit(lambda field, conn: field.premap(conn))
+    result = jax.jit(lambda field, conn: inner(field, conn))(field, conn)
+
+    assert result.domain == common.domain({E: (0, 2), E2VDim: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [[0.0, 1.0], [2.0, 3.0]])
+
+
+def test_neighbor_sum_with_custom_skip_value_and_nonzero_domain_start():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[11, 12], [13, 99]]),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=99,
+    )
+    field = common._field(np.asarray([1.0, 2.0, 4.0, 8.0]), domain=common.domain({V: (10, 14)}))
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(field.premap(conn), axis=E2VDim)
+
+    np.testing.assert_array_equal(result.asnumpy(), [6.0, 8.0])
+
+
+def test_neighbor_sum_over_infinite_range():
+    E = Dimension("E")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [2, -1]]),
+        codomain=Dimension("V"),
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+    field = common._field(
+        np.asarray([[1.0, 2.0], [4.0, 8.0]]), domain=common.domain({E: (0, 2), E2VDim: (0, 2)})
+    )
+    broadcasted = fbuiltins.broadcast(field, (E, E2VDim, K))
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(broadcasted, axis=E2VDim)
+
+    assert result.domain == common.Domain(
+        common.named_range((E, (0, 2))), common.NamedRange(K, common.UnitRange.infinite())
+    )
+    np.testing.assert_array_equal(result.ndarray.ravel(), [3.0, 4.0])
 
 
 @pytest.mark.requires_jax

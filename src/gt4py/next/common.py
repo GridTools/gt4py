@@ -1416,10 +1416,10 @@ class FieldBuiltinFuncRegistry:
     def register_builtin_func(
         cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Any:
-        assert op not in cls._builtin_func_map
+        assert op not in cls._builtin_func_map.maps[0]
         if op_func is None:  # when used as a decorator
             return functools.partial(cls.register_builtin_func, op)
-        return cls._builtin_func_map.setdefault(op, op_func)
+        return cls._builtin_func_map.maps[0].setdefault(op, op_func)
 
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:

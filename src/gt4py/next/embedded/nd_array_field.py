@@ -650,7 +650,23 @@ def _connectivity_index_array(
     *,
     skip_value_replacement: Optional[core_defs.IntegralScalar] = None,
 ) -> core_defs.NDArrayObject:
-    """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
+    """`connectivity`'s index table broadcast over `domain` (not yet shifted to 0-based)."""
+    arr = _aligned_connectivity_table(
+        connectivity, domain, xp, skip_value_replacement=skip_value_replacement
+    )
+    if arr.shape != domain.shape:
+        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
+    return arr
+
+
+def _aligned_connectivity_table(
+    connectivity: common.GatherConnectivity,
+    domain: common.Domain,
+    xp: ModuleType,
+    *,
+    skip_value_replacement: Optional[core_defs.IntegralScalar] = None,
+) -> core_defs.NDArrayObject:
+    """`connectivity`'s index table with one axis per dimension of `domain`, size 1 where it has none."""
     # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
@@ -668,10 +684,7 @@ def _connectivity_index_array(
     )
     if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
         arr = xp.expand_dims(arr, axis=tuple(fresh_axis.values()))
-    arr = xp.transpose(arr, transposed_axes)  # reorder to the output dimension order
-    if arr.shape != domain.shape:
-        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
-    return arr
+    return xp.transpose(arr, transposed_axes)  # reorder to the output dimension order
 
 
 def _identity_index_array(
@@ -957,7 +970,7 @@ def _make_reduction(
             values = field.ndarray
         else:
             assert isinstance(offset_definition, common.GatherConnectivity)
-            table = _connectivity_index_array(offset_definition, field.domain, xp)
+            table = _aligned_connectivity_table(offset_definition, field.domain, xp)
             values = xp.where(
                 table != offset_definition.skip_value, field.ndarray, initial_value_op(field)
             )
@@ -1117,6 +1130,15 @@ if jnp:
                 self.skip_value,
                 handle,
             )
+
+    def _jax_as_offset(
+        offset: fbuiltins.FieldOffset, offset_field: NdArrayField
+    ) -> common.Connectivity:
+        # without this, adding the coordinates stages the table even for concrete offsets
+        with jax.ensure_compile_time_eval():
+            return _as_offset(offset, offset_field)
+
+    JaxArrayField.register_builtin_func(experimental.as_offset, _jax_as_offset)  # type: ignore[arg-type]
 
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
     common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
