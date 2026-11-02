@@ -15,11 +15,30 @@ from typing import Optional, Sequence, Union
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.libraries import standard as dace_stdlib
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes
+from dace.sdfg import dealias as dace_dealias, graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
+
+
+def gt_collect_symbols_written_in_sdfg(sdfg: dace.SDFG) -> OrderedSet[str]:
+    """Returns symbols assigned or bound inside the SDFG.
+
+    This includes symbols assigned on interstate edges, introduced by control-flow
+    regions, and used as map parameters.
+    """
+    written_symbols: OrderedSet[str] = OrderedSet()
+    for isedge in sdfg.all_interstate_edges():
+        written_symbols.update(isedge.data.assignments.keys())
+    for region in sdfg.all_control_flow_regions():
+        written_symbols.update(region.new_symbols(sdfg.symbols).keys())
+    for state in sdfg.states():
+        for node in state.nodes():
+            if isinstance(node, dace_nodes.MapEntry):
+                written_symbols.update(node.params)
+
+    return written_symbols
 
 
 def gt_configure_transient_lifetime(
@@ -542,12 +561,29 @@ def reconfigure_dataflow_after_rerouting(
                 assert subset_to_adjust is not None
                 subset_to_adjust.offset(ss_offset, negative=False)
 
+            # A NestedSDFG inside the Map scope now accesses `new_node`.
+            nested_node, nested_conn = (
+                (edge_to_adjust.src, edge_to_adjust.src_conn)
+                if is_producer_edge
+                else (edge_to_adjust.dst, edge_to_adjust.dst_conn)
+            )
+            if isinstance(nested_node, dace_nodes.NestedSDFG):
+                restate_nested_sdfg_connector(
+                    nsdfg_node=nested_node,
+                    connector=nested_conn,
+                    new_desc=new_node.desc(sdfg),
+                    ss_offset=ss_offset,
+                )
+
     elif isinstance(other_node, dace_nodes.NestedSDFG):
-        # We have obviously to adjust the strides, however, this is done outside
-        #  this function.
-        # TODO(phimuell): Look into the implication that we not necessarily pass
-        #  the full array, but essentially slice a bit.
-        pass
+        # The connector has to be equivalent to `new_node`, which also sets the
+        #  strides, and the accesses inside have to be shifted.
+        restate_nested_sdfg_connector(
+            nsdfg_node=other_node,
+            connector=new_edge.src_conn if is_producer_edge else new_edge.dst_conn,
+            new_desc=new_node.desc(sdfg),
+            ss_offset=ss_offset,
+        )
 
     elif isinstance(other_node, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
         # For now we only handle the case that the reduction node is writing into
@@ -569,6 +605,77 @@ def reconfigure_dataflow_after_rerouting(
         raise NotImplementedError(
             f"The case for '{type(other_node).__name__}' has not been implemented."
         )
+
+
+def restate_nested_sdfg_connector(
+    nsdfg_node: dace_nodes.NestedSDFG,
+    connector: str,
+    new_desc: dace_data.Data,
+    ss_offset: Sequence[dace_sym.SymExpr] | None,
+) -> None:
+    """Restates `connector` of `nsdfg_node` as the new data connected to it.
+
+    In the SDFG IR a connector of a NestedSDFG is not a view: it is equivalent to
+    the data connected to it on the outside, i.e. it has the same shape and strides,
+    and the accesses inside use the coordinates of that data. When a transformation
+    connects different data to the connector, e.g. through `reroute_edge()`, the
+    connector has to adopt `new_desc` and every access inside the NestedSDFG, and
+    inside the NestedSDFGs below it, has to be shifted by `ss_offset`.
+
+    Args:
+        nsdfg_node: The NestedSDFG whose connector is connected to different data.
+        connector: The name of the connector, and of the data inside the NestedSDFG.
+        new_desc: The data descriptor of the data that is now connected to `connector`.
+        ss_offset: The position of the old data inside the new one, i.e. the offset
+            that has to be added to the accesses. If `None` then `new_desc` has to
+            be a scalar.
+
+    Raises:
+        NotImplementedError: If the new data has a different rank than the old one, or
+            if a symbol used by `new_desc` or `ss_offset` has a different meaning
+            inside the NestedSDFG.
+    """
+    nsdfg = nsdfg_node.sdfg
+    old_desc = nsdfg.arrays[connector]
+    if ss_offset is None:
+        if not isinstance(new_desc, dace_data.Scalar):
+            raise TypeError(f"Passed 'None' as 'ss_offset' but '{new_desc}' is not a scalar.")
+    elif len(old_desc.shape) != len(new_desc.shape) or len(ss_offset) != len(new_desc.shape):
+        raise NotImplementedError(
+            f"Can not restate the connector '{connector}' of NestedSDFG '{nsdfg_node.label}'"
+            f" with shape {old_desc.shape} as data with shape {new_desc.shape}."
+        )
+
+    # The symbols are passed 1:1 into the NestedSDFG, thus they must not be used there
+    #  for something else.
+    passed_symbols = {str(sym) for sym in new_desc.free_symbols}
+    if ss_offset is not None:
+        passed_symbols.update(
+            str(sym) for off in ss_offset if dace_sym.issymbolic(off) for sym in off.free_symbols
+        )
+    inner_written_symbols = gt_collect_symbols_written_in_sdfg(nsdfg)
+    for sym in sorted(passed_symbols):
+        # Note that the default value passed to `get()` is the symbol itself, because missing
+        #  symbols are added automatically.
+        if (
+            sym in nsdfg.arrays
+            or sym in inner_written_symbols
+            or str(nsdfg_node.symbol_mapping.get(sym, sym)) != sym
+        ):
+            raise NotImplementedError(
+                f"Can not restate the connector '{connector}' of NestedSDFG '{nsdfg_node.label}',"
+                f" because the symbol '{sym}' has a different meaning inside it."
+            )
+
+    # TODO(phimuell): The `reduce_connector()` function should be replaced with something
+    #  that does not create views as a side effect.
+    dace_dealias.reduce_connector(
+        nsdfg,
+        connector,
+        reduced_desc=new_desc,
+        # Where the origin of the new data is located in the coordinates of the old data.
+        offset=None if ss_offset is None else [-off for off in ss_offset],
+    )
 
 
 def find_upstream_nodes(
@@ -657,7 +764,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         if isinstance(successor, dace.SDFGState):
             all_successors.append(successor)
         else:
-            all_successors.extend(successor.all_states())
+            all_successors.extend(successor.states())
 
     return all_successors
 
