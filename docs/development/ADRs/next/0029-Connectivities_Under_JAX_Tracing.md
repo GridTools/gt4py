@@ -27,7 +27,7 @@ Narrowing is the common case: the field usually covers only part of the connecti
 How a `premap` behaves under `jit` depends on how its connectivity reaches the compiled function:
 
 - **Passed as a jit argument** (`jax.jit(lambda f, c: f.premap(c))(field, conn)`), the recommended way. The table is a tracer, and flattening attached the handle. Domain inference reads the concrete table through the handle, and the gather takes the table as a runtime argument.
-- **Closed over** (`jax.jit(lambda f: f.premap(conn))(field)`). The table stays concrete, also after `restrict`. Domain inference reads it directly, but the table is inlined into the compiled program as a constant. `as_offset` of a closed-over offset field behaves the same way.
+- **Closed over** (`jax.jit(lambda f: f.premap(conn))(field)`). The table stays concrete, also after `restrict`. Domain inference reads it directly, but the table is inlined into the compiled program as a constant. `as_offset` of a closed-over offset field behaves the same way, but slicing or computing with that field inside the trace makes it traced (next case).
 - **Computed from traced values** (`as_offset(Koff, offset_field)` with a traced offset field). The table is a tracer with no handle, because no concrete values exist at trace time. Domain inference assumes every target lies inside the field, so the output domain is not narrowed, and the gather clips its indices to the field.
 
 ## Consequences
