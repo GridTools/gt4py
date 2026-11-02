@@ -22,6 +22,25 @@ from ordered_set import OrderedSet
 from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
 
 
+def gt_collect_symbols_written_in_sdfg(sdfg: dace.SDFG) -> OrderedSet[str]:
+    """Returns symbols assigned or bound inside the SDFG.
+
+    This includes symbols assigned on interstate edges, introduced by control-flow
+    regions, and used as map parameters.
+    """
+    written_symbols: OrderedSet[str] = OrderedSet()
+    for isedge in sdfg.all_interstate_edges():
+        written_symbols.update(isedge.data.assignments.keys())
+    for region in sdfg.all_control_flow_regions():
+        written_symbols.update(region.new_symbols(sdfg.symbols).keys())
+    for state in sdfg.states():
+        for node in state.nodes():
+            if isinstance(node, dace_nodes.MapEntry):
+                written_symbols.update(node.params)
+
+    return written_symbols
+
+
 def gt_configure_transient_lifetime(
     sdfg: dace.SDFG,
     lifetime: dace.AllocationLifetime,
@@ -596,12 +615,12 @@ def restate_nested_sdfg_connector(
 ) -> None:
     """Restates `connector` of `nsdfg_node` as the new data connected to it.
 
-    The data descriptor of a NestedSDFG connector has to be equivalent to the data
-    connected to it (see `NestedSDFG.validate()`), and the accesses inside use the
-    coordinates of that data. When a transformation connects different data to the
-    connector, e.g. through `reroute_edge()`, the connector has to adopt `new_desc`
-    and every access inside the NestedSDFG, and inside the NestedSDFGs below it, has
-    to be shifted by `ss_offset`.
+    In the SDFG IR a connector of a NestedSDFG is not a view: it is equivalent to
+    the data connected to it on the outside, i.e. it has the same shape and strides,
+    and the accesses inside use the coordinates of that data. When a transformation
+    connects different data to the connector, e.g. through `reroute_edge()`, the
+    connector has to adopt `new_desc` and every access inside the NestedSDFG, and
+    inside the NestedSDFGs below it, has to be shifted by `ss_offset`.
 
     Args:
         nsdfg_node: The NestedSDFG whose connector is connected to different data.
@@ -634,13 +653,22 @@ def restate_nested_sdfg_connector(
         passed_symbols.update(
             str(sym) for off in ss_offset if dace_sym.issymbolic(off) for sym in off.free_symbols
         )
+    inner_written_symbols = gt_collect_symbols_written_in_sdfg(nsdfg)
     for sym in sorted(passed_symbols):
-        if sym in nsdfg.arrays or str(nsdfg_node.symbol_mapping.get(sym, sym)) != sym:
+        # Note that the default value passed to `get()` is the symbol itself, because missing
+        #  symbols are added automatically.
+        if (
+            sym in nsdfg.arrays
+            or sym in inner_written_symbols
+            or str(nsdfg_node.symbol_mapping.get(sym, sym)) != sym
+        ):
             raise NotImplementedError(
                 f"Can not restate the connector '{connector}' of NestedSDFG '{nsdfg_node.label}',"
                 f" because the symbol '{sym}' has a different meaning inside it."
             )
 
+    # TODO(phimuell): The `reduce_connector()` function should be replaced with something
+    #  that does not create views as a side effect.
     dace_dealias.reduce_connector(
         nsdfg,
         connector,

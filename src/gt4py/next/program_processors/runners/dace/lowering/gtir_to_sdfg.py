@@ -1391,10 +1391,6 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
 
         result = gtx_utils.tree_map(construct_output_for_nested_sdfg)(lambda_result)
 
-        # Now that the nested SDFG is connected, its connectors are made equivalent to
-        #  the data connected to them, by applying the symbol mapping inside it.
-        nsdfg_node.integrate_into_parent()
-
         return result
 
     def visit_Literal(

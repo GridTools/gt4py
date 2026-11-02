@@ -747,11 +747,16 @@ class LambdaToDataflow(eve.NodeVisitor):
         else:
             raise TypeError(f"Unexpected {arg} as input argument.")
 
-        inner_desc = arg_desc.clone()
-        inner_desc.transient = False
         if param_name not in sdfg.arrays:
-            sdfg.add_datadesc(param_name, inner_desc)
+            sdfg.add_datadesc(param_name, gtir_to_sdfg_utils.as_global_desc(arg_desc))
             input_memlets[param_name] = arg_expr
+        else:
+            # If the parameter name already exists in the nested SDFG, we assume that
+            # the data descriptor is equivalent to the argument data descriptor.
+            # This is a reasonable assumption because the nested SDFG is generated
+            # from a single if-expression, and therefore all branches of the if
+            # expression must have the same input arguments.
+            assert sdfg.arrays[param_name] == gtir_to_sdfg_utils.as_global_desc(arg_desc)
 
         inner_node = state.add_access(param_name)
         if isinstance(arg, IteratorExpr):
@@ -848,15 +853,13 @@ class LambdaToDataflow(eve.NodeVisitor):
         The result data inside the nested SDFG must have the same name as the connector.
         """
         output_data = str(sym.id)
-        if output_data in sdfg.arrays:
-            output_desc = sdfg.data(output_data)
+        if output_desc := sdfg.arrays.get(output_data):
             assert not output_desc.transient
         else:
             # If the result is currently written to a transient node, inside the nested SDFG,
             # we need to allocate a non-transient data node.
             result_desc = edge.result.dc_node.desc(sdfg)
-            output_desc = result_desc.clone()
-            output_desc.transient = False
+            output_desc = gtir_to_sdfg_utils.as_global_desc(result_desc)
             output_data = sdfg.add_datadesc(output_data, output_desc, find_new_name=True)
         output_node = state.add_access(output_data)
         state.add_nedge(
@@ -908,9 +911,8 @@ class LambdaToDataflow(eve.NodeVisitor):
         # add connectivities
         for aname, adesc in self.sdfg.arrays.items():
             if gtx_dace_args.is_connectivity_identifier(aname):
-                adesc = adesc.clone()
-                adesc.transient = True
-                nsdfg.add_datadesc(aname, adesc)
+                inner_desc = gtir_to_sdfg_utils.as_global_desc(adesc)
+                nsdfg.add_datadesc(aname, inner_desc)
 
         # create states inside the nested SDFG for the if-branches
         if_region = dace.sdfg.state.ConditionalBlock("if")

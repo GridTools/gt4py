@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, ClassVar
 from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
+from dace.sdfg.dealias import convert_legacy_nested_sdfgs
 from dace.sdfg.utils import inline_sdfgs
 from dace.transformation.dataflow import MapCollapse
 
@@ -296,6 +297,9 @@ def freeze_origin_domain_sdfg(
     for symbol in nsdfg.sdfg.free_symbols:
         if symbol not in wrapper_sdfg.symbols:
             wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
+
+    # Converts the legacy nested SDFGs of `wrapper_sdfg` before handing it to `inline_sdfgs`
+    convert_legacy_nested_sdfgs(wrapper_sdfg)
 
     # Try to inline wrapped SDFG before symbols are specialized to avoid extra views
     inline_sdfgs(wrapper_sdfg)

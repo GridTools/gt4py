@@ -38,6 +38,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
 )
 from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg,
@@ -162,6 +163,8 @@ def _lower_lambda_to_nested_sdfg(
         offset_provider_type = sdfg_builder.get_offset_provider_type(offset_type.value)
         assert isinstance(offset_provider_type, gtx_common.NeighborConnectivityType)
         list_size = offset_provider_type.max_neighbors
+        # The local (list) dimension of the scan result takes the position that
+        # the scan (column) dimension has in the field layout.
         return [
             *field_shape[:scan_dim_index],
             sympy.Integer(list_size),
@@ -271,9 +274,6 @@ def _lower_lambda_to_nested_sdfg(
         else:
             assert isinstance(scan_result.gt_dtype, ts.ScalarType)
             assert len(scan_output_shape) == len(field_subset)
-            # This function is called once per field of a tuple result, so the subset
-            # has to be copied: DaCe rejects an SDFG where two memlets refer to the
-            # same subset object.
             output_subset = copy.deepcopy(field_subset)
         scan_result_data = scan_result.dc_node.data
         scan_result_desc = scan_result.dc_node.desc(lambda_ctx.sdfg)
@@ -363,11 +363,11 @@ def _handle_dataflow_result_of_nested_sdfg(
         # We write the result to the output field after the loop region has ended.
         inner_states = list(inner_ctx.sdfg.states())
         if len(inner_states) == 3:
-            assert sorted(st.label for st in inner_states) == [
+            assert set(st.label for st in inner_states) == {
                 "scan_compute",
                 "scan_entry",
                 "scan_update",
-            ]
+            }
             scan_loop = next(
                 node
                 for node in inner_ctx.sdfg.nodes()
@@ -375,12 +375,12 @@ def _handle_dataflow_result_of_nested_sdfg(
             )
             last_level_state = inner_ctx.sdfg.add_state_after(scan_loop, "scan_last_level")
         else:
-            assert sorted(st.label for st in inner_states) == [
+            assert set(st.label for st in inner_states) == {
                 "scan_compute",
                 "scan_entry",
                 "scan_last_level",
                 "scan_update",
-            ]
+            }
             last_level_state = next(s for s in inner_states if s.label == "scan_last_level")
         # Move the write of the result from the scan loop to the state after the loop,
         #  so that only the last level is written.
@@ -536,11 +536,23 @@ def translate_scan_fieldop(
 
     input_edges = []
     for input_connector, memlet in input_memlets.items():
-        src_node = lambda_arg_nodes[input_connector]
-        assert src_node is not None
-        input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
-            ctx.state, src_node.dc_node, memlet.src_subset, nsdfg_node, input_connector
-        )
+        if src_node := lambda_arg_nodes.get(input_connector, None):
+            input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
+                state=ctx.state,
+                source=src_node.dc_node,
+                subset=memlet.src_subset,
+                dest=nsdfg_node,
+                dest_conn=input_connector,
+            )
+        else:
+            assert gtx_dace_args.is_connectivity_identifier(input_connector)
+            input_edge = gtir_to_sdfg_lambda.MemletInputEdge(
+                state=ctx.state,
+                source=ctx.state.add_access(input_connector),
+                subset=memlet.src_subset,
+                dest=nsdfg_node,
+                dest_conn=input_connector,
+            )
         input_edges.append(input_edge)
 
     # for output connections, we create temporary arrays that contain the computation
@@ -561,18 +573,14 @@ def translate_scan_fieldop(
     # the `LoopRegion` inside the stencil dataflow.
     scan_dim = next(r.dim for r in field_domain if sdfg_builder.is_column_axis(r.dim))
     result = gtir_to_sdfg_fieldop.create_field_operator(
-        ctx,
-        field_domain,
-        node.type,
-        sdfg_builder,
-        input_edges,
-        output_tree,
-        node.annex.domain,
+        ctx=ctx,
+        domain=field_domain,
+        node_type=node.type,
+        sdfg_builder=sdfg_builder,
+        input_edges=input_edges,
+        output=output_tree,
+        output_domain=node.annex.domain,
         inner_dims=(scan_dim,),
     )
-
-    # Now that the nested SDFG is connected, its connectors are made equivalent to
-    #  the data connected to them, by applying the symbol mapping inside it.
-    nsdfg_node.integrate_into_parent()
 
     return result

@@ -289,6 +289,13 @@ def create_field_operator(
 
     return gtx_utils.tree_map(
         lambda edge, field_domain, sym: _create_field_operator_impl(
-            ctx, sdfg_builder, edge, field_domain, sym.type, map_exit, inner_dims, len(domain) == 0
+            ctx=ctx,
+            sdfg_builder=sdfg_builder,
+            output_edge=edge,
+            output_domain=field_domain,
+            output_type=sym.type,
+            map_exit=map_exit,
+            inner_dims=inner_dims,
+            is_zero_dim=(len(domain) == 0),
         )
     )(output, output_domain, output_symbols)
