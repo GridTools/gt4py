@@ -64,7 +64,6 @@ def make_dace_translator(
     auto_optimize_args: dict[str, Any] | None = None,
     sync_sdfg_call: bool = True,
     use_metrics: bool = True,
-    disable_itir_transforms: bool = False,
     disable_field_origin_on_program_arguments: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
 ) -> DaCeTranslator:
@@ -82,7 +81,6 @@ def make_dace_translator(
         sync_sdfg_call: Make a synchronous SDFG call, to ensure that the GPU kernel
             execution is completed before the Python driver code continues. Only effective on GPU.
         use_metrics: Add SDFG instrumentation for stencil compute time.
-        disable_itir_transforms: Skip the GTIR transformation passes.
         disable_field_origin_on_program_arguments: Assume that all fields passed
             as program arguments have zero-based origin, which skips the range
             start-symbols `_range_0`.
@@ -129,7 +127,6 @@ def make_dace_translator(
         sync_sdfg_call=sync_sdfg_call,
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride,
         use_metrics=use_metrics,
-        disable_itir_transforms=disable_itir_transforms,
         disable_field_origin_on_program_arguments=disable_field_origin_on_program_arguments,
         use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
     )
