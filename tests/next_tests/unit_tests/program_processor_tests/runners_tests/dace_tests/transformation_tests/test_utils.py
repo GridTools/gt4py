@@ -80,6 +80,33 @@ def test_find_successor_state_non_terminal_loop_region():
     assert gtx_transformations_utils.find_successor_state(body_state2) == [after_loop]
 
 
+def test_collect_symbols_written_in_sdfg():
+    sdfg = dace.SDFG(util.unique_name("collect_symbols_written_in_sdfg"))
+    state1 = sdfg.add_state(is_start_block=True)
+    state2 = sdfg.add_state()
+    sdfg.add_edge(
+        state1,
+        state2,
+        dace.InterstateEdge(assignments={"interstate_symbol": "1"}),
+    )
+    state2.add_map("map", {"map_parameter": "0:10"})
+
+    loop = LoopRegion(
+        label="loop",
+        condition_expr="loop_symbol < 2",
+        loop_var="loop_symbol",
+        initialize_expr="loop_symbol = 0",
+        update_expr="loop_symbol = loop_symbol + 1",
+    )
+    sdfg.add_node(loop)
+
+    assert gtx_transformations_utils.gt_collect_symbols_written_in_sdfg(sdfg) == {
+        "interstate_symbol",
+        "loop_symbol",
+        "map_parameter",
+    }
+
+
 def test_find_successor_state_nested_sdfg():
     """Terminal state inside a nested SDFG.
 
