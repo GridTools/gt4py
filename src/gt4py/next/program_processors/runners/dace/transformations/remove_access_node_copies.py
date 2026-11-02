@@ -282,4 +282,3 @@ class RemoveAccessNodeCopies(dace_transformation.SingleStateTransformation):
                     outer_desc,
                     ss_offset=tuple(node_offset),
                 )
-                node.integrate_into_parent()

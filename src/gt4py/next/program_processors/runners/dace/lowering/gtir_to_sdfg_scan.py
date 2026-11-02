@@ -583,8 +583,4 @@ def translate_scan_fieldop(
         inner_dims=(scan_dim,),
     )
 
-    # Now that the nested SDFG is connected, its connectors are made equivalent to
-    #  the data connected to them, by applying the symbol mapping inside it.
-    nsdfg_node.integrate_into_parent()
-
     return result
