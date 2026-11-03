@@ -67,11 +67,12 @@ build_cscs_amd_rocm:
   artifacts:
     when: always
     paths:
-      - _dace_deterministic_codegen/
+      - _${BACKEND}_deterministic_codegen/
     expire_in: 1 month
   parallel:
     matrix:
       - SUBPACKAGE: [next]
+        BACKEND: ['dace', 'dace_gt']
         SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
         DETAIL: ["nomesh"]
         PY_VERSION: *test_python_versions
@@ -86,13 +87,13 @@ build_cscs_amd_rocm:
   script:
     - mkdir -p "${WORKDIR}/gt4py" && git clone --depth 1 "${CSCS_CI_ORIG_CLONE_URL}" "${WORKDIR}/gt4py"
     - cd "${WORKDIR}/gt4py" && git fetch --depth 1 origin "${CI_COMMIT_SHA}" && git checkout "${CI_COMMIT_SHA}"
-    - export NOX_SESSION_ARGS="(${SUBVARIANT}${DETAIL:+, $DETAIL})"
+    - export NOX_SESSION_ARGS="(${BACKEND}, ${SUBVARIANT}${DETAIL:+, $DETAIL})"
     - |
       cd "${WORKDIR}/gt4py"
       nox_rc=0
       ./noxfile.py -s "test_${SUBPACKAGE}_dace_determinism-${PY_VERSION}${NOX_SESSION_ARGS}" || nox_rc=$?
-      if [ -d _dace_deterministic_codegen ]; then
-        cp -r _dace_deterministic_codegen "${CI_PROJECT_DIR}/"
+      if [ -d _${BACKEND}_deterministic_codegen ]; then
+        cp -r _${BACKEND}_deterministic_codegen "${CI_PROJECT_DIR}/"
       fi
       exit $nox_rc
 
