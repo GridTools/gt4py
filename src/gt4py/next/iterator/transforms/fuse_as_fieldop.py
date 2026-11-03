@@ -30,6 +30,7 @@ from gt4py.next.iterator.transforms import (
     inline_lambdas,
     inline_lifts,
     merge_let,
+    symbol_ref_utils,
     trace_shifts,
 )
 from gt4py.next.iterator.type_system import inference as type_inference
@@ -408,6 +409,21 @@ class FuseAsFieldOp(
                 _arg_inline_predicate(arg, arg_shifts)
                 for arg, arg_shifts in zip(args, shifts, strict=True)
             ]
+            if cpm.is_call_to(stencil, "scan"):
+                # Inlining an argument into a scan stencil evaluates the argument's
+                # expression inside the sequential scan loop, where the stencil
+                # parameters are bound to (sub-)columns of the scan inputs and thus
+                # cannot be shifted. In particular, a producer shifted along the scan
+                # axis would extend the domain of the scan input. Therefore, only
+                # inline point-wise arguments; shifted producers remain separate field
+                # operators computing full fields that are consumed by the scan.
+                eligible_els = [
+                    eligible
+                    and not symbol_ref_utils.collect_symbol_refs(
+                        arg, ["shift", "lift"], ignore_builtins=False
+                    )
+                    for eligible, arg in zip(eligible_els, args, strict=True)
+                ]
             if any(eligible_els):
                 return self.visit(
                     fuse_as_fieldop(
