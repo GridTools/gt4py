@@ -66,6 +66,9 @@ class MapFusionVertical(dace_dftrans.MapFusionVertical):
     Essentially the same as DaCe's `MapFusionVertical`, but with the following differences:
     - `strict_dataflow` is by default `False`, whereas in DaCe it is `True` for compatibility
         reasons.
+    - `allow_intermediates_with_symbolic_size` is set to `False`, to avoid the creation
+        of intermediate arrays with symbolic size, which would require dynamic allocation
+        and therefore are inefficient for GPU kernels.
     - It accepts the additional `check_fusion_callback`, which is called before the
         `can_be_applied()` function of the DaCe version is called. If it returns `False` then the
         fusion will be rejected.
@@ -81,6 +84,7 @@ class MapFusionVertical(dace_dftrans.MapFusionVertical):
     ) -> None:
         super().__init__(
             strict_dataflow=strict_dataflow,
+            allow_intermediates_with_symbolic_size=False,
             **kwargs,
         )
         self._check_fusion_callback = None
