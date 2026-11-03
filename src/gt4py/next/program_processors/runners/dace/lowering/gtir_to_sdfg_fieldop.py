@@ -21,6 +21,7 @@ full shape by the output memlet.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import Iterable, Sequence
 
 import dace
@@ -98,6 +99,7 @@ def _create_field_operator_impl(
     map_exit: dace_nodes.MapExit | None,
     inner_dims: Sequence[gtx_common.Dimension],
     is_zero_dim: bool,
+    is_shared_output_node: bool = False,
 ) -> gtir_to_sdfg_types.FieldopData | None:
     """
     Helper method to allocate a temporary array that stores one field computed
@@ -122,6 +124,9 @@ def _create_field_operator_impl(
             written in full shape rather than element-wise.
         is_zero_dim: The field operator has an empty domain, thus it computes a
             zero-dimensional field regardless of `output_domain`.
+        is_shared_output_node: When `True`, the temporary data container written
+            by the dataflow is also referenced by other fields of the result, so
+            it must not be removed when connecting this field's output edge.
 
     Returns:
         The field data descriptor, which includes the field access node in the
@@ -206,7 +211,9 @@ def _create_field_operator_impl(
     field_node = ctx.state.add_access(field_name)
 
     # and here the edge writing the dataflow result data through the map exit node
-    last_node_removed = output_edge.connect(map_exit, field_node, field_subset)
+    last_node_removed = output_edge.connect(
+        map_exit, field_node, field_subset, shared_node=is_shared_output_node
+    )
 
     if len(inner_dims) != 0 and not last_node_removed:
         # The dataflow of a scan is lowered to a nested SDFG that writes the column
@@ -279,6 +286,22 @@ def create_field_operator(
     for edge in input_edges:
         edge.connect(map_entry)
 
+    # A dataflow node can be referenced by several fields of the result when the
+    # field operator returns the same value more than once. Every field of the
+    # result gets its own output connection, set up one after another, therefore
+    # a node that is shared between multiple fields is still needed by the output
+    # connections that follow the first one: it must not be removed by the first
+    # connection.
+    shared_dc_nodes = {
+        dc_node
+        for dc_node, count in Counter(
+            edge.result.dc_node
+            for edge in gtx_utils.flatten_nested_tuple((output,))
+            if edge is not None
+        ).items()
+        if count > 1
+    }
+
     # Note that `output_symbols` below is not used, we only need the tree-like
     # structure to get the type of each nested field in the `tree_map` visitor.
     output_symbols = (
@@ -297,5 +320,6 @@ def create_field_operator(
             map_exit=map_exit,
             inner_dims=inner_dims,
             is_zero_dim=(len(domain) == 0),
+            is_shared_output_node=(edge is not None and edge.result.dc_node in shared_dc_nodes),
         )
     )(output, output_domain, output_symbols)

@@ -283,6 +283,8 @@ class DataflowOutputEdge:
         map_exit: Optional[dace_nodes.MapExit],
         dest: dace_nodes.AccessNode,
         dest_subset: dace_subsets.Range,
+        *,
+        shared_node: bool = False,
     ) -> bool:
         """Create a connection to the `dest` node, writing the given `dest_subset`.
 
@@ -290,6 +292,16 @@ class DataflowOutputEdge:
         `False` if kept. For edges writing data from a nested SDFG, in case the
         outside data container is removed, the caller is responsible to propagate
         the strides of the destination array to the array inside the nested SDFG.
+
+        Args:
+            map_exit: The `MapExit` node of the map scope, `None` when the dataflow
+                is instantiated without a map.
+            dest: The external data node to write to.
+            dest_subset: The subset of `dest` to write.
+            shared_node: When `True`, the temporary data container is also
+                referenced by other output connections of the same dataflow result
+                (for example because the field operator returns the same value
+                twice), so it must not be removed.
         """
         dest_desc = self.result.dc_node.desc(self.state)
         write_edge = self.state.in_edges(self.result.dc_node)[0]
@@ -298,9 +310,15 @@ class DataflowOutputEdge:
         if isinstance(write_edge.src, dace_nodes.Tasklet):
             # The temporary data written by a tasklet can be safely deleted,
             # but only when no other consumer inside the dataflow reads it:
-            # removing the node also removes all its in/out edges.
+            # removing the node also removes all its in/out edges. A container
+            # that is shared between several result fields is read by the
+            # output connections, which are set up one after another, hence the
+            # first connection must not remove it since the following ones still
+            # depend on it.
             assert map_exit is not None
-            remove_last_node = len(self.state.out_edges(self.result.dc_node)) == 0
+            remove_last_node = (
+                len(self.state.out_edges(self.result.dc_node)) == 0 and not shared_node
+            )
         elif isinstance(write_edge.src, dace_nodes.NestedSDFG):
             if isinstance(dest_desc, dace.data.Scalar):
                 # We keep scalar temporary storage, as a general rule, since it
