@@ -80,9 +80,13 @@ jobs:
           - name: test_next
             args: "(dace, cpu, nomesh)"
           - name: test_next
+            args: "(dace_gt, cpu, nomesh)"
+          - name: test_next
             args: "(internal, cpu, atlas)"
           - name: test_next
             args: "(dace, cpu, atlas)"
+          - name: test_next
+            args: "(dace_gt, cpu, atlas)"
           - name: test_storage
             args: "(cpu)"
         exclude: ${{ fromJSON(needs.define-test-sessions-exclusions.outputs.test-sessions-exclusions) }}
