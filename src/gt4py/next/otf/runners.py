@@ -182,12 +182,12 @@ def _run_compilation_task_in_worker(
     # `spawn` worker. Adopt the parent's limit, but never lower the worker's.
     sys.setrecursionlimit(max(recursion_limit, sys.getrecursionlimit()))
     _apply_config_overrides(config_overrides)
+    executor = pickle.loads(executor_blob)
+    # Unpickled here rather than by the pool, so that a failure (e.g. an
+    # unreadable connectivity table file) fails this task instead of breaking
+    # the pool for all later tasks.
+    compilable = pickle.loads(compilable_blob)
     with trace_markers.time_range(f"gt4py.compile.worker[{_program_name(compilable, '?')}]"):
-        executor = pickle.loads(executor_blob)
-        # Unpickled here rather than by the pool, so that a failure (e.g. an
-        # unreadable connectivity table file) fails this task instead of breaking
-        # the pool for all later tasks.
-        compilable = pickle.loads(compilable_blob)
         return executor(compilable)
 
 
