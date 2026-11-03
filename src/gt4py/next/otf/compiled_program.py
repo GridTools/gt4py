@@ -31,7 +31,7 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
     type_translation,
 )
-from gt4py.next.instrumentation import hook_machinery, metrics
+from gt4py.next.instrumentation import hook_machinery, metrics, trace_markers
 from gt4py.next.otf import arguments, artifacts, compilation_tasks, runners
 from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.utils import tree_map
@@ -489,9 +489,12 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def _load_artifact(
         self, artifact_future: concurrent.futures.Future[artifacts.CompilationArtifact]
     ) -> artifacts.ExecutableProgram:
-        artifact = artifact_future.result()  # re-raises errors from the compilation worker
+        name = self.definition_stage.definition.__name__
+        with trace_markers.time_range(f"gt4py.compile.wait[{name}]"):
+            artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
-            return self.backend.load_artifact(artifact)
+            with trace_markers.time_range(f"gt4py.compile.load[{name}]"):
+                return self.backend.load_artifact(artifact)
         except Exception as e:
             raise RuntimeError(
                 f"Failed to load the compiled program '{self.definition.__name__}'."
@@ -690,11 +693,14 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
         # The default runner is resolved at each submission, so the pool never
         # holds on to a runner that `wait_for_compilation` has already shut down.
         runner = runners.get_default_runner()
-        future = runner.submit(
-            compilation_tasks.make_compilation_task(
+        name = self.definition_stage.definition.__name__
+        # Frontend lowering runs here, in the calling thread, for every runner.
+        with trace_markers.time_range(f"gt4py.compile.lower[{name}]"):
+            task = compilation_tasks.make_compilation_task(
                 self.backend, self.definition_stage, compile_time_args
             )
-        )
+        with trace_markers.time_range(f"gt4py.compile.submit[{name}]"):
+            future = runner.submit(task)
         if future.done():
             # Eager so compile() raises now; otherwise the error stays in the
             # already-resolved future until the next call touches this key.

@@ -149,6 +149,12 @@ UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE: bool = env_flag_to_bool(
 #: Add GPU trace markers (NVTX, ROC-TX) to the generated code, at compile time.
 ADD_GPU_TRACE_MARKERS: bool = env_flag_to_bool("GT4PY_ADD_GPU_TRACE_MARKERS", default=False)
 
+#: Add profiler time ranges (NVTX, ROC-TX) around program compilation, cache lookups
+#: and artifact loading, to tell cache hits from actual builds in a trace.
+ADD_COMPILATION_TRACE_MARKERS: bool = env_flag_to_bool(
+    "GT4PY_ADD_COMPILATION_TRACE_MARKERS", default=False
+)
+
 
 #: Number of parallel compilation jobs (0 = synchronous compilation).
 #: Defaults to the number of CPUs available to this process (respecting the

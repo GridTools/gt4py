@@ -18,6 +18,7 @@ from typing import Any, Callable, Generic, Protocol, Self, TypeVar
 from gt4py._core import filecache
 from gt4py.eve.xtyping import OpaqueMutableMapping
 from gt4py.next import config, fingerprinting, utils
+from gt4py.next.instrumentation import trace_markers
 
 
 StartT = TypeVar("StartT")
@@ -350,11 +351,19 @@ class CachedStep(
 
     def __call__(self, inp: StartT) -> EndT:
         """Run the step only if the input is not cached, else return from cache."""
-        key = self.cache_key(inp)
+        # In-memory lookups are too cheap to be worth a trace marker.
+        traced = not isinstance(self.cache, dict)
+        step_name = type(self.step).__name__
+        with trace_markers.time_range(f"CachedStep.key[{step_name}]", enabled=traced):
+            key = self.cache_key(inp)
         try:
-            result = self.cache[key]
+            with trace_markers.time_range(f"CachedStep.lookup[{step_name}]", enabled=traced):
+                result = self.cache[key]
         except KeyError:
-            result = self.cache[key] = self.step(inp)
+            with trace_markers.time_range(
+                f"CachedStep.miss[{step_name}]", argb_color=trace_markers.BUILD_COLOR, enabled=traced
+            ):
+                result = self.cache[key] = self.step(inp)
         return result
 
     def cache_key(self, inp: StartT) -> str:

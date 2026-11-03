@@ -24,6 +24,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
+from gt4py.next.instrumentation import trace_markers
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import cache as _cache, common as compilation_common
 
@@ -47,7 +48,14 @@ class CompilationTask:
     no_offload_reason: str | None = None
 
     def compile(self, with_refs: bool = False) -> artifacts.CompilationArtifact:
-        return self.executor(self.construct_compilable(with_refs))
+        compilable = self.construct_compilable(with_refs)
+        with trace_markers.time_range(f"gt4py.compile.run[{_program_name(compilable, self.name)}]"):
+            return self.executor(compilable)
+
+
+def _program_name(compilable: Any, default: str) -> str:
+    """Name of the program in `compilable` for trace markers, `default` if it has none."""
+    return str(getattr(getattr(compilable, "data", None), "id", default))
 
 
 @runtime_checkable
@@ -176,8 +184,9 @@ def _run_compilation_task_in_worker(
     # `spawn` worker. Adopt the parent's limit, but never lower the worker's.
     sys.setrecursionlimit(max(recursion_limit, sys.getrecursionlimit()))
     _apply_config_overrides(config_overrides)
-    executor = pickle.loads(executor_blob)
-    return executor(compilable)
+    with trace_markers.time_range(f"gt4py.compile.worker[{_program_name(compilable, '?')}]"):
+        executor = pickle.loads(executor_blob)
+        return executor(compilable)
 
 
 class ProcessRunner:

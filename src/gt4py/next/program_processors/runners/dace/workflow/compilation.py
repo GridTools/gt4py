@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import os
@@ -22,6 +23,7 @@ import dace.codegen.compiler as dace_compiler
 from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import xtyping
 from gt4py.next import common, config, fingerprinting
+from gt4py.next.instrumentation import trace_markers
 from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -262,8 +264,10 @@ class DaCeCompilationArtifact:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
-        sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
-        sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
+        with trace_markers.time_range("DaCeCompilationArtifact.sdfg_from_json"):
+            sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
+        with trace_markers.time_range(f"DaCeCompilationArtifact.get_program_handle[{sdfg.name}]"):
+            sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
         return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
@@ -306,10 +310,11 @@ class DaCeCompiler(
             cmake_build_type=self.cmake_build_type,
         ):
             # Add TX markers to the generated GPU code for trace visualization tools.
-            if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
-                inp, sdfg = _add_tx_markers(inp)
-            else:
-                sdfg = dace.SDFG.from_json(inp.program_source.source_code)
+            with trace_markers.time_range("DaCeCompiler.sdfg_from_json"):
+                if self.add_gpu_trace_markers and self.device_type == core_defs.CUPY_DEVICE_TYPE:
+                    inp, sdfg = _add_tx_markers(inp)
+                else:
+                    sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
             # user changes the backend configuration (PR #2650).
@@ -323,7 +328,9 @@ class DaCeCompiler(
             # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
 
-            with locking.lock(sdfg_build_folder):
+            with contextlib.ExitStack() as build_folder_lock:
+                with trace_markers.time_range(f"DaCeCompiler.lock_wait[{sdfg.name}]"):
+                    build_folder_lock.enter_context(locking.lock(sdfg_build_folder))
                 # With `compiler.use_cache=True` dace reuses a cached library on mere
                 # *existence*, without validating it; an interrupted build can leave a
                 # truncated, unloadable library behind, or a `FOLDER_MODE` file that was
@@ -353,9 +360,16 @@ class DaCeCompiler(
                 # other processes may be loading. `use_cache` is not implied by
                 # `dace_context`: a `DACE_compiler_use_cache` env var overrides the value
                 # set there, and with it off dace rebuilds over the existing library.
-                if not (dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()):
+                cache_hit = dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()
+                if not cache_hit:
                     marker.unlink(missing_ok=True)
-                sdfg.compile(validate=False, return_program_handle=False)
+                with trace_markers.time_range(
+                    f"DaCeCompiler.{'cache_hit' if cache_hit else 'build'}[{sdfg.name}]",
+                    argb_color=trace_markers.CACHE_HIT_COLOR
+                    if cache_hit
+                    else trace_markers.BUILD_COLOR,
+                ):
+                    sdfg.compile(validate=False, return_program_handle=False)
                 marker.touch()
 
         assert inp.binding_source is not None
