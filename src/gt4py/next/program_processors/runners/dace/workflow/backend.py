@@ -164,3 +164,9 @@ run_dace_cpu_gt_noopt = make_dace_toolchain(
     name_postfix="_gt",
     translation=functools.partial(gtx_wfdfactory.make_dace_translator, apply_common_transform=True),
 )
+
+run_dace_gpu_gt = make_dace_toolchain(
+    gtx_wfdfactory.DaCeConfig(gpu=True, auto_optimize=True),
+    name_postfix="_gt",
+    translation=functools.partial(gtx_wfdfactory.make_dace_translator, apply_common_transform=True),
+)

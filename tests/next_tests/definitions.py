@@ -74,6 +74,7 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
     DACE_CPU_GT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_gt"
     DACE_CPU_GT_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_gt_noopt"
+    DACE_GPU_GT = "gt4py.next.program_processors.runners.dace.run_dace_gpu_gt"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -159,6 +160,10 @@ OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE = (
 # `uses_dace` is the one exception to "index-only is safe to add": it selects the nox test matrix
 # (`-m "uses_dace"` vs `-m "not uses_dace"` in `noxfile.py`), so tagging a test with it *removes*
 # that test from every `internal` session, and untagging removes it from the `dace` ones.
+# `uses_dace_gt` refines this within the `dace` sessions: it splits them by the DaCe translator's
+# `apply_common_transform` setting (`-m "uses_dace and uses_dace_gt"` for the `*_gt` backends vs
+# `-m "uses_dace and not uses_dace_gt"` for the others). It is applied to the backend fixture
+# parameters of the `*_gt` backends, not to individual tests.
 
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
@@ -179,6 +184,30 @@ DACE_SKIP_TEST_LIST = (
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_COMPOSITE_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_LIFT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
+    ]
+)
+# Skip list for the `*_gt` DaCe backends (`apply_common_transform=True`). Compared to
+# `DACE_SKIP_TEST_LIST`, `USES_LIFT`, `USES_COMPOSITE_SHIFTS` and `USES_CAN_DEREF` are
+# dropped: the GT translation path passes those tests. `can_deref` of a CSE-bound shifted
+# iterator is resolved through the let-binding environment in `LambdaToDataflow`.
+DACE_GT_SKIP_TEST_LIST = (
+    COMMON_SKIP_TEST_LIST
+    + DOMAIN_INFERENCE_SKIP_LIST
+    + [
         (USES_REDUCE_WITH_LAMBDA, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -256,8 +285,9 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_CPU_GT: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_CPU_GT_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_CPU_GT: DACE_GT_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_CPU_GT_NO_OPT: DACE_GT_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU_GT: DACE_GT_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST

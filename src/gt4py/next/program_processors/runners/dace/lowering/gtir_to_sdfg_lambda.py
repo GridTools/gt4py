@@ -602,11 +602,17 @@ class LambdaToDataflow(eve.NodeVisitor):
     def _visit_can_deref(self, node: gtir.FunCall) -> DataExpr:
         assert isinstance(node.type, ts.ScalarType) and node.type.kind == ts.ScalarKind.BOOL
         assert len(node.args) == 1
-        if not cpm.is_applied_shift(node.args[0]):
+        # Resolve the argument the same way `deref` does, i.e. through `self.visit` rather
+        # than pattern-matching the raw IR node. When the shifted iterator has been bound
+        # to a symbol (e.g. by the common-subexpression-elimination pass running as part of
+        # the GTIR common transform), the argument is a `SymRef` and `self.visit` returns
+        # the already-materialized `IteratorExpr` from the let-binding environment. Matching
+        # `cpm.is_applied_shift` on the raw node would miss this and fail to lower.
+        it = self.visit(node.args[0])
+        if not isinstance(it, IteratorExpr):
             raise NotImplementedError(
                 f"Only `can_deref` of unstructured `shift` expressions is supported, got {node.args[0]}."
             )
-        it = self._visit_shift(node.args[0])
         index_values = {k: v for k, v in it.indices.items() if not isinstance(v, SymbolExpr)}
         if len(index_values) == 0:
             raise ValueError(f"Unexpected `can_deref` argument: {it}.")
@@ -806,7 +812,35 @@ class LambdaToDataflow(eve.NodeVisitor):
 
         inner_node = state.add_access(param_name)
         if isinstance(arg, IteratorExpr):
-            return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, arg.indices)
+            # Re-anchor runtime index expressions inside the nested SDFG. A shifted
+            # iterator (possibly bound to a symbol by common-subexpression elimination)
+            # refers to neighbor-table entries of a connectivity; connectivities are
+            # always available inside the nested SDFG (see `_visit_if`), so such index
+            # memlets can be re-anchored to the inner access node. Other runtime indices
+            # (e.g. computed offsets) cannot be passed into the branch yet.
+            inner_indices: dict[gtx_common.Dimension, MemletExpr | ValueExpr | SymbolExpr] = {}
+            for index_dim, index_expr in arg.indices.items():
+                if isinstance(index_expr, SymbolExpr):
+                    inner_indices[index_dim] = index_expr
+                elif (
+                    isinstance(index_expr, (MemletExpr, ValueExpr))
+                    and index_expr.dc_node.data in sdfg.arrays
+                ):
+                    inner_dc_node = state.add_access(index_expr.dc_node.data)
+                    if isinstance(index_expr, MemletExpr):
+                        inner_indices[index_dim] = MemletExpr(
+                            inner_dc_node,
+                            index_expr.gt_field,
+                            copy.deepcopy(index_expr.subset),
+                        )
+                    else:
+                        inner_indices[index_dim] = ValueExpr(inner_dc_node, index_expr.gt_dtype)
+                else:
+                    raise NotImplementedError(
+                        f"Cannot lower index expression '{index_expr}' of iterator"
+                        f" '{param_name}' inside an if-branch."
+                    )
+            return IteratorExpr(inner_node, arg.gt_dtype, arg.field_domain, inner_indices)
         elif isinstance(arg_expr, MemletExpr):
             # The data descriptor inside the nested SDFG is a copy of the full outer
             # container, because a nested SDFG connector has to be equivalent to the
@@ -1021,10 +1055,26 @@ class LambdaToDataflow(eve.NodeVisitor):
             for sym_name, sym_type in self.symbol_map.items()
             if isinstance(sym_type, IteratorExpr)
         }
-        direct_deref_iterators = (
+        direct_deref_candidates = (
             set(symbol_ref_utils.collect_symbol_refs(node.args[1:3], iterator_symbols))
             - shifted_iterator_symbols
         )
+        # Additionally exclude iterators whose field-domain indices are not all static
+        # (symbolic). Dereferencing on the input memlet requires a memlet-accessible
+        # subset. An iterator that is already shifted (e.g. a shifted iterator bound to a
+        # symbol by the common-subexpression-elimination pass of the GTIR common
+        # transform) carries runtime neighbor indices and must be dereferenced inside the
+        # branch dataflow instead.
+        direct_deref_iterators = set()
+        for sym_name in direct_deref_candidates:
+            sym_expr = self.symbol_map[sym_name]
+            # `direct_deref_candidates` only holds symbols bound to `IteratorExpr` (see
+            # `iterator_symbols`), but narrow explicitly for the type checker.
+            if isinstance(sym_expr, IteratorExpr) and all(
+                isinstance(sym_expr.indices.get(dim), SymbolExpr)
+                for dim, _ in sym_expr.field_domain
+            ):
+                direct_deref_iterators.add(sym_name)
 
         for nstate, arg in zip([tstate, fstate], node.args[1:3]):
             # visit each if-branch in the corresponding state of the nested SDFG

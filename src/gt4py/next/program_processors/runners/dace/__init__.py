@@ -16,6 +16,7 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
     run_dace_cpu_gt_noopt,
     run_dace_cpu_noopt,
     run_dace_gpu,
+    run_dace_gpu_gt,
     run_dace_gpu_noopt,
 )
 from gt4py.next.program_processors.runners.dace.workflow.factory import (
@@ -47,5 +48,6 @@ __all__ = [
     "run_dace_cpu_gt_noopt",
     "run_dace_cpu_noopt",
     "run_dace_gpu",
+    "run_dace_gpu_gt",
     "run_dace_gpu_noopt",
 ]

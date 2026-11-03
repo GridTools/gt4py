@@ -50,10 +50,13 @@ nox.options.sessions = [
     "test_eve-3.14",
     "test_next-3.12(internal, cpu, nomesh)",
     "test_next-3.12(dace, cpu, nomesh)",
+    "test_next-3.12(dace_gt, cpu, nomesh)",
     "test_next-3.13(internal, cpu, nomesh)",
     "test_next-3.13(dace, cpu, nomesh)",
+    "test_next-3.13(dace_gt, cpu, nomesh)",
     "test_next-3.14(internal, cpu, nomesh)",
     "test_next-3.14(dace, cpu, nomesh)",
+    "test_next-3.14(dace_gt, cpu, nomesh)",
     "test_package-3.12",
     "test_package-3.13",
     "test_package-3.14",
@@ -86,15 +89,20 @@ DeviceTestSettings: Final[dict[DeviceOption, dict[str, list[str]]]] = {
     },
 }
 
-CodeGenOption: TypeAlias = Literal["internal", "dace"]
+CodeGenOption: TypeAlias = Literal["internal", "dace", "dace_gt"]
 CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
-    codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
+    # 'dace_gt' runs the same selection as 'dace', but against the `*_gt`
+    # backends which use `apply_common_transform=True`.
+    "internal": nox.param("internal", id="internal", tags=["internal"]),
+    "dace": nox.param("dace", id="dace", tags=["dace"]),
+    "dace_gt": nox.param("dace_gt", id="dace_gt", tags=["dace", "dace_gt"]),
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
     "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["uses_dace"]},
+    "dace": {"extras": [], "markers": ["uses_dace", "not uses_dace_gt"]},
+    "dace_gt": {"extras": [], "markers": ["uses_dace", "uses_dace_gt"]},
 }
 
 
@@ -140,7 +148,7 @@ def install_session_venv(
 # -- Sessions --
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
 @nox.parametrize("device", [*DeviceNoxParam.values()])
-@nox.parametrize("codegen", [*CodeGenNoxParam.values()])
+@nox.parametrize("codegen", [CodeGenNoxParam["internal"], CodeGenNoxParam["dace"]])
 def test_cartesian(
     session: nox.Session,
     codegen: CodeGenOption,
@@ -365,8 +373,9 @@ def test_typing_exports(session: nox.Session) -> None:
 # venv's own python (a gt4py-capable interpreter) — it does not import the
 # module.
 #
-# Only `dace` codegen is checked (`internal` doesn't go through dace), so the
-# codegen parameter is dropped from this session's signature.
+# Only the DaCe codegens are checked (`internal` doesn't go through dace), so the
+# codegen parameter is restricted to 'dace' and 'dace_gt' (`apply_common_transform`
+# off/on), whose selections are disjoint and each determinism-checked separately.
 
 
 @nox.session(python=PYTHON_VERSIONS, tags=["next", "dace", "determinism"])
@@ -378,15 +387,17 @@ def test_typing_exports(session: nox.Session) -> None:
     ],
 )
 @nox.parametrize("device", [*DeviceNoxParam.values()])
+@nox.parametrize("codegen", [CodeGenNoxParam["dace"], CodeGenNoxParam["dace_gt"]])
 def test_next_dace_determinism(
     session: nox.Session,
+    codegen: CodeGenOption,
     device: DeviceOption,
     meshlib: Literal["nomesh", "atlas"],
 ) -> None:
     """Run selected 'gt4py.next' DaCe tests twice and verify codegen
     is byte-identical between the two runs."""
 
-    codegen_settings = CodeGenDaceTestSettings["dace"]
+    codegen_settings = CodeGenDaceTestSettings[codegen]
     device_settings = DeviceTestSettings[device]
     extras = [
         "standard",
@@ -407,7 +418,9 @@ def test_next_dace_determinism(
     # The `scripts` group provides `typer`, needed by the dace-determinism CLI.
     install_session_venv(session, extras=extras, groups=[*groups, "scripts"])
 
-    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+    markers = " and ".join(
+        [*codegen_settings["markers"], *device_settings["markers"], *mesh_markers]
+    )
 
     # Execute the determinism script with the session venv's own python (resolved
     # by nox from "python"); the script runs the pytest selection twice via
@@ -431,7 +444,7 @@ def test_next_dace_determinism(
         str(pathlib.Path("scripts") / "python" / "dace_determinism.py"),
         "ci-check",
         "--workdir",
-        str(REPO_ROOT / "_dace_deterministic_codegen"),
+        str(REPO_ROOT / f"_{codegen}_deterministic_codegen"),
         "--",
         *pytest_args,
         *session.posargs,
