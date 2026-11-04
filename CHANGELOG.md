@@ -2,6 +2,20 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.4] - 2026-11-04
+
+### General
+
+- Update DaCe to 2.0.0b1.
+
+### Cartesian
+
+- Extend the `dtypes` remapping to plain scalar type hints (e.g. `Float`, `Int`) for stencil temporaries.
+
+### Next
+
+See commit history.
+
 ## [1.2.3] - 2026-10-05
 
 ### General
