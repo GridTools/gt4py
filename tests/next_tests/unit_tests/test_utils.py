@@ -652,6 +652,114 @@ def test_tree_map_custom_output_type():
     assert testee(((1, 2), 3)) == [[2, 3], 4]
 
 
+@dataclasses.dataclass
+class _Node:
+    """Collection whose children are only reachable through an attribute, not by iteration."""
+
+    children: list
+
+
+def _node_elements(node: _Node) -> list:
+    return node.children
+
+
+def _node_constructor(_, elements) -> _Node:
+    return _Node(children=list(elements))
+
+
+@dataclasses.dataclass
+class _NamedNode:
+    """Collection whose children are addressed by name instead of by position."""
+
+    children: dict
+
+
+def _named_node_constructor(value: _NamedNode, elements) -> _NamedNode:
+    return _NamedNode(children=dict(zip(value.children.keys(), elements, strict=True)))
+
+
+def test_tree_map_custom_collection_elements():
+    @utils.tree_map(
+        collection_type=_Node,
+        collection_elements=_node_elements,
+        result_collection_constructor=_node_constructor,
+    )
+    def testee(x):
+        return x + 1
+
+    assert testee(_Node([_Node([1, 2]), 3])) == _Node([_Node([2, 3]), 4])
+
+
+def test_tree_map_custom_collection_elements_multi_arg():
+    @utils.tree_map(
+        collection_type=_Node,
+        collection_elements=_node_elements,
+        result_collection_constructor=_node_constructor,
+    )
+    def testee(x, y):
+        return x + y
+
+    assert testee(_Node([_Node([1, 2]), 3]), _Node([_Node([4, 5]), 6])) == _Node([_Node([5, 7]), 9])
+
+
+def test_tree_map_custom_collection_elements_with_path_arg():
+    @utils.tree_map(
+        collection_type=_Node,
+        collection_elements=_node_elements,
+        result_collection_constructor=_node_constructor,
+        with_path_arg=True,
+    )
+    def testee(x, path):
+        return (x, path)
+
+    assert testee(_Node([_Node([1, 2]), 3])) == _Node(
+        [_Node([(1, (0, 0)), (2, (0, 1))]), (3, (1,))]
+    )
+
+
+def test_tree_map_custom_collection_elements_unpack():
+    @utils.tree_map(
+        collection_type=_Node,
+        collection_elements=_node_elements,
+        result_collection_constructor=_node_constructor,
+        unpack=True,
+    )
+    def testee(x):
+        return (x, x**2)
+
+    assert testee(_Node([_Node([2, 3]), 4])) == (
+        _Node([_Node([2, 3]), 4]),
+        _Node([_Node([4, 9]), 16]),
+    )
+
+
+def test_tree_map_custom_collection_keys():
+    """`collection_keys` makes up the path, independently of the element decomposition."""
+
+    @utils.tree_map(
+        collection_type=_NamedNode,
+        collection_elements=lambda node: node.children.values(),
+        collection_keys=lambda node: node.children.keys(),
+        result_collection_constructor=_named_node_constructor,
+        with_path_arg=True,
+    )
+    def testee(x, path):
+        return path
+
+    assert testee(_NamedNode({"a": _NamedNode({"b": 1}), "c": 2})) == _NamedNode(
+        {"a": _NamedNode({"b": ("a", "b")}), "c": ("c",)}
+    )
+
+
+def test_tree_map_structure_mismatch():
+    @utils.tree_map(with_path_arg=True)
+    def testee(x, y, path):
+        return (x + y, path)
+
+    with pytest.raises(AssertionError):
+        testee((1, 2), (3, 4, 5))
+
+
 def test_tree_map_multiple_input_types():
     @utils.tree_map(
         collection_type=(list, tuple),

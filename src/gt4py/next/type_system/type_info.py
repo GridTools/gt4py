@@ -163,16 +163,39 @@ def tree_map_type(
 ) -> Callable[..., _T | _C]: ...
 
 
+@overload
 def tree_map_type(
-    fun: Callable[..., _T],
+    *,
+    result_collection_constructor: Callable[..., Any] = ...,
+    with_path_arg: bool = ...,
+    unpack: bool = ...,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
+
+
+def tree_map_type(
+    fun: Callable[..., _T] | None = None,
     *,
     result_collection_constructor: Callable[..., Any] = tree_map_type_constructor,
     with_path_arg: bool = False,
     unpack: bool = False,
 ) -> Callable[..., Any]:
+    """
+    `tree_map` specialized for collection type specs, see `gt4py.next.utils.tree_map`.
+
+    Can be used directly or as a (possibly parametrized) decorator. By default the result
+    collection is of the same kind as the traversed collection type spec.
+    """
+    if fun is None:
+        return functools.partial(
+            tree_map_type,
+            result_collection_constructor=result_collection_constructor,
+            with_path_arg=with_path_arg,
+            unpack=unpack,
+        )
     return next_utils.tree_map(
         fun,
         collection_type=ts.COLLECTION_TYPE_SPECS,
+        collection_elements=lambda t: t.types,
         result_collection_constructor=result_collection_constructor,
         with_path_arg=with_path_arg,
         unpack=unpack,

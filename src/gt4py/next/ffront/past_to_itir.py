@@ -457,8 +457,7 @@ class ProgramLowering(
             "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
         )
 
-        @utils.tree_map(
-            collection_type=ts.COLLECTION_TYPE_SPECS,
+        @type_info.tree_map_type(
             with_path_arg=True,
             unpack=True,
             result_collection_constructor=lambda _, elts: im.make_tuple(*elts),
