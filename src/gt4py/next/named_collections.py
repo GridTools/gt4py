@@ -165,6 +165,16 @@ def make_extractor_expr(named_collection_type_hint: xtyping.TypeAnnotation, valu
         elif issubclass(actual_type, tuple) and (
             tuple_arg_hints := typing.get_args(named_collection_type_hint)
         ):
+            if len(tuple_arg_hints) == 2 and tuple_arg_hints[1] is Ellipsis:
+                # Variable-length tuple: the length is only known at run time, extract
+                # with a comprehension, or pass the value through if the elements do not
+                # need extraction. Note that reusing the variable name in nested
+                # comprehensions is fine: a comprehension's iterable is evaluated in the
+                # enclosing scope and the element expression only uses its own variable.
+                element_expr = make_extractor_expr(tuple_arg_hints[0], "__el")
+                if element_expr == "__el":
+                    return value_expr
+                return f"tuple({element_expr} for __el in {value_expr})"
             # This is a `tuple` with type arguments
             expr_parts = [
                 make_extractor_expr(value, f"{value_expr}[{i}]")
@@ -202,6 +212,11 @@ def make_extractor_expr_from_type_spec(type_: ts.TypeSpec, value_expr: str) -> s
                 for i, t in enumerate(type_.types)
             ]
             return f"({', '.join(args)})"
+        case ts.VarLenTupleType() if type_info.needs_value_extraction(type_):
+            # the length is only known at run time, extract with a comprehension (see
+            # the note on nested comprehensions in `make_extractor_expr`)
+            element_expr = make_extractor_expr_from_type_spec(type_.element_type, "__el")
+            return f"tuple({element_expr} for __el in {value_expr})"
 
     return value_expr
 
