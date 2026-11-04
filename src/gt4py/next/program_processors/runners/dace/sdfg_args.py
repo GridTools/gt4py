@@ -53,6 +53,23 @@ def as_itir_type(dtype: dace.typeclass) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
+def skip_value_replacement(dtype: dace.typeclass) -> str:
+    """Tasklet expression for the dummy value written at skipped neighbors.
+
+    Local neighbor lists reserve an entry for every neighbor slot, including the
+    invalid (skip-value) ones. The dummy stored there is always masked out by the
+    consuming reduction (see ``ReduceWithSkipValues`` and the guarded accumulation
+    in the codegen), so its value is irrelevant to the result.
+
+    We deliberately use the dtype's max value rather than ``math.nan``: the latter
+    lowers to ``dace::math::nan``, which is only defined for host code and fails to
+    compile in CUDA/HIP device code ("identifier ``dace::math::nan`` is undefined in
+    device code"). The max value is a plain numeric literal that compiles on both
+    host and device while still acting as an easily spotted sentinel.
+    """
+    return str(dace.dtypes.max_value(dtype))
+
+
 def connectivity_identifier(name: str) -> str:
     return f"{CONNECTIVITY_INDENTIFIER_PREFIX}{name}"
 
@@ -141,3 +158,21 @@ def filter_connectivity_types(
         for offset, conn in offset_provider_type.items()
         if isinstance(conn, gtx_common.NeighborConnectivityType)
     }
+
+
+def find_connectivity_identifier_by_neighbor_dim(
+    offset_provider_type: gtx_common.OffsetProviderType,
+    local_dim: gtx_common.Dimension,
+) -> str | None:
+    """
+    Find the SDFG connectivity-container name for the connectivity whose
+    local (neighbor) dimension is ``local_dim``.
+
+    The container is stored under ``connectivity_identifier(offset_tag)``
+    (see ``_add_sdfg_params``); this helper returns that name without the
+    caller having to know the offset tag.
+    """
+    for offset, conn in offset_provider_type.items():
+        if isinstance(conn, gtx_common.NeighborConnectivityType) and conn.neighbor_dim == local_dim:
+            return connectivity_identifier(offset)
+    return None

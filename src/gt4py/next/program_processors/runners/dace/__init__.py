@@ -15,6 +15,12 @@ from gt4py.next.program_processors.runners.dace.workflow.backend import (
     run_dace_cpu_noopt,
     run_dace_gpu,
     run_dace_gpu_noopt,
+    run_dace_stree_fview_cpu,
+    run_dace_stree_fview_cpu_noopt,
+    run_dace_stree_fview_gpu,
+    run_dace_stree_iview_cpu,
+    run_dace_stree_iview_cpu_noopt,
+    run_dace_stree_iview_gpu,
 )
 from gt4py.next.program_processors.runners.dace.workflow.factory import (
     DaCeBindingsBuilder,
@@ -44,4 +50,10 @@ __all__ = [
     "run_dace_cpu_noopt",
     "run_dace_gpu",
     "run_dace_gpu_noopt",
+    "run_dace_stree_fview_cpu",
+    "run_dace_stree_fview_cpu_noopt",
+    "run_dace_stree_fview_gpu",
+    "run_dace_stree_iview_cpu",
+    "run_dace_stree_iview_cpu_noopt",
+    "run_dace_stree_iview_gpu",
 ]
