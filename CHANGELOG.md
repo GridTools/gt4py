@@ -2,6 +2,22 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.4] - 2026-11-04
+
+### General
+
+- Update DaCe to 2.0.0b1.
+- Limit `pytest` to versions below 9.2.0 until `pytest-benchmark` is compatible.
+- Pin `toml-sort` to 0.25.0 in the `pretty-format-toml` pre-commit hook.
+
+### Cartesian
+
+- Extend the `dtypes` remapping to plain scalar type hints (e.g. `Float`, `Int`) for stencil temporaries, previously limited to `Field` annotations.
+
+### Next
+
+See commit history.
+
 ## [1.2.3] - 2026-10-05
 
 ### General
