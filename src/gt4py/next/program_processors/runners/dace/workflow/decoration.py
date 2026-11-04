@@ -34,7 +34,9 @@ class DaCeDecoratedProgram:
     program. External workspace memory (when the SDFG uses
     ``TransientMemoryMode.EXTERNAL``) is installed onto the underlying
     ``CompiledDaceProgram`` before the first call via `set_external_workspace`;
-    its lifetime is owned by the caller, not by this wrapper.
+    its lifetime is owned by the caller, not by this wrapper. Similarly, an external
+    GPU stream can be set before the first call via `set_external_gpu_stream`; it
+    is passed as argument to the SDFG and applied on SDFG initialization.
     """
 
     def __init__(
@@ -43,6 +45,7 @@ class DaCeDecoratedProgram:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU,
     ) -> None:
         self._fun = fun
+        self._external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None = None
         # Retrieve metrics level from GT4Py environment variable.
         self._collect_time = metrics.is_level_enabled(metrics.PERFORMANCE)
         self._collect_time_arg = np.array(
@@ -85,6 +88,10 @@ class DaCeDecoratedProgram:
                 gtx_wfdcommon.SDFG_ARG_METRIC_LEVEL: metrics.get_current_level(),
                 gtx_wfdcommon.SDFG_ARG_METRIC_COMPUTE_TIME: self._collect_time_arg,
             }
+            if gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM in self._fun.sdfg_program.sdfg.symbols:
+                this_call_args[gtx_wfdcommon.SDFG_ARG_EXTERNAL_GPU_STREAM] = (
+                    gtx_wfdcommon.get_gpu_stream_ptr(self._external_gpu_stream)
+                )
             self._fun.construct_arguments(**this_call_args)
 
         # Perform the call to the SDFG.
@@ -98,6 +105,38 @@ class DaCeDecoratedProgram:
     def set_external_workspace(self, external_workspace: gtx_wfdcommon.ExternalWorkspace) -> None:
         """Set the external workspace for the underlying compiled program.
 
-        This method should be called before the first call to the program.
+        This method should be called before the first call to the program, because
+        the workspace is installed when the SDFG arguments are constructed.
+
+        Args:
+            external_workspace: Mapping from device types to the array-like objects
+                used as workspace memory for the SDFG transient arrays, when the
+                transient memory mode is `EXTERNAL`.
         """
         self._fun.external_workspace = external_workspace
+
+    def set_external_gpu_stream(
+        self, external_gpu_stream: gtx_wfdcommon.GPUStreamHandle | None
+    ) -> None:
+        """Set the external GPU stream used by the underlying compiled program.
+
+        This method should be called before the first call to the program, because
+        the stream is applied on SDFG initialization.
+
+        Args:
+            external_gpu_stream: The handle of the external GPU stream, either as an
+                integer or as a stream object, see `GPUStreamHandle`. `None` selects
+                the default stream.
+
+        Raises:
+            RuntimeError: If the program was already called.
+            TypeError: If `external_gpu_stream` is not a valid GPU stream handle.
+        """
+        if self._fun.csdfg_argv is not None:
+            raise RuntimeError(
+                "The external GPU stream must be set before the first call to the program."
+            )
+        # Validate the stream handle, but store it as given: a stream object is thus
+        #  kept alive as long as the program, which uses its pointer value.
+        gtx_wfdcommon.get_gpu_stream_ptr(external_gpu_stream)
+        self._external_gpu_stream = external_gpu_stream

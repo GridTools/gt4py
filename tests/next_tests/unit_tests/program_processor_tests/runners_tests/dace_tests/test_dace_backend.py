@@ -114,7 +114,7 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
         translation=functools.partial(
             dace_wf_factory.make_dace_translator,
             auto_optimize_args=optimization_args,
-            async_sdfg_call=True,
+            sync_sdfg_call=False,
             use_metrics=True,
         ),
     )
@@ -242,6 +242,107 @@ def test_make_backend_warns_external_workspace_without_external_mode():
     assert backend.external_workspace[core_defs.DeviceType.CPU] is workspace
 
 
+def _make_mocked_decorated_program(
+    sdfg_symbols: dict[str, dace.dtypes.typeclass],
+) -> tuple[dace_wf_decoration.DaCeDecoratedProgram, mock.MagicMock]:
+    """Return a decorated program wrapping a mocked compiled program, and the mock."""
+    sdfg = dace.SDFG("mocked_program")
+    for name, dtype in sdfg_symbols.items():
+        sdfg.add_symbol(name, dtype)
+
+    compiled_program = mock.MagicMock()
+    compiled_program.sdfg_program.sdfg = sdfg
+    compiled_program.csdfg_argv = None
+    compiled_program.csdfg_init_argv = None
+
+    def construct_arguments(**kwargs: Any) -> None:
+        compiled_program.csdfg_argv = []
+        compiled_program.csdfg_init_argv = []
+
+    compiled_program.construct_arguments.side_effect = construct_arguments
+    # Simulate the first call, where the argument vector is not yet constructed.
+    compiled_program.update_sdfg_ctype_arglist.side_effect = TypeError
+
+    return dace_wf_decoration.DaCeDecoratedProgram(compiled_program), compiled_program
+
+
+@dataclasses.dataclass(frozen=True)
+class _GPUStream:
+    """Minimal stand-in for a stream object such as `cupy.cuda.Stream`."""
+
+    ptr: Any
+
+
+@pytest.mark.parametrize(
+    "stream, expected_ptr",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
+)
+def test_get_gpu_stream_ptr(stream, expected_ptr):
+    assert dace_wf_common.get_gpu_stream_ptr(stream) == expected_ptr
+
+
+@pytest.mark.parametrize(
+    "stream",
+    ["0x1234", True, 1.0, _GPUStream(None), object()],
+    ids=["str", "bool", "float", "stream_object_without_int_ptr", "object"],
+)
+def test_get_gpu_stream_ptr_rejects_invalid_stream(stream):
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_common.get_gpu_stream_ptr(stream)
+
+
+def test_make_backend_rejects_invalid_external_gpu_stream():
+    with pytest.raises(TypeError, match="Invalid GPU stream"):
+        dace_wf_backend.make_dace_backend(gpu=True, auto_optimize=False, external_gpu_stream="0")
+
+
+@pytest.mark.parametrize(
+    "external_gpu_stream, expected_arg",
+    [
+        (None, dace_wf_common.DEFAULT_GPU_STREAM),
+        (0x1234, 0x1234),
+        (_GPUStream(0x1234), 0x1234),
+    ],
+    ids=["default", "int", "stream_object"],
+)
+def test_decorated_program_passes_external_gpu_stream_arg(external_gpu_stream, expected_arg):
+    program, compiled_program = _make_mocked_decorated_program(
+        {
+            dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM: dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM_DTYPE
+        }
+    )
+    program.set_external_gpu_stream(external_gpu_stream)
+
+    with mock.patch.object(dace_wf_decoration.sdfg_callable, "get_sdfg_args", return_value={}):
+        program(offset_provider={})
+
+    compiled_program.construct_arguments.assert_called_once()
+    call_kwargs = compiled_program.construct_arguments.call_args.kwargs
+    assert call_kwargs[dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM] == expected_arg
+    compiled_program.fast_call.assert_called_once()
+
+    # The stream is applied on SDFG initialization, it cannot be changed later.
+    with pytest.raises(RuntimeError, match="before the first call"):
+        program.set_external_gpu_stream(0x5678)
+
+
+def test_decorated_program_skips_external_gpu_stream_arg_on_cpu():
+    # A CPU SDFG does not have the external GPU stream argument.
+    program, compiled_program = _make_mocked_decorated_program({})
+    program.set_external_gpu_stream(0x1234)
+
+    with mock.patch.object(dace_wf_decoration.sdfg_callable, "get_sdfg_args", return_value={}):
+        program(offset_provider={})
+
+    call_kwargs = compiled_program.construct_arguments.call_args.kwargs
+    assert dace_wf_common.SDFG_ARG_EXTERNAL_GPU_STREAM not in call_kwargs
+
+
 def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
     """The toolchain and its translation step read the workspace from one config."""
     workspace = _RecordingWorkspace()
@@ -284,7 +385,7 @@ def test_make_dace_backend_is_deprecated():
     with pytest.warns(DeprecationWarning, match="make_dace_toolchain"):
         deprecated = dace_wf_backend.make_dace_backend(
             gpu=False,
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             optimization_args={"blocking_size": 10},
             external_workspace=workspace,
             unstructured_horizontal_has_unit_stride=True,
@@ -299,7 +400,7 @@ def test_make_dace_backend_is_deprecated():
         translation=functools.partial(
             dace_wf_factory.make_dace_translator,
             auto_optimize_args={"blocking_size": 10},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             use_metrics=False,
             disable_field_origin_on_program_arguments=True,
             use_max_domain_range_on_unstructured_shift=True,
@@ -324,7 +425,7 @@ def test_translator_rejects_derived_optimization_args_on_every_route():
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=False,
             auto_optimize_args={"gpu": True},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=False,
         )
@@ -426,7 +527,7 @@ def test_transient_memory_mode(device_type, transient_memory_mode, monkeypatch):
             auto_optimize_args={
                 "transient_memory_mode": transient_memory_mode,
             },
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
         ),
     )
 
