@@ -49,7 +49,7 @@ test = [
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
-  'pytest>=8.0.1',
+  'pytest>=8.0.1, <9.2.0',  # TODO(romanc): check why cartesian tests fail with `pytest==9.2.0`
   'pytest-benchmark>=5.3.1',
   'pytest-cache>=1.0',
   'pytest-factoryboy>=2.6.1',
