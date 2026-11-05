@@ -173,6 +173,92 @@ def test_dtype_mismatch_explains_promotion():
     assert len(err.related) == 2
 
 
+def test_incompatible_argument_in_operator_call_is_diagnosed():
+    # A direct field operator call lowers through a generated wrapper program whose
+    # parameters are specialized to the concrete argument types *before* its type
+    # deduction; a mismatching argument must be diagnosed there with a 'DSLError'
+    # (not a bare 'AssertionError'), pointing at the operator's definition.
+    from gt4py.next.ffront import foast_to_gtir, foast_to_past, stages as ffront_stages
+    from gt4py.next.ffront.func_to_foast import func_to_foast
+    from gt4py.next.otf import arguments, workflow
+    from gt4py.next.type_system import type_specifications as ts
+
+    @gtx.field_operator
+    def copy(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a
+
+    float32_field = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    float64_field = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    compile_time_args = arguments.CompileTimeArgs(
+        args=(float32_field, float64_field),
+        kwargs={},
+        offset_provider={},
+        column_axis=None,
+        argument_descriptor_contexts={},
+    )
+    op_to_prog = foast_to_past.OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
+
+    with pytest.raises(errors.DSLError) as exc_info:
+        op_to_prog(
+            workflow.ConcreteArtifact(
+                func_to_foast(ffront_stages.DSLFieldOperatorDef(definition=copy.definition)),
+                compile_time_args,
+            )
+        )
+
+    err = exc_info.value
+    assert err.message == (
+        "Expected argument 'a' to be of type 'Field[[IDim], float64]', "
+        "got 'Field[[IDim], float32]'."
+    )
+    assert err.notes == ["GT4Py does not implicitly convert between datatypes."]
+    assert any("astype(<expr>, float64)" in hint for hint in err.hints)
+    rendered = str(err)
+    assert "def copy(a: gtx.Field[[IDim], float64])" in rendered
+    assert re.search(r"\^+ this has type 'Field\[\[IDim\], float64\]'", rendered), rendered
+
+
+def test_scalar_argument_dtype_mismatch_in_operator_call_is_diagnosed():
+    # A scalar argument with the wrong dtype is diagnosed the same way as a field
+    # argument, but the hint names the scalar cast (e.g. 'float64(...)') rather than
+    # the field-only 'astype' builtin.
+    from gt4py.next.ffront import foast_to_gtir, foast_to_past, stages as ffront_stages
+    from gt4py.next.ffront.func_to_foast import func_to_foast
+    from gt4py.next.otf import arguments, workflow
+    from gt4py.next.type_system import type_specifications as ts
+
+    @gtx.field_operator
+    def scale(a: gtx.Field[[IDim], float64], factor: float64) -> gtx.Field[[IDim], float64]:
+        return a * factor
+
+    field_t = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    float32_scalar = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    compile_time_args = arguments.CompileTimeArgs(
+        args=(field_t, float32_scalar, field_t),
+        kwargs={},
+        offset_provider={},
+        column_axis=None,
+        argument_descriptor_contexts={},
+    )
+    op_to_prog = foast_to_past.OperatorToProgram(foast_to_gtir.adapted_foast_to_gtir_factory())
+
+    with pytest.raises(errors.DSLError) as exc_info:
+        op_to_prog(
+            workflow.ConcreteArtifact(
+                func_to_foast(ffront_stages.DSLFieldOperatorDef(definition=scale.definition)),
+                compile_time_args,
+            )
+        )
+
+    err = exc_info.value
+    assert err.message == "Expected argument 'factor' to be of type 'float64', got 'float32'."
+    assert err.notes == ["GT4Py does not implicitly convert between datatypes."]
+    assert any("float64(<value>)" in hint for hint in err.hints)
+    rendered = str(err)
+    assert "def scale(a: gtx.Field[[IDim], float64], factor: float64)" in rendered
+    assert re.search(r"\^+ this has type 'float64'", rendered), rendered
+
+
 def test_bool_op_suggests_bitwise_operators():
     def with_and(a: gtx.Field[[IDim], bool], b: gtx.Field[[IDim], bool]) -> gtx.Field[[IDim], bool]:
         return a and b
@@ -392,6 +478,7 @@ def test_conditional_in_generator_expression_explains_static_length():
     assert err.message == "Conditionals are not supported in generator expressions."
     assert any("known at compile time" in note for note in err.notes)
     assert "if True" in str(err)
+
 
 def test_unindexed_cartesian_offset_names_the_offset_as_written():
     # The tag of 'IOff' is 'Ioff'; the message has to quote what the user wrote.
