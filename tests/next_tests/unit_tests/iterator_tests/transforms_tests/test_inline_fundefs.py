@@ -19,7 +19,9 @@ domain = im.domain(common.GridType.CARTESIAN, {TDim: (0, 1)})
 
 
 def program_factory(
-    body: list[itir.Stmt], function_definitions: list[itir.FunctionDefinition]
+    body: list[itir.Stmt],
+    function_definitions: list[itir.FunctionDefinition],
+    declarations: list[itir.Temporary] | None = None,
 ) -> itir.Program:
     return itir.Program(
         id="testee",
@@ -28,7 +30,7 @@ def program_factory(
             im.sym("inp", ts.FieldType(dims=[TDim], dtype=int_type)),
             im.sym("out", ts.FieldType(dims=[TDim], dtype=int_type)),
         ],
-        declarations=[],
+        declarations=declarations or [],
         body=body,
     )
 
@@ -55,20 +57,14 @@ def test_simple():
 
 
 def test_unreferenced_fundef():
-    # unreferenced function definitions are still bound, dead code elimination removes them later
+    # an unreferenced function definition is not bound at all
     fun = itir.FunctionDefinition(id="fun", params=[im.sym("a")], expr=im.deref("a"))
     testee = program_factory(
         body=[itir.SetAt(expr=im.deref("inp"), target=im.ref("out"), domain=domain)],
         function_definitions=[fun],
     )
     expected = program_factory(
-        body=[
-            itir.SetAt(
-                expr=im.let("fun", im.lambda_("a")(im.deref("a")))(im.deref("inp")),
-                target=im.ref("out"),
-                domain=domain,
-            )
-        ],
+        body=[itir.SetAt(expr=im.deref("inp"), target=im.ref("out"), domain=domain)],
         function_definitions=[],
     )
 
@@ -83,7 +79,9 @@ def test_shadowed_by_binder():
     testee = program_factory(
         body=[
             itir.SetAt(
-                expr=im.as_fieldop(stencil, domain)("inp"), target=im.ref("out"), domain=domain
+                expr=im.as_fieldop(stencil, domain)(im.call("fun")("inp")),
+                target=im.ref("out"),
+                domain=domain,
             )
         ],
         function_definitions=[fun],
@@ -93,8 +91,8 @@ def test_shadowed_by_binder():
         body=[
             itir.SetAt(
                 expr=im.let("fun", im.lambda_("a")(im.deref("a")))(
-                    # the `fun` binder of the stencil is untouched
-                    im.as_fieldop(stencil, domain)("inp")
+                    # the `fun` binder of the stencil is untouched, the call is bound
+                    im.as_fieldop(stencil, domain)(im.call("fun")("inp"))
                 ),
                 target=im.ref("out"),
                 domain=domain,
@@ -151,3 +149,134 @@ def test_if_stmt():
     binding = im.let("fun", im.lambda_("a")(im.deref("a")))
     assert actual.body[0].cond == binding(im.call("fun")(True))
     assert actual.body[0].true_branch[0].expr == binding(im.call("fun")("inp"))
+
+
+def test_param_shadowing_own_fundef():
+    # the parameter of `foo` shadows the function definition `foo` itself, which is not a
+    # self-reference and hence not a dependency cycle
+    foo = itir.FunctionDefinition(id="foo", params=[im.sym("foo")], expr=im.deref("foo"))
+    testee = program_factory(
+        body=[itir.SetAt(expr=im.call("foo")("inp"), target=im.ref("out"), domain=domain)],
+        function_definitions=[foo],
+    )
+    expected = program_factory(
+        body=[
+            itir.SetAt(
+                expr=im.let("foo", im.lambda_("foo")(im.deref("foo")))(im.call("foo")("inp")),
+                target=im.ref("out"),
+                domain=domain,
+            )
+        ],
+        function_definitions=[],
+    )
+
+    actual = inline_fundefs.inline_fundefs(testee)
+    assert actual == expected
+
+
+def test_params_shadowing_other_fundefs():
+    # `f` and `g` do not reference each other, their parameters only happen to be named like the
+    # respective other function definition
+    f = itir.FunctionDefinition(id="f", params=[im.sym("g")], expr=im.deref("g"))
+    g = itir.FunctionDefinition(id="g", params=[im.sym("f")], expr=im.deref("f"))
+    testee = program_factory(
+        body=[
+            itir.SetAt(expr=im.call("f")(im.call("g")("inp")), target=im.ref("out"), domain=domain)
+        ],
+        function_definitions=[f, g],
+    )
+    expected = program_factory(
+        body=[
+            itir.SetAt(
+                expr=im.let("f", im.lambda_("g")(im.deref("g")))(
+                    im.let("g", im.lambda_("f")(im.deref("f")))(im.call("f")(im.call("g")("inp")))
+                ),
+                target=im.ref("out"),
+                domain=domain,
+            )
+        ],
+        function_definitions=[],
+    )
+
+    actual = inline_fundefs.inline_fundefs(testee)
+    assert actual == expected
+
+
+def test_param_shadowing_fundef_with_dependency():
+    # `mixed` shadows `helper` with its parameter, but genuinely depends on `other`, which
+    # therefore has to be bound further outside
+    helper = itir.FunctionDefinition(id="helper", params=[im.sym("x")], expr=im.deref("x"))
+    other = itir.FunctionDefinition(id="other", params=[im.sym("x")], expr=im.deref("x"))
+    mixed = itir.FunctionDefinition(
+        id="mixed", params=[im.sym("helper")], expr=im.call("other")("helper")
+    )
+    testee = program_factory(
+        body=[itir.SetAt(expr=im.call("mixed")("inp"), target=im.ref("out"), domain=domain)],
+        function_definitions=[mixed, helper, other],
+    )
+    expected = program_factory(
+        body=[
+            itir.SetAt(
+                # `helper` is only shadowed, never referenced, hence it is not bound
+                expr=im.let("other", im.lambda_("x")(im.deref("x")))(
+                    im.let("mixed", im.lambda_("helper")(im.call("other")("helper")))(
+                        im.call("mixed")("inp")
+                    )
+                ),
+                target=im.ref("out"),
+                domain=domain,
+            )
+        ],
+        function_definitions=[],
+    )
+
+    actual = inline_fundefs.inline_fundefs(testee)
+    assert actual == expected
+
+
+def test_fundef_referenced_in_domain():
+    # the domain of a statement is wrapped just like its expression
+    upper = itir.FunctionDefinition(id="upper", params=[], expr=im.literal_from_value(10))
+    symbolic_domain = im.domain(common.GridType.CARTESIAN, {TDim: (0, im.call("upper")())})
+    testee = program_factory(
+        body=[itir.SetAt(expr=im.deref("inp"), target=im.ref("out"), domain=symbolic_domain)],
+        function_definitions=[upper],
+    )
+    expected = program_factory(
+        body=[
+            itir.SetAt(
+                expr=im.deref("inp"),
+                target=im.ref("out"),
+                domain=im.let("upper", im.lambda_()(im.literal_from_value(10)))(symbolic_domain),
+            )
+        ],
+        function_definitions=[],
+    )
+
+    actual = inline_fundefs.inline_fundefs(testee)
+    assert actual == expected
+
+
+def test_fundef_referenced_in_temporary_domain():
+    # the domain of a temporary is wrapped as well
+    upper = itir.FunctionDefinition(id="upper", params=[], expr=im.literal_from_value(10))
+    symbolic_domain = im.domain(common.GridType.CARTESIAN, {TDim: (0, im.call("upper")())})
+    testee = program_factory(
+        body=[itir.SetAt(expr=im.deref("inp"), target=im.ref("out"), domain=domain)],
+        function_definitions=[upper],
+        declarations=[itir.Temporary(id="tmp", domain=symbolic_domain, dtype=int_type)],
+    )
+    expected = program_factory(
+        body=[itir.SetAt(expr=im.deref("inp"), target=im.ref("out"), domain=domain)],
+        function_definitions=[],
+        declarations=[
+            itir.Temporary(
+                id="tmp",
+                domain=im.let("upper", im.lambda_()(im.literal_from_value(10)))(symbolic_domain),
+                dtype=int_type,
+            )
+        ],
+    )
+
+    actual = inline_fundefs.inline_fundefs(testee)
+    assert actual == expected

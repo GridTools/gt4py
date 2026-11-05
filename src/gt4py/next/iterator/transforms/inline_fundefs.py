@@ -16,26 +16,32 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import symbol_ref_utils
 
 
-def _sorted_by_dependency(
+def _dependencies(
     function_definitions: list[itir.FunctionDefinition],
-) -> list[itir.FunctionDefinition]:
-    """Order function definitions such that each one only references its predecessors."""
+) -> dict[str, list[str]]:
+    """Map each function definition to the function definitions it references."""
     fundefs = {str(fundef.id): fundef for fundef in function_definitions}
-    dependencies = {
-        name: symbol_ref_utils.collect_symbol_refs(fundef.expr, fundefs.keys())
+    return {
+        # wrapped in a lambda such that references shadowed by the definition's own parameters
+        # are not collected
+        name: symbol_ref_utils.collect_symbol_refs(
+            im.lambda_(*fundef.params)(fundef.expr), fundefs.keys()
+        )
         for name, fundef in fundefs.items()
     }
-    return [fundefs[name] for name in graphlib.TopologicalSorter(dependencies).static_order()]
 
 
 @dataclasses.dataclass(frozen=True)
-class _WrapStatementExpressions(PreserveLocationVisitor, NodeTranslator):
-    """Replace every expression a statement is made of by `wrap` applied to it."""
+class _WrapExpressions(PreserveLocationVisitor, NodeTranslator):
+    """Replace every expression a statement or declaration is made of by `wrap` applied to it."""
 
     wrap: Callable[[itir.Expr], itir.Expr]
 
     def visit_SetAt(self, node: itir.SetAt) -> itir.SetAt:
-        return itir.SetAt(expr=self.wrap(node.expr), domain=node.domain, target=node.target)
+        # note: the target only refers to parameters and temporaries, hence it is not wrapped
+        return itir.SetAt(
+            expr=self.wrap(node.expr), domain=self.wrap(node.domain), target=node.target
+        )
 
     def visit_IfStmt(self, node: itir.IfStmt) -> itir.IfStmt:
         return itir.IfStmt(
@@ -44,16 +50,22 @@ class _WrapStatementExpressions(PreserveLocationVisitor, NodeTranslator):
             false_branch=self.visit(node.false_branch),
         )
 
+    def visit_Temporary(self, node: itir.Temporary) -> itir.Temporary:
+        return itir.Temporary(
+            id=node.id,
+            domain=self.wrap(node.domain) if node.domain is not None else None,
+            dtype=node.dtype,
+        )
+
 
 def inline_fundefs(program: itir.Program) -> itir.Program:
     """
     Turn the function definitions of a program into `let` bindings of its statements.
 
-    Every statement expression is wrapped in a `let` binding all function definitions to the
-    corresponding lambdas. Since the function definitions thereby become regular bindings, the
-    usual scoping rules apply, in particular a lambda parameter of the same name shadows a
-    function definition instead of being erroneously replaced by it. Bindings that are unused,
-    e.g. because the function definition is never called, are removed by dead code elimination.
+    Every expression of a statement or declaration is wrapped in a `let` binding the function
+    definitions it references to the corresponding lambdas. Since the function definitions thereby
+    become regular bindings, the usual scoping rules apply, in particular a lambda parameter of the
+    same name shadows a function definition instead of being erroneously replaced by it.
 
     >>> from gt4py.next import common
     >>> from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -81,22 +93,30 @@ def inline_fundefs(program: itir.Program) -> itir.Program:
     if not program.function_definitions:
         return program
 
-    # dependent function definitions are bound further inside, such that they see the function
-    # definitions they reference
-    bindings = [
-        (im.sym(fundef.id), im.lambda_(*fundef.params)(fundef.expr))
-        for fundef in _sorted_by_dependency(program.function_definitions)
-    ]
+    fundefs = {str(fundef.id): fundef for fundef in program.function_definitions}
+    dependencies = _dependencies(program.function_definitions)
+    # a function definition precedes the ones referencing it, such that it is bound further
+    # outside and hence visible in their bodies
+    order = list(graphlib.TopologicalSorter(dependencies).static_order())
 
     def wrap(expr: itir.Expr) -> itir.Expr:
-        for param, value in reversed(bindings):
-            expr = im.let(param, value)(expr)
+        # Only the function definitions that are referenced, directly or through another
+        # definition, are bound. Walking `order` backwards visits a definition before all
+        # definitions it references, so the transitive closure needs no extra traversal.
+        required = set(symbol_ref_utils.collect_symbol_refs(expr, fundefs.keys()))
+        for name in reversed(order):
+            if name not in required:
+                continue
+            required.update(dependencies[name])
+            fundef = fundefs[name]
+            expr = im.let(im.sym(name), im.lambda_(*fundef.params)(fundef.expr))(expr)
         return expr
 
+    wrapper = _WrapExpressions(wrap)
     return itir.Program(
         id=program.id,
         function_definitions=[],
         params=program.params,
-        declarations=program.declarations,
-        body=_WrapStatementExpressions(wrap).visit(program.body),
+        declarations=wrapper.visit(program.declarations),
+        body=wrapper.visit(program.body),
     )
