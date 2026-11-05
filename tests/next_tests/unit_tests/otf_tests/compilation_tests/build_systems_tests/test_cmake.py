@@ -80,3 +80,20 @@ def test_default_cmake_factory(extension_source_example, clean_cmake_cache):
     )
 
     assert (otf_builder.root_path / "configure.sh").exists()
+
+
+def test_cmake_factory_does_not_need_a_c_compiler(
+    extension_source_example, clean_cmake_cache, monkeypatch
+):
+    monkeypatch.setenv("CC", "/nonexistent/cc")
+    otf_builder = cmake.CMakeFactory()(
+        source=extension_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
+    )
+
+    otf_builder.build()
+
+    data = build_data.read_data(otf_builder.root_path)
+    assert data.status == build_data.BuildStatus.COMPILED
+    assert (
+        "CMAKE_C_COMPILER" not in (otf_builder.root_path / "build" / "CMakeCache.txt").read_text()
+    )
