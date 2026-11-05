@@ -237,6 +237,10 @@ def _specialize_program_params(
     In particular, parameters declared with a generic type, e.g. a variable-length tuple,
     only have a concrete type at the call. The arguments are expected to be canonicalized
     against the signature already (see `transform_program_args`).
+
+    If a concrete argument type is not provided for a parameter — e.g. when lowering an
+    argument-free program view such as `Program.gtir` — the declared parameter type is
+    kept unchanged.
     """
     param_types: dict[str, ts.TypeSpec] = {
         **{str(param.id): arg_type for param, arg_type in zip(past_node.params, arg_types)},
@@ -244,12 +248,40 @@ def _specialize_program_params(
     }
     new_params = []
     for param in past_node.params:
-        param_type = param_types[str(param.id)]
-        # incompatible argument types have already been rejected in `transform_program_args`
-        assert type_info.is_concretizable(param.type, to_type=param_type), (
-            f"Argument of type '{param_type}' is not compatible with parameter "
-            f"'{param.id}' of type '{param.type}'."
-        )
+        param_type = param_types.get(str(param.id), param.type)
+        if not type_info.is_concretizable(param.type, to_type=param_type):
+            # This is the first line of defense in the direct field operator call path,
+            # where the generated wrapper program is specialized before its type
+            # deduction and `transform_program_args` (which would reject the argument
+            # with a proper diagnostic) has not run yet.
+            notes: tuple[str, ...] = ()
+            hints: tuple[str, ...] = ()
+            if (
+                isinstance(param.type, ts.FieldType)
+                and isinstance(param_type, ts.FieldType)
+                and param.type.dims == param_type.dims
+                and param.type.dtype != param_type.dtype
+            ):
+                notes = ("GT4Py does not implicitly convert between datatypes.",)
+                hints = (
+                    f"Convert the argument explicitly, e.g. 'astype(<expr>, {param.type.dtype})'.",
+                )
+            elif (
+                isinstance(param.type, ts.ScalarType)
+                and isinstance(param_type, ts.ScalarType)
+                and param.type.shape == param_type.shape
+                and param.type.kind != param_type.kind
+            ):
+                notes = ("GT4Py does not implicitly convert between datatypes.",)
+                cast = param.type.kind.name.lower()
+                hints = (f"Convert the argument explicitly, e.g. '{cast}(<value>)'.",)
+            raise errors.DSLError(
+                param.location,
+                f"Expected argument '{param.id}' to be of type '{param.type}', got '{param_type}'.",
+                label=f"this has type '{param.type}'",
+                notes=notes,
+                hints=hints,
+            )
         new_params.append(param.copy(update={"type": param_type}))
     return past_node.copy(update={"params": new_params})
 
