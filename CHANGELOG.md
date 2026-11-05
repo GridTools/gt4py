@@ -2,6 +2,40 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.4] - 2026-11-04
+
+### General
+
+- Update DaCe to 2.0.0b1.
+
+### Cartesian
+
+- Extend the `dtypes` remapping to plain scalar type hints (e.g. `Float`, `Int`) for stencil temporaries.
+
+### Next
+
+See commit history.
+
+## [1.2.3] - 2026-10-05
+
+### General
+
+- Update DaCe to 2.0.0a10.
+- Replace `gt4py.eve.extended_typing` with `gt4py.eve.xtyping`, importing typing symbols
+  from `typing`, `typing_extensions`, or `collections.abc` directly.
+- Speed up `eve` with cheaper `isinstance` checks for nodes and avoid deep copies
+  of immutable leaf values.
+- Run development scripts in a scripts-only environment, reducing startup from ~6 s to well under a second.
+- Remove the Gitpod and devcontainer development setups.
+
+### Cartesian
+
+- Fix the performance regression in the `dace:gpu` backend for stencils with parallel vertical loops.
+
+### Next
+
+See commit history.
+
 ## [1.2.2] - 2026-08-31
 
 ### General

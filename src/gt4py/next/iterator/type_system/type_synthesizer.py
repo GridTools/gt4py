@@ -11,10 +11,10 @@ from __future__ import annotations
 import dataclasses
 import functools
 import inspect
-from typing import TypeVar, cast, overload
+from collections.abc import Callable, Iterable
+from typing import Optional, TypeVar, Union, cast, overload
 
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Iterable, Optional, Union
 from gt4py.next import common, utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import misc as ir_misc

@@ -12,8 +12,8 @@ import functools
 import itertools
 import operator
 from collections.abc import Iterator, Sequence
+from typing import Any, Optional, cast
 
-from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 

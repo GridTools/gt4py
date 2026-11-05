@@ -16,7 +16,7 @@ from gt4py.cartesian.gtc import passes
 from gt4py.cartesian.gtc.debug.debug_codegen import DebugCodeGen
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.passes import oir_optimizations
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 from gt4py.storage import layout
 from gt4py.storage.cartesian import layout_registry
 
@@ -45,7 +45,7 @@ class DebugBackend(backend.BaseBackend):
         source_code = DebugCodeGen().visit(oir)
 
         if self.builder.options.format_source:
-            source_code = codegen.format_source("python", source_code)
+            source_code = formatting.format_python_source(source_code)
 
         caching = self.builder.caching
         computation_name = f"{caching.module_prefix}computation{caching.module_postfix}.py"

@@ -9,10 +9,9 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+from typing import Any, Final, Optional
 
 import dace
-import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -340,6 +339,13 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
+#: The parameters of `gt_auto_optimize()` that the translation step derives from
+#: its own configuration, and which therefore cannot be customized.
+_DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
+    {"gpu", "constant_symbols", "unit_strides_kind"}
+)
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
@@ -358,9 +364,16 @@ class DaCeTranslator(
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
-    disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.auto_optimize_args and (
+            derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS
+        ):
+            raise ValueError(
+                f"The following optimization arguments cannot be overridden: {derived_args}."
+            )
 
     def generate_sdfg(
         self,
@@ -376,12 +389,11 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(
-                ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-                offset_provider=offset_provider,
-            )
+        ir = itir_transforms.apply_fieldview_transforms(
+            ir,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            offset_provider=offset_provider,
+        )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -402,6 +414,11 @@ class DaCeTranslator(
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols=constant_symbols,
+                unit_strides_kind=(
+                    common.DimensionKind.HORIZONTAL
+                    if self.unstructured_horizontal_has_unit_stride
+                    else None
+                ),
                 **auto_optimize_args,
             )
         elif on_gpu:
@@ -419,13 +436,6 @@ class DaCeTranslator(
 
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
-            # Replacing the SDFG symbols for field origin in global arrays is strictly
-            # required by dace orchestration, which runs the translation stage
-            # with `disable_field_origin_on_program_arguments=True`. The program
-            # decorator used by dace orchestartion cannot handle field origin.
-            # It also requires skipping auto-optimize on the `SDFGConvertible` objects,
-            # because it targets the full-application SDFG, so we have to explicitly
-            # apply `gt_substitute_compiletime_symbols()` here.
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
@@ -467,8 +477,3 @@ class DaCeTranslator(
             code_spec=artifacts.SDFGCodeSpec(),
         )
         return module
-
-
-class DaCeTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeTranslator

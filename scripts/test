@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --only-group scripts --only-group test python3
 #
 # GT4Py - GridTools Framework
 #
@@ -76,7 +76,8 @@ if __name__ == "__main__":
             typer.Argument(help="Pytest arguments to forward. Pass them after '--'."),
         ] = None,
     ):
-        cmd = ["pytest", *(pytest_args or [])]
+        # Run pytest from this script's environment, not whatever 'pytest' is on PATH.
+        cmd = [sys.executable, "-m", "pytest", *(pytest_args or [])]
         base_dir = common.SCRIPTS_DIR / "tests" / "python"
         rich.print(f"Running: {base_dir} $ {' '.join(cmd)}\n")
         result = subprocess.run(cmd, cwd=base_dir)

@@ -18,11 +18,18 @@ path = "gt4py.cartesian"
 depends_on = [
     { path = "gt4py._core" },
     { path = "gt4py.eve" },
+    { path = "gt4py.eve.formatting" },
     { path = "gt4py.storage" },
 ]
 
 [[modules]]
 path = "gt4py.eve"
+depends_on = []
+
+# Separate module so that only `gt4py.cartesian` can use the best-effort
+# generated-code formatting (optional `black`/`clang-format` dependencies).
+[[modules]]
+path = "gt4py.eve.formatting"
 depends_on = []
 
 [[modules]]

@@ -11,11 +11,9 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Final, Optional
 
-import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
@@ -48,7 +46,9 @@ class GTFNTranslationStep(
     code_spec: Optional[artifacts.HeaderAndSourceCodeSpec] = None
     # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     enable_itir_transforms: bool = True
-    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    # No default: the device must agree with the other steps of the pipeline, so
+    # forgetting to pass it must fail instead of silently targeting the CPU.
+    device_type: core_defs.DeviceType = dataclasses.field(kw_only=True)
     symbolic_domain_sizes: dict[str, itir.Expr] | None = None
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
@@ -171,8 +171,7 @@ class GTFNTranslationStep(
             column_axis=column_axis,
         )
 
-        generated_code = GTFNCodegen.apply(gtfn_ir)
-        return codegen.format_source("cpp", generated_code, style="LLVM")
+        return GTFNCodegen.apply(gtfn_ir)
 
     def __call__(
         self, inp: stages.CompilableProgramDef
@@ -209,14 +208,13 @@ class GTFNTranslationStep(
             inp.args.offset_provider,
             inp.args.column_axis,
         )
-        source_code = artifacts.format_source(
-            self._code_spec(),
-            f"""
-                    #include <{self._backend_header()}>
-                    #include <gridtools/sid/dimension_to_tuple_like.hpp>
-                    {stencil_src}
-                    {decl_src}
-                    """.strip(),
+        source_code = "\n".join(
+            [
+                f"#include <{self._backend_header()}>",
+                "#include <gridtools/sid/dimension_to_tuple_like.hpp>",
+                stencil_src,
+                decl_src,
+            ]
         )
 
         module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
@@ -265,13 +263,10 @@ class GTFNTranslationStep(
         )
 
 
-class GTFNTranslationStepFactory(factory.Factory[GTFNTranslationStep]):
-    class Meta:
-        model = GTFNTranslationStep
+translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStep(
+    device_type=core_defs.DeviceType.CPU
+)
 
-
-translate_program_cpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory()  # type: ignore[assignment] # factory-boy typing not precise enough
-
-translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStepFactory(  # type: ignore[assignment] # factory-boy typing not precise enough
+translate_program_gpu: Final[stages.TranslationStep] = GTFNTranslationStep(
     device_type=core_defs.DeviceType.CUDA
 )

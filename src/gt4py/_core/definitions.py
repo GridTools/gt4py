@@ -14,22 +14,14 @@ import enum
 import functools
 import math
 import numbers
-
-import numpy as np
-import numpy.typing as npt
-
-import gt4py.eve as eve
-from gt4py._core import types as core_types
-from gt4py.eve.extended_typing import (
+from collections.abc import Iterator, Sequence
+from typing import (
     TYPE_CHECKING,
     Any,
     Final,
     Generic,
-    Iterator,
     Literal,
-    Protocol,
     Self,
-    Sequence,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -37,6 +29,13 @@ from gt4py.eve.extended_typing import (
     cast,
     overload,
 )
+
+import numpy as np
+import numpy.typing as npt
+from typing_extensions import Protocol
+
+import gt4py.eve as eve
+from gt4py._core import types as core_types
 
 
 try:

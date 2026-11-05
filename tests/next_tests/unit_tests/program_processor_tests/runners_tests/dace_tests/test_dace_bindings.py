@@ -12,7 +12,7 @@ import functools
 import dace
 import numpy as np
 import pytest
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 
 from gt4py import next as gtx
 from gt4py.next import common as gtx_common, int32
@@ -238,7 +238,7 @@ def mocked_compile_call(
         for line in inp.binding_source.source_code.splitlines()
         if not line.lstrip().startswith("assert")
     )
-    assert codegen.format_python_source(binding_source_pruned) == binding_source_ref
+    assert formatting.format_python_source(binding_source_pruned) == binding_source_ref
     return _dace_compile_call(self, inp)
 
 
@@ -294,10 +294,12 @@ def test_cartesian_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     ):
         testee_op(a, b, out=out, domain={IDim: (1, M - 1), JDim: (2, N - 2), KDim: (3, K - 3)})
 
-    backend = dace_runner.make_dace_backend(
-        gpu=False,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+    backend = dace_runner.make_dace_toolchain(
+        translation=functools.partial(
+            dace_runner.make_dace_translator,
+            use_metrics=use_metrics,
+            disable_field_origin_on_program_arguments=use_zero_origin,
+        )
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,
@@ -348,10 +350,12 @@ def test_unstructured_bind_sdfg(use_metrics, use_zero_origin, monkeypatch):
     def testee(a: cases.VField, b: cases.VField):
         testee_op(a, out=b)
 
-    backend = dace_runner.make_dace_backend(
-        gpu=False,
-        use_metrics=use_metrics,
-        use_zero_origin=use_zero_origin,
+    backend = dace_runner.make_dace_toolchain(
+        translation=functools.partial(
+            dace_runner.make_dace_translator,
+            use_metrics=use_metrics,
+            disable_field_origin_on_program_arguments=use_zero_origin,
+        )
     )
     monkeypatch.setattr(
         dace_workflow.compilation.DaCeCompiler,

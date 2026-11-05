@@ -8,12 +8,13 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Dict, Final, Mapping, Optional, TypeVar
 
 import dace
 
 from gt4py import eve
-from gt4py.eve.extended_typing import NestedTuple
+from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common as gtx_common, utils as gtx_utils
 from gt4py.next.iterator import ir as gtir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -23,6 +24,13 @@ from gt4py.next.type_system import type_specifications as ts
 
 _TASKLET_CONNECTOR_PREFIX: Final[str] = "__tlet_"
 """Prefix string to be used for tasklet connectors."""
+
+
+def as_global_desc(desc: dace.data.Data) -> dace.data.Data:
+    """Returns a non-transient copy of `desc`, to be used as nested SDFG connector."""
+    global_desc = copy.deepcopy(desc)
+    global_desc.transient = False
+    return global_desc
 
 
 def debug_info(

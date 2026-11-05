@@ -134,12 +134,12 @@ def test_gtfn_file_cache(program_example):
         data=fencil,
         args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
     )
-    cached_gtfn_translation_step = gtfn.GTFNCompileWorkflowFactory(
-        cached_translation=True
+    cached_gtfn_translation_step = gtfn.make_gtfn_compile_workflow(
+        gtfn.GTFNConfig(cached_translation=True)
     ).translation
 
-    bare_gtfn_translation_step = gtfn.GTFNCompileWorkflowFactory(
-        cached_translation=False
+    bare_gtfn_translation_step = gtfn.make_gtfn_compile_workflow(
+        gtfn.GTFNConfig(cached_translation=False)
     ).translation
 
     cache_key = cached_gtfn_translation_step.cache_key(compilable_program)

@@ -129,7 +129,7 @@ _VALID_DATA_TYPES = (
 )
 
 
-def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
+def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[str, Type]):
     def _parse_annotation(arg, annotation):
         # This function evaluates the type hint 'annotation' for the stencil argument 'arg'.
         # Note that 'typing.get_type_hints()' cannot be used here since field

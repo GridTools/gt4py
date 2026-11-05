@@ -9,10 +9,11 @@
 from __future__ import annotations
 
 import typing
+from collections.abc import Callable
+from typing import Optional, TypeAlias, TypeVar, Unpack
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Callable, Optional, TypeAlias, TypeVar, Unpack
 from gt4py.next import common, utils as gtx_utils
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import (
