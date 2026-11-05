@@ -660,12 +660,27 @@ def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
+def _check_equal_tuple_lengths(builtin_name: str, args: tuple[ts.TupleType, ...]) -> None:
+    lengths = {len(arg.types) for arg in args}
+    if len(lengths) != 1:
+        raise ValueError(
+            f"Element-wise operation '{builtin_name}' requires all tuples to have the same "
+            f"length, got lengths {sorted(lengths)}."
+        )
+
+
 def _make_tuple_map_synthesizer(
     builtin_name: str, *, recursive: bool
 ) -> Callable[..., TypeOrTypeSynthesizer]:
-    """Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level)."""
+    """
+    Shared implementation for `tree_map_tuple` (recursive) and `map_tuple` (top-level).
 
-    def tuple_map_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
+    `tree_map_tuple` maps a single tuple recursively. `map_tuple` maps the top-level elements
+    of one or more tuples in lockstep (a zip): `op` is applied to the i-th element of each
+    tuple, so all tuples must have the same length.
+    """
+
+    def recursive_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
         @type_synthesizer
         def applied_map(
             arg: ts.TupleType, offset_provider_type: common.OffsetProviderType
@@ -676,16 +691,31 @@ def _make_tuple_map_synthesizer(
                 )
 
             bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
-
-            if recursive:
-                return type_info.tree_map_type(bound_op)(arg)  # type: ignore[return-value]
-
-            # Non-recursive: apply `op` once per top-level element.
-            return ts.TupleType(types=[bound_op(el) for el in arg.types])
+            return type_info.tree_map_type(bound_op)(arg)  # type: ignore[return-value]
 
         return applied_map
 
-    return tuple_map_synthesizer
+    def zip_synthesizer(op: TypeSynthesizer) -> TypeSynthesizer:
+        @type_synthesizer
+        def applied_map(
+            *args: ts.TupleType, offset_provider_type: common.OffsetProviderType
+        ) -> ts.TupleType:
+            if not all(isinstance(arg, ts.TupleType) for arg in args):
+                raise TypeError(
+                    f"'{builtin_name}' requires 'TupleType' arguments, got: "
+                    f"{[type(arg).__name__ for arg in args]}."
+                )
+
+            _check_equal_tuple_lengths(builtin_name, args)
+            bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
+            # Apply `op` once per top-level element, zipping the tuples in lockstep.
+            return ts.TupleType(
+                types=[bound_op(*(arg.types[i] for arg in args)) for i in range(len(args[0].types))]
+            )
+
+        return applied_map
+
+    return recursive_synthesizer if recursive else zip_synthesizer
 
 
 tree_map_tuple = _register_builtin_type_synthesizer(

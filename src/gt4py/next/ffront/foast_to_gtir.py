@@ -675,29 +675,25 @@ def _map_elementwise(
     var_len_tuple_indices = [
         i for i, t in enumerate(original_arg_types) if isinstance(t, ts.XVarLenTupleType)
     ]
-    if len(var_len_tuple_indices) > 1:
-        # Type deduction accepts this combination (the runtime lengths are unknown there and
-        # embedded execution supports it), but `map_tuple` maps over a single tuple only.
-        # TODO(tehrengruber): Support this.
-        raise FieldOperatorLoweringError(
-            "Element-wise operations between multiple variable-length tuples are not supported."
-        )
-    (var_len_tuple_index,) = var_len_tuple_indices
-    var_len_tuple_type = original_arg_types[var_len_tuple_index]
-    assert isinstance(var_len_tuple_type, ts.XVarLenTupleType)
-    param = next(uids["__elementwise"])
+    # One lambda parameter per variable-length tuple; `map_tuple` zips their elements in
+    # lockstep (expanded into a fixed-length `make_tuple` by 'ExpandTupleMaps' once the
+    # concrete lengths are known), while non-tuple arguments are broadcast to every element.
+    params = [next(uids["__elementwise"]) for _ in var_len_tuple_indices]
+    param_by_index = dict(zip(var_len_tuple_indices, params))
     body = _map(
         op,
         tuple(
-            im.ref(param) if i == var_len_tuple_index else arg for i, arg in enumerate(lowered_args)
+            im.ref(param_by_index[i]) if i in param_by_index else arg
+            for i, arg in enumerate(lowered_args)
         ),
         tuple(
-            var_len_tuple_type.element_type if i == var_len_tuple_index else t
-            for i, t in enumerate(original_arg_types)
+            t.element_type if isinstance(t, ts.XVarLenTupleType) else t for t in original_arg_types
         ),
         uids=uids,
     )
-    return im.call(im.call("map_tuple")(im.lambda_(param)(body)))(lowered_args[var_len_tuple_index])
+    return im.call(im.call("map_tuple")(im.lambda_(*params)(body)))(
+        *(lowered_args[i] for i in var_len_tuple_indices)
+    )
 
 
 def _map(
