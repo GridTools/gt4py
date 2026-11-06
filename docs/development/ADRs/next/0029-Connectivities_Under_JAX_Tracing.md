@@ -34,6 +34,7 @@ How a `premap` behaves under `jit` depends on how its connectivity reaches the c
 
 - Domains under `jit` match eager execution when the table is concrete or has a handle.
 - A table computed from traced values behaves differently from eager execution when a target is out of range. Eagerly, a uniform offset narrows the domain and a non-contiguous one raises. Under `jit` the domain stays as it is and those targets read the field's boundary value, without an error.
+- The clamp is only partly redundant with jax's own indexing, which clamps indices past the end but wraps negative ones as NumPy does. It compiles to an extra clamp next to the select jax emits for negative indices. A gather with `mode="clip", wrap_negative_indices=False` clamps both ends with no extra operations; whether that makes jax code faster is still to be investigated.
 - Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached per buffer. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
 
