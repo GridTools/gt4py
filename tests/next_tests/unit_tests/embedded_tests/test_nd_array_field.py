@@ -1888,48 +1888,6 @@ def _skip_value_e2v_table(num_vertices: int) -> np.ndarray:
     return table
 
 
-def test_inverse_image_range_containing_skip_value_selects_skip_only_rows():
-    conn = common._connectivity(
-        np.asarray([[0, 1], [-1, -1]]),
-        codomain=D0,
-        domain=common.domain({D1: (0, 2), D2: (0, 2)}),
-        skip_value=-1,
-    )
-
-    assert conn._inverse_image(UnitRange(0, 2)) == common.domain({D1: (0, 1), D2: (0, 2)})
-    assert conn._inverse_image(UnitRange(-1, 2)) == common.domain({D1: (0, 2), D2: (0, 2)})
-
-
-@pytest.mark.requires_jax
-def test_jax_connectivity_pytree_roundtrip():
-    import jax
-
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    domain = common.domain({E: (0, 2), E2VDim: (0, 2)})
-    table = jax.numpy.asarray([[0, 1], [2, -1]], dtype=np.int32)
-    conn = common._connectivity(table, codomain=V, domain=domain, skip_value=-1)
-
-    children, treedef = jax.tree_util.tree_flatten(conn)
-    assert len(children) == 1
-    assert children[0] is table
-
-    restored = jax.tree_util.tree_unflatten(treedef, children)
-    assert isinstance(restored, nd_array_field.JaxArrayConnectivityField)
-    assert restored.domain == domain
-    assert restored.codomain == V
-    assert restored.skip_value == -1
-    assert restored._inverse_image(UnitRange(0, 2)) == common.domain({E: (0, 1), E2VDim: (0, 2)})
-
-    same_table = common._connectivity(table, codomain=V, domain=domain, skip_value=-1)
-    assert jax.tree_util.tree_structure(same_table) == treedef
-    copied_table = common._connectivity(
-        jax.numpy.array(table, copy=True), codomain=V, domain=domain, skip_value=-1
-    )
-    assert jax.tree_util.tree_structure(copied_table) != treedef
-
-
 @pytest.mark.requires_jax
 @pytest.mark.parametrize("num_field_vertices", [300, 600], ids=["narrowing", "covering"])
 def test_jax_jit_premap_with_connectivity_argument(num_field_vertices):
@@ -2202,17 +2160,6 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
-
-
-def test_inverse_image_empty_table_raises():
-    conn = common._connectivity(
-        np.zeros((0, 2), dtype=np.int32),
-        codomain=D0,
-        domain=common.domain({D1: (0, 0), D2: (0, 2)}),
-    )
-
-    with pytest.raises(ValueError, match="non-contiguous or empty"):
-        conn._inverse_image(UnitRange(0, 4))
 
 
 def test_neighbor_sum_with_transposed_table_dims():

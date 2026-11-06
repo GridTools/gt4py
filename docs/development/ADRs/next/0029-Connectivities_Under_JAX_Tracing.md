@@ -6,8 +6,8 @@ tags: [embedded, jax, connectivities]
 
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
-- **Created**: 2026-10-30
-- **Updated**: 2026-10-30
+- **Created**: 2026-11-06
+- **Updated**: 2026-11-06
 
 In the context of running embedded `premap` under `jax.jit`, facing a neighbor table that must be a runtime argument for the gather but concrete for domain inference, we decided to register jax connectivities as pytree nodes that carry a handle to the concrete table, to get the same narrowing as eager execution without compiling tables into the program. We accept a table reference held by jax's jit cache and a silent clamp when the table is only known at runtime.
 
