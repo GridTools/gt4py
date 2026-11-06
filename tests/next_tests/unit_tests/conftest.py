@@ -112,11 +112,21 @@ ND_ARRAY_IMPLEMENTATIONS: Final[list[ModuleType]] = [
     np,
     *_optional_module("cupy"),
     *_optional_module("jax.numpy"),
+    *_optional_module("array_api_strict"),
 ]
 
 
 def is_cupy(xp: ModuleType) -> bool:
     return xp.__name__ == "cupy"
+
+
+def is_array_api_strict(xp: ModuleType) -> bool:
+    return xp.__name__ == "array_api_strict"
+
+
+def asarray(xp: ModuleType, data, dtype=None):
+    """`xp.asarray` with a NumPy-style `dtype`, translated to the namespace's own dtype object."""
+    return xp.asarray(data, dtype=None if dtype is None else getattr(xp, np.dtype(dtype).name))
 
 
 def nd_array_implementation_params():

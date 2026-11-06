@@ -31,7 +31,12 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
-from next_tests.unit_tests.conftest import ND_ARRAY_IMPLEMENTATIONS, is_cupy
+from next_tests.unit_tests.conftest import (
+    ND_ARRAY_IMPLEMENTATIONS,
+    asarray,
+    is_array_api_strict,
+    is_cupy,
+)
 
 
 D0 = Dimension("D0")
@@ -83,7 +88,7 @@ def _make_field_or_scalar(
         dtype = np.float32
     if isinstance(lst, core_defs.SCALAR_TYPES):
         return dtype(lst)
-    buffer = nd_array_implementation.asarray(lst, dtype=dtype)
+    buffer = asarray(nd_array_implementation, lst, dtype=dtype)
     if domain is None:
         domain = _make_default_domain(buffer.shape)
     return common._field(buffer, domain=domain)
@@ -108,7 +113,7 @@ def are_equal_fields(a: Field, b: Field) -> bool:
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
-    data = nd_array_implementation.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+    data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = constructors.as_field((D0, D1), data)
 
     field_ndarray = field.ndarray
@@ -126,6 +131,9 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
         assert field_ndarray is not field.ndarray
 
 
+_NOT_IN_ARRAY_API = ("fmod", "cbrt", "gamma")
+
+
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementation):
     if builtin_name == "gamma":
@@ -140,6 +148,10 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
     field_inputs = [_make_field_or_scalar(inp, nd_array_implementation) for inp in inputs]
 
     builtin = getattr(fbuiltins, builtin_name)
+    if is_array_api_strict(nd_array_implementation) and builtin_name in _NOT_IN_ARRAY_API:
+        with pytest.raises(NotImplementedError, match=builtin_name):
+            builtin(*field_inputs)
+        return
     result = builtin(*field_inputs)
 
     assert np.allclose(result.ndarray, expected)
@@ -151,7 +163,8 @@ def test_where_builtin(nd_array_implementation):
     false_ = np.asarray([3.0, 4.0], dtype=np.float32)
 
     field_inputs = [
-        _make_field_or_scalar(inp, nd_array_implementation) for inp in [cond, true_, false_]
+        _make_field_or_scalar(cond, nd_array_implementation, dtype=bool),
+        *(_make_field_or_scalar(inp, nd_array_implementation) for inp in [true_, false_]),
     ]
     expected = np.where(cond, true_, false_)
 
@@ -164,13 +177,16 @@ def test_where_builtin_different_domain(nd_array_implementation):
     true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
     false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
 
-    cond_field = common._field(nd_array_implementation.asarray(cond), domain=common.domain({D1: 2}))
+    cond_field = common._field(
+        asarray(nd_array_implementation, cond), domain=common.domain({D1: 2})
+    )
     true_field = common._field(
-        nd_array_implementation.asarray(true_),
+        asarray(nd_array_implementation, true_),
         domain=common.domain({D0: common.UnitRange(0, 2), D1: common.UnitRange(-1, 2)}),
     )
     false_field = common._field(
-        nd_array_implementation.asarray(false_), domain=common.domain({D1: common.UnitRange(-1, 3)})
+        asarray(nd_array_implementation, false_),
+        domain=common.domain({D1: common.UnitRange(-1, 3)}),
     )
 
     expected = np.where(cond[np.newaxis, :], true_[:, 1:], false_[np.newaxis, 1:-1])
@@ -289,7 +305,7 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
 
 def test_as_scalar(nd_array_implementation):
     testee = common._field(
-        nd_array_implementation.asarray(42.0, dtype=np.float32), domain=common.Domain()
+        asarray(nd_array_implementation, 42.0, dtype=np.float32), domain=common.Domain()
     )
 
     result = testee.as_scalar()
@@ -313,8 +329,8 @@ def product_nd_array_implementation(request):
 
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
-    if "numpy" in first_impl.__name__ and "cupy" in second_impl.__name__:
-        pytest.skip("Binary operation between NumPy and CuPy requires explicit conversion.")
+    if not is_cupy(first_impl) and is_cupy(second_impl):
+        pytest.skip("Binary operation between a CPU library and CuPy requires explicit conversion.")
 
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]

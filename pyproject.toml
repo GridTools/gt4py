@@ -43,6 +43,7 @@ profiling = [
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
+  'array-api-strict>=2.4',
   'black>=25.11',
   'clang-format>=18.1',
   'factory-boy>=3.3.3',
