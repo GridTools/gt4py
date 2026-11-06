@@ -54,6 +54,12 @@ class NumPyOps(array_ops.ArrayOps):
             return _np_gamma
         return super()._elementwise(name)
 
+    def setitem(
+        self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
+    ) -> core_defs.NDArrayObject:
+        array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
+        return array
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 
@@ -74,6 +80,12 @@ class CuPyOps(array_ops.ArrayOps):
 
             return cupyx.scipy.special.gamma
         return super()._elementwise(name)
+
+    def setitem(
+        self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
+    ) -> core_defs.NDArrayObject:
+        array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
+        return array
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         import cupy as cp
@@ -139,13 +151,6 @@ class TorchOps(array_ops.ArrayOps):
 
             return gamma
         return super()._elementwise(name)
-
-    def setitem(
-        self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
-    ) -> core_defs.NDArrayObject:
-        if not isinstance(value, self._torch.Tensor | int | float | bool):
-            value = self.asarray(value, like=array)
-        return super().setitem(array, key, value)
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return array.detach().cpu().numpy()  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete

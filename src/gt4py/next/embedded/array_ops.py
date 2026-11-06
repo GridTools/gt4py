@@ -163,6 +163,11 @@ class ArrayOps:
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
         """Write `value` into `array[key]`; returns the array holding the result."""
+        if not isinstance(value, bool | int | float):
+            # the standard leaves assigning another dtype or device unspecified
+            value = self.xp.asarray(value, device=self.device(array))
+            if value.dtype != array.dtype:
+                value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 

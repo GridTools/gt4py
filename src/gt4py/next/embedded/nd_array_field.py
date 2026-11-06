@@ -427,13 +427,28 @@ class NdArrayField(
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
-        slice_ = (
-            _get_slices_from_domain_slice(self.domain, index_sequence)
-            if common.is_absolute_index_sequence(index_sequence)
-            else index_sequence
-        )
-        assert common.is_relative_index_sequence(slice_)
-        return new_domain, slice_
+        if common.is_absolute_index_sequence(index_sequence):
+            return new_domain, _broadcast_axes_slice(
+                _get_slices_from_domain_slice(self.domain, index_sequence),
+                self.domain,
+                self._ndarray.shape,
+            )
+        assert common.is_relative_index_sequence(index_sequence)
+        if len(index_sequence) < self._ndarray.ndim and Ellipsis not in index_sequence:
+            return new_domain, (*index_sequence, Ellipsis)
+        return new_domain, index_sequence
+
+
+def _broadcast_axes_slice(
+    slice_: common.RelativeIndexSequence, domain: common.Domain, shape: tuple[int, ...]
+) -> common.RelativeIndexSequence:
+    """`slice_` with every index into a size-1 axis spanning a longer range (a broadcast axis) reading its only element."""
+    return tuple(
+        (slice(None) if isinstance(s, slice) else 0)
+        if size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
+        else s
+        for s, size, rng in zip(slice_, shape, domain.ranges, strict=True)
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -645,7 +660,7 @@ def _identity_index_array(
         dtype=None if dtype is None else ops.dtype(dtype),
         device=ops.device(like),
     )
-    shape = tuple(len(indices) if i == d_idx else 1 for i in range(len(domain)))
+    shape = tuple(len(unit_range) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
 
