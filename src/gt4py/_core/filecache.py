@@ -16,10 +16,6 @@ from gt4py._core import file_utils, locking
 from gt4py.eve import utils as eve_utils
 
 
-def _file_identity(stat: os.stat_result) -> tuple[int, ...]:
-    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
-
-
 class FileCache:
     """
     Dictionary-like object for persistently caching objects on disk.
@@ -40,28 +36,28 @@ class FileCache:
         # Lock-free: entries are only ever replaced atomically, so a reader sees
         # either a complete entry or none.
         path = self._get_path(key)
-        identity = None
         try:
-            with open(path, "rb") as f:
-                identity = _file_identity(os.fstat(f.fileno()))
+            f = open(path, "rb")
+        except OSError as e:
+            raise KeyError(key) from e
+        with f:
+            try:
                 return pickle.load(f)
-        except FileNotFoundError as e:
-            raise KeyError(key) from e
-        except (EOFError, pickle.UnpicklingError, OSError, AttributeError, ImportError) as e:
-            # An interrupted write can leave a truncated/corrupt entry. Treat it as a
-            # miss and drop it so the caller recomputes it, unless a writer has
-            # replaced it in the meantime.
-            if identity is not None:
-                self._evict_if_unchanged(path, identity)
-            raise KeyError(key) from e
+            except (EOFError, pickle.UnpicklingError, OSError, AttributeError, ImportError) as e:
+                # An interrupted write can leave a truncated/corrupt entry. Treat it as a
+                # miss and drop it so the caller recomputes it, unless a writer has
+                # replaced it in the meantime. Evicting while the file is still open
+                # keeps its inode from being reused by such a replacement.
+                self._evict_if_unchanged(path, os.fstat(f.fileno()))
+                raise KeyError(key) from e
 
-    def _evict_if_unchanged(self, path: pathlib.Path, identity: tuple[int, ...]) -> None:
+    def _evict_if_unchanged(self, path: pathlib.Path, opened: os.stat_result) -> None:
         with locking.lock(path):
             try:
-                current = _file_identity(path.stat())
+                current = path.stat()
             except FileNotFoundError:
                 return
-            if current == identity:
+            if (current.st_dev, current.st_ino) == (opened.st_dev, opened.st_ino):
                 path.unlink(missing_ok=True)
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
@@ -70,10 +66,11 @@ class FileCache:
             file_utils.atomic_write_bytes(path, pickle.dumps(value, protocol=5))
 
     def __delitem__(self, key: Hashable) -> None:
-        if key not in self:
-            raise KeyError(key)
         with locking.lock(path := self._get_path(key)):
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError as e:
+                raise KeyError(key) from e
 
     def __contains__(self, key: Hashable) -> bool:
         return self._get_path(key).exists()

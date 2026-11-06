@@ -119,3 +119,17 @@ def test_corrupt_entry_replaced_during_read_is_kept(temp_cache, monkeypatch):
     monkeypatch.setattr(filecache.pickle, "load", original_load)
 
     assert temp_cache[key] == {"a": 2}
+
+
+def test_delete_item_removed_concurrently_raises_keyerror(temp_cache, monkeypatch):
+    key = "raced_delete"
+    temp_cache[key] = 1
+    real_lock = filecache.locking.lock
+
+    def lock_after_concurrent_delete(path):
+        temp_cache._get_path(key).unlink()
+        return real_lock(path)
+
+    monkeypatch.setattr(filecache.locking, "lock", lock_after_concurrent_delete)
+    with pytest.raises(KeyError):
+        del temp_cache[key]
