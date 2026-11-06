@@ -9,6 +9,7 @@
 import math
 import operator
 import pickle
+import re
 from typing import Callable, Iterable, Optional
 
 import numpy as np
@@ -25,7 +26,11 @@ from gt4py.next.common import (
     NamedRange,
     UnitRange,
 )
-from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
+from gt4py.next.embedded import (
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+    nd_array_field,
+)
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset
@@ -1343,7 +1348,7 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
         codomain=V,
     )
 
-    _ = e2v_conn.inverse_image(UnitRange(2, 5))
+    _ = e2v_conn._inverse_image(UnitRange(2, 5))
     assert "_cache" in e2v_conn.__dict__
 
     _ = e2v_conn.__gt_buffer_info__
@@ -1394,6 +1399,9 @@ def test_connectivity_field_inverse_image():
         codomain=V,
     )
 
+    # the table is [9, 0, 1, ..., 8]: values 2..6 sit at positions 3..7
+    assert e2v_conn._inverse_image(UnitRange(V_START, V_STOP)) == common.domain({E: (3, 8)})
+
 
 def test_connectivity_field_inverse_image_2d_domain():
     V = Dimension("V")
@@ -1425,32 +1433,32 @@ def test_connectivity_field_inverse_image_2d_domain():
     # For the 'c2v_conn' defined above, the only valid range including 2
     # is [0, 3). Otherwise, the inverse image would be non-contiguous.
     image_range = UnitRange(V_START, V_STOP)
-    result = c2v_conn.inverse_image(image_range)
+    result = c2v_conn._inverse_image(image_range)
 
     assert len(result) == 2
     assert result[0] == (C, UnitRange(C_START, C_STOP))
     assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn._inverse_image(UnitRange(0, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn._inverse_image(UnitRange(0, 1))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 1))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn._inverse_image(UnitRange(1, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn._inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn._inverse_image(UnitRange(2, 3))
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
@@ -1466,14 +1474,14 @@ def test_connectivity_field_inverse_image_non_contiguous():
         codomain=V,
     )
 
-    result = e2v_conn.inverse_image(UnitRange(V_START, 5))
+    result = e2v_conn._inverse_image(UnitRange(V_START, 5))
     assert result[0] == (E, UnitRange(V_START, 5))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, 6))
+        e2v_conn._inverse_image(UnitRange(V_START, 6))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
+        e2v_conn._inverse_image(UnitRange(V_START, V_STOP))
 
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
@@ -1505,32 +1513,32 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
     #  | [-1  2 -1 -1]]
 
     image_range = UnitRange(V_START, V_STOP)
-    result = c2v_conn.inverse_image(image_range)
+    result = c2v_conn._inverse_image(image_range)
 
     assert len(result) == 2
     assert result[0] == (C, UnitRange(C_START, C_STOP))
     assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn._inverse_image(UnitRange(0, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn._inverse_image(UnitRange(0, 1))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(0, 1))
     assert result[1] == (C2V, UnitRange(1, 2))
 
-    result = c2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn._inverse_image(UnitRange(1, 2))
     assert len(result) == 2
     assert result[0] == (C, UnitRange(1, 2))
     assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn._inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous"):
-        result = c2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn._inverse_image(UnitRange(2, 3))
 
 
 @pytest.mark.parametrize(
@@ -1760,6 +1768,25 @@ def test_concat(fields_data, dim, expected_data, expect_error):
         np.testing.assert_allclose(result.asnumpy(), expected_array)
 
 
+def test_neighbor_sum_after_narrowing_premap():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    e2v = common._connectivity(
+        np.asarray([[0, 1], [2, -1], [4, 5], [6, 7]]),
+        codomain=V,
+        domain=common.domain({E: (0, 4), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+    v_field = common._field(np.arange(1.0, 5.0), domain=common.domain({V: (0, 4)}))
+
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        result = fbuiltins.neighbor_sum(v_field.premap(e2v), axis=E2VDim)
+
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [3.0, 3.0])
+
+
 @pytest.mark.requires_jax
 def test_jax_jit_field_arguments():
     import jax
@@ -1825,3 +1852,365 @@ def test_jax_traced_array_dispatch():
         return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
 
     np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)
+
+
+@pytest.mark.requires_jax
+def test_jax_grad_through_premap_with_skip_values():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    e2v = common._connectivity(
+        jax.numpy.asarray([[0, 1], [2, -1]], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+
+    def loss(x):
+        field = common._field(x, domain=common.domain({V: (0, 4)}))
+        with embedded_context.update(offset_provider={"E2V": e2v}):
+            result = fbuiltins.neighbor_sum(fbuiltins.sqrt(field.premap(e2v)), axis=E2VDim)
+        return jax.numpy.sum(result.ndarray)
+
+    x = jax.numpy.asarray([4.0, 9.0, 16.0, -1.0])
+
+    np.testing.assert_allclose(loss(x), 9.0)
+    np.testing.assert_allclose(jax.grad(loss)(x), [0.25, 1.0 / 6.0, 0.125, 0.0])
+
+
+def _skip_value_e2v_table(num_vertices: int) -> np.ndarray:
+    """Two edges per vertex, both entries equal, every seventh second entry a skip value."""
+    vertex = np.arange(4 * num_vertices) // 2
+    table = np.stack([vertex, vertex], axis=1).astype(np.int32)
+    table[::7, 1] = -1
+    return table
+
+
+@pytest.mark.requires_jax
+@pytest.mark.parametrize("num_field_vertices", [300, 600], ids=["narrowing", "covering"])
+def test_jax_jit_premap_with_connectivity_argument(num_field_vertices):
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = _skip_value_e2v_table(300)
+    conn_domain = common.domain({E: (0, table.shape[0]), E2VDim: (0, 2)})
+    field_domain = common.domain({V: (0, num_field_vertices)})
+
+    def premap_and_reduce(field, conn):
+        with embedded_context.update(offset_provider={"E2V": conn}):
+            return fbuiltins.neighbor_sum(field.premap(conn), axis=E2VDim)
+
+    expected = premap_and_reduce(
+        common._field(np.arange(num_field_vertices, dtype=np.float64), domain=field_domain),
+        common._connectivity(table, codomain=V, domain=conn_domain, skip_value=-1),
+    )
+
+    jitted = jax.jit(premap_and_reduce)
+    field = common._field(
+        jax.numpy.arange(num_field_vertices, dtype=np.float64), domain=field_domain
+    )
+    conn = common._connectivity(
+        jax.numpy.asarray(table), codomain=V, domain=conn_domain, skip_value=-1
+    )
+    result = jitted(field, conn)
+
+    assert result.domain == expected.domain
+    np.testing.assert_allclose(result.asnumpy(), expected.asnumpy())
+
+    stablehlo = jitted.lower(field, conn).as_text()
+    main_arguments = re.search(r"@main\(([^)]*)\)", stablehlo).group(1)
+    assert f"tensor<{table.shape[0]}x2xi32>" in main_arguments
+    # large constants print as hex
+    assert 'dense<"0x' not in stablehlo
+    assert 'dense<"0x' in jax.jit(lambda field: field.premap(conn)).lower(field).as_text()
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_closed_over_restricted_connectivity():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [1, 0], [2, 2]], dtype=np.int32)
+    conn = common._connectivity(
+        jax.numpy.asarray(table),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
+
+    result = jax.jit(lambda field: field.premap(conn[common.NamedIndex(E2VDim, 1)]))(field)
+
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [20.0, 10.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_as_offset_computed_in_trace():
+    import jax
+
+    from gt4py.next.ffront import experimental
+
+    C = Dimension("C")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({C: (0, 2), K: (0, 4)})
+    values = np.arange(8, dtype=np.float64).reshape(2, 4)
+    offsets = np.asarray([[1, 1, 0, -1], [0, 2, 1, 0]], dtype=np.int32)
+
+    def shifted(field, offset_field):
+        return field.premap(experimental.as_offset(Koff, offset_field))
+
+    field = common._field(jax.numpy.asarray(values), domain=domain)
+    offset_field = common._field(jax.numpy.asarray(offsets), domain=domain)
+    expected = shifted(field, offset_field)
+
+    result = jax.jit(shifted)(field, offset_field)
+
+    assert result.domain == domain
+    np.testing.assert_array_equal(result.asnumpy(), expected.asnumpy())
+    np.testing.assert_array_equal(
+        result.asnumpy(), np.take_along_axis(values, np.arange(4) + offsets, axis=1)
+    )
+
+    # out-of-range targets read the boundary value under a trace
+    beyond = common._field(jax.numpy.asarray(np.full((2, 4), 3, dtype=np.int32)), domain=domain)
+    np.testing.assert_array_equal(
+        jax.jit(shifted)(field, beyond).asnumpy(), np.repeat(values[:, -1:], 4, axis=1)
+    )
+    below = common._field(jax.numpy.asarray(np.full((2, 4), -3, dtype=np.int32)), domain=domain)
+    np.testing.assert_array_equal(
+        jax.jit(shifted)(field, below).asnumpy(),
+        np.take_along_axis(
+            values, np.maximum(np.arange(4) - 3, 0)[None, :].repeat(2, axis=0), axis=1
+        ),
+    )
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_closed_over_as_offset_narrows_like_eager():
+    import jax
+
+    from gt4py.next.ffront import experimental
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({K: (0, 4)})
+    field = common._field(jax.numpy.asarray([0.0, 1.0, 2.0, 3.0]), domain=domain)
+    offset_field = common._field(jax.numpy.ones(4, dtype=np.int32), domain=domain)
+
+    result = jax.jit(lambda field: field.premap(experimental.as_offset(Koff, offset_field)))(field)
+
+    assert result.domain == common.domain({K: (0, 3)})
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_field_offset_does_not_leak_tracers():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    E2V = fbuiltins.FieldOffset("E2V", source=V, target=(E, E2VDim))
+    conn = common._connectivity(
+        jax.numpy.asarray([[0, 1], [2, 3]], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.arange(4, dtype=np.float64), domain=common.domain({V: (0, 4)}))
+
+    def shifted(field, conn):
+        with embedded_context.update(offset_provider={"E2V": conn}):
+            return field(E2V)
+
+    with jax.checking_leaks():
+        result = jax.jit(shifted)(field, conn)
+
+    np.testing.assert_array_equal(result.asnumpy(), [[0.0, 1.0], [2.0, 3.0]])
+
+
+@pytest.mark.requires_jax
+def test_nested_jax_jit_premap_narrows():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        jax.numpy.asarray([[0, 1], [2, 3], [4, 5]], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(jax.numpy.arange(4, dtype=np.float64), domain=common.domain({V: (0, 4)}))
+
+    inner = jax.jit(lambda field, conn: field.premap(conn))
+    result = jax.jit(lambda field, conn: inner(field, conn))(field, conn)
+
+    assert result.domain == common.domain({E: (0, 2), E2VDim: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [[0.0, 1.0], [2.0, 3.0]])
+
+
+def test_neighbor_sum_with_custom_skip_value_and_nonzero_domain_start():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[11, 12], [13, 99]]),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=99,
+    )
+    field = common._field(np.asarray([1.0, 2.0, 4.0, 8.0]), domain=common.domain({V: (10, 14)}))
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(field.premap(conn), axis=E2VDim)
+
+    np.testing.assert_array_equal(result.asnumpy(), [6.0, 8.0])
+
+
+def test_neighbor_sum_over_infinite_range():
+    E = Dimension("E")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [2, -1]]),
+        codomain=Dimension("V"),
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+    field = common._field(
+        np.asarray([[1.0, 2.0], [4.0, 8.0]]), domain=common.domain({E: (0, 2), E2VDim: (0, 2)})
+    )
+    broadcasted = fbuiltins.broadcast(field, (E, E2VDim, K))
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(broadcasted, axis=E2VDim)
+
+    assert result.domain == common.Domain(
+        common.named_range((E, (0, 2))), common.NamedRange(K, common.UnitRange.infinite())
+    )
+    np.testing.assert_array_equal(result.ndarray.ravel(), [3.0, 4.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_retraces_per_connectivity_buffer():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = jax.numpy.asarray(_skip_value_e2v_table(8))
+    conn_domain = common.domain({E: (0, table.shape[0]), E2VDim: (0, 2)})
+    field = common._field(jax.numpy.arange(8, dtype=np.float64), domain=common.domain({V: (0, 8)}))
+    traces = 0
+
+    @jax.jit
+    def premap(field, conn):
+        nonlocal traces
+        traces += 1
+        return field.premap(conn)
+
+    conn = common._connectivity(table, codomain=V, domain=conn_domain, skip_value=-1)
+    premap(field, conn)
+    premap(field, conn)
+    assert traces == 1
+
+    premap(field, common._connectivity(table, codomain=V, domain=conn_domain, skip_value=-1))
+    assert traces == 1
+
+    premap(
+        field,
+        common._connectivity(
+            jax.numpy.array(table, copy=True), codomain=V, domain=conn_domain, skip_value=-1
+        ),
+    )
+    assert traces == 2
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_non_contiguous_inverse_image_raises():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    conn = common._connectivity(
+        jax.numpy.asarray([0, 5, 1], dtype=np.int32),
+        codomain=V,
+        domain=common.domain({E: (0, 3)}),
+    )
+    field = common._field(jax.numpy.arange(3, dtype=np.float64), domain=common.domain({V: (0, 3)}))
+
+    with pytest.raises(ValueError, match="non-contiguous"):
+        jax.jit(lambda field, conn: field.premap(conn))(field, conn)
+
+
+def test_connectivity_field_setitem_raises():
+    conn = common._connectivity(
+        np.asarray([[0, 1], [-1, -1]]),
+        codomain=D0,
+        domain=common.domain({D1: (0, 2), D2: (0, 2)}),
+        skip_value=-1,
+    )
+
+    with pytest.raises(TypeError, match="item assignment"):
+        conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def test_neighbor_sum_with_transposed_table_dims():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [2, -1], [1, 3]])
+    e2v = common._connectivity(
+        table, codomain=V, domain=common.domain({E: (0, 3), E2VDim: (0, 2)}), skip_value=-1
+    )
+    data = np.arange(12, dtype=np.float64).reshape(4, 3)
+    ve_field = common._field(data, domain=common.domain({V: (0, 4), E: (0, 3)}))
+
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        premapped = ve_field.premap(e2v)
+        result = fbuiltins.neighbor_sum(premapped, axis=E2VDim)
+
+    assert premapped.domain == common.domain({E2VDim: (0, 2), E: (0, 3)})
+    expected = np.zeros(3)
+    for e in range(3):
+        for n in range(2):
+            if table[e, n] != -1:
+                expected[e] += data[table[e, n], e]
+    assert result.domain == common.domain({E: (0, 3)})
+    np.testing.assert_allclose(result.asnumpy(), expected)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_restricted_connectivity_argument():
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = _skip_value_e2v_table(8)
+    conn_domain = common.domain({E: (0, table.shape[0]), E2VDim: (0, 2)})
+    field_domain = common.domain({V: (0, 4)})
+
+    def premap_first_neighbor(field, conn):
+        return field.premap(conn[NamedIndex(E2VDim, 0)])
+
+    expected = premap_first_neighbor(
+        common._field(np.arange(4, dtype=np.float64), domain=field_domain),
+        common._connectivity(table, codomain=V, domain=conn_domain, skip_value=-1),
+    )
+    result = jax.jit(premap_first_neighbor)(
+        common._field(jax.numpy.arange(4, dtype=np.float64), domain=field_domain),
+        common._connectivity(
+            jax.numpy.asarray(table), codomain=V, domain=conn_domain, skip_value=-1
+        ),
+    )
+
+    assert result.domain == expected.domain
+    np.testing.assert_allclose(result.asnumpy(), expected.asnumpy())

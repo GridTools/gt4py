@@ -1017,7 +1017,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
             )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+    def _inverse_image(self, image_range: UnitRange) -> Sequence[NamedRange]: ...
 
     @property
     @abc.abstractmethod
@@ -1296,16 +1296,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
         return cls(new, codomain=old)
 
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        if not isinstance(image_range, UnitRange):
-            if image_range.dim != self.codomain:
-                raise ValueError(
-                    f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
-                )
-
-            image_range = image_range.unit_range
-
-        assert isinstance(image_range, UnitRange)
+    def _inverse_image(self, image_range: UnitRange) -> Sequence[NamedRange]:
         return (named_range((self.domain_dim, image_range - self.offset)),)
 
     def premap(
@@ -1425,10 +1416,10 @@ class FieldBuiltinFuncRegistry:
     def register_builtin_func(
         cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Any:
-        assert op not in cls._builtin_func_map
+        assert op not in cls._builtin_func_map.maps[0]
         if op_func is None:  # when used as a decorator
             return functools.partial(cls.register_builtin_func, op)
-        return cls._builtin_func_map.setdefault(op, op_func)
+        return cls._builtin_func_map.maps[0].setdefault(op, op_func)
 
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
