@@ -40,13 +40,10 @@ def copy_map_graph(
         map_entry: The entry node of the map graph.
         map_exit: The exit node of the map graph.
         suffix: String to append to the label of the copied nodes.
-        defined_symbols: The result of ``graph.defined_symbols()``, for callers that copy
-            several map graphs of one state while the SDFG does not change. If not
-            given, it is resolved here as soon as the copied scope contains a
-            ``NestedSDFG`` -- once for all nested SDFGs of that scope -- and never
-            resolved for tasklet-only scopes. Passing it down avoids resolving the
-            symbols once per copied ``NestedSDFG``, which is quadratic in the number
-            of data descriptors.
+        defined_symbols: The result of ``graph.defined_symbols()``. This is intended
+            for cases where multiple nested SDFGs are inserted, then the symbols can be
+            computed once and reused multiple times, instead recomputing them for every
+            insertion.
 
     Returns:
         A tuple of map entry and exit nodes, for the new map.
@@ -180,7 +177,7 @@ def copy_map_graph_with_new_range(
         A tuple of map entry and exit nodes, for the new map.
     """
     new_map_entry, new_map_exit = copy_map_graph(
-        sdfg, state, map_entry, map_exit, suffix, defined_symbols=defined_symbols
+        sdfg, state, map_entry, map_exit, suffix, defined_symbols
     )
     update_map_range(new_map_entry.map, map_range)
     assert new_map_entry.range == map_range
