@@ -35,7 +35,7 @@ How a `premap` behaves under `jit` depends on how its connectivity reaches the c
 - Domains under `jit` match eager execution when the table is concrete or has a handle.
 - A table computed from traced values behaves differently from eager execution when a target is out of range. Eagerly, a uniform offset narrows the domain and a non-contiguous one raises. Under `jit` the domain stays as it is and those targets read the field's boundary value, without an error.
 - Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
-- Connectivities reject item assignment, because their domain lookups are cached per buffer.
+- Connectivities reject item assignment, because their domain lookups are cached per buffer. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
 
 Open questions, all caused by the handle:
 

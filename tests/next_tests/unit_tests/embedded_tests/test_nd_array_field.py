@@ -1399,6 +1399,9 @@ def test_connectivity_field_inverse_image():
         codomain=V,
     )
 
+    # the table is [9, 0, 1, ..., 8]: values 2..6 sit at positions 3..7
+    assert e2v_conn._inverse_image(UnitRange(V_START, V_STOP)) == common.domain({E: (3, 8)})
+
 
 def test_connectivity_field_inverse_image_2d_domain():
     V = Dimension("V")

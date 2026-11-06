@@ -1107,7 +1107,7 @@ if jnp:
         ) -> core_defs.NDArrayObject:
             if self._image_unknown:
                 # the output domain assumed all targets inside the field; out-of-range ones read its boundary
-                return jnp.clip(index, 0, len(image_range) - 1)
+                return jnp.clip(index, 0, len(image_range) - 1)  # type: ignore[arg-type, return-value] # `NDArrayObject` typing is not complete
             return index
 
         def _restrict_buffer(
@@ -1125,7 +1125,7 @@ if jnp:
                     new_buffer = jnp.asarray(self._ndarray[buffer_slice])
             return JaxArrayConnectivityField(
                 new_domain,
-                new_buffer,
+                new_buffer,  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
                 self.codomain,
                 self.skip_value,
                 handle,
