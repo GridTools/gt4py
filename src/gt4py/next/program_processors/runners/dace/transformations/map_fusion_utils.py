@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 import itertools
-from typing import Optional
+from typing import Any, Optional
 
 import dace
 from dace import subsets as dace_subsets
@@ -27,6 +27,7 @@ def copy_map_graph(
     map_entry: dace_nodes.MapEntry,
     map_exit: dace_nodes.MapExit,
     suffix: Optional[str] = None,
+    defined_symbols: Optional[dict[str, Any]] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
     """Performs a full copy of the dataflow inside the Map.
 
@@ -39,6 +40,10 @@ def copy_map_graph(
         map_entry: The entry node of the map graph.
         map_exit: The exit node of the map graph.
         suffix: String to append to the label of the copied nodes.
+        defined_symbols: The result of ``graph.defined_symbols()``, for callers that copy
+            several map graphs of one state while the SDFG does not change; it is computed
+            here if not given. Passing it down avoids resolving the symbols once per copied
+            ``NestedSDFG``, which is quadratic in the number of data descriptors.
 
     Returns:
         A tuple of map entry and exit nodes, for the new map.
@@ -50,6 +55,9 @@ def copy_map_graph(
     new_nodes = {}
     new_data_names = {}
     new_data_descriptors = {}
+
+    if defined_symbols is None:
+        defined_symbols = graph.defined_symbols()
 
     subgraph = graph.scope_subgraph(map_entry, include_entry=True, include_exit=True)
     map_nodes = subgraph.nodes()
@@ -82,6 +90,7 @@ def copy_map_graph(
                 outputs={k: None for k in sorted(node.out_connectors.keys())},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
+                defined_symbols=defined_symbols,
             )
             # ensure the correct reference to parent
             node_.sdfg.parent_nsdfg_node = node_
@@ -146,6 +155,7 @@ def copy_map_graph_with_new_range(
     map_exit: dace_nodes.MapExit,
     map_range: dace_subsets.Range,
     suffix: str,
+    defined_symbols: Optional[dict[str, Any]] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
     """Wrapper of `copy_map_graph` that additionally calls `update_map_range` on the new map.
 
@@ -163,7 +173,9 @@ def copy_map_graph_with_new_range(
     Returns:
         A tuple of map entry and exit nodes, for the new map.
     """
-    new_map_entry, new_map_exit = copy_map_graph(sdfg, state, map_entry, map_exit, suffix)
+    new_map_entry, new_map_exit = copy_map_graph(
+        sdfg, state, map_entry, map_exit, suffix, defined_symbols=defined_symbols
+    )
     update_map_range(new_map_entry.map, map_range)
     assert new_map_entry.range == map_range
     assert new_map_exit.map.range == map_range

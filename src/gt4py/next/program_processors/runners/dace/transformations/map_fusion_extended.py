@@ -320,6 +320,11 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
         first_map_splitted_range, second_map_splitted_range = splitted_range
 
+        # Resolve the symbols of the state once for all maps split by this transformation:
+        # copying a map graph adds data descriptors and nested SDFGs, but none of the symbols
+        # the copies need -- they are clones -- so the answer stays valid for the whole loop.
+        defined_symbols = graph.defined_symbols()
+
         def _replace_ranged_map(
             map_entry: dace_nodes.MapEntry,
             map_exit: dace_nodes.MapExit,
@@ -329,7 +334,7 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
             new_map_entries: list[dace_nodes.MapEntry] = []
             for i, r in enumerate(new_ranges):
                 new_map_entry, _ = gtx_mfutils.copy_map_graph_with_new_range(
-                    sdfg, graph, map_entry, map_exit, r, str(i)
+                    sdfg, graph, map_entry, map_exit, r, str(i), defined_symbols=defined_symbols
                 )
                 new_map_entries.append(new_map_entry)
             gtx_mfutils.delete_map(graph, map_entry, map_exit)  # remove the original first map
