@@ -31,6 +31,7 @@ from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
+from next_tests.unit_tests.conftest import ND_ARRAY_IMPLEMENTATIONS, is_cupy
 
 
 D0 = Dimension("D0")
@@ -297,10 +298,10 @@ def test_as_scalar(nd_array_implementation):
 
 
 def product_nd_array_implementation_params():
-    for xp1 in nd_array_field._nd_array_implementations:
-        for xp2 in nd_array_field._nd_array_implementations:
+    for xp1 in ND_ARRAY_IMPLEMENTATIONS:
+        for xp2 in ND_ARRAY_IMPLEMENTATIONS:
             marks = ()
-            if any(hasattr(nd_array_field, "cp") and xp == nd_array_field.cp for xp in (xp1, xp2)):
+            if any(is_cupy(xp) for xp in (xp1, xp2)):
                 marks = pytest.mark.requires_gpu
             yield pytest.param((xp1, xp2), id=f"{xp1.__name__}-{xp2.__name__}", marks=marks)
 
@@ -1812,7 +1813,8 @@ def test_jax_traced_array_dispatch():
 
     def loss(arr):
         field = common._field(arr, domain=domain)
-        assert isinstance(field, nd_array_field.JaxArrayField)
+        assert isinstance(field, nd_array_field.NdArrayField)
+        assert field.array_ns is jax.numpy
         return jax.numpy.sum((field * field).ndarray)
 
     np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())

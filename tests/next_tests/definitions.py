@@ -11,10 +11,12 @@
 import dataclasses
 import enum
 import importlib
-from typing import Final
+from types import ModuleType
+from typing import Final, Optional
+
+import numpy as np
 import pytest
 
-from gt4py.next.embedded import nd_array_field
 from gt4py.next import constructors
 
 # Skip definitions
@@ -57,9 +59,16 @@ class EmbeddedDummyBackend:
     executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
-cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
-jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
+def _optional_module(name: str) -> Optional[ModuleType]:
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        return None
+
+
+numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", np)
+cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
+jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
