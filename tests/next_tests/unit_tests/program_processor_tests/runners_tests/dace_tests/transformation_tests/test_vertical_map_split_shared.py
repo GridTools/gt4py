@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import copy
+from contextlib import nullcontext
 
 import dace
 import numpy as np
@@ -15,6 +16,8 @@ from dace.sdfg import nodes as dace_nodes
 
 from gt4py.next.program_processors.runners.dace import transformations as gtx_transformations
 from gt4py.next.program_processors.runners.dace.transformations import map_fusion_extended
+
+from . import util
 
 
 def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
@@ -63,47 +66,38 @@ def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
     return sdfg, state, access, producer, producer_exit, consumers
 
 
-@pytest.mark.parametrize("allow_shared_data", [False, True])
+@pytest.mark.parametrize("allow_shared_output", [False, True])
 @pytest.mark.parametrize("fuse_map_fragments", [False, True])
 @pytest.mark.parametrize("upper_consumer", [False, True])
 def test_shared_output_split_preserves_values(
-    tmp_path, allow_shared_data, fuse_map_fragments, upper_consumer
+    allow_shared_output, fuse_map_fragments, upper_consumer
 ):
     sdfg, state, _, _, _, _ = _make_sdfg(upper_consumer=upper_consumer, later_state=True)
     external_descriptors = {name: desc.to_json() for name, desc in sdfg.arrays.items()}
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
     gtx_transformations.gt_vertical_map_split_fusion(
         sdfg,
         run_simplify=False,
         run_map_fusion=not fuse_map_fragments,
         consolidate_edges_only_if_not_extending=True,
         fuse_map_fragments=fuse_map_fragments,
-        allow_shared_data=allow_shared_data,
+        allow_shared_output=allow_shared_output,
         validate=True,
         validate_all=True,
     )
     maps = [node for node in state.nodes() if isinstance(node, dace_nodes.MapEntry)]
-    assert len(maps) == (2 if allow_shared_data else 2 + upper_consumer)
-    if allow_shared_data:
+    assert len(maps) == (2 if allow_shared_output else 2 + upper_consumer)
+    if allow_shared_output:
         assert {str(node.map.range) for node in maps} == {"1:5, 0:3", "1:5, 3:12"}
     for name, desc in external_descriptors.items():
         assert sdfg.arrays[name].to_json() == desc
 
-    gtx_transformations.gt_simplify(sdfg, validate=True, validate_all=True)
-    rng = np.random.default_rng(42)
-    args = {name: rng.random((6, 12)) for name in external_descriptors}
-    expected = copy.deepcopy(args)
-    expected["theta"][1:5] = args["input"][1:5] + 1
-    expected["rho"][1:5] = args["input"][1:5] * 2
-    expected["wind"][1:5, :3] = expected["theta"][1:5, :3] * 3
-    if upper_consumer:
-        expected["wind"][1:5, 3:] = expected["theta"][1:5, 3:] * 4
-    expected["later"][:] = expected["theta"] + 7
-    sdfg.build_folder = str(tmp_path / "build")
-    sdfg.name += f"_{allow_shared_data}_{fuse_map_fragments}_{upper_consumer}"
-    compiled = sdfg.compile()
-    compiled(**args)
-    for name in expected:
-        np.testing.assert_allclose(args[name], expected[name], rtol=1e-14, atol=0)
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+    # Compare whole arrays so writes outside the transformed bands are checked too.
+    for name in ref:
+        np.testing.assert_allclose(res[name], ref[name], rtol=1e-14, atol=0)
 
 
 @pytest.mark.parametrize(
@@ -158,7 +152,7 @@ def test_shared_output_split_rejects_unsafe_partition(unsafe):
     before = sdfg.to_json()
     assert not map_fusion_extended.VerticalSplitMapRange.can_be_applied_to(
         sdfg,
-        options={"allow_shared_data": True},
+        options={"allow_shared_output": True},
         first_map_exit=producer_exit,
         access_node=theta,
         second_map_entry=consumers[0],
@@ -176,7 +170,7 @@ def test_shared_output_split_respects_callback():
             run_map_fusion=False,
             consolidate_edges_only_if_not_extending=True,
             fuse_map_fragments=True,
-            allow_shared_data=True,
+            allow_shared_output=True,
             check_split_callback=lambda *args: False,
         )
         == 0
@@ -189,8 +183,8 @@ def test_shared_output_split_can_be_selected_by_optimizer_hook():
     selected = []
 
     def select_theta(transformation, first_map, second_map, graph, sdfg):
-        transformation.allow_shared_data = transformation.access_node.data == "theta"
-        if transformation.allow_shared_data:
+        transformation.allow_shared_output = transformation.access_node.data == "theta"
+        if transformation.allow_shared_output:
             selected.append(transformation.access_node.data)
         return True
 
@@ -220,12 +214,26 @@ def test_shared_output_split_can_be_selected_by_optimizer_hook():
 )
 def test_shared_output_split_auto_optimizer_option(tmp_path, enabled, selected, expected_maps):
     sdfg, state, _, _, _, _ = _make_sdfg()
-    options = {} if enabled is None else {"vertical_split_allow_shared_data": enabled}
+    options = {} if enabled is None else {"vertical_split_allow_shared_output": enabled}
     if selected is not None:
-        options["vertical_split_shared_data"] = selected
-    gtx_transformations.gt_auto_optimize(
-        sdfg, gpu=False, validate=True, validate_all=True, **options
+        options["vertical_split_shared_output_data"] = selected
+    expected_warning = (
+        "Shared-output selection is ignored"
+        if not enabled and selected is not None
+        else "The shared-output selection is empty"
+        if selected == []
+        else None
     )
+    with (
+        pytest.warns(UserWarning, match=expected_warning)
+        if expected_warning
+        else nullcontext() as warnings
+    ):
+        gtx_transformations.gt_auto_optimize(
+            sdfg, gpu=False, validate=True, validate_all=True, **options
+        )
+    if expected_warning:
+        assert len(warnings) == 1
     assert sum(isinstance(node, dace_nodes.MapEntry) for node in state.nodes()) == expected_maps
     assert all(not sdfg.arrays[name].transient for name in ("theta", "rho", "wind"))
     rng = np.random.default_rng(42)
@@ -250,10 +258,124 @@ def test_shared_output_split_dimension_selection(dimension, consumer_start, expe
     gtx_transformations.gt_auto_optimize(
         sdfg,
         gpu=False,
-        vertical_split_allow_shared_data=True,
-        vertical_split_shared_data=("theta",),
-        vertical_split_shared_data_dimension=dimension,
+        vertical_split_allow_shared_output=True,
+        vertical_split_shared_output_data=("theta",),
+        vertical_split_shared_output_dimension=dimension,
         validate=True,
         validate_all=True,
     )
     assert sum(isinstance(node, dace_nodes.MapEntry) for node in state.nodes()) == expected
+
+
+@pytest.mark.parametrize("transient", [False, True])
+def test_split_rejects_aliasing_arrays(transient):
+    sdfg, _, access, _, producer_exit, consumers = _make_sdfg()
+    sdfg.arrays["theta"].transient = transient
+    sdfg.arrays["theta"].may_alias = True
+    before = sdfg.to_json()
+    assert not map_fusion_extended.VerticalSplitMapRange.can_be_applied_to(
+        sdfg,
+        options={"allow_shared_output": True},
+        first_map_exit=producer_exit,
+        access_node=access["theta"],
+        second_map_entry=consumers[0],
+    )
+    assert sdfg.to_json() == before
+
+
+def test_shared_output_translated_indices_remain_unchanged():
+    sdfg, state, _, _, _, _ = _make_sdfg()
+    for node in state.nodes():
+        if isinstance(node, dace_nodes.MapEntry):
+            node.map.range = dace.subsets.Range(
+                [
+                    (start + 50, end + 50, step) if index == 0 else (start, end, step)
+                    for index, (start, end, step) in enumerate(node.map.range)
+                ]
+            )
+    for edge in state.edges():
+        for name in ("subset", "other_subset"):
+            subset = getattr(edge.data, name)
+            if subset is not None and "i" in str(subset):
+                setattr(
+                    edge.data,
+                    name,
+                    dace.subsets.Range.from_string(str(subset).replace("i", "(i-50)")),
+                )
+    sdfg.validate()
+    before = sdfg.to_json()
+    assert (
+        gtx_transformations.gt_vertical_map_split_fusion(
+            sdfg,
+            run_simplify=False,
+            run_map_fusion=False,
+            consolidate_edges_only_if_not_extending=True,
+            fuse_map_fragments=True,
+            allow_shared_output=True,
+        )
+        == 0
+    )
+    assert sdfg.to_json() == before
+
+
+@pytest.mark.parametrize("alias", [None, "rho"])
+def test_shared_output_multiple_connecting_arrays(alias):
+    sdfg, state, access, _, producer_exit, consumers = _make_sdfg()
+    for entry, factor in zip(consumers, (3, 4), strict=True):
+        tasklet = next(
+            node
+            for node in state.scope_subgraph(entry).nodes()
+            if isinstance(node, dace_nodes.Tasklet)
+        )
+        tasklet.add_in_connector("r")
+        state.add_memlet_path(
+            access["rho"], entry, tasklet, dst_conn="r", memlet=dace.Memlet("rho[i,k]")
+        )
+        tasklet.code = dace.properties.CodeBlock(f"w = t * {factor} + r")
+    if alias:
+        sdfg.arrays[alias].may_alias = True
+        before = sdfg.to_json()
+        assert not map_fusion_extended.VerticalSplitMapRange.can_be_applied_to(
+            sdfg,
+            options={"allow_shared_output": True},
+            first_map_exit=producer_exit,
+            access_node=access["theta"],
+            second_map_entry=consumers[0],
+        )
+        assert sdfg.to_json() == before
+        return
+    sdfg.validate()
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+    gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg,
+        run_simplify=False,
+        run_map_fusion=False,
+        consolidate_edges_only_if_not_extending=True,
+        fuse_map_fragments=True,
+        allow_shared_output=True,
+        validate=True,
+        validate_all=True,
+    )
+    assert len(util.count_nodes(sdfg, dace_nodes.MapEntry, return_nodes=True)) == 2
+    util.compile_and_run_sdfg(sdfg, **res)
+    for name in ref:
+        np.testing.assert_allclose(res[name], ref[name], rtol=1e-14, atol=0)
+
+
+@pytest.mark.parametrize(
+    "options, message",
+    [
+        ({"shared_output_data": ["theta"]}, "Shared-output selection is ignored"),
+        ({"shared_output_split_dimension": "k"}, "Shared-output selection is ignored"),
+        (
+            {"allow_shared_output": True, "shared_output_data": []},
+            "The shared-output selection is empty",
+        ),
+    ],
+)
+def test_shared_output_direct_options_warn_once(options, message):
+    with pytest.warns(UserWarning, match=message) as warnings:
+        transform = map_fusion_extended.VerticalSplitMapRange(**options)
+    assert len(warnings) == 1
+    assert not transform.allow_shared_output

@@ -65,21 +65,21 @@ Read `VerticalSplitMapRange` in
 starting with `_shared_access_partition`, then `_split_shared_access` and their
 call sites. The existing map-fusion machinery performs the subsequent fusion.
 
-`allow_shared_data` defaults to `False`. For direct use, enable it through
-`gt_vertical_map_split_fusion(..., allow_shared_data=True)`. The
+`allow_shared_output` defaults to `False`. For direct use, enable it through
+`gt_vertical_map_split_fusion(..., allow_shared_output=True)`. The
 `fuse_map_fragments` option controls fusion of the fragments created by the split.
 For normal backend optimization, pass
-`optimization_args={"vertical_split_allow_shared_data": True}`. This defaults to
+`optimization_args={"vertical_split_allow_shared_output": True}`. This defaults to
 `False`, so applications can enable it per program without inspecting SDFG nodes.
 The compiler still checks every candidate for safe partitions. This enables all
 safe shared-output candidates in the selected program, which is broader than a
 callback restricted to one output name; GPU performance must be checked for
 that configuration. To limit candidates by their connecting array, also pass
-`vertical_split_shared_data=("shared_output",)`. An empty sequence allows no
+`vertical_split_shared_output_data=("shared_output",)`. An empty sequence allows no
 shared-output candidates; `None` allows any name. This selection does not change
 the treatment of transient arrays or bypass the safety checks. It lets an
 application retain a measured field selection without inspecting SDFG nodes.
-Use `vertical_split_shared_data_dimension=KDim` to allow splitting only along
+Use `vertical_split_shared_output_dimension=KDim` to allow splitting only along
 that dimension while requiring all other map ranges to match. This avoids
 splitting a shared producer across both horizontal and vertical boundaries when
 only the vertical split has been measured. Both restrictions leave transient
@@ -99,7 +99,7 @@ from gt4py.next.program_processors.runners.dace import transformations
 
 
 def select_shared_output(transformation, first_map, second_map, graph, sdfg):
-    transformation.allow_shared_data = transformation.access_node.data == "shared_output"
+    transformation.allow_shared_output = transformation.access_node.data == "shared_output"
     return True
 
 
@@ -148,6 +148,27 @@ See the [ICON results and measurement definitions](https://github.com/dganellari
 The GPU-tested combined GT4Py revision was `403f9d99`; this branch preserves its
 shared-output implementation and tests. The GPU stack also included the separate
 array-scalar warning fix. No general profitability rule or default activation is
-proposed. The implementation is now rebased onto `main`. Historical timings
-describe the older compiler stack; GPU performance must be checked again after
-the rebase.
+proposed. These September timings describe the older compiler stack. The
+following section records validation after the rebase onto `main`.
+
+## Rebased validation, October 2026
+
+The combined compiler was validated on regional/120 and global/120 with the
+current ICON4Py model options, selecting theta's output and splitting along K.
+These program-time reductions compare both selected passes off/on; they do not
+isolate the effect of this pass from changes elsewhere in the granule.
+
+| GPU / 2D block |      Regional/120 theta-rho reduction |                    Global/120 theta-rho reduction |
+| -------------- | ------------------------------------: | ------------------------------------------------: |
+| MI300A / 256x1 |          14.67%, resolved improvement |                                 0.12%, unresolved |
+| GH200 / 32x8   |           -3.22%, resolved regression |                                 0.13%, unresolved |
+| GH200 / 128x2  | 2.15%, order-sensitive and unresolved | Not repeated with the corrected combined compiler |
+
+Regional jobs were 683962 (MI300A, nid002744) and 941764 (GH200, nid005227).
+Global jobs were 684168 (MI300A, nid002676) and 942867 (GH200, nid005306).
+All four jobs passed reference correctness and whole-granule comparisons of
+146 arrays with zero observed error, together with source and graph checks.
+These checks establish correctness for the tested configurations, not universal
+profitability. On regional GH200 at 32x8, the combined granule still improves
+because the solver savings outweigh theta-rho's regression. Retain explicit
+application selection; broader enablement needs its own measurements.

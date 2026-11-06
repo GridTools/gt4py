@@ -25,6 +25,7 @@ from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.transformations import map_fusion_extended
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -171,9 +172,9 @@ def gt_auto_optimize(
     fuse_tasklets: bool = False,
     validate: bool = True,
     validate_all: bool = False,
-    vertical_split_allow_shared_data: bool = False,
-    vertical_split_shared_data: Optional[Sequence[str]] = None,
-    vertical_split_shared_data_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
+    vertical_split_allow_shared_output: bool = False,
+    vertical_split_shared_output_data: Optional[Sequence[str]] = None,
+    vertical_split_shared_output_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
@@ -224,12 +225,12 @@ def gt_auto_optimize(
         scan_loop_unrolling: Whether to unroll scan loops.
         scan_loop_unrolling_factor: The unroll factor to use when unrolling scan loops.
         disable_splitting: Disable the splitting transformations.
-        vertical_split_allow_shared_data: Allow vertical map splitting through
+        vertical_split_allow_shared_output: Allow vertical map splitting through
             shared outputs when their reads and writes form safe partitions.
-        vertical_split_shared_data: If given, restrict shared-output splitting to
+        vertical_split_shared_output_data: If given, restrict shared-output splitting to
             candidates connected through these arrays. Does not enable splitting
-            by itself; `vertical_split_allow_shared_data` must also be `True`.
-        vertical_split_shared_data_dimension: For shared outputs, require equal
+            by itself; `vertical_split_allow_shared_output` must also be `True`.
+        vertical_split_shared_output_dimension: For shared outputs, require equal
             map ranges except along this dimension.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
@@ -277,6 +278,16 @@ def gt_auto_optimize(
     uids = gtx_utils.IDGeneratorPool()
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
+
+    (
+        vertical_split_allow_shared_output,
+        vertical_split_shared_output_data,
+        vertical_split_shared_output_dimension,
+    ) = map_fusion_extended.check_shared_output_options(
+        vertical_split_allow_shared_output,
+        vertical_split_shared_output_data,
+        vertical_split_shared_output_dimension,
+    )
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.
@@ -354,9 +365,9 @@ def gt_auto_optimize(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
             disable_splitting=disable_splitting,
-            vertical_split_allow_shared_data=vertical_split_allow_shared_data,
-            vertical_split_shared_data=vertical_split_shared_data,
-            vertical_split_shared_data_dimension=vertical_split_shared_data_dimension,
+            vertical_split_allow_shared_output=vertical_split_allow_shared_output,
+            vertical_split_shared_output_data=vertical_split_shared_output_data,
+            vertical_split_shared_output_dimension=vertical_split_shared_output_dimension,
             optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
@@ -474,9 +485,9 @@ def _gt_auto_process_top_level_maps(
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     disable_splitting: bool,
     validate_all: bool,
-    vertical_split_allow_shared_data: bool = False,
-    vertical_split_shared_data: Optional[Sequence[str]] = None,
-    vertical_split_shared_data_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
+    vertical_split_allow_shared_output: bool = False,
+    vertical_split_shared_output_data: Optional[Sequence[str]] = None,
+    vertical_split_shared_output_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
 
@@ -672,9 +683,9 @@ def _gt_auto_process_top_level_maps(
                 run_simplify=False,
                 run_map_fusion=True,
                 fuse_map_fragments=False,  # To avoid uncontrolled Map fusing.
-                allow_shared_data=vertical_split_allow_shared_data,
-                shared_data=vertical_split_shared_data,
-                shared_data_split_dimension=vertical_split_shared_data_dimension,
+                allow_shared_output=vertical_split_allow_shared_output,
+                shared_output_data=vertical_split_shared_output_data,
+                shared_output_split_dimension=vertical_split_shared_output_dimension,
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 single_use_data=single_use_data,
