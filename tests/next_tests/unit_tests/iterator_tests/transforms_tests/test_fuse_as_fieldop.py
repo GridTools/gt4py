@@ -7,9 +7,16 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
 
+import pytest
+
 from gt4py.next import utils, common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im, domain_utils
+from gt4py.next.iterator.ir_utils import (
+    ir_makers as im,
+    domain_utils,
+    common_pattern_matcher as cpm,
+)
+from gt4py.next.iterator.type_system import inference
 from gt4py.next.iterator.transforms import (
     fuse_as_fieldop,
     collapse_tuple as ct,
@@ -407,3 +414,75 @@ def test_opage_arg_deduplication(uids: utils.IDGeneratorPool):
         testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
+
+
+def test_single_step_does_not_absorb_newly_exposed_producer(uids):
+    domain = im.domain("cartesian_domain", {IDim: (0, 4)})
+    upstream = im.op_as_fieldop("multiplies", domain)(
+        im.ref("x", field_type), im.ref("y", field_type)
+    )
+    immediate = im.op_as_fieldop("plus", domain)(upstream, im.ref("z", field_type))
+    outer = inference.infer(
+        im.op_as_fieldop("minus", domain)(immediate, im.ref("w", field_type)),
+        offset_provider_type={},
+        allow_undeclared_symbols=True,
+    )
+    fused = fuse_as_fieldop.FuseAsFieldOp.fuse_once(
+        outer,
+        offset_provider_type={},
+        uids=uids,
+        enable_cse=False,
+    )
+    assert any(cpm.is_applied_as_fieldop(arg) and arg == upstream for arg in fused.args)
+    fully_fused = fuse_as_fieldop.FuseAsFieldOp.apply(
+        outer,
+        offset_provider_type={},
+        uids=uids,
+        enable_cse=False,
+        allow_undeclared_symbols=True,
+    )
+    assert not any(cpm.is_applied_as_fieldop(arg) for arg in fully_fused.args)
+
+
+@pytest.mark.parametrize("allowed", [False, True])
+def test_single_step_predicate_cannot_override_eligibility(uids, allowed):
+    inner_domain = im.domain("cartesian_domain", {IDim: (0, 3)})
+    outer_domain = im.domain("cartesian_domain", {IDim: (1, 2)})
+    node = inference.infer(
+        im.as_fieldop(
+            im.lambda_("a")(
+                im.plus(im.deref(im.shift(IOff, 1)("a")), im.deref(im.shift(IOff, -1)("a")))
+            ),
+            outer_domain,
+        )(im.op_as_fieldop("plus", inner_domain)(im.ref("x", field_type), im.ref("y", field_type))),
+        offset_provider_type={},
+        allow_undeclared_symbols=True,
+    )
+    assert (
+        fuse_as_fieldop.FuseAsFieldOp.fuse_once(
+            node,
+            offset_provider_type={},
+            uids=uids,
+            arg_predicate=lambda *_: allowed,
+        )
+        is node
+    )
+
+
+def test_single_step_predicate_selects_only_requested_input(uids):
+    domain = im.domain("cartesian_domain", {IDim: (0, 4)})
+    inputs = [im.op_as_fieldop("plus", domain)(im.ref(name, field_type), 1) for name in ("x", "y")]
+    node = inference.infer(
+        im.op_as_fieldop("plus", domain)(*inputs),
+        offset_provider_type={},
+        allow_undeclared_symbols=True,
+    )
+    fused = fuse_as_fieldop.FuseAsFieldOp.fuse_once(
+        node,
+        offset_provider_type={},
+        uids=uids,
+        enable_cse=False,
+        arg_predicate=lambda arg, _: arg == inputs[0],
+    )
+    assert inputs[0] not in fused.args
+    assert inputs[1] in fused.args
