@@ -33,18 +33,32 @@ class FileCache:
         return path
 
     def __getitem__(self, key: Hashable) -> Any:
-        if key not in self:
-            raise KeyError(key)
-        with locking.lock(path := self._get_path(key)):
+        # Lock-free: entries are only ever replaced atomically, so a reader sees
+        # either a complete entry or none.
+        path = self._get_path(key)
+        try:
+            f = open(path, "rb")
+        except OSError as e:
+            raise KeyError(key) from e
+        with f:
             try:
-                with open(path, "rb") as f:
-                    return pickle.load(f)
+                return pickle.load(f)
             except (EOFError, pickle.UnpicklingError, OSError, AttributeError, ImportError) as e:
-                # An interrupted write can leave a truncated/corrupt entry that
-                # `__contains__` still reports as present. Treat it as a miss and
-                # drop the unusable entry so the caller recomputes it.
-                path.unlink(missing_ok=True)
+                # An interrupted write can leave a truncated/corrupt entry. Treat it as a
+                # miss and drop it so the caller recomputes it, unless a writer has
+                # replaced it in the meantime. Evicting while the file is still open
+                # keeps its inode from being reused by such a replacement.
+                self._evict_if_unchanged(path, os.fstat(f.fileno()))
                 raise KeyError(key) from e
+
+    def _evict_if_unchanged(self, path: pathlib.Path, opened: os.stat_result) -> None:
+        with locking.lock(path):
+            try:
+                current = path.stat()
+            except FileNotFoundError:
+                return
+            if (current.st_dev, current.st_ino) == (opened.st_dev, opened.st_ino):
+                path.unlink(missing_ok=True)
 
     def __setitem__(self, key: Hashable, value: Any) -> None:
         self.path.mkdir(parents=True, exist_ok=True)
@@ -52,10 +66,11 @@ class FileCache:
             file_utils.atomic_write_bytes(path, pickle.dumps(value, protocol=5))
 
     def __delitem__(self, key: Hashable) -> None:
-        if key not in self:
-            raise KeyError(key)
         with locking.lock(path := self._get_path(key)):
-            path.unlink()
+            try:
+                path.unlink()
+            except FileNotFoundError as e:
+                raise KeyError(key) from e
 
     def __contains__(self, key: Hashable) -> bool:
         return self._get_path(key).exists()
