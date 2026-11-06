@@ -9,6 +9,8 @@
 from typing import Literal, Union, overload, Any
 
 import numpy as np
+import pytest
+
 import dace
 import copy
 import uuid
@@ -196,3 +198,32 @@ def compare_sdfg_res(
 ) -> bool:
     """Compares if `res` and  `ref` are the same."""
     return all(np.allclose(ref[name], res[name]) for name in ref.keys())
+
+
+class DefinedSymbolsCounter:
+    """Counts the calls made to ``dace.SDFGState.defined_symbols()``.
+
+    Resolving the symbols of a state is an expensive operation that scans the whole
+    SDFG, so it should only happen when a copied map scope actually contains a
+    ``NestedSDFG`` and its result should be reused instead of being recomputed.
+    This class patches ``defined_symbols()`` on the class, thus it counts the
+    calls made on the states of every SDFG.
+
+    Args:
+        monkeypatch: The pytest monkey patch fixture used to install and
+            automatically revert the patch.
+
+    Note:
+        The number of observed calls is available through the ``calls``
+        attribute.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.calls = 0
+        original = dace.SDFGState.defined_symbols
+
+        def counting(state: dace.SDFGState) -> dict[str, Any]:
+            self.calls += 1
+            return original(state)
+
+        monkeypatch.setattr(dace.SDFGState, "defined_symbols", counting)

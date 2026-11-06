@@ -41,9 +41,12 @@ def copy_map_graph(
         map_exit: The exit node of the map graph.
         suffix: String to append to the label of the copied nodes.
         defined_symbols: The result of ``graph.defined_symbols()``, for callers that copy
-            several map graphs of one state while the SDFG does not change; it is computed
-            here if not given. Passing it down avoids resolving the symbols once per copied
-            ``NestedSDFG``, which is quadratic in the number of data descriptors.
+            several map graphs of one state while the SDFG does not change. If not
+            given, it is resolved here as soon as the copied scope contains a
+            ``NestedSDFG`` -- once for all nested SDFGs of that scope -- and never
+            resolved for tasklet-only scopes. Passing it down avoids resolving the
+            symbols once per copied ``NestedSDFG``, which is quadratic in the number
+            of data descriptors.
 
     Returns:
         A tuple of map entry and exit nodes, for the new map.
@@ -55,9 +58,6 @@ def copy_map_graph(
     new_nodes = {}
     new_data_names = {}
     new_data_descriptors = {}
-
-    if defined_symbols is None:
-        defined_symbols = graph.defined_symbols()
 
     subgraph = graph.scope_subgraph(map_entry, include_entry=True, include_exit=True)
     map_nodes = subgraph.nodes()
@@ -84,6 +84,12 @@ def copy_map_graph(
             new_data_names[data_name] = new_data_name
             new_data_descriptors[data_name] = new_data_desc
         elif isinstance(node, dace_nodes.NestedSDFG):
+            # The symbols are only consumed while copying a nested SDFG: they are
+            # resolved when the first one is copied and the result is reused for
+            # all nested SDFGs of the scope, while tasklet-only scopes never
+            # resolve them.
+            if defined_symbols is None:
+                defined_symbols = graph.defined_symbols()
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
                 inputs={k: None for k in sorted(node.in_connectors.keys())},
