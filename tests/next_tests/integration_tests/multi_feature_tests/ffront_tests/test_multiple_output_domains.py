@@ -544,7 +544,7 @@ def test_program_unstructured(unstructured_case):
         unstructured_case.default_sizes[Cell],
         unstructured_case.default_sizes[Edge],
         inout=(out_a_shifted, out_a),
-        ref=((a.ndarray)[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]], a),
+        ref=(a.asnumpy()[unstructured_case.offset_provider["C2E"].asnumpy()[:, 1]], a),
     )
 
 
@@ -598,7 +598,7 @@ def test_program_temporary(unstructured_case):
         extend={Cell: (-restrict_cell[0], restrict_cell[1])},
     )()
 
-    e2v = (a.ndarray)[unstructured_case.offset_provider["E2V"].asnumpy()[:, 1]]
+    e2v = a.asnumpy()[unstructured_case.offset_provider["E2V"].asnumpy()[:, 1]]
     cases.verify(
         unstructured_case,
         prog_temporary,

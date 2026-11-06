@@ -69,12 +69,16 @@ def _optional_module(name: str) -> Optional[ModuleType]:
 numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", np)
 cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
 jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
+array_api_strict_execution = EmbeddedDummyBackend(
+    "EmbeddedArrayAPIStrict", _optional_module("array_api_strict")
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
     JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
+    ARRAY_API_STRICT_EXECUTION = "next_tests.definitions.array_api_strict_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -132,6 +136,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
+USES_MATH_OUTSIDE_ARRAY_API = "uses_math_outside_array_api"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
@@ -220,6 +225,9 @@ EMBEDDED_SKIP_LIST = [
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+ARRAY_API_STRICT_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    (USES_MATH_OUTSIDE_ARRAY_API, XFAIL, "Not in the Array API standard."),
+]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
@@ -260,6 +268,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
+    EmbeddedIds.ARRAY_API_STRICT_EXECUTION: ARRAY_API_STRICT_EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
