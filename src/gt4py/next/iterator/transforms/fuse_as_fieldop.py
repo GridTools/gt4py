@@ -12,6 +12,7 @@ import dataclasses
 import enum
 import functools
 import operator
+from collections.abc import Callable
 from typing import Optional
 
 from gt4py import eve
@@ -396,29 +397,57 @@ class FuseAsFieldOp(
             return new_node
         return None
 
-    def transform_fuse_as_fieldop(self, node: itir.Node, **kwargs):
-        if cpm.is_applied_as_fieldop(node):
-            node = ir_misc.canonicalize_as_fieldop(node)
-            stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensure cpm.is_applied_as_fieldop
-            assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
-            args: list[itir.Expr] = node.args
-            shifts = trace_shifts.trace_stencil(stencil, num_args=len(args))
+    @staticmethod
+    def fuse_once(
+        node: itir.Expr,
+        *,
+        offset_provider_type: common.OffsetProviderType,
+        uids: utils.IDGeneratorPool,
+        enable_cse: bool = True,
+        arg_predicate: Callable[
+            [itir.Expr, set[tuple[itir.OffsetLiteral | itir.CartesianOffset, ...]]], bool
+        ]
+        | None = None,
+    ) -> itir.Expr:
+        """Fuse eligible immediate inputs once, without visiting new producers.
 
-            eligible_els = [
-                _arg_inline_predicate(arg, arg_shifts)
-                for arg, arg_shifts in zip(args, shifts, strict=True)
-            ]
-            if any(eligible_els):
-                return self.visit(
-                    fuse_as_fieldop(
-                        node,
-                        eligible_els,
-                        uids=self.uids,
-                        offset_provider_type=self.offset_provider_type,
-                        enable_cse=self.enable_cse,
-                    ),
-                    **{**kwargs, "recurse": False},
-                )
+        `arg_predicate` can restrict the standard eligibility checks. It cannot
+        make an otherwise ineligible input fuse. The input must already be typed.
+        """
+        if not cpm.is_applied_as_fieldop(node):
+            return node
+        original = node
+        node = ir_misc.canonicalize_as_fieldop(node)
+        assert isinstance(node.fun, itir.FunCall)
+        stencil = node.fun.args[0]
+        assert isinstance(stencil, itir.Lambda) or cpm.is_call_to(stencil, "scan")
+        shifts = trace_shifts.trace_stencil(stencil, num_args=len(node.args))
+        eligible = [
+            (arg_predicate is None or arg_predicate(arg, accesses))
+            and _arg_inline_predicate(arg, accesses)
+            for arg, accesses in zip(node.args, shifts, strict=True)
+        ]
+        if not any(eligible):
+            return original
+        return fuse_as_fieldop(
+            node,
+            eligible,
+            uids=uids,
+            offset_provider_type=offset_provider_type,
+            enable_cse=enable_cse,
+        )
+
+    def transform_fuse_as_fieldop(self, node: itir.Node, **kwargs):
+        if not cpm.is_applied_as_fieldop(node):
+            return None
+        fused = self.fuse_once(
+            node,
+            uids=self.uids,
+            offset_provider_type=self.offset_provider_type,
+            enable_cse=self.enable_cse,
+        )
+        if fused is not node:
+            return self.visit(fused, **{**kwargs, "recurse": False})
         return None
 
     def transform_inline_let_vars_opcount_preserving(self, node: itir.Node, **kwargs):
