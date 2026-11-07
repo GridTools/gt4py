@@ -29,7 +29,7 @@ docs = [
 ]
 frameworks = [
   # 3rd party frameworks with some interoperability with gt4py
-  'atlas4py>=0.41'
+  'atlas4py>=0.41 ; python_version < "3.15"',  # not needed for the 3.15 CPU-only prototype
 ]
 lint = [
   'pre-commit>=4.0.1',
@@ -82,9 +82,7 @@ classifiers = [
   'Intended Audience :: Science/Research',
   'Operating System :: POSIX',
   'Programming Language :: Python',
-  'Programming Language :: Python :: 3.12',
-  'Programming Language :: Python :: 3.13',
-  'Programming Language :: Python :: 3.14',
+  'Programming Language :: Python :: 3.15',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -99,7 +97,7 @@ dependencies = [
   'cmake>=3.22',
   'cytoolz>=1.0.1',
   'dace==2.0.0b1',
-  'deepdiff>=8.1.0',
+  'deepdiff>=8.6.2,<9',  # avoid cachebox/PyO3 Python 3.15 incompatibility
   'devtools>=0.6',
   "filelock>=3.18.0",
   'frozendict>=2.3',
@@ -136,26 +134,28 @@ license = 'BSD-3-Clause'
 license-files = ['LICENSE']
 name = 'gt4py'
 readme = 'README.md'
-# TODO(egparedes): remove the exclusions when possible
-# 3.13.10, 3.14.1 excluded due to bugs breaking dataclasses for Networkx
-# - https://github.com/networkx/networkx/issues/8362
-# - https://github.com/python/cpython/issues/142214
-requires-python = '>=3.12, <3.15, !=3.13.10, !=3.14.1'
+# Temporary Python 3.15-only constraint for the integration fork.
+requires-python = '>=3.15'
 
 [project.optional-dependencies]
 cartesian = ['black>=25.11', 'clang-format>=18.1', 'gt4py[jax,standard,testing]']
-cuda12 = ['cupy-cuda12x>=12.0']
-cuda13 = ['cupy-cuda13x>=14.0']
-jax = [
-  'jax>=0.4.26 ; python_version < "3.14"',
-  'jax>=0.9.1 ; python_version >= "3.14"'  # first version with pre-built wheel for Python 3.14
+# These GPU backends have no supported Python 3.15 wheels yet.
+# Retain their extra names but do not resolve/install their dependencies on 3.15.
+cuda12 = ['cupy-cuda12x>=12.0 ; python_version < "3.15"']
+cuda13 = ['cupy-cuda13x>=14.0 ; python_version < "3.15"']
+jax = ['jax>=0.12.0.1']
+jax-cuda12 = [
+  'jax[cuda12-local]>=0.6.0 ; python_version < "3.15"',
+  'gt4py[cuda12] ; python_version < "3.15"',
 ]
-jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
-jax-cuda13 = ['jax[cuda13-local]>=0.7.0', 'gt4py[cuda13]']
+jax-cuda13 = [
+  'jax[cuda13-local]>=0.7.0 ; python_version < "3.15"',
+  'gt4py[cuda13] ; python_version < "3.15"',
+]
 next = ['gt4py[jax,standard,testing]']
-rocm6 = ['cupy>=13.4.1,<14.0']
-rocm7 = ['cupy-rocm-7-0>=14.0']
-standard = ['scipy>=1.16.1']
+rocm6 = ['cupy>=13.4.1,<14.0 ; python_version < "3.15"']
+rocm7 = ['cupy-rocm-7-0>=14.0 ; python_version < "3.15"']
+standard = ['scipy>=1.18.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
 
 [project.urls]
@@ -175,9 +175,8 @@ implicit_reexport = false
 install_types = true
 namespace_packages = false
 plugins = ['gt4py.next.type_system.mypy_plugin']
-# Pin to the lowest supported version, otherwise the type-check floor silently
-# follows whichever interpreter happens to run mypy.
-python_version = '3.12'
+# Match the Python 3.15-only constraint in this experimental fork.
+python_version = '3.15'
 # pretty = true
 show_column_numbers = true
 show_error_codes = true
@@ -295,7 +294,7 @@ line-length = 100
 respect-gitignore = true
 show-fixes = true
 # show-source = true
-target-version = 'py312'
+target-version = 'py315'
 
 [tool.ruff.format]
 docstring-code-format = true
