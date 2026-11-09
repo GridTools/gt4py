@@ -119,6 +119,8 @@ class NdArrayField(
     @property
     def array_ns(self) -> ModuleType:
         """The module of the array library holding the buffer, e.g. `numpy`."""
+        # TODO(havogt): return the Array API namespace (`self._ops.xp`) instead of the library's
+        #   own module; users comparing it to `numpy` should query the device instead.
         return self._ops.array_ns
 
     def __getstate__(self) -> dict[str, Any]:
