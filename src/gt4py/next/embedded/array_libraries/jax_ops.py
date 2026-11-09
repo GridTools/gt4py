@@ -63,6 +63,9 @@ def _unflatten_field(
     return nd_array_field.NdArrayField(domain, children[0])  # type: ignore[abstract] # mypy does not see '__gt_builtin_func__' as implemented by 'FieldBuiltinFuncRegistry'
 
 
+# JAX registers pytrees by type, so fields of every array library are pytrees, not only those
+# holding JAX arrays: like a bare NumPy array, a NumPy-backed field passed to `jax.jit` is
+# copied to a JAX array on every call.
 jax.tree_util.register_pytree_node(
     nd_array_field.NdArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_field'
     _flatten_field,
