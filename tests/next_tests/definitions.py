@@ -14,6 +14,7 @@ import importlib
 from types import ModuleType
 from typing import Final, Optional
 
+import array_api_strict
 import numpy as np
 import pytest
 
@@ -69,9 +70,7 @@ def _optional_module(name: str) -> Optional[ModuleType]:
 numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", np)
 cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
 jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
-array_api_strict_execution = EmbeddedDummyBackend(
-    "EmbeddedArrayAPIStrict", _optional_module("array_api_strict")
-)
+array_api_strict_execution = EmbeddedDummyBackend("EmbeddedArrayAPIStrict", array_api_strict)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):

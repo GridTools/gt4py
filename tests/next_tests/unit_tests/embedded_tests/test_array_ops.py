@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import array_api_compat
+import array_api_strict as xs
 import numpy as np
 import pytest
 
@@ -14,8 +15,6 @@ from gt4py.next import common
 from gt4py.next.embedded import array_libraries, array_ops, nd_array_field
 from gt4py.next.ffront import fbuiltins
 
-
-xs = pytest.importorskip("array_api_strict")
 
 D = common.Dimension("D")
 
