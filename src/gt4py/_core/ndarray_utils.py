@@ -8,7 +8,7 @@
 
 import functools
 from collections.abc import Hashable
-from typing import Any, Callable, Protocol, TypeGuard, cast
+from typing import Any, Callable, Final, Protocol, TypeGuard, cast
 
 import array_api_compat
 import numpy as np
@@ -109,6 +109,9 @@ def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
     return cast(ArrayNamespace, array_api_compat.array_namespace(array))
 
 
+_SCALAR_TYPES: Final = frozenset(core_defs.SCALAR_TYPES)
+
+
 @functools.cache
 def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, type]]:
     to_namespace = {
@@ -116,12 +119,7 @@ def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, 
         for scalar_type, name in core_types.type_to_name.items()
         if hasattr(array_ns, name)
     }
-    # keyed by the dtype of an actual array: e.g. NumPy namespaces expose scalar types as dtypes
-    to_scalar_type = {
-        array_ns.empty((0,), dtype=dtype).dtype: scalar_type
-        for scalar_type, dtype in to_namespace.items()
-    }
-    return to_namespace, to_scalar_type
+    return to_namespace, {dtype: scalar_type for scalar_type, dtype in to_namespace.items()}
 
 
 def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> Any:
@@ -134,12 +132,14 @@ def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar
 
 def scalar_type(array_ns: ArrayNamespace, dtype: Any) -> type[core_defs.Scalar]:
     """The gt4py scalar type of the arrays of `array_ns` with dtype `dtype`."""
-    try:
-        return _dtype_tables(array_ns)[1][dtype]
-    except KeyError:
+    # NumPy, CuPy and JAX describe dtypes as `np.dtype`, whose byte order and whose
+    # namespace attribute (a scalar type, e.g. `np.float64`) do not compare equal to it
+    result = dtype.type if isinstance(dtype, np.dtype) else _dtype_tables(array_ns)[1].get(dtype)
+    if result not in _SCALAR_TYPES:
         raise TypeError(
             f"Dtype '{dtype}' of array namespace '{array_ns}' is not a gt4py scalar type."
-        ) from None
+        )
+    return result
 
 
 def dtype_of(array: core_defs.NDArrayObject) -> core_defs.DType:

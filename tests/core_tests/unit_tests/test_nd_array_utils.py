@@ -67,3 +67,19 @@ def test_dtype_translation(array_ns_name, scalar_type):
 def test_dtype_of_unsupported_dtype():
     with pytest.raises(TypeError, match="not a gt4py scalar type"):
         ndarray_utils.dtype_of(np.empty((2,), dtype=np.complex128))
+
+
+@pytest.mark.parametrize("dtype", [">f8", "<f8", ">i4", "<i4"])
+def test_dtype_of_ignores_byte_order(dtype):
+    assert ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype)) == definitions.dtype(
+        np.dtype(dtype).newbyteorder("=").type
+    )
+
+
+@pytest.mark.requires_jax
+def test_dtype_of_jax_without_x64():
+    import jax
+
+    with jax.enable_x64(False):
+        array = jax.numpy.zeros((2,), dtype=jax.numpy.float32)
+        assert ndarray_utils.dtype_of(array) == definitions.dtype(np.float32)
