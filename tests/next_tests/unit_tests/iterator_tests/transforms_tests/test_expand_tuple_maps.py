@@ -125,6 +125,18 @@ def test_map_tuple_unequal_lengths_raise(_binary_fun):
         )
 
 
+def test_map_tuple_unequal_lengths_raise_without_inference(_binary_fun):
+    short = ts.TupleType(types=[i_field])
+    expr = im.call(im.call("map_tuple")(_binary_fun))(
+        im.ref("t", short), im.ref("u", i_tuple_field)
+    )
+    # Skip full inference in `ExpandTupleMaps.apply`, as for an already-typed input expression.
+    expr.type = short
+
+    with pytest.raises(ValueError, match="same length"):
+        _apply(expr)
+
+
 def test_apply_creates_default_uids(_unary_fun):
     expr = im.call(im.call("tree_map_tuple")(_unary_fun))(
         im.make_tuple(im.ref("a", i_field), im.ref("b", i_field))

@@ -13,7 +13,7 @@ from gt4py import eve
 from gt4py.next import common, utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
-from gt4py.next.iterator.type_system import inference as itir_inference
+from gt4py.next.iterator.type_system import inference as itir_inference, type_synthesizer
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -31,6 +31,12 @@ def _tree_map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleTy
 
 def _map_tuple_body(f: itir.Expr, tuple_refs: list[tuple[itir.Expr, ts.TupleType]]) -> itir.Expr:
     """Expand `map_tuple(f)(t1, ..., tn)` over the top-level elements, zipping the tuples."""
+    if not tuple_refs:
+        raise ValueError("'map_tuple' requires at least one tuple argument.")
+
+    type_synthesizer.check_equal_tuple_lengths(
+        "map_tuple", tuple(tuple_type for _, tuple_type in tuple_refs)
+    )
     length = len(tuple_refs[0][1].types)
     return im.make_tuple(
         *(im.call(f)(*(im.tuple_get(i, ref) for ref, _ in tuple_refs)) for i in range(length))

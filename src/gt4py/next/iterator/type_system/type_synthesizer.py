@@ -660,7 +660,8 @@ def map_list(op: TypeSynthesizer) -> TypeSynthesizer:
     return applied_map
 
 
-def _check_equal_tuple_lengths(builtin_name: str, args: tuple[ts.TupleType, ...]) -> None:
+def check_equal_tuple_lengths(builtin_name: str, args: tuple[ts.TupleType, ...]) -> None:
+    """Check that all tuple types have equal length."""
     lengths = {len(arg.types) for arg in args}
     if len(lengths) != 1:
         raise ValueError(
@@ -706,7 +707,7 @@ def _make_tuple_map_synthesizer(
                     f"{[type(arg).__name__ for arg in args]}."
                 )
 
-            _check_equal_tuple_lengths(builtin_name, args)
+            check_equal_tuple_lengths(builtin_name, args)
             bound_op = functools.partial(op, offset_provider_type=offset_provider_type)
             # Apply `op` once per top-level element, zipping the tuples in lockstep.
             return ts.TupleType(
