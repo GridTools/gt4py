@@ -6,13 +6,14 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
 from collections.abc import Hashable
 from typing import Any, Callable, Protocol, TypeGuard, cast
 
 import array_api_compat
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, types as core_types
 
 
 try:
@@ -106,6 +107,44 @@ def is_array_namespace(obj: Any) -> TypeGuard[ArrayNamespace]:
 
 def array_namespace(array: core_defs.NDArrayObject) -> ArrayNamespace:
     return cast(ArrayNamespace, array_api_compat.array_namespace(array))
+
+
+@functools.cache
+def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, type]]:
+    to_namespace = {
+        scalar_type: getattr(array_ns, name)
+        for scalar_type, name in core_types.type_to_name.items()
+        if hasattr(array_ns, name)
+    }
+    # keyed by the dtype of an actual array: e.g. NumPy namespaces expose scalar types as dtypes
+    to_scalar_type = {
+        array_ns.empty((0,), dtype=dtype).dtype: scalar_type
+        for scalar_type, dtype in to_namespace.items()
+    }
+    return to_namespace, to_scalar_type
+
+
+def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> Any:
+    """The dtype object of `array_ns` for the gt4py scalar type `scalar_type`."""
+    try:
+        return _dtype_tables(array_ns)[0][scalar_type]
+    except KeyError:
+        raise TypeError(f"Array namespace '{array_ns}' has no dtype for '{scalar_type}'.") from None
+
+
+def scalar_type(array_ns: ArrayNamespace, dtype: Any) -> type[core_defs.Scalar]:
+    """The gt4py scalar type of the arrays of `array_ns` with dtype `dtype`."""
+    try:
+        return _dtype_tables(array_ns)[1][dtype]
+    except KeyError:
+        raise TypeError(
+            f"Dtype '{dtype}' of array namespace '{array_ns}' is not a gt4py scalar type."
+        ) from None
+
+
+def dtype_of(array: core_defs.NDArrayObject) -> core_defs.DType:
+    """The gt4py dtype of `array`."""
+    return core_defs.dtype(scalar_type(array_namespace(array), array.dtype))
 
 
 def _numpy_device_translator(device: core_defs.Device | None) -> Any:

@@ -29,7 +29,7 @@ import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import numpy as np
 
-from gt4py._core import definitions as core_defs, types as core_types
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
 
 
@@ -70,16 +70,6 @@ class ArrayOps:
 
     def __init__(self, xp: ModuleType) -> None:
         self.xp = xp
-        self._dtypes = {
-            scalar_type: getattr(xp, name)
-            for scalar_type, name in core_types.type_to_name.items()
-            if hasattr(xp, name)
-        }
-        # keyed by the dtype of an actual array: e.g. NumPy namespaces expose scalar types as dtypes
-        self._scalar_types = {
-            xp.empty(0, dtype=dtype).dtype: scalar_type
-            for scalar_type, dtype in self._dtypes.items()
-        }
         self._elementwise_cache: dict[str, Callable[..., Any]] = {}
 
     def __repr__(self) -> str:
@@ -91,20 +81,10 @@ class ArrayOps:
         return self.xp
 
     def dtype(self, scalar_type: type) -> Any:
-        try:
-            return self._dtypes[core_defs.dtype(scalar_type).scalar_type]
-        except KeyError:
-            raise TypeError(
-                f"Array namespace '{self.xp.__name__}' has no dtype for '{scalar_type}'."
-            ) from None
+        return core_ndarray_utils.namespace_dtype(self.xp, core_defs.dtype(scalar_type).scalar_type)
 
     def scalar_type(self, dtype: Any) -> type[core_defs.Scalar]:
-        try:
-            return self._scalar_types[dtype]
-        except KeyError:
-            raise TypeError(
-                f"Dtype '{dtype}' of array namespace '{self.xp.__name__}' is not a gt4py scalar type."
-            ) from None
+        return core_ndarray_utils.scalar_type(self.xp, dtype)
 
     def device(self, array: core_defs.NDArrayObject) -> Any:
         return array_api_compat.device(array)

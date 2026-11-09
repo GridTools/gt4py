@@ -19,13 +19,8 @@ import array_api_compat
 import gt4py.eve as eve
 import gt4py.next.common as common
 import gt4py.next.custom_layout_allocators as next_allocators
-import gt4py.next.embedded.array_ops as array_ops
 import gt4py.next.embedded.nd_array_field as nd_array_field
-from gt4py._core import (
-    definitions as core_defs,
-    ndarray_utils as core_ndarray_utils,
-    types as core_types,
-)
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import xtyping
 
 
@@ -207,7 +202,7 @@ class FieldConstructor:
             raise ValueError(f"Cannot construct 'Field' from array of shape '{data.shape}'.")
 
         if dtype is None:
-            dtype = core_defs.dtype(array_ops.of(data).scalar_type(data.dtype))
+            dtype = core_ndarray_utils.dtype_of(data)
 
         return self._construct_from_array(
             actual_domain,
@@ -270,7 +265,7 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         )
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
-        return getattr(self.array_ns, core_types.type_to_name[dtype.scalar_type])
+        return core_ndarray_utils.namespace_dtype(self.array_ns, dtype.scalar_type)
 
     def empty(
         self,

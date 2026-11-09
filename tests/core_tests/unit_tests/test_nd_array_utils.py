@@ -6,9 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import importlib
 from typing import Any
-from gt4py._core import ndarray_utils, definitions
+
+import numpy as np
 import pytest
+
+from gt4py._core import ndarray_utils, definitions
 
 
 def cuda_device(id_: int) -> Any:
@@ -45,3 +49,21 @@ def test_get_device_translator(array_ns, gt4py_device, expected_device):
 )
 def test_is_array_namespace(array_ns):
     assert ndarray_utils.is_array_namespace(array_ns)
+
+
+@pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
+@pytest.mark.parametrize(
+    "scalar_type", [np.bool_, np.int32, np.int64, np.uint8, np.float32, np.float64]
+)
+def test_dtype_translation(array_ns_name, scalar_type):
+    array_ns = importlib.import_module(array_ns_name)
+    name = np.dtype(scalar_type).name
+    array = array_ns.empty((2,), dtype=getattr(array_ns, name))
+
+    assert ndarray_utils.namespace_dtype(array_ns, scalar_type) == getattr(array_ns, name)
+    assert ndarray_utils.dtype_of(array) == definitions.dtype(scalar_type)
+
+
+def test_dtype_of_unsupported_dtype():
+    with pytest.raises(TypeError, match="not a gt4py scalar type"):
+        ndarray_utils.dtype_of(np.empty((2,), dtype=np.complex128))

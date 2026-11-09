@@ -10,7 +10,7 @@ from types import ModuleType
 
 import numpy as np
 
-from gt4py._core import definitions as core_defs, types as core_types
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common, named_collections, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -69,8 +69,8 @@ def field_from_typespec(
         res = common._field(
             xp.empty(
                 domain.shape,
-                dtype=getattr(
-                    xp, core_types.type_to_name[type_translation.as_dtype(type_).scalar_type]
+                dtype=core_ndarray_utils.namespace_dtype(
+                    xp, type_translation.as_dtype(type_).scalar_type
                 ),
             ),
             domain=domain,
