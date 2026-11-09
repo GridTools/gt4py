@@ -347,18 +347,7 @@ class NdArrayField(
         index: common.AnyIndexSpec,
         value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
     ) -> None:
-        target_domain, target_slice = self._slice(index)
-
-        # TODO(havogt): a broadcast axis stores one element for its whole range, so a write to
-        #   part of the range cannot be represented without materializing the axis. Remove once
-        #   broadcasting has a representation that is not a size-1 buffer axis.
-        for dim, rng, size in zip(self.domain.dims, self.domain.ranges, self._ndarray.shape):
-            if _is_broadcast_axis(size, rng) and (
-                dim not in target_domain.dims or target_domain[dim].unit_range != rng
-            ):
-                raise ValueError(
-                    f"Cannot assign to part of the broadcast dimension '{dim}' of range '{rng}'."
-                )
+        target_domain, target_slice = self._slice(index, for_assignment=True)
 
         if isinstance(value, common.Field):
             if not value.domain == target_domain:
@@ -434,27 +423,22 @@ class NdArrayField(
         raise NotImplementedError("'__invert__' not implemented for non-'bool' fields.")
 
     def _slice(
-        self, index: common.AnyIndexSpec
+        self, index: common.AnyIndexSpec, *, for_assignment: bool = False
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
         index = embedded_common.canonicalize_any_index_sequence(index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
         if common.is_absolute_index_sequence(index_sequence):
-            return new_domain, _broadcast_axes_slice(
-                _get_slices_from_domain_slice(self.domain, index_sequence),
-                self.domain,
-                self._ndarray.shape,
-            )
+            buffer_slice = _get_slices_from_domain_slice(self.domain, index_sequence)
+            if for_assignment:
+                # writing the only element of a broadcast axis would change its whole range
+                return new_domain, buffer_slice
+            return new_domain, _broadcast_axes_slice(buffer_slice, self.domain, self._ndarray.shape)
         assert common.is_relative_index_sequence(index_sequence)
         if len(index_sequence) < self._ndarray.ndim and Ellipsis not in index_sequence:
             return new_domain, (*index_sequence, Ellipsis)
         return new_domain, index_sequence
-
-
-def _is_broadcast_axis(size: int, rng: common.UnitRange) -> bool:
-    """Whether a buffer axis of `size` stands for every index of the longer range `rng`."""
-    return size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
 
 
 def _broadcast_axes_slice(
@@ -462,7 +446,9 @@ def _broadcast_axes_slice(
 ) -> common.RelativeIndexSequence:
     """`slice_` with every index into a size-1 axis spanning a longer range (a broadcast axis) reading its only element."""
     return tuple(
-        (slice(None) if isinstance(s, slice) else 0) if _is_broadcast_axis(size, rng) else s
+        (slice(None) if isinstance(s, slice) else 0)
+        if size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
+        else s
         for s, size, rng in zip(slice_, shape, domain.ranges, strict=True)
     )
 
