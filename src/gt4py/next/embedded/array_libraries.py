@@ -116,50 +116,9 @@ class JaxOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
 
 
-class TorchOps(array_ops.ArrayOps):
-    def __init__(self, xp: ModuleType) -> None:
-        super().__init__(xp)
-        import torch
-
-        self._torch = torch
-
-    @property
-    def array_ns(self) -> ModuleType:
-        return self._torch
-
-    def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
-        # torch functions reject scalar operands; 0-d tensors keep NumPy's promotion
-        # because a Python float is made float64 here, not torch's default float32
-        if isinstance(value, self._torch.Tensor):
-            return value
-        scalar_type = (
-            type(value)
-            if isinstance(value, np.generic)
-            else core_defs.dtype(type(value)).scalar_type
-        )
-        return self.asarray(value, dtype=scalar_type, like=like)
-
-    def _elementwise(self, name: str) -> Callable[..., Any]:
-        torch = self._torch
-        if name == "cbrt":
-            return lambda x: torch.sign(x) * torch.abs(x) ** (1.0 / 3.0)
-        if name == "gamma":
-
-            def gamma(x: Any) -> Any:
-                sign = torch.where((x < 0) & (torch.floor(x) % 2 == 1), -1.0, 1.0).to(x.dtype)
-                return sign * torch.exp(torch.lgamma(x))
-
-            return gamma
-        return super()._elementwise(name)
-
-    def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
-        return array.detach().cpu().numpy()  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
-
-
 array_ops.register(array_api_compat.is_numpy_namespace, NumPyOps)
 array_ops.register(array_api_compat.is_cupy_namespace, CuPyOps)
 array_ops.register(array_api_compat.is_jax_namespace, JaxOps)
-array_ops.register(array_api_compat.is_torch_namespace, TorchOps)
 
 
 if importlib.util.find_spec("jax") is not None:

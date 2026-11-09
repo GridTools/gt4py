@@ -112,7 +112,6 @@ ND_ARRAY_IMPLEMENTATIONS: Final[list[ModuleType]] = [
     np,
     *_optional_module("cupy"),
     *_optional_module("jax.numpy"),
-    *_optional_module("torch"),
     *_optional_module("array_api_strict"),
 ]
 
