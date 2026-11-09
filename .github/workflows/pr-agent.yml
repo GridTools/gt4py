@@ -4,7 +4,11 @@ name: PR Agent
 # backed by the CSCS inference service. Advisory only: this workflow is never a
 # required status check and must not gate merges.
 #
-# Rationale and operational notes:
+# The version, model and model limits come from repository variables so they can
+# be retuned without a code change. Defaults below apply when a variable is
+# unset, so the workflow is self-contained.
+#
+# Rationale, the full variable list and operational notes:
 # docs/development/tools/ci-infrastructure.md#ai-assisted-pr-review-pr-agent
 
 on:
@@ -61,17 +65,25 @@ jobs:
     # "interruptions of the service should be expected". An advisory reviewer
     # must never look like a CI failure.
     continue-on-error: true
+    # A job-level 'container' rather than the documented step-level
+    # 'uses: docker://pragent/pr-agent:<version>-github_action', because GitHub
+    # does not allow expressions in a step's 'uses', so the version could not
+    # come from a repository variable there. Only the tag is variable; the image
+    # repository stays hardcoded, which bounds what a change to repository
+    # settings alone can point this job at.
+    container:
+      image: pragent/pr-agent:${{ vars.PR_AGENT_VERSION || '0.50.0' }}-github_action
     steps:
       # Deliberately no 'actions/checkout': PR Agent reads the diff through the
       # GitHub API. Do not add one -- this job holds a secret under
       # 'pull_request_target', so checking out PR code would be the one change
       # that makes this workflow genuinely dangerous.
       #
-      # Pinned by digest rather than tag because this job holds a secret;
-      # sha256:548e894a8807... is the 0.50.0-github_action image. To upgrade,
-      # bump the comment and re-resolve the digest from the release tag.
+      # This is the image's own entrypoint. GitHub replaces a container's
+      # ENTRYPOINT for container jobs, so it has to be invoked explicitly;
+      # PYTHONPATH=/app and the virtualenv on PATH both come from the image.
       - name: Run PR Agent
-        uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
+        run: python /app/pr_agent/servers/github_action_runner.py
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -79,28 +91,33 @@ jobs:
           # 'api_base' is a host-only setting: a PR's own '.pr_agent.toml'
           # cannot redirect inference to another endpoint.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
-          OPENAI.API_BASE: "https://api.inference.cscs.ch/v1"
-          config.model: "openai/zai-org/GLM-5.3"
+          OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
+          config.model: ${{ vars.PR_AGENT_MODEL || 'openai/zai-org/GLM-5.3' }}
           # On a truncated or empty response PR Agent moves to the fallback
           # model rather than retrying the same one
           # ('config.retry_same_model_on_length' is false by default), which is
           # what we want: Qwen spends far fewer tokens on reasoning.
-          config.fallback_models: '["openai/Qwen/Qwen3.8-27B-FP8"]'
+          config.fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS || '["openai/Qwen/Qwen3.8-27B-FP8"]' }}
 
-          # GLM-5.3 is absent from PR Agent's model table, so its limits must be
-          # declared or PR Agent treats the model as unknown. Note that
-          # 'config.max_model_tokens' (default 32000) caps the *input* for any
-          # model regardless of this value; we leave that default in place
-          # deliberately as a cost bound, since it comfortably covers GT4Py's
-          # typical PR size. Raise it if large PRs start getting clipped.
-          config.custom_model_max_tokens: "131072"
+          # The two limits below are properties of whichever model
+          # PR_AGENT_MODEL selects, so they are variables too: changing the
+          # model without changing them is how this gets misconfigured.
+          #
+          # The model CSCS serves is absent from PR Agent's model table, so its
+          # limits must be declared or PR Agent treats the model as unknown.
+          # Note that 'config.max_model_tokens' (default 32000) caps the *input*
+          # for any model regardless of this value; we leave that default in
+          # place deliberately as a cost bound, since it comfortably covers
+          # GT4Py's typical PR size. Raise it if large PRs start getting
+          # clipped.
+          config.custom_model_max_tokens: ${{ vars.PR_AGENT_MODEL_MAX_TOKENS || '131072' }}
           # Load-bearing: every model CSCS serves is a reasoning model, and
           # reasoning tokens are drawn from the same output budget before any
           # answer is emitted. Left unset (0), the provider default applies and
           # a review can come back truncated mid-YAML or empty -- which looks
-          # like "the bot posted nothing" rather than a clean error. 32768 is
-          # the output budget CSCS publishes for GLM-5.3.
-          config.max_output_tokens: "32768"
+          # like "the bot posted nothing" rather than a clean error. The default
+          # here is the output budget CSCS publishes for GLM-5.3.
+          config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"

@@ -24,7 +24,7 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 ### AI-assisted PR review (PR Agent)
 
-The `PR Agent` workflow runs [PR Agent](https://github.com/The-PR-Agent/pr-agent) (MIT-licensed, community-owned since Qodo donated it) to post an advisory review on new pull requests. It is **never a required status check** and is marked `continue-on-error`, so it cannot gate a merge. Review policy lives in [`.pr_agent.toml`](../../../.pr_agent.toml); the endpoint, model and token limits live in the workflow, because PR Agent treats those as host-only settings that a pull request cannot override from its own branch.
+The `PR Agent` workflow runs [PR Agent](https://github.com/The-PR-Agent/pr-agent) (MIT-licensed, community-owned since Qodo donated it) to post an advisory review on new pull requests. It is **never a required status check** and is marked `continue-on-error`, so it cannot gate a merge. Review policy lives in [`.pr_agent.toml`](../../../.pr_agent.toml). The endpoint, model and token limits are set in the workflow rather than there, because PR Agent treats those as host-only settings that a pull request cannot override from its own branch; their values come from the repository variables listed below.
 
 Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/improve`, `/ask "<question>"` or `/describe`. Only `/review` runs automatically. `/describe` is deliberately not automatic: a GT4Py PR title becomes the squash-commit message and must follow Conventional Commits, so an overwritten description would conflict with the pull request template. Comment commands are restricted to users with write access, since otherwise anyone could drain the API budget by repeating a command; automatic review runs for all PRs, where the spend is bounded by PR volume.
 
@@ -47,10 +47,32 @@ Inference runs on the [CSCS inference service](https://docs.cscs.ch/services/inf
 
 Running inference at CSCS also keeps PR content on infrastructure CSCS controls: the service does not record prompts or model responses, and processing stays in Switzerland.
 
+#### Configuration variables
+
+The PR Agent version, the model and the model's token limits are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
+
+| Variable                     | Default                            | Purpose                                                                        |
+| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
+| `PR_AGENT_VERSION`           | `0.50.0`                           | PR Agent release, used as the image tag                                        |
+| `PR_AGENT_MODEL`             | `openai/zai-org/GLM-5.3`           | Reviewer model                                                                 |
+| `PR_AGENT_FALLBACK_MODELS`   | `["openai/Qwen/Qwen3.8-27B-FP8"]`  | JSON array, used when the primary model errors or returns a truncated response |
+| `PR_AGENT_MODEL_MAX_TOKENS`  | `131072`                           | Context window of `PR_AGENT_MODEL`                                             |
+| `PR_AGENT_MAX_OUTPUT_TOKENS` | `32768`                            | Output budget of `PR_AGENT_MODEL`                                              |
+| `PR_AGENT_API_BASE`          | `https://api.inference.cscs.ch/v1` | Inference endpoint                                                             |
+
+`PR_AGENT_VERSION` is the only version pinned by this workflow, which has no other actions to pin.
+
+The last three travel with `PR_AGENT_MODEL`: the token limits are properties of the selected model, and changing the model without updating them is the way this gets misconfigured. The failure is quiet — see the reasoning-token note below.
+
+Two caveats on using variables here:
+
+- A variable change bypasses code review, unlike a change to the workflow. Only the image *tag* is variable; the image repository is hardcoded, so a settings-only change can select a different PR Agent version but not an arbitrary image. The tradeoff is that the version can no longer be pinned by digest.
+- Fork PRs read variables from the base branch, as with everything else in this workflow, so a fork cannot substitute its own model or endpoint.
+
 Two consequences of this backend are worth knowing before changing the model pin:
 
 - **Every model CSCS serves is a reasoning model**, and reasoning tokens are drawn from the same output budget as the answer. `config.max_output_tokens` must therefore be set explicitly; left at its default the provider's own limit applies, and a review can come back truncated or empty, which presents as the bot posting nothing rather than as a clean error.
-- **CSCS rotates its model catalogue on short notice**, including retiring models that its own documentation examples still reference. The pinned model needs periodic review against `GET /v1/models`; this is a maintenance cost that a commercial API pin would not carry. Service status is at [inference.status.cscs.ch](https://inference.status.cscs.ch).
+- **CSCS rotates its model catalogue on short notice**, including retiring models that its own documentation examples still reference. `PR_AGENT_MODEL` needs periodic review against `GET /v1/models`; this is a maintenance cost that a commercial API pin would not carry. Service status is at [inference.status.cscs.ch](https://inference.status.cscs.ch).
 
 ## CSCS-CI
 

@@ -1,9 +1,9 @@
 # PR Agent review policy for GT4Py.
 #
 # Only review *policy* belongs here. The inference endpoint, the model and its
-# token limits live in '.github/workflows/pr-agent.yml', because PR Agent treats
-# those as host-only settings that a pull request's own copy of this file is not
-# allowed to override.
+# token limits are set in '.github/workflows/pr-agent.yml' from repository
+# variables, because PR Agent treats those as host-only settings that a pull
+# request's own copy of this file is not allowed to override.
 #
 # PR Agent reads this file from the default branch, so changes take effect only
 # once merged to 'main'.
