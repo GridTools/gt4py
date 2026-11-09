@@ -109,12 +109,8 @@ def test_map_tuple_three_args(_ternary_fun):
     )
 
     expected = im.make_tuple(
-        im.call(_ternary_fun)(
-            im.tuple_get(0, "t"), im.tuple_get(0, "u"), im.tuple_get(0, "v")
-        ),
-        im.call(_ternary_fun)(
-            im.tuple_get(1, "t"), im.tuple_get(1, "u"), im.tuple_get(1, "v")
-        ),
+        im.call(_ternary_fun)(im.tuple_get(0, "t"), im.tuple_get(0, "u"), im.tuple_get(0, "v")),
+        im.call(_ternary_fun)(im.tuple_get(1, "t"), im.tuple_get(1, "u"), im.tuple_get(1, "v")),
     )
     assert result == expected
 
