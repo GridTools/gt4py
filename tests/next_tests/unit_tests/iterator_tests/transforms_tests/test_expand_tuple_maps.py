@@ -46,6 +46,16 @@ def _unary_fun() -> itir.SymRef:
     return im.ref("unary_f", _fun_type(1))
 
 
+@pytest.fixture
+def _binary_fun() -> itir.SymRef:
+    return im.ref("binary_f", _fun_type(2))
+
+
+@pytest.fixture
+def _ternary_fun() -> itir.SymRef:
+    return im.ref("ternary_f", _fun_type(3))
+
+
 def test_tree_map_tuple_nested(_unary_fun):
     nested = ts.TupleType(types=[i_tuple_field, i_tuple_field])
     result = _apply_and_collapse(
@@ -75,6 +85,48 @@ def test_map_tuple_single_arg(_unary_fun):
         im.call(_unary_fun)(im.tuple_get(1, "t")),
     )
     assert result == expected
+
+
+def test_map_tuple_two_args(_binary_fun):
+    result = _apply_and_collapse(
+        im.call(im.call("map_tuple")(_binary_fun))(
+            im.ref("t", i_tuple_field), im.ref("u", i_tuple_field)
+        )
+    )
+
+    expected = im.make_tuple(
+        im.call(_binary_fun)(im.tuple_get(0, "t"), im.tuple_get(0, "u")),
+        im.call(_binary_fun)(im.tuple_get(1, "t"), im.tuple_get(1, "u")),
+    )
+    assert result == expected
+
+
+def test_map_tuple_three_args(_ternary_fun):
+    result = _apply_and_collapse(
+        im.call(im.call("map_tuple")(_ternary_fun))(
+            im.ref("t", i_tuple_field), im.ref("u", i_tuple_field), im.ref("v", i_tuple_field)
+        )
+    )
+
+    expected = im.make_tuple(
+        im.call(_ternary_fun)(
+            im.tuple_get(0, "t"), im.tuple_get(0, "u"), im.tuple_get(0, "v")
+        ),
+        im.call(_ternary_fun)(
+            im.tuple_get(1, "t"), im.tuple_get(1, "u"), im.tuple_get(1, "v")
+        ),
+    )
+    assert result == expected
+
+
+def test_map_tuple_unequal_lengths_raise(_binary_fun):
+    short = ts.TupleType(types=[i_field])
+    with pytest.raises(ValueError, match="same length"):
+        _apply(
+            im.call(im.call("map_tuple")(_binary_fun))(
+                im.ref("t", short), im.ref("u", i_tuple_field)
+            )
+        )
 
 
 def test_apply_creates_default_uids(_unary_fun):

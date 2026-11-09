@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 import dataclasses
 import functools
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 from gt4py import eve
 from gt4py.next import common, utils
@@ -29,17 +29,12 @@ def _tree_map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleTy
     return mapper(tup_type)
 
 
-def _map_tuple_body(f: itir.Expr, tup_expr: itir.Expr, tup_type: ts.TupleType) -> itir.Expr:
-    """Expand `map_tuple(f)(t)` over top-level elements only (no recursion)."""
+def _map_tuple_body(f: itir.Expr, tuple_refs: list[tuple[itir.Expr, ts.TupleType]]) -> itir.Expr:
+    """Expand `map_tuple(f)(t1, ..., tn)` over the top-level elements, zipping the tuples."""
+    length = len(tuple_refs[0][1].types)
     return im.make_tuple(
-        *(im.call(f)(im.tuple_get(i, tup_expr)) for i in range(len(tup_type.types)))
+        *(im.call(f)(*(im.tuple_get(i, ref) for ref, _ in tuple_refs)) for i in range(length))
     )
-
-
-_MAP_EXPANDER: dict[str, Callable[[itir.Expr, itir.Expr, ts.TupleType], itir.Expr]] = {
-    "tree_map_tuple": _tree_map_tuple_body,
-    "map_tuple": _map_tuple_body,
-}
 
 
 ProgramOrExpr = TypeVar("ProgramOrExpr", bound=itir.Program | itir.Expr)
@@ -74,19 +69,35 @@ class ExpandTupleMaps(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall):
         node = self.generic_visit(node)
 
-        if not cpm.is_call_to(node.fun, tuple(_MAP_EXPANDER.keys())):
+        if not cpm.is_call_to(node.fun, ("tree_map_tuple", "map_tuple")):
             return node
 
         assert isinstance(node.fun, itir.FunCall)
+        name = node.fun.fun.id
         f = node.fun.args[0]
-        (tup,) = node.args
-        itir_inference.reinfer(tup)
-        assert isinstance(tup.type, ts.TupleType)
 
-        # Let bind the tuple arg to avoid expression duplication.
-        ref_name = next(self.uids["_etm"])
-        body = _MAP_EXPANDER[node.fun.fun.id](f, im.ref(ref_name), tup.type)
+        # Let-bind each tuple arg to avoid expression duplication.
+        bindings: list[tuple[str, itir.Expr]] = []
+        tuple_types: list[ts.TupleType] = []
+        for tup in node.args:
+            itir_inference.reinfer(tup)
+            assert isinstance(tup.type, ts.TupleType)
+            bindings.append((next(self.uids["_etm"]), tup))
+            tuple_types.append(tup.type)
 
-        result = im.let(ref_name, tup)(body)
+        if name == "tree_map_tuple":
+            ((ref_name, _),) = bindings
+            (tup_type,) = tuple_types
+            body = _tree_map_tuple_body(f, im.ref(ref_name), tup_type)
+        else:  # `map_tuple`: zip all tuples in lockstep
+            body = _map_tuple_body(
+                f,
+                [
+                    (im.ref(ref_name), tup_type)
+                    for (ref_name, _), tup_type in zip(bindings, tuple_types)
+                ],
+            )
+
+        result = im.let(*bindings)(body)
         itir_inference.reinfer(result)
         return result

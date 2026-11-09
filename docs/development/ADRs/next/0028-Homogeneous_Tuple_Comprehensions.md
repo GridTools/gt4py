@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Till Ehrengruber (@tehrengruber), Sara Faghih-Naini (@SF-N)
 - **Created**: 2026-08-27
-- **Updated**: 2026-08-27
+- **Updated**: 2026-11-05
 
 In the context of tuple comprehensions in the field-view frontend, facing the constraint that every FOAST node carries exactly one type, we decided to support only homogeneous iterables — all elements of the same type — and reject heterogeneous ones in the type deduction.
 
@@ -36,6 +36,17 @@ Note that homogeneity applies to the iterable's elements as a whole: in the thir
 - Computations over differently-typed elements cannot be written as a comprehension; they must be spelled out per element.
 - The restriction could be lifted for fixed-length iterables by typing the mapper generically: the target symbol gets a type variable bounded by the valid element types, so a single type per node still suffices during type deduction. After `map_tuple` expansion the mapper is instantiated once per element, and each instance can then be specialized to its concrete element type. This is possible as a follow-up without breaking existing code, since it only widens the set of accepted programs. For variable-length iterables there is nothing to lift: heterogeneity cannot occur, as `VarArgType` has a single element type by construction.
 
+## Extension: variadic `map_tuple` for element-wise operators
+
+Element-wise binary operators on variable-length tuples (e.g. `f * s`, both `XTuple[T, …]`) must combine *several* independent tuples in lockstep, which the single-tuple `map_tuple` used for comprehensions cannot express. We therefore generalize `map_tuple` into a **variadic zip**:
+
+- `map_tuple(f)(t1, …, tn)` applies `f` to the i-th element of each tuple, yielding `make_tuple(f(t1[0], …, tn[0]), …, f(t1[n-1], …, tn[n-1]))`. The n-ary form subsumes the previous single-tuple case (n = 1), so comprehension lowering is unchanged; `tree_map_tuple` (recursive) stays single-tuple.
+- The n-ary lambda has one parameter per tuple (each an element), so its body is still typed once. The monomorphic, one-function-type-per-node property this ADR relies on is preserved, and heterogeneity cannot arise for variable-length tuples.
+- At field-operator lowering the tuples are still length-agnostic (`XVarLenTupleType`); the lowering emits a deferred `map_tuple`. Per [#2833] each call-site length is specialized to a concrete tuple, so `ExpandTupleMaps` can later expand to a fixed-length `make_tuple`. All zipped tuples must have the **same length**, checked in the ITIR type synthesizer (the earliest point); this mirrors the embedded `XTuple` runtime, where element-wise operators `zip` and raise on unequal lengths.
+
+**Out of scope.** Validating that a concrete `out=` argument's length matches the length the operator produces is a separate concern: the produced length is not represented in the type system, so it requires the length-specialization machinery that collapses a variable-length return to a concrete length (an open end of [#2834]).
+
 ## References
 
 - PR [#2833](https://github.com/GridTools/gt4py/pull/2833) (tuple comprehension support)
+- PR [#2834](https://github.com/GridTools/gt4py/pull/2834) (element-wise operators on tuples)

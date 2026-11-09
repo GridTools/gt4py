@@ -168,6 +168,14 @@ def expression_test_cases():
             ),
             ts.TupleType(types=[bool_type, ts.TupleType(types=[bool_type, bool_type])]),
         ),
+        # map_tuple (top-level, zips one or more tuples in lockstep)
+        (
+            im.map_tuple(im.ref("plus"))(
+                im.ref("t", ts.TupleType(types=[int_type, int_type])),
+                im.ref("u", ts.TupleType(types=[int_type, int_type])),
+            ),
+            ts.TupleType(types=[int_type, int_type]),
+        ),
         # reduce
         (im.reduce("plus", 0)(im.ref("l", int_list_type)), int_type),
         (

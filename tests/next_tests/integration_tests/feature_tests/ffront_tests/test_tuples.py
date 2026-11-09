@@ -536,6 +536,21 @@ def test_elementwise_binop_var_len_xtuple_scalar_broadcast(cartesian_case):
     )
 
 
+def test_elementwise_binop_two_var_len_xtuples(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: gtx.XTuple[cases.IFloatField, ...],
+        b: gtx.XTuple[cases.IFloatField, ...],
+    ) -> gtx.XTuple[cases.IFloatField, ...]:
+        return a * b
+
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        ref=lambda a, b: tuple(el_a * el_b for el_a, el_b in zip(a, b)),
+    )
+
+
 @pytest.mark.uses_tuple_args
 def test_elementwise_binop_nested_xtuple_scalar_broadcast(cartesian_case):
     @gtx.field_operator

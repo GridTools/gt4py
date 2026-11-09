@@ -35,7 +35,7 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.fbuiltins import exp, minimum
-from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering, FieldOperatorLoweringError
+from gt4py.next.ffront.foast_to_gtir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -627,9 +627,7 @@ def test_elementwise_binop_nested_xtuple_scalar_broadcast():
     assert lowered_inlined.expr == reference_inlined
 
 
-def test_elementwise_binop_two_var_len_xtuples_unsupported():
-    # Type deduction accepts this combination (embedded execution supports it), but the
-    # lowering can only map over a single variable-length tuple.
+def test_elementwise_binop_two_var_len_xtuples():
     def foo(
         a: gtx.XTuple[gtx.Field[[TDim], float64], ...],
         b: gtx.XTuple[gtx.Field[[TDim], float64], ...],
@@ -637,9 +635,80 @@ def test_elementwise_binop_two_var_len_xtuples_unsupported():
         return a * b
 
     parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
 
-    with pytest.raises(FieldOperatorLoweringError, match="variable-length tuples"):
-        FieldOperatorLowering.apply(parsed)
+    # `map_tuple` zips the two variable-length tuples in lockstep; it is expanded into a
+    # fixed-length `make_tuple` by 'ExpandTupleMaps' once the concrete lengths are known.
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_0", "__elementwise_1")(
+                im.op_as_fieldop("multiplies")("__elementwise_0", "__elementwise_1")
+            )
+        )
+    )("a", "b")
+
+    assert lowered.expr == reference
+
+
+def test_elementwise_binop_three_var_len_xtuples():
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+        b: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+        c: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+    ):
+        return a * b * c
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # `(a * b) * c`: each level is a `map_tuple` zipping its two variable-length operands.
+    inner = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_0", "__elementwise_1")(
+                im.op_as_fieldop("multiplies")("__elementwise_0", "__elementwise_1")
+            )
+        )
+    )("a", "b")
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_2", "__elementwise_3")(
+                im.op_as_fieldop("multiplies")("__elementwise_2", "__elementwise_3")
+            )
+        )
+    )(inner, "c")
+
+    assert lowered.expr == reference
+
+
+def test_elementwise_binop_var_len_xtuple_scalar_and_var_len_xtuple():
+    def foo(
+        a: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+        factor: float64,
+        b: gtx.XTuple[gtx.Field[[TDim], float64], ...],
+    ):
+        return a * factor * b
+
+    parsed = FieldOperatorParser.apply_to_function(foo)
+    lowered = FieldOperatorLowering.apply(parsed)
+
+    # `(a * factor) * b`: `a * factor` zips `a` with the broadcast `factor`; the result is
+    # then zipped with `b`, correlating the two variable-length tuples.
+    inner = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_0")(
+                im.op_as_fieldop("multiplies")("__elementwise_0", "factor")
+            )
+        )
+    )("a")
+    reference = im.call(
+        im.call("map_tuple")(
+            im.lambda_("__elementwise_1", "__elementwise_2")(
+                im.op_as_fieldop("multiplies")("__elementwise_1", "__elementwise_2")
+            )
+        )
+    )(inner, "b")
+
+    assert lowered.expr == reference
 
 
 def test_elementwise_binop_var_len_xtuple_scalar_broadcast():
