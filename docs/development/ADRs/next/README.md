@@ -38,7 +38,6 @@ Writing a new ADR is simple:
 ### Embedded Execution
 
 - [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
-- [0031 - Array API Embedded Fields](0031-Array_API_Embedded_Fields.md)
 
 ### Transformations
 
