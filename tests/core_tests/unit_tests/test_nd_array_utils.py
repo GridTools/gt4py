@@ -64,11 +64,6 @@ def test_dtype_translation(array_ns_name, scalar_type):
     assert ndarray_utils.dtype_of(array) == definitions.dtype(scalar_type)
 
 
-def test_dtype_of_unsupported_dtype():
-    with pytest.raises(TypeError, match="not a gt4py scalar type"):
-        ndarray_utils.dtype_of(np.empty((2,), dtype=np.complex128))
-
-
 @pytest.mark.parametrize("dtype", [">f8", "<f8", ">i4", "<i4"])
 def test_dtype_of_ignores_byte_order(dtype):
     assert ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype)) == definitions.dtype(
@@ -83,3 +78,16 @@ def test_dtype_of_jax_without_x64():
     with jax.enable_x64(False):
         array = jax.numpy.zeros((2,), dtype=jax.numpy.float32)
         assert ndarray_utils.dtype_of(array) == definitions.dtype(np.float32)
+
+
+@pytest.mark.parametrize(
+    "c_type, expected", [(np.longlong, np.int64), (np.ulonglong, np.uint64), (np.intc, np.int32)]
+)
+def test_dtype_of_c_type_aliases(c_type, expected):
+    assert ndarray_utils.dtype_of(np.zeros((2,), dtype=c_type)) == definitions.dtype(expected)
+
+
+@pytest.mark.parametrize("dtype", [np.float16, np.complex128])
+def test_dtype_of_rejects_non_gt4py_types(dtype):
+    with pytest.raises(TypeError, match="not a gt4py scalar type"):
+        ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype))

@@ -113,6 +113,13 @@ _SCALAR_TYPES: Final = frozenset(core_defs.SCALAR_TYPES)
 
 
 @functools.cache
+def _numpy_scalar_type(dtype: np.dtype) -> type:
+    # NumPy, CuPy and JAX describe dtypes as `np.dtype`, and its `type` depends on byte order
+    # and C type name (e.g. `np.longlong` is not `np.int64`); kind and size identify it
+    return np.dtype(f"{dtype.kind}{dtype.itemsize}").type
+
+
+@functools.cache
 def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, type]]:
     to_namespace = {
         scalar_type: getattr(array_ns, name)
@@ -132,9 +139,11 @@ def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar
 
 def scalar_type(array_ns: ArrayNamespace, dtype: Any) -> type[core_defs.Scalar]:
     """The gt4py scalar type of the arrays of `array_ns` with dtype `dtype`."""
-    # NumPy, CuPy and JAX describe dtypes as `np.dtype`, whose byte order and whose
-    # namespace attribute (a scalar type, e.g. `np.float64`) do not compare equal to it
-    result = dtype.type if isinstance(dtype, np.dtype) else _dtype_tables(array_ns)[1].get(dtype)
+    result = (
+        _numpy_scalar_type(dtype)
+        if isinstance(dtype, np.dtype)
+        else _dtype_tables(array_ns)[1].get(dtype)
+    )
     if result not in _SCALAR_TYPES:
         raise TypeError(
             f"Dtype '{dtype}' of array namespace '{array_ns}' is not a gt4py scalar type."
