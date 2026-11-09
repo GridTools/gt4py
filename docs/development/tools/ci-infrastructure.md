@@ -49,25 +49,21 @@ Running inference at CSCS also keeps PR content on infrastructure CSCS controls:
 
 #### Configuration variables
 
-The PR Agent version, the model and the model's token limits are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
+The model, its token limits and the endpoint are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
 
 | Variable                     | Default                            | Purpose                                                                        |
 | ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| `PR_AGENT_VERSION`           | `0.50.0`                           | PR Agent release, used as the image tag                                        |
 | `PR_AGENT_MODEL`             | `openai/zai-org/GLM-5.3`           | Reviewer model                                                                 |
 | `PR_AGENT_FALLBACK_MODELS`   | `["openai/Qwen/Qwen3.8-27B-FP8"]`  | JSON array, used when the primary model errors or returns a truncated response |
 | `PR_AGENT_MODEL_MAX_TOKENS`  | `131072`                           | Context window of `PR_AGENT_MODEL`                                             |
 | `PR_AGENT_MAX_OUTPUT_TOKENS` | `32768`                            | Output budget of `PR_AGENT_MODEL`                                              |
 | `PR_AGENT_API_BASE`          | `https://api.inference.cscs.ch/v1` | Inference endpoint                                                             |
 
-`PR_AGENT_VERSION` is the only version pinned by this workflow, which has no other actions to pin.
+The two token limits travel with `PR_AGENT_MODEL`: they are properties of the selected model, and changing the model without updating them is the way this gets misconfigured. The failure is quiet — see the reasoning-token note below.
 
-The last three travel with `PR_AGENT_MODEL`: the token limits are properties of the selected model, and changing the model without updating them is the way this gets misconfigured. The failure is quiet — see the reasoning-token note below.
+The PR Agent version is **not** a variable. GitHub does not allow expressions in a step's `uses`, so it is pinned in the workflow, by digest with the release version in a comment. Upgrading is therefore a reviewed change, which is appropriate for the image that receives the inference key. It is the only version this workflow pins; it uses no other actions.
 
-Two caveats on using variables here:
-
-- A variable change bypasses code review, unlike a change to the workflow. Only the image *tag* is variable; the image repository is hardcoded, so a settings-only change can select a different PR Agent version but not an arbitrary image. The tradeoff is that the version can no longer be pinned by digest.
-- Fork PRs read variables from the base branch, as with everything else in this workflow, so a fork cannot substitute its own model or endpoint.
+Note that fork PRs read variables from the base branch, as with everything else in this workflow, so a fork cannot substitute its own model or endpoint.
 
 Two consequences of this backend are worth knowing before changing the model pin:
 

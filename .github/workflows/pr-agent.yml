@@ -4,9 +4,11 @@ name: PR Agent
 # backed by the CSCS inference service. Advisory only: this workflow is never a
 # required status check and must not gate merges.
 #
-# The version, model and model limits come from repository variables so they can
-# be retuned without a code change. Defaults below apply when a variable is
-# unset, so the workflow is self-contained.
+# The model, its token limits and the endpoint come from repository variables so
+# they can be retuned without a code change. Defaults below apply when a
+# variable is unset, so the workflow is self-contained. The PR Agent version is
+# pinned here rather than in a variable: GitHub does not allow expressions in a
+# step's 'uses'.
 #
 # Rationale, the full variable list and operational notes:
 # docs/development/tools/ci-infrastructure.md#ai-assisted-pr-review-pr-agent
@@ -65,25 +67,17 @@ jobs:
     # "interruptions of the service should be expected". An advisory reviewer
     # must never look like a CI failure.
     continue-on-error: true
-    # A job-level 'container' rather than the documented step-level
-    # 'uses: docker://pragent/pr-agent:<version>-github_action', because GitHub
-    # does not allow expressions in a step's 'uses', so the version could not
-    # come from a repository variable there. Only the tag is variable; the image
-    # repository stays hardcoded, which bounds what a change to repository
-    # settings alone can point this job at.
-    container:
-      image: pragent/pr-agent:${{ vars.PR_AGENT_VERSION || '0.50.0' }}-github_action
     steps:
       # Deliberately no 'actions/checkout': PR Agent reads the diff through the
       # GitHub API. Do not add one -- this job holds a secret under
       # 'pull_request_target', so checking out PR code would be the one change
       # that makes this workflow genuinely dangerous.
       #
-      # This is the image's own entrypoint. GitHub replaces a container's
-      # ENTRYPOINT for container jobs, so it has to be invoked explicitly;
-      # PYTHONPATH=/app and the virtualenv on PATH both come from the image.
+      # Pinned by digest rather than tag because this job holds a secret;
+      # sha256:548e894a8807... is the 0.50.0-github_action image. To upgrade,
+      # bump the comment and re-resolve the digest from the release tag.
       - name: Run PR Agent
-        run: python /app/pr_agent/servers/github_action_runner.py
+        uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
