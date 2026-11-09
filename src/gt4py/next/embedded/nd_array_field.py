@@ -349,6 +349,17 @@ class NdArrayField(
     ) -> None:
         target_domain, target_slice = self._slice(index)
 
+        # TODO(havogt): a broadcast axis stores one element for its whole range, so a write to
+        #   part of the range cannot be represented without materializing the axis. Remove once
+        #   broadcasting has a representation that is not a size-1 buffer axis.
+        for dim, rng, size in zip(self.domain.dims, self.domain.ranges, self._ndarray.shape):
+            if _is_broadcast_axis(size, rng) and (
+                dim not in target_domain.dims or target_domain[dim].unit_range != rng
+            ):
+                raise ValueError(
+                    f"Cannot assign to part of the broadcast dimension '{dim}' of range '{rng}'."
+                )
+
         if isinstance(value, common.Field):
             if not value.domain == target_domain:
                 raise ValueError(
@@ -441,14 +452,17 @@ class NdArrayField(
         return new_domain, index_sequence
 
 
+def _is_broadcast_axis(size: int, rng: common.UnitRange) -> bool:
+    """Whether a buffer axis of `size` stands for every index of the longer range `rng`."""
+    return size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
+
+
 def _broadcast_axes_slice(
     slice_: common.RelativeIndexSequence, domain: common.Domain, shape: tuple[int, ...]
 ) -> common.RelativeIndexSequence:
     """`slice_` with every index into a size-1 axis spanning a longer range (a broadcast axis) reading its only element."""
     return tuple(
-        (slice(None) if isinstance(s, slice) else 0)
-        if size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
-        else s
+        (slice(None) if isinstance(s, slice) else 0) if _is_broadcast_axis(size, rng) else s
         for s, size, rng in zip(slice_, shape, domain.ranges, strict=True)
     )
 
