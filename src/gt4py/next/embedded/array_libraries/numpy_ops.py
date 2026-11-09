@@ -23,12 +23,12 @@ from gt4py.next import common
 from gt4py.next.embedded import array_ops
 
 
-def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
-    try:
-        from scipy.special import gamma
-    except ImportError:
+try:
+    from scipy.special import gamma as _np_gamma
+except ImportError:
+
+    def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
         return np.vectorize(math.gamma, otypes=[a.dtype])(a)
-    return gamma(a)
 
 
 class NumPyOps(array_ops.ArrayOps):
