@@ -1,0 +1,118 @@
+name: PR Agent
+
+# AI-assisted PR review via PR Agent (https://github.com/The-PR-Agent/pr-agent),
+# backed by the CSCS inference service. Advisory only: this workflow is never a
+# required status check and must not gate merges.
+#
+# Rationale and operational notes:
+# docs/development/tools/ci-infrastructure.md#ai-assisted-pr-review-pr-agent
+
+on:
+  # 'pull_request_target' and NOT 'pull_request': most GT4Py pull requests come
+  # from forks, and fork PRs get no access to repository secrets, so a
+  # 'pull_request' job could never read CSCS_INFERENCE_API_KEY. The usual
+  # 'pull_request_target' hazard does not apply here because this job never
+  # checks out or executes PR code (see the job steps).
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+  # Lets maintainers invoke commands by commenting, e.g. '/review' or '/improve'.
+  issue_comment:
+    types: [created]
+
+  ## COMMENTED OUT: only for testing changes to this workflow.
+  ## 'pull_request_target' and '.pr_agent.toml' are both read from the base /
+  ## default branch, so changes here have no effect until merged to 'main'.
+  ## Uncommenting gives a real run on the PR that changes them, but only for
+  ## PRs from branches in the upstream GridTools/gt4py repo.
+  # pull_request:
+  #   branches:
+  #     - main
+  ## END
+
+# No 'contents: write': nothing here may push to the repository. Raising this
+# turns a prompt injection in a PR diff into a write primitive.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-agent:
+    # Auto-review runs on every PR: the spend is bounded by PR volume.
+    # Comment-triggered commands are restricted to maintainers, because anyone
+    # could otherwise drain the key by repeating '/improve'. This mirrors the
+    # CSCS-CI convention of acting only on whitelisted users' comments.
+    if: >-
+      github.event.sender.type != 'Bot'
+      && (
+        github.event_name != 'issue_comment'
+        || (
+          github.event.issue.pull_request != null
+          && startsWith(github.event.comment.body, '/')
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+        )
+      )
+    runs-on: ubuntu-latest
+    # CSCS states the inference service runs on a single infrastructure and that
+    # "interruptions of the service should be expected". An advisory reviewer
+    # must never look like a CI failure.
+    continue-on-error: true
+    steps:
+      # Deliberately no 'actions/checkout': PR Agent reads the diff through the
+      # GitHub API. Do not add one -- this job holds a secret under
+      # 'pull_request_target', so checking out PR code would be the one change
+      # that makes this workflow genuinely dangerous.
+      #
+      # Pinned by digest rather than tag because this job holds a secret;
+      # sha256:548e894a8807... is the 0.50.0-github_action image. To upgrade,
+      # bump the comment and re-resolve the digest from the release tag.
+      - name: Run PR Agent
+        uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # --- CSCS inference service (OpenAI-compatible route) ---
+          # 'api_base' is a host-only setting: a PR's own '.pr_agent.toml'
+          # cannot redirect inference to another endpoint.
+          OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
+          OPENAI.API_BASE: "https://api.inference.cscs.ch/v1"
+          config.model: "openai/zai-org/GLM-5.3"
+          # On a truncated or empty response PR Agent moves to the fallback
+          # model rather than retrying the same one
+          # ('config.retry_same_model_on_length' is false by default), which is
+          # what we want: Qwen spends far fewer tokens on reasoning.
+          config.fallback_models: '["openai/Qwen/Qwen3.8-27B-FP8"]'
+
+          # GLM-5.3 is absent from PR Agent's model table, so its limits must be
+          # declared or PR Agent treats the model as unknown. Note that
+          # 'config.max_model_tokens' (default 32000) caps the *input* for any
+          # model regardless of this value; we leave that default in place
+          # deliberately as a cost bound, since it comfortably covers GT4Py's
+          # typical PR size. Raise it if large PRs start getting clipped.
+          config.custom_model_max_tokens: "131072"
+          # Load-bearing: every model CSCS serves is a reasoning model, and
+          # reasoning tokens are drawn from the same output budget before any
+          # answer is emitted. Left unset (0), the provider default applies and
+          # a review can come back truncated mid-YAML or empty -- which looks
+          # like "the bot posted nothing" rather than a clean error. 32768 is
+          # the output budget CSCS publishes for GLM-5.3.
+          config.max_output_tokens: "32768"
+          # Open-weight models follow the output schema more reliably when the
+          # prompt examples are repeated.
+          config.duplicate_prompt_examples: "true"
+
+          # --- Which tools run automatically ---
+          # '/describe' stays off: a GT4Py PR title is the squash-commit message
+          # and must follow Conventional Commits, and the PR body is the commit
+          # body, so an overwritten description would fight
+          # '.github/pull_request_template.md'. '/improve' stays off until the
+          # trial in the tracking issue says it earns its noise; both remain
+          # available on demand as comments.
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "false"
+          github_action_config.auto_improve: "false"
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'

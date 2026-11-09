@@ -22,6 +22,36 @@ The idea is to run test sessions only when needed. This means that a set of test
 
 There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: the `highest` and the `lowest-direct` `uv` resolution strategies. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
 
+### AI-assisted PR review (PR Agent)
+
+The `PR Agent` workflow runs [PR Agent](https://github.com/The-PR-Agent/pr-agent) (MIT-licensed, community-owned since Qodo donated it) to post an advisory review on new pull requests. It is **never a required status check** and is marked `continue-on-error`, so it cannot gate a merge. Review policy lives in [`.pr_agent.toml`](../../../.pr_agent.toml); the endpoint, model and token limits live in the workflow, because PR Agent treats those as host-only settings that a pull request cannot override from its own branch.
+
+Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/improve`, `/ask "<question>"` or `/describe`. Only `/review` runs automatically. `/describe` is deliberately not automatic: a GT4Py PR title becomes the squash-commit message and must follow Conventional Commits, so an overwritten description would conflict with the pull request template. Comment commands are restricted to users with write access, since otherwise anyone could drain the API budget by repeating a command; automatic review runs for all PRs, where the spend is bounded by PR volume.
+
+Unlike GitHub Copilot code review, which reads only `.github/` files and therefore needs the review rules restated in [`copilot-instructions.md`](../../../.github/copilot-instructions.md), PR Agent reads `AGENTS.md` directly through its `repo_context_files` setting. Prefer extending `AGENTS.md` over duplicating guidance into `.pr_agent.toml`.
+
+#### Why `pull_request_target`
+
+Most GT4Py pull requests come from forks, and GitHub gives fork PRs no access to repository secrets. A workflow triggered on `pull_request` could therefore never read the inference API key, and would fail on the majority of PRs. The workflow uses `pull_request_target` instead, which runs with secrets available.
+
+The usual `pull_request_target` hazard — running untrusted code with secrets in scope — does not apply, because PR Agent reads the diff through the GitHub API and the job has no `actions/checkout` step. Two invariants keep that true, and both must be preserved:
+
+- The job must never check out or execute pull request code.
+- The job must never be granted `contents: write`. The model reads an untrusted diff, so a write permission would turn a prompt injection into a write primitive.
+
+Note that both `pull_request_target` and `.pr_agent.toml` are read from the base (default) branch. A change to either has no effect until it is merged to `main`, which also means such a change cannot be exercised by the pull request that introduces it. The workflow carries a commented-out `pull_request` trigger for that case; as with `daily-ci.yml`, it only works for PRs from branches in the upstream repository.
+
+#### Inference backend and cost
+
+Inference runs on the [CSCS inference service](https://docs.cscs.ch/services/inference/) through its OpenAI-compatible API, using the `CSCS_INFERENCE_API_KEY` repository secret. Access is granted per CSCS project and billed as token-based resource consumption converted from node hours, so this spend competes with the project's compute allocation rather than being a separate subscription. The key should be created in the [inference UI](https://ui.inference.cscs.ch/login) with a token budget, a reset period, and a model restriction, so a runaway loop fails closed instead of draining the allocation. Store it alongside the CSCS-CI credentials in the internal CSCS credentials store.
+
+Running inference at CSCS also keeps PR content on infrastructure CSCS controls: the service does not record prompts or model responses, and processing stays in Switzerland.
+
+Two consequences of this backend are worth knowing before changing the model pin:
+
+- **Every model CSCS serves is a reasoning model**, and reasoning tokens are drawn from the same output budget as the answer. `config.max_output_tokens` must therefore be set explicitly; left at its default the provider's own limit applies, and a review can come back truncated or empty, which presents as the bot posting nothing rather than as a clean error.
+- **CSCS rotates its model catalogue on short notice**, including retiring models that its own documentation examples still reference. The pinned model needs periodic review against `GET /v1/models`; this is a maintenance cost that a commercial API pin would not carry. Service status is at [inference.status.cscs.ch](https://inference.status.cscs.ch).
+
 ## CSCS-CI
 
 CI pipelines for all tests can be triggered via CSCS-CI. These automatically run from a Gitlab mirror for whitelisted users only, and have to be explicitly run by a whitelisted user via the comment "cscs-ci run default" on PRs from other users. There is currently no finegrained control over which subpackage tests are run. Neither can a subset be started manually from the comments nor can tests be skipped based on which files have been changed. Both are achievable (the latter with considerable effort), however given the current duration of the pipeline it does not seem worth doing so.
