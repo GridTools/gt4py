@@ -40,7 +40,7 @@ def test_unregistered_namespace_uses_standard_ops():
 
 
 def test_registered_namespaces():
-    assert type(array_ops.of(np.empty(1))) is array_libraries.NumPyOps
+    assert type(array_ops.of(np.empty(1))) is array_libraries.numpy_ops.NumPyOps
     assert array_ops.of(np.empty(1)).array_ns is np
 
 
@@ -74,7 +74,7 @@ def test_builtin_override(isolated_registry):
 
 
 def test_later_registration_takes_precedence(isolated_registry):
-    class Ops(array_libraries.NumPyOps):
+    class Ops(array_libraries.numpy_ops.NumPyOps):
         pass
 
     array_ops.register(array_api_compat.is_numpy_namespace, Ops)
