@@ -82,14 +82,18 @@ Running inference at CSCS also keeps PR content on infrastructure CSCS controls:
 
 The model, its token limits and the endpoint are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
 
-| Variable                        | Default                            | Purpose                                                                        |
-| ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
-| `PR_AGENT_MODEL`                | `openai/zai-org/GLM-5.3`           | Reviewer model                                                                 |
-| `PR_AGENT_FALLBACK_MODELS`      | `["openai/Qwen/Qwen3.8-27B-FP8"]`  | JSON array, used when the primary model errors or returns a truncated response |
-| `PR_AGENT_MODEL_CONTEXT_WINDOW` | `131072`                           | Context window `PR_AGENT_MODEL` is capable of                                  |
-| `PR_AGENT_TOKEN_BUDGET`         | `65536`                            | Context window we actually allow; the operative cap                            |
-| `PR_AGENT_MAX_OUTPUT_TOKENS`    | `16384`                            | Headroom reserved for the answer                                               |
-| `PR_AGENT_API_BASE`             | `https://api.inference.cscs.ch/v1` | Inference endpoint                                                             |
+| Variable                        | Default                            | Purpose                                                                                              |
+| ------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `PR_AGENT_MODEL`                | **none — required**                | Reviewer model                                                                                       |
+| `PR_AGENT_FALLBACK_MODELS`      | **none — required**                | JSON array, used when the primary model errors or returns a truncated response. `[]` for no fallback |
+| `PR_AGENT_MODEL_CONTEXT_WINDOW` | `131072`                           | Context window `PR_AGENT_MODEL` is capable of                                                        |
+| `PR_AGENT_TOKEN_BUDGET`         | `65536`                            | Context window we actually allow; the operative cap                                                  |
+| `PR_AGENT_MAX_OUTPUT_TOKENS`    | `16384`                            | Headroom reserved for the answer                                                                     |
+| `PR_AGENT_API_BASE`             | `https://api.inference.cscs.ch/v1` | Inference endpoint                                                                                   |
+
+The two model variables have no workflow default on purpose: every model PR Agent may call is chosen explicitly in repository settings, so no inference is ever billed against a model nobody picked. The workflow checks both before starting the container and fails with an `::error::` naming the unset variable, rather than letting an empty model string fail inside it.
+
+Both take an `openai/` prefix in front of the model id CSCS serves — `openai/zai-org/GLM-5.3`, not `zai-org/GLM-5.3`. The prefix is LiteLLM's selector for the OpenAI-compatible route and is not part of the model name: LiteLLM strips it and sends the remainder, so CSCS receives exactly the id that `GET /v1/models` lists. Without it there is no provider to route to and the call fails with `LLM Provider NOT provided`. PR Agent's documentation gives the same form, `model = "openai/<provider-model-id>"`.
 
 All of these travel with `PR_AGENT_MODEL`: they are properties of the selected model, and changing the model without updating them is the way this gets misconfigured. The failure is quiet.
 

@@ -112,6 +112,24 @@ jobs:
               ;;
           esac
 
+      # The models have no defaults, so an unset variable would otherwise reach
+      # LiteLLM as an empty model string and fail inside the container, where
+      # 'continue-on-error' would bury it. Fail here instead, by name.
+      - name: Check model configuration
+        if: steps.auth.outputs.allowed == 'true'
+        env:
+          MODEL: ${{ vars.PR_AGENT_MODEL }}
+          FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
+        run: |
+          missing=()
+          [ -n "${MODEL}" ] || missing+=("PR_AGENT_MODEL")
+          [ -n "${FALLBACKS}" ] || missing+=("PR_AGENT_FALLBACK_MODELS (use '[]' for no fallback)")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Unset repository variable(s): ${missing[*]}. See docs/development/tools/ci-infrastructure.md#configuration-variables"
+            exit 1
+          fi
+          echo "::notice::Model '${MODEL}', fallbacks '${FALLBACKS}'."
+
       # No 'actions/checkout', ever: PR Agent reads the diff through the GitHub
       # API, and checking out PR code in a 'pull_request_target' job that holds
       # a secret is what would make this workflow dangerous.
@@ -120,7 +138,9 @@ jobs:
       # the 0.50.0-github_action image; to upgrade, resolve the digest of the
       # new '<version>-github_action' tag and update this comment.
       - name: Run PR Agent
-        if: steps.auth.outputs.allowed == 'true'
+        # 'success()' is implicit for a step 'if', but spelled out because it is
+        # what skips this step when the configuration check above fails.
+        if: success() && steps.auth.outputs.allowed == 'true'
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,10 +152,19 @@ jobs:
           # invocation.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
           OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
-          config.model: ${{ vars.PR_AGENT_MODEL || 'openai/zai-org/GLM-5.3' }}
-          # Used when the primary errors or returns a truncated or empty answer;
-          # Qwen spends far fewer tokens on reasoning.
-          config.fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS || '["openai/Qwen/Qwen3.8-27B-FP8"]' }}
+          # No defaults: every model PR Agent may call is chosen explicitly in
+          # repository variables, checked by the step above.
+          #
+          # Both need an 'openai/' prefix, which is LiteLLM's selector for the
+          # OpenAI-compatible route and not part of the model name. LiteLLM
+          # strips it and sends the rest, so CSCS receives its own id --
+          # 'openai/zai-org/GLM-5.3' arrives as 'zai-org/GLM-5.3'. Without the
+          # prefix LiteLLM has no provider and fails with "LLM Provider NOT
+          # provided", so do not "simplify" it to the bare id from
+          # 'GET /v1/models'.
+          config.model: ${{ vars.PR_AGENT_MODEL }}
+          # Used when the primary errors or returns a truncated or empty answer.
+          config.fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
 
           # --- Token budget: these three interact, do not tune one alone ---
           #
