@@ -42,8 +42,12 @@ jobs:
     # are skipped so a pull request is reviewed once, when it is ready.
     #
     # The author bot check is not redundant with the sender check: a human
-    # marking a bot-authored pull request ready leaves the author a bot, and an
-    # app login is not a user to the permission API.
+    # marking a bot-authored pull request ready leaves the author a bot.
+    # 'Authorize' would deny such a PR anyway, so this only avoids starting a
+    # job for it.
+    #
+    # The "|| github.event_name == 'pull_request'" clause below is TEMPORARY
+    # and goes with the trigger of that name; remove both together.
     if: >-
       github.event.sender.type != 'Bot'
       && (
@@ -59,7 +63,8 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    # Backstop only; the inference step carries the limit that matters.
+    timeout-minutes: 30
     steps:
       # Effective permission rather than 'author_association', which reports
       # private organization members as 'CONTRIBUTOR' and does not imply write
@@ -107,7 +112,7 @@ jobs:
         env:
           MODEL: ${{ vars.PR_AGENT_MODEL }}
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
-          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '131072' }}
           OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
         run: |
           fail() {
@@ -127,7 +132,7 @@ jobs:
             echo "budget=${BUDGET}"
             echo "output=${OUTPUT}"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; input cap ${BUDGET}, output reserve ${OUTPUT}."
+          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; context window ${BUDGET}, output reserve ${OUTPUT}."
 
       # Never add 'actions/checkout' here: this job holds a secret under
       # 'pull_request_target', and checking out pull request code is what would
@@ -142,6 +147,10 @@ jobs:
         # availability guarantee and an advisory reviewer must not look like a
         # CI failure, while authorization and configuration faults stay red.
         continue-on-error: true
+        # On the step rather than the job, so that exhausting the fallback
+        # chain is tolerated like any other inference failure instead of
+        # failing the job.
+        timeout-minutes: 22
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,19 +165,17 @@ jobs:
           config.custom_model_max_tokens: ${{ steps.models.outputs.budget }}
           config.max_model_tokens: ${{ steps.models.outputs.budget }}
           # Reasoning models spend this budget before answering, so too small a
-          # reserve returns an empty response with finish_reason 'length'.
-          # Measured against this repository's own diff: GLM-5.3-Flash emitted
-          # 11k output tokens, and Qwen3.8-Flash-Next was truncated at 16384.
+          # reserve returns an empty response with finish_reason 'length' --
+          # which is what Qwen3.8-Flash-Next did at 16384 in run 42902972140.
           config.max_output_tokens: ${{ steps.models.outputs.output }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
-          # The 120 s default is below what these models need: measured on this
-          # repository's diff, GLM-5.3 answered in 49 s but GLM-5.3-Flash took
-          # 124 s, and PR Agent's review prompt is larger again. A timeout
-          # retry on the same model would only double the wait before the
-          # fallback, so the chain moves on instead; three models at this
-          # timeout stay inside the job's limit.
+          # The 120 s default is far below what a review of this repository
+          # takes: through PR Agent, GLM-5.3 did not answer within 360 s, and
+          # the review that was published came from GLM-5.3-Flash at about
+          # 270 s. A timeout retry on the same model would only double the wait
+          # before the fallback, so the chain moves on instead.
           config.ai_timeout: "360"
           config.retry_same_model_on_timeout: "false"
           # '/describe' and '/generate_labels' write PR metadata from model

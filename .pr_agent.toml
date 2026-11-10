@@ -8,14 +8,16 @@
 ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
 # Extend these files rather than restating their rules here; the review rules
 # are shared with GitHub Copilot's reviewer rather than kept in two places.
-# Every listed file is sent with every prompt, so the list is kept short.
-repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md", ".github/copilot-instructions.md"]
+# Every listed file is sent with every prompt, so the list is kept short, and
+# they share one line budget that truncates from the end -- hence the file
+# 'extra_instructions' names is listed first.
+repo_context_files = [".github/copilot-instructions.md", "AGENTS.md", "src/gt4py/next/AGENTS.md"]
 
 [pr_code_suggestions]
 # Raised above the default to drop marginal suggestions.
 suggestions_score_threshold = 6
 
 [pr_reviewer]
-extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in your context above."
+extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in the repository context below."
 # GT4Py PRs rarely reference a tracked ticket, so this spends tokens for little.
 require_ticket_analysis_review = false
