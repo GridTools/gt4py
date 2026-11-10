@@ -29,7 +29,9 @@ on:
   ## 'pull_request_target' and '.pr_agent.toml' are both read from the base /
   ## default branch, so changes here have no effect until merged to 'main'.
   ## Uncommenting gives a real run on the PR that changes them, but only for
-  ## PRs from branches in the upstream GridTools/gt4py repo.
+  ## PRs from branches in the upstream GridTools/gt4py repo. While it is
+  ## enabled, a same-repo PR fires both triggers; they land in different
+  ## concurrency groups, so such a PR is reviewed twice, concurrently.
   # pull_request:
   #   branches:
   #     - main
@@ -62,17 +64,18 @@ permissions:
 #    newer one joins the same group. Keying comment-triggered runs on the
 #    comment id gives each command its own group, so a queued '/improve' cannot
 #    be evicted by a later unrelated comment. PR-event runs still share a group
-#    per pull request, where collapsing a redundant second automatic review is
-#    the behaviour we want.
+#    per pull request, where dropping a redundant automatic review is the
+#    behaviour we want. Note the default queue holds one pending run, so two
+#    PR events still cost two reviews -- it takes a third to evict the second.
 #
 # The event name is part of the key so a comment id can never collide with a
 # pull request number.
 #
 # Note 'queue: max' is deliberately NOT used here. It would stop the eviction
-# above, but it would also make a redundant second automatic review queue and
-# run instead of being collapsed, which costs a second inference call for no
-# benefit. Per-event keying removes the eviction that matters -- a lost
-# command -- while keeping the eviction that saves money.
+# above, but it would also let every redundant automatic review queue and run,
+# each costing an inference call against a shared allocation. Per-event keying
+# removes the eviction that matters -- a lost command -- while keeping the one
+# that saves money.
 concurrency:
   group: pr-agent-${{ github.event_name }}-${{ github.event.comment.id || github.event.pull_request.number }}
   cancel-in-progress: false
