@@ -172,10 +172,9 @@ jobs:
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
           # The 120 s default is far below what a review of this repository
-          # takes: through PR Agent, GLM-5.3 did not answer within 360 s, and
-          # the review that was published came from GLM-5.3-Flash at about
-          # 270 s. A timeout retry on the same model would only double the wait
-          # before the fallback, so the chain moves on instead.
+          # takes: the first review published here came from GLM-5.3-Flash
+          # after about 270 s. A timeout retry on the same model would only
+          # double the wait before the fallback, so the chain moves on instead.
           config.ai_timeout: "360"
           config.retry_same_model_on_timeout: "false"
           # '/describe' and '/generate_labels' write PR metadata from model
