@@ -49,17 +49,32 @@ permissions:
   issues: write
   pull-requests: write
 
-# 'cancel-in-progress' is deliberately false. A workflow-level concurrency
-# group is claimed when the run is QUEUED, before the job 'if' is evaluated, so
-# every 'issue_comment' event joins this group even when its job is then
-# skipped. With cancellation on, any comment on a PR -- from anyone, including
-# a plain "hi" -- would kill that PR's in-flight review, leaving no trace on
-# the PR. That is both an outsider-reachable denial of service and a
-# self-inflicted one: most comments in this repo are 'cscs-ci run ...', which
-# routinely lands seconds after a PR is opened. Serializing instead of
-# cancelling keeps one review per PR at a time without that hole.
+# A concurrency group is claimed when a run is QUEUED, before the job 'if' is
+# evaluated, so an 'issue_comment' event joins its group even when its job is
+# then skipped. Two consequences, and the group below is shaped to avoid both:
+#
+#  - 'cancel-in-progress' must stay false. With it on, any comment on a PR --
+#    from anyone, including a plain "hi" -- would kill that PR's in-flight
+#    review with no trace on the PR. That is both an outsider-reachable denial
+#    of service and a self-inflicted one, since most comments in this repo are
+#    'cscs-ci run ...', which routinely lands seconds after a PR is opened.
+#  - Even with cancellation off, GitHub evicts an existing *pending* run when a
+#    newer one joins the same group. Keying comment-triggered runs on the
+#    comment id gives each command its own group, so a queued '/improve' cannot
+#    be evicted by a later unrelated comment. PR-event runs still share a group
+#    per pull request, where collapsing a redundant second automatic review is
+#    the behaviour we want.
+#
+# The event name is part of the key so a comment id can never collide with a
+# pull request number.
+#
+# Note 'queue: max' is deliberately NOT used here. It would stop the eviction
+# above, but it would also make a redundant second automatic review queue and
+# run instead of being collapsed, which costs a second inference call for no
+# benefit. Per-event keying removes the eviction that matters -- a lost
+# command -- while keeping the eviction that saves money.
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: pr-agent-${{ github.event_name }}-${{ github.event.comment.id || github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
@@ -130,8 +145,15 @@ jobs:
           # into the shell command.
           ACTOR: ${{ github.event_name == 'issue_comment' && github.event.comment.user.login || github.event.pull_request.user.login }}
         run: |
-          level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
-            --jq '.permission' 2>/dev/null || echo "none")
+          # "Could not ask" is reported differently from "asked, and denied".
+          # Both deny, but only the first is a problem with this workflow, and
+          # a silent deny is how a broken gate would hide.
+          if ! level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
+            --jq '.permission' 2>&1); then
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Could not resolve repository permission for '${ACTOR}', denying: ${level}"
+            exit 1
+          fi
           case "${level}" in
             admin | maintain | write)
               echo "::notice::${ACTOR} has '${level}' permission; running PR Agent."
