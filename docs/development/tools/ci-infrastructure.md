@@ -32,6 +32,18 @@ Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/
 
 Both paths that spend inference credit go through **one** authorization check: the `Authorize` step resolves the actor's *effective* repository permission and requires `write`, `maintain` or `admin`. The actor is the PR author for automatic review and the commenter for a command.
 
+In practice that resolves to whoever currently holds `write` or better, which is granted from three places. Two of them are teams:
+
+- **`gt4py-core`**, which has `admin` on this repository.
+- **`gt4py-collaborators`**, which has `push`.
+
+The third is anything granted outside those teams, and it matters because managing the two teams does not by itself determine who can spend inference credit:
+
+- **Organization owners** hold `admin` on every repository in the organization, so they can trigger regardless of team membership — including any owner added later.
+- **Direct repository collaborators** can be granted permission on this repository alone, bypassing both teams. One such grant currently exists, at `maintain`, held by the machine account used for CSCS-CI notification tokens (see [cscs-ci.md](cscs-ci.md)). Its GitHub account type is `User`, not `Bot`, so the workflow's `github.event.sender.type != 'Bot'` filter does **not** exclude it: a pull request authored by that account, or a `/`-prefixed comment from it, would spend inference credit.
+
+Organization members with none of those grants resolve to `read` and cannot trigger anything. They can still open pull requests and comment as usual — only the bot is gated, and their PRs are reviewed when someone with write access comments `/review`. The organization's base repository permission is effectively `read`; were it ever raised to `write`, every member would silently gain trigger rights with nothing in this repository to signal it.
+
 This check is what makes the automatic path safe. GitHub's fork-PR approval setting does not apply, because "[since the base branch is considered trusted, workflows triggered by these events will always run, regardless of approval settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#controlling-changes-from-forks-to-workflows-in-public-repositories)". Without it, any stranger could spend the project's CSCS allocation by opening pull requests. An outside contributor's PR is reviewed when a maintainer asks with `/review`.
 
 The check uses effective permission rather than `author_association`, for two reasons:
