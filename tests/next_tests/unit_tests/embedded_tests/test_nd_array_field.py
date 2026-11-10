@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import math
 import operator
 import pickle
@@ -27,6 +28,7 @@ from gt4py.next.common import (
     UnitRange,
 )
 from gt4py.next.embedded import (
+    array_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -1575,7 +1577,7 @@ def test_hyperslice(index_array, expected):
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
+    result = array_ops.of(index_array).hyperslice(index_array, image_range, skip_value)
 
     assert result == expected
 
@@ -2232,3 +2234,117 @@ def test_jax_jit_premap_with_restricted_connectivity_argument():
 
     assert result.domain == expected.domain
     np.testing.assert_allclose(result.asnumpy(), expected.asnumpy())
+
+
+def _jax_narrowing_setup():
+    """A field on V:(1,4) and two tables on E:(0,5) mapping into it on E:(1,4) and on E:(0,3)."""
+    import jax
+
+    V = Dimension("V")
+    E = Dimension("E")
+    field = common._field(jax.numpy.asarray([10.0, 20.0, 30.0]), domain=common.domain({V: (1, 4)}))
+    conn_domain = common.domain({E: (0, 5)})
+    conn_a = common._connectivity(
+        jax.numpy.asarray([0, 1, 2, 3, 5], dtype=np.int32), codomain=V, domain=conn_domain
+    )
+    conn_b = common._connectivity(
+        jax.numpy.asarray([1, 2, 3, 0, 5], dtype=np.int32), codomain=V, domain=conn_domain
+    )
+    return E, field, conn_a, conn_b
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_connectivity_from_array():
+    import jax
+
+    E, field, conn_a, _ = _jax_narrowing_setup()
+    conn = nd_array_field.NdArrayConnectivityField.from_array(
+        conn_a.ndarray, conn_a.codomain, domain=conn_a.domain
+    )
+
+    for result in (
+        jax.jit(lambda field, conn: field.premap(conn))(field, conn),
+        jax.jit(lambda field: field.premap(conn))(field),
+    ):
+        assert result.domain == common.domain({E: (1, 4)})
+        np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
+
+
+@pytest.mark.requires_jax
+@pytest.mark.parametrize("predicate", [True, False])
+def test_jax_jit_premap_with_connectivity_selected_by_cond(predicate):
+    import jax
+
+    E, field, conn_a, conn_b = _jax_narrowing_setup()
+
+    def premap_selected(predicate, field, conn1, conn2):
+        return field.premap(jax.lax.cond(predicate, lambda: conn1, lambda: conn2))
+
+    with pytest.raises(TypeError, match="pytree structure"):
+        jax.jit(premap_selected)(predicate, field, conn_a, conn_b)
+    with pytest.raises(TypeError, match="pytree structure"):
+        jax.jit(lambda predicate, field, conn: premap_selected(predicate, field, conn, conn_b))(
+            predicate, field, conn_a
+        )
+
+    # the same table in both branches
+    same_table = common._connectivity(
+        conn_a.ndarray, codomain=conn_a.codomain, domain=conn_a.domain
+    )
+    result = jax.jit(premap_selected)(predicate, field, conn_a, same_table)
+    assert result.domain == common.domain({E: (1, 4)})
+    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_connectivity_selected_by_switch():
+    import jax
+
+    _, field, conn_a, conn_b = _jax_narrowing_setup()
+
+    def premap_selected(index, field, conn1, conn2):
+        return field.premap(jax.lax.switch(index, [lambda: conn1, lambda: conn2]))
+
+    with pytest.raises(TypeError, match="pytree structure"):
+        jax.jit(premap_selected)(1, field, conn_a, conn_b)
+
+
+@pytest.mark.requires_jax
+def test_jax_scan_with_connectivity_carry():
+    import jax
+
+    _, field, conn_a, conn_b = _jax_narrowing_setup()
+
+    def premap_sums(conn, next_conn):
+        def body(carry, x):
+            return (carry if next_conn is None else next_conn), x * jax.numpy.sum(
+                field.premap(carry).ndarray
+            )
+
+        return jax.lax.scan(body, conn, jax.numpy.asarray([1.0, 2.0]))[1]
+
+    np.testing.assert_array_equal(premap_sums(conn_a, None), [60.0, 120.0])
+    np.testing.assert_array_equal(
+        jax.jit(lambda conn: premap_sums(conn, None))(conn_a), [60.0, 120.0]
+    )
+
+    with pytest.raises(TypeError, match="pytree structure"):
+        premap_sums(conn_a, conn_b)
+    with pytest.raises(TypeError, match="pytree structure"):
+        jax.jit(premap_sums)(conn_a, conn_b)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_with_replaced_table_has_no_values():
+    import jax
+
+    E, field, conn_a, _ = _jax_narrowing_setup()
+
+    def premap_next(field, conn):
+        return field.premap(dataclasses.replace(conn, _ndarray=conn.ndarray + 1))
+
+    result = jax.jit(premap_next)(field, conn_a)
+
+    # as for every table computed in the trace: not narrowed, out-of-range targets clamped
+    assert result.domain == common.domain({E: (0, 5)})
+    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0, 30.0, 30.0])

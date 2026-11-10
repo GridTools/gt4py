@@ -21,7 +21,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
@@ -455,6 +455,13 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: stored for the `ArrayOps` of the table, which passes it to its table operations
+    _static: Any = dataclasses.field(
+        default=None,
+        compare=False,
+        repr=False,
+        metadata=utils.gt4py_metadata(fingerprint=False),
+    )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -512,7 +519,9 @@ class NdArrayConnectivityField(
         if (new_domain := self._cache.get(cache_key, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = _hyperslice(self._ndarray, image_range, self._ops.xp, self.skip_value)
+            slices = self._ops.hyperslice(
+                self._ndarray, image_range, self.skip_value, static=self._static
+            )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
@@ -526,23 +535,17 @@ class NdArrayConnectivityField(
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
             new_domain, buffer_slice = self._slice(index)
+            table, static = self._ops.restrict_table(
+                self._ndarray, buffer_slice, static=self._static
+            )
             restricted_connectivity = self.__class__(
-                new_domain,
-                self._ops.asarray(self.ndarray[buffer_slice]),
-                self.codomain,
-                self.skip_value,
+                new_domain, table, self.codomain, self.skip_value, static
             )
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
 
     __getitem__ = restrict
-
-    def _gather_index(
-        self, index: core_defs.NDArrayObject, image_range: common.UnitRange
-    ) -> core_defs.NDArrayObject:
-        """The 0-based buffer indices the gather reads for `index` from a field on `image_range`."""
-        return index
 
 
 def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> NdArrayField:
@@ -612,7 +615,9 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         index = (
             _connectivity_index_array(conn, new_domain, ops, skip_value_replacement=start) - start
         )
-        return conn._gather_index(index, data.domain[dim].unit_range)
+        return conn._ops.gather_index(
+            index, len(data.domain[dim].unit_range), conn._ndarray, static=conn._static
+        )
 
     new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
@@ -683,47 +688,6 @@ def _identity_index_array(
     )
     shape = tuple(len(unit_range) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
-
-
-def _hyperslice(
-    index_array: core_defs.NDArrayObject,
-    image_range: common.UnitRange,
-    xp: ModuleType,
-    skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[tuple[slice, ...]]:
-    """
-    Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
-
-    If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
-    A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
-
-    Example:
-        index_array =  0  1 -1
-                       3  4 -1
-                      -1 -1 -1
-        skip_value = -1
-
-        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
-    """
-    select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
-
-    if not xp.any(select_mask):
-        return None
-
-    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
-
-    slices = tuple(
-        slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
-        for dim_nnz_indices in nnz
-    )
-    hcube = select_mask[tuple(slices)]
-    if skip_value is not None:
-        ignore_mask = index_array == skip_value
-        hcube = hcube | ignore_mask[tuple(slices)]
-    if not xp.all(hcube):
-        return None
-
-    return slices
 
 
 # -- Specialized implementations for builtin operations on array fields --

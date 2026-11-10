@@ -6,13 +6,24 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`ArrayOps` for JAX arrays, and `NdArrayField` as a JAX pytree."""
+"""
+`ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
+
+Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
+connectivity table inside a trace is in one of three cases, told apart by
+`_values`:
+
+- concrete: operations reading its values run under `jax.ensure_compile_time_eval`;
+- a tracer standing for a concrete table, which it got as a pytree leaf: the
+  values are read from that table, kept in a `_StaticTable`;
+- a tracer computed inside the trace: there are no values, all its targets are
+  assumed to be in range and the gather clamps them.
+"""
 
 from __future__ import annotations
 
-import dataclasses
-from collections.abc import Callable
-from typing import Any, Optional, TypeAlias, cast
+from collections.abc import Callable, Mapping
+from typing import Any, ClassVar, Optional, TypeAlias
 
 import array_api_compat
 import jax
@@ -24,7 +35,53 @@ from gt4py.next.embedded import array_ops, nd_array_field
 from gt4py.next.ffront import experimental, fbuiltins
 
 
+class _StaticTable:
+    """
+    The concrete array `values` holding the values of `table`, a placeholder of a trace.
+
+    It is also the pytree aux data of a connectivity, without `table`: two are equal
+    if their values are the same array.
+    """
+
+    __slots__ = ("table", "values")
+
+    def __init__(self, values: core_defs.NDArrayObject, table: Any = None) -> None:
+        self.values = values
+        self.table = table
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _StaticTable) and self.values is other.values
+
+    def __hash__(self) -> int:
+        return id(self.values)
+
+    def __repr__(self) -> str:
+        return f"<values of the array at {id(self.values):#x}>"
+
+
+def _has_values(table: Any) -> bool:
+    return isinstance(table, np.ndarray | jax.Array) and not isinstance(table, jax.core.Tracer)
+
+
+def _values(table: Any, static: Optional[_StaticTable]) -> Optional[core_defs.NDArrayObject]:
+    """Return the concrete array with the values of `table`, `None` if they exist only at run time."""
+    if _has_values(table):
+        return table
+    # a connectivity copied with another table still carries the `static` of the old one
+    return static.values if static is not None and static.table is table else None
+
+
+def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
+    # adding the coordinates would stage the table under a trace even for concrete offsets
+    with jax.ensure_compile_time_eval():
+        return nd_array_field._as_offset(offset, offset_field)
+
+
 class JaxOps(array_ops.ArrayOps):
+    builtin_overrides: ClassVar[Mapping[Any, Callable[..., Any]]] = {
+        experimental.as_offset: _as_offset
+    }
+
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         return value
 
@@ -39,6 +96,51 @@ class JaxOps(array_ops.ArrayOps):
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+
+    def hyperslice(
+        self,
+        table: core_defs.NDArrayObject,
+        image_range: common.UnitRange,
+        skip_value: Optional[core_defs.IntegralScalar] = None,
+        *,
+        static: Optional[_StaticTable] = None,
+    ) -> Optional[tuple[slice, ...]]:
+        values = _values(table, static)
+        if values is None:
+            return (slice(None),) * table.ndim
+        if values is not table:
+            return array_ops.of(values).hyperslice(values, image_range, skip_value)
+        with jax.ensure_compile_time_eval():
+            return super().hyperslice(table, image_range, skip_value)
+
+    def restrict_table(
+        self,
+        table: core_defs.NDArrayObject,
+        key: common.RelativeIndexSequence,
+        *,
+        static: Optional[_StaticTable] = None,
+    ) -> tuple[core_defs.NDArrayObject, Optional[_StaticTable]]:
+        values = _values(table, static)
+        if values is table:
+            with jax.ensure_compile_time_eval():
+                return super().restrict_table(table, key)
+        restricted, _ = super().restrict_table(table, key)
+        if values is None:
+            return restricted, None
+        restricted_values, _ = array_ops.of(values).restrict_table(values, key)
+        return restricted, _StaticTable(restricted_values, restricted)
+
+    def gather_index(
+        self,
+        index: core_defs.NDArrayObject,
+        size: int,
+        table: core_defs.NDArrayObject,
+        *,
+        static: Optional[_StaticTable] = None,
+    ) -> core_defs.NDArrayObject:
+        if _values(table, static) is None:
+            return jax.numpy.clip(index, 0, size - 1)  # type: ignore[arg-type, return-value, unused-ignore] # `NDArrayObject` typing is not complete
+        return index
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
@@ -75,164 +177,39 @@ jax.tree_util.register_pytree_node(
 )
 
 
-def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
-    # adding the coordinates would stage the table under a trace even for concrete offsets
-    with jax.ensure_compile_time_eval():
-        return nd_array_field._as_offset(offset, offset_field)
-
-
-JaxOps.builtin_overrides = {experimental.as_offset: _as_offset}
-
-
-# Under `jax.jit` a connectivity is in one of three cases (ADR 0029), each its own class:
-# its table is concrete, traced with a concrete twin, or traced without values.
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class _ConcreteConnectivity(nd_array_field.NdArrayConnectivityField):
-    """A concrete jax table, which stays concrete when used inside a trace."""
-
-    def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        with jax.ensure_compile_time_eval():
-            return super()._inverse_image(image_range)
-
-    def restrict(self, index: common.AnyIndexSpec) -> _ConcreteConnectivity:
-        with jax.ensure_compile_time_eval():
-            return cast(_ConcreteConnectivity, super().restrict(index))
-
-    __getitem__ = restrict
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class _TwinnedConnectivity(nd_array_field.NdArrayConnectivityField):
-    """A traced table whose values are known from a concrete connectivity with the same table."""
-
-    _twin: nd_array_field.NdArrayConnectivityField
-
-    def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        return self._twin._inverse_image(image_range)
-
-    def restrict(self, index: common.AnyIndexSpec) -> _TwinnedConnectivity:
-        cache_key = (id(self.ndarray), self.domain, index)
-        restricted: Optional[_TwinnedConnectivity]
-        if (restricted := self._cache.get(cache_key, None)) is None:
-            new_domain, buffer_slice = self._slice(index)
-            restricted = self._cache[cache_key] = _TwinnedConnectivity(
-                new_domain,
-                self._ndarray[buffer_slice],
-                self.codomain,
-                self.skip_value,
-                self._twin.restrict(index),
-            )
-        return restricted
-
-    __getitem__ = restrict
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class _ValueFreeConnectivity(nd_array_field.NdArrayConnectivityField):
-    """A traced table without concrete values, e.g. from `as_offset` of traced offsets."""
-
-    def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        # every target is assumed to lie inside the field; `_gather_index` clamps the others
-        return self.domain
-
-    def _gather_index(
-        self, index: core_defs.NDArrayObject, image_range: common.UnitRange
-    ) -> core_defs.NDArrayObject:
-        return jax.numpy.clip(index, 0, len(image_range) - 1)  # type: ignore[arg-type, return-value, unused-ignore] # `NDArrayObject` typing is not complete
-
-
-def _connectivity_class(
-    table: core_defs.NDArrayObject, twin: Optional[nd_array_field.NdArrayConnectivityField]
-) -> type[nd_array_field.NdArrayConnectivityField]:
-    if not isinstance(table, jax.core.Tracer):
-        return _ConcreteConnectivity
-    return _ValueFreeConnectivity if twin is None else _TwinnedConnectivity
-
-
-def _connectivity_from_array(
-    data: Any,
-    /,
-    codomain: common.Dimension,
-    *,
-    domain: Optional[common.DomainLike] = None,
-    dtype: Optional[core_defs.DType] = None,
-    skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> nd_array_field.NdArrayConnectivityField:
-    assert domain is not None
-    return _connectivity_class(data, None).from_array(
-        data, codomain, domain=domain, dtype=dtype, skip_value=skip_value
-    )
-
-
-common._connectivity.register(jax.Array, _connectivity_from_array)
-# jax >= 0.11: 'Tracer' is no longer a subclass of 'jax.Array' for 'singledispatch'
-common._connectivity.register(jax.core.Tracer, _connectivity_from_array)
-
-
-class _TwinHandle:
-    """Pytree aux data carrying a concrete connectivity, compared by the identity of its table."""
-
-    __slots__ = ("connectivity",)
-
-    def __init__(self, connectivity: nd_array_field.NdArrayConnectivityField) -> None:
-        self.connectivity = connectivity
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, _TwinHandle)
-            and self.connectivity._ndarray is other.connectivity._ndarray
-        )
-
-    def __hash__(self) -> int:
-        return id(self.connectivity._ndarray)
-
-
 _ConnectivityAuxData: TypeAlias = tuple[
-    common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_TwinHandle]
+    common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_StaticTable]
 ]
 
 
 def _flatten_connectivity(
     connectivity: nd_array_field.NdArrayConnectivityField,
 ) -> tuple[tuple[core_defs.NDArrayObject], _ConnectivityAuxData]:
-    if isinstance(connectivity, _TwinnedConnectivity):
-        handle: Optional[_TwinHandle] = _TwinHandle(connectivity._twin)
-    elif isinstance(connectivity, _ValueFreeConnectivity):
-        handle = None
-    else:
-        handle = _TwinHandle(connectivity)
-    return (connectivity._ndarray,), (
+    table = connectivity._ndarray
+    values = _values(table, connectivity._static)
+    return (table,), (
         connectivity.domain,
         connectivity.codomain,
         connectivity.skip_value,
-        handle,
+        None if values is None else _StaticTable(values),
     )
 
 
 def _unflatten_connectivity(
     aux_data: _ConnectivityAuxData, children: tuple[core_defs.NDArrayObject]
 ) -> nd_array_field.NdArrayConnectivityField:
-    # one unflatten for all classes: `lax.scan` and `lax.cond` rebuild results through the
-    # unflatten of the input's class, so the class must follow from the children
-    domain, codomain, skip_value, handle = aux_data
+    domain, codomain, skip_value, static = aux_data
     (table,) = children
-    twin = None if handle is None else handle.connectivity
-    if twin is not None and isinstance(table, jax.core.Tracer):
-        return _TwinnedConnectivity(domain, table, codomain, skip_value, twin)
-    return _connectivity_class(table, twin)(domain, table, codomain, skip_value)  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+    if static is not None:
+        # jax compares the aux data of the branches of `lax.cond` and of the carry of `lax.scan`
+        # on trees it rebuilds around placeholders that are not tracers, so they keep it as well
+        static = None if _has_values(table) else _StaticTable(static.values, table)
+    return nd_array_field.NdArrayConnectivityField(domain, table, codomain, skip_value, static)  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 
-# jax registers pytree nodes by exact type
-for _cls in (
-    nd_array_field.NdArrayConnectivityField,
-    _ConcreteConnectivity,
-    _TwinnedConnectivity,
-    _ValueFreeConnectivity,
-):
-    jax.tree_util.register_pytree_node(
-        _cls,  # type: ignore[type-abstract, unused-ignore] # see 'NdArrayField' above
-        _flatten_connectivity,
-        _unflatten_connectivity,
-    )
+# jax registers pytree nodes by exact type, so the connectivity needs its own registration
+jax.tree_util.register_pytree_node(
+    nd_array_field.NdArrayConnectivityField,  # type: ignore[type-abstract, unused-ignore] # see 'NdArrayField' above
+    _flatten_connectivity,
+    _unflatten_connectivity,
+)
