@@ -30,10 +30,18 @@ Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/
 
 #### Who can trigger it
 
-Every path that spends inference credit requires a trusted author, in two layers:
+Both paths that spend inference credit go through **one** authorization check: the `Authorize` step resolves the actor's *effective* repository permission and requires `write`, `maintain` or `admin`. The actor is the PR author for automatic review and the commenter for a command.
 
-- **Automatic review** requires the PR author's `author_association` to be `OWNER`, `MEMBER` or `COLLABORATOR`. This is not merely belt-and-braces: GitHub's fork-PR approval settings do not apply here, because "[since the base branch is considered trusted, workflows triggered by these events will always run, regardless of approval settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#controlling-changes-from-forks-to-workflows-in-public-repositories)". Without the check, any stranger could spend the project's CSCS allocation by opening pull requests. GT4Py's core developers are all `MEMBER` even when pushing from a personal fork, so automatic review still covers essentially all real traffic; an outside contributor's PR gets reviewed when a maintainer asks with `/review`.
-- **Comment commands** additionally resolve the commenter's *effective* repository permission and require `write`, `maintain` or `admin`. `author_association` alone is not an authorization decision: `MEMBER` only proves organization membership, and an organization whose base permission is read still yields `MEMBER`; `COLLABORATOR` includes outside collaborators with read-only or triage access. Those principals could otherwise spend credit and, through `/describe`, have the bot rewrite a PR title and body they are not allowed to edit themselves. The check fails closed, so an API error disables comment commands but leaves automatic review working.
+This check is what makes the automatic path safe. GitHub's fork-PR approval setting does not apply, because "[since the base branch is considered trusted, workflows triggered by these events will always run, regardless of approval settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#controlling-changes-from-forks-to-workflows-in-public-repositories)". Without it, any stranger could spend the project's CSCS allocation by opening pull requests. An outside contributor's PR is reviewed when a maintainer asks with `/review`.
+
+Deliberately **not** `author_association`, for two independent reasons:
+
+- It does not identify who it appears to. Webhook payloads report `MEMBER` only for *public* organization members; private members appear as `CONTRIBUTOR` or `NONE`. GridTools has exactly one public member, so an association gate would skip essentially every core developer — and with `continue-on-error` on a skipped job, silently.
+- It is not an authorization decision even when it is accurate. An organization whose base permission is read still yields `MEMBER`, and `COLLABORATOR` includes outside collaborators with read-only or triage access. Such a principal could otherwise spend credit and, through `/describe`, have the bot rewrite a PR title and body they are not allowed to edit themselves.
+
+The check **fails closed**: an API error disables the bot rather than opening it up. GitHub documents the collaborator-permission endpoint as accepting an installation access token with `Metadata: read`, which `GITHUB_TOKEN` always carries, so a 403 is not expected — but this has not been exercised live. If the bot goes quiet on both paths at once, read the `Authorize` step's log first.
+
+Draft PRs are skipped until marked ready. The Action's automatic path has no draft check of its own, so without the workflow's `draft == false` condition a draft PR would be reviewed once on `opened` and again on `ready_for_review`.
 
 Unlike GitHub Copilot code review, which reads only `.github/` files and therefore needs the review rules restated in [`copilot-instructions.md`](../../../.github/copilot-instructions.md), PR Agent reads `AGENTS.md` directly through its `repo_context_files` setting. Prefer extending `AGENTS.md` over duplicating guidance into `.pr_agent.toml`.
 
@@ -78,9 +86,9 @@ context_window = min(PR_AGENT_MODEL_CONTEXT_WINDOW, PR_AGENT_TOKEN_BUDGET)
 diff_budget    = context_window - PR_AGENT_MAX_OUTPUT_TOKENS - rendered_prompt_tokens
 ```
 
-The diff packer evaluates that budget *unclamped*. An output reserve at or above the token budget therefore makes it negative, every file is skipped as "too large", and the model is asked to review an empty diff — no configuration error is raised. That is the same "the bot posted nothing" symptom that reserving output tokens exists to prevent, so keep a wide margin between `PR_AGENT_TOKEN_BUDGET` and `PR_AGENT_MAX_OUTPUT_TOKENS`. With the defaults above the diff budget starts at 49152 tokens, far more than a typical GT4Py PR needs.
+The diff packer evaluates that budget *unclamped*. An output reserve at or above the token budget therefore makes it negative and every file is skipped as "too large"; PR Agent logs `Empty diff for PR`, raises `No PR diff fits the /review request`, exhausts the fallback chain and fails. Since the job is `continue-on-error`, the PR shows nothing and the only trace is the run log — so keep a wide margin between `PR_AGENT_TOKEN_BUDGET` and `PR_AGENT_MAX_OUTPUT_TOKENS`. With the defaults above the diff budget starts at 49152 tokens, far more than a typical GT4Py PR needs.
 
-`PR_AGENT_MODEL_CONTEXT_WINDOW` cannot be dropped: the model CSCS serves is absent from PR Agent's model table, and `PR_AGENT_TOKEN_BUDGET` "only caps a resolved limit; it cannot supply a missing model limit". Values of `PR_AGENT_MAX_OUTPUT_TOKENS` below 4096 are silently raised to 4096.
+`PR_AGENT_MODEL_CONTEXT_WINDOW` cannot be dropped: the model CSCS serves is absent from PR Agent's model table, and `PR_AGENT_TOKEN_BUDGET` "only caps a resolved limit; it cannot supply a missing model limit". Values of `PR_AGENT_MAX_OUTPUT_TOKENS` below 4096 are raised to 4096, with a warning in the run log.
 
 The PR Agent version is **not** a variable. GitHub does not allow expressions in a step's `uses`, so it is pinned in the workflow, by digest with the release version in a comment. Upgrading is therefore a reviewed change, which is appropriate for the image that receives the inference key. It is the only version this workflow pins; it uses no other actions.
 

@@ -40,46 +40,53 @@ on:
 # does NOT make the model's output inert -- 'issues: write' and
 # 'pull-requests: write' let PR Agent publish comments, and would let it set
 # labels or rewrite a PR title/body, all from model output derived from
-# untrusted PR text. Label writes are disabled in '.pr_agent.toml' and
-# '/describe' is not run automatically; keep it that way, and do not widen these
-# permissions.
+# untrusted PR text. Automatic review is the only thing that runs unprompted,
+# and its label writes are disabled in '.pr_agent.toml'; '/describe' and
+# '/generate_labels' can still write PR metadata, but only when a maintainer
+# asks for them. Keep it that way, and do not widen these permissions.
 permissions:
   contents: read
   issues: write
   pull-requests: write
 
+# 'cancel-in-progress' is deliberately false. A workflow-level concurrency
+# group is claimed when the run is QUEUED, before the job 'if' is evaluated, so
+# every 'issue_comment' event joins this group even when its job is then
+# skipped. With cancellation on, any comment on a PR -- from anyone, including
+# a plain "hi" -- would kill that PR's in-flight review, leaving no trace on
+# the PR. That is both an outsider-reachable denial of service and a
+# self-inflicted one: most comments in this repo are 'cscs-ci run ...', which
+# routinely lands seconds after a PR is opened. Serializing instead of
+# cancelling keeps one review per PR at a time without that hole.
 concurrency:
   group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   pr-agent:
-    # Every path that spends inference credit requires a trusted author.
+    # This condition carries only cheap, structural filters. Authorization is
+    # the 'Authorize' step's job -- deliberately NOT 'author_association',
+    # which does not mean what it appears to: webhook payloads report 'MEMBER'
+    # only for *public* organization members, and private members show up as
+    # 'CONTRIBUTOR' or 'NONE'. GridTools has exactly one public member, so an
+    # association gate here would skip essentially every core developer, and
+    # 'continue-on-error' on a skipped job would make that silent.
     #
-    # Automatic review is gated on the PR author's association and NOT merely on
-    # the sender not being a bot: 'pull_request_target' is exempt from the
-    # "require approval for outside contributors" fork setting, so without this
-    # check any stranger could spend the project's CSCS allocation just by
-    # opening (or reopening) pull requests. GT4Py's core developers are all
-    # 'MEMBER' even when they push from a personal fork, so this keeps automatic
-    # review on essentially all real traffic; an outside contributor's PR is
-    # reviewed when a maintainer asks for it with '/review'.
-    #
-    # Comment commands are gated on the commenter's association for the same
-    # reason. Association is a coarse signal -- see the 'Authorize' step, which
-    # checks effective repository permission before anything is spent.
+    # 'draft == false' avoids reviewing a PR twice. The Action's automatic path
+    # has no draft check of its own (unlike its pull_request_review path), so
+    # without this a draft PR is reviewed once on 'opened' and again on
+    # 'ready_for_review'. This way each PR is reviewed once, when it is ready.
     if: >-
       github.event.sender.type != 'Bot'
       && (
         (
           (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
-          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+          && github.event.pull_request.draft == false
         )
         || (
           github.event_name == 'issue_comment'
           && github.event.issue.pull_request != null
           && startsWith(github.event.comment.body, '/')
-          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
         )
       )
     runs-on: ubuntu-latest
@@ -90,38 +97,48 @@ jobs:
     continue-on-error: true
     timeout-minutes: 15
     steps:
-      # 'author_association' is not an authorization decision: MEMBER only means
-      # organization membership (an org whose base permission is 'read' still
-      # yields MEMBER), and COLLABORATOR covers outside collaborators with
-      # read-only or triage access. Those principals would otherwise be able to
-      # spend inference credit and, via '/describe', have the bot rewrite a PR
-      # title and body they could not edit themselves. So resolve the
-      # commenter's effective permission before running anything.
+      # The single authorization point, for BOTH paths: resolve the actor's
+      # effective repository permission and require write or better. This is
+      # what makes the automatic path safe -- 'pull_request_target' is exempt
+      # from the "require approval for outside contributors" fork setting
+      # ("workflows triggered by these events will always run, regardless of
+      # approval settings"), so without a check here any stranger could spend
+      # the project's CSCS allocation just by opening pull requests. An outside
+      # contributor's PR is reviewed when a maintainer asks with '/review'.
       #
-      # Fails closed: any API error leaves 'allowed' false. The blast radius of
-      # that is comment commands only -- automatic review skips this check.
+      # Effective permission rather than 'author_association' because the
+      # latter is both wrong for private org members (see the job 'if') and too
+      # weak: an org whose base permission is 'read' still yields 'MEMBER', and
+      # 'COLLABORATOR' covers outside collaborators with read-only or triage
+      # access. Such a principal could otherwise spend credit and, via
+      # '/describe', have the bot rewrite a PR title and body they are not
+      # allowed to edit themselves.
+      #
+      # Fails closed: any API error leaves 'allowed' false, which disables the
+      # bot rather than opening it up. GitHub documents this endpoint as
+      # accepting an installation access token with 'Metadata: read', which
+      # GITHUB_TOKEN always carries, so a 403 is not expected -- but it has not
+      # been exercised live. If the bot goes quiet everywhere, read this step's
+      # log first.
       - name: Authorize
         id: auth
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Via env, not inline in the script, so the value is never substituted
-          # into the shell command.
-          COMMENTER: ${{ github.event.comment.user.login }}
           REPO: ${{ github.repository }}
+          # The PR author on the automatic path, the commenter on the command
+          # path. Passed via env, not inline, so a login is never substituted
+          # into the shell command.
+          ACTOR: ${{ github.event_name == 'issue_comment' && github.event.comment.user.login || github.event.pull_request.user.login }}
         run: |
-          if [ "${{ github.event_name }}" != "issue_comment" ]; then
-            echo "allowed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          level=$(gh api "repos/${REPO}/collaborators/${COMMENTER}/permission" \
+          level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
             --jq '.permission' 2>/dev/null || echo "none")
           case "${level}" in
             admin | maintain | write)
-              echo "::notice::${COMMENTER} has '${level}' permission; running PR Agent."
+              echo "::notice::${ACTOR} has '${level}' permission; running PR Agent."
               echo "allowed=true" >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "::notice::${COMMENTER} has '${level}' permission; skipping PR Agent."
+              echo "::notice::${ACTOR} has '${level}' permission; skipping PR Agent."
               echo "allowed=false" >> "$GITHUB_OUTPUT"
               ;;
           esac
@@ -164,10 +181,12 @@ jobs:
           #                                   - rendered_prompt_tokens
           #
           # The diff packer evaluates that budget unclamped, so an output
-          # reserve at or above the token budget makes it negative, every file
-          # is then skipped as "too large", and the model is asked to review an
-          # empty diff -- no configuration error is raised. Keep a wide margin
-          # between TOKEN_BUDGET and MAX_OUTPUT_TOKENS.
+          # reserve at or above the token budget makes it negative and every
+          # file is skipped as "too large". PR Agent then logs "Empty diff for
+          # PR" and raises "No PR diff fits the /review request", exhausts the
+          # fallback chain and fails. Because the job is 'continue-on-error'
+          # the PR shows nothing at all, so the only trace is the run log.
+          # Keep a wide margin between TOKEN_BUDGET and MAX_OUTPUT_TOKENS.
           #
           # With the defaults below: min(131072, 65536) - 16384 = 49152 tokens
           # of input, which is far more than a typical GT4Py PR needs (the
@@ -190,7 +209,8 @@ jobs:
           # serves is a reasoning model, and reasoning tokens are spent from
           # this budget before any answer is emitted. Left unset (0), the
           # provider default applies and a review can come back truncated
-          # mid-YAML or empty. Values below 4096 are silently raised to 4096.
+          # mid-YAML or empty. Values below 4096 are raised to 4096, with a
+          # warning in the run log.
           config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
