@@ -12,8 +12,9 @@ on:
     types: [created]
 
   ## TEMPORARY, for testing this workflow on its own pull request. Works only
-  ## for branches in GridTools/gt4py, and cannot test '.pr_agent.toml', which
-  ## is always read from the default branch. Remove before merging.
+  ## for branches in GridTools/gt4py. '.pr_agent.toml' still comes from the
+  ## default branch unless PR_AGENT_CONFIG_BRANCH is set, which the env block
+  ## below does. Remove before merging.
   pull_request:
     branches:
       - main
@@ -58,7 +59,7 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 22
     steps:
       # Effective permission rather than 'author_association', which reports
       # private organization members as 'CONTRIBUTOR' and does not imply write
@@ -107,7 +108,7 @@ jobs:
           MODEL: ${{ vars.PR_AGENT_MODEL }}
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
           BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
-          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
+          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
         run: |
           fail() {
             echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
@@ -155,22 +156,42 @@ jobs:
           config.custom_model_max_tokens: ${{ steps.models.outputs.budget }}
           config.max_model_tokens: ${{ steps.models.outputs.budget }}
           # Reasoning models spend this budget before answering, so too small a
-          # reserve returns a truncated or empty review.
+          # reserve returns an empty response with finish_reason 'length'.
+          # Measured against this repository's own diff: GLM-5.3-Flash emitted
+          # 11k output tokens, and Qwen3.8-Flash-Next was truncated at 16384.
           config.max_output_tokens: ${{ steps.models.outputs.output }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
+          # The 120 s default is below what these models need: measured on this
+          # repository's diff, GLM-5.3 answered in 49 s but GLM-5.3-Flash took
+          # 124 s, and PR Agent's review prompt is larger again. A timeout
+          # retry on the same model would only double the wait before the
+          # fallback, so the chain moves on instead; three models at this
+          # timeout stay inside the job's limit.
+          config.ai_timeout: "360"
+          config.retry_same_model_on_timeout: "false"
           # '/describe' and '/generate_labels' write PR metadata from model
           # output and '/improve' is noisy, so all three stay behind a human
           # request.
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
-          ## TEMPORARY, with the 'pull_request' trigger above. PR Agent does not
-          ## auto-review on 'synchronize', so pushing to the PR would otherwise
-          ## log "Skipping action: synchronize" and do nothing. Remove before
-          ## merging, together with that trigger.
+          ## TEMPORARY, with the 'pull_request' trigger above. Remove both before
+          ## merging.
+          ##
+          ## PR Agent does not auto-review on 'synchronize', so pushing to the
+          ## PR would otherwise log "Skipping action: synchronize" and do
+          ## nothing.
+          ##
+          ## '.pr_agent.toml' is read from the default branch, where it does
+          ## not exist until this merges, so without the config branch a test
+          ## run silently exercises built-in defaults instead of this repo's
+          ## policy. A literal branch name is safe here; never derive it from
+          ## PR input such as 'github.head_ref', which would let a pull request
+          ## supply its own policy.
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          PR_AGENT_CONFIG_BRANCH: ci-pr-agent
           # Here rather than in '.pr_agent.toml' because that file is fetched
           # over the API, and a failed fetch falls back to defaults that enable
           # label writes. These labels are chosen by model output, which text
