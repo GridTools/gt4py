@@ -1,31 +1,23 @@
-# PR Agent review policy for GT4Py.
-#
-# Policy only: the endpoint, model and token limits are set in
-# '.github/workflows/pr-agent.yml'. PR Agent reads this file from the default
-# branch, so a pull request cannot change the policy for its own review, and
-# edits take effect once merged to 'main'.
+# PR Agent review policy for GT4Py. Read from the default branch, so a pull
+# request cannot change the policy for its own review -- and so edits here only
+# take effect once merged. See docs/development/tools/pr-agent.md.
 
 [config]
-# Skip generated release PRs. The first pattern is PR Agent's default, which
-# setting this key replaces.
+# Release PRs are generated and have nothing to review. The first pattern is
+# PR Agent's own default, which setting this key would otherwise drop.
 ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
-# Read into every prompt, from the default branch. Extend these files rather
-# than restating their rules here. They share a 500-line budget
-# ('config.repo_context_max_lines'): these two take ~210 lines, which is why
-# 'CODING_GUIDELINES.md' (~240 lines) is not listed.
+# Extend these files rather than restating their rules here. Every listed file
+# is sent with every prompt, so the list is kept short for cost.
 repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md"]
 
 [pr_code_suggestions]
-# Applies to '/improve'. Raised from the default of 1 to drop marginal
-# suggestions.
+# Raised above the default to drop marginal suggestions.
 suggestions_score_threshold = 6
 
 [pr_reviewer]
-# Off so that '/review' only comments. When on (the default) it sets and
-# clears 'Review effort N/5' and 'Possible security concern' labels from model
-# output, which text in an untrusted diff can steer. Also set in the workflow
-# environment, which still applies if fetching this file fails; keep both in
-# step.
+# Off so that '/review' only comments: these labels are chosen by model output,
+# which text in an untrusted diff can steer. Also set in the workflow, which
+# still applies if fetching this file fails; keep both in step.
 enable_review_labels_effort = false
 enable_review_labels_security = false
 extra_instructions = """\
@@ -60,8 +52,5 @@ Style:
   over a refactor.
 - Phrase a finding that is a question rather than a defect as a question.
 """
-# Avoids a "No major issues detected" comment on every clean PR.
-publish_output_no_suggestions = false
-# Off: GT4Py PRs rarely reference a tracked ticket, so the analysis spends
-# tokens for little.
+# GT4Py PRs rarely reference a tracked ticket, so this spends tokens for little.
 require_ticket_analysis_review = false

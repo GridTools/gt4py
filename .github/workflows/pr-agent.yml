@@ -1,50 +1,36 @@
 name: PR Agent
 
-# Advisory AI review of pull requests with PR Agent
-# (https://github.com/The-PR-Agent/pr-agent) on the CSCS inference service.
-# Never a required status check. The model, its token limits and the endpoint
-# are repository variables with defaults below. Details:
-# docs/development/tools/ci-infrastructure.md#ai-assisted-pr-review-pr-agent
+# Advisory AI review of pull requests, on the CSCS inference service. Never a
+# required status check. See docs/development/tools/pr-agent.md.
 
 on:
-  # 'pull_request_target' because fork PRs get no repository secrets under
-  # 'pull_request'. Safe only while the job never checks out or runs PR code.
+  # Not 'pull_request': fork pull requests get no repository secrets there, and
+  # most GT4Py pull requests come from forks.
   pull_request_target:
     types: [opened, reopened, ready_for_review]
-  # Comment commands, e.g. '/review' or '/improve'.
   issue_comment:
     types: [created]
 
-  ## COMMENTED OUT: only for testing changes to this workflow.
-  ## 'pull_request_target' and '.pr_agent.toml' are read from the default
-  ## branch, so a PR cannot exercise its own changes to them. Uncommenting runs
-  ## the PR's version, for branches in GridTools/gt4py only. Such a PR is then
-  ## reviewed twice: both triggers fire, in separate concurrency groups.
+  ## Uncomment to exercise a change to this file on the pull request that makes
+  ## it; works only for branches in GridTools/gt4py. It cannot test
+  ## '.pr_agent.toml', which is always read from the default branch.
   # pull_request:
   #   branches:
   #     - main
-  ## END
 
-# No 'contents: write': a prompt injection in a diff must not become a way to
-# push. The two write scopes still let model output reach PR comments, labels,
-# title and body. Automatic review only comments (its label writes are off in
-# both '.pr_agent.toml' and this job's env); '/describe' and
-# '/generate_labels' write PR metadata only when a maintainer asks. Do not
-# widen these permissions.
+# Never 'contents: write': a prompt injection in a diff must not become a way
+# to push. The two write scopes are the minimum needed to publish a review, and
+# they also permit label and PR-body writes from model output -- which is why
+# automatic review has labels off and does not run '/describe'.
 permissions:
   contents: read
   issues: write
   pull-requests: write
 
-# A run joins its concurrency group when queued, before the job 'if', so every
-# comment on a PR creates a run in a group even when its job is then skipped.
-#  - 'cancel-in-progress' stays false, or any comment would kill that PR's
-#    in-flight review.
-#  - A newer run evicts a pending one in the same group, so comment runs are
-#    keyed on the comment id and a queued command cannot be displaced. PR-event
-#    runs share one group per PR, where a newer automatic review replacing a
-#    pending one saves an inference call.
-# The event name keeps comment ids and PR numbers from colliding.
+# Cancelling is unsafe here: a run joins its group when queued, before the job
+# 'if', so any comment on a pull request would kill that PR's in-flight review.
+# Keying comment runs on the comment id keeps a newer run from evicting a
+# queued command, while pull request events still collapse per PR.
 concurrency:
   group: pr-agent-${{ github.event_name }}-${{ github.event.comment.id || github.event.pull_request.number }}
   cancel-in-progress: false
@@ -52,13 +38,11 @@ concurrency:
 jobs:
   pr-agent:
     # Structural filters only; authorization is the 'Authorize' step. Drafts
-    # are skipped so a PR is reviewed once, when ready, rather than on both
-    # 'opened' and 'ready_for_review'.
+    # are skipped so a pull request is reviewed once, when it is ready.
     #
-    # The author check is separate from the sender check: a human marking a
-    # bot-authored PR ready makes the sender a user while the author stays a
-    # bot, and an app login is not a user to the permission API, so 'Authorize'
-    # would 404 and report a broken gate on a PR it should simply skip.
+    # The author bot check is not redundant with the sender check: a human
+    # marking a bot-authored pull request ready leaves the author a bot, and an
+    # app login is not a user to the permission API.
     if: >-
       github.event.sender.type != 'Bot'
       && (
@@ -76,18 +60,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # The only authorization point, for both paths: the actor (PR author for
-      # automatic review, commenter for a command) needs write permission or
-      # better. 'pull_request_target' runs for any fork PR regardless of the
-      # repository's fork-approval setting, so without this anyone could spend
-      # the CSCS allocation by opening PRs. An outside contributor's PR is
-      # reviewed when a maintainer comments '/review'.
+      # Effective permission rather than 'author_association', which reports
+      # private organization members as 'CONTRIBUTOR' and does not imply write
+      # access even when accurate. Without a check here anyone could spend the
+      # CSCS allocation by opening pull requests, since 'pull_request_target'
+      # ignores the fork-approval setting.
       #
-      # Effective permission, not 'author_association': webhook payloads report
-      # private organization members (nearly all of GridTools) as 'CONTRIBUTOR',
-      # and 'MEMBER' or 'COLLABORATOR' do not imply write access anyway.
-      #
-      # Fails closed: if the bot is silent on both paths, read this step's log.
+      # Fails closed, and separates "could not ask" from "asked and denied" so
+      # that a broken gate cannot pass for an ordinary denial.
       - name: Authorize
         id: auth
         env:
@@ -96,7 +76,6 @@ jobs:
           # Via env so a login is never substituted into the script.
           ACTOR: ${{ github.event_name == 'issue_comment' && github.event.comment.user.login || github.event.pull_request.user.login }}
         run: |
-          # An API failure is an error, not a denial, so a broken gate shows.
           if ! level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
             --jq '.permission' 2>&1); then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
@@ -114,19 +93,13 @@ jobs:
               ;;
           esac
 
-      # The models have no defaults: PR Agent must never call a model nobody
-      # chose. An unset variable would otherwise reach LiteLLM as an empty
-      # model string and fail inside the container, where the step's
-      # 'continue-on-error' would bury it. Failing here keeps it red.
+      # The models have no defaults, so PR Agent never calls a model nobody
+      # chose. Checking here keeps a misconfiguration red, rather than failing
+      # inside the step below, which tolerates failure.
       #
-      #   PR_AGENT_MODEL            one CSCS model id, exactly as
-      #                             'GET /v1/models' lists it
-      #   PR_AGENT_FALLBACK_MODELS  comma-separated ids, or 'none'
-      #
-      # The 'openai/' prefix is added here rather than stored in the variables.
-      # It is LiteLLM's selector for the OpenAI-compatible route, not part of a
-      # model name: LiteLLM strips it and sends the rest, so CSCS receives its
-      # own id. Without it the call fails with "LLM Provider NOT provided".
+      # The 'openai/' prefix is added here rather than stored in the variables:
+      # it selects LiteLLM's OpenAI-compatible route and is not part of a model
+      # name, so the variables hold ids exactly as CSCS publishes them.
       - name: Resolve models
         id: models
         if: steps.auth.outputs.allowed == 'true'
@@ -137,14 +110,13 @@ jobs:
           OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
         run: |
           fail() {
-            echo "::error::$1 See docs/development/tools/ci-infrastructure.md#configuration-variables"
+            echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
             exit 1
           }
           [ -n "${MODEL}" ] || fail "Repository variable PR_AGENT_MODEL is not set."
           [ -n "${FALLBACKS}" ] || fail "Repository variable PR_AGENT_FALLBACK_MODELS is not set; use 'none' for no fallback."
-          # The diff budget is BUDGET minus OUTPUT minus the rendered prompt. If
-          # OUTPUT reached BUDGET it would go negative, every file would be
-          # dropped, and the review would fail with "No PR diff fits".
+          # A reserve at or above the budget leaves no room for the diff, and
+          # the review then fails with "No PR diff fits" rather than saying so.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
 
           fallbacks='[]'
@@ -152,70 +124,46 @@ jobs:
           echo "fallbacks=${fallbacks}" >> "$GITHUB_OUTPUT"
           echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; input cap ${BUDGET}, output reserve ${OUTPUT}."
 
-      # No 'actions/checkout', ever: PR Agent reads the diff through the GitHub
-      # API, and checking out PR code in a 'pull_request_target' job that holds
-      # a secret is what would make this workflow dangerous.
+      # Never add 'actions/checkout' here: this job holds a secret under
+      # 'pull_request_target', and checking out pull request code is what would
+      # make that dangerous. PR Agent reads the diff through the GitHub API.
       #
       # Pinned by digest because the image receives the inference key. This is
       # the 0.50.0-github_action image; to upgrade, resolve the digest of the
       # new '<version>-github_action' tag and update this comment.
       - name: Run PR Agent
-        # 'success()' is implicit for a step 'if', but spelled out because it is
-        # what skips this step when the configuration check above fails.
         if: success() && steps.auth.outputs.allowed == 'true'
-        # Only this step tolerates failure: the inference service has no
-        # availability guarantee, and an advisory reviewer must not look like a
-        # CI failure. Authorization and configuration failures above stay red,
-        # because those are faults in this workflow and should be seen.
+        # Only this step tolerates failure. The inference service has no
+        # availability guarantee and an advisory reviewer must not look like a
+        # CI failure, while authorization and configuration faults stay red.
         continue-on-error: true
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-          # --- CSCS inference service (OpenAI-compatible route) ---
-          # Key and endpoint are host-only in PR Agent: neither '.pr_agent.toml'
-          # nor a comment argument can redirect inference. An authorized
-          # commenter can still override the model and token settings per
-          # invocation.
+          # PR Agent refuses the key and endpoint from repository config or a
+          # comment argument, so neither can be redirected by a pull request.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
           OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
           config.model: openai/${{ vars.PR_AGENT_MODEL }}
           config.fallback_models: ${{ steps.models.outputs.fallbacks }}
-          # The operative input cap. 'custom_model_max_tokens' only has to be a
-          # positive value at least as large, because get_max_tokens returns
-          # min(max_model_tokens, custom_model_max_tokens) for a model absent
-          # from PR Agent's own table -- so one number serves both, and a
-          # model's true context window never needs to be configured here.
+          # One value serves both: PR Agent takes the smaller of the two, so
+          # the model's true context window never has to be configured.
           config.custom_model_max_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
           config.max_model_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
-          # Reserved for the answer. CSCS serves reasoning models, which spend
-          # this budget on reasoning first; left unset, a review can come back
-          # truncated or empty. Values below 4096 are raised to 4096.
+          # Reasoning models spend this budget before answering, so too small a
+          # reserve returns a truncated or empty review.
           config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
-
-          # --- Which tools run automatically ---
-          # Only '/review'. '/describe' rewrites the PR body -- here the
-          # squash-commit message body and the filled-in PR template -- though
-          # it leaves the title alone at this pin, since
-          # 'pr_description.generate_ai_title' is false. It and
-          # '/generate_labels' write PR metadata from model output, so both
-          # stay behind a human request. '/improve' is on request only, to
-          # limit noise.
+          # '/describe' and '/generate_labels' write PR metadata from model
+          # output and '/improve' is noisy, so all three stay behind a human
+          # request.
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
-
-          # Repeated from '.pr_agent.toml' on purpose. That file is fetched
-          # over the GitHub API, and a non-404 failure there is only logged as
-          # a warning before PR Agent carries on with its built-in defaults --
-          # in which both of these are true, so a transient API error would let
-          # an automatic review set and clear labels chosen by model output.
-          # An env override cannot fail to load and takes precedence, so it
-          # holds either way. The rest of '.pr_agent.toml' costs only noise or
-          # tokens if it is missed, so it is not duplicated here.
+          # Repeated from '.pr_agent.toml' because a failed fetch of that file
+          # falls back to defaults that enable label writes.
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
