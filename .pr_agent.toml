@@ -19,5 +19,9 @@ suggestions_score_threshold = 6
 
 [pr_reviewer]
 extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in the repository context below."
+# An updated review already replaces its own comment in place; the default
+# also posts a second comment pointing at it, which is noise on a PR that
+# gets several pushes.
+final_update_message = false
 # GT4Py PRs rarely reference a tracked ticket, so this spends tokens for little.
 require_ticket_analysis_review = false
