@@ -1,45 +1,29 @@
 # PR Agent review policy for GT4Py.
 #
-# Only review *policy* belongs here. The inference endpoint, the model and its
-# token limits are set in '.github/workflows/pr-agent.yml' from repository
-# variables.
-#
-# Be careful about what that does and does not protect. PR Agent reads this file
-# from the default branch, so a pull request cannot change review policy by
-# editing its own copy. The endpoint and credential are additionally host-only:
-# PR Agent refuses them as comment arguments. The model and the ordinary token
-# limits are NOT in that protected set, so an authorized commenter can override
-# them for a single invocation -- which is a reason to keep comment commands
-# restricted to users with real write access, as the workflow does.
-#
-# PR Agent reads this file from the default branch, so changes take effect only
-# once merged to 'main'.
+# Policy only: the endpoint, model and token limits are set in
+# '.github/workflows/pr-agent.yml'. PR Agent reads this file from the default
+# branch, so a pull request cannot change the policy for its own review, and
+# edits take effect once merged to 'main'.
 
 [config]
-# Skip release PRs, which are generated and have no code to review.
-# The first pattern is PR Agent's own default; setting this key replaces it.
+# Skip generated release PRs. The first pattern is PR Agent's default, which
+# setting this key replaces.
 ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
-# PR Agent reads these into every prompt, from the default branch. Unlike
-# GitHub Copilot -- which only reads '.github/' files and so needs the
-# review rules restated in '.github/copilot-instructions.md' -- PR Agent can
-# read the real instruction files, so do not duplicate them here.
-# Budget is 'config.repo_context_max_lines' (500) in total; these two are ~210
-# lines, which leaves headroom. 'CODING_GUIDELINES.md' (~240 lines) is
-# deliberately left out to stay inside that budget; AGENTS.md cites it as
-# authoritative for anything a reviewer needs to look up.
+# Read into every prompt, from the default branch. Extend these files rather
+# than restating their rules here. They share a 500-line budget
+# ('config.repo_context_max_lines'): these two take ~210 lines, which is why
+# 'CODING_GUIDELINES.md' (~240 lines) is not listed.
 repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md"]
 
 [pr_code_suggestions]
-# Only surfaces on an explicit '/improve'. Default is 1, i.e. keep almost
-# everything; raised to drop marginal suggestions.
+# Applies to '/improve'. Raised from the default of 1 to drop marginal
+# suggestions.
 suggestions_score_threshold = 6
 
 [pr_reviewer]
-# Both default to true, which makes '/review' set 'Review effort N/5' and
-# 'Possible security concern' labels through the issues API -- and remove
-# previously matching ones. The label contents come from model output derived
-# from an untrusted diff, so text in a PR can steer which labels the bot
-# applies and clears. Review output stays comments only.
+# Off so that '/review' only comments. When on (the default) it sets and
+# clears 'Review effort N/5' and 'Possible security concern' labels from model
+# output, which text in an untrusted diff can steer.
 enable_review_labels_effort = false
 enable_review_labels_security = false
 extra_instructions = """\
