@@ -166,6 +166,11 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
+          ## TEMPORARY, with the 'pull_request' trigger above. PR Agent does not
+          ## auto-review on 'synchronize', so pushing to the PR would otherwise
+          ## log "Skipping action: synchronize" and do nothing. Remove before
+          ## merging, together with that trigger.
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
           # Here rather than in '.pr_agent.toml' because that file is fetched
           # over the API, and a failed fetch falls back to defaults that enable
           # label writes. These labels are chosen by model output, which text
