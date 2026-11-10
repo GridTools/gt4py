@@ -155,25 +155,42 @@ jobs:
           # what we want: Qwen spends far fewer tokens on reasoning.
           config.fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS || '["openai/Qwen/Qwen3.8-27B-FP8"]' }}
 
-          # The two limits below are properties of whichever model
-          # PR_AGENT_MODEL selects, so they are variables too: changing the
-          # model without changing them is how this gets misconfigured.
+          # --- Token budget: these three interact, do not tune one alone ---
           #
-          # The model CSCS serves is absent from PR Agent's model table, so its
-          # limits must be declared or PR Agent treats the model as unknown.
-          # Note that 'config.max_model_tokens' (default 32000) caps the *input*
-          # for any model regardless of this value; we leave that default in
-          # place deliberately as a cost bound, since it comfortably covers
-          # GT4Py's typical PR size. Raise it if large PRs start getting
-          # clipped.
-          config.custom_model_max_tokens: ${{ vars.PR_AGENT_MODEL_MAX_TOKENS || '131072' }}
-          # Load-bearing: every model CSCS serves is a reasoning model, and
-          # reasoning tokens are drawn from the same output budget before any
-          # answer is emitted. Left unset (0), the provider default applies and
-          # a review can come back truncated mid-YAML or empty -- which looks
-          # like "the bot posted nothing" rather than a clean error. The default
-          # here is the output budget CSCS publishes for GLM-5.3.
-          config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
+          # PR Agent computes, in pr_agent/algo/token_budget.py:
+          #
+          #   context_window = min(MODEL_CONTEXT_WINDOW, TOKEN_BUDGET)
+          #   input_capacity = context_window - MAX_OUTPUT_TOKENS
+          #   available      = input_capacity - rendered_prompt_tokens
+          #
+          # and clamps 'available' at zero. So an output reserve at or above
+          # the token budget silently leaves NO room for the diff: the review
+          # is attempted with an empty patch instead of failing loudly. Keep a
+          # wide margin between TOKEN_BUDGET and MAX_OUTPUT_TOKENS.
+          #
+          # With the defaults below: min(131072, 65536) - 16384 = 49152 tokens
+          # of input, which is far more than a typical GT4Py PR needs (the
+          # median is ~212 changed lines) while still bounding spend well below
+          # the million-token window GLM-5.3 would otherwise accept. Oversized
+          # diffs are clipped rather than rejected ('large_patch_policy').
+          #
+          # All three are properties of whichever model PR_AGENT_MODEL selects,
+          # so all three are variables: changing the model without them is how
+          # this gets misconfigured, and the failure is quiet.
+
+          # What the model can do. Required because the model CSCS serves is
+          # absent from PR Agent's model table, and an unknown model with no
+          # declared limit raises. On its own this only raises a ceiling.
+          config.custom_model_max_tokens: ${{ vars.PR_AGENT_MODEL_CONTEXT_WINDOW || '131072' }}
+          # What we allow. This is the operative cap: it clamps the value
+          # above, and is the number the input capacity is computed from.
+          config.max_model_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          # Headroom reserved for the answer. Load-bearing: every model CSCS
+          # serves is a reasoning model, and reasoning tokens are spent from
+          # this budget before any answer is emitted. Left unset (0), the
+          # provider default applies and a review can come back truncated
+          # mid-YAML or empty. Values below 4096 are silently raised to 4096.
+          config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
