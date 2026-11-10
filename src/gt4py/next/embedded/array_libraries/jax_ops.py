@@ -201,9 +201,9 @@ def _unflatten_connectivity(
     domain, codomain, skip_value, static = aux_data
     (table,) = children
     if static is not None:
-        # jax compares the aux data of the branches of `lax.cond` and of the carry of `lax.scan`
-        # on trees it rebuilds around placeholders that are not tracers, so they keep it as well
-        static = None if _has_values(table) else _StaticTable(static.values, table)
+        # not only for tracers: jax compares the aux data of the branches of `lax.cond` and of
+        # the carry of `lax.scan` on trees it rebuilds around other placeholders
+        static = _StaticTable(static.values, table)
     return nd_array_field.NdArrayConnectivityField(domain, table, codomain, skip_value, static)  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 

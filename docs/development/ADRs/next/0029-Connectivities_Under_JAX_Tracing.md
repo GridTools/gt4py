@@ -26,7 +26,7 @@ There is one connectivity class, `NdArrayConnectivityField`, for all array libra
 
 A connectivity stores one opaque value for its `ArrayOps`, `_static`, and hands it to these methods. For a table that is a tracer, `JaxOps` keeps there the concrete array with the same values, the static values, together with the tracer they belong to. A connectivity that got another table, for example through `dataclasses.replace`, does not match its `_static` any more and is treated as having none.
 
-The connectivity is a pytree node. The table is the child. The aux data holds domain, codomain, skip value and the static values, compared by the identity of the array: a new wrapper around the same buffer does not retrace, a new buffer does. Flattening emits them if the table is concrete or a tracer with matching `_static`. Unflattening around anything but a concrete array attaches them.
+The connectivity is a pytree node. The table is the child. The aux data holds domain, codomain, skip value and the static values, compared by the identity of the array: a new wrapper around the same buffer does not retrace, a new buffer does. Flattening emits them if the table is concrete or a tracer with matching `_static`. Unflattening attaches them to the new child, whatever it is; a concrete child does not need them.
 
 How a `premap` behaves under `jit` depends on how its connectivity reaches the compiled function:
 
@@ -43,7 +43,7 @@ The aux data claims that the child has the static values. Where jax rebuilds a p
 - At the entry of `jit`, of a nested `jit`, and for the operands of `lax.cond`, the new tracer stands for the flattened table.
 - `lax.cond` and `lax.switch` require all branches to return the same aux data, and `lax.scan`, `lax.while_loop` and `lax.fori_loop` require the carry to keep its aux data. Selecting between two tables, changing the table of a carried connectivity, or mixing a table that has static values with one computed in the trace raises jax's `TypeError` about differing pytree structure. The same table on all branches, or an unchanged carry, keeps its static values.
 
-For that check jax rebuilds the trees around placeholders that are not tracers, which is why unflattening attaches the static values to those as well.
+For that check jax rebuilds the trees around placeholders that are not tracers, which is why unflattening attaches the static values to every child.
 
 ## Consequences
 
