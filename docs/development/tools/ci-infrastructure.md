@@ -82,33 +82,34 @@ Running inference at CSCS also keeps PR content on infrastructure CSCS controls:
 
 The model, its token limits and the endpoint are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
 
-| Variable                   | Default                            | Purpose                                                     |
-| -------------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| `PR_AGENT_MODEL`           | **none — required**                | One CSCS model id, exactly as `GET /v1/models` lists it     |
-| `PR_AGENT_FALLBACK_MODELS` | **none — required**                | Comma-separated ids, tried in order; `none` for no fallback |
-| `PR_AGENT_MODELS`          | **none — required**                | JSON table of per-model limits (below)                      |
-| `PR_AGENT_API_BASE`        | `https://api.inference.cscs.ch/v1` | Inference endpoint                                          |
+| Variable                     | Default                            | Purpose                                                     |
+| ---------------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `PR_AGENT_MODEL`             | **none — required**                | One CSCS model id, exactly as `GET /v1/models` lists it     |
+| `PR_AGENT_FALLBACK_MODELS`   | **none — required**                | Comma-separated ids, tried in order; `none` for no fallback |
+| `PR_AGENT_TOKEN_BUDGET`      | `65536`                            | Input cap per request                                       |
+| `PR_AGENT_MAX_OUTPUT_TOKENS` | `16384`                            | Headroom reserved for the answer                            |
+| `PR_AGENT_API_BASE`          | `https://api.inference.cscs.ch/v1` | Inference endpoint                                          |
 
-The model ids are stored bare. The workflow prepends `openai/`, which is LiteLLM's selector for the OpenAI-compatible route and not part of a model name: LiteLLM strips it and sends the remainder, so CSCS receives exactly the id it published. Without a prefix the call fails with `LLM Provider NOT provided`, and the prefix belongs with `PR_AGENT_API_BASE` rather than inside each id.
+Model ids are stored bare. The workflow prepends `openai/`, which is LiteLLM's selector for the OpenAI-compatible route and not part of a model name: LiteLLM strips it and sends the remainder, so CSCS receives exactly the id it published. Without a prefix the call fails with `LLM Provider NOT provided`, and the prefix belongs with `PR_AGENT_API_BASE` rather than inside every id.
 
-Neither model variable has a default, so PR Agent never calls a model nobody chose. `PR_AGENT_MODELS` carries the limits for every id either of them may name:
+Neither model variable has a default, so PR Agent never calls a model nobody chose. The `Resolve models` step checks both before the container starts and fails with an `::error::` naming the unset one.
 
-```json
-{
-  "zai-org/GLM-5.3":      {"context_window": 1048576, "token_budget": 65536, "max_output_tokens": 16384},
-  "Qwen/Qwen3.8-27B-FP8": {"context_window": 262144,  "token_budget": 65536, "max_output_tokens": 16384}
-}
-```
+The two token limits are **policy, not model properties**. PR Agent has no per-model limits — `get_max_tokens` returns `min(max_model_tokens, custom_model_max_tokens)` and applies it to whichever model serves the request — so a single pair governs the primary and every fallback. Choose values that fit the smallest model in use:
 
-- `context_window` is what the model is capable of, as CSCS publishes it.
-- `token_budget` is the input cap we choose — deliberately well below `context_window`, since spend comes out of the project's compute allocation.
-- `max_output_tokens` is the headroom reserved for the answer. CSCS serves reasoning models, which spend it on reasoning before emitting anything, so it cannot be small.
+| Model                                                | Context window | Max output |
+| ---------------------------------------------------- | -------------- | ---------- |
+| `zai-org/GLM-5.3`                                    | 1,048,576      | 32,768     |
+| `zai-org/GLM-5.3-Flash`                              | 1,048,576      | 32,768     |
+| `Qwen/Qwen3.8-27B-FP8`                               | 262,144        | —          |
+| `Qwen/Qwen3.8-Flash-Next-FP8`                        | 262,144        | —          |
+| `google/gemma-4-31B-it`                              | 262,144        | —          |
+| `swiss-ai/Apertus-v1.5-70B` (and `-8B`, `-thinking`) | 262,144        | —          |
 
-Keeping the limits in the table with the model is what stops them drifting apart: selecting a model selects its limits, instead of leaving three separate variables to be updated in step.
+Check the current catalogue and limits against `GET /v1/models` and the [CSCS model table](https://docs.cscs.ch/services/inference/), since the catalogue changes on short notice. The defaults above sit far inside every row.
 
-The `Resolve models` step reads all three variables before the container starts and **fails with an `::error::` naming the problem** if a variable is unset, the table is not JSON, an id has no entry, or an entry does not satisfy `context_window >= token_budget > max_output_tokens`. That last constraint matters: the diff budget is `token_budget` minus `max_output_tokens` minus the rendered prompt, and if the reserve reached the budget the budget would go negative, every file would be dropped, and the review would fail with `No PR diff fits the /review request` — visible only in the run log, because the job is `continue-on-error`.
+`config.custom_model_max_tokens` is set to the same value as the budget. It only has to be a positive number at least as large, because the `min()` above makes any larger value equivalent — so a model's true context window never has to be configured, only respected when choosing the budget.
 
-Each limit passed to PR Agent is the **minimum across the primary and every fallback**. PR Agent applies one set of limits to whichever model serves a request, since `get_max_tokens` uses `config.custom_model_max_tokens` for any model absent from its own table, so a fallback with a smaller window would otherwise be overrun.
+The diff budget is `PR_AGENT_TOKEN_BUDGET` minus `PR_AGENT_MAX_OUTPUT_TOKENS` minus the rendered prompt, and the step refuses a budget that does not exceed the reserve. If it went negative, every file would be dropped and the review would fail with `No PR diff fits the /review request` — visible only in the run log, since the job is `continue-on-error`.
 
 The PR Agent version is **not** a variable. GitHub does not allow expressions in a step's `uses`, so it is pinned in the workflow, by digest with the release version in a comment. Upgrading is therefore a reviewed change, which is appropriate for the image that receives the inference key. It is the only version this workflow pins; it uses no other actions.
 

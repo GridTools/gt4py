@@ -112,39 +112,27 @@ jobs:
               ;;
           esac
 
-      # Models and their limits come from repository variables, with no
-      # defaults: PR Agent must never call a model nobody chose.
+      # The models have no defaults: PR Agent must never call a model nobody
+      # chose. An unset variable would otherwise reach LiteLLM as an empty
+      # model string and fail inside the container, where 'continue-on-error'
+      # would bury it, so fail here by name instead.
       #
       #   PR_AGENT_MODEL            one CSCS model id, exactly as
       #                             'GET /v1/models' lists it
       #   PR_AGENT_FALLBACK_MODELS  comma-separated ids, or 'none'
-      #   PR_AGENT_MODELS           JSON table of per-model limits:
-      #     {"<id>": {"context_window": N, "token_budget": N,
-      #               "max_output_tokens": N}, ...}
       #
-      # The 'openai/' prefix is added here, not stored in the variables. It is
-      # LiteLLM's selector for the OpenAI-compatible route, not part of a model
-      # name: LiteLLM strips it and sends the rest, so CSCS receives its own id.
-      # Without it the call fails with "LLM Provider NOT provided".
-      #
-      # Each limit is the MINIMUM across the primary and every fallback,
-      # because PR Agent applies one set of limits to whichever model serves
-      # the request (get_max_tokens uses config.custom_model_max_tokens for any
-      # model absent from its table). A fallback with a smaller window would
-      # otherwise be overrun.
-      #
-      # 'token_budget' is the input cap we choose, well under the model's
-      # 'context_window', and the diff budget is 'token_budget' minus
-      # 'max_output_tokens' minus the rendered prompt. The table is rejected
-      # unless context_window >= token_budget > max_output_tokens, so the
-      # budget cannot go negative and silently leave no room for the diff.
+      # The 'openai/' prefix is added here rather than stored in the variables.
+      # It is LiteLLM's selector for the OpenAI-compatible route, not part of a
+      # model name: LiteLLM strips it and sends the rest, so CSCS receives its
+      # own id. Without it the call fails with "LLM Provider NOT provided".
       - name: Resolve models
         id: models
         if: steps.auth.outputs.allowed == 'true'
         env:
           MODEL: ${{ vars.PR_AGENT_MODEL }}
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
-          MODELS: ${{ vars.PR_AGENT_MODELS }}
+          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
         run: |
           fail() {
             echo "::error::$1 See docs/development/tools/ci-infrastructure.md#configuration-variables"
@@ -152,40 +140,15 @@ jobs:
           }
           [ -n "${MODEL}" ] || fail "Repository variable PR_AGENT_MODEL is not set."
           [ -n "${FALLBACKS}" ] || fail "Repository variable PR_AGENT_FALLBACK_MODELS is not set; use 'none' for no fallback."
-          [ -n "${MODELS}" ] || fail "Repository variable PR_AGENT_MODELS is not set."
-          jq -e 'type == "object"' >/dev/null 2>&1 <<<"${MODELS}" || fail "PR_AGENT_MODELS is not a JSON object."
+          # The diff budget is BUDGET minus OUTPUT minus the rendered prompt. If
+          # OUTPUT reached BUDGET it would go negative, every file would be
+          # dropped, and the review would fail with "No PR diff fits".
+          [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
 
-          resolved=$(jq -c -n --arg model "${MODEL}" --arg fb "${FALLBACKS}" --argjson tbl "${MODELS}" '
-            def trim: gsub("^\\s+";"") | gsub("\\s+$";"");
-            def dedupe: reduce .[] as $x ([]; if index($x) then . else . + [$x] end);
-            ($fb | if . == "none" then [] else split(",") end | map(trim)
-                 | map(select(length > 0)) | map(select(. != $model)) | dedupe) as $fallbacks
-            | ([$model] + $fallbacks) as $all
-            | ($all | map(. as $i | select($tbl | has($i) | not))) as $missing
-            | ($all | map(. as $i | select($tbl | has($i)))
-                    | map(. as $i | $tbl[$i] + {id: $i})
-                    | map(select((.context_window | type) != "number"
-                                 or (.token_budget | type) != "number"
-                                 or (.max_output_tokens | type) != "number"
-                                 or .token_budget > .context_window
-                                 or .max_output_tokens >= .token_budget))
-                    | map(.id)) as $bad
-            | {missing: $missing, bad: $bad,
-               model: ("openai/" + $model),
-               fallbacks: ($fallbacks | map("openai/" + .)),
-               window: ([$all[] | $tbl[.].context_window // empty] | min),
-               budget: ([$all[] | $tbl[.].token_budget // empty] | min),
-               output: ([$all[] | $tbl[.].max_output_tokens // empty] | min)}')
-
-          missing=$(jq -r '.missing | join(", ")' <<<"${resolved}")
-          [ -z "${missing}" ] || fail "PR_AGENT_MODELS has no entry for: ${missing}."
-          bad=$(jq -r '.bad | join(", ")' <<<"${resolved}")
-          [ -z "${bad}" ] || fail "PR_AGENT_MODELS entries need numeric context_window >= token_budget > max_output_tokens: ${bad}."
-
-          for key in model fallbacks window budget output; do
-            printf '%s=%s\n' "${key}" "$(jq -rc ".${key}" <<<"${resolved}")" >> "$GITHUB_OUTPUT"
-          done
-          echo "::notice::$(jq -r '"Model \(.model), fallbacks \(if (.fallbacks | length) == 0 then "none" else (.fallbacks | join(", ")) end); input cap \(.budget), output reserve \(.output)."' <<<"${resolved}")"
+          fallbacks='[]'
+          [ "${FALLBACKS}" = "none" ] || fallbacks=$(jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map("openai/" + .)' <<<"${FALLBACKS}")
+          echo "fallbacks=${fallbacks}" >> "$GITHUB_OUTPUT"
+          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; input cap ${BUDGET}, output reserve ${OUTPUT}."
 
       # No 'actions/checkout', ever: PR Agent reads the diff through the GitHub
       # API, and checking out PR code in a 'pull_request_target' job that holds
@@ -209,13 +172,19 @@ jobs:
           # invocation.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
           OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
-          config.model: ${{ steps.models.outputs.model }}
+          config.model: openai/${{ vars.PR_AGENT_MODEL }}
           config.fallback_models: ${{ steps.models.outputs.fallbacks }}
-          # All three resolved from PR_AGENT_MODELS by the step above, as the
-          # minimum across the primary and every fallback.
-          config.custom_model_max_tokens: ${{ steps.models.outputs.window }}
-          config.max_model_tokens: ${{ steps.models.outputs.budget }}
-          config.max_output_tokens: ${{ steps.models.outputs.output }}
+          # The operative input cap. 'custom_model_max_tokens' only has to be a
+          # positive value at least as large, because get_max_tokens returns
+          # min(max_model_tokens, custom_model_max_tokens) for a model absent
+          # from PR Agent's own table -- so one number serves both, and a
+          # model's true context window never needs to be configured here.
+          config.custom_model_max_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          config.max_model_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          # Reserved for the answer. CSCS serves reasoning models, which spend
+          # this budget on reasoning first; left unset, a review can come back
+          # truncated or empty. Values below 4096 are raised to 4096.
+          config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
