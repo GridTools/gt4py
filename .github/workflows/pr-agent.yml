@@ -160,13 +160,14 @@ jobs:
           # PR Agent computes, in pr_agent/algo/token_budget.py:
           #
           #   context_window = min(MODEL_CONTEXT_WINDOW, TOKEN_BUDGET)
-          #   input_capacity = context_window - MAX_OUTPUT_TOKENS
-          #   available      = input_capacity - rendered_prompt_tokens
+          #   diff_budget    = context_window - MAX_OUTPUT_TOKENS
+          #                                   - rendered_prompt_tokens
           #
-          # and clamps 'available' at zero. So an output reserve at or above
-          # the token budget silently leaves NO room for the diff: the review
-          # is attempted with an empty patch instead of failing loudly. Keep a
-          # wide margin between TOKEN_BUDGET and MAX_OUTPUT_TOKENS.
+          # The diff packer evaluates that budget unclamped, so an output
+          # reserve at or above the token budget makes it negative, every file
+          # is then skipped as "too large", and the model is asked to review an
+          # empty diff -- no configuration error is raised. Keep a wide margin
+          # between TOKEN_BUDGET and MAX_OUTPUT_TOKENS.
           #
           # With the defaults below: min(131072, 65536) - 16384 = 49152 tokens
           # of input, which is far more than a typical GT4Py PR needs (the

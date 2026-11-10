@@ -75,11 +75,10 @@ The three token variables in particular **interact, and must not be tuned one at
 
 ```text
 context_window = min(PR_AGENT_MODEL_CONTEXT_WINDOW, PR_AGENT_TOKEN_BUDGET)
-input_capacity = context_window - PR_AGENT_MAX_OUTPUT_TOKENS
-available      = input_capacity - rendered_prompt_tokens
+diff_budget    = context_window - PR_AGENT_MAX_OUTPUT_TOKENS - rendered_prompt_tokens
 ```
 
-and clamps `available` at zero. An output reserve at or above the token budget therefore leaves **no room for the diff**, and PR Agent reviews an empty patch rather than failing loudly — the same "the bot posted nothing" symptom that reserving output exists to prevent. Keep a wide margin between `PR_AGENT_TOKEN_BUDGET` and `PR_AGENT_MAX_OUTPUT_TOKENS`. With the defaults above, input capacity is 49152 tokens, far more than a typical GT4Py PR needs.
+The diff packer evaluates that budget *unclamped*. An output reserve at or above the token budget therefore makes it negative, every file is skipped as "too large", and the model is asked to review an empty diff — no configuration error is raised. That is the same "the bot posted nothing" symptom that reserving output tokens exists to prevent, so keep a wide margin between `PR_AGENT_TOKEN_BUDGET` and `PR_AGENT_MAX_OUTPUT_TOKENS`. With the defaults above the diff budget starts at 49152 tokens, far more than a typical GT4Py PR needs.
 
 `PR_AGENT_MODEL_CONTEXT_WINDOW` cannot be dropped: the model CSCS serves is absent from PR Agent's model table, and `PR_AGENT_TOKEN_BUDGET` "only caps a resolved limit; it cannot supply a missing model limit". Values of `PR_AGENT_MAX_OUTPUT_TOKENS` below 4096 are silently raised to 4096.
 
