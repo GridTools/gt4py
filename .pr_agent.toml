@@ -2,8 +2,15 @@
 #
 # Only review *policy* belongs here. The inference endpoint, the model and its
 # token limits are set in '.github/workflows/pr-agent.yml' from repository
-# variables, because PR Agent treats those as host-only settings that a pull
-# request's own copy of this file is not allowed to override.
+# variables.
+#
+# Be careful about what that does and does not protect. PR Agent reads this file
+# from the default branch, so a pull request cannot change review policy by
+# editing its own copy. The endpoint and credential are additionally host-only:
+# PR Agent refuses them as comment arguments. The model and the ordinary token
+# limits are NOT in that protected set, so an authorized commenter can override
+# them for a single invocation -- which is a reason to keep comment commands
+# restricted to users with real write access, as the workflow does.
 #
 # PR Agent reads this file from the default branch, so changes take effect only
 # once merged to 'main'.
@@ -28,6 +35,13 @@ repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md"]
 suggestions_score_threshold = 6
 
 [pr_reviewer]
+# Both default to true, which makes '/review' set 'Review effort N/5' and
+# 'Possible security concern' labels through the issues API -- and remove
+# previously matching ones. The label contents come from model output derived
+# from an untrusted diff, so text in a PR can steer which labels the bot
+# applies and clears. Review output stays comments only.
+enable_review_labels_effort = false
+enable_review_labels_security = false
 extra_instructions = """\
 Review scope for this repository:
 

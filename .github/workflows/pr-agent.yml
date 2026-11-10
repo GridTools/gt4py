@@ -35,8 +35,14 @@ on:
   #     - main
   ## END
 
-# No 'contents: write': nothing here may push to the repository. Raising this
-# turns a prompt injection in a PR diff into a write primitive.
+# No 'contents: write': nothing here may push to the repository, so a prompt
+# injection in a PR diff cannot become a source-write primitive. Note that this
+# does NOT make the model's output inert -- 'issues: write' and
+# 'pull-requests: write' let PR Agent publish comments, and would let it set
+# labels or rewrite a PR title/body, all from model output derived from
+# untrusted PR text. Label writes are disabled in '.pr_agent.toml' and
+# '/describe' is not run automatically; keep it that way, and do not widen these
+# permissions.
 permissions:
   contents: read
   issues: write
@@ -48,16 +54,30 @@ concurrency:
 
 jobs:
   pr-agent:
-    # Auto-review runs on every PR: the spend is bounded by PR volume.
-    # Comment-triggered commands are restricted to maintainers, because anyone
-    # could otherwise drain the key by repeating '/improve'. This mirrors the
-    # CSCS-CI convention of acting only on whitelisted users' comments.
+    # Every path that spends inference credit requires a trusted author.
+    #
+    # Automatic review is gated on the PR author's association and NOT merely on
+    # the sender not being a bot: 'pull_request_target' is exempt from the
+    # "require approval for outside contributors" fork setting, so without this
+    # check any stranger could spend the project's CSCS allocation just by
+    # opening (or reopening) pull requests. GT4Py's core developers are all
+    # 'MEMBER' even when they push from a personal fork, so this keeps automatic
+    # review on essentially all real traffic; an outside contributor's PR is
+    # reviewed when a maintainer asks for it with '/review'.
+    #
+    # Comment commands are gated on the commenter's association for the same
+    # reason. Association is a coarse signal -- see the 'Authorize' step, which
+    # checks effective repository permission before anything is spent.
     if: >-
       github.event.sender.type != 'Bot'
       && (
-        github.event_name != 'issue_comment'
+        (
+          (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
+          && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+        )
         || (
-          github.event.issue.pull_request != null
+          github.event_name == 'issue_comment'
+          && github.event.issue.pull_request != null
           && startsWith(github.event.comment.body, '/')
           && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
         )
@@ -65,9 +85,47 @@ jobs:
     runs-on: ubuntu-latest
     # CSCS states the inference service runs on a single infrastructure and that
     # "interruptions of the service should be expected". An advisory reviewer
-    # must never look like a CI failure.
+    # must never look like a CI failure. Note this hides genuine failures too:
+    # check the run log, not the PR's check status, when the bot stays silent.
     continue-on-error: true
+    timeout-minutes: 15
     steps:
+      # 'author_association' is not an authorization decision: MEMBER only means
+      # organization membership (an org whose base permission is 'read' still
+      # yields MEMBER), and COLLABORATOR covers outside collaborators with
+      # read-only or triage access. Those principals would otherwise be able to
+      # spend inference credit and, via '/describe', have the bot rewrite a PR
+      # title and body they could not edit themselves. So resolve the
+      # commenter's effective permission before running anything.
+      #
+      # Fails closed: any API error leaves 'allowed' false. The blast radius of
+      # that is comment commands only -- automatic review skips this check.
+      - name: Authorize
+        id: auth
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Via env, not inline in the script, so the value is never substituted
+          # into the shell command.
+          COMMENTER: ${{ github.event.comment.user.login }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "${{ github.event_name }}" != "issue_comment" ]; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          level=$(gh api "repos/${REPO}/collaborators/${COMMENTER}/permission" \
+            --jq '.permission' 2>/dev/null || echo "none")
+          case "${level}" in
+            admin | maintain | write)
+              echo "::notice::${COMMENTER} has '${level}' permission; running PR Agent."
+              echo "allowed=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::notice::${COMMENTER} has '${level}' permission; skipping PR Agent."
+              echo "allowed=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       # Deliberately no 'actions/checkout': PR Agent reads the diff through the
       # GitHub API. Do not add one -- this job holds a secret under
       # 'pull_request_target', so checking out PR code would be the one change
@@ -77,13 +135,17 @@ jobs:
       # sha256:548e894a8807... is the 0.50.0-github_action image. To upgrade,
       # bump the comment and re-resolve the digest from the release tag.
       - name: Run PR Agent
+        if: steps.auth.outputs.allowed == 'true'
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           # --- CSCS inference service (OpenAI-compatible route) ---
-          # 'api_base' is a host-only setting: a PR's own '.pr_agent.toml'
-          # cannot redirect inference to another endpoint.
+          # 'api_base' is a host-only setting: PR Agent rejects it as a comment
+          # argument, so neither a PR's own '.pr_agent.toml' nor a '/review
+          # --openai.api_base=...' comment can redirect inference. Ordinary
+          # model and token settings are NOT protected that way and an
+          # authorized commenter can override them per invocation.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
           OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
           config.model: ${{ vars.PR_AGENT_MODEL || 'openai/zai-org/GLM-5.3' }}
@@ -120,9 +182,10 @@ jobs:
           # '/describe' stays off: a GT4Py PR title is the squash-commit message
           # and must follow Conventional Commits, and the PR body is the commit
           # body, so an overwritten description would fight
-          # '.github/pull_request_template.md'. '/improve' stays off until the
-          # trial in the tracking issue says it earns its noise; both remain
-          # available on demand as comments.
+          # '.github/pull_request_template.md'. It is also the one command that
+          # rewrites PR metadata from model output, so leaving it manual keeps a
+          # human in front of that write. '/improve' stays off until the trial
+          # says it earns its noise; both remain available as comments.
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
