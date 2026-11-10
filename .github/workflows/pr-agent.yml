@@ -27,9 +27,10 @@ on:
 
 # No 'contents: write': a prompt injection in a diff must not become a way to
 # push. The two write scopes still let model output reach PR comments, labels,
-# title and body. Automatic review only comments (its labels are off in
-# '.pr_agent.toml'); '/describe' and '/generate_labels' write PR metadata only
-# when a maintainer asks. Do not widen these permissions.
+# title and body. Automatic review only comments (its label writes are off in
+# both '.pr_agent.toml' and this job's env); '/describe' and
+# '/generate_labels' write PR metadata only when a maintainer asks. Do not
+# widen these permissions.
 permissions:
   contents: read
   issues: write
@@ -172,3 +173,14 @@ jobs:
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
           github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
+
+          # Repeated from '.pr_agent.toml' on purpose. That file is fetched
+          # over the GitHub API, and a non-404 failure there is only logged as
+          # a warning before PR Agent carries on with its built-in defaults --
+          # in which both of these are true, so a transient API error would let
+          # an automatic review set and clear labels chosen by model output.
+          # An env override cannot fail to load and takes precedence, so it
+          # holds either way. The rest of '.pr_agent.toml' costs only noise or
+          # tokens if it is missed, so it is not duplicated here.
+          pr_reviewer.enable_review_labels_effort: "false"
+          pr_reviewer.enable_review_labels_security: "false"

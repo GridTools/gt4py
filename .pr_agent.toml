@@ -23,7 +23,9 @@ suggestions_score_threshold = 6
 [pr_reviewer]
 # Off so that '/review' only comments. When on (the default) it sets and
 # clears 'Review effort N/5' and 'Possible security concern' labels from model
-# output, which text in an untrusted diff can steer.
+# output, which text in an untrusted diff can steer. Also set in the workflow
+# environment, which still applies if fetching this file fails; keep both in
+# step.
 enable_review_labels_effort = false
 enable_review_labels_security = false
 extra_instructions = """\
