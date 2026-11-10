@@ -6,51 +6,16 @@
 # Release PRs are generated and have nothing to review. The first pattern is
 # PR Agent's own default, which setting this key would otherwise drop.
 ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
-# Extend these files rather than restating their rules here. Every listed file
-# is sent with every prompt, so the list is kept short for cost.
-repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md"]
+# Extend these files rather than restating their rules here; the review rules
+# are shared with GitHub Copilot's reviewer rather than kept in two places.
+# Every listed file is sent with every prompt, so the list is kept short.
+repo_context_files = ["AGENTS.md", "src/gt4py/next/AGENTS.md", ".github/copilot-instructions.md"]
 
 [pr_code_suggestions]
 # Raised above the default to drop marginal suggestions.
 suggestions_score_threshold = 6
 
 [pr_reviewer]
-# Off so that '/review' only comments: these labels are chosen by model output,
-# which text in an untrusted diff can steer. Also set in the workflow, which
-# still applies if fetching this file fails; keep both in step.
-enable_review_labels_effort = false
-enable_review_labels_security = false
-extra_instructions = """\
-Review scope for this repository:
-
-- Flag new or changed code paths (branches, early returns, error and exception
-  paths, new public functions) whose behaviour is not covered by a test in the
-  matching `tests/<subpackage>_tests/` tree. Tests are the spec here.
-- Flag unhandled edge cases: empty or zero-dimensional fields, mismatched or
-  non-promotable dimensions, off-by-one errors in domain or offset arithmetic,
-  integer-vs-float dtype assumptions, and `None` / optional inputs.
-- Flag missing error handling on I/O, filesystem or subprocess calls (compiler
-  and build invocation), where failure would surface as an opaque crash.
-- Flag a new runtime dependency (`pyproject.toml` `dependencies =`) that has no
-  matching ADR under `docs/development/ADRs/`.
-
-Stay silent about:
-
-- Formatting and import order. `ruff` owns those, and pre-commit and CI enforce
-  them.
-- Missing license headers. Pre-commit inserts them automatically.
-- Missing docstrings on private or internal helpers.
-- Anything `tach`, `ruff` or `mypy` already enforces deterministically, since CI
-  catches it without a comment.
-
-Style:
-
-- One comment per distinct issue, leading with the risk and then the fix.
-- Cite evidence as `path/to/file.py:LINE`.
-- For a PR that changes architecture, question the design and propose
-  refactorings where warranted. For a localized fix, prefer the smallest change
-  over a refactor.
-- Phrase a finding that is a question rather than a defect as a question.
-"""
+extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in your context above."
 # GT4Py PRs rarely reference a tracked ticket, so this spends tokens for little.
 require_ticket_analysis_review = false

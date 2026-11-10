@@ -33,7 +33,7 @@ No in-flight run is ever cancelled. Automatic reviews are serialized per pull re
 
 Draft PRs are skipped until marked ready. The Action's automatic path has no draft check of its own, so without the workflow's `draft == false` condition a draft PR would be reviewed once on `opened` and again on `ready_for_review`.
 
-Unlike GitHub Copilot code review, which reads only `.github/` files and therefore needs the review rules restated in [`copilot-instructions.md`](../../../.github/copilot-instructions.md), PR Agent reads `AGENTS.md` directly through its `repo_context_files` setting. Prefer extending `AGENTS.md` over duplicating guidance into `.pr_agent.toml`.
+PR Agent reads `AGENTS.md`, `src/gt4py/next/AGENTS.md` and [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md) through its `repo_context_files` setting, so both reviewers work from the same rules and `.pr_agent.toml` restates none of them. Extend those files rather than adding guidance to `.pr_agent.toml`.
 
 ## Why `pull_request_target`
 
@@ -44,7 +44,7 @@ The usual `pull_request_target` hazard — running untrusted code with secrets i
 - The job must never check out or execute pull request code.
 - The job must never be granted `contents: write`. The model reads an untrusted diff, so a write permission would turn a prompt injection into a source-write primitive.
 
-Withholding `contents: write` does not make the model's output inert. `issues: write` and `pull-requests: write` are needed to publish a review at all, and they also permit setting labels and rewriting a PR title and body — all from model output derived from untrusted PR text. Review labels are disabled and `/describe` is not run automatically; keep them that way. The two label settings are disabled in both `.pr_agent.toml` and the workflow environment, because `.pr_agent.toml` is fetched over the GitHub API and a failure there is only logged before PR Agent falls back to built-in defaults, which enable label writes. An environment override cannot fail to load and takes precedence, so it holds either way.
+Withholding `contents: write` does not make the model's output inert. `issues: write` and `pull-requests: write` are needed to publish a review at all, and they also permit setting labels and rewriting a PR title and body — all from model output derived from untrusted PR text. Review labels are disabled and `/describe` is not run automatically; keep them that way. The label settings live in the workflow environment rather than in `.pr_agent.toml`, because that file is fetched over the GitHub API and a failure there is only logged before PR Agent falls back to built-in defaults, which enable label writes. An environment override cannot fail to load and takes precedence.
 
 Note that both `pull_request_target` and `.pr_agent.toml` are read from the base (default) branch, so a change to either has no effect until merged to `main`. The workflow carries a commented-out `pull_request` trigger to exercise a workflow change on the PR that makes it; as with `daily-ci.yml`, it only works for PRs from branches in the upstream repository. It does **not** help with `.pr_agent.toml`, which PR Agent still reads from the default branch.
 

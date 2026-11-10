@@ -11,17 +11,17 @@ on:
   issue_comment:
     types: [created]
 
-  ## Uncomment to exercise a change to this file on the pull request that makes
-  ## it; works only for branches in GridTools/gt4py. It cannot test
-  ## '.pr_agent.toml', which is always read from the default branch.
-  # pull_request:
-  #   branches:
-  #     - main
+  ## TEMPORARY, for testing this workflow on its own pull request. Works only
+  ## for branches in GridTools/gt4py, and cannot test '.pr_agent.toml', which
+  ## is always read from the default branch. Remove before merging.
+  pull_request:
+    branches:
+      - main
 
 # Never 'contents: write': a prompt injection in a diff must not become a way
 # to push. The two write scopes are the minimum needed to publish a review, and
 # they also permit label and PR-body writes from model output -- which is why
-# automatic review has labels off and does not run '/describe'.
+# label writes are off and '/describe' is not automatic.
 permissions:
   contents: read
   issues: write
@@ -83,7 +83,7 @@ jobs:
             exit 1
           fi
           case "${level}" in
-            admin | maintain | write)
+            admin | write)
               echo "::notice::${ACTOR} has '${level}' permission; running PR Agent."
               echo "allowed=true" >> "$GITHUB_OUTPUT"
               ;;
@@ -121,7 +121,11 @@ jobs:
 
           fallbacks='[]'
           [ "${FALLBACKS}" = "none" ] || fallbacks=$(jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map("openai/" + .)' <<<"${FALLBACKS}")
-          echo "fallbacks=${fallbacks}" >> "$GITHUB_OUTPUT"
+          {
+            echo "fallbacks=${fallbacks}"
+            echo "budget=${BUDGET}"
+            echo "output=${OUTPUT}"
+          } >> "$GITHUB_OUTPUT"
           echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; input cap ${BUDGET}, output reserve ${OUTPUT}."
 
       # Never add 'actions/checkout' here: this job holds a secret under
@@ -148,11 +152,11 @@ jobs:
           config.fallback_models: ${{ steps.models.outputs.fallbacks }}
           # One value serves both: PR Agent takes the smaller of the two, so
           # the model's true context window never has to be configured.
-          config.custom_model_max_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
-          config.max_model_tokens: ${{ vars.PR_AGENT_TOKEN_BUDGET || '65536' }}
+          config.custom_model_max_tokens: ${{ steps.models.outputs.budget }}
+          config.max_model_tokens: ${{ steps.models.outputs.budget }}
           # Reasoning models spend this budget before answering, so too small a
           # reserve returns a truncated or empty review.
-          config.max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '16384' }}
+          config.max_output_tokens: ${{ steps.models.outputs.output }}
           # Open-weight models follow the output schema more reliably when the
           # prompt examples are repeated.
           config.duplicate_prompt_examples: "true"
@@ -162,8 +166,9 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review"]'
-          # Repeated from '.pr_agent.toml' because a failed fetch of that file
-          # falls back to defaults that enable label writes.
+          # Here rather than in '.pr_agent.toml' because that file is fetched
+          # over the API, and a failed fetch falls back to defaults that enable
+          # label writes. These labels are chosen by model output, which text
+          # in an untrusted diff can steer.
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
