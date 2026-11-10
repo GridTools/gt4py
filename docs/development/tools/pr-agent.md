@@ -63,7 +63,7 @@ The model, its token limits and the endpoint are [repository variables](https://
 | `PR_AGENT_MODEL`             | **none — required**                | One CSCS model id, exactly as `GET /v1/models` lists it     |
 | `PR_AGENT_FALLBACK_MODELS`   | **none — required**                | Comma-separated ids, tried in order; `none` for no fallback |
 | `PR_AGENT_TOKEN_BUDGET`      | `65536`                            | Input cap per request                                       |
-| `PR_AGENT_MAX_OUTPUT_TOKENS` | `16384`                            | Headroom reserved for the answer                            |
+| `PR_AGENT_MAX_OUTPUT_TOKENS` | `32768`                            | Headroom reserved for the answer                            |
 | `PR_AGENT_API_BASE`          | `https://api.inference.cscs.ch/v1` | Inference endpoint                                          |
 
 Model ids are stored bare. The workflow prepends `openai/`, which is LiteLLM's selector for the OpenAI-compatible route and not part of a model name: LiteLLM strips it and sends the remainder, so CSCS receives exactly the id it published. Without a prefix the call fails with `LLM Provider NOT provided`, and the prefix belongs with `PR_AGENT_API_BASE` rather than inside every id.
@@ -93,5 +93,5 @@ Note that fork PRs read variables from the base branch, as with everything else 
 
 Two consequences of this backend are worth knowing before changing the model:
 
-- **The models worth using here are reasoning models** (the non-thinking Apertus variants are not), and reasoning tokens are drawn from the same output budget as the answer. `PR_AGENT_MAX_OUTPUT_TOKENS` must therefore be generous; left unset the provider's own limit applies, and a review can come back truncated or empty, which presents as the bot posting nothing rather than as a clean error.
+- **The models worth using here are reasoning models** (the non-thinking Apertus variants are not), and reasoning tokens are drawn from the same output budget as the answer. `PR_AGENT_MAX_OUTPUT_TOKENS` must therefore be generous. Measured on this repository's own diff, GLM-5.3-Flash emitted 11k output tokens and Qwen3.8-Flash-Next 15.1k, so a 16384 cap truncated Qwen to an empty response. Too small a reserve presents as the bot posting nothing rather than as a clean error, and the same models also need `config.ai_timeout` well above its 120-second default.
 - **CSCS rotates its model catalogue on short notice**, including retiring models that its own documentation examples still reference. `PR_AGENT_MODEL` needs periodic review against `GET /v1/models`. Service status is at [inference.status.cscs.ch](https://inference.status.cscs.ch).
