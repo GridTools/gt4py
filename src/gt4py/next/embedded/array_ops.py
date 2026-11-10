@@ -21,6 +21,7 @@ holds a factory, so registering a library does not import it.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Final
@@ -154,6 +155,14 @@ class ArrayOps:
                 value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
+
+    def is_traced(self, array: core_defs.NDArrayObject) -> bool:
+        """Whether `array` is a placeholder of a trace rather than an array with values."""
+        return False
+
+    def concrete_eval(self) -> contextlib.AbstractContextManager:
+        """Context in which operations on concrete arrays are evaluated, also inside a trace."""
+        return contextlib.nullcontext()
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         if _NUMPY_FROM_DLPACK_TAKES_DEVICE:

@@ -10,8 +10,9 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional, TypeAlias
 
 import array_api_compat
 import jax
@@ -37,6 +38,12 @@ class JaxOps(array_ops.ArrayOps):
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+
+    def is_traced(self, array: core_defs.NDArrayObject) -> bool:
+        return isinstance(array, jax.core.Tracer)
+
+    def concrete_eval(self) -> contextlib.AbstractContextManager:
+        return jax.ensure_compile_time_eval()
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
@@ -70,4 +77,56 @@ jax.tree_util.register_pytree_node(
     nd_array_field.NdArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_field'
     _flatten_field,
     _unflatten_field,
+)
+
+
+class _TwinHandle:
+    """Pytree aux data carrying a concrete connectivity, compared by the identity of its table."""
+
+    __slots__ = ("connectivity",)
+
+    def __init__(self, connectivity: nd_array_field.NdArrayConnectivityField) -> None:
+        self.connectivity = connectivity
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, _TwinHandle)
+            and self.connectivity._ndarray is other.connectivity._ndarray
+        )
+
+    def __hash__(self) -> int:
+        return id(self.connectivity._ndarray)
+
+
+_ConnectivityAuxData: TypeAlias = tuple[
+    common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_TwinHandle]
+]
+
+
+def _flatten_connectivity(
+    connectivity: nd_array_field.NdArrayConnectivityField,
+) -> tuple[tuple[core_defs.NDArrayObject], _ConnectivityAuxData]:
+    concrete = connectivity._concrete
+    handle = None if concrete is None else _TwinHandle(concrete)
+    return (connectivity._ndarray,), (
+        connectivity.domain,
+        connectivity.codomain,
+        connectivity.skip_value,
+        handle,
+    )
+
+
+def _unflatten_connectivity(
+    aux_data: _ConnectivityAuxData, children: tuple[core_defs.NDArrayObject]
+) -> nd_array_field.NdArrayConnectivityField:
+    domain, codomain, skip_value, handle = aux_data
+    twin = None if handle is None else handle.connectivity
+    return nd_array_field.NdArrayConnectivityField(domain, children[0], codomain, skip_value, twin)  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+
+
+# jax registers pytree nodes by exact type, so the connectivity needs its own registration
+jax.tree_util.register_pytree_node(
+    nd_array_field.NdArrayConnectivityField,  # type: ignore[type-abstract, unused-ignore] # see 'NdArrayField' above
+    _flatten_connectivity,
+    _unflatten_connectivity,
 )
