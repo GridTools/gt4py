@@ -24,9 +24,9 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 ### AI-assisted PR review (PR Agent)
 
-The `PR Agent` workflow runs [PR Agent](https://github.com/The-PR-Agent/pr-agent) (MIT-licensed, community-owned since Qodo donated it) to post an advisory review on new pull requests. It is **never a required status check** and is marked `continue-on-error`, so it cannot gate a merge. Review policy lives in [`.pr_agent.toml`](../../../.pr_agent.toml). The endpoint, model and token limits are set in the workflow rather than there, because PR Agent treats those as host-only settings that a pull request cannot override from its own branch; their values come from the repository variables listed below.
+The `PR Agent` workflow runs [PR Agent](https://github.com/The-PR-Agent/pr-agent) (MIT-licensed, community-owned since Qodo donated it) to post an advisory review on new pull requests. It is **never a required status check**, and the step that calls the inference service is `continue-on-error`, so it cannot gate a merge. Review policy lives in [`.pr_agent.toml`](../../../.pr_agent.toml). The endpoint, model and token limits are set in the workflow instead, from the repository variables listed below. Only the endpoint and key are host-only in PR Agent, which refuses them from repository config or a comment argument; the model and token settings are placed there by choice, so they sit beside the endpoint they belong to.
 
-Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/improve`, `/ask "<question>"` or `/describe`. Only `/review` runs automatically. `/describe` is not automatic for two reasons: a GT4Py PR title becomes the squash-commit message and must follow Conventional Commits, so an overwritten description would conflict with the pull request template; and it is the one command that rewrites PR metadata from model output, which is better left behind a human request.
+Maintainers can invoke tools on demand by commenting on a PR, e.g. `/review`, `/improve`, `/ask "<question>"` or `/describe`. Only `/review` runs automatically. `/describe` is not automatic because it rewrites the PR body, which here is the squash-commit message body and the filled-in pull request template. It leaves the title alone at this pin, since `pr_description.generate_ai_title` is false. It and `/generate_labels` write PR metadata from model output, so both are better left behind a human request.
 
 #### Who can trigger it
 
@@ -70,7 +70,7 @@ The usual `pull_request_target` hazard — running untrusted code with secrets i
 
 Withholding `contents: write` does not make the model's output inert. `issues: write` and `pull-requests: write` are needed to publish a review at all, and they also permit setting labels and rewriting a PR title and body — all from model output derived from untrusted PR text. Review labels are disabled and `/describe` is not run automatically; keep them that way. The two label settings are disabled in both `.pr_agent.toml` and the workflow environment, because `.pr_agent.toml` is fetched over the GitHub API and a failure there is only logged before PR Agent falls back to built-in defaults, which enable label writes. An environment override cannot fail to load and takes precedence, so it holds either way.
 
-Note that both `pull_request_target` and `.pr_agent.toml` are read from the base (default) branch. A change to either has no effect until it is merged to `main`, which also means such a change cannot be exercised by the pull request that introduces it. The workflow carries a commented-out `pull_request` trigger for that case; as with `daily-ci.yml`, it only works for PRs from branches in the upstream repository.
+Note that both `pull_request_target` and `.pr_agent.toml` are read from the base (default) branch, so a change to either has no effect until merged to `main`. The workflow carries a commented-out `pull_request` trigger to exercise a workflow change on the PR that makes it; as with `daily-ci.yml`, it only works for PRs from branches in the upstream repository. It does **not** help with `.pr_agent.toml`, which PR Agent still reads from the default branch.
 
 #### Inference backend and cost
 
@@ -80,7 +80,7 @@ Running inference at CSCS also keeps PR content on infrastructure CSCS controls:
 
 #### Configuration variables
 
-The model, its token limits and the endpoint are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. Each has a default in the workflow that applies when the variable is unset, so the workflow works as committed and a variable only needs to be set to override it.
+The model, its token limits and the endpoint are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), not hardcoded values, so they can be retuned from the repository settings without opening a PR. The two model variables are required; the rest default in the workflow and only need setting to override.
 
 | Variable                     | Default                            | Purpose                                                     |
 | ---------------------------- | ---------------------------------- | ----------------------------------------------------------- |
@@ -94,7 +94,7 @@ Model ids are stored bare. The workflow prepends `openai/`, which is LiteLLM's s
 
 Neither model variable has a default, so PR Agent never calls a model nobody chose. The `Resolve models` step checks both before the container starts and fails with an `::error::` naming the unset one.
 
-The two token limits are **policy, not model properties**. PR Agent has no per-model limits — `get_max_tokens` returns `min(max_model_tokens, custom_model_max_tokens)` and applies it to whichever model serves the request — so a single pair governs the primary and every fallback. Choose values that fit the smallest model in use:
+The two token limits are **policy, not model properties**. For a model absent from PR Agent's own `MAX_TOKENS` table — as the CSCS models are — `get_max_tokens` returns `min(max_model_tokens, custom_model_max_tokens)` and applies it to whichever model serves the request, so a single pair governs the primary and every fallback. Choose values that fit the smallest model in use:
 
 | Model                                                | Context window | Max output |
 | ---------------------------------------------------- | -------------- | ---------- |
@@ -105,19 +105,19 @@ The two token limits are **policy, not model properties**. PR Agent has no per-m
 | `google/gemma-4-31B-it`                              | 262,144        | —          |
 | `swiss-ai/Apertus-v1.5-70B` (and `-8B`, `-thinking`) | 262,144        | —          |
 
-Check the current catalogue and limits against `GET /v1/models` and the [CSCS model table](https://docs.cscs.ch/services/inference/), since the catalogue changes on short notice. The defaults above sit far inside every row.
+Check the current catalogue and limits against `GET /v1/models` and the [CSCS model table](https://docs.cscs.ch/services/inference/api/), since the catalogue changes on short notice. The defaults above sit far inside every row.
 
 `config.custom_model_max_tokens` is set to the same value as the budget. It only has to be a positive number at least as large, because the `min()` above makes any larger value equivalent — so a model's true context window never has to be configured, only respected when choosing the budget.
 
-The diff budget is `PR_AGENT_TOKEN_BUDGET` minus `PR_AGENT_MAX_OUTPUT_TOKENS` minus the rendered prompt, and the step refuses a budget that does not exceed the reserve. If it went negative, every file would be dropped and the review would fail with `No PR diff fits the /review request` — visible only in the run log, since the job is `continue-on-error`.
+The diff budget is `PR_AGENT_TOKEN_BUDGET` minus `PR_AGENT_MAX_OUTPUT_TOKENS` minus the rendered prompt, and the step refuses a budget that does not exceed the reserve. If it went negative, every file would be dropped and the review would fail with `No PR diff fits the /review request` — visible only in the run log, since the inference step is `continue-on-error`.
 
 The PR Agent version is **not** a variable. GitHub does not allow expressions in a step's `uses`, so it is pinned in the workflow, by digest with the release version in a comment. Upgrading is therefore a reviewed change, which is appropriate for the image that receives the inference key. It is the only version this workflow pins; it uses no other actions.
 
 Note that fork PRs read variables from the base branch, as with everything else in this workflow, so a fork cannot substitute its own model or endpoint.
 
-Two consequences of this backend are worth knowing before changing the model pin:
+Two consequences of this backend are worth knowing before changing the model:
 
-- **Every model CSCS serves is a reasoning model**, and reasoning tokens are drawn from the same output budget as the answer. Each table entry's `max_output_tokens` must therefore be generous; left unset the provider's own limit applies, and a review can come back truncated or empty, which presents as the bot posting nothing rather than as a clean error.
+- **The models worth using here are reasoning models** (the non-thinking Apertus variants are not), and reasoning tokens are drawn from the same output budget as the answer. `PR_AGENT_MAX_OUTPUT_TOKENS` must therefore be generous; left unset the provider's own limit applies, and a review can come back truncated or empty, which presents as the bot posting nothing rather than as a clean error.
 - **CSCS rotates its model catalogue on short notice**, including retiring models that its own documentation examples still reference. `PR_AGENT_MODEL` needs periodic review against `GET /v1/models`. Service status is at [inference.status.cscs.ch](https://inference.status.cscs.ch).
 
 ## CSCS-CI

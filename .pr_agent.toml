@@ -62,6 +62,6 @@ Style:
 """
 # Avoids a "No major issues detected" comment on every clean PR.
 publish_output_no_suggestions = false
-# No Jira / Linear integration here, so ticket analysis would spend tokens on
-# nothing.
+# Off: GT4Py PRs rarely reference a tracked ticket, so the analysis spends
+# tokens for little.
 require_ticket_analysis_review = false

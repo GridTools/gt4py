@@ -54,12 +54,18 @@ jobs:
     # Structural filters only; authorization is the 'Authorize' step. Drafts
     # are skipped so a PR is reviewed once, when ready, rather than on both
     # 'opened' and 'ready_for_review'.
+    #
+    # The author check is separate from the sender check: a human marking a
+    # bot-authored PR ready makes the sender a user while the author stays a
+    # bot, and an app login is not a user to the permission API, so 'Authorize'
+    # would 404 and report a broken gate on a PR it should simply skip.
     if: >-
       github.event.sender.type != 'Bot'
       && (
         (
           (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
           && github.event.pull_request.draft == false
+          && github.event.pull_request.user.type != 'Bot'
         )
         || (
           github.event_name == 'issue_comment'
@@ -68,10 +74,6 @@ jobs:
         )
       )
     runs-on: ubuntu-latest
-    # The inference service has no availability guarantee, and an advisory
-    # reviewer must not look like a CI failure. This hides real failures too:
-    # when the bot is silent, read the run log, not the check status.
-    continue-on-error: true
     timeout-minutes: 15
     steps:
       # The only authorization point, for both paths: the actor (PR author for
@@ -114,8 +116,8 @@ jobs:
 
       # The models have no defaults: PR Agent must never call a model nobody
       # chose. An unset variable would otherwise reach LiteLLM as an empty
-      # model string and fail inside the container, where 'continue-on-error'
-      # would bury it, so fail here by name instead.
+      # model string and fail inside the container, where the step's
+      # 'continue-on-error' would bury it. Failing here keeps it red.
       #
       #   PR_AGENT_MODEL            one CSCS model id, exactly as
       #                             'GET /v1/models' lists it
@@ -161,6 +163,11 @@ jobs:
         # 'success()' is implicit for a step 'if', but spelled out because it is
         # what skips this step when the configuration check above fails.
         if: success() && steps.auth.outputs.allowed == 'true'
+        # Only this step tolerates failure: the inference service has no
+        # availability guarantee, and an advisory reviewer must not look like a
+        # CI failure. Authorization and configuration failures above stay red,
+        # because those are faults in this workflow and should be seen.
+        continue-on-error: true
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -190,11 +197,13 @@ jobs:
           config.duplicate_prompt_examples: "true"
 
           # --- Which tools run automatically ---
-          # Only '/review'. '/describe' would overwrite the PR title and body,
-          # which here are the squash-commit message (Conventional Commits) and
-          # the PR template, and it is the one command that rewrites PR metadata
-          # from model output. '/improve' is on request only, to limit noise.
-          # Both remain available as comments.
+          # Only '/review'. '/describe' rewrites the PR body -- here the
+          # squash-commit message body and the filled-in PR template -- though
+          # it leaves the title alone at this pin, since
+          # 'pr_description.generate_ai_title' is false. It and
+          # '/generate_labels' write PR metadata from model output, so both
+          # stay behind a human request. '/improve' is on request only, to
+          # limit noise.
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
