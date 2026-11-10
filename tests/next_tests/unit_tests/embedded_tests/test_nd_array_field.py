@@ -2335,16 +2335,41 @@ def test_jax_scan_with_connectivity_carry():
 
 
 @pytest.mark.requires_jax
-def test_jax_jit_premap_with_replaced_table_has_no_values():
+@pytest.mark.parametrize("nested", [False, True])
+def test_jax_jit_premap_with_replaced_table_has_no_values(nested):
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
+    premap = (
+        jax.jit(lambda field, conn: field.premap(conn))
+        if nested
+        else nd_array_field.NdArrayField.premap
+    )
 
     def premap_next(field, conn):
-        return field.premap(dataclasses.replace(conn, _ndarray=conn.ndarray + 1))
+        return premap(field, dataclasses.replace(conn, _ndarray=conn.ndarray + 1))
 
     result = jax.jit(premap_next)(field, conn_a)
 
     # as for every table computed in the trace: not narrowed, out-of-range targets clamped
     assert result.domain == common.domain({E: (0, 5)})
     np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0, 30.0, 30.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_clamps_only_tables_without_values(monkeypatch):
+    import jax
+
+    _, field, conn_a, _ = _jax_narrowing_setup()
+    clip = jax.numpy.clip
+    clipped = []
+    monkeypatch.setattr(jax.numpy, "clip", lambda *args: clipped.append(args) or clip(*args))
+
+    jax.jit(lambda field, conn: field.premap(conn))(field, conn_a)
+    jax.jit(lambda field: field.premap(conn_a))(field)
+    assert not clipped
+
+    jax.jit(lambda field, table: field.premap(dataclasses.replace(conn_a, _ndarray=table)))(
+        field, conn_a.ndarray
+    )
+    assert len(clipped) == 1
