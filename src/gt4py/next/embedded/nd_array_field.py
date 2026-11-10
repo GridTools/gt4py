@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import dataclasses
 import functools
 import itertools
@@ -466,6 +467,10 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: concrete connectivity with the same table, for domain inference while `_ndarray` is traced
+    _twin: Optional[NdArrayConnectivityField] = dataclasses.field(
+        default=None, compare=False, repr=False
+    )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -516,13 +521,48 @@ class NdArrayConnectivityField(
     def _cache(self) -> dict:
         return {}
 
+    @property
+    def _is_traced(self) -> bool:
+        """Whether `_ndarray` is a placeholder of a trace rather than an array with values."""
+        return False
+
+    def _concrete_eval(self) -> contextlib.AbstractContextManager:
+        """Context in which operations on concrete arrays are evaluated, also inside a trace."""
+        return contextlib.nullcontext()
+
+    @property
+    def _concrete(self) -> Optional[NdArrayConnectivityField]:
+        """
+        The connectivity whose table domain inference reads (the three cases of ADR 0029).
+
+        - `self`: the table is concrete, eagerly or closed over inside a trace.
+        - The twin: the table is traced and the twin came with it through the pytree.
+        - `None`: the table is traced and has no concrete values, e.g. `as_offset` of traced
+          offsets. Domain inference then assumes every target lies inside the field and the
+          gather clamps.
+        """
+        if not self._is_traced:
+            return self
+        return self._twin
+
+    @property
+    def _gather_clamps(self) -> bool:
+        return self._concrete is None
+
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
+        concrete = self._concrete
+        if concrete is None:
+            return self.domain
+        if concrete is not self:
+            return concrete._inverse_image(image_range)
+
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = _hyperslice(self._index_table, image_range, self.array_ns, self.skip_value)
+            with self._concrete_eval():
+                slices = _hyperslice(self._ndarray, image_range, self.array_ns, self.skip_value)
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
@@ -530,18 +570,6 @@ class NdArrayConnectivityField(
             self._cache[cache_key] = new_domain
 
         return new_domain
-
-    @property
-    def _index_table(self) -> core_defs.NDArrayObject:
-        # domain inference needs concrete contents, which a traced `_ndarray` does not have;
-        # the jax subclass answers with the concrete table behind the tracer
-        return self._ndarray
-
-    def _gather_index(
-        self, index: core_defs.NDArrayObject, image_range: common.UnitRange
-    ) -> core_defs.NDArrayObject:
-        """The 0-based buffer indices the gather reads for `index` from a field on `image_range`."""
-        return index
 
     def __setitem__(
         self,
@@ -555,17 +583,22 @@ class NdArrayConnectivityField(
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
             new_domain, buffer_slice = self._slice(index)
-            restricted_connectivity = self._restrict_buffer(new_domain, buffer_slice)
+            concrete = self._concrete
+            twin = None
+            if concrete is self:
+                # stays concrete inside a trace, so domain inference can still read it
+                with self._concrete_eval():
+                    new_buffer = self.array_ns.asarray(self._ndarray[buffer_slice])
+            else:
+                new_buffer = self.array_ns.asarray(self._ndarray[buffer_slice])
+                if concrete is not None:
+                    twin = concrete.restrict(index)
+            restricted_connectivity = self.__class__(
+                new_domain, new_buffer, self.codomain, self.skip_value, twin
+            )
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
-
-    def _restrict_buffer(
-        self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence
-    ) -> NdArrayConnectivityField:
-        cls = self.__class__
-        new_buffer = cls.array_ns.asarray(self.ndarray[buffer_slice])
-        return cls(new_domain, new_buffer, self.codomain, self.skip_value)
 
     __getitem__ = restrict
 
@@ -637,7 +670,10 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         index = (
             _connectivity_index_array(conn, new_domain, xp, skip_value_replacement=start) - start
         )
-        return conn._gather_index(index, data.domain[dim].unit_range)
+        if conn._gather_clamps:
+            # the output domain assumed all targets inside the field; out-of-range ones read its boundary
+            index = xp.clip(index, 0, len(data.domain[dim].unit_range) - 1)
+        return index
 
     new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
@@ -1062,74 +1098,37 @@ if jnp:
 
             object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
-    class _TableHandle:
-        """Trace-time reference to a connectivity table, compared by buffer identity."""
+    class _TwinHandle:
+        """Pytree aux data carrying a concrete connectivity, compared by the identity of its table."""
 
-        __slots__ = ("table",)
+        __slots__ = ("connectivity",)
 
-        def __init__(self, table: core_defs.NDArrayObject) -> None:
-            self.table = table
+        def __init__(self, connectivity: NdArrayConnectivityField) -> None:
+            self.connectivity = connectivity
 
         def __eq__(self, other: object) -> bool:
-            return isinstance(other, _TableHandle) and self.table is other.table
+            return (
+                isinstance(other, _TwinHandle)
+                and self.connectivity._ndarray is other.connectivity._ndarray
+            )
 
         def __hash__(self) -> int:
-            return id(self.table)
+            return id(self.connectivity._ndarray)
 
     _JaxConnectivityAuxData: TypeAlias = tuple[
-        common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_TableHandle]
+        common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_TwinHandle]
     ]
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = jnp
-        _table_handle: Optional[_TableHandle] = None
 
         @property
-        def _index_table(self) -> core_defs.NDArrayObject:
-            if self._table_handle is not None and isinstance(self._ndarray, jax.core.Tracer):
-                return self._table_handle.table
-            return self._ndarray
+        def _is_traced(self) -> bool:
+            return isinstance(self._ndarray, jax.core.Tracer)
 
-        @property
-        def _image_unknown(self) -> bool:
-            return self._table_handle is None and isinstance(self._ndarray, jax.core.Tracer)
-
-        def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-            if self._image_unknown:
-                # values computed inside a trace: assume every target lies in `image_range`
-                return self.domain
-            with jax.ensure_compile_time_eval():
-                return super()._inverse_image(image_range)
-
-        def _gather_index(
-            self, index: core_defs.NDArrayObject, image_range: common.UnitRange
-        ) -> core_defs.NDArrayObject:
-            if self._image_unknown:
-                # the output domain assumed all targets inside the field; out-of-range ones read its boundary
-                return jnp.clip(index, 0, len(image_range) - 1)  # type: ignore[arg-type, return-value, unused-ignore] # `NDArrayObject` typing is not complete
-            return index
-
-        def _restrict_buffer(
-            self, new_domain: common.Domain, buffer_slice: common.RelativeIndexSequence
-        ) -> JaxArrayConnectivityField:
-            handle = None
-            if isinstance(self._ndarray, jax.core.Tracer):
-                if self._table_handle is not None:
-                    with jax.ensure_compile_time_eval():
-                        handle = _TableHandle(self._table_handle.table[buffer_slice])
-                new_buffer = jnp.asarray(self._ndarray[buffer_slice])
-            else:
-                # a concrete table must stay concrete under a trace: domain inference reads it
-                with jax.ensure_compile_time_eval():
-                    new_buffer = jnp.asarray(self._ndarray[buffer_slice])
-            return JaxArrayConnectivityField(
-                new_domain,
-                new_buffer,  # type: ignore[arg-type, unused-ignore] # `NDArrayObject` typing is not complete
-                self.codomain,
-                self.skip_value,
-                handle,
-            )
+        def _concrete_eval(self) -> contextlib.AbstractContextManager:
+            return jax.ensure_compile_time_eval()
 
     def _jax_as_offset(
         offset: fbuiltins.FieldOffset, offset_field: NdArrayField
@@ -1166,13 +1165,9 @@ if jnp:
     def _flatten_jax_connectivity(
         connectivity: JaxArrayConnectivityField,
     ) -> tuple[tuple[core_defs.NDArrayObject], _JaxConnectivityAuxData]:
-        table = connectivity._ndarray
-        handle = (
-            connectivity._table_handle
-            if isinstance(table, jax.core.Tracer)
-            else _TableHandle(table)
-        )
-        return (table,), (
+        concrete = connectivity._concrete
+        handle = None if concrete is None else _TwinHandle(concrete)
+        return (connectivity._ndarray,), (
             connectivity.domain,
             connectivity.codomain,
             connectivity.skip_value,
@@ -1183,7 +1178,8 @@ if jnp:
         aux_data: _JaxConnectivityAuxData, children: tuple[core_defs.NDArrayObject]
     ) -> JaxArrayConnectivityField:
         domain, codomain, skip_value, handle = aux_data
-        return JaxArrayConnectivityField(domain, children[0], codomain, skip_value, handle)
+        twin = None if handle is None else handle.connectivity
+        return JaxArrayConnectivityField(domain, children[0], codomain, skip_value, twin)
 
     jax.tree_util.register_pytree_node(
         JaxArrayConnectivityField,  # type: ignore[type-abstract, unused-ignore] # see '_unflatten_jax_field'
