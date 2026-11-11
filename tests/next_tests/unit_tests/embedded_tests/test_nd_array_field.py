@@ -1293,6 +1293,56 @@ def test_setitem(index, value):
     assert np.allclose(field.ndarray, expected)
 
 
+_ROW = np.arange(10) * 2.0
+
+
+@pytest.mark.parametrize(
+    "index, source, make_value",
+    [
+        ((1, 1), 42.0, lambda xp, v: v),
+        ((1, 1), 42, lambda xp, v: v),
+        ((1, 1), np.float32(42.5), lambda xp, v: v),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
+        ((1, slice(None)), _ROW, lambda xp, v: v),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float64),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
+    ],
+    ids=[
+        "python-float",
+        "python-int",
+        "numpy-scalar",
+        "array",
+        "array-other-dtype",
+        "numpy-array",
+        "field",
+    ],
+)
+def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
+    xp = nd_array_implementation
+    value = make_value(xp, source)
+    if is_cupy(xp) and isinstance(value, np.ndarray):
+        pytest.skip("CuPy does not assign a non-scalar NumPy array.")
+    field = common._field(
+        asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
+        domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+    )
+    expected = np.arange(100, dtype=np.float64).reshape(10, 10)
+    expected[index] = source
+
+    field[index] = value
+
+    assert field.array_ns is xp
+    assert field.dtype == core_defs.dtype(np.float64)
+    assert np.array_equal(field.asnumpy(), expected)
+
+
 def test_setitem_wrong_domain():
     field = common._field(
         np.arange(100).reshape(10, 10),
