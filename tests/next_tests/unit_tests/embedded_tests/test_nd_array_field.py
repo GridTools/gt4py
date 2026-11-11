@@ -110,11 +110,28 @@ def are_equal_fields(a: Field, b: Field) -> bool:
     return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
+def _skip_or_expect_no_buffer_info(xp) -> bool:
+    """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
+    if xp.__name__ == "jax.numpy":
+        return True
+    if xp.__name__ not in ("numpy", "cupy"):
+        pytest.skip(
+            "Buffer pointers and strides are outside the Array API standard; "
+            "'BufferInfo.from_ndarray' knows NumPy and CuPy only."
+        )
+    return False
+
+
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    field = constructors.as_field((D0, D1), data)
+    field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
+    assert field.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            field.__gt_buffer_info__
+        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
@@ -1340,10 +1357,15 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
-        np.roll(np.arange(E_START, E_STOP), 1),
+        asarray(nd_array_implementation, np.roll(np.arange(E_START, E_STOP), 1), dtype=np.int32),
         domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
+    assert e2v_conn.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            e2v_conn.__gt_buffer_info__
+        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
     assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
