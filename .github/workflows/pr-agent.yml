@@ -13,9 +13,9 @@ on:
   ## COMMENTED OUT: only for testing changes to this workflow.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
   ## The other blocks marked like this one must be re-enabled with it.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   ## END
 
 # No 'contents: write': a prompt injection in a diff must not become a way to
@@ -44,7 +44,7 @@ jobs:
       github.event.sender.type != 'Bot'
       && (
         (
-          github.event_name == 'pull_request_target'
+          (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
           && github.event.pull_request.draft == false
           && github.event.pull_request.user.type != 'Bot'
         )
@@ -199,8 +199,8 @@ jobs:
           ## PR_AGENT_CONFIG_BRANCH is set. Use only a literal branch name: one
           ## derived from PR input (e.g. 'github.head_ref') would let a pull
           ## request supply its own review policy.
-          # github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
-          # PR_AGENT_CONFIG_BRANCH: ci-pr-agent
+          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          PR_AGENT_CONFIG_BRANCH: ci-pr-agent-no-review-signal
           ## END
           # Not in '.pr_agent.toml': if fetching that file fails, PR Agent
           # falls back to defaults that let model output write labels.
