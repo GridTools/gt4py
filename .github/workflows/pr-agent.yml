@@ -117,7 +117,7 @@ jobs:
               '' | 0* | *[!0-9]*) : ;;
               *) [ "$2" -gt 0 ] && return 0 ;;
             esac
-            fail "Repository variable $1 must be a positive integer, got '$2'."
+            fail "Repository variable $1 must be a positive integer without leading zeros, got '$2'."
           }
           [ -n "${MODEL}" ] || fail "Repository variable PR_AGENT_MODEL is not set."
           [ -n "${FALLBACKS}" ] || fail "Repository variable PR_AGENT_FALLBACK_MODELS is not set; use 'none' for no fallback."
@@ -126,8 +126,7 @@ jobs:
           positive PR_AGENT_TOKEN_BUDGET "${BUDGET}"
           positive PR_AGENT_MAX_OUTPUT_TOKENS "${OUTPUT}"
           positive PR_AGENT_AI_TIMEOUT "${AI_TIMEOUT}"
-          # One model cannot be given more time than the whole job, and
-          # refusing that early keeps the arithmetic below inside int64.
+          # Keeps the arithmetic below inside int64.
           [ "${AI_TIMEOUT}" -le "$(( JOB_TIMEOUT * 60 ))" ] || fail "PR_AGENT_AI_TIMEOUT (${AI_TIMEOUT}s) exceeds the ${JOB_TIMEOUT} min job limit."
           # A reserve at or above the budget leaves no room for the diff.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
@@ -162,8 +161,8 @@ jobs:
         continue-on-error: true
         # On the step, not the job, so a timeout is tolerated as well. A 429
         # or 5xx replays the same model, so 'ai_timeout' alone does not bound
-        # this. 'fromJSON' because a step output is a string and the runner
-        # silently drops a timeout it cannot read as a number.
+        # this. 'fromJSON' because a step output is a string, and the runner
+        # drops a timeout that is not a number.
         timeout-minutes: ${{ fromJSON(steps.models.outputs.step_timeout) }}
         # Pinned by digest (tag '0.50.0-github_action') because the image
         # receives the inference key.
