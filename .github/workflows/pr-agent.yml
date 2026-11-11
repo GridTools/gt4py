@@ -11,13 +11,14 @@ on:
   issue_comment:
     types: [created]
 
-  ## TEMPORARY, for testing this workflow on its own pull request. Works only
-  ## for branches in GridTools/gt4py. '.pr_agent.toml' still comes from the
-  ## default branch unless PR_AGENT_CONFIG_BRANCH is set, which the env block
-  ## below does. Remove before merging.
-  pull_request:
-    branches:
-      - main
+  ## COMMENTED OUT: only for testing changes to this workflow on its own pull
+  ## request. It only works for PRs to 'main' from branches in the upstream
+  ## gt4py repo. Three things below go with it and are marked the same way;
+  ## re-enable all four together or the job starts and does nothing.
+  # pull_request:
+  #   branches:
+  #     - main
+  ## END
 
 # Never 'contents: write': a prompt injection in a diff must not become a way
 # to push. The two write scopes below are both granted and both already allow
@@ -53,13 +54,14 @@ jobs:
     # 'Authorize' would deny such a PR anyway, so this only avoids starting a
     # job for it.
     #
-    # The "|| github.event_name == 'pull_request'" clause below is TEMPORARY
-    # and goes with the trigger of that name; remove both together.
+    # Re-enabling the commented-out 'pull_request' trigger also needs
+    # "|| github.event_name == 'pull_request'" restored in the first condition
+    # below, which cannot be commented out inside an expression.
     if: >-
       github.event.sender.type != 'Bot'
       && (
         (
-          (github.event_name == 'pull_request_target' || github.event_name == 'pull_request')
+          github.event_name == 'pull_request_target'
           && github.event.pull_request.draft == false
           && github.event.pull_request.user.type != 'Bot'
         )
@@ -208,21 +210,23 @@ jobs:
           github_action_config.auto_review: "true"
           github_action_config.auto_describe: "false"
           github_action_config.auto_improve: "false"
-          ## TEMPORARY, with the 'pull_request' trigger above. Remove both before
-          ## merging.
+          ## COMMENTED OUT: both go with the 'pull_request' trigger at the top
+          ## of this file.
           ##
-          ## PR Agent does not auto-review on 'synchronize', so pushing to the
-          ## PR would otherwise log "Skipping action: synchronize" and do
-          ## nothing.
+          ## PR Agent does not auto-review on 'synchronize', so a push to the
+          ## pull request would otherwise log "Skipping action: synchronize"
+          ## and do nothing.
           ##
-          ## '.pr_agent.toml' is read from the default branch, where it does
-          ## not exist until this merges, so without the config branch a test
-          ## run silently exercises built-in defaults instead of this repo's
-          ## policy. A literal branch name is safe here; never derive it from
-          ## PR input such as 'github.head_ref', which would let a pull request
-          ## supply its own policy.
-          github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
-          PR_AGENT_CONFIG_BRANCH: ci-pr-agent
+          ## '.pr_agent.toml' is read from the default branch, so a policy
+          ## change cannot be exercised before it merges; PR_AGENT_CONFIG_BRANCH
+          ## reads it from the test branch instead. Set it only to a literal
+          ## branch name -- deriving it from PR input such as 'github.head_ref'
+          ## would let a pull request supply its own review policy. Clear it
+          ## again afterwards: once the branch is gone the fetch fails and PR
+          ## Agent falls back to built-in defaults without saying so.
+          # github_action_config.pr_actions: '["opened", "reopened", "ready_for_review", "synchronize"]'
+          # PR_AGENT_CONFIG_BRANCH: ci-pr-agent
+          ## END
           # Here rather than in '.pr_agent.toml' because that file is fetched
           # over the API, and a failed fetch falls back to defaults that enable
           # label writes. These labels are chosen by model output, which text
