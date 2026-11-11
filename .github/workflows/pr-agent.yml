@@ -173,7 +173,7 @@ jobs:
           # so a pull request cannot redirect them.
           OPENAI.KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
           OPENAI.API_BASE: ${{ vars.PR_AGENT_API_BASE || 'https://api.inference.cscs.ch/v1' }}
-          config.model: openai/${{ vars.PR_AGENT_MODEL }}
+          config.model: openai/zai-org/GLM-does-not-exist  ## TEMPORARY: force the first fallback to answer
           config.fallback_models: ${{ steps.models.outputs.fallbacks }}
           # PR Agent uses the smaller of the two, so one value serves both.
           config.custom_model_max_tokens: ${{ steps.models.outputs.budget }}
