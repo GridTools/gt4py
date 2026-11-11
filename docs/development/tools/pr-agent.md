@@ -62,7 +62,7 @@ These are [repository variables](https://github.com/GridTools/gt4py/settings/var
 - **The token limits apply to every model in the chain**, so they must fit the smallest one. The output reserve is sent as `max_tokens`, and a model with a lower output limit rejects the request. Check a new fallback before adding it, since it is only reached when the models before it have failed.
 - **The output reserve must be generous.** The models worth using are reasoning models, whose reasoning tokens count against it. Too small a reserve yields an empty response, so the bot posts nothing instead of failing cleanly.
 - **The budget is not a cap on the diff.** The diff gets the budget minus the reserve minus the prompt, which is substantial. Both values must be positive, because PR Agent reads zero or negative as "no limit" and the answer then truncates.
-- **A more capable model is not a better primary if it is slow.** Every attempt that times out is billed and discarded before a fallback answers.
+- **A more capable model is not a better primary if it is slow.** Every attempt that times out is billed and discarded before a fallback answers; the review names the model that produced it, and marks it as a fallback.
 - **The step's time limit is derived**: one `PR_AGENT_AI_TIMEOUT` per model plus two minutes. `Resolve models` fails if that does not fit under the job's `timeout-minutes`.
 - **A failed automatic review posts nothing.** The run stays green with a warning annotation; the cause is in the `Run PR Agent` log. A manual `/review` reports the reason.
 - **The PR Agent version is pinned by digest in the workflow**, since GitHub does not allow expressions in `uses`. Upgrading is thus a reviewed change, as befits the image that receives the inference key.
