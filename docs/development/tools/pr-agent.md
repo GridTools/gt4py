@@ -46,18 +46,11 @@ The service does not record prompts or responses, and processing stays in Switze
 
 ## When no review appears
 
-A missing review is not an error in the CI sense: the inference step is `continue-on-error`, so the run stays green whether PR Agent reviewed the pull request or gave up. A `Report that no review was produced` step turns that silence into a warning annotation and a job summary, keyed on the inference step's `outcome` — the result *before* `continue-on-error` rewrites it, which still reads `failure` both when the model chain is exhausted and when the step runs out of time.
+The inference step is `continue-on-error`, so the run is green whether PR Agent reviewed the PR or gave up. A `Report that no review was produced` step turns that silence into a warning annotation and a job summary, keyed on the step's `outcome` — the result before `continue-on-error` rewrites it, so it catches both an exhausted model chain and a step timeout. Green is deliberate: the check is advisory and a PR author cannot act on an outage.
 
-The run deliberately stays green. The check is advisory, and a pull request author can do nothing about an inference outage; the annotation is for whoever is watching the workflow.
+In the `Run PR Agent` log, `Failed to generate prediction` for every model means the chain was exhausted; no such line means the step hit its limit. A timeout or `finish_reason: length` is a configuration problem (`config.ai_timeout`, `PR_AGENT_MAX_OUTPUT_TOKENS`); a 5xx or connection error is the service.
 
-Two causes look alike in the check list and are easy to tell apart in the step log:
-
-- `Failed to generate prediction with <model>` for every model means the chain was exhausted. A timeout or an `Empty content ... finish_reason: length` is a configuration problem — `config.ai_timeout` or `PR_AGENT_MAX_OUTPUT_TOKENS` — while a 5xx or a connection error is the service being unavailable.
-- No such line near the end means the step hit its own limit mid-attempt.
-
-Three timeouts are in play, and they are not interchangeable. `config.ai_timeout` bounds a single model attempt; exceeding it moves to the next model and is a normal, handled event. The step's `timeout-minutes` bounds the whole chain, and because `continue-on-error` covers a step timeout, hitting it degrades quietly. The job's `timeout-minutes` is a backstop: a job timeout is a cancellation, which `continue-on-error` does *not* cover, so it surfaces.
-
-The step limit is not redundant with `ai_timeout`, which is the tempting conclusion to draw. A rejected request — 429, 5xx or connection error — replays the *same* model up to `config.num_retries` times (default 4), each attempt free to spend a full `ai_timeout`, and `retry_same_model_on_timeout = false` only suppresses replays after a *timeout*. During a service wobble the chain therefore has no useful bound of its own, and the step limit is the only thing that stops it.
+The three timeouts differ. `config.ai_timeout` bounds one model attempt, and moving on is normal. The step's `timeout-minutes` bounds the whole chain and is covered by `continue-on-error`, so hitting it degrades quietly; it is not redundant with `ai_timeout`, because a 429 or 5xx replays the same model up to `config.num_retries` times and `retry_same_model_on_timeout = false` only suppresses replays after a timeout. The job's is a backstop, and its cancellation is *not* covered, so it surfaces.
 
 ## Configuration variables
 
