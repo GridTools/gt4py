@@ -25,8 +25,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, Optional, TypeAlias
 
-import array_api_compat
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -85,12 +85,12 @@ class JaxOps(array_ops.ArrayOps):
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         return value
 
-    def _elementwise(self, name: str) -> Callable[..., Any]:
+    def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "gamma":
             import jax.scipy.special
 
             return jax.scipy.special.gamma
-        return super()._elementwise(name)
+        return super()._elementwise_function(name)
 
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
@@ -149,7 +149,7 @@ class JaxOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
 
 
-array_ops.register(array_api_compat.is_jax_namespace, JaxOps)
+array_ops.register(JaxOps(jnp))
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)

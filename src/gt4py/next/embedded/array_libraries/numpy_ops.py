@@ -15,7 +15,7 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 
-import array_api_compat
+import array_api_compat.numpy as compat_numpy
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -48,10 +48,10 @@ class NumPyOps(array_ops.ArrayOps):
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         return value
 
-    def _elementwise(self, name: str) -> Callable[..., Any]:
+    def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "gamma":
             return _np_gamma
-        return super()._elementwise(name)
+        return super()._elementwise_function(name)
 
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
@@ -63,4 +63,4 @@ class NumPyOps(array_ops.ArrayOps):
         return np.asarray(array)
 
 
-array_ops.register(array_api_compat.is_numpy_namespace, NumPyOps)
+array_ops.register(NumPyOps(compat_numpy))

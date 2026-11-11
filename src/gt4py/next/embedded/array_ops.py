@@ -11,12 +11,13 @@ Array operations of the embedded fields, per array namespace.
 
 `ArrayOps` implements everything `NdArrayField` does on its buffer against the
 Array API standard, through the namespace `array_api_compat` returns for the
-buffer. Any standard-conforming array library works without registration.
+buffer. Any array library conforming to revision 2024.12 or later of the standard
+works without registration; earlier revisions do not take Python scalars as
+arguments of elementwise functions, which `ArrayOps` passes for scalar operands.
 
 A library that needs different behaviour, or has a faster path outside the
-standard, subclasses `ArrayOps`, overrides only those methods and is registered
-with `register`. The registry is keyed by a predicate on the compat namespace and
-holds a factory, so registering a library does not import it.
+standard, subclasses `ArrayOps`, overrides only those methods and registers an
+instance for its compat namespace with `register`.
 """
 
 from __future__ import annotations
@@ -74,7 +75,7 @@ class ArrayOps:
 
     def __init__(self, xp: ModuleType) -> None:
         self.xp = xp
-        self._elementwise_cache: dict[str, Callable[..., Any]] = {}
+        self._elementwise_function_cache: dict[str, Callable[..., Any]] = {}
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.xp.__name__})"
@@ -119,15 +120,15 @@ class ArrayOps:
             return self.asarray(value, dtype=type(value), like=like)
         return value
 
-    def elementwise(self, name: str) -> Callable[..., Any]:
+    def elementwise_function(self, name: str) -> Callable[..., Any]:
         """The elementwise function for a gt4py builtin or operator name."""
         try:
-            return self._elementwise_cache[name]
+            return self._elementwise_function_cache[name]
         except KeyError:
-            func = self._elementwise_cache[name] = self._elementwise(name)
+            func = self._elementwise_function_cache[name] = self._elementwise_function(name)
             return func
 
-    def _elementwise(self, name: str) -> Callable[..., Any]:
+    def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "where":
             return self.where
         func = getattr(self.xp, STANDARD_NAMES.get(name, name), None)
@@ -138,10 +139,27 @@ class ArrayOps:
         return func
 
     def where(self, condition: Any, x: Any, y: Any) -> core_defs.NDArrayObject:
+        """
+        `xp.where` for the operands of the `where` builtin.
+
+        The standard requires an array `condition`, but the builtin also receives a
+        scalar one (e.g. from `broadcast(True)`), which some libraries reject (CuPy,
+        torch). It becomes a 0-d array on the device of the other operands. `x` and `y`
+        are converted like the operands of any other elementwise function; the standard
+        also requires one of them to be an array, so if both are scalars, `x` becomes a
+        0-d array with the default dtype for its kind, as NumPy promotes it.
+        """
         if isinstance(condition, bool | np.bool_):
-            like = next(a for a in (x, y) if array_api_compat.is_array_api_obj(a))
+            like = next(
+                a
+                for a in (x, y)
+                if array_api_compat.is_array_api_obj(a) and not isinstance(a, np.generic)
+            )
             condition = self.asarray(condition, dtype=bool, like=like)
-        return self.xp.where(condition, self.operand(x, condition), self.operand(y, condition))
+        x, y = self.operand(x, condition), self.operand(y, condition)
+        if not (array_api_compat.is_array_api_obj(x) or array_api_compat.is_array_api_obj(y)):
+            x = self.asarray(x, like=condition)
+        return self.xp.where(condition, x, y)
 
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
@@ -232,30 +250,22 @@ class ArrayOps:
         return common.BufferInfo.from_ndarray(array)
 
 
-_registry: list[tuple[Callable[[ModuleType], bool], Callable[[ModuleType], ArrayOps]]] = []
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
 
 
-def register(
-    is_namespace: Callable[[ModuleType], bool], factory: Callable[[ModuleType], ArrayOps]
-) -> None:
-    """
-    Use `factory(xp)` for the buffers whose compat namespace `xp` satisfies `is_namespace`.
-
-    Later registrations take precedence.
-    """
-    _registry.insert(0, (is_namespace, factory))
-    _ops_by_namespace.clear()
+def register(ops: ArrayOps) -> None:
+    """Use `ops` for the buffers whose compat namespace is `ops.xp`, replacing an earlier registration."""
+    _ops_by_namespace[ops.xp] = ops
     _ops_by_array_type.clear()
 
 
 def for_namespace(xp: ModuleType) -> ArrayOps:
+    """The registered `ArrayOps` for the compat namespace `xp`, or the default one."""
     try:
         return _ops_by_namespace[xp]
     except KeyError:
-        factory = next((f for is_ns, f in _registry if is_ns(xp)), ArrayOps)
-        ops = _ops_by_namespace[xp] = factory(xp)
+        ops = _ops_by_namespace[xp] = ArrayOps(xp)
         return ops
 
 

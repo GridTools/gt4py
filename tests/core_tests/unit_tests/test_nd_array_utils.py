@@ -75,7 +75,11 @@ def test_dtype_of_ignores_byte_order(dtype):
 def test_dtype_of_jax_without_x64():
     import jax
 
-    with jax.enable_x64(False):
+    # `jax.enable_x64` replaced `jax.experimental.disable_x64` in newer JAX versions
+    disable_x64 = (
+        jax.enable_x64(False) if hasattr(jax, "enable_x64") else jax.experimental.disable_x64()
+    )
+    with disable_x64:
         array = jax.numpy.zeros((2,), dtype=jax.numpy.float32)
         assert ndarray_utils.dtype_of(array) == definitions.dtype(np.float32)
 
@@ -91,3 +95,13 @@ def test_dtype_of_c_type_aliases(c_type, expected):
 def test_dtype_of_rejects_non_gt4py_types(dtype):
     with pytest.raises(TypeError, match="not a gt4py scalar type"):
         ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype))
+
+
+@pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
+@pytest.mark.parametrize(
+    "c_type, expected", [(np.longlong, "int64"), (np.ulonglong, "uint64"), (np.intc, "int32")]
+)
+def test_namespace_dtype_of_c_type_aliases(array_ns_name, c_type, expected):
+    array_ns = importlib.import_module(array_ns_name)
+
+    assert ndarray_utils.namespace_dtype(array_ns, c_type) == getattr(array_ns, expected)

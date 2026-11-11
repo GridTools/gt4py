@@ -35,7 +35,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.ffront.experimental import as_offset, concat_where
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import (
@@ -117,11 +117,28 @@ def are_equal_fields(a: Field, b: Field) -> bool:
     return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
+def _skip_or_expect_no_buffer_info(xp) -> bool:
+    """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
+    if xp.__name__ == "jax.numpy":
+        return True
+    if xp.__name__ not in ("numpy", "cupy"):
+        pytest.skip(
+            "Buffer pointers and strides are outside the Array API standard; "
+            "'BufferInfo.from_ndarray' knows NumPy and CuPy only."
+        )
+    return False
+
+
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    field = constructors.as_field((D0, D1), data)
+    field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
+    assert field.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            field.__gt_buffer_info__
+        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
@@ -177,6 +194,17 @@ def test_where_builtin(nd_array_implementation):
 
     result = fbuiltins.where(*field_inputs)
     assert np.allclose(result.ndarray, expected)
+
+
+@pytest.mark.parametrize("condition", [True, False, np.bool_(True)])
+@pytest.mark.parametrize("scalar", [5.0, np.float64(5.0)], ids=["python", "numpy"])
+def test_where_builtin_scalar_condition(nd_array_implementation, condition, scalar):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation, dtype=np.float64)
+
+    result = fbuiltins.where(condition, scalar, field)
+
+    assert result.array_ns is nd_array_implementation
+    assert np.array_equal(result.asnumpy(), np.where(condition, 5.0, [1.0, 2.0, 3.0]))
 
 
 def test_where_builtin_different_domain(nd_array_implementation):
@@ -349,6 +377,25 @@ def test_mixed_fields(product_nd_array_implementation):
 
     result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
+
+
+def test_mixed_fields_concat_where(product_nd_array_implementation):
+    first_impl, second_impl = product_nd_array_implementation
+    if not is_cupy(first_impl) and is_cupy(second_impl):
+        pytest.skip("Converting a CuPy array to a CPU library requires an explicit copy.")
+    K = Dimension("K")
+    domain = common.domain({K: 4})
+    true_field = common._field(
+        asarray(first_impl, [1.0, 2.0, 3.0, 4.0], dtype=np.float64), domain=domain
+    )
+    false_field = common._field(
+        asarray(second_impl, [10.0, 20.0, 30.0, 40.0], dtype=np.float64), domain=domain
+    )
+
+    result = concat_where(common.domain({K: (0, 2)}), true_field, false_field)
+
+    assert result.array_ns is first_impl
+    assert np.array_equal(result.asnumpy(), [1.0, 2.0, 30.0, 40.0])
 
 
 def test_non_dispatched_function():
@@ -1283,6 +1330,69 @@ def test_setitem(index, value):
     assert np.allclose(field.ndarray, expected)
 
 
+_ROW = np.arange(10) * 2.0
+
+
+@pytest.mark.parametrize(
+    "index, source, make_value",
+    [
+        ((1, 1), 42.0, lambda xp, v: v),
+        ((1, 1), 42, lambda xp, v: v),
+        ((1, 1), np.float32(42.5), lambda xp, v: v),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
+        ((1, slice(None)), _ROW, lambda xp, v: v),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float64),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
+    ],
+    ids=[
+        "python-float",
+        "python-int",
+        "numpy-scalar",
+        "array",
+        "array-other-dtype",
+        "numpy-array",
+        "field",
+    ],
+)
+def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
+    xp = nd_array_implementation
+    value = make_value(xp, source)
+    if is_cupy(xp) and isinstance(value, np.ndarray):
+        pytest.skip("CuPy does not assign a non-scalar NumPy array.")
+    field = common._field(
+        asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
+        domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+    )
+    expected = np.arange(100, dtype=np.float64).reshape(10, 10)
+    expected[index] = source
+
+    field[index] = value
+
+    assert field.array_ns is xp
+    assert field.dtype == core_defs.dtype(np.float64)
+    assert np.array_equal(field.asnumpy(), expected)
+
+
+@pytest.mark.parametrize("c_type, expected", [(np.longlong, np.int64), (np.intc, np.int32)])
+def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 2.0], dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 2))),
+    )
+
+    result = fbuiltins.astype(field, c_type)
+
+    assert result.dtype == core_defs.dtype(expected)
+    assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
+
+
 def test_setitem_wrong_domain():
     field = common._field(
         np.arange(100).reshape(10, 10),
@@ -1347,10 +1457,15 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
-        np.roll(np.arange(E_START, E_STOP), 1),
+        asarray(nd_array_implementation, np.roll(np.arange(E_START, E_STOP), 1), dtype=np.int32),
         domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
+    assert e2v_conn.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            e2v_conn.__gt_buffer_info__
+        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
     assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
