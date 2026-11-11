@@ -32,6 +32,8 @@ from gt4py.next.ffront import experimental, fbuiltins
 
 
 def _ops_of(*values: Any) -> array_ops.ArrayOps:
+    # TODO(havogt): the first field's array library decides, so mixing libraries depends on the
+    #   order of the operands; reject mixed libraries or define a priority instead.
     for v in values:
         if isinstance(v, NdArrayField):
             return array_ops.of(v._ndarray)
