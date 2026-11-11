@@ -75,7 +75,11 @@ def test_dtype_of_ignores_byte_order(dtype):
 def test_dtype_of_jax_without_x64():
     import jax
 
-    with jax.enable_x64(False):
+    # `jax.enable_x64` replaced `jax.experimental.disable_x64` in newer JAX versions
+    disable_x64 = (
+        jax.enable_x64(False) if hasattr(jax, "enable_x64") else jax.experimental.disable_x64()
+    )
+    with disable_x64:
         array = jax.numpy.zeros((2,), dtype=jax.numpy.float32)
         assert ndarray_utils.dtype_of(array) == definitions.dtype(np.float32)
 

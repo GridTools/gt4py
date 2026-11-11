@@ -1495,7 +1495,7 @@ requires-dist = [
     { name = "gt4py", extras = ["jax", "standard", "testing"], marker = "extra == 'next'" },
     { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.93" },
     { name = "jax", marker = "python_full_version >= '3.14' and extra == 'jax'", specifier = ">=0.9.1" },
-    { name = "jax", marker = "python_full_version < '3.14' and extra == 'jax'", specifier = ">=0.4.26" },
+    { name = "jax", marker = "python_full_version < '3.14' and extra == 'jax'", specifier = ">=0.4.32" },
     { name = "jax", extras = ["cuda12-local"], marker = "extra == 'jax-cuda12'", specifier = ">=0.6.0" },
     { name = "jax", extras = ["cuda13-local"], marker = "extra == 'jax-cuda13'", specifier = ">=0.7.0" },
     { name = "jinja2", specifier = ">=3.0.0" },
