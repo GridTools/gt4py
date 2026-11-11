@@ -33,7 +33,7 @@ def _strict_field(values, dtype=xs.float64):
 def test_unregistered_namespace_uses_standard_ops():
     field = _strict_field([1.0, 2.0])
 
-    assert type(field._ops) is array_ops.ArrayOps
+    assert type(array_ops.of(field.ndarray)) is array_ops.ArrayOps
     assert field.array_ns is xs
     assert isinstance(field, nd_array_field.NdArrayField)
 
