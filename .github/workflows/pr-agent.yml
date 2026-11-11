@@ -24,13 +24,12 @@ on:
 # label and PR-body writes from model output -- which is why label writes are
 # off and '/describe' is not automatic.
 #
-# 'issues: write' is not redundant with 'pull-requests: write', though a PR
-# comment makes it look that way. PR Agent publishes the review through
-# '/repos/.../issues/{n}/comments', edits and deletes it there in persistent
-# mode, and reacts to a command with '/repos/.../issues/comments/{id}/reactions'.
-# GitHub treats a pull request as an issue, so the comment endpoint may accept
-# either scope, but the reaction endpoint is listed under Issues alone and
-# '/generate_labels' writes issue labels. Upstream requires it too.
+# 'issues: write' is kept, but it is close to redundant. Posting, editing and
+# deleting the review comment, and writing labels, all accept either write
+# scope. The one call that needs Issues specifically is the eyes reaction on a
+# command, and PR Agent only logs a warning if it fails. So dropping this scope
+# would cost the acknowledgement on a command that takes minutes, nothing more.
+# It is kept for that acknowledgement and because upstream requires it.
 permissions:
   contents: read
   issues: write
