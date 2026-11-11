@@ -15,7 +15,7 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 
-import array_api_compat
+import array_api_compat.numpy as compat_numpy
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -63,4 +63,4 @@ class NumPyOps(array_ops.ArrayOps):
         return np.asarray(array)
 
 
-array_ops.register(array_api_compat.is_numpy_namespace, NumPyOps)
+array_ops.register(NumPyOps(compat_numpy))

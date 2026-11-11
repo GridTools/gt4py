@@ -13,8 +13,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import array_api_compat
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -45,7 +45,7 @@ class JaxOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
 
 
-array_ops.register(array_api_compat.is_jax_namespace, JaxOps)
+array_ops.register(JaxOps(jnp))
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)

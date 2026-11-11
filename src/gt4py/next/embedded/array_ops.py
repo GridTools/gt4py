@@ -16,9 +16,8 @@ works without registration; earlier revisions do not take Python scalars as
 arguments of elementwise functions, which `ArrayOps` passes for scalar operands.
 
 A library that needs different behaviour, or has a faster path outside the
-standard, subclasses `ArrayOps`, overrides only those methods and is registered
-with `register`. The registry is keyed by a predicate on the compat namespace and
-holds a factory, so registering a library does not import it.
+standard, subclasses `ArrayOps`, overrides only those methods and registers an
+instance for its compat namespace with `register`.
 """
 
 from __future__ import annotations
@@ -179,30 +178,22 @@ class ArrayOps:
         return common.BufferInfo.from_ndarray(array)
 
 
-_registry: list[tuple[Callable[[ModuleType], bool], Callable[[ModuleType], ArrayOps]]] = []
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
 
 
-def register(
-    is_namespace: Callable[[ModuleType], bool], factory: Callable[[ModuleType], ArrayOps]
-) -> None:
-    """
-    Use `factory(xp)` for the buffers whose compat namespace `xp` satisfies `is_namespace`.
-
-    Later registrations take precedence.
-    """
-    _registry.insert(0, (is_namespace, factory))
-    _ops_by_namespace.clear()
+def register(ops: ArrayOps) -> None:
+    """Use `ops` for the buffers whose compat namespace is `ops.xp`, replacing an earlier registration."""
+    _ops_by_namespace[ops.xp] = ops
     _ops_by_array_type.clear()
 
 
 def for_namespace(xp: ModuleType) -> ArrayOps:
+    """The registered `ArrayOps` for the compat namespace `xp`, or the default one."""
     try:
         return _ops_by_namespace[xp]
     except KeyError:
-        factory = next((f for is_ns, f in _registry if is_ns(xp)), ArrayOps)
-        ops = _ops_by_namespace[xp] = factory(xp)
+        ops = _ops_by_namespace[xp] = ArrayOps(xp)
         return ops
 
 

@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import array_api_compat
+import array_api_compat.numpy as compat_numpy
 import array_api_strict as xs
 import numpy as np
 import pytest
@@ -21,8 +21,7 @@ D = common.Dimension("D")
 
 @pytest.fixture
 def isolated_registry(monkeypatch):
-    monkeypatch.setattr(array_ops, "_registry", list(array_ops._registry))
-    monkeypatch.setattr(array_ops, "_ops_by_namespace", {})
+    monkeypatch.setattr(array_ops, "_ops_by_namespace", dict(array_ops._ops_by_namespace))
     monkeypatch.setattr(array_ops, "_ops_by_array_type", {})
 
 
@@ -50,7 +49,7 @@ def test_elementwise_function_override(isolated_registry):
                 return lambda x: x + 100.0
             return super()._elementwise_function(name)
 
-    array_ops.register(array_api_compat.is_array_api_strict_namespace, Ops)
+    array_ops.register(Ops(xs))
     field = _strict_field([1.0, 2.0])
 
     assert np.allclose(fbuiltins.sin(field).asnumpy(), [101.0, 102.0])
@@ -64,7 +63,7 @@ def test_builtin_override(isolated_registry):
     class Ops(array_ops.ArrayOps):
         builtin_overrides = {fbuiltins.where: where_override}
 
-    array_ops.register(array_api_compat.is_array_api_strict_namespace, Ops)
+    array_ops.register(Ops(xs))
     field = _strict_field([1.0, 2.0])
     cond = _strict_field([True, False], dtype=xs.bool)
 
@@ -76,6 +75,6 @@ def test_later_registration_takes_precedence(isolated_registry):
     class Ops(array_libraries.numpy_ops.NumPyOps):
         pass
 
-    array_ops.register(array_api_compat.is_numpy_namespace, Ops)
+    array_ops.register(Ops(compat_numpy))
 
     assert type(array_ops.of(np.empty(1))) is Ops
