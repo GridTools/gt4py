@@ -44,14 +44,6 @@ Inference runs on the [CSCS inference service](https://docs.cscs.ch/services/inf
 
 The service does not record prompts or responses, and processing stays in Switzerland.
 
-## When no review appears
-
-The inference step is `continue-on-error`, so the run is green whether PR Agent reviewed the PR or gave up. A `Report that no review was produced` step turns that silence into a warning annotation and a job summary, keyed on the step's `outcome` — the result before `continue-on-error` rewrites it, so it catches both an exhausted model chain and a step timeout. Green is deliberate: the check is advisory and a PR author cannot act on an outage.
-
-In the `Run PR Agent` log, `Failed to generate prediction` for every model means the chain was exhausted; no such line means the step hit its limit. A timeout or `finish_reason: length` is a configuration problem (`config.ai_timeout`, `PR_AGENT_MAX_OUTPUT_TOKENS`); a 5xx or connection error is the service.
-
-The three timeouts differ. `PR_AGENT_AI_TIMEOUT` bounds one model attempt, and moving on is normal. The step's budget covers the whole chain and is covered by `continue-on-error`, so hitting it degrades quietly; it is not redundant with the per-model timeout, because a 429 or 5xx replays the same model up to `config.num_retries` times and `retry_same_model_on_timeout = false` only suppresses replays after a timeout. The job's `timeout-minutes` is a backstop, and its cancellation is *not* covered, so it surfaces — which is why the derived step budget is checked against it.
-
 ## Configuration variables
 
 These are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), so they can be changed without a PR. Fork PRs cannot override them.
@@ -69,8 +61,8 @@ These are [repository variables](https://github.com/GridTools/gt4py/settings/var
 - **The models have no default**, so PR Agent never calls a model nobody chose. CSCS retires models on short notice, so review them periodically against `GET /v1/models`, the [model table](https://docs.cscs.ch/services/inference/api/) and the [service status](https://inference.status.cscs.ch).
 - **The token limits apply to every model in the chain**, so they must fit the smallest one. The output reserve is sent as `max_tokens`, and a model with a lower output limit rejects the request. Check a new fallback before adding it, since it is only reached when the models before it have failed.
 - **The output reserve must be generous.** The models worth using are reasoning models, whose reasoning tokens count against it. Too small a reserve yields an empty response, so the bot posts nothing instead of failing cleanly.
-- **The step's time budget is derived, not configured.** `Resolve models` sets it to `chain length × PR_AGENT_AI_TIMEOUT` plus two minutes, so adding a fallback or raising the timeout cannot silently cut the chain short. A combination that would not fit under the job's `timeout-minutes` fails there with an `::error::` instead.
+- **The step's time limit is derived**: one `PR_AGENT_AI_TIMEOUT` per model plus two minutes. `Resolve models` fails if that does not fit under the job's `timeout-minutes`.
 - **The budget is not a cap on the diff.** The diff gets the budget minus the reserve minus the prompt, which is substantial. Both values must be positive, because PR Agent reads zero or negative as "no limit" and the answer then truncates.
 - **A more capable model is not a better primary if it is slow.** Every attempt that times out is billed and discarded before a fallback answers.
-- **A failed automatic review posts nothing.** The only trace is a red `Run PR Agent` step inside a green job. A manual `/review` reports the reason.
+- **A failed automatic review posts nothing.** The run stays green with a warning annotation; the cause is in the `Run PR Agent` log. A manual `/review` reports the reason.
 - **The PR Agent version is pinned by digest in the workflow**, since GitHub does not allow expressions in `uses`. Upgrading is thus a reviewed change, as befits the image that receives the inference key.

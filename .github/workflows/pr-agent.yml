@@ -56,8 +56,6 @@ jobs:
       )
     runs-on: ubuntu-latest
     # Backstop; the effective limit is on the 'Run PR Agent' step.
-    # Must stay above the step budget derived in 'Resolve models', which
-    # checks it against JOB_TIMEOUT there; change both together.
     timeout-minutes: 45
     steps:
       # 'pull_request_target' ignores the fork-approval setting, so without
@@ -106,7 +104,7 @@ jobs:
           BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '131072' }}
           OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
           AI_TIMEOUT: ${{ vars.PR_AGENT_AI_TIMEOUT || '720' }}
-          # Mirrors this job's 'timeout-minutes'; keep the two in step.
+          # This job's 'timeout-minutes', which expressions cannot read.
           JOB_TIMEOUT: "45"
         run: |
           fail() {
@@ -116,7 +114,7 @@ jobs:
           # Non-numeric values would break the '-gt' tests with an unhelpful error.
           positive() {
             case "$2" in
-              '' | *[!0-9]*) : ;;
+              '' | 0* | *[!0-9]*) : ;;
               *) [ "$2" -gt 0 ] && return 0 ;;
             esac
             fail "Repository variable $1 must be a positive integer, got '$2'."
@@ -128,20 +126,21 @@ jobs:
           positive PR_AGENT_TOKEN_BUDGET "${BUDGET}"
           positive PR_AGENT_MAX_OUTPUT_TOKENS "${OUTPUT}"
           positive PR_AGENT_AI_TIMEOUT "${AI_TIMEOUT}"
+          # One model cannot be given more time than the whole job, and
+          # refusing that early keeps the arithmetic below inside int64.
+          [ "${AI_TIMEOUT}" -le "$(( JOB_TIMEOUT * 60 ))" ] || fail "PR_AGENT_AI_TIMEOUT (${AI_TIMEOUT}s) exceeds the ${JOB_TIMEOUT} min job limit."
           # A reserve at or above the budget leaves no room for the diff.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
 
           fallbacks='[]'
           [ "${FALLBACKS}" = "none" ] || fallbacks=$(jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map("openai/" + .)' <<<"${FALLBACKS}")
-          # The step budget follows the chain: every model may spend a full
-          # AI_TIMEOUT before the next is tried, so a hardcoded limit silently
-          # cuts the chain short once a model is added or the timeout raised.
-          # Two minutes cover the image pull, the diff fetch and publishing.
+          # Models can time out one after another; two minutes more for the
+          # diff fetch and publishing.
           chain=$(( 1 + $(jq 'length' <<<"${fallbacks}") ))
           step=$(( (chain * AI_TIMEOUT + 59) / 60 + 2 ))
           # A job timeout is a cancellation, which 'continue-on-error' does not
           # cover, so an unreachable step budget turns a tolerated miss red.
-          [ "$(( step + 2 ))" -le "${JOB_TIMEOUT}" ] || fail "${chain} models at ${AI_TIMEOUT}s need ${step} min, over the ${JOB_TIMEOUT} min job limit. Lower PR_AGENT_AI_TIMEOUT, shorten PR_AGENT_FALLBACK_MODELS, or raise the job's timeout-minutes and JOB_TIMEOUT together."
+          [ "$(( step + 2 ))" -le "${JOB_TIMEOUT}" ] || fail "${chain} models at ${AI_TIMEOUT}s need ${step} min, leaving no margin under the ${JOB_TIMEOUT} min job limit. Lower PR_AGENT_AI_TIMEOUT, shorten PR_AGENT_FALLBACK_MODELS, or raise the job's timeout-minutes and JOB_TIMEOUT together."
 
           {
             echo "fallbacks=${fallbacks}"
@@ -161,10 +160,11 @@ jobs:
         # The inference service has no availability guarantee, and an advisory
         # review must not look like a CI failure.
         continue-on-error: true
-        # On the step, not the job, so a timeout is tolerated as well. Not
-        # redundant with 'ai_timeout': a 429 or 5xx replays the same model up
-        # to 'config.num_retries' times, each able to spend a full ai_timeout.
-        timeout-minutes: ${{ steps.models.outputs.step_timeout || 40 }}
+        # On the step, not the job, so a timeout is tolerated as well. A 429
+        # or 5xx replays the same model, so 'ai_timeout' alone does not bound
+        # this. 'fromJSON' because a step output is a string and the runner
+        # silently drops a timeout it cannot read as a number.
+        timeout-minutes: ${{ fromJSON(steps.models.outputs.step_timeout) }}
         # Pinned by digest (tag '0.50.0-github_action') because the image
         # receives the inference key.
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
@@ -208,18 +208,15 @@ jobs:
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
 
-      # 'continue-on-error' above makes "gave up" look like "reviewed".
-      # 'outcome' is the result before that rewrite, so it catches both an
-      # exhausted chain and a step timeout. A warning, not a failure: the
-      # check is advisory and a PR author cannot act on an outage.
-      - name: Report that no review was produced
+      # 'continue-on-error' makes a failed run look like a reviewed one;
+      # 'outcome' is the result before that rewrite.
+      - name: Report a failed PR Agent run
         if: steps.pragent.outcome == 'failure'
         run: |
-          echo "::warning title=No PR Agent review::Every model failed, or the step ran out of time. See the 'Run PR Agent' log."
+          echo "::warning title=PR Agent failed::No review was posted. See the 'Run PR Agent' log."
           {
-            echo "### PR Agent produced no review"
+            echo "### PR Agent failed or timed out"
             echo
-            echo "The run is green because the check is advisory."
-            echo "In the \`Run PR Agent\` log, \`Failed to generate prediction\` for every model means the chain was exhausted; no such line means the step timed out."
-            echo "A timeout or \`finish_reason: length\` is configuration (\`config.ai_timeout\`, \`PR_AGENT_MAX_OUTPUT_TOKENS\`); a 5xx is the service."
+            echo "No review was posted; the run is green because the check is advisory."
+            echo "The cause is in the \`Run PR Agent\` log; see docs/development/tools/pr-agent.md#configuration-variables."
           } >> "$GITHUB_STEP_SUMMARY"
