@@ -11,7 +11,9 @@ Array operations of the embedded fields, per array namespace.
 
 `ArrayOps` implements everything `NdArrayField` does on its buffer against the
 Array API standard, through the namespace `array_api_compat` returns for the
-buffer. Any standard-conforming array library works without registration.
+buffer. Any array library conforming to revision 2024.12 or later of the standard
+works without registration; earlier revisions do not take Python scalars as
+arguments of elementwise functions, which `ArrayOps` passes for scalar operands.
 
 A library that needs different behaviour, or has a faster path outside the
 standard, subclasses `ArrayOps`, overrides only those methods and is registered
