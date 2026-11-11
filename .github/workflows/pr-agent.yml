@@ -56,7 +56,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     # Backstop; the effective limit is on the 'Run PR Agent' step.
-    timeout-minutes: 30
+    # Must stay above the step budget derived in 'Resolve models', which
+    # checks it against JOB_TIMEOUT there; change both together.
+    timeout-minutes: 45
     steps:
       # 'pull_request_target' ignores the fork-approval setting, so without
       # this gate anyone opening a PR could spend the CSCS allocation.
@@ -103,6 +105,9 @@ jobs:
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
           BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '131072' }}
           OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
+          AI_TIMEOUT: ${{ vars.PR_AGENT_AI_TIMEOUT || '720' }}
+          # Mirrors this job's 'timeout-minutes'; keep the two in step.
+          JOB_TIMEOUT: "45"
         run: |
           fail() {
             echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
@@ -122,17 +127,30 @@ jobs:
           # output cap and reserves too little for the answer, which truncates.
           positive PR_AGENT_TOKEN_BUDGET "${BUDGET}"
           positive PR_AGENT_MAX_OUTPUT_TOKENS "${OUTPUT}"
+          positive PR_AGENT_AI_TIMEOUT "${AI_TIMEOUT}"
           # A reserve at or above the budget leaves no room for the diff.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
 
           fallbacks='[]'
           [ "${FALLBACKS}" = "none" ] || fallbacks=$(jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map("openai/" + .)' <<<"${FALLBACKS}")
+          # The step budget follows the chain: every model may spend a full
+          # AI_TIMEOUT before the next is tried, so a hardcoded limit silently
+          # cuts the chain short once a model is added or the timeout raised.
+          # Two minutes cover the image pull, the diff fetch and publishing.
+          chain=$(( 1 + $(jq 'length' <<<"${fallbacks}") ))
+          step=$(( (chain * AI_TIMEOUT + 59) / 60 + 2 ))
+          # A job timeout is a cancellation, which 'continue-on-error' does not
+          # cover, so an unreachable step budget turns a tolerated miss red.
+          [ "$(( step + 2 ))" -le "${JOB_TIMEOUT}" ] || fail "${chain} models at ${AI_TIMEOUT}s need ${step} min, over the ${JOB_TIMEOUT} min job limit. Lower PR_AGENT_AI_TIMEOUT, shorten PR_AGENT_FALLBACK_MODELS, or raise the job's timeout-minutes and JOB_TIMEOUT together."
+
           {
             echo "fallbacks=${fallbacks}"
             echo "budget=${BUDGET}"
             echo "output=${OUTPUT}"
+            echo "ai_timeout=${AI_TIMEOUT}"
+            echo "step_timeout=${step}"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; context window ${BUDGET}, output reserve ${OUTPUT}."
+          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; context window ${BUDGET}, output reserve ${OUTPUT}, ${AI_TIMEOUT}s per model, ${step} min for the chain."
 
       # Never add 'actions/checkout': this job holds a secret under
       # 'pull_request_target', so it must not check out pull request code.
@@ -146,7 +164,7 @@ jobs:
         # On the step, not the job, so a timeout is tolerated as well. Not
         # redundant with 'ai_timeout': a 429 or 5xx replays the same model up
         # to 'config.num_retries' times, each able to spend a full ai_timeout.
-        timeout-minutes: 22
+        timeout-minutes: ${{ steps.models.outputs.step_timeout || 40 }}
         # Pinned by digest (tag '0.50.0-github_action') because the image
         # receives the inference key.
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
@@ -170,7 +188,7 @@ jobs:
           # Reviews of this repository take longer than the 120 s default. On
           # timeout, the fallback is tried instead of waiting again on the
           # same model.
-          config.ai_timeout: "360"
+          config.ai_timeout: ${{ steps.models.outputs.ai_timeout }}
           config.retry_same_model_on_timeout: "false"
           # '/describe' rewrites the PR body from model output and '/improve'
           # is noisy, so both run only on request.
