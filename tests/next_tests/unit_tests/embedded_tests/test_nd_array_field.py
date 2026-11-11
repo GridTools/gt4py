@@ -1343,6 +1343,19 @@ def test_setitem_array_libraries(nd_array_implementation, index, source, make_va
     assert np.array_equal(field.asnumpy(), expected)
 
 
+@pytest.mark.parametrize("c_type, expected", [(np.longlong, np.int64), (np.intc, np.int32)])
+def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 2.0], dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 2))),
+    )
+
+    result = fbuiltins.astype(field, c_type)
+
+    assert result.dtype == core_defs.dtype(expected)
+    assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
+
+
 def test_setitem_wrong_domain():
     field = common._field(
         np.arange(100).reshape(10, 10),

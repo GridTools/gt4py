@@ -91,3 +91,13 @@ def test_dtype_of_c_type_aliases(c_type, expected):
 def test_dtype_of_rejects_non_gt4py_types(dtype):
     with pytest.raises(TypeError, match="not a gt4py scalar type"):
         ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype))
+
+
+@pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
+@pytest.mark.parametrize(
+    "c_type, expected", [(np.longlong, "int64"), (np.ulonglong, "uint64"), (np.intc, "int32")]
+)
+def test_namespace_dtype_of_c_type_aliases(array_ns_name, c_type, expected):
+    array_ns = importlib.import_module(array_ns_name)
+
+    assert ndarray_utils.namespace_dtype(array_ns, c_type) == getattr(array_ns, expected)

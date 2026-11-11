@@ -133,8 +133,13 @@ def _dtype_tables(
 
 def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> _ArrayDType:
     """The dtype object of `array_ns` for the gt4py scalar type `scalar_type`."""
+    key: type = (
+        _numpy_scalar_type(np.dtype(scalar_type))
+        if issubclass(scalar_type, np.generic)
+        else scalar_type
+    )
     try:
-        return _dtype_tables(array_ns)[0][scalar_type]
+        return _dtype_tables(array_ns)[0][key]
     except KeyError:
         raise TypeError(f"Array namespace '{array_ns}' has no dtype for '{scalar_type}'.") from None
 
