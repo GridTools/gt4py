@@ -114,7 +114,10 @@ class ArrayOps:
 
         Python scalars stay Python scalars, so they keep the weak typing of the
         standard. NumPy scalars become 0-d arrays of their dtype, which promotes like
-        NumPy does with NumPy scalars.
+        NumPy does with NumPy scalars. They reach fields of every library, since gt4py's
+        scalar types are NumPy's, but the standard does not accept them as operands.
+        Libraries that do (NumPy, CuPy, JAX) override this to keep them as they are,
+        which spares creating a 0-d array, on the device, per operation.
         """
         if isinstance(value, np.generic):
             return self.asarray(value, dtype=type(value), like=like)
@@ -125,8 +128,9 @@ class ArrayOps:
         try:
             return self._elementwise_function_cache[name]
         except KeyError:
-            func = self._elementwise_function_cache[name] = self._elementwise_function(name)
-            return func
+            return self._elementwise_function_cache.setdefault(
+                name, self._elementwise_function(name)
+            )
 
     def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "where":
@@ -164,9 +168,15 @@ class ArrayOps:
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
-        """Write `value` into `array[key]`; returns the array holding the result."""
+        """
+        Write `value` into `array[key]`; returns the array holding the result.
+
+        The standard leaves assigning a value of another dtype, device or library
+        unspecified, so such values are converted to the array's first. Libraries that
+        cast on assignment (NumPy, CuPy) assign directly; JAX arrays are immutable and
+        need `.at[key].set(value)`.
+        """
         if not isinstance(value, bool | int | float):
-            # the standard leaves assigning another dtype or device unspecified
             value = self.xp.asarray(value, device=self.device(array))
             if value.dtype != array.dtype:
                 value = self.xp.astype(value, array.dtype)
