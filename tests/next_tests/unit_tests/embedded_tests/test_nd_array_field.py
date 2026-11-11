@@ -1936,6 +1936,35 @@ def test_jax_pytree_roundtrip():
 
 
 @pytest.mark.requires_jax
+def test_jax_pytree_rejects_fields_of_other_libraries():
+    import jax
+
+    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
+
+    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
+        jax.jit(lambda f: f * 2.0)(field)
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_non_array_leaves():
+    import jax
+
+    D_BATCH = Dimension("D_BATCH")
+    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
+    batched = common._field(jax.numpy.ones((2, 3)), domain=common.domain({D_BATCH: 2, D0: 3}))
+
+    shapes = jax.tree.map(lambda x: x.shape, field)
+    assert jax.tree.leaves(shapes) == [3]
+    assert jax.eval_shape(lambda f: f * 2.0, field).ndarray.shape == (3,)
+    # a field with an axis index as leaf, as `vmap` prefix for the batched field's buffer
+    axes = nd_array_field.NdArrayField(common.domain({D0: 3}), 0)
+    sums = jax.vmap(lambda f: f.ndarray.sum(), in_axes=(axes,))(
+        nd_array_field.NdArrayField(common.domain({D0: 3}), batched.ndarray)
+    )
+    np.testing.assert_allclose(sums, [3.0, 3.0])
+
+
+@pytest.mark.requires_jax
 def test_jax_traced_array_dispatch():
     import jax
 

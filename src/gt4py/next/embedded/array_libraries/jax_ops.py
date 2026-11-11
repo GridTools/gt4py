@@ -13,6 +13,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+import array_api_compat
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -54,6 +55,11 @@ jax.config.update("jax_enable_x64", True)
 def _flatten_field(
     field: nd_array_field.NdArrayField,
 ) -> tuple[tuple[core_defs.NDArrayObject], common.Domain]:
+    # JAX also flattens pytrees whose leaves are not arrays (e.g. `jax.tree.map` results or
+    # `vmap` axis specifications), so only arrays of other libraries are rejected
+    assert not array_api_compat.is_array_api_obj(field.ndarray) or array_api_compat.is_jax_array(
+        field.ndarray
+    ), f"Only fields of JAX arrays are JAX pytrees, got a field of '{type(field.ndarray)}'."
     return (field.ndarray,), field.domain
 
 
@@ -63,9 +69,6 @@ def _unflatten_field(
     return nd_array_field.NdArrayField(domain, children[0])  # type: ignore[abstract] # mypy does not see '__gt_builtin_func__' as implemented by 'FieldBuiltinFuncRegistry'
 
 
-# JAX registers pytrees by type, so fields of every array library are pytrees, not only those
-# holding JAX arrays: like a bare NumPy array, a NumPy-backed field passed to `jax.jit` is
-# copied to a JAX array on every call.
 jax.tree_util.register_pytree_node(
     nd_array_field.NdArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_field'
     _flatten_field,
