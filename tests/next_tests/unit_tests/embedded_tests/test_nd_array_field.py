@@ -11,6 +11,7 @@ import operator
 import pickle
 from typing import Callable, Iterable, Optional
 
+import array_api_strict
 import numpy as np
 import pytest
 
@@ -1359,6 +1360,8 @@ def test_setitem_array_libraries(nd_array_implementation, index, source, make_va
     value = make_value(xp, source)
     if is_cupy(xp) and isinstance(value, np.ndarray):
         pytest.skip("CuPy does not assign a non-scalar NumPy array.")
+    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
+        pytest.skip("Assigning an array of another library is tested separately.")
     field = common._field(
         asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
         domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
@@ -1384,6 +1387,16 @@ def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
 
     assert result.dtype == core_defs.dtype(expected)
     assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
+
+
+def test_setitem_array_of_other_library_raises():
+    field = common._field(
+        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
+    )
+
+    with pytest.raises(TypeError, match="Cannot assign an array of 'numpy'"):
+        field[...] = np.ones(3)
 
 
 def test_setitem_wrong_domain():

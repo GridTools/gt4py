@@ -55,6 +55,8 @@ STANDARD_NAMES: Final[Mapping[str, str]] = {
 }
 
 
+# TODO(havogt): Redesign coherent conversion rules when arrays/scalars of different array
+#   libraries are used together.
 class ArrayOps:
     """
     Operations on the buffers of embedded fields for one array namespace.
@@ -167,15 +169,23 @@ class ArrayOps:
         """
         Write `value` into `array[key]`; returns the array holding the result.
 
-        The standard leaves assigning a value of another dtype, device or library
-        unspecified, so such values are converted to the array's first. Libraries that
-        cast on assignment (NumPy, CuPy) assign directly; JAX arrays are immutable and
-        need `.at[key].set(value)`.
+        `value` is a Python scalar, a NumPy scalar (gt4py's scalar types are NumPy's)
+        or an array of the same library as `array`; arrays of other libraries raise
+        `TypeError`. The standard leaves assigning a value of another dtype unspecified,
+        so it is cast to the dtype of `array` first. Libraries that cast on assignment
+        (NumPy, CuPy) assign directly; JAX arrays are immutable and need
+        `.at[key].set(value)`.
         """
-        if not isinstance(value, bool | int | float):
+        if isinstance(value, np.generic):
             value = self.xp.asarray(value, device=self.device(array))
-            if value.dtype != array.dtype:
-                value = self.xp.astype(value, array.dtype)
+        elif not isinstance(value, bool | int | float):
+            if array_api_compat.array_namespace(value) is not self.xp:
+                raise TypeError(
+                    f"Cannot assign an array of '{type(value).__module__}' to an array of"
+                    f" '{self.xp.__name__}'."
+                )
+        if not isinstance(value, bool | int | float) and value.dtype != array.dtype:
+            value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
