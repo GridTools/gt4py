@@ -189,6 +189,17 @@ def test_where_builtin(nd_array_implementation):
     assert np.allclose(result.ndarray, expected)
 
 
+@pytest.mark.parametrize("condition", [True, False, np.bool_(True)])
+@pytest.mark.parametrize("scalar", [5.0, np.float64(5.0)], ids=["python", "numpy"])
+def test_where_builtin_scalar_condition(nd_array_implementation, condition, scalar):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation, dtype=np.float64)
+
+    result = fbuiltins.where(condition, scalar, field)
+
+    assert result.array_ns is nd_array_implementation
+    assert np.array_equal(result.asnumpy(), np.where(condition, 5.0, [1.0, 2.0, 3.0]))
+
+
 def test_where_builtin_different_domain(nd_array_implementation):
     cond = np.asarray([True, False])
     true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)

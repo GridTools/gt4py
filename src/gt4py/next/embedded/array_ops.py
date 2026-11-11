@@ -150,7 +150,11 @@ class ArrayOps:
         0-d array with the default dtype for its kind, as NumPy promotes it.
         """
         if isinstance(condition, bool | np.bool_):
-            like = next(a for a in (x, y) if array_api_compat.is_array_api_obj(a))
+            like = next(
+                a
+                for a in (x, y)
+                if array_api_compat.is_array_api_obj(a) and not isinstance(a, np.generic)
+            )
             condition = self.asarray(condition, dtype=bool, like=like)
         x, y = self.operand(x, condition), self.operand(y, condition)
         if not (array_api_compat.is_array_api_obj(x) or array_api_compat.is_array_api_obj(y)):
