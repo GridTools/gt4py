@@ -138,11 +138,16 @@ jobs:
       # 'pull_request_target', so it must not check out pull request code.
       # PR Agent reads the diff through the GitHub API.
       - name: Run PR Agent
+        id: pragent
         if: success() && steps.auth.outputs.allowed == 'true'
         # The inference service has no availability guarantee, and an advisory
         # review must not look like a CI failure.
         continue-on-error: true
         # On the step, not the job, so a timeout is tolerated as well.
+        # Not redundant with 'config.ai_timeout': a 429 or 5xx replays the
+        # same model up to 'config.num_retries' times (default 4), each
+        # attempt free to spend a full ai_timeout, so during a service
+        # wobble the chain has no useful bound of its own.
         timeout-minutes: 22
         # Pinned by digest (tag '0.50.0-github_action') because the image
         # receives the inference key.
@@ -186,3 +191,29 @@ jobs:
           # falls back to defaults that let model output write labels.
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
+
+      # 'continue-on-error' above hides the difference between "reviewed" and
+      # "gave up", so without this a chain that exhausts every model, or a step
+      # that runs out of time, looks exactly like a clean review. 'outcome' is
+      # the result before that rewrite, so it still reports 'failure' for both.
+      #
+      # A warning rather than a failure: the run stays green on purpose, and a
+      # pull request author cannot act on a CSCS outage anyway. The annotation
+      # and the summary are for whoever is watching the workflow.
+      - name: Report that no review was produced
+        if: steps.pragent.outcome == 'failure'
+        run: |
+          echo "::warning title=No PR Agent review::PR Agent produced no review. Every model in the chain failed, or the step ran out of time. See the 'Run PR Agent' step log."
+          {
+            echo "### PR Agent produced no review"
+            echo
+            echo "The inference step reported \`failure\`, so no review was posted."
+            echo "The run is green because this check is advisory and never gates a merge."
+            echo
+            echo "Check the \`Run PR Agent\` step log to tell the cases apart:"
+            echo "- \`Failed to generate prediction with <model>\` for each model means the chain was exhausted."
+            echo "- No such line near the end means the step hit its 22-minute limit mid-attempt."
+            echo
+            echo "A timeout or a truncated response is a configuration problem (\`config.ai_timeout\`,"
+            echo "\`PR_AGENT_MAX_OUTPUT_TOKENS\`); a 5xx or a connection error is the service being unavailable."
+          } >> "$GITHUB_STEP_SUMMARY"
