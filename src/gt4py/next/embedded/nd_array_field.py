@@ -43,7 +43,7 @@ def _make_builtin(
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         ops = _ops_of(*fields)
-        op = ops.elementwise(array_builtin_name)
+        op = ops.elementwise_function(array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if isinstance(f, common.Field)]

@@ -74,7 +74,7 @@ class ArrayOps:
 
     def __init__(self, xp: ModuleType) -> None:
         self.xp = xp
-        self._elementwise_cache: dict[str, Callable[..., Any]] = {}
+        self._elementwise_function_cache: dict[str, Callable[..., Any]] = {}
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.xp.__name__})"
@@ -119,15 +119,15 @@ class ArrayOps:
             return self.asarray(value, dtype=type(value), like=like)
         return value
 
-    def elementwise(self, name: str) -> Callable[..., Any]:
+    def elementwise_function(self, name: str) -> Callable[..., Any]:
         """The elementwise function for a gt4py builtin or operator name."""
         try:
-            return self._elementwise_cache[name]
+            return self._elementwise_function_cache[name]
         except KeyError:
-            func = self._elementwise_cache[name] = self._elementwise(name)
+            func = self._elementwise_function_cache[name] = self._elementwise_function(name)
             return func
 
-    def _elementwise(self, name: str) -> Callable[..., Any]:
+    def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "where":
             return self.where
         func = getattr(self.xp, STANDARD_NAMES.get(name, name), None)

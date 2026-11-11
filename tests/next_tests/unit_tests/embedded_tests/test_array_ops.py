@@ -43,12 +43,12 @@ def test_registered_namespaces():
     assert array_ops.of(np.empty(1)).array_ns is np
 
 
-def test_elementwise_override(isolated_registry):
+def test_elementwise_function_override(isolated_registry):
     class Ops(array_ops.ArrayOps):
-        def _elementwise(self, name):
+        def _elementwise_function(self, name):
             if name == "sin":
                 return lambda x: x + 100.0
-            return super()._elementwise(name)
+            return super()._elementwise_function(name)
 
     array_ops.register(array_api_compat.is_array_api_strict_namespace, Ops)
     field = _strict_field([1.0, 2.0])

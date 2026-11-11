@@ -31,12 +31,12 @@ class CuPyOps(array_ops.ArrayOps):
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         return value
 
-    def _elementwise(self, name: str) -> Callable[..., Any]:
+    def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "gamma":
             import cupyx.scipy.special
 
             return cupyx.scipy.special.gamma
-        return super()._elementwise(name)
+        return super()._elementwise_function(name)
 
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
