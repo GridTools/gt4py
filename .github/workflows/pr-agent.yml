@@ -126,8 +126,26 @@ jobs:
             echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
             exit 1
           }
+          # Rejects a non-numeric value too, which would otherwise fail the
+          # comparison below with bash's "integer expression expected" instead
+          # of a message naming the variable at fault.
+          positive() {
+            case "$2" in
+              '' | *[!0-9]*) : ;;
+              *) [ "$2" -gt 0 ] && return 0 ;;
+            esac
+            fail "Repository variable $1 must be a positive integer, got '$2'."
+          }
           [ -n "${MODEL}" ] || fail "Repository variable PR_AGENT_MODEL is not set."
           [ -n "${FALLBACKS}" ] || fail "Repository variable PR_AGENT_FALLBACK_MODELS is not set; use 'none' for no fallback."
+          # Zero or negative is the quietest way to break a review rather than
+          # an obvious one: PR Agent maps those to "no limit configured", so it
+          # sends no output cap at all and then reserves the built-in 1500
+          # tokens when sizing the diff, leaving the answer to truncate.
+          # Only an explicit value gets here -- the defaults above cover unset
+          # and empty, but the runner passes any other string through.
+          positive PR_AGENT_TOKEN_BUDGET "${BUDGET}"
+          positive PR_AGENT_MAX_OUTPUT_TOKENS "${OUTPUT}"
           # A reserve at or above the budget leaves no room for the diff, and
           # the review then fails with "No PR diff fits" rather than saying so.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."

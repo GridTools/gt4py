@@ -74,7 +74,7 @@ The model, its token limits and the endpoint are [repository variables](https://
 
 Model ids are stored bare. The workflow prepends `openai/`, which is LiteLLM's selector for the OpenAI-compatible route and not part of a model name: LiteLLM strips it and sends the remainder, so CSCS receives exactly the id it published. Without a prefix the call fails with `LLM Provider NOT provided`, and the prefix belongs with `PR_AGENT_API_BASE` rather than inside every id.
 
-Neither model variable has a default, so PR Agent never calls a model nobody chose. The `Resolve models` step checks both before the container starts and fails with an `::error::` naming the unset one.
+Neither model variable has a default, so PR Agent never calls a model nobody chose. The `Resolve models` step checks both before the container starts and fails with an `::error::` naming the unset one. It also requires both token values to be positive integers, because PR Agent reads zero or negative as *no limit configured* rather than rejecting it: it then sends no output cap at all and reserves only its built-in 1500 tokens when sizing the diff, so the review truncates mid-answer with nothing in the configuration to show why. Leaving a variable unset is safe — the workflow default applies — but setting it to `0` is not, since the runner passes any non-empty string through.
 
 The two token limits are **policy, not model properties**. For a model absent from PR Agent's own `MAX_TOKENS` table — as the CSCS models are — `get_max_tokens` returns `min(max_model_tokens, custom_model_max_tokens)` and applies it to whichever model serves the request, so a single pair governs the primary and every fallback. Choose values that fit the smallest model in use:
 
