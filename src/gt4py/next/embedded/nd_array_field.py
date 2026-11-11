@@ -778,9 +778,10 @@ def _intersect_fields(
         *[f.domain for f in broadcasted_fields], ignore_dims=ignore_dims
     )
 
+    ops = array_ops.of(like._ndarray)
     return tuple(
         NdArrayField.from_array(
-            f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)],
+            ops.asarray(f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)]),
             domain=intersected_domain,
         )
         for f, intersected_domain in zip(broadcasted_fields, intersected_domains, strict=True)

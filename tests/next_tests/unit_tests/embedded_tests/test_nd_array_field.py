@@ -28,7 +28,7 @@ from gt4py.next.common import (
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.ffront.experimental import as_offset, concat_where
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import (
@@ -359,6 +359,25 @@ def test_mixed_fields(product_nd_array_implementation):
 
     result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
+
+
+def test_mixed_fields_concat_where(product_nd_array_implementation):
+    first_impl, second_impl = product_nd_array_implementation
+    if not is_cupy(first_impl) and is_cupy(second_impl):
+        pytest.skip("Converting a CuPy array to a CPU library requires an explicit copy.")
+    K = Dimension("K")
+    domain = common.domain({K: 4})
+    true_field = common._field(
+        asarray(first_impl, [1.0, 2.0, 3.0, 4.0], dtype=np.float64), domain=domain
+    )
+    false_field = common._field(
+        asarray(second_impl, [10.0, 20.0, 30.0, 40.0], dtype=np.float64), domain=domain
+    )
+
+    result = concat_where(common.domain({K: (0, 2)}), true_field, false_field)
+
+    assert result.array_ns is first_impl
+    assert np.array_equal(result.asnumpy(), [1.0, 2.0, 30.0, 40.0])
 
 
 def test_non_dispatched_function():
