@@ -138,6 +138,14 @@ class ArrayOps:
         return func
 
     def where(self, condition: Any, x: Any, y: Any) -> core_defs.NDArrayObject:
+        """
+        `xp.where` for the operands of the `where` builtin.
+
+        The standard requires an array `condition`, but the builtin also receives a
+        scalar one (e.g. from `broadcast(True)`), which some libraries reject (CuPy,
+        torch). It becomes a 0-d array on the device of the other operands. `x` and `y`
+        are converted like the operands of any other elementwise function.
+        """
         if isinstance(condition, bool | np.bool_):
             like = next(a for a in (x, y) if array_api_compat.is_array_api_obj(a))
             condition = self.asarray(condition, dtype=bool, like=like)
