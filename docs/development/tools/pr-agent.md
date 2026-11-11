@@ -46,7 +46,7 @@ The usual `pull_request_target` hazard — running untrusted code with secrets i
 - The job must never check out or execute pull request code.
 - The job must never be granted `contents: write`. The model reads an untrusted diff, so a write permission would turn a prompt injection into a source-write primitive.
 
-Withholding `contents: write` does not make the model's output inert. `issues: write` and `pull-requests: write` are needed to publish a review at all, and they also permit setting labels and rewriting a PR title and body — all from model output derived from untrusted PR text.
+Withholding `contents: write` does not make the model's output inert. Publishing a review at all requires a write scope, and the scopes that allow it also permit setting labels and rewriting a PR title and body — all from model output derived from untrusted PR text.
 
 `issues: write` is kept deliberately, but it is nearly redundant and a future maintainer trimming scopes should know exactly what it buys. Per GitHub's own server-to-server permission table, posting the review comment, editing and deleting it in persistent mode, and writing labels all accept **either** `issues: write` or `pull-requests: write`. `PATCH /pulls/{n}`, which only `/describe` uses, needs `pull-requests: write`. The single call that requires Issues specifically is the eyes reaction on a comment command — and `add_reaction` catches the failure, logs a warning and carries on.
 

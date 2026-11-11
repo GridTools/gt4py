@@ -20,7 +20,7 @@ on:
       - main
 
 # Never 'contents: write': a prompt injection in a diff must not become a way
-# to push. The two write scopes below are both needed and both already allow
+# to push. The two write scopes below are both granted and both already allow
 # label and PR-body writes from model output -- which is why label writes are
 # off and '/describe' is not automatic.
 #
