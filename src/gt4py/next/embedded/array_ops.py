@@ -34,10 +34,6 @@ from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_
 from gt4py.next import common
 
 
-# TODO(havogt): drop once gt4py requires NumPy >= 2.1, the first version whose `from_dlpack`
-#   takes `device` and `copy`; NumPy 2.0's `from_dlpack` cannot copy a non-CPU array to the host.
-_NUMPY_FROM_DLPACK_TAKES_DEVICE: Final = np.lib.NumpyVersion(np.__version__) >= "2.1.0"
-
 #: gt4py builtin and operator names whose Array API name differs.
 STANDARD_NAMES: Final[Mapping[str, str]] = {
     "neg": "negative",
@@ -184,9 +180,7 @@ class ArrayOps:
         return array
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
-        if _NUMPY_FROM_DLPACK_TAKES_DEVICE:
-            return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
-        return np.from_dlpack(array)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
+        return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
     def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
         return common.BufferInfo.from_ndarray(array)
