@@ -144,12 +144,17 @@ class ArrayOps:
         The standard requires an array `condition`, but the builtin also receives a
         scalar one (e.g. from `broadcast(True)`), which some libraries reject (CuPy,
         torch). It becomes a 0-d array on the device of the other operands. `x` and `y`
-        are converted like the operands of any other elementwise function.
+        are converted like the operands of any other elementwise function; the standard
+        also requires one of them to be an array, so if both are scalars, `x` becomes a
+        0-d array with the default dtype for its kind, as NumPy promotes it.
         """
         if isinstance(condition, bool | np.bool_):
             like = next(a for a in (x, y) if array_api_compat.is_array_api_obj(a))
             condition = self.asarray(condition, dtype=bool, like=like)
-        return self.xp.where(condition, self.operand(x, condition), self.operand(y, condition))
+        x, y = self.operand(x, condition), self.operand(y, condition)
+        if not (array_api_compat.is_array_api_obj(x) or array_api_compat.is_array_api_obj(y)):
+            x = self.asarray(x, like=condition)
+        return self.xp.where(condition, x, y)
 
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
