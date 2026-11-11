@@ -113,14 +113,16 @@ _SCALAR_TYPES: Final = frozenset(core_defs.SCALAR_TYPES)
 
 
 @functools.cache
-def _numpy_scalar_type(dtype: np.dtype) -> type:
+def _numpy_scalar_type(dtype: np.dtype) -> type[np.generic]:
     # NumPy, CuPy and JAX describe dtypes as `np.dtype`, and its `type` depends on byte order
     # and C type name (e.g. `np.longlong` is not `np.int64`); kind and size identify it
     return np.dtype(f"{dtype.kind}{dtype.itemsize}").type
 
 
 @functools.cache
-def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, type]]:
+def _dtype_tables(
+    array_ns: ArrayNamespace,
+) -> tuple[dict[type, _ArrayDType], dict[_ArrayDType, type]]:
     to_namespace = {
         scalar_type: getattr(array_ns, name)
         for scalar_type, name in core_types.type_to_name.items()
@@ -129,7 +131,7 @@ def _dtype_tables(array_ns: ArrayNamespace) -> tuple[dict[type, Any], dict[Any, 
     return to_namespace, {dtype: scalar_type for scalar_type, dtype in to_namespace.items()}
 
 
-def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> Any:
+def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> _ArrayDType:
     """The dtype object of `array_ns` for the gt4py scalar type `scalar_type`."""
     try:
         return _dtype_tables(array_ns)[0][scalar_type]
@@ -137,7 +139,7 @@ def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar
         raise TypeError(f"Array namespace '{array_ns}' has no dtype for '{scalar_type}'.") from None
 
 
-def scalar_type(array_ns: ArrayNamespace, dtype: Any) -> type[core_defs.Scalar]:
+def scalar_type(array_ns: ArrayNamespace, dtype: _ArrayDType) -> type[core_defs.Scalar]:
     """The gt4py scalar type of the arrays of `array_ns` with dtype `dtype`."""
     result = (
         _numpy_scalar_type(dtype)
