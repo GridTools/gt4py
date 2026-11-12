@@ -217,7 +217,12 @@ def _arg_inline_predicate(
         # applied fieldop with list return type must always be inlined as no backend supports this
         type_inference.reinfer(node)
         assert isinstance(node.type, ts.TypeSpec)
-        dtype = type_info.tree_map_type(type_info.extract_dtype)(node.type)
+        try:
+            dtype = type_info.tree_map_type(type_info.extract_dtype)(node.type)
+        except ValueError:
+            # Type not fully constrained (e.g. a deferred symbol): inlining cannot be
+            # decided here - keep the argument as-is (inlining is an optimization).
+            return False
         if isinstance(dtype, ts.ListType):
             return True
         # only accessed at the center location
