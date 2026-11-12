@@ -43,7 +43,6 @@ STANDARD_NAMES: Final[Mapping[str, str]] = {
     "div": "divide",
     "floordiv": "floor_divide",
     "power": "pow",
-    "pow": "pow",
     "mod": "remainder",
     "invert": "logical_not",
     "arcsin": "asin",
