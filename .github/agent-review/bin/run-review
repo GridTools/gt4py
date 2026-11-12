@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# In-sandbox driver of the agent review; harness-agnostic.
+#
+# Usage: run-review <workspace>
+#
+# Runs INSIDE the AWF sandbox (see docs/development/tools/agent-review.md).
+# Everything it fetches from the pull request is untrusted: git runs with
+# hooks, global/system config, submodules and LFS disabled, and nothing from
+# the checkout is executed here. The harness adapter is the only component
+# that acts on the content, and it holds no secret.
+#
+# Inputs, written by the trusted host before the sandbox starts:
+#   <workspace>/in/params.json  validated parameters (repo, pr, shas, harness, ...)
+#   <workspace>/in/pr.json      raw GitHub API response for the PR (untrusted)
+# Outputs:
+#   <workspace>/out/review.md   the review, at most REVIEW_MAX_BYTES
+#   <workspace>/out/meta.json   status of the run
+#
+# Exit codes: 0 review written, 2 the harness ran but produced no review,
+# 1 anything else.
+
+set -euo pipefail
+shopt -u patsub_replacement 2>/dev/null || true
+
+# Leaves room for the comment header under GitHub's 65536-character limit and
+# under the 64 KiB 'collect-result' cap on the host.
+readonly REVIEW_MAX_BYTES=60000
+readonly PR_BODY_MAX_BYTES=16384
+readonly PR_TITLE_MAX_BYTES=512
+
+die() {
+  echo "run-review: $*" >&2
+  exit 1
+}
+
+[ $# -eq 1 ] || die "Usage: run-review <workspace>"
+WS=$1
+case "${WS}" in /*) ;; *) die "The workspace must be an absolute path, got '${WS}'." ;; esac
+
+TRUSTED_ROOT=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+IN_DIR="${WS}/in"
+REPO_DIR="${WS}/repo"
+CONTEXT_DIR="${REPO_DIR}/.agent-review-context"
+HARNESS_OUT="${WS}/harness-out"
+RESULT_DIR="${WS}/out"
+
+# --- Parameters -----------------------------------------------------------
+param() { jq -er --arg k "$1" '.[$k] | tostring' "${IN_DIR}/params.json"; }
+
+REPO=$(param repo)
+PR_NUMBER=$(param pr)
+HEAD_SHA=$(param head_sha)
+BASE_SHA=$(param base_sha)
+HARNESS=$(param harness)
+MODEL=$(param model)
+HARNESS_TIMEOUT_MINUTES=$(param harness_timeout_minutes)
+STUB_PADDING_KIB=$(jq -r '.stub_padding_kib // 0 | tostring' "${IN_DIR}/params.json")
+
+# Validated in the 'authorize' job already; checked again because these become
+# paths, URLs and command arguments.
+[[ "${REPO}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || die "Invalid repo '${REPO}'."
+[[ "${PR_NUMBER}" =~ ^[1-9][0-9]{0,9}$ ]] || die "Invalid PR number '${PR_NUMBER}'."
+[[ "${HEAD_SHA}" =~ ^[0-9a-f]{40}$ ]] || die "Invalid head sha '${HEAD_SHA}'."
+[[ "${BASE_SHA}" =~ ^[0-9a-f]{40}$ ]] || die "Invalid base sha '${BASE_SHA}'."
+[[ "${HARNESS}" =~ ^[a-z][a-z0-9-]{0,31}$ ]] || die "Invalid harness '${HARNESS}'."
+[[ "${MODEL}" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$ ]] || die "Invalid model '${MODEL}'."
+[[ "${HARNESS_TIMEOUT_MINUTES}" =~ ^[1-9][0-9]{0,2}$ ]] || die "Invalid timeout '${HARNESS_TIMEOUT_MINUTES}'."
+[[ "${STUB_PADDING_KIB}" =~ ^[0-9]{1,5}$ ]] || die "Invalid stub padding '${STUB_PADDING_KIB}'."
+
+ADAPTER_DIR="${TRUSTED_ROOT}/harnesses/${HARNESS}"
+HARNESS_PREFIX="${TRUSTED_ROOT}/harness/${HARNESS}"
+[ -f "${ADAPTER_DIR}/run.sh" ] || die "No adapter for harness '${HARNESS}'."
+[ -d "${HARNESS_PREFIX}" ] || die "Harness '${HARNESS}' is not installed at '${HARNESS_PREFIX}'."
+
+write_meta() { # status harness_exit truncated review_bytes
+  mkdir -p "${RESULT_DIR}"
+  jq -n \
+    --arg harness "${HARNESS}" --arg model "${MODEL}" --arg status "$1" \
+    --argjson harness_exit "$2" --argjson truncated "$3" --argjson review_bytes "$4" \
+    '{harness: $harness, model: $model, status: $status, harness_exit: $harness_exit,
+      truncated: $truncated, review_bytes: $review_bytes}' >"${RESULT_DIR}/meta.json"
+}
+
+# --- Fetch the pull request ------------------------------------------------
+# No user or system git config: the host's may enable LFS filters or other
+# helpers. Hooks and fsmonitor are disabled on every call since '.git' could
+# otherwise be influenced by repository content.
+export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_TERMINAL_PROMPT=0
+export GIT_LFS_SKIP_SMUDGE=1 GIT_NO_REPLACE_OBJECTS=1
+git_safe() {
+  git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.symlinks=true \
+    -c protocol.file.allow=never -c protocol.ext.allow=never \
+    -c submodule.recurse=false -c diff.external= -c advice.detachedHead=false \
+    -C "${REPO_DIR}" "$@"
+}
+
+rm -rf "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}"
+mkdir -p "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}"
+git_safe init -q
+git_safe remote add origin "https://github.com/${REPO}.git"
+
+# Fetch by sha so the reviewed commit is exactly the one authorized; never
+# fall back to the moving 'refs/pull/N/head'. Blobs are fetched lazily, so the
+# agent can still read any file of the history it explores.
+git_safe fetch -q --no-tags --filter=blob:none --depth=50 origin "${HEAD_SHA}" "${BASE_SHA}"
+[ "$(git_safe rev-parse --verify "${HEAD_SHA}^{commit}")" = "${HEAD_SHA}" ] ||
+  die "Fetched head does not match ${HEAD_SHA}."
+[ "$(git_safe rev-parse --verify "${BASE_SHA}^{commit}")" = "${BASE_SHA}" ] ||
+  die "Fetched base does not match ${BASE_SHA}."
+
+# A three-dot diff needs the merge base, which a shallow fetch may lack.
+MERGE_BASE=""
+for deepen in 200 1000 5000; do
+  if MERGE_BASE=$(git_safe merge-base "${BASE_SHA}" "${HEAD_SHA}" 2>/dev/null); then
+    break
+  fi
+  git_safe fetch -q --no-tags --filter=blob:none --deepen="${deepen}" origin "${HEAD_SHA}" "${BASE_SHA}"
+done
+if [ -z "${MERGE_BASE}" ]; then
+  git_safe fetch -q --no-tags --filter=blob:none --unshallow origin "${HEAD_SHA}" "${BASE_SHA}"
+  MERGE_BASE=$(git_safe merge-base "${BASE_SHA}" "${HEAD_SHA}") || die "No merge base between base and head."
+fi
+
+git_safe checkout -q --detach "${HEAD_SHA}"
+
+# --- Context files -----------------------------------------------------------
+# The PR may itself contain '.agent-review-context'; git removes it safely
+# (it does not follow symlinks), then the directory is created fresh.
+git_safe rm -r -q -f --ignore-unmatch -- .agent-review-context
+rm -rf "${CONTEXT_DIR}"
+mkdir -p "${CONTEXT_DIR}/pr-instruction-files"
+printf '/.agent-review-context/\n' >>"${REPO_DIR}/.git/info/exclude"
+
+git_safe diff --no-ext-diff --no-textconv "${MERGE_BASE}" "${HEAD_SHA}" >"${CONTEXT_DIR}/diff.patch"
+git_safe diff --no-ext-diff --name-status "${MERGE_BASE}" "${HEAD_SHA}" >"${CONTEXT_DIR}/changed-files.txt"
+
+# --- Reset agent instruction files to the base version -----------------------
+mapfile -t SPECS < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${TRUSTED_ROOT}/instruction-files.txt")
+[ "${#SPECS[@]}" -gt 0 ] || die "No entries in instruction-files.txt."
+# 'ls-files', not 'ls-tree', which rejects the ':(glob)' magic. The index
+# holds the head tree after the checkout; the base tree goes into a scratch
+# index. Listed into files so a git failure stops the run (set -e).
+git_safe ls-files -z -- "${SPECS[@]}" >"${WS}/pr-paths"
+GIT_INDEX_FILE="${WS}/base.index" git_safe read-tree "${BASE_SHA}"
+GIT_INDEX_FILE="${WS}/base.index" git_safe ls-files -z -- "${SPECS[@]}" >"${WS}/base-paths"
+mapfile -d '' -t PR_PATHS <"${WS}/pr-paths"
+mapfile -d '' -t BASE_PATHS <"${WS}/base-paths"
+rm -f "${WS}/pr-paths" "${WS}/base-paths" "${WS}/base.index"
+
+for path in "${PR_PATHS[@]}"; do
+  # Git refuses such paths in trees, but they become filesystem paths here.
+  case "/${path}/" in */../* | */./* | *//*) die "Unexpected path in PR tree: '${path}'." ;; esac
+  dest="${CONTEXT_DIR}/pr-instruction-files/${path}.txt"
+  mkdir -p "$(dirname "${dest}")"
+  git_safe cat-file -p "${HEAD_SHA}:${path}" >"${dest}"
+done
+if [ "${#PR_PATHS[@]}" -gt 0 ]; then
+  # Git removes paths without following symlinks in leading components.
+  git_safe --literal-pathspecs rm -r -q -f --ignore-unmatch -- "${PR_PATHS[@]}"
+fi
+if [ "${#BASE_PATHS[@]}" -gt 0 ]; then
+  git_safe --literal-pathspecs checkout -q "${BASE_SHA}" -- "${BASE_PATHS[@]}"
+fi
+
+# --- Render the prompt -------------------------------------------------------
+# Byte truncation can split a multi-byte character; 'iconv -c' drops it (and
+# drops invalid bytes), exiting 1 when it does.
+clip() { head -c "$1" | { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; }; }
+
+PR_TITLE=$(jq -r '.title // "" | tostring' "${IN_DIR}/pr.json" | tr -d '\r' | head -n 1 | clip "${PR_TITLE_MAX_BYTES}")
+PR_BODY=$(jq -r '.body // "" | tostring' "${IN_DIR}/pr.json" | tr -d '\r' | clip "${PR_BODY_MAX_BYTES}")
+NONCE=$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
+# The PR cannot know the nonce, but strip it anyway so the delimiters stay unique.
+PR_TITLE=${PR_TITLE//"${NONCE}"/}
+PR_BODY=${PR_BODY//"${NONCE}"/}
+
+PROMPT_FILE="${WS}/prompt.md"
+prompt=$(<"${TRUSTED_ROOT}/prompt.md.tmpl")
+prompt=${prompt//"{{REPO}}"/"${REPO}"}
+prompt=${prompt//"{{PR_NUMBER}}"/"${PR_NUMBER}"}
+prompt=${prompt//"{{HEAD_SHA}}"/"${HEAD_SHA}"}
+prompt=${prompt//"{{BASE_SHA}}"/"${BASE_SHA}"}
+prompt=${prompt//"{{MERGE_BASE}}"/"${MERGE_BASE}"}
+prompt=${prompt//"{{CONTEXT_DIR}}"/".agent-review-context"}
+prompt=${prompt//"{{NONCE}}"/"${NONCE}"}
+# Untrusted values last, so placeholders inside them are not expanded.
+prompt=${prompt//"{{PR_TITLE}}"/"${PR_TITLE}"}
+prompt=${prompt//"{{PR_BODY}}"/"${PR_BODY}"}
+printf '%s\n' "${prompt}" >"${PROMPT_FILE}"
+
+# --- Run the harness -----------------------------------------------------------
+echo "run-review: running harness '${HARNESS}' on ${REPO}#${PR_NUMBER} at ${HEAD_SHA} (merge base ${MERGE_BASE})."
+harness_exit=0
+(
+  cd "${REPO_DIR}"
+  export PROMPT_FILE REPO_DIR MODEL HARNESS_PREFIX PR_NUMBER CONTEXT_DIR STUB_PADDING_KIB
+  # The harness writes to its own directory; only this script writes the result.
+  OUT_DIR="${HARNESS_OUT}" exec timeout --kill-after=30s "${HARNESS_TIMEOUT_MINUTES}m" bash "${ADAPTER_DIR}/run.sh"
+) || harness_exit=$?
+
+case "${harness_exit}" in
+  0) status=ok ;;
+  2) status=no-review ;;
+  124 | 137) status=timeout ;;
+  *) status=failed ;;
+esac
+
+# --- Collect the review ----------------------------------------------------------
+# The harness output is agent-controlled: accept only a regular file. The host
+# re-checks this ('collect-result'); this check keeps the failure readable.
+candidate="${HARNESS_OUT}/review.md"
+if [ "${status}" != ok ] || [ -L "${candidate}" ] || [ ! -f "${candidate}" ] || [ ! -s "${candidate}" ]; then
+  [ "${status}" = ok ] && status=no-review
+  write_meta "${status}" "${harness_exit}" false 0
+  echo "run-review: no review produced (status '${status}', harness exit ${harness_exit})." >&2
+  [ "${status}" = no-review ] && exit 2
+  exit 1
+fi
+
+size=$(stat -c %s -- "${candidate}")
+truncated=false
+if [ "${size}" -gt "${REVIEW_MAX_BYTES}" ]; then
+  truncated=true
+  clip "$((REVIEW_MAX_BYTES - 100))" <"${candidate}" >"${RESULT_DIR}/review.md"
+  printf '\n\n_[Review truncated: it exceeded %d bytes.]_\n' "${REVIEW_MAX_BYTES}" >>"${RESULT_DIR}/review.md"
+else
+  { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; } <"${candidate}" >"${RESULT_DIR}/review.md"
+fi
+write_meta ok "${harness_exit}" "${truncated}" "$(stat -c %s -- "${RESULT_DIR}/review.md")"
+echo "run-review: review written ($(stat -c %s -- "${RESULT_DIR}/review.md") bytes, truncated=${truncated})."

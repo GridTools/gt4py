@@ -1,0 +1,60 @@
+# AWF (github/gh-aw-firewall) configuration for the agent review sandbox.
+# Schema: https://github.com/github/gh-aw-firewall (docs/awf-config-spec.md).
+#
+# Read from the workflow's own commit, never from the PR. The 'review' job
+# renders it to JSON and sets 'apiProxy.allowedModels' to the configured model
+# (repository variable AGENT_REVIEW_MODEL); host paths (--work-dir,
+# --audit-dir, --container-workdir) and image digests (--image-tag) are passed
+# as command-line flags.
+#
+# Confirmed by the Phase 0 probe on AWF v0.29.12: the CSCS base-URL path
+# mapping, the Anthropic auth header, and the model pattern format.
+# TODO(phase0): still open are how this file and the command-line flags merge,
+# and that nothing secret is readable inside the sandbox.
+
+network:
+  # Only for the in-sandbox 'git fetch' of the public repository. The
+  # inference host is added by AWF for the API-proxy sidecar from
+  # 'apiProxy.targets'; the agent reaching it directly has no key.
+  allowDomains:
+    - github.com
+
+apiProxy:
+  # Upstreams. The real key is given to the sidecar only, through the 'awf'
+  # step's environment (OPENAI_API_KEY or ANTHROPIC_API_KEY, depending on the
+  # harness's wire); the agent gets placeholders.
+  targets:
+    openai:
+      # Holds 'https://api.inference.cscs.ch/v1'. Harnesses use the listener
+      # origin, $AWF_API_PROXY_OPENAI_URL; both '<origin>/v1/chat/completions'
+      # and '<origin>/chat/completions' reach the upstream
+      # '/v1/chat/completions'.
+      baseUrlEnv: AGENT_REVIEW_OPENAI_BASE_URL
+    anthropic:
+      # Harnesses call '$AWF_API_PROXY_ANTHROPIC_URL/v1/messages'; the sidecar
+      # sends 'x-api-key', which CSCS accepts.
+      host: api.inference.cscs.ch
+  # Placeholder; the 'review' job replaces it with '*/<model>': patterns
+  # containing '/' are matched against '<provider>/<model>'. Other models
+  # get a 403 'model_policy_violation' from the proxy.
+  allowedModels:
+    - none
+  # Spend caps. The primary cap is the dedicated CSCS key's own token budget.
+  # AWF prices unpriced CSCS models with a median estimate, so its AI-credit
+  # cap is not a hard limit; the turn cap is used here.
+  maxTurns: 80
+  maxPermissionDenied: 5
+
+container:
+  # Minutes; the review step's own timeout is a few minutes longer so this
+  # one triggers first and the result is still collected.
+  agentTimeout: 25
+  memoryLimit: 6g
+  # TODO(phase0): pin images by digest with 'container.images' if passing
+  # the setup action's 'image-tag' output (with digests) is not enough.
+
+# TODO(phase0): consider 'filesystem.allowWrite' to make every host bind
+# mount read-only except the review workspace; check harness compatibility.
+
+logging:
+  logLevel: info

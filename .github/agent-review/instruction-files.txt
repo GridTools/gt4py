@@ -1,0 +1,28 @@
+# Paths that agents read as instructions or configuration.
+#
+# 'run-review' resets every path matching these entries to its version at the
+# PR's base commit before the harness starts, so a pull request cannot rewrite
+# the rules it is reviewed by. The PR's own versions are kept as data, with a
+# '.txt' suffix, under '.agent-review-context/pr-instruction-files/'.
+#
+# One git pathspec per line (see 'git help glossary'); blank lines and lines
+# starting with '#' are ignored. This is the union over all harnesses: list a
+# harness's paths here when adding its adapter (see harnesses/*/README.md).
+
+# Shared by all harnesses.
+AGENTS.md
+CLAUDE.md
+.github/copilot-instructions.md
+:(glob)**/AGENTS.md
+:(glob)**/CLAUDE.md
+
+# opencode
+opencode.json
+opencode.jsonc
+.opencode
+
+# memdoor
+.memdoor
+
+# Pi
+.pi
