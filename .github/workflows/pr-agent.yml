@@ -206,6 +206,10 @@ jobs:
           # falls back to defaults that let model output write labels.
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
+          # Also not in '.pr_agent.toml', but because PR Agent refuses this
+          # key from a repository file: it governs what a failure message may
+          # disclose, so only the host may enable it.
+          pr_reviewer.publish_error_details: "true"
 
       # 'continue-on-error' makes a failed run look like a reviewed one;
       # 'outcome' is the result before that rewrite.
