@@ -56,7 +56,7 @@ jobs:
       )
     runs-on: ubuntu-latest
     # Backstop; the effective limit is on the 'Run PR Agent' step.
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       # 'pull_request_target' ignores the fork-approval setting, so without
       # this gate anyone opening a PR could spend the CSCS allocation.
@@ -75,7 +75,7 @@ jobs:
           if ! level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
             --jq '.permission' 2>&1); then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            echo "::error::Could not resolve repository permission for '${ACTOR}', denying: ${level}"
+            echo "::error::Could not resolve repository permission for '${ACTOR}', denying: '${level}'."
             exit 1
           fi
           # 'permission' reports the 'maintain' role as 'write'.
@@ -101,20 +101,23 @@ jobs:
         env:
           MODEL: ${{ vars.PR_AGENT_MODEL }}
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
-          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '131072' }}
-          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
+          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '262144' }}
+          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '100000' }}
+          AI_TIMEOUT: ${{ vars.PR_AGENT_AI_TIMEOUT || '720' }}
+          # This job's 'timeout-minutes', which expressions cannot read.
+          JOB_TIMEOUT: "45"
         run: |
           fail() {
-            echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
+            echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables."
             exit 1
           }
           # Non-numeric values would break the '-gt' tests with an unhelpful error.
           positive() {
             case "$2" in
-              '' | *[!0-9]*) : ;;
+              '' | 0* | *[!0-9]*) : ;;
               *) [ "$2" -gt 0 ] && return 0 ;;
             esac
-            fail "Repository variable $1 must be a positive integer, got '$2'."
+            fail "Repository variable $1 must be a positive integer without leading zeros, got '$2'."
           }
           [ -n "${MODEL}" ] || fail "Repository variable PR_AGENT_MODEL is not set."
           [ -n "${FALLBACKS}" ] || fail "Repository variable PR_AGENT_FALLBACK_MODELS is not set; use 'none' for no fallback."
@@ -122,28 +125,45 @@ jobs:
           # output cap and reserves too little for the answer, which truncates.
           positive PR_AGENT_TOKEN_BUDGET "${BUDGET}"
           positive PR_AGENT_MAX_OUTPUT_TOKENS "${OUTPUT}"
+          positive PR_AGENT_AI_TIMEOUT "${AI_TIMEOUT}"
+          # Keeps the arithmetic below inside int64.
+          [ "${AI_TIMEOUT}" -le "$(( JOB_TIMEOUT * 60 ))" ] || fail "PR_AGENT_AI_TIMEOUT (${AI_TIMEOUT}s) exceeds the ${JOB_TIMEOUT} min job limit."
           # A reserve at or above the budget leaves no room for the diff.
           [ "${BUDGET}" -gt "${OUTPUT}" ] || fail "PR_AGENT_TOKEN_BUDGET (${BUDGET}) must be greater than PR_AGENT_MAX_OUTPUT_TOKENS (${OUTPUT})."
 
           fallbacks='[]'
           [ "${FALLBACKS}" = "none" ] || fallbacks=$(jq -Rc 'split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0)) | map("openai/" + .)' <<<"${FALLBACKS}")
+          # Models can time out one after another; two minutes more for the
+          # diff fetch and publishing.
+          chain=$(( 1 + $(jq 'length' <<<"${fallbacks}") ))
+          step=$(( (chain * AI_TIMEOUT + 59) / 60 + 2 ))
+          # A job timeout is a cancellation, which 'continue-on-error' does not
+          # cover, so an unreachable step budget turns a tolerated miss red.
+          [ "$(( step + 2 ))" -le "${JOB_TIMEOUT}" ] || fail "${chain} models at ${AI_TIMEOUT}s need ${step} min, leaving no margin under the ${JOB_TIMEOUT} min job limit. Lower PR_AGENT_AI_TIMEOUT, shorten PR_AGENT_FALLBACK_MODELS, or raise the job's timeout-minutes and JOB_TIMEOUT together."
+
           {
             echo "fallbacks=${fallbacks}"
             echo "budget=${BUDGET}"
             echo "output=${OUTPUT}"
+            echo "ai_timeout=${AI_TIMEOUT}"
+            echo "step_timeout=${step}"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; context window ${BUDGET}, output reserve ${OUTPUT}."
+          echo "::notice::Model openai/${MODEL}, fallbacks ${fallbacks}; context window ${BUDGET}, output reserve ${OUTPUT}, ${AI_TIMEOUT}s per model, ${step} min for the chain."
 
       # Never add 'actions/checkout': this job holds a secret under
       # 'pull_request_target', so it must not check out pull request code.
       # PR Agent reads the diff through the GitHub API.
       - name: Run PR Agent
+        id: pragent
         if: success() && steps.auth.outputs.allowed == 'true'
         # The inference service has no availability guarantee, and an advisory
         # review must not look like a CI failure.
         continue-on-error: true
-        # On the step, not the job, so a timeout is tolerated as well.
-        timeout-minutes: 22
+        # On the step, not the job, so a timeout is tolerated as well. A 429
+        # or 5xx replays the same model, so 'ai_timeout' alone does not bound
+        # this. 'fromJSON' because a step output is a string, and the runner
+        # drops a timeout that is not a number.
+        timeout-minutes: ${{ fromJSON(steps.models.outputs.step_timeout) }}
         # Pinned by digest (tag '0.50.0-github_action') because the image
         # receives the inference key.
         uses: docker://pragent/pr-agent@sha256:548e894a88071180832b2f4233f734d0acd0db1a879e2fcbaa70bac8b8372ebe
@@ -167,7 +187,7 @@ jobs:
           # Reviews of this repository take longer than the 120 s default. On
           # timeout, the fallback is tried instead of waiting again on the
           # same model.
-          config.ai_timeout: "360"
+          config.ai_timeout: ${{ steps.models.outputs.ai_timeout }}
           config.retry_same_model_on_timeout: "false"
           # '/describe' rewrites the PR body from model output and '/improve'
           # is noisy, so both run only on request.
@@ -186,3 +206,20 @@ jobs:
           # falls back to defaults that let model output write labels.
           pr_reviewer.enable_review_labels_effort: "false"
           pr_reviewer.enable_review_labels_security: "false"
+          # Also not in '.pr_agent.toml', but because PR Agent refuses this
+          # key from a repository file: it governs what a failure message may
+          # disclose, so only the host may enable it.
+          pr_reviewer.publish_error_details: "true"
+
+      # 'continue-on-error' makes a failed run look like a reviewed one;
+      # 'outcome' is the result before that rewrite.
+      - name: Report a failed PR Agent run
+        if: steps.pragent.outcome == 'failure'
+        run: |
+          echo "::warning title=PR Agent failed::No review was posted. See the 'Run PR Agent' log."
+          {
+            echo "### PR Agent failed or timed out"
+            echo
+            echo "No review was posted; the run is green because the check is advisory."
+            echo "The cause is in the \`Run PR Agent\` log; see docs/development/tools/pr-agent.md#configuration-variables."
+          } >> "$GITHUB_STEP_SUMMARY"
