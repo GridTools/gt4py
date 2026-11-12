@@ -19,9 +19,31 @@ repo_context_files = [".github/copilot-instructions.md", "AGENTS.md", "src/gt4py
 suggestions_score_threshold = 6
 
 [pr_reviewer]
+# The commands are not discoverable otherwise, and only maintainers can use
+# them.
+enable_help_text = true
 extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in the repository context below."
 # An updated review replaces its comment in place; a second comment pointing
 # at it is noise.
 final_update_message = false
+# A finding on the line it concerns is easier to act on than one in a summary
+# comment. Model output already reaches the PR as a comment, so this moves it
+# rather than granting it anything new.
+inline_key_issues = true
+# Three findings is too few for the size of a typical GT4Py refactor.
+num_max_findings = 8
+# Without this a failed review says only that it failed; the reason is
+# deterministic and sanitised, and costs no AI call.
+publish_error_details = true
+# Explicit rather than default: a review that found nothing should say so,
+# because silence is indistinguishable from the bot not having run.
+publish_output_no_suggestions = true
+# This and the three 'require_*' keys that follow it are assessment fields on
+# the single review request, not extra AI calls, so they cost latency and
+# spend only through the larger answer they ask for.
+require_can_be_split_review = true
+require_failure_modes = true
+require_merge_recommendation = true
+require_score_review = true
 # GT4Py PRs rarely reference a ticket.
 require_ticket_analysis_review = false
