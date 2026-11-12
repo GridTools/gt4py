@@ -1,0 +1,8 @@
+{
+  "name": "agent-review-opencode",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@opencode/cli-linux-x64-baseline": "2.2.7"
+  }
+}

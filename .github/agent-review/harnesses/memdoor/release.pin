@@ -1,0 +1,5 @@
+# <release tag> <SHA-256 of memdoor-linux-amd64>
+# From the release's SHA256SUMS, fetched 2026-11-13. SHA256SUMS sits next to
+# the binary in the same release, so it adds no trust: the hash pinned here
+# is the integrity check. Re-verify it when bumping (see README.md).
+v1.827.0 dcef0aaabf022c274ca6ac63014606aa18cf2bd0f020d0ccc9a4cfcad4213658
