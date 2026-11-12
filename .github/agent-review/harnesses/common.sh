@@ -7,12 +7,13 @@
 # the step log.
 
 # Checks the contract's environment and creates a scratch HOME and XDG
-# directories under /tmp, so no configuration is read from (or written to) the
-# runner's home. Sets SCRATCH.
+# directories under $TMPDIR (set by run-review to a directory in the
+# workspace), so no configuration is read from (or written to) the runner's
+# home. Sets SCRATCH.
 adapter_init() { # name
   : "${PROMPT_FILE:?}" "${REPO_DIR:?}" "${OUT_DIR:?}" "${MODEL:?}" "${HARNESS_PREFIX:?}"
   ADAPTER_NAME=$1
-  SCRATCH=$(mktemp -d "/tmp/agent-review-${ADAPTER_NAME}.XXXXXX")
+  SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/agent-review-${ADAPTER_NAME}.XXXXXX")
   export HOME="${SCRATCH}/home" XDG_CONFIG_HOME="${SCRATCH}/config" XDG_DATA_HOME="${SCRATCH}/data" \
     XDG_CACHE_HOME="${SCRATCH}/cache" XDG_STATE_HOME="${SCRATCH}/state" NO_COLOR=1
   mkdir -p "${HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${XDG_CACHE_HOME}" "${XDG_STATE_HOME}" "${OUT_DIR}"

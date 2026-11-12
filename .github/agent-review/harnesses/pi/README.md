@@ -2,7 +2,9 @@
 
 [Pi](https://github.com/earendil-works/pi) (MIT), npm package
 `@earendil-works/pi-coding-agent` (`@mariozechner/pi-coding-agent` is its old,
-stale name). Wire: Anthropic Messages, through AWF's Anthropic listener.
+stale name). Wire: OpenAI chat, through AWF's OpenAI listener, with Pi's
+`openai-completions` API (Pi's built-in `openai` provider would use the
+Responses API, which CSCS does not serve).
 
 ## Version and upgrades
 
@@ -19,10 +21,13 @@ To upgrade, set the version in `package.json` and regenerate the lockfile with
 ## Configuration and isolation
 
 - `models.json` in a scratch `PI_CODING_AGENT_DIR` defines one provider
-  (`awf-proxy`) with a placeholder key. The base URL is the listener origin,
-  `$AWF_API_PROXY_ANTHROPIC_URL`: Pi appends `/v1/messages?beta=true` itself.
-  If the wire in `wire` is changed to `openai-chat`, `run.sh` switches to
-  Pi's `openai-completions` API with `$AWF_API_PROXY_OPENAI_URL/v1`.
+  (`awf-proxy`) with a placeholder key and the base URL
+  `$AWF_API_PROXY_OPENAI_URL/v1` (Pi appends `/chat/completions`).
+- `run.sh` also supports the `anthropic-messages` wire (Pi's Anthropic API,
+  base URL `$AWF_API_PROXY_ANTHROPIC_URL`, to which Pi appends
+  `/v1/messages?beta=true`), tested only against a local fake server. It is
+  not used because AWF v0.29.12 must not get `ANTHROPIC_API_KEY` (see
+  `../README.md`).
 - `--no-approve`: the repository's `.pi/` (settings, extensions, which would be
   **executed**, MCP servers, which would be **spawned**, system prompts,
   skills) and `.agents/skills` are ignored. `--no-context-files`: `AGENTS.md`
