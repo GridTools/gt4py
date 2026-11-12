@@ -47,11 +47,13 @@ on:
   ## END
 
 ## COMMENTED OUT: test parameters for the 'push' trigger above. Use literal
-## values only: the pull request reviewed and commented on, the harness, and
-## whether to post the comment or only show it in the run summary.
+## values only: the pull request reviewed and commented on, the harness, the
+## model (instead of AGENT_REVIEW_MODEL), and whether to post the comment or
+## only show it in the run summary.
 # env:
 #   TEST_PR: "9"
 #   TEST_HARNESS: stub
+#   TEST_MODEL: ""
 #   TEST_DRY_RUN: "true"
 #   TEST_STUB_PADDING_KIB: "0"
 ## END
@@ -129,6 +131,7 @@ jobs:
           VAR_MODEL: ${{ vars.AGENT_REVIEW_MODEL }}
           TEST_PR: ${{ env.TEST_PR }}
           TEST_HARNESS: ${{ env.TEST_HARNESS }}
+          TEST_MODEL: ${{ env.TEST_MODEL }}
           TEST_DRY_RUN: ${{ env.TEST_DRY_RUN }}
           TEST_STUB_PADDING_KIB: ${{ env.TEST_STUB_PADDING_KIB }}
         run: |
@@ -168,6 +171,7 @@ jobs:
               resolve_pr "${pr}"
               actor=${ACTOR}
               harness=${TEST_HARNESS:-stub}
+              VAR_MODEL=${TEST_MODEL:-${VAR_MODEL}}
               dry_run=${TEST_DRY_RUN:-true}
               padding=${TEST_STUB_PADDING_KIB:-0}
               ;;
@@ -405,9 +409,15 @@ jobs:
           # keeps the sandbox out of it.
           sudo install -d -m 0700 "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit"
 
+          # The sandbox's output is not trusted: stop the runner from
+          # interpreting workflow commands ('::...::') in it, with a token the
+          # sandbox cannot know.
+          stop_token=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+
           # 'sudo -E' passes the environment through to AWF; AWF forwards
           # none of it to the agent except what it sets itself.
           set +e
+          echo "::stop-commands::${stop_token}"
           sudo -E "${awf_bin}" \
             --config "${RUNNER_TEMP}/awf.json" \
             --work-dir "${RUNNER_TEMP}/awf-work" \
@@ -418,6 +428,7 @@ jobs:
             -- /opt/agent-review/bin/run-review "${WS}"
           rc=$?
           # The host is tainted from here on: shell builtins only.
+          echo "::${stop_token}::"
           echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           exit "${rc}"
 
