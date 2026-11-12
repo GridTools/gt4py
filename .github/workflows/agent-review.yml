@@ -366,9 +366,6 @@ jobs:
           yq -o=json '.' /opt/agent-review/awf.yaml \
             | jq --arg model "${MODEL}" '.apiProxy.allowedModels = ["*/" + $model]' \
             > "${RUNNER_TEMP}/awf.json"
-          # TODO(phase0): check that no sandbox-writable directory (such as
-          # ~/.local/bin) precedes /usr/bin; the post-sandbox steps pin PATH.
-          echo "PATH=${PATH}"
 
       - name: Run the review in the sandbox
         id: agent
@@ -404,7 +401,9 @@ jobs:
           fi
           unset KEY
           awf_bin=$(command -v awf)
-          mkdir -p "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit"
+          # AWF refuses a work directory others can read; root-owned also
+          # keeps the sandbox out of it.
+          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit"
 
           # 'sudo -E' passes the environment through to AWF; AWF forwards
           # none of it to the agent except what it sets itself.
@@ -422,8 +421,9 @@ jobs:
           echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           exit "${rc}"
 
-      # Absolute paths and a fixed PATH: the sandbox could write to home and
-      # tool directories that the default PATH searches first.
+      # Absolute paths and a fixed PATH: the runner's default PATH searches
+      # home directories such as ~/.local/bin before /usr/bin, and the sandbox
+      # could write there.
       - name: Collect the result
         if: always() && steps.agent.outputs.skipped != 'true'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
@@ -443,6 +443,13 @@ jobs:
       # Off by default. TODO(phase0): confirm that AWF's audit files hold no
       # secret before enabling it: artifacts of public repositories are
       # downloadable by any signed-in user.
+      - name: Make the AWF audit log readable
+        if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
+        shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+        env:
+          PATH: /usr/bin:/bin
+        run: /usr/bin/sudo /usr/bin/chmod -R a+rX "${RUNNER_TEMP}/awf-audit"
+
       - name: Upload the AWF audit log
         if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
