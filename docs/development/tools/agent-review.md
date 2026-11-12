@@ -5,7 +5,7 @@ The `Agent Review` workflow ([`.github/workflows/agent-review.yml`](../../../.gi
 The design and the alternatives considered are in [ADR 0001](../ADRs/ci/0001-sandboxed-agent-pr-review.md).
 
 > [!WARNING]
-> Pilot. Harness adapters other than `stub` are not implemented yet, and the AWF facts marked `TODO(phase0)` in [`awf.yaml`](../../../.github/agent-review/awf.yaml) and the workflow are still being verified.
+> Pilot. The opencode, memdoor and Pi adapters have been run on a fork only, and the AWF facts marked `TODO(phase0)` in [`awf.yaml`](../../../.github/agent-review/awf.yaml) and the workflow are still being verified.
 
 ## Usage
 
@@ -36,7 +36,9 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 3. **The host is tainted once `awf` returns.** AWF mounts the workspace, `/tmp` and parts of the home directory read-write. Steps after it use no token, run no git, use no cache action, and run only `/usr/bin` tools with a fixed `PATH`. The only data leaving `review` is at most 64 KiB per file of regular, single-link files named `review.md` and `meta.json`, copied without following symlinks.
 4. **Write tokens exist only in `publish`**, which runs no model and no PR code, and treats the review as hostile: it must be valid UTF-8, HTML comment delimiters are broken up (so the review can neither hide text nor imitate the comment marker), `@mentions` are neutralised with a zero-width joiner (and character references such as `&#64;` or `&commat;`, which GitHub also turns into mentions, are escaped), and the length is capped. The marker is matched only on the first line of the bot's own comments, never with `--edit-last`, because PR Agent posts as the same bot.
 5. **Harness, prompt, AWF config and instruction files come from the workflow's own commit** (`github.workflow_sha`, fetched as a tarball), never from the PR, so a PR cannot change the policy it is reviewed by. Files matching [`instruction-files.txt`](../../../.github/agent-review/instruction-files.txt), at any depth, are reset to the base version (or removed) before the harness starts; the PR's versions are kept as data for the review.
-6. **Everything is pinned**: actions by commit SHA, the AWF version, AWF images by digest (`image-tag` output of the setup action), and each harness by exact version with an integrity check.
+6. **The `review` job starts no service on the host.** The sandbox can connect to any host port bound to `0.0.0.0` through AWF's network gateway (`172.30.0.1`); on a stock runner that is only `sshd`. No `services:` containers, no daemons started in a step.
+7. **AWF's logs are read only from `$RUNNER_TEMP`** (`--proxy-logs-dir`, `--audit-dir`). Without `--proxy-logs-dir`, AWF moves them to `/tmp` after the run, where the sandbox can plant fake ones.
+8. **Everything is pinned**: actions by commit SHA, the AWF version, AWF images by digest (`image-tag` output of the setup action), and each harness by exact version with an integrity check.
 
 ## What remains risky
 
@@ -49,14 +51,14 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 
 The key is the `CSCS_INFERENCE_API_KEY` repository secret, the same name as PR Agent's. On upstream it should be a **dedicated key** for this workflow, with its own token budget, reset period and model restriction, created in the [inference UI](https://ui.inference.cscs.ch/login): it is the hard spending cap. If the secret is missing, the review is skipped with a notice (the `stub` harness needs no key).
 
-| Variable                    | Default                            | Purpose                                                                            |
-| --------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------- |
-| `AGENT_REVIEW_HARNESS`      | **required**                       | `opencode`, `memdoor`, `pi` or `stub`; the `workflow_dispatch` input overrides it  |
-| `AGENT_REVIEW_MODEL`        | **required** (except for `stub`)   | CSCS model id, as listed by `GET /v1/models`; also the only model AWF lets through |
-| `AGENT_REVIEW_API_BASE`     | `https://api.inference.cscs.ch/v1` | OpenAI-compatible endpoint                                                         |
-| `AGENT_REVIEW_UPLOAD_AUDIT` | unset                              | `true` uploads AWF's audit log as an artifact; keep off until Phase 0 clears it    |
+| Variable                    | Default                            | Purpose                                                                             |
+| --------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `AGENT_REVIEW_HARNESS`      | **required**                       | `opencode`, `memdoor`, `pi` or `stub`; the `workflow_dispatch` input overrides it   |
+| `AGENT_REVIEW_MODEL`        | **required** (except for `stub`)   | CSCS model id, as listed by `GET /v1/models`; also the only model AWF lets through  |
+| `AGENT_REVIEW_API_BASE`     | `https://api.inference.cscs.ch/v1` | OpenAI-compatible endpoint                                                          |
+| `AGENT_REVIEW_UPLOAD_AUDIT` | unset                              | `true` uploads AWF's audit and proxy logs (requests, tokens, egress) as an artifact |
 
-Fixed limits, changed by a reviewed PR: 80 model calls (`apiProxy.maxTurns`), 30 requests per minute, 20 minutes for the harness, 25 for AWF's `agentTimeout`, 30 for the step and 45 for the job. AWF's AI-credit cap is not used, since it prices CSCS models with an estimate.
+Fixed limits, changed by a reviewed PR: 80 model calls (`apiProxy.maxTurns`; opencode also stops itself after 35 steps, memdoor and Pi have no cap of their own), 30 requests per minute, 20 minutes for the harness, 25 for AWF's `agentTimeout`, 30 for the step and 45 for the job. AWF's AI-credit cap is not used, since it prices CSCS models with an estimate.
 
 The `stub` harness makes no model call and posts a fixed review containing hostile content; it is for testing the pipeline only.
 
@@ -69,11 +71,13 @@ A harness is a directory `.github/agent-review/harnesses/<name>/`; the name must
 - `wire` names the API the harness speaks: `openai-chat`, `anthropic-messages` or `none`. It selects the variable the key is passed in, and so AWF's listener.
 - File names the harness reads as instructions or configuration, at any depth, go into `instruction-files.txt`.
 
+The [adapters README](../../../.github/agent-review/harnesses/README.md) compares the three harnesses (version, wire, how the repository's own agent configuration is disabled, turn cap); each adapter's `README.md` explains its pins, upgrades and isolation. In short: all three use the OpenAI chat API (AWF v0.29.12 must get only `OPENAI_API_KEY`: with `ANTHROPIC_API_KEY` its entrypoint fails when the home directory is read-only); opencode and Pi have switches that ignore the repository's agent configuration (which can otherwise execute code from the PR), memdoor has none and relies on the reset of `AGENTS.md` and on guards against its `skill` tool.
+
 ## Testing changes
 
 `pull_request_target` and `workflow_dispatch` read the workflow from the default branch, so a change cannot be tested from a PR. To test on a fork:
 
 1. Open a throwaway PR inside the fork to review and comment on.
-2. On a branch named `ci/agent-review-<n>`, re-enable the two blocks marked `COMMENTED OUT` in the workflow (the `push` trigger and the `TEST_*` parameters, with the throwaway PR's number) and push it. Every push runs the pipeline with the `stub` harness unless `TEST_HARNESS` says otherwise. Never merge these blocks enabled.
+2. On a branch named `ci/agent-review-<n>`, re-enable the two blocks marked `COMMENTED OUT` in the workflow (the `push` trigger and the `TEST_*` parameters, with the throwaway PR's number) and push it. Every push runs the pipeline with the `stub` harness unless `TEST_HARNESS` says otherwise; other harnesses need `TEST_MODEL` (or the `AGENT_REVIEW_MODEL` variable) and the `CSCS_INFERENCE_API_KEY` secret in the fork. Never merge these blocks enabled.
 
-The scripts have offline tests: `bash .github/agent-review/tests/test-collect-result.sh` and `test-publish-comment.sh`. `test-run-review.sh` runs the driver with the `stub` harness against a real PR, without AWF, and needs network access.
+The scripts have offline tests: `bash .github/agent-review/tests/test-collect-result.sh` and `test-publish-comment.sh`. `test-run-review.sh` runs the driver with the `stub` harness against a real PR, without AWF, and needs network access. To try an adapter without a key, run `install.sh <prefix>`, then `run-review` with `AWF_API_PROXY_OPENAI_URL` and `AWF_API_PROXY_ANTHROPIC_URL` pointing at a local fake OpenAI/Anthropic server.
