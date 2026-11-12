@@ -66,11 +66,11 @@ def _flatten_field(
 def _unflatten_field(
     domain: common.Domain, children: tuple[core_defs.NDArrayObject]
 ) -> nd_array_field.NdArrayField:
-    return nd_array_field.NdArrayField(domain, children[0])  # type: ignore[abstract] # mypy does not see '__gt_builtin_func__' as implemented by 'FieldBuiltinFuncRegistry'
+    return nd_array_field.NdArrayField(domain, children[0])
 
 
 jax.tree_util.register_pytree_node(
-    nd_array_field.NdArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_field'
+    nd_array_field.NdArrayField,
     _flatten_field,
     _unflatten_field,
 )
