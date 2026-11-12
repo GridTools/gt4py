@@ -32,9 +32,6 @@ final_update_message = false
 inline_key_issues = true
 # Three findings is too few for the size of a typical GT4Py refactor.
 num_max_findings = 8
-# Without this a failed review says only that it failed; the reason is
-# deterministic and sanitised, and costs no AI call.
-publish_error_details = true
 # Explicit rather than default: a review that found nothing should say so,
 # because silence is indistinguishable from the bot not having run.
 publish_output_no_suggestions = true
