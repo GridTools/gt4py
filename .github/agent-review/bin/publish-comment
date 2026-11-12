@@ -12,7 +12,9 @@
 #   - it must be valid UTF-8; control characters are dropped;
 #   - HTML comment delimiters are broken up, so the review can neither hide
 #     text nor imitate the marker that identifies this workflow's comment;
-#   - @mentions are neutralised with a zero-width joiner after the '@';
+#   - @mentions are neutralised with a zero-width joiner after the '@', and
+#     character references that GitHub decodes before finding mentions
+#     ('&#64;', '&#x40;', '&commat;') are escaped so they render literally;
 #   - it is truncated to REVIEW_MAX_BYTES.
 # 'sanitize' and 'render' only read stdin/files and write stdout, so they are
 # tested offline (tests/test-publish-comment.sh); only 'post' uses the network.
@@ -52,11 +54,14 @@ cmd_sanitize() {
     return 3
   }
   # Keep tab and newline; drop other C0 controls and DEL (CR included).
-  # The replacements cannot create new matches: neither inserts '<' or '>'.
+  # The replacements cannot create new matches: none inserts '<', '>' or '&#',
+  # or a complete '&commat;'.
   tr -d '\000-\010\013-\037\177' <"${input}" |
     sed -e "s/<!--/<!${ZWSP}--/g" \
       -e "s/-->/--${ZWSP}>/g" \
-      -e "s/@\([A-Za-z0-9]\)/@${ZWJ}\1/g" >"${cleaned}"
+      -e "s/@\([A-Za-z0-9]\)/@${ZWJ}\1/g" \
+      -e 's/&#/\&amp;#/g' \
+      -e 's/&commat;/\&amp;commat;/g' >"${cleaned}"
   # Truncated from a file, not in the pipeline: 'head' closing the pipe early
   # would kill the writer with SIGPIPE, which 'pipefail' reports as a failure.
   head -c "${REVIEW_MAX_BYTES}" "${cleaned}" | drop_partial_chars

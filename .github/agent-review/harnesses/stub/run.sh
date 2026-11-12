@@ -3,7 +3,8 @@
 #
 # It exists to test the pipeline (prepare -> AWF -> collect -> publish)
 # without any secret. The review deliberately contains hostile content that
-# the 'publish' job must neutralise: an @mention, HTML comments imitating the
+# the 'publish' job must neutralise: @mentions (also as character
+# references), HTML comments imitating the
 # comment marker, and optional padding (STUB_PADDING_KIB) to exceed the size
 # limits.
 #
@@ -33,7 +34,8 @@ env | cut -d= -f1 | grep -E 'KEY|TOKEN|SECRET|PASSWORD' | sort | sed 's/^/stub: 
   echo
   echo "### Findings"
   echo
-  echo "1. **Mention neutralisation**: this mention must not notify anyone: @egparedes."
+  echo "1. **Mention neutralisation**: these mentions must not notify anyone: @egparedes," \
+    "&#64;egparedes, &#x40;egparedes, &commat;egparedes."
   echo "2. **Marker spoofing**: the next lines must not hide text or imitate the comment marker."
   echo "   <!-- agent-review:stub -->"
   echo "   <!<!---- nested comment start -->"

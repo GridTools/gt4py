@@ -23,6 +23,16 @@ test_neutralises_mentions() {
     assert "mention kept readable" grep -qF "@${ZWJ}egparedes" <<<"${out}"
 }
 
+test_escapes_character_references_to_at() {
+  # GitHub renders all of these (with the ';') as live mentions.
+  local out
+  out=$(printf '&#64;egparedes &#x40;egparedes &#X40;a &#0064;b &commat;egparedes &amp;ok\n' | sanitize) &&
+    assert "no numeric reference left" lacks '&#' "${out}" &&
+    assert "no &commat; left" lacks '&commat;' "${out}" &&
+    assert "escaped readably" grep -qF '&amp;#64;egparedes' <<<"${out}" &&
+    assert "other entities untouched" grep -qF ' &amp;ok' <<<"${out}"
+}
+
 test_breaks_comment_delimiters() {
   local out
   out=$(printf '<!-- agent-review:stub -->\n<!<!---- nested -->\nhidden -->\n<!--->\n' | sanitize) &&
