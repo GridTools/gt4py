@@ -1,0 +1,19 @@
+# Harness adapters
+
+Each subdirectory adapts one coding-agent harness to the agent review
+pipeline (see `docs/development/tools/agent-review.md`). All files here are
+read from the workflow's own commit, never from the pull request.
+
+| File         | Contract                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `install.sh` | `install.sh <prefix>`. Runs in the secretless `prepare` job. Installs an **exact** version with integrity checks (npm: `npm ci` against a committed `package-lock.json`; binaries: release URL plus SHA-256) into `<prefix>`, and writes the version to `<prefix>/VERSION`. The prefix is unpacked to `/opt/agent-review/harness/<name>` (read-only) and must run from there without network access.                                                                                                                                           |
+| `run.sh`     | Runs inside the sandbox from the PR checkout, under `timeout`. Environment: `PROMPT_FILE`, `REPO_DIR`, `OUT_DIR`, `CONTEXT_DIR`, `MODEL`, `HARNESS_PREFIX`, `PR_NUMBER`, and AWF's `AWF_API_PROXY_OPENAI_URL` / `AWF_API_PROXY_ANTHROPIC_URL`. Keeps its configuration in a scratch home under `/tmp`, built from environment variables only; disables auto-update, telemetry, sharing and remote model catalogues; runs headless and writes `$OUT_DIR/review.md`. Exit codes: 0 review written, 2 ran but no review, anything else a failure. |
+| `wire`       | One line: `openai-chat`, `anthropic-messages` or `none`. Selects the variable the inference key is passed in, and so AWF's listener. Clients use the listener origin (`$AWF_API_PROXY_OPENAI_URL`, or `$AWF_API_PROXY_ANTHROPIC_URL` plus `/v1/messages`).                                                                                                                                                                                                                                                                                     |
+| `README.md`  | Pinned version, how to upgrade it, the paths it reads as instructions or configuration (add them to `../instruction-files.txt`), and any outbound calls it tries to make.                                                                                                                                                                                                                                                                                                                                                                      |
+
+The harness name must also be added to the `workflow_dispatch` choice and to
+the `case` in the `Authorize` step of `.github/workflows/agent-review.yml`.
+
+`stub` makes no model call and writes a fixed review with hostile content
+(an @mention, HTML comments imitating the comment marker, and optional
+padding); it tests the pipeline without any secret.
