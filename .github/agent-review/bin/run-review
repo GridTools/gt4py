@@ -135,7 +135,17 @@ git_safe diff --no-ext-diff --no-textconv "${MERGE_BASE}" "${HEAD_SHA}" >"${CONT
 git_safe diff --no-ext-diff --name-status "${MERGE_BASE}" "${HEAD_SHA}" >"${CONTEXT_DIR}/changed-files.txt"
 
 # --- Reset agent instruction files to the base version -----------------------
-mapfile -t SPECS < <(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${TRUSTED_ROOT}/instruction-files.txt")
+# Every pattern applies at any depth (see instruction-files.txt), and
+# case-insensitively, since a harness may not care about case either.
+SPECS=()
+while IFS= read -r pattern; do
+  case "${pattern}" in
+    '' | '#'*) continue ;;
+    /* | :* | *..*) die "Invalid pattern in instruction-files.txt: '${pattern}'." ;;
+    */) SPECS+=(":(glob,icase)**/${pattern}**") ;;
+    *) SPECS+=(":(glob,icase)**/${pattern}") ;;
+  esac
+done < <(sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "${TRUSTED_ROOT}/instruction-files.txt")
 [ "${#SPECS[@]}" -gt 0 ] || die "No entries in instruction-files.txt."
 # 'ls-files', not 'ls-tree', which rejects the ':(glob)' magic. The index
 # holds the head tree after the checkout; the base tree goes into a scratch
@@ -150,6 +160,10 @@ rm -f "${WS}/pr-paths" "${WS}/base-paths" "${WS}/base.index"
 for path in "${PR_PATHS[@]}"; do
   # Git refuses such paths in trees, but they become filesystem paths here.
   case "/${path}/" in */../* | */./* | *//*) die "Unexpected path in PR tree: '${path}'." ;; esac
+  # Only what the PR adds or changes is kept, so the review can comment on it.
+  head_id=$(git_safe rev-parse "${HEAD_SHA}:${path}")
+  base_id=$(git_safe rev-parse -q --verify "${BASE_SHA}:${path}" || true)
+  [ "${head_id}" != "${base_id}" ] || continue
   dest="${CONTEXT_DIR}/pr-instruction-files/${path}.txt"
   mkdir -p "$(dirname "${dest}")"
   git_safe cat-file -p "${HEAD_SHA}:${path}" >"${dest}"

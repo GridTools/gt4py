@@ -2,8 +2,9 @@
 # Integration test for bin/run-review with the 'stub' harness, WITHOUT AWF.
 #
 # Needs network access to github.com: it reviews GridTools/gt4py#2983, a
-# merged PR that changes AGENTS.md, so the instruction-file reset is
-# exercised. Run it by hand when changing run-review; it is not run in CI.
+# merged PR that changes AGENTS.md, and commit 64c83aa0 against its parent,
+# which adds instruction files at several depths, so both branches of the
+# instruction-file reset are exercised. Run it by hand when changing run-review; it is not run in CI.
 
 set -uo pipefail
 # shellcheck source=lib.sh
@@ -13,12 +14,13 @@ AR_DIR=$(cd "$(dirname "$0")/.." && pwd)
 HEAD_SHA=46e9c4f3cecc6571b36b219994f8b126602513ff
 BASE_SHA=2866dacf34e1d4f68112c5756cb31cec9ff29547
 
-setup() {
+setup() { # [padding-kib [head-sha base-sha]]
+  local head=${2:-${HEAD_SHA}} base=${3:-${BASE_SHA}}
   # The trusted root, as the review job lays it out under /opt/agent-review.
   mkdir -p root ws/in
   cp -r "${AR_DIR}/bin" "${AR_DIR}/harnesses" "${AR_DIR}/prompt.md.tmpl" "${AR_DIR}/instruction-files.txt" root/
   bash root/harnesses/stub/install.sh root/harness/stub
-  jq -n --arg h "${HEAD_SHA}" --arg b "${BASE_SHA}" --argjson pad "${1:-0}" \
+  jq -n --arg h "${head}" --arg b "${base}" --argjson pad "${1:-0}" \
     '{repo: "GridTools/gt4py", pr: 2983, head_sha: $h, base_sha: $b, harness: "stub",
       model: "none", harness_timeout_minutes: 5, stub_padding_kib: $pad}' >ws/in/params.json
   # Hostile title and body: placeholders and a fake end delimiter.
@@ -47,6 +49,22 @@ test_truncates_oversized_review() {
   bash root/bin/run-review "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
   assert "truncated flag" test "$(jq -r .truncated ws/out/meta.json)" = true &&
     assert "under 60000 bytes" test "$(stat -c %s ws/out/review.md)" -le 60000
+}
+
+test_removes_instruction_files_added_by_the_pr() {
+  # Adds .claude/, .opencode/, copilot-instructions.md and root and nested
+  # AGENTS.md / CLAUDE.md, none of which exist in its parent.
+  local head=64c83aa07ab0e2c00b385faccb8b4ca57945829a base=b84a46734f164516a4c28c486e4e4b71dd2eb2d8
+  local repo="${TMP}/ws/repo" ctx="${TMP}/ws/repo/.agent-review-context/pr-instruction-files" p
+  setup 0 "${head}" "${base}"
+  bash root/bin/run-review "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
+  for p in .claude/settings.json .github/copilot-instructions.md .opencode/opencode.jsonc \
+    AGENTS.md CLAUDE.md src/gt4py/next/AGENTS.md src/gt4py/next/CLAUDE.md; do
+    assert "${p} removed" test ! -e "${repo}/${p}" &&
+      assert "${p} kept as data" cmp -s "${ctx}/${p}.txt" <(git -C "${repo}" show "${head}:${p}") ||
+      return 1
+  done
+  assert "unrelated file kept" test -f "${repo}/.gitignore"
 }
 
 for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do run_test "$t"; done

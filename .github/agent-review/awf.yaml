@@ -7,10 +7,15 @@
 # --audit-dir, --container-workdir) and image digests (--image-tag) are passed
 # as command-line flags.
 #
-# Confirmed by the Phase 0 probe on AWF v0.29.12: the CSCS base-URL path
-# mapping, the Anthropic auth header, and the model pattern format.
+# Confirmed by the (interim) Phase 0 probe on AWF v0.29.12, run
+# https://github.com/egparedes/gt4py/actions/runs/43326894660: the CSCS
+# base-URL path mapping, the Anthropic auth header, and the model pattern
+# format. The work directory must not be readable by others (agent review
+# fork run 43327583530).
 # TODO(phase0): still open are how this file and the command-line flags merge,
-# and that nothing secret is readable inside the sandbox.
+# the canaries (nothing secret readable inside the sandbox, /opt read-only,
+# $RUNNER_TEMP not visible), and AWF's logs under the shared /tmp
+# (/tmp/squid-logs-work, /tmp/api-proxy-logs-work) despite --work-dir.
 
 network:
   # Only for the in-sandbox 'git fetch' of the public repository. The

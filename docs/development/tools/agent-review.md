@@ -34,8 +34,8 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 1. **The real key is only in AWF's API-proxy sidecar** and the environment of the `awf` step; the agent sees placeholders. Never inline it into a `run:` script or pass it to another step.
 2. **No PR-derived byte is executed or parsed on the host.** No `actions/checkout`, no `uv sync`, no git on the PR tree outside the sandbox. `pr.json` is written as bytes and parsed inside the sandbox.
 3. **The host is tainted once `awf` returns.** AWF mounts the workspace, `/tmp` and parts of the home directory read-write. Steps after it use no token, run no git, use no cache action, and run only `/usr/bin` tools with a fixed `PATH`. The only data leaving `review` is at most 64 KiB per file of regular, single-link files named `review.md` and `meta.json`, copied without following symlinks.
-4. **Write tokens exist only in `publish`**, which runs no model and no PR code, and treats the review as hostile: it must be valid UTF-8, HTML comment delimiters are broken up (so the review can neither hide text nor imitate the comment marker), `@mentions` are neutralised with a zero-width joiner, and the length is capped. The marker is matched only on the first line of the bot's own comments, never with `--edit-last`, because PR Agent posts as the same bot.
-5. **Harness, prompt, AWF config and instruction files come from the workflow's own commit** (`github.workflow_sha`, fetched as a tarball), never from the PR, so a PR cannot change the policy it is reviewed by. Paths in [`instruction-files.txt`](../../../.github/agent-review/instruction-files.txt) are reset to the base version before the harness starts.
+4. **Write tokens exist only in `publish`**, which runs no model and no PR code, and treats the review as hostile: it must be valid UTF-8, HTML comment delimiters are broken up (so the review can neither hide text nor imitate the comment marker), `@mentions` are neutralised with a zero-width joiner (and character references such as `&#64;` or `&commat;`, which GitHub also turns into mentions, are escaped), and the length is capped. The marker is matched only on the first line of the bot's own comments, never with `--edit-last`, because PR Agent posts as the same bot.
+5. **Harness, prompt, AWF config and instruction files come from the workflow's own commit** (`github.workflow_sha`, fetched as a tarball), never from the PR, so a PR cannot change the policy it is reviewed by. Files matching [`instruction-files.txt`](../../../.github/agent-review/instruction-files.txt), at any depth, are reset to the base version (or removed) before the harness starts; the PR's versions are kept as data for the review.
 6. **Everything is pinned**: actions by commit SHA, the AWF version, AWF images by digest (`image-tag` output of the setup action), and each harness by exact version with an integrity check.
 
 ## What remains risky
@@ -43,7 +43,7 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 - **Prompt injection can steer the review's content**: a false approval, misleading findings, links. Mitigations: the comment is labelled advisory, never a status; mentions are neutralised and the size is capped. Cross-references such as `owner/repo#123` are not neutralised and can create backlinks in other repositories.
 - **Budget burn** up to the caps below and the key's own budget, by anyone with write access or a PR author with write access.
 - **A sandbox escape** (kernel or Docker bug) would expose the key on the host. Mitigations: a dedicated, low-budget key that is quick to rotate; gVisor (`--container-runtime gvisor`) is planned once the harnesses are known to work with it.
-- `@` is neutralised everywhere, including code blocks, so a Python decorator copied from a review contains an invisible character.
+- `@` and `&#` are neutralised everywhere, including code blocks, so a Python decorator copied from a review contains an invisible character, and numeric character references show literally.
 
 ## Configuration
 
@@ -65,9 +65,9 @@ The `stub` harness makes no model call and posts a fixed review containing hosti
 A harness is a directory `.github/agent-review/harnesses/<name>/`; the name must also be added to the `workflow_dispatch` choice and to the `case` in the `Authorize` step. The contract is in [`harnesses/README.md`](../../../.github/agent-review/harnesses/README.md); in short:
 
 - `install.sh <prefix>` runs in `prepare` and installs an exact version, integrity-checked, into `<prefix>`, writing the version to `<prefix>/VERSION`. The prefix is unpacked to `/opt/agent-review/harness/<name>` and must run from there without network access.
-- `run.sh` runs inside the sandbox, from the PR checkout, with `PROMPT_FILE`, `REPO_DIR`, `OUT_DIR`, `CONTEXT_DIR`, `MODEL`, `HARNESS_PREFIX` and `PR_NUMBER` set, plus AWF's `AWF_API_PROXY_OPENAI_URL` / `AWF_API_PROXY_ANTHROPIC_URL`. It keeps its configuration in a scratch home under `/tmp`, disables updates, telemetry and sharing, and writes `$OUT_DIR/review.md`. Exit codes: 0 review written, 2 no review, anything else a failure.
+- `run.sh` runs inside the sandbox, from the PR checkout, with `PROMPT_FILE`, `REPO_DIR`, `OUT_DIR`, `CONTEXT_DIR`, `MODEL`, `HARNESS_PREFIX` and `PR_NUMBER` set, plus AWF's `AWF_API_PROXY_OPENAI_URL` / `AWF_API_PROXY_ANTHROPIC_URL`. It keeps its configuration in a scratch home under `/tmp`, disables updates, telemetry and sharing, and writes `$OUT_DIR/review.md`. Exit codes: 0 review written, 2 no review, anything else a failure; it must return 2, not 0, when the harness exits 0 without a real answer.
 - `wire` names the API the harness speaks: `openai-chat`, `anthropic-messages` or `none`. It selects the variable the key is passed in, and so AWF's listener.
-- Paths the harness reads as instructions or configuration go into `instruction-files.txt`.
+- File names the harness reads as instructions or configuration, at any depth, go into `instruction-files.txt`.
 
 ## Testing changes
 

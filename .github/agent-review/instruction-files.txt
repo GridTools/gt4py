@@ -1,28 +1,39 @@
-# Paths that agents read as instructions or configuration.
+# Files that agents read as instructions or configuration.
 #
-# 'run-review' resets every path matching these entries to its version at the
-# PR's base commit before the harness starts, so a pull request cannot rewrite
-# the rules it is reviewed by. The PR's own versions are kept as data, with a
-# '.txt' suffix, under '.agent-review-context/pr-instruction-files/'.
+# Before the harness starts, 'run-review' removes every file in the PR tree
+# matching these patterns and restores the ones that exist at the PR's base
+# commit, so a pull request cannot rewrite the rules it is reviewed by. Files
+# the PR adds or changes are kept as data, as '<path>.txt', under
+# '.agent-review-context/pr-instruction-files/', so the review still sees them.
 #
-# One git pathspec per line (see 'git help glossary'); blank lines and lines
-# starting with '#' are ignored. This is the union over all harnesses: list a
-# harness's paths here when adding its adapter (see harnesses/*/README.md).
+# One pattern per line, matched AT ANY DEPTH: harnesses pick up instruction
+# files in subdirectories too (opencode attaches a nested AGENTS.md to every
+# file it reads in that directory). A pattern ending in '/' matches a
+# directory and everything below it. Blank lines and lines starting with '#'
+# are ignored. Each pattern becomes the git pathspec ':(glob)**/<pattern>'
+# (or ':(glob)**/<pattern>**' for directories), so '*' does not cross '/'.
+#
+# This is the union over all harnesses: extend it when adding an adapter
+# (see harnesses/README.md).
 
-# Shared by all harnesses.
+# Shared conventions.
 AGENTS.md
+AGENTS.override.md
 CLAUDE.md
+CLAUDE.local.md
 .github/copilot-instructions.md
-:(glob)**/AGENTS.md
-:(glob)**/CLAUDE.md
+.claude/
+.mcp.json
+# Skills; memdoor's 'skill' tool loads '.agents/skills'.
+.agents/
 
 # opencode
 opencode.json
 opencode.jsonc
-.opencode
+.opencode/
 
 # memdoor
-.memdoor
+.memdoor/
 
 # Pi
-.pi
+.pi/
