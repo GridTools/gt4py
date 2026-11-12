@@ -6,7 +6,7 @@ The `PR Agent` workflow ([`.github/workflows/pr-agent.yml`](../../../.github/wor
 
 - `/review` runs automatically when a non-draft PR is opened, reopened or marked ready, if its author has write access. PRs titled `Releasing v…` (releases) or `[Auto] …` are skipped, and comment commands on them are ignored too: the run stays green and posts nothing.
 - Users with write access can comment `/review`, `/improve`, `/ask "<question>"` or `/describe` on any PR, including one from a fork. `/describe` is manual because it rewrites the PR body, which here is the filled-in PR template and becomes the squash-commit message.
-- Write access comes from the `gt4py-core` and `gt4py-collaborators` teams, from organization ownership, and from direct collaborators such as the CSCS-CI machine account (see [cscs-ci.md](cscs-ci.md)). That account is of type `User`, so the workflow's bot filters do not exclude it.
+- Write access comes from the `gt4py-core` and `gt4py-collaborators` teams, from organization ownership, and from direct collaborators such as the CSCS-CI machine account (see [cscs-ci.md](cscs-ci.md)). That account is of type `User`, so the workflow's bot filters do not exclude it. Every organization member would also pass if the organization's base permission were ever raised to `write`.
 
 The review policy is in [`.pr_agent.toml`](../../../.pr_agent.toml). The review rules are in [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md), shared with GitHub Copilot's reviewer, followed by `AGENTS.md` and `src/gt4py/next/AGENTS.md`. Extend those files rather than adding guidance to `.pr_agent.toml`.
 
@@ -19,7 +19,7 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 - **Review labels stay disabled and `/describe` manual**, since their output is derived from untrusted PR text. Those settings are in the workflow environment, not `.pr_agent.toml`, so a failed fetch of the policy file cannot re-enable them.
 - **The image is pinned by digest**, since it receives the inference key. Upgrading is a reviewed change.
 
-The workflow and `.pr_agent.toml` are read from `main`, so changes take effect only once merged. To test changes from a branch in this repository, re-enable the blocks marked `COMMENTED OUT` in the workflow (with `PR_AGENT_CONFIG_BRANCH` set to the literal branch name, never one derived from PR input) and disable them again before merging. The files in `repo_context_files` are always read from `main`, so changes to the review rules cannot be tested this way. A run that applied a policy file logs `Applying repo settings (sections: […])`; the bare `Applying repo settings` appears in every run.
+The workflow and `.pr_agent.toml` are read from `main`, so changes take effect only once merged. To test changes from a branch in this repository, re-enable the blocks marked `COMMENTED OUT` in the workflow (with `PR_AGENT_CONFIG_BRANCH` set to the literal branch name, never one derived from PR input) and disable them again before merging, since otherwise the policy keeps being read from the test branch and PRs from this repository are reviewed twice. The files in `repo_context_files` are always read from `main`, so changes to the review rules cannot be tested this way. A run that applied a policy file logs `Applying repo settings (sections: […])`; the bare `Applying repo settings` appears in every run.
 
 ## Configuration variables
 
@@ -36,5 +36,6 @@ The key is the `CSCS_INFERENCE_API_KEY` repository secret; its usage is billed a
 
 - Model ids are stored without the `openai/` prefix, which the workflow adds. CSCS retires models on short notice, so check them against the [model table](https://docs.cscs.ch/services/inference/api/).
 - The token limits apply to every model in the chain, so they must fit the smallest one: the output reserve is sent as `max_tokens`, which a model with a lower output limit rejects. Check a fallback before adding it, since it is only reached when the models before it fail. Too small an output reserve makes reasoning models return empty responses.
+- A diff that does not fit in the token budget is reviewed in up to three chunks, sent to the model in parallel and merged into one review (`enable_large_pr_chunking` in `.pr_agent.toml`). Each chunk is billed as a separate call; files that still do not fit are listed in the review's coverage footer.
 - The `Run PR Agent` step limit is derived as one `PR_AGENT_AI_TIMEOUT` per model plus two minutes; `Resolve models` rejects a chain that does not fit in the job's `timeout-minutes` with two minutes to spare.
 - The review names the model that produced it, so a fallback answer is visible.

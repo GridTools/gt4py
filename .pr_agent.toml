@@ -4,7 +4,8 @@
 
 [config]
 # Release PRs are generated. The first pattern is PR Agent's default, which
-# setting this key would otherwise drop.
+# setting this key would otherwise drop. A matching title also blocks comment
+# commands, so only list PRs nobody would want reviewed.
 ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
 # The review is not always produced by the primary model, and which one
 # answered explains a thin review without reading the run log.
@@ -20,7 +21,8 @@ suggestions_score_threshold = 6
 
 [pr_reviewer]
 # The generic usage guide is noise on every review; the commands are listed in
-# docs/development/tools/pr-agent.md and ci-infrastructure.md.
+# docs/development/tools/pr-agent.md and
+# docs/development/tools/ci-infrastructure.md.
 enable_help_text = false
 # A diff over the token budget is reviewed in chunks rather than dropping the
 # files that do not fit. At most 'max_number_of_calls' (default 3) chunks, run

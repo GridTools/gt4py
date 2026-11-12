@@ -75,7 +75,7 @@ jobs:
           if ! level=$(gh api "repos/${REPO}/collaborators/${ACTOR}/permission" \
             --jq '.permission' 2>&1); then
             echo "allowed=false" >> "$GITHUB_OUTPUT"
-            echo "::error::Could not resolve repository permission for '${ACTOR}', denying: ${level}"
+            echo "::error::Could not resolve repository permission for '${ACTOR}', denying: '${level}'."
             exit 1
           fi
           # 'permission' reports the 'maintain' role as 'write'.
@@ -108,7 +108,7 @@ jobs:
           JOB_TIMEOUT: "45"
         run: |
           fail() {
-            echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables"
+            echo "::error::$1 See docs/development/tools/pr-agent.md#configuration-variables."
             exit 1
           }
           # Non-numeric values would break the '-gt' tests with an unhelpful error.
