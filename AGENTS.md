@@ -83,6 +83,9 @@ If a command above is wrong for your environment, fix `pyproject.toml`,
   declared DAG. If you genuinely need a new edge, edit `tach.toml`
   explicitly and explain why in the PR.
 - For first-time contributors, add them to [`AUTHORS.md`](AUTHORS.md).
+- When changing a rule that `.github/copilot-instructions.md` restates (the
+  review-relevant subset of this file, for the AI reviewers Copilot and PR
+  Agent), update it there too.
 
 ## Don't
 

@@ -101,8 +101,8 @@ jobs:
         env:
           MODEL: ${{ vars.PR_AGENT_MODEL }}
           FALLBACKS: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
-          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '131072' }}
-          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '32768' }}
+          BUDGET: ${{ vars.PR_AGENT_TOKEN_BUDGET || '262144' }}
+          OUTPUT: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS || '100000' }}
           AI_TIMEOUT: ${{ vars.PR_AGENT_AI_TIMEOUT || '720' }}
           # This job's 'timeout-minutes', which expressions cannot read.
           JOB_TIMEOUT: "45"

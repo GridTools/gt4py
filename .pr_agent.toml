@@ -9,9 +9,9 @@ ignore_pr_title = ["^\\[Auto\\]", "^Releasing v"]
 # The review is not always produced by the primary model, and which one
 # answered explains a thin review without reading the run log.
 output_run_details = true
-# The review rules live in these files, shared with GitHub Copilot's reviewer.
-# They share one line budget that truncates from the end, so the file named in
-# 'extra_instructions' goes first.
+# The review rules live in these files; the first is shared with GitHub
+# Copilot's reviewer. They share one line budget that truncates from the end,
+# so the file named in 'extra_instructions' goes first.
 repo_context_files = [".github/copilot-instructions.md", "AGENTS.md", "src/gt4py/next/AGENTS.md"]
 
 [pr_code_suggestions]
