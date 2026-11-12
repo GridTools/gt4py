@@ -303,7 +303,9 @@ jobs:
       HARNESS: ${{ needs.authorize.outputs.harness }}
     # Never add 'actions/checkout' or a cache action to this job: the first
     # would run git on the tainted workspace in its post step, the second
-    # could let a PR poison the base branch's cache.
+    # could let a PR poison the base branch's cache. Never start a service on
+    # the host either (no 'services:', no daemon in a step): the sandbox
+    # reaches every host port bound to 0.0.0.0 through AWF's network gateway.
     steps:
       - *fetch-trusted
 
@@ -406,8 +408,10 @@ jobs:
           unset KEY
           awf_bin=$(command -v awf)
           # AWF refuses a work directory others can read; root-owned also
-          # keeps the sandbox out of it.
-          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit"
+          # keeps the sandbox out of it. Without '--proxy-logs-dir', AWF moves
+          # its logs to /tmp after the run, where the sandbox can plant fake
+          # ones; under $RUNNER_TEMP the sandbox cannot see them.
+          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
 
           # The sandbox's output is not trusted: stop the runner from
           # interpreting workflow commands ('::...::') in it, with a token the
@@ -422,6 +426,7 @@ jobs:
             --config "${RUNNER_TEMP}/awf.json" \
             --work-dir "${RUNNER_TEMP}/awf-work" \
             --audit-dir "${RUNNER_TEMP}/awf-audit" \
+            --proxy-logs-dir "${RUNNER_TEMP}/awf-logs" \
             --image-tag "${IMAGE_TAG}" \
             --container-workdir "${WS}" \
             --rate-limit-rpm 30 \
@@ -451,22 +456,44 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # Off by default. TODO(phase0): confirm that AWF's audit files hold no
-      # secret before enabling it: artifacts of public repositories are
-      # downloadable by any signed-in user.
+      # Cost of the review, from the API proxy's own log (written by the
+      # sidecar under $RUNNER_TEMP, out of the sandbox's reach). Numbers only.
+      - name: Report token usage
+        if: always() && steps.agent.outputs.skipped != 'true'
+        shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+        env:
+          PATH: /usr/bin:/bin
+        run: |
+          log="${RUNNER_TEMP}/awf-logs/api-proxy-logs/token-usage.jsonl"
+          if ! /usr/bin/sudo /usr/bin/test -f "${log}"; then
+            echo "No token usage log."
+            exit 0
+          fi
+          /usr/bin/sudo /usr/bin/cat "${log}" | /usr/bin/jq -rs '
+            "| Model calls | Failed calls | Input tokens | Output tokens |",
+            "| ---: | ---: | ---: | ---: |",
+            "| \(length) | \(map(select((.status | tonumber? // 0) >= 400)) | length)"
+            + " | \(map(.input_tokens | numbers) | add // 0) | \(map(.output_tokens | numbers) | add // 0) |"' \
+            | /usr/bin/tee -a "${GITHUB_STEP_SUMMARY}"
+
+      # Off by default: artifacts of public repositories are downloadable by
+      # any signed-in user. The Phase 0 probe found no key or auth header in
+      # the audit files or the proxy logs.
       - name: Make the AWF audit log readable
         if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
-        run: /usr/bin/sudo /usr/bin/chmod -R a+rX "${RUNNER_TEMP}/awf-audit"
+        run: /usr/bin/sudo /usr/bin/chmod -R a+rX "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
 
       - name: Upload the AWF audit log
         if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-review-audit
-          path: ${{ runner.temp }}/awf-audit
+          path: |
+            ${{ runner.temp }}/awf-audit
+            ${{ runner.temp }}/awf-logs
           if-no-files-found: ignore
           retention-days: 7
 
