@@ -19,9 +19,9 @@ repo_context_files = [".github/copilot-instructions.md", "AGENTS.md", "src/gt4py
 suggestions_score_threshold = 6
 
 [pr_reviewer]
-# The commands are not discoverable otherwise, and only maintainers can use
-# them.
-enable_help_text = true
+# The generic usage guide is noise on every review; the commands are listed in
+# docs/development/tools/pr-agent.md and ci-infrastructure.md.
+enable_help_text = false
 extra_instructions = "Follow the review rules in `.github/copilot-instructions.md`, included in the repository context below."
 # An updated review replaces its comment in place; a second comment pointing
 # at it is noise.
