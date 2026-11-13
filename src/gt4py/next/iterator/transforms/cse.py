@@ -413,8 +413,8 @@ def extract_subexpression(
             continue
 
         expr_id = next(prefixed_uids)
-        extracted[itir.Sym(id=expr_id)] = expr
-        expr_ref = itir.SymRef(id=expr_id)
+        extracted[im.sym(expr_id, expr.type)] = expr
+        expr_ref = im.ref(expr_id, expr.type)
         for id_ in eligible_ids:
             expr_map[id_] = expr_ref
 

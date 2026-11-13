@@ -311,6 +311,9 @@ def test_field_extraction_outside_asfieldop(uids: utils.IDGeneratorPool):
 
     actual = CommonSubexpressionElimination.apply(testee, within_stencil=False, uids=uids)
     assert actual == expected
+    # the extracted symbol and its references carry the type of the extracted expression
+    assert actual.fun.params[0].type == field.type
+    assert all(arg.type == field.type for arg in actual.fun.expr.args)
 
 
 def test_scalar_extraction_inside_as_fieldop(uids: utils.IDGeneratorPool):
