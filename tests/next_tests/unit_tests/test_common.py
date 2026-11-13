@@ -737,7 +737,9 @@ class TestBufferInfo:
         a = np.zeros(4, dtype=np.float64)
         scalar = np.zeros((), dtype=np.float64)
         scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
-        assert scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
+        assert (
+            scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
+        )
 
         for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
             assert _buffer_info(x) != _buffer_info(y)

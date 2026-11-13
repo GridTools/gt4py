@@ -55,7 +55,7 @@ class _DLManagedTensorVersioned(ctypes.Structure):
 
 _VERSIONED: Final = b"dltensor_versioned"
 _UNVERSIONED: Final = b"dltensor"
-_DL_TENSOR_OFFSET: Final[int] = _DLManagedTensorVersioned.dl_tensor.offset  # type: ignore[attr-defined] # ctypes field descriptors are untyped
+_DL_TENSOR_OFFSET: Final[int] = _DLManagedTensorVersioned.dl_tensor.offset
 
 _capsule_is_valid = ctypes.pythonapi.PyCapsule_IsValid
 _capsule_is_valid.restype = ctypes.c_int
@@ -75,7 +75,7 @@ _DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
 
 def device(device_type: int, device_id: int) -> core_defs.Device:
     """The `Device` of a DLPack device pair; device types gt4py does not name are kept as integers."""
-    return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))  # type: ignore[arg-type] # unnamed DLPack device types are kept as plain integers
+    return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))
 
 
 def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
@@ -129,10 +129,11 @@ def buffer_info(array: Any) -> common.BufferInfo:
         ) from None
     ndim = tensor.ndim
     shape = tuple(tensor.shape[:ndim])
+    strides = tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape)
     return common.BufferInfo(
         data_ptr=(tensor.data or 0) + tensor.byte_offset,
         shape=shape,
-        elem_strides=tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape),
+        elem_strides=strides,
         dtype=dtype,
         device=device(tensor.device.device_type, tensor.device.device_id),
     )
