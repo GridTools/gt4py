@@ -24,10 +24,11 @@ mkdir -p "${PI_CODING_AGENT_DIR}"
 wire=$(head -n 1 "${here}/wire")
 case "${wire}" in
   anthropic-messages)
-    # The Anthropic SDK appends '/v1/messages?beta=true' itself, so the base
-    # is the listener origin. The placeholder goes out as 'x-api-key'.
+    # Not used: the workflow supports only 'openai-chat'. Pi's Anthropic API
+    # would go to the OpenAI listener, which forwards '/v1/messages' (Pi
+    # appends '/v1/messages?beta=true' to the origin).
     api=anthropic-messages
-    base=${AWF_API_PROXY_ANTHROPIC_URL:?}
+    base=${AWF_API_PROXY_OPENAI_URL:?}
     ;;
   openai-chat)
     # The OpenAI SDK appends '/chat/completions', so the base carries '/v1'.

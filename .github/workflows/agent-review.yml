@@ -364,13 +364,16 @@ jobs:
 
       # The model allowlist must match the configured model, and has no
       # command-line flag. AWF matches patterns containing '/' against
-      # '<provider>/<model>', so a bare 'zai-org/GLM-5.3' would match nothing.
+      # '<provider>/<model>', so a bare 'zai-org/GLM-5.3' would match nothing;
+      # 'openai/' because the only upstream is the OpenAI target. The
+      # workspace is the only host directory the sandbox may write to.
       - name: Render the AWF configuration
         env:
           MODEL: ${{ needs.authorize.outputs.model }}
         run: |
           yq -o=json '.' /opt/agent-review/awf.yaml \
-            | jq --arg model "${MODEL}" '.apiProxy.allowedModels = ["*/" + $model]' \
+            | jq --arg model "${MODEL}" --arg ws "${WS}" \
+              '.apiProxy.allowedModels = ["openai/" + $model] | .filesystem.allowWrite = [$ws]' \
             > "${RUNNER_TEMP}/awf.json"
 
       - name: Run the review in the sandbox
@@ -388,30 +391,33 @@ jobs:
           AGENT_REVIEW_OPENAI_BASE_URL: ${{ vars.AGENT_REVIEW_API_BASE || 'https://api.inference.cscs.ch/v1' }}
           IMAGE_TAG: ${{ steps.awf.outputs.image-tag }}
         run: |
-          # The adapter declares which API it speaks; that selects the
-          # variable AWF's sidecar reads the key from.
+          # The adapter declares whether it calls a model. Only AWF's OpenAI
+          # listener is used: never pass ANTHROPIC_API_KEY. With it, AWF
+          # v0.29.12 configures an Anthropic listener whose 'POST /messages'
+          # escapes the 'maxTurns' cap, and its entrypoint fails under
+          # 'filesystem.allowWrite'.
           wire=$(head -n 1 "/opt/agent-review/harnesses/${HARNESS}/wire")
           case "${wire}" in
-            openai-chat) key_var=OPENAI_API_KEY ;;
-            anthropic-messages) key_var=ANTHROPIC_API_KEY ;;
-            none) key_var="" ;;
-            *) echo "::error::Unknown wire '${wire}' for harness '${HARNESS}'."; exit 1 ;;
+            openai-chat)
+              if [ -z "${KEY}" ]; then
+                echo "::notice::Secret CSCS_INFERENCE_API_KEY is not set; skipping the review."
+                echo "skipped=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              export OPENAI_API_KEY="${KEY}"
+              ;;
+            none) ;;
+            *) echo "::error::Unsupported wire '${wire}' for harness '${HARNESS}'."; exit 1 ;;
           esac
-          if [ -n "${key_var}" ]; then
-            if [ -z "${KEY}" ]; then
-              echo "::notice::Secret CSCS_INFERENCE_API_KEY is not set; skipping the review."
-              echo "skipped=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            export "${key_var}=${KEY}"
-          fi
           unset KEY
           awf_bin=$(command -v awf)
-          # AWF refuses a work directory others can read; root-owned also
-          # keeps the sandbox out of it. Without '--proxy-logs-dir', AWF moves
-          # its logs to /tmp after the run, where the sandbox can plant fake
-          # ones; under $RUNNER_TEMP the sandbox cannot see them.
-          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-work" "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
+          # Under $RUNNER_TEMP, root-only: without '--proxy-logs-dir', AWF
+          # moves its logs to /tmp after the run, where the sandbox can plant
+          # fake ones. No '--work-dir': it breaks 'filesystem.allowWrite'; the
+          # default one is root-only and hidden from the sandbox.
+          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
+          # AWF v0.29.12 needs these mount points for 'filesystem.allowWrite'.
+          mkdir -p /tmp/gh-aw/sandbox/firewall/audit /tmp/gh-aw/sandbox/firewall/logs /tmp/gh-aw/mcp-logs
 
           # The sandbox's output is not trusted: stop the runner from
           # interpreting workflow commands ('::...::') in it, with a token the
@@ -424,15 +430,14 @@ jobs:
           echo "::stop-commands::${stop_token}"
           sudo -E "${awf_bin}" \
             --config "${RUNNER_TEMP}/awf.json" \
-            --work-dir "${RUNNER_TEMP}/awf-work" \
             --audit-dir "${RUNNER_TEMP}/awf-audit" \
             --proxy-logs-dir "${RUNNER_TEMP}/awf-logs" \
             --image-tag "${IMAGE_TAG}" \
             --container-workdir "${WS}" \
-            --rate-limit-rpm 30 \
             -- /opt/agent-review/bin/run-review "${WS}"
           rc=$?
-          # The host is tainted from here on: shell builtins only.
+          # The sandbox could write only to the workspace; still, treat the
+          # host as tainted from here on: shell builtins only.
           echo "::${stop_token}::"
           echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           exit "${rc}"

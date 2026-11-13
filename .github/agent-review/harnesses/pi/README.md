@@ -23,11 +23,10 @@ To upgrade, set the version in `package.json` and regenerate the lockfile with
 - `models.json` in a scratch `PI_CODING_AGENT_DIR` defines one provider
   (`awf-proxy`) with a placeholder key and the base URL
   `$AWF_API_PROXY_OPENAI_URL/v1` (Pi appends `/chat/completions`).
-- `run.sh` also supports the `anthropic-messages` wire (Pi's Anthropic API,
-  base URL `$AWF_API_PROXY_ANTHROPIC_URL`, to which Pi appends
-  `/v1/messages?beta=true`), tested only against a local fake server. It is
-  not used because AWF v0.29.12 must not get `ANTHROPIC_API_KEY` (see
-  `../README.md`).
+- `run.sh` can also use Pi's Anthropic API (`anthropic-messages` in `wire`)
+  on the OpenAI listener's origin, to which Pi appends
+  `/v1/messages?beta=true`; tested only against a local fake server, and the
+  workflow accepts only `openai-chat` (see `../README.md`).
 - `--no-approve`: the repository's `.pi/` (settings, extensions, which would be
   **executed**, MCP servers, which would be **spawned**, system prompts,
   skills) and `.agents/skills` are ignored. `--no-context-files`: `AGENTS.md`

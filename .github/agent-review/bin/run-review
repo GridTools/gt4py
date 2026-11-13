@@ -43,6 +43,8 @@ REPO_DIR="${WS}/repo"
 CONTEXT_DIR="${REPO_DIR}/.agent-review-context"
 HARNESS_OUT="${WS}/harness-out"
 RESULT_DIR="${WS}/out"
+SCRATCH_HOME="${WS}/scratch-home"
+SCRATCH_TMP="${WS}/scratch-tmp"
 
 # --- Parameters -----------------------------------------------------------
 param() { jq -er --arg k "$1" '.[$k] | tostring' "${IN_DIR}/params.json"; }
@@ -94,8 +96,11 @@ git_safe() {
     -C "${REPO_DIR}" "$@"
 }
 
-rm -rf "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}" "${WS}/tmp"
-mkdir -p "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}" "${WS}/tmp"
+rm -rf "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}" "${SCRATCH_HOME}" "${SCRATCH_TMP}"
+mkdir -p "${REPO_DIR}" "${HARNESS_OUT}" "${RESULT_DIR}" "${SCRATCH_HOME}" "${SCRATCH_TMP}"
+# Everything stays in the workspace, the only directory the sandbox may
+# write to ('filesystem.allowWrite').
+export HOME="${SCRATCH_HOME}" TMPDIR="${SCRATCH_TMP}"
 git_safe init -q
 git_safe remote add origin "https://github.com/${REPO}.git"
 
@@ -208,9 +213,6 @@ harness_exit=0
 (
   cd "${REPO_DIR}"
   export PROMPT_FILE REPO_DIR MODEL HARNESS_PREFIX PR_NUMBER CONTEXT_DIR STUB_PADDING_KIB
-  # Scratch files stay in the workspace, so that the workspace can be the
-  # only directory the sandbox may write to.
-  export TMPDIR="${WS}/tmp"
   # The harness writes to its own directory; only this script writes the result.
   OUT_DIR="${HARNESS_OUT}" exec timeout --kill-after=30s "${HARNESS_TIMEOUT_MINUTES}m" bash "${ADAPTER_DIR}/run.sh"
 ) || harness_exit=$?

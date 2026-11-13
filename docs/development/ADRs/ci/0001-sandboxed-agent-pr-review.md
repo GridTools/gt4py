@@ -23,7 +23,7 @@ We run the agent inside [AWF](https://github.com/github/gh-aw-firewall) (agentic
 
 1. `authorize` checks that the PR author (automatic runs) or the labeller (`agent-review` label) has write access, fails closed, and pins the head sha.
 2. `prepare` installs the pinned harness without any secret, so install hooks or a compromised release have nothing to steal.
-3. `review` passes the key only to the `awf` step. The host never handles PR content: the PR is fetched by git inside the sandbox, and the host is treated as tainted after `awf` returns. Only two small regular files leave the job.
+3. `review` passes the key only to the `awf` step. The host never handles PR content: the PR is fetched by git inside the sandbox, the sandbox can write only to the review workspace, and the host is still treated as tainted after `awf` returns. Only two small regular files leave the job.
 4. `publish` posts the comment from a fresh VM with a write token, no model and no PR code, and sanitises the review (mentions, HTML comments, size).
 
 Everything the agent is instructed by (prompt, AWF configuration, harness, instruction files) comes from the workflow's own commit, never from the PR. The harness is an adapter with a small contract (`install.sh`, `run.sh`, `wire`) and is selected by a repository variable, one per run. Details and the invariants to keep are in [agent-review.md](../../tools/agent-review.md).

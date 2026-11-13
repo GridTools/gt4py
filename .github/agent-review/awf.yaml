@@ -3,19 +3,15 @@
 #
 # Read from the workflow's own commit, never from the PR. The 'review' job
 # renders it to JSON and sets 'apiProxy.allowedModels' to the configured model
-# (repository variable AGENT_REVIEW_MODEL); host paths (--work-dir,
-# --audit-dir, --container-workdir) and image digests (--image-tag) are passed
-# as command-line flags.
+# (repository variable AGENT_REVIEW_MODEL) and 'filesystem.allowWrite' to the
+# review workspace; host paths (--audit-dir, --proxy-logs-dir,
+# --container-workdir) and image digests (--image-tag) are passed as
+# command-line flags.
 #
-# Confirmed by the (interim) Phase 0 probe on AWF v0.29.12, run
-# https://github.com/egparedes/gt4py/actions/runs/43326894660: the CSCS
-# base-URL path mapping, the Anthropic auth header, and the model pattern
-# format. The work directory must not be readable by others (agent review
-# fork run 43327583530).
-# TODO(phase0): still open are how this file and the command-line flags merge,
-# the canaries (nothing secret readable inside the sandbox, /opt read-only,
-# $RUNNER_TEMP not visible), and AWF's logs under the shared /tmp
-# (/tmp/squid-logs-work, /tmp/api-proxy-logs-work) despite --work-dir.
+# Verified by the Phase 0 probe on AWF v0.29.12 (fork runs 43326894660 to
+# 43331077096): the dummy key is unreadable in the sandbox in every mode; the
+# CSCS path mapping; the model pattern format; 'maxTurns' and
+# 'rateLimiting' answer 429; 'agentTimeout' ends the agent with exit 124.
 
 network:
   # Only for the in-sandbox 'git fetch' of the public repository. The
@@ -25,9 +21,12 @@ network:
     - github.com
 
 apiProxy:
-  # Upstreams. The real key is given to the sidecar only, through the 'awf'
-  # step's environment (OPENAI_API_KEY or ANTHROPIC_API_KEY, depending on the
-  # harness's wire); the agent gets placeholders.
+  # The real key is given to the sidecar only, through the 'awf' step's
+  # environment (OPENAI_API_KEY); the agent gets placeholders.
+  # One upstream and one listener for every harness. No 'anthropic' target:
+  # 'POST /messages' on AWF's Anthropic listener is not counted by 'maxTurns'
+  # (v0.29.12). Anthropic-API clients can use the OpenAI listener, which
+  # forwards '/v1/messages' with a Bearer token (CSCS accepts it).
   targets:
     openai:
       # Holds 'https://api.inference.cscs.ch/v1'. Harnesses use the listener
@@ -35,11 +34,7 @@ apiProxy:
       # and '<origin>/chat/completions' reach the upstream
       # '/v1/chat/completions'.
       baseUrlEnv: AGENT_REVIEW_OPENAI_BASE_URL
-    anthropic:
-      # Harnesses call '$AWF_API_PROXY_ANTHROPIC_URL/v1/messages'; the sidecar
-      # sends 'x-api-key', which CSCS accepts.
-      host: api.inference.cscs.ch
-  # Placeholder; the 'review' job replaces it with '*/<model>': patterns
+  # Placeholder; the 'review' job replaces it with 'openai/<model>': patterns
   # containing '/' are matched against '<provider>/<model>'. Other models
   # get a 403 'model_policy_violation' from the proxy.
   allowedModels:
@@ -50,6 +45,10 @@ apiProxy:
   maxTurns: 80
   maxPermissionDenied: 5
 
+rateLimiting:
+  # Answered with 429 above the limit.
+  requestsPerMinute: 30
+
 container:
   # Minutes; the review step's own timeout is a few minutes longer so this
   # one triggers first and the result is still collected.
@@ -58,8 +57,14 @@ container:
   # TODO(phase0): pin images by digest with 'container.images' if passing
   # the setup action's 'image-tag' output (with digests) is not enough.
 
-# TODO(phase0): consider 'filesystem.allowWrite' to make every host bind
-# mount read-only except the review workspace; check harness compatibility.
+filesystem:
+  # Placeholder; the 'review' job sets it to the review workspace, the only
+  # host directory the sandbox may write to. Everything else AWF mounts (the
+  # rest of the runner workspace, /tmp, ~/.config, ~/.local/bin, ...) is
+  # read-only, so the host stays clean. Needs the default work dir and
+  # pre-created mount points under /tmp/gh-aw (v0.29.12).
+  allowWrite:
+    - /nonexistent
 
 logging:
   logLevel: info
