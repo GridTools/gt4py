@@ -280,9 +280,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 connectivity = connectivity.as_connectivity_field()
             assert isinstance(connectivity, common.Connectivity)
 
-            # Current implementation relies on skip_value == -1:
-            # if we assume the indexed array has at least one element,
-            # we wrap around without out of bounds access
+            # the neighbor reductions mask skipped neighbors by `common._DEFAULT_SKIP_VALUE`
             assert connectivity.skip_value is None or connectivity.skip_value == -1
 
             conn_fields.append(connectivity)
@@ -613,7 +611,12 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
     take_indices = tuple(
         (
-            _connectivity_index_array(conn_by_codomain[dim], new_domain, ops)
+            _connectivity_index_array(
+                conn_by_codomain[dim],
+                new_domain,
+                ops,
+                codomain_start=data.domain[dim].unit_range.start,
+            )
             if dim in conn_by_codomain
             else _identity_index_array(new_domain, dim, ops, like=data._ndarray)
         )
@@ -651,14 +654,24 @@ def _single_axis_gather_premap(
 
 
 def _connectivity_index_array(
-    connectivity: common.GatherConnectivity, domain: common.Domain, ops: array_ops.ArrayOps
+    connectivity: common.GatherConnectivity,
+    domain: common.Domain,
+    ops: array_ops.ArrayOps,
+    *,
+    codomain_start: int,
 ) -> core_defs.NDArrayObject:
-    """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
+    """
+    `connectivity`'s index table laid out over `domain` (not yet shifted to 0-based).
+
+    Skip values are replaced by `codomain_start`, so that skipped neighbors index the field in bounds.
+    """
     # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
     arr = ops.asarray(conn.ndarray)
+    if conn.skip_value is not None:
+        arr = xp.where(arr == conn.skip_value, codomain_start, arr)
     # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
     fresh_axis = {
