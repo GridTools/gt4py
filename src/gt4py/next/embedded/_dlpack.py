@@ -66,9 +66,8 @@ _capsule_pointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
 
 _DLPACK_TYPE_CODES: Final = {"i": 0, "u": 1, "f": 2, "b": 6}
 _DTYPES: Final[dict[tuple[int, int, int], core_defs.DType]] = {
-    (_DLPACK_TYPE_CODES[np.dtype(t).kind], 8 * np.dtype(t).itemsize, 1): core_defs.dtype(t)
-    for t in core_defs.SCALAR_TYPES
-    if issubclass(t, np.generic)
+    (_DLPACK_TYPE_CODES[dt.kind], dt.bit_width, dt.lanes): dt
+    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES if issubclass(t, np.generic))
 }
 _DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
 
