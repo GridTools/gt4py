@@ -301,10 +301,11 @@ jobs:
     runs-on: ubuntu-24.04
     # Holds the dedicated inference key (AGENT_REVIEW_INFERENCE_API_KEY), not
     # a repository secret: restrict the environment to the default branch, so
-    # a branch workflow or a dispatch from another ref cannot read it. Under
-    # 'pull_request_target' the job runs for the default branch. GitHub
-    # creates the environment, unprotected and without the secret, on the
-    # first run if it is missing; the review is then skipped.
+    # a branch workflow or a dispatch from another ref cannot read it.
+    # 'pull_request_target' runs with the default branch as its ref, which
+    # should pass that rule (not yet observed). GitHub creates the
+    # environment, unprotected and without the secret, on the first run if it
+    # is missing; the review is then skipped. Each run records a deployment.
     environment: agent-review
     # Backstop; the effective limit is on the 'Run the review' step.
     timeout-minutes: 45
@@ -402,6 +403,7 @@ jobs:
         env:
           MODEL: ${{ needs.authorize.outputs.model }}
         run: |
+          set -o pipefail
           yq -o=json '.' /opt/agent-review/awf.yaml \
             | jq --arg model "${MODEL}" --arg ws "${WS}" \
               '.apiProxy.allowedModels = ["openai/" + $model] | .filesystem.allowWrite = [$ws]' \
@@ -460,6 +462,8 @@ jobs:
             --container-workdir "${WS}" \
             -- /opt/agent-review/bin/run-review --phase fetch "${WS}" 2>&1 \
             | /usr/bin/sed -u -e 's/\r//g' -e 's/^/awf| /'
+          # The default shell has no pipefail: report awf's status, not sed's.
+          exit "${PIPESTATUS[0]}"
 
       - name: Run the review in the sandbox
         id: agent

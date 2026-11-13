@@ -17,7 +17,6 @@ adapter_init opencode
 readonly MAX_STEPS=35
 
 bin="${HARNESS_PREFIX}/node_modules/@opencode/cli-linux-x64-baseline/bin/opencode"
-check_version "opencode v$(head -n 1 "${HARNESS_PREFIX}/VERSION")" "${bin}" --version || exit 1
 
 # Ignore the repository's opencode.json(c) and .opencode/ (plugins there are
 # executed, MCP servers spawned) and its AGENTS.md. A nested AGENTS.md is
@@ -25,6 +24,7 @@ check_version "opencode v$(head -n 1 "${HARNESS_PREFIX}/VERSION")" "${bin}" --ve
 export OPENCODE_DISABLE_PROJECT_CONFIG=1
 # No model catalogue fetch (models.opencode.ai), auto-update or file watcher.
 export OPENCODE_DISABLE_MODELS_FETCH=1 OPENCODE_DISABLE_AUTOUPDATE=1 OPENCODE_DISABLE_FILEWATCHER=1
+check_version "opencode v$(head -n 1 "${HARNESS_PREFIX}/VERSION")" "${bin}" --version || exit 1
 
 # Only the AWF provider may be used. opencode appends '/chat/completions' to
 # the base URL, so it carries '/v1'; the placeholder key is sent as a Bearer
