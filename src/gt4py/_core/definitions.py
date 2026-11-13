@@ -176,10 +176,11 @@ def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind: ...
 
 def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
     """Return the data type kind of the given scalar type."""
+    # `np.bool_` is not registered as `numbers.Integral`
+    if is_boolean_integral_type(sc_type):
+        return DTypeKind.BOOL
     if issubclass(sc_type, numbers.Integral):
-        if is_boolean_integral_type(sc_type):
-            return DTypeKind.BOOL
-        elif is_positive_integral_type(sc_type):
+        if is_positive_integral_type(sc_type):
             return DTypeKind.UINT
         else:
             return DTypeKind.INT
