@@ -512,10 +512,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     # The only job with a write token. It runs no model and no PR code, and
-    # treats the review as hostile text ('publish-comment').
+    # treats the review as hostile text ('publish-comment'). Comments on a
+    # pull request need only 'pull-requests: write'.
     permissions:
       contents: read
-      issues: write
       pull-requests: write
     steps:
       - *fetch-trusted
@@ -528,17 +528,14 @@ jobs:
           name: agent-review-result
           path: ${{ runner.temp }}/result
 
-      # Upserts one comment per harness, found by a hidden marker on this
-      # workflow's own comments. Never 'gh pr comment --edit-last': PR Agent
-      # posts as the same bot.
-      - name: Publish the review
-        id: publish
+      # No token in this step: validating and rendering the hostile review
+      # needs none.
+      - name: Render the review
+        id: render
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          PR: ${{ needs.authorize.outputs.pr }}
           HARNESS: ${{ needs.authorize.outputs.harness }}
           MODEL: ${{ needs.authorize.outputs.model }}
+          HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
           VERSION: ${{ needs.prepare.outputs.version }}
           DRY_RUN: ${{ needs.authorize.outputs.dry_run }}
           SKIPPED: ${{ needs.review.outputs.skipped }}
@@ -556,7 +553,7 @@ jobs:
           fi
           rc=0
           bash "${pc}" render --harness "${HARNESS}" --version "${VERSION}" --model "${MODEL}" \
-            --run-url "${RUN_URL}" --review "${review}" > "${RUNNER_TEMP}/body.md" || rc=$?
+            --head-sha "${HEAD_SHA}" --run-url "${RUN_URL}" --review "${review}" > "${RUNNER_TEMP}/body.md" || rc=$?
           case "${rc}" in
             0) ;;
             3) echo "result=invalid" >> "$GITHUB_OUTPUT"; exit 0 ;;
@@ -571,17 +568,29 @@ jobs:
             echo "result=dry-run" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          url=$(bash "${pc}" post --repo "${REPO}" --pr "${PR}" --harness "${HARNESS}" \
-            --body-file "${RUNNER_TEMP}/body.md")
+          echo "result=rendered" >> "$GITHUB_OUTPUT"
+
+      # Upserts one comment per harness, found by a hidden marker on this
+      # workflow's own comments. Never 'gh pr comment --edit-last': PR Agent
+      # posts as the same bot.
+      - name: Publish the review
+        if: steps.render.outputs.result == 'rendered'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ needs.authorize.outputs.pr }}
+          HARNESS: ${{ needs.authorize.outputs.harness }}
+        run: |
+          url=$(bash "${RUNNER_TEMP}/trusted/bin/publish-comment" post --repo "${REPO}" --pr "${PR}" \
+            --harness "${HARNESS}" --body-file "${RUNNER_TEMP}/body.md")
           echo "::notice::Posted the agent review: ${url}"
-          echo "result=posted" >> "$GITHUB_OUTPUT"
 
       # A failed or rejected review is a warning, not a red run: the check is
       # advisory.
       - name: Report a missing review
-        if: steps.publish.outputs.result == 'missing' || steps.publish.outputs.result == 'invalid'
+        if: steps.render.outputs.result == 'missing' || steps.render.outputs.result == 'invalid'
         env:
-          RESULT: ${{ steps.publish.outputs.result }}
+          RESULT: ${{ steps.render.outputs.result }}
           OUTCOME: ${{ needs.review.outputs.outcome }}
           EXIT_CODE: ${{ needs.review.outputs.exit_code }}
         run: |

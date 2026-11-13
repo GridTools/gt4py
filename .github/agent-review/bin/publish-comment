@@ -3,7 +3,7 @@
 #
 # Usage:
 #   publish-comment sanitize                      < review > safe-review
-#   publish-comment render --harness H --version V --model M --run-url U --review FILE
+#   publish-comment render --harness H --version V --model M --head-sha SHA --run-url U --review FILE
 #   publish-comment post --repo R --pr N --harness H --body-file FILE
 #
 # Runs in the 'publish' job: a fresh VM with a write-capable token, no model
@@ -72,12 +72,13 @@ check_label() { # name value
 }
 
 cmd_render() {
-  local harness="" version="" model="" run_url="" review=""
+  local harness="" version="" model="" head_sha="" run_url="" review=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --harness) harness=$2 ;;
       --version) version=$2 ;;
       --model) model=$2 ;;
+      --head-sha) head_sha=$2 ;;
       --run-url) run_url=$2 ;;
       --review) review=$2 ;;
       *) die "Unknown option '$1'." ;;
@@ -89,6 +90,7 @@ cmd_render() {
   check_label harness "${harness}"
   check_label version "${version}"
   check_label model "${model}"
+  [[ "${head_sha}" =~ ^[0-9a-f]{40}$ ]] || die "Invalid head sha '${head_sha}'."
   [[ "${run_url}" =~ ^https://github\.com/[A-Za-z0-9_./-]+$ ]] || die "Invalid run URL '${run_url}'."
   [ -f "${review}" ] || die "No review file '${review}'."
 
@@ -101,8 +103,10 @@ cmd_render() {
   marker "${harness}"
   printf '\n> [!NOTE]\n'
   # shellcheck disable=SC2016 # the backticks are Markdown
-  printf '> Advisory review by **%s** %s (`%s`), produced in a sandbox. ' "${harness}" "${version}" "${model}"
-  printf 'Not a required check; it may be wrong. [Workflow run](%s).\n\n' "${run_url}"
+  printf '> Advisory review by **%s** %s (`%s`) of commit %s, produced in a sandbox. ' \
+    "${harness}" "${version}" "${model}" "${head_sha}"
+  printf 'Later pushes are not reviewed. Not a required check: it may be wrong, and the content of the pull request can steer it. '
+  printf '[Workflow run](%s).\n\n' "${run_url}"
   printf '%s\n' "${safe}"
   if [ "${#safe}" -ge "${REVIEW_MAX_BYTES}" ] || [ "${original_bytes}" -gt "${REVIEW_MAX_BYTES}" ]; then
     printf '\n_[Truncated to %d bytes.]_\n' "${REVIEW_MAX_BYTES}"
@@ -134,15 +138,22 @@ cmd_post() {
   # The marker is matched only on this workflow's own comments, and on the
   # first line only: never 'gh pr comment --edit-last', since PR Agent posts
   # as the same bot. The sanitiser keeps the review from containing it.
-  local id="" cid login first
+  # Listed into a file, not a process substitution, so a failed listing
+  # stops the script instead of posting a second comment.
+  local id="" cid login first listing
+  listing=$(mktemp)
+  # shellcheck disable=SC2064 # expand now: the local is gone on return
+  trap "rm -f '${listing}'" RETURN
+  gh api --paginate "repos/${repo}/issues/${pr}/comments?per_page=100" \
+    --jq '.[] | [.id, .user.login, (.body | split("\n") | .[0])] | @tsv' >"${listing}" ||
+    die "Could not list the comments of #${pr}."
   # '|| [ -n ... ]' also handles a last line without a newline.
   while IFS=$'\t' read -r cid login first || [ -n "${cid}" ]; do
     if [ "${login}" = "${BOT_LOGIN}" ] && [ "${first}" = "${want}" ]; then
       id=${cid}
       break
     fi
-  done < <(gh api --paginate "repos/${repo}/issues/${pr}/comments?per_page=100" \
-    --jq '.[] | [.id, .user.login, (.body | split("\n") | .[0])] | @tsv')
+  done <"${listing}"
 
   if [ -n "${id}" ]; then
     jq -Rsc '{body: .}' <"${body_file}" |
