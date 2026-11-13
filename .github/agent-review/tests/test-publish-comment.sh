@@ -25,14 +25,45 @@ test_neutralises_mentions() {
     assert "mention kept readable" grep -qF "@${ZWJ}egparedes" <<<"${out}"
 }
 
-test_escapes_character_references_to_at() {
-  # GitHub renders all of these (with the ';') as live mentions.
+test_escapes_character_references() {
+  # GitHub renders the first five (with the ';') as live mentions, and the
+  # named ones after them as invisible characters.
   local out
-  out=$(printf '&#64;egparedes &#x40;egparedes &#X40;a &#0064;b &commat;egparedes &amp;ok\n' | sanitize) &&
+  out=$(printf '&#64;egparedes &#x40;egparedes &#X40;a &#0064;b &commat;egparedes &zwj;&rlm;&ZeroWidthSpace; &amp;ok & a&b\n' | sanitize) &&
     assert "no numeric reference left" lacks '&#' "${out}" &&
-    assert "no &commat; left" lacks '&commat;' "${out}" &&
+    assert "no named reference left" lacks '&[A-Za-z][A-Za-z0-9]*;' "${out//&amp;/}" &&
     assert "escaped readably" grep -qF '&amp;#64;egparedes' <<<"${out}" &&
-    assert "other entities untouched" grep -qF ' &amp;ok' <<<"${out}"
+    assert "named escaped readably" grep -qF '&amp;commat;egparedes &amp;zwj;&amp;rlm;' <<<"${out}" &&
+    assert "bare ampersands untouched" grep -qF ' & a&b' <<<"${out}"
+}
+
+test_breaks_markup_that_renders_as_nothing() {
+  local out
+  out=$(printf 'a <?php x ?> <!DOCTYPE x> <![CDATA[ x ]]>\n[x]: https://e.org "t"\n  [y]:\n> [z]: <u>\n' | sanitize) &&
+    assert "no processing instruction" lacks '<[?]' "${out}" &&
+    assert "no declaration or CDATA" lacks '<!' "${out}" &&
+    assert "no link reference definition" lacks '\]:' "${out}"
+}
+
+test_drops_invisible_characters() {
+  # ZWSP, LRM, RLO, PDF, word joiner, BOM, FE0F, a tag character, and a soft
+  # hyphen; the fraction slash (U+2044) and 'é' are visible and stay.
+  local out
+  out=$(printf 'a\xe2\x80\x8bb\xe2\x80\x8ec\xe2\x80\xaed\xe2\x80\xace\xe2\x81\xa0f\xef\xbb\xbfg\xef\xb8\x8fh\xf3\xa0\x81\x81i\xc2\xadj \xe2\x81\x84\xc3\xa9\n' | sanitize) &&
+    assert "invisible characters dropped (${out})" test "${out}" = $'abcdefghij \xe2\x81\x84\xc3\xa9'
+}
+
+test_dropping_invisibles_cannot_join_delimiters() {
+  # Removing the invisible characters first must not leave a live delimiter,
+  # mention or reference behind.
+  local out zw=$'\xe2\x80\x8b' rlm=$'\xe2\x80\x8f'
+  out=$(printf '<%s!-- x -%s-> <%s?p?> @%segparedes &%s#64; [x]%s: u &%scommat;\n' \
+    "${zw}" "${rlm}" "${zw}" "${zw}" "${rlm}" "${zw}" "${rlm}" | sanitize) &&
+    assert "no comment" lacks '<!|-->' "${out}" &&
+    assert "no processing instruction" lacks '<[?]' "${out}" &&
+    assert "no mention" lacks '@[A-Za-z0-9]' "${out}" &&
+    assert "no reference" lacks '&#|&commat;' "${out}" &&
+    assert "no definition" lacks '\]:' "${out}"
 }
 
 test_breaks_comment_delimiters() {

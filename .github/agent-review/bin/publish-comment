@@ -9,12 +9,18 @@
 # Runs in the 'publish' job: a fresh VM with a write-capable token, no model
 # and no PR code. The review is model output steered by untrusted PR content,
 # so it is treated as hostile text:
-#   - it must be valid UTF-8; control characters are dropped;
-#   - HTML comment delimiters are broken up, so the review can neither hide
-#     text nor imitate the marker that identifies this workflow's comment;
-#   - @mentions are neutralised with a zero-width joiner after the '@', and
-#     character references that GitHub decodes before finding mentions
-#     ('&#64;', '&#x40;', '&commat;') are escaped so they render literally;
+#   - it must be valid UTF-8; control characters are dropped, and so are
+#     invisible format characters (zero-width, bidirectional controls,
+#     variation selectors, tag characters), which could hide or reorder text;
+#   - markup that GitHub renders as nothing is broken up with a zero-width
+#     space: HTML comments (so the review cannot imitate the marker that
+#     identifies this workflow's comment either), processing instructions
+#     ('<?'), declarations and CDATA ('<!'), and link reference definitions
+#     ('[label]: url "title"');
+#   - character references are escaped so they render literally: numeric
+#     ones ('&#64;') and named ones ('&commat;', '&zwj;', '&rlm;'), which
+#     GitHub decodes into mentions or invisible characters;
+#   - @mentions are neutralised with a zero-width joiner after the '@';
 #   - it is truncated to REVIEW_MAX_BYTES.
 # 'sanitize' and 'render' only read stdin/files and write stdout, so they are
 # tested offline (tests/test-publish-comment.sh); only 'post' uses the network.
@@ -28,6 +34,10 @@ readonly REVIEW_MAX_BYTES=60000
 readonly BODY_MAX_BYTES=65536
 readonly ZWSP=$'\xe2\x80\x8b' # zero-width space
 readonly ZWJ=$'\xe2\x80\x8d'  # zero-width joiner
+# Invisible format characters, as UTF-8 byte patterns (matched under LC_ALL=C):
+# U+00AD, U+061C, U+180E, U+200B-U+200F, U+202A-U+202E, U+2060-U+206F,
+# U+FE00-U+FE0F, U+FEFF, U+E0000-U+E007F (tags), U+E0100-U+E01EF (selectors).
+readonly INVISIBLE=$'\xc2\xad|\xd8\x9c|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f\xaa-\xae]|\xe2\x81[\xa0-\xaf]|\xef\xb8[\x80-\x8f]|\xef\xbb\xbf|\xf3\xa0[\x80\x81][\x80-\xbf]|\xf3\xa0[\x84-\x87][\x80-\xbf]'
 BOT_LOGIN=${BOT_LOGIN:-github-actions[bot]}
 
 die() {
@@ -54,14 +64,18 @@ cmd_sanitize() {
     return 3
   }
   # Keep tab and newline; drop other C0 controls and DEL (CR included).
-  # The replacements cannot create new matches: none inserts '<', '>' or '&#',
-  # or a complete '&commat;'.
+  # Invisible characters go first, so removing them cannot join a delimiter
+  # that the later replacements would miss ('<' U+200B '!--'). The later
+  # replacements cannot create new matches: none inserts '<', '>', '&', ']'
+  # or '@', and the named-reference rule runs before the numeric one.
   tr -d '\000-\010\013-\037\177' <"${input}" |
-    sed -e "s/<!--/<!${ZWSP}--/g" \
+    sed -E -e "s/${INVISIBLE}//g" |
+    sed -e "s/<\([!?]\)/<${ZWSP}\1/g" \
       -e "s/-->/--${ZWSP}>/g" \
+      -e "s/\]:/]${ZWSP}:/g" \
       -e "s/@\([A-Za-z0-9]\)/@${ZWJ}\1/g" \
-      -e 's/&#/\&amp;#/g' \
-      -e 's/&commat;/\&amp;commat;/g' >"${cleaned}"
+      -e 's/&\([A-Za-z][A-Za-z0-9]*;\)/\&amp;\1/g' \
+      -e 's/&#/\&amp;#/g' >"${cleaned}"
   # Truncated from a file, not in the pipeline: 'head' closing the pipe early
   # would kill the writer with SIGPIPE, which 'pipefail' reports as a failure.
   head -c "${REVIEW_MAX_BYTES}" "${cleaned}" | drop_partial_chars
