@@ -5,7 +5,7 @@ The `Agent Review` workflow ([`.github/workflows/agent-review.yml`](../../../.gi
 The design and the alternatives considered are in [ADR 0001](../ADRs/ci/0001-sandboxed-agent-pr-review.md).
 
 > [!WARNING]
-> Pilot. The opencode, memdoor and Pi adapters have been run on a fork only, against small PRs and a hostile-PR suite (Phase 2: prompt injection, instruction/config overrides at any depth, output-channel and git-level attacks — all contained, no secret exposed). `pull_request_target` and the `agent-review`-label path are still unexercised.
+> Pilot. The opencode, memdoor and Pi adapters have been run on a fork only, against small PRs and a hostile-PR suite (Phase 2: prompt injection and instruction/config overrides at any depth on real harness runs; output-channel and git-level attacks offline). No invariant deviation was observed; no key material appeared in the artifacts or comments. `pull_request_target` and the `agent-review`-label path are still unexercised.
 
 ## Usage
 
