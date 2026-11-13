@@ -35,7 +35,8 @@ def laplacian(inp):
     )
 
 
-@fundef
+# note: not a `fundef` as it would be polymorphic in `d`, which the type inference does not
+# support; tracing inlines it as a lambda instead
 def flux(d):
     def flux_impl(inp):
         lap = lift(laplacian)(inp)
