@@ -280,9 +280,6 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 connectivity = connectivity.as_connectivity_field()
             assert isinstance(connectivity, common.Connectivity)
 
-            # the neighbor reductions mask skipped neighbors by `common._DEFAULT_SKIP_VALUE`
-            assert connectivity.skip_value is None or connectivity.skip_value == -1
-
             conn_fields.append(connectivity)
             codomains_counter[connectivity.codomain] += 1
 
@@ -1008,8 +1005,13 @@ def _make_reduction(
             slice(None) if d in [axis, offset_definition.domain.dims[0]] else None
             for d in field.domain.dims
         )
+        skip_value = (
+            common._DEFAULT_SKIP_VALUE
+            if offset_definition.skip_value is None
+            else offset_definition.skip_value
+        )
         masked_array = ops.where(
-            ops.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
+            ops.asarray(offset_definition.ndarray[broadcast_slice]) != skip_value,
             field.ndarray,
             initial_value_op(field),
         )
