@@ -1,5 +1,0 @@
-# <Node.js version> <SHA-256 of node-v<version>-linux-x64.tar.xz>
-# From https://nodejs.org/dist/v<version>/SHASUMS256.txt, fetched 2026-11-13.
-# Pi needs Node >= 22.19.0; the harness ships its own so the sandbox does not
-# depend on the runner's.
-24.22.3 4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb
