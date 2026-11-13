@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # Pi adapter: a headless review, run INSIDE the sandbox by run-review.
 #
-# Environment: the adapter contract (harnesses/README.md). The wire is read
-# from the 'wire' file next to this script, which is also what selects the
-# AWF listener that holds the key. Exit codes: 0 review written, 2 no final
-# answer, other: failure.
+# Environment: the adapter contract (harnesses/README.md); the wire is the
+# OpenAI chat API on AWF's OpenAI listener, through Pi's 'openai-completions'
+# API (Pi's built-in 'openai' provider would use the Responses API, which
+# CSCS does not serve). Exit codes: 0 review written, 2 no final answer,
+# other: failure.
 #
 # Pi has no turn cap and no stall detection, and exits 0 when every request
 # failed: AWF's apiProxy.maxTurns and run-review's timeout bound a run.
 
 set -uo pipefail
-here=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck source=SCRIPTDIR/../common.sh
-. "${here}/../common.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 adapter_init pi
+: "${AWF_API_PROXY_OPENAI_URL:?}"
 
 # Model metadata Pi needs for context management.
 readonly CONTEXT_WINDOW=128000 MAX_TOKENS=16384
@@ -21,25 +22,11 @@ readonly CONTEXT_WINDOW=128000 MAX_TOKENS=16384
 export PI_CODING_AGENT_DIR="${SCRATCH}/agent" PI_OFFLINE=1 PI_TELEMETRY=0
 mkdir -p "${PI_CODING_AGENT_DIR}"
 
-wire=$(head -n 1 "${here}/wire")
-case "${wire}" in
-  anthropic-messages)
-    # Not used: the workflow supports only 'openai-chat'. Pi's Anthropic API
-    # would go to the OpenAI listener, which forwards '/v1/messages' (Pi
-    # appends '/v1/messages?beta=true' to the origin).
-    api=anthropic-messages
-    base=${AWF_API_PROXY_OPENAI_URL:?}
-    ;;
-  openai-chat)
-    # The OpenAI SDK appends '/chat/completions', so the base carries '/v1'.
-    api=openai-completions
-    base=${AWF_API_PROXY_OPENAI_URL:?}/v1
-    ;;
-  *) echo "unknown wire '${wire}'" | diag; exit 1 ;;
-esac
-jq -n --arg id "${MODEL}" --arg base "${base%/}" --arg api "${api}" \
+# Pi appends '/chat/completions' to the base URL, so it carries '/v1'; the
+# placeholder key is sent as a Bearer token and replaced by AWF's sidecar.
+jq -n --arg id "${MODEL}" --arg base "${AWF_API_PROXY_OPENAI_URL%/}/v1" \
   --argjson ctx "${CONTEXT_WINDOW}" --argjson max "${MAX_TOKENS}" '
-  {providers: {"awf-proxy": {baseUrl: $base, api: $api, apiKey: "awf-placeholder",
+  {providers: {"awf-proxy": {baseUrl: $base, api: "openai-completions", apiKey: "awf-placeholder",
     models: [{id: $id, name: $id, reasoning: false, input: ["text"], contextWindow: $ctx, maxTokens: $max}]}}}' \
   >"${PI_CODING_AGENT_DIR}/models.json"
 

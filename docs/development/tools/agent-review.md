@@ -5,7 +5,7 @@ The `Agent Review` workflow ([`.github/workflows/agent-review.yml`](../../../.gi
 The design and the alternatives considered are in [ADR 0001](../ADRs/ci/0001-sandboxed-agent-pr-review.md).
 
 > [!WARNING]
-> Pilot. The opencode, memdoor and Pi adapters have been run on a fork only, and the AWF facts marked `TODO(phase0)` in [`awf.yaml`](../../../.github/agent-review/awf.yaml) and the workflow are still being verified.
+> Pilot. The opencode, memdoor and Pi adapters have been run on a fork only, against small PRs; `pull_request_target` runs and the hostile-PR suite are still to come.
 
 ## Usage
 

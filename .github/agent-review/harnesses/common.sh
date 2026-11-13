@@ -20,11 +20,10 @@ adapter_init() { # name
   # Loopback (memdoor's local gateway) and the AWF listeners must never go
   # through an HTTP proxy, should the sandbox set one.
   local hosts="127.0.0.1,localhost,::1" url host
-  for url in "${AWF_API_PROXY_OPENAI_URL:-}" "${AWF_API_PROXY_ANTHROPIC_URL:-}"; do
-    host=${url#*://}
-    host=${host%%[:/]*}
-    [ -z "${host}" ] || hosts="${hosts},${host}"
-  done
+  url=${AWF_API_PROXY_OPENAI_URL:-}
+  host=${url#*://}
+  host=${host%%[:/]*}
+  [ -z "${host}" ] || hosts="${hosts},${host}"
   export NO_PROXY="${hosts}${NO_PROXY:+,${NO_PROXY}}"
   export no_proxy="${NO_PROXY}"
 }
