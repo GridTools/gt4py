@@ -22,6 +22,9 @@
 # regression test, tests/test-instruction-coverage.sh).
 AGENTS.md
 AGENTS.override.md
+# Named by the trusted AGENTS.md as a per-machine override; ignored by
+# .gitignore, but a PR can still force-add it.
+AGENTS.local.md
 CLAUDE.md
 CLAUDE.local.md
 CODING_GUIDELINES.md
