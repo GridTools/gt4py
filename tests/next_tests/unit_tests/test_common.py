@@ -632,11 +632,9 @@ class TestBufferInfo:
         assert buffer_info.device.device_type == core_defs.DeviceType.CPU
         assert buffer_info.device.device_id == 0
 
+    @pytest.mark.requires_gpu
     def test_from_cupy_ndarray(self):
-        try:
-            import cp as cp
-        except ImportError:
-            pytest.skip("CuPy is not installed")
+        cp = pytest.importorskip("cupy")
 
         a = cp.asarray([1, 2, 3, 4, 5])
         buffer_info = common.BufferInfo.from_ndarray(a)
