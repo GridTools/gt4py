@@ -26,7 +26,12 @@ from gt4py.next.common import (
     NamedRange,
     UnitRange,
 )
-from gt4py.next.embedded import array_ops, exceptions as embedded_exceptions, nd_array_field
+from gt4py.next.embedded import (
+    array_ops,
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+    nd_array_field,
+)
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset, concat_where
@@ -986,6 +991,36 @@ def test_gather_premap_skip_values_on_offset_domain(
         expected = expected[..., k_table]
     is_neighbor = table != -1
     assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
+
+
+@pytest.mark.parametrize(
+    "reduction, expected",
+    [
+        (fbuiltins.neighbor_sum, [6.0, 3.0, 7.0]),
+        (fbuiltins.max_over, [5.0, 3.0, 7.0]),
+        (fbuiltins.min_over, [1.0, 3.0, 7.0]),
+    ],
+)
+def test_neighbor_reduction_with_non_default_skip_value(
+    nd_array_implementation, reduction, expected
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 5.0, 3.0, 7.0], dtype=np.float64),
+        domain=common.Domain(dims=(_GV,), ranges=(UnitRange(0, 4),)),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, [[0, 1], [2, -2], [-2, 3]], dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=-2,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field.premap(conn), axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
+    assert np.array_equal(result.asnumpy(), expected)
 
 
 def test_gather_premap_uses_array_ops_take(monkeypatch):
