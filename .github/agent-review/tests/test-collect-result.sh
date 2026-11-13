@@ -32,6 +32,15 @@ test_rejects_symlinked_file() {
     assert "meta still copied" test -f "${TMP}/dest/meta.json"
 }
 
+test_rejects_symlink_to_proc_environ() {
+  # A review.md symlinked at a process's environment must leak no env bytes.
+  setup_out
+  rm "${TMP}/ws/out/review.md"
+  ln -s /proc/self/environ "${TMP}/ws/out/review.md"
+  collect "${TMP}/ws/out" "${TMP}/dest" >log && grep -q "not a regular file" log &&
+    assert "environ symlink not followed" test ! -e "${TMP}/dest/review.md"
+}
+
 test_rejects_symlinked_out_dir() {
   mkdir -p "${TMP}/elsewhere" "${TMP}/ws"
   echo "secret" >"${TMP}/elsewhere/review.md"
