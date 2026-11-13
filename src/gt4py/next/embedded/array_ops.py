@@ -200,6 +200,7 @@ class ArrayOps:
         the axis; they never raise and never read out of bounds.
         """
         xp = self.xp
+        axis %= array.ndim
         flat = xp.clip(xp.reshape(indices, (-1,)), 0, array.shape[axis] - 1)
         out_shape = (*array.shape[:axis], *indices.shape, *array.shape[axis + 1 :])
         return xp.reshape(xp.take(array, flat, axis=axis), out_shape)
