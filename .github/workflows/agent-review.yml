@@ -41,13 +41,13 @@ on:
         type: boolean
         default: false
 
-  ## COMMENTED OUT: only for a plumbing test of this caller from a branch of
-  ## this repository with a PR to 'main' (the two events above read this file
-  ## from 'main'). Re-enable together with the 'test' job marked like this
+  ## TEMPORARILY ENABLED: only for a plumbing test of this caller from a branch
+  ## of this repository with a PR to 'main' (the two events above read this
+  ## file from 'main'). Keep it together with the 'test' job marked like this
   ## one, and never merge either enabled.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   ## END
 
 # Each called job widens what it needs, within the calling job's ceiling.
@@ -67,7 +67,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent-review'
     # Pinned by full commit SHA; bump it only to a reviewed release of
     # GridTools/ci-workflows, after reading its release notes.
-    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@f0aa5db38da1853a0785debde61788d4da86ee10 # pre-release, PR #1
+    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@b259354abbac0ccabffb1bf027d71fa66f0385a8 # pre-release, PR #1
     # The ceiling for every job of the called workflow, checked at startup:
     # exactly the union of what its jobs request.
     permissions:
@@ -95,28 +95,26 @@ jobs:
     secrets:
       inference_api_key: ${{ secrets.AGENT_REVIEW_INFERENCE_API_KEY }}
 
-  ## COMMENTED OUT: the job for the 'pull_request' trigger above: the 'stub'
-  ## harness (no model, no key), always a dry run, reviewing the PR itself.
-  ## Keep its pin equal to the one of 'review'. The pinned version accepts
-  ## 'pull_request' only in its own self-test: from here, 'authorize' fails
-  ## with "Event 'pull_request' is for the self-test of ..." (startup, the
-  ## pin and the permission ceiling are still checked), and its 'review' job
-  ## would be denied the 'main'-only environment on a branch ref.
-  # test:
-  #   if: github.event_name == 'pull_request'
-  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@f0aa5db38da1853a0785debde61788d4da86ee10 # pre-release, PR #1
-  #   permissions:
-  #     contents: read
-  #     pull-requests: write
-  #   with:
-  #     harness: stub
-  #     pr: ${{ github.event.pull_request.number }}
-  #     dry_run: true
-  #     project_name: GT4Py
-  #     rule_files: |
-  #       .github/copilot-instructions.md
-  #       AGENTS.md
-  #       CODING_GUIDELINES.md
-  #       src/gt4py/next/AGENTS.md
-  #     prompt_addendum: .github/agent-review/prompt-addendum.md
+  ## TEMPORARILY ENABLED: the job for the 'pull_request' trigger above: the
+  ## 'stub' harness (no model, no key), always a dry run, reviewing the PR
+  ## itself, in the called workflow's keyless job (no environment). Keep its
+  ## pin equal to the one of 'review'. Under 'pull_request' the caller's file,
+  ## rule files and addendum are PR content: this proves the plumbing only.
+  test:
+    if: github.event_name == 'pull_request'
+    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@b259354abbac0ccabffb1bf027d71fa66f0385a8 # pre-release, PR #1
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      harness: stub
+      pr: ${{ github.event.pull_request.number }}
+      dry_run: true
+      project_name: GT4Py
+      rule_files: |
+        .github/copilot-instructions.md
+        AGENTS.md
+        CODING_GUIDELINES.md
+        src/gt4py/next/AGENTS.md
+      prompt_addendum: .github/agent-review/prompt-addendum.md
   ## END
