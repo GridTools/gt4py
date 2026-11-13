@@ -126,6 +126,15 @@ def _transform_if(
 ) -> Optional[list[itir.Stmt]]:
     if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
+
+        # A reference to a temporary carries the domain the temporary is allocated on, which
+        # can be larger than the domain the `if_` is read on.
+        true_val, false_val = (
+            im.ref(val.id, val.type, annex={"domain": stmt.expr.annex.domain})
+            if isinstance(val, itir.SymRef)
+            else val
+            for val in (true_val, false_val)
+        )
         return [
             itir.IfStmt(
                 cond=cond,
