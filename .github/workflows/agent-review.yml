@@ -1,0 +1,122 @@
+name: Agent Review
+
+# Advisory review of pull requests by a coding agent that runs inside the AWF
+# sandbox; never a required status check. The pipeline (four jobs, harness
+# adapters, sandbox configuration, prompt) is the reusable workflow in
+# GridTools/ci-workflows, where its security invariants are documented and
+# reviewed. This file only chooses when it runs, grants its permissions,
+# maps the key and sets the GT4Py configuration.
+# See docs/development/tools/agent-review.md.
+
+on:
+  # Not 'pull_request': fork pull requests get no secrets there. No
+  # 'issue_comment': PR Agent reacts to every comment starting with '/', and
+  # a comment trigger would add a second privileged entry point. No
+  # 'synchronize', as for PR Agent.
+  #
+  # Only the 'agent-review' label for now: the automatic review of PRs by
+  # writers ('opened', 'reopened', 'ready_for_review') is to be enabled once
+  # the label and dispatch paths have been observed upstream. The called
+  # workflow already handles those actions.
+  #
+  # Both events read this file from 'main'. The Actions event policy for
+  # this file must allow both (see the docs).
+  pull_request_target:
+    types: [labeled]
+    # types: [opened, reopened, ready_for_review, labeled]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: string
+      harness:
+        description: Harness; 'default' uses the AGENT_REVIEW_HARNESS variable
+        # A choice because it becomes a path: never free text.
+        type: choice
+        default: default
+        options: [default, stub, opencode, pi]
+      dry_run:
+        description: Show the comment in the run summary instead of posting it
+        type: boolean
+        default: false
+
+  ## COMMENTED OUT: only for a plumbing test of this caller from a branch of
+  ## this repository with a PR to 'main' (the two events above read this file
+  ## from 'main'). Re-enable together with the 'test' job marked like this
+  ## one, and never merge either enabled: the Actions event policy for this
+  ## file would then have to allow 'pull_request' too.
+  # pull_request:
+  #   branches:
+  #     - main
+  ## END
+
+# Each called job widens what it needs, within the calling job's ceiling.
+permissions: {}
+
+# No cancelling: a run joins its group when queued, before the job 'if' is
+# evaluated, so labelling a PR with an unrelated label would cancel its
+# in-flight review.
+concurrency:
+  group: agent-review-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Saves creating the called jobs for unrelated labels; the called
+    # workflow checks the label, the bots and the labeller's permission.
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent-review'
+    # Pinned by full commit SHA; bump it only to a reviewed release of
+    # GridTools/ci-workflows, after reading its release notes.
+    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@a6d4ef72439268af8f61d1adefa9d40bc23f2463 # main, pre-release (v0.1.0 pending)
+    # The ceiling for every job of the called workflow, checked at startup:
+    # exactly the union of what its jobs request.
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      harness: ${{ (inputs.harness == '' || inputs.harness == 'default') && vars.AGENT_REVIEW_HARNESS || inputs.harness }}
+      model: ${{ vars.AGENT_REVIEW_MODEL }}
+      pr: ${{ inputs.pr }}
+      dry_run: ${{ inputs.dry_run == true }}
+      project_name: GT4Py
+      # Followed by the agent, in this order; each is reset to the PR's base
+      # version before the agent runs, so a PR cannot change them.
+      rule_files: |
+        .github/copilot-instructions.md
+        AGENTS.md
+        CODING_GUIDELINES.md
+        src/gt4py/next/AGENTS.md
+      # Read from this repository at this workflow's commit, never the PR's.
+      prompt_addendum: .github/agent-review/prompt-addendum.md
+      upload_audit: ${{ vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true' }}
+    # Explicit mapping, resolved only in the called job that uses the
+    # 'agent-review' environment (restricted to 'main'). Never
+    # 'secrets: inherit', and never PR Agent's CSCS_INFERENCE_API_KEY.
+    secrets:
+      inference_api_key: ${{ secrets.AGENT_REVIEW_INFERENCE_API_KEY }}
+
+  ## COMMENTED OUT: the job for the 'pull_request' trigger above: the 'stub'
+  ## harness (no model, no key), always a dry run, reviewing the PR itself, in
+  ## the called workflow's keyless job (no environment). Keep its pin equal to
+  ## the one of 'review'. Under 'pull_request' the caller's file, rule files
+  ## and addendum are PR content: this proves the plumbing only. Last run
+  ## green with this configuration on the pre-release pin.
+  # test:
+  #   if: github.event_name == 'pull_request'
+  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@a6d4ef72439268af8f61d1adefa9d40bc23f2463 # main, pre-release (v0.1.0 pending)
+  #   permissions:
+  #     contents: read
+  #     pull-requests: write
+  #   with:
+  #     harness: stub
+  #     pr: ${{ github.event.pull_request.number }}
+  #     dry_run: true
+  #     project_name: GT4Py
+  #     rule_files: |
+  #       .github/copilot-instructions.md
+  #       AGENTS.md
+  #       CODING_GUIDELINES.md
+  #       src/gt4py/next/AGENTS.md
+  #     prompt_addendum: .github/agent-review/prompt-addendum.md
+  ## END

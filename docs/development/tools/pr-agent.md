@@ -21,6 +21,10 @@ The workflow uses `pull_request_target` because most GT4Py PRs come from forks, 
 
 The workflow and `.pr_agent.toml` are read from `main`, so changes take effect only once merged. To test changes from a branch in this repository, re-enable the blocks marked `COMMENTED OUT` in the workflow (with `PR_AGENT_CONFIG_BRANCH` set to the literal branch name, never one derived from PR input) and disable them again before merging, since otherwise the policy keeps being read from the test branch and PRs from this repository are reviewed twice. The files in `repo_context_files` are always read from `main`, so changes to the review rules cannot be tested this way. A run that applied a policy file logs `Applying repo settings (sections: […])`; the bare `Applying repo settings` appears in every run.
 
+## Event policy
+
+GitHub blocks `pull_request_target` by default in public repositories from **2 December 2026** (with brownouts before that), unless an Actions event policy allows it; PR Agent's automatic review depends on that event. GridTools/gt4py therefore has the policy "Allow PR Agent events" (policy 13604, active) under **Settings → Actions → Policies**, scoped by workflow path to `.github/workflows/pr-agent.yml` and allowing `pull_request_target` and `issue_comment`. Its event list reads as an allowlist, so a trigger added to the workflow must be added to the policy too, and renaming the workflow file takes it out of the policy's scope. The policy covers no other workflow (see [agent-review.md](agent-review.md#required-repository-settings)). See [Control workflow execution](https://docs.github.com/actions/how-tos/administer/control-workflow-execution).
+
 ## Configuration variables
 
 The key is the `CSCS_INFERENCE_API_KEY` repository secret; its usage is billed against the CSCS project's compute allocation. Create it in the [inference UI](https://ui.inference.cscs.ch/login) with a token budget, a reset period and a model restriction, and store it with the CSCS-CI credentials in the internal CSCS credentials store. The rest are [repository variables](https://github.com/GridTools/gt4py/settings/variables/actions), changeable without a PR:
