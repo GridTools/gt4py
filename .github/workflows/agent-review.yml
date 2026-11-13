@@ -298,6 +298,13 @@ jobs:
     needs: [authorize, prepare]
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-24.04
+    # Holds the dedicated inference key (AGENT_REVIEW_INFERENCE_API_KEY), not
+    # a repository secret: restrict the environment to the default branch, so
+    # a branch workflow or a dispatch from another ref cannot read it. Under
+    # 'pull_request_target' the job runs for the default branch. GitHub
+    # creates the environment, unprotected and without the secret, on the
+    # first run if it is missing; the review is then skipped.
+    environment: agent-review
     # Backstop; the effective limit is on the 'Run the review' step.
     timeout-minutes: 45
     # Read-only: the token is used before the sandbox starts, and no step
@@ -399,8 +406,9 @@ jobs:
         timeout-minutes: 30
         env:
           # The only place the key appears. AWF hands it to the API-proxy
-          # sidecar and gives the agent a placeholder.
-          KEY: ${{ secrets.CSCS_INFERENCE_API_KEY }}
+          # sidecar and gives the agent a placeholder. A dedicated key, never
+          # PR Agent's CSCS_INFERENCE_API_KEY: its budget is the hard cap.
+          KEY: ${{ secrets.AGENT_REVIEW_INFERENCE_API_KEY }}
           AGENT_REVIEW_OPENAI_BASE_URL: ${{ vars.AGENT_REVIEW_API_BASE || 'https://api.inference.cscs.ch/v1' }}
           IMAGE_TAG: ${{ steps.awf.outputs.image-tag }}
         run: |
@@ -413,7 +421,7 @@ jobs:
           case "${wire}" in
             openai-chat)
               if [ -z "${KEY}" ]; then
-                echo "::notice::Secret CSCS_INFERENCE_API_KEY is not set; skipping the review."
+                echo "::notice::Secret AGENT_REVIEW_INFERENCE_API_KEY is not set in the 'agent-review' environment; skipping the review."
                 echo "skipped=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
