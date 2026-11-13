@@ -29,7 +29,10 @@ def _cbrt(x: torch.Tensor) -> torch.Tensor:
 
 def _gamma(x: torch.Tensor) -> torch.Tensor:
     sign = torch.where((x < 0) & (torch.floor(x) % 2 == 1), -1.0, 1.0).to(x.dtype)
-    return sign * torch.exp(torch.lgamma(x))
+    result = sign * torch.exp(torch.lgamma(x))
+    # the poles as in SciPy: +-inf at +-0, NaN at the negative integers
+    result = torch.where(x == 0, 1 / x, result)
+    return torch.where((x < 0) & (x == torch.floor(x)), torch.nan, result)
 
 
 class TorchOps(array_ops.ArrayOps):
