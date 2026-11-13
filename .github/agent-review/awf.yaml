@@ -8,8 +8,8 @@
 # --container-workdir) and image digests (--image-tag) are passed as
 # command-line flags.
 #
-# Verified by the Phase 0 probe on AWF v0.29.12 (fork runs 43326894660 to
-# 43331077096): the dummy key is unreadable in the sandbox in every mode; the
+# Verified by a probe on AWF v0.29.12 (runs on a fork, listed in the pull
+# request that added this file): the dummy key is unreadable in the sandbox in every mode; the
 # CSCS path mapping; the model pattern format; 'maxTurns' and
 # 'rateLimiting' answer 429; 'agentTimeout' ends the agent with exit 124.
 # The bounds the agent can actually hit are in the 'Spend' notes below.
@@ -18,8 +18,8 @@ network:
   # None: the agent runs without network access. The 'review' job's first,
   # keyless sandbox run, which fetches the PR and runs no agent, allows
   # 'github.com' (and its subdomains). AWF still adds the inference host
-  # from 'apiProxy.targets' for the API-proxy sidecar; the agent can reach
-  # it directly too, but without a key.
+  # from 'apiProxy.targets' for the API-proxy sidecar; the agent can
+  # probably reach it directly too (not tried), but without a key.
   allowDomains: []
 
 apiProxy:

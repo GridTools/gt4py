@@ -9,7 +9,7 @@ set -uo pipefail
 PC="${BIN_DIR}/publish-comment"
 ZWJ=$'\xe2\x80\x8d'
 ZWSP=$'\xe2\x80\x8b'
-RUN_URL="https://github.com/egparedes/gt4py/actions/runs/1"
+RUN_URL="https://github.com/example-org/gt4py/actions/runs/1"
 SHA=0123456789abcdef0123456789abcdef01234567
 
 sanitize() { bash "${PC}" sanitize; }
@@ -21,20 +21,20 @@ render() {
 
 test_neutralises_mentions() {
   local out
-  out=$(printf 'Ping @egparedes and @GridTools/gt4py-core, mail a@b.org.\n' | sanitize) &&
+  out=$(printf 'Ping @some-user and @GridTools/gt4py-core, mail a@b.org.\n' | sanitize) &&
     assert "no live mention left" lacks '@[A-Za-z0-9]' "${out}" &&
-    assert "mention kept readable" grep -qF "@${ZWJ}egparedes" <<<"${out}"
+    assert "mention kept readable" grep -qF "@${ZWJ}some-user" <<<"${out}"
 }
 
 test_escapes_character_references() {
   # GitHub renders the first five (with the ';') as live mentions, and the
   # named ones after them as invisible characters.
   local out
-  out=$(printf '&#64;egparedes &#x40;egparedes &#X40;a &#0064;b &commat;egparedes &zwj;&rlm;&ZeroWidthSpace; &amp;ok & a&b\n' | sanitize) &&
+  out=$(printf '&#64;some-user &#x40;some-user &#X40;a &#0064;b &commat;some-user &zwj;&rlm;&ZeroWidthSpace; &amp;ok & a&b\n' | sanitize) &&
     assert "no numeric reference left" lacks '&#' "${out}" &&
     assert "no named reference left" lacks '&[A-Za-z][A-Za-z0-9]*;' "${out//&amp;/}" &&
-    assert "escaped readably, not as an issue reference" grep -qF "&amp;#${ZWSP}64;egparedes" <<<"${out}" &&
-    assert "named escaped readably" grep -qF '&amp;commat;egparedes &amp;zwj;&amp;rlm;' <<<"${out}" &&
+    assert "escaped readably, not as an issue reference" grep -qF "&amp;#${ZWSP}64;some-user" <<<"${out}" &&
+    assert "named escaped readably" grep -qF '&amp;commat;some-user &amp;zwj;&amp;rlm;' <<<"${out}" &&
     assert "bare ampersands untouched" grep -qF ' & a&b' <<<"${out}"
 }
 
@@ -58,7 +58,7 @@ test_dropping_invisibles_cannot_join_delimiters() {
   # Removing the invisible characters first must not leave a live delimiter,
   # mention or reference behind.
   local out zw=$'\xe2\x80\x8b' rlm=$'\xe2\x80\x8f'
-  out=$(printf '<%s!-- x -%s-> <%s?p?> @%segparedes &%s#64; [x]%s: u &%scommat;\n' \
+  out=$(printf '<%s!-- x -%s-> <%s?p?> @%ssome-user &%s#64; [x]%s: u &%scommat;\n' \
     "${zw}" "${rlm}" "${zw}" "${zw}" "${rlm}" "${zw}" "${rlm}" | sanitize) &&
     assert "no comment" lacks '<!|-->' "${out}" &&
     assert "no processing instruction" lacks '<[?]' "${out}" &&
@@ -100,7 +100,7 @@ test_render_marker_header_and_limit() {
   local first comments
   {
     echo "### Summary"
-    echo "@egparedes <!-- agent-review:stub -->"
+    echo "@some-user <!-- agent-review:stub -->"
     head -c 200000 /dev/zero | tr '\0' 'x'
   } >review.md
   render review.md >body.md &&
@@ -152,26 +152,26 @@ post() {
   echo "<!-- agent-review:stub -->" >body.md
   echo "text" >>body.md
   FAKE_DIR="${TMP}" PATH="${TMP}/bin:${PATH}" \
-    bash "${PC}" post --repo egparedes/gt4py --pr 9 --harness stub --body-file body.md >/dev/null
+    bash "${PC}" post --repo example-org/gt4py --pr 9 --harness stub --body-file body.md >/dev/null
 }
 
 test_post_updates_own_marked_comment() {
   install_fake_gh "$(printf '%s\n' \
-    $'11\tegparedes\t<!-- agent-review:stub -->' \
+    $'11\tsome-user\t<!-- agent-review:stub -->' \
     $'12\tgithub-actions[bot]\t## PR Reviewer Guide' \
     $'13\tgithub-actions[bot]\tquoted <!-- agent-review:stub -->' \
     $'14\tgithub-actions[bot]\t<!-- agent-review:opencode -->' \
     $'15\tgithub-actions[bot]\t<!-- agent-review:stub -->')"
   post &&
-    assert "PATCHed comment 15" grep -q "^PATCH repos/egparedes/gt4py/issues/comments/15$" requests.log
+    assert "PATCHed comment 15" grep -q "^PATCH repos/example-org/gt4py/issues/comments/15$" requests.log
 }
 
 test_post_creates_comment_without_marker_match() {
   install_fake_gh "$(printf '%s\n' \
-    $'11\tegparedes\t<!-- agent-review:stub -->' \
+    $'11\tsome-user\t<!-- agent-review:stub -->' \
     $'12\tgithub-actions[bot]\t## PR Reviewer Guide')"
   post &&
-    assert "POSTed a new comment" grep -q "^POST repos/egparedes/gt4py/issues/9/comments$" requests.log &&
+    assert "POSTed a new comment" grep -q "^POST repos/example-org/gt4py/issues/9/comments$" requests.log &&
     assert "body sent as JSON" grep -qF '"body":"<!-- agent-review:stub -->\ntext\n"' requests.log
 }
 
@@ -186,7 +186,7 @@ test_post_refuses_body_without_marker() {
   install_fake_gh ""
   echo "no marker" >body.md
   ! FAKE_DIR="${TMP}" PATH="${TMP}/bin:${PATH}" \
-    bash "${PC}" post --repo egparedes/gt4py --pr 9 --harness stub --body-file body.md >/dev/null 2>&1
+    bash "${PC}" post --repo example-org/gt4py --pr 9 --harness stub --body-file body.md >/dev/null 2>&1
 }
 
 for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do run_test "$t"; done

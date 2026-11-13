@@ -406,11 +406,6 @@ jobs:
           version: v0.29.12
           pull-images: "true"
 
-      # The model allowlist must match the configured model, and has no
-      # command-line flag. AWF matches patterns containing '/' against
-      # '<provider>/<model>', so a bare 'zai-org/GLM-5.3' would match nothing;
-      # 'openai/' because the only upstream is the OpenAI target. The
-      # workspace is the only host directory the sandbox may write to.
       # Two sandbox runs, so the agent never has network access: 'fetch'
       # (keyless, only github.com allowed, no agent) fetches the PR and
       # renders the prompt; 'review' runs the harness with no allowed domain
