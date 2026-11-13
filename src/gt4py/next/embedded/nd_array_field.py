@@ -958,15 +958,27 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.domain.dims[0]] else None
+        mask_dims = (axis, offset_definition.domain.dims[0])
+        mask_shape = tuple(
+            offset_definition.ndarray.shape[offset_definition.domain.dims.index(d)]
+            if d in mask_dims
+            else 1
             for d in field.domain.dims
         )
-        masked_array = ops.where(
-            ops.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
-            field.ndarray,
-            initial_value_op(field),
-        )
+        if offset_definition.skip_value is None and all(
+            m in (1, s) for m, s in zip(mask_shape, field.ndarray.shape)
+        ):
+            masked_array = field.ndarray
+        else:
+            broadcast_slice = tuple(
+                slice(None) if d in mask_dims else None for d in field.domain.dims
+            )
+            masked_array = ops.where(
+                ops.asarray(offset_definition.ndarray[broadcast_slice])
+                != common._DEFAULT_SKIP_VALUE,
+                field.ndarray,
+                initial_value_op(field),
+            )
 
         return NdArrayField.from_array(
             reduce_op(ops.xp, masked_array, reduce_dim_index), domain=new_domain
