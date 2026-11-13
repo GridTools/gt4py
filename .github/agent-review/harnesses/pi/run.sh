@@ -21,6 +21,8 @@ readonly CONTEXT_WINDOW=128000 MAX_TOKENS=16384
 
 export PI_CODING_AGENT_DIR="${SCRATCH}/agent" PI_OFFLINE=1 PI_TELEMETRY=0
 mkdir -p "${PI_CODING_AGENT_DIR}"
+pi_cli="${HARNESS_PREFIX}/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"
+check_version "$(head -n 1 "${HARNESS_PREFIX}/VERSION")" "${HARNESS_PREFIX}/node/bin/node" "${pi_cli}" --version || exit 1
 
 # Pi appends '/chat/completions' to the base URL, so it carries '/v1'; the
 # placeholder key is sent as a Bearer token and replaced by AWF's sidecar.
@@ -35,7 +37,7 @@ cd "${REPO_DIR}" || exit 1
 # MCP servers spawned) and .agents/skills; --no-context-files also ignores
 # AGENTS.md and CLAUDE.md, so the prompt names the rules to read. The prompt
 # comes on stdin: with stdin open and no prompt, Pi waits forever.
-"${HARNESS_PREFIX}/node/bin/node" "${HARNESS_PREFIX}/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js" \
+"${HARNESS_PREFIX}/node/bin/node" "${pi_cli}" \
   --print --mode json --no-session --no-approve --no-context-files --tools read,grep,find,ls,bash \
   --model "awf-proxy/${MODEL}" <"${PROMPT_FILE}" >"${OUT_DIR}/harness.jsonl" 2>"${OUT_DIR}/harness.stderr"
 rc=$?

@@ -17,6 +17,7 @@ adapter_init opencode
 readonly MAX_STEPS=35
 
 bin="${HARNESS_PREFIX}/node_modules/@opencode/cli-linux-x64-baseline/bin/opencode"
+check_version "opencode v$(head -n 1 "${HARNESS_PREFIX}/VERSION")" "${bin}" --version || exit 1
 
 # Ignore the repository's opencode.json(c) and .opencode/ (plugins there are
 # executed, MCP servers spawned) and its AGENTS.md. A nested AGENTS.md is

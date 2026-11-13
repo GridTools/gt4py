@@ -51,6 +51,19 @@ diag_failure() { # exit-code jsonl-file type-key
   [ ! -s "${OUT_DIR}/harness.stderr" ] || tail -n 20 "${OUT_DIR}/harness.stderr" | diag
 }
 
+# Fails the run unless the harness reports the pinned version. Runs here,
+# inside the sandbox, because 'prepare' never executes harness code on the
+# host. The pattern is a shell glob matched against the first output line.
+check_version() { # pattern command...
+  local want=$1 got
+  shift
+  got=$("$@" 2>/dev/null | head -n 1) || true
+  # shellcheck disable=SC2053 # 'want' is a glob on purpose
+  [[ "${got}" == ${want} ]] && return 0
+  printf 'version mismatch: got %q, want %q\n' "${got}" "${want}" | diag
+  return 1
+}
+
 # True if the file holds a non-whitespace character.
 has_text() {
   [ -f "$1" ] && grep -q '[^[:space:]]' "$1"

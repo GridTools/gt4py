@@ -4,7 +4,9 @@
 #
 # Usage: install.sh <prefix>
 #
-# Runs in the secretless 'prepare' job. Pi is pure JavaScript and WebAssembly
+# Runs in the secretless 'prepare' job, and never executes the harness or its
+# Node.js there: that job runs on the host with sudo and the runner's cache
+# token. run.sh checks the version inside the sandbox. Pi is pure JavaScript and WebAssembly
 # without native addons; no install scripts run.
 
 set -euo pipefail
@@ -29,7 +31,7 @@ cp "${here}/package.json" "${here}/package-lock.json" "${prefix}/"
 (cd "${prefix}" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error)
 
 want=$(jq -r --arg p "${package}" '.dependencies[$p]' "${here}/package.json")
-got=$(HOME="${tmp}" PI_OFFLINE=1 PI_TELEMETRY=0 "${prefix}/node/bin/node" \
-  "${prefix}/node_modules/${package}/dist/bundle/cli.js" --version)
-[ "${got}" = "${want}" ] || { echo "Version mismatch: got '${got}', want '${want}'." >&2; exit 1; }
+got=$(jq -r .version "${prefix}/node_modules/${package}/package.json")
+[ "${got}" = "${want}" ] || { echo "Version mismatch: installed '${got}', want '${want}'." >&2; exit 1; }
+[ -f "${prefix}/node_modules/${package}/dist/bundle/cli.js" ] || { echo "No Pi CLI in ${package}." >&2; exit 1; }
 echo "${want}" >"${prefix}/VERSION"

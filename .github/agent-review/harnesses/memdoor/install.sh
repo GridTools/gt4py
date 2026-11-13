@@ -4,7 +4,9 @@
 #
 # Usage: install.sh <prefix>
 #
-# Runs in the secretless 'prepare' job.
+# Runs in the secretless 'prepare' job, and never executes the binary there:
+# that job runs on the host with sudo and the runner's cache token. The
+# SHA-256 pins the build; run.sh checks the version inside the sandbox.
 
 set -euo pipefail
 
@@ -19,8 +21,4 @@ curl -fsSL --retry 3 -o "${prefix}/bin/memdoor" \
   "https://github.com/guregodevo/memdoor/releases/download/${tag}/memdoor-linux-amd64"
 echo "${sha}  ${prefix}/bin/memdoor" | sha256sum -c --quiet -
 chmod 0555 "${prefix}/bin/memdoor"
-
-# A fresh HOME, so the version check writes nowhere that matters.
-got=$(HOME=$(mktemp -d) "${prefix}/bin/memdoor" --version | head -n 1)
-case "${got}" in "memdoor ${tag} "* | "memdoor ${tag}") ;; *) echo "Version mismatch: '${got}', want ${tag}." >&2; exit 1 ;; esac
 echo "${tag}" >"${prefix}/VERSION"

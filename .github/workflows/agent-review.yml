@@ -6,7 +6,8 @@ name: Agent Review
 #
 # Trust boundaries, one job each:
 #   authorize  permission checks only; pins the PR head sha.
-#   prepare    installs the harness, without secrets (install hooks run here).
+#   prepare    downloads the pinned harness, without secrets; runs none of
+#              its code (no install scripts, no version check).
 #   review     runs the agent on the PR inside AWF. The inference key is in
 #              ONE step's env and reaches only AWF's API-proxy sidecar. The
 #              host never touches PR content and is treated as tainted once
@@ -244,8 +245,10 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # No secrets in this job: package install hooks, and a compromised
-    # harness release, run where there is nothing to steal.
+    # No secrets in this job, and no harness code runs in it: install
+    # scripts are disabled and the version is checked inside the sandbox.
+    # Its token can still read and write the Actions cache (scoped to the
+    # default branch under 'pull_request_target'), and it has sudo.
     permissions:
       contents: read
     outputs:

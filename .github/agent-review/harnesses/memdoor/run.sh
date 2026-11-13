@@ -15,6 +15,8 @@ adapter_init memdoor
 : "${AWF_API_PROXY_OPENAI_URL:?}"
 
 bin="${HARNESS_PREFIX}/bin/memdoor"
+tag=$(head -n 1 "${HARNESS_PREFIX}/VERSION")
+check_version "memdoor ${tag}?( *)" "${bin}" --version || exit 1
 
 # A fresh stamp skips the daily version check against memdoor.ai.
 mkdir -p "${HOME}/.memdoor"
