@@ -8,6 +8,7 @@ set -uo pipefail
 
 PC="${BIN_DIR}/publish-comment"
 ZWJ=$'\xe2\x80\x8d'
+ZWSP=$'\xe2\x80\x8b'
 RUN_URL="https://github.com/egparedes/gt4py/actions/runs/1"
 SHA=0123456789abcdef0123456789abcdef01234567
 
@@ -32,7 +33,7 @@ test_escapes_character_references() {
   out=$(printf '&#64;egparedes &#x40;egparedes &#X40;a &#0064;b &commat;egparedes &zwj;&rlm;&ZeroWidthSpace; &amp;ok & a&b\n' | sanitize) &&
     assert "no numeric reference left" lacks '&#' "${out}" &&
     assert "no named reference left" lacks '&[A-Za-z][A-Za-z0-9]*;' "${out//&amp;/}" &&
-    assert "escaped readably" grep -qF '&amp;#64;egparedes' <<<"${out}" &&
+    assert "escaped readably, not as an issue reference" grep -qF "&amp;#${ZWSP}64;egparedes" <<<"${out}" &&
     assert "named escaped readably" grep -qF '&amp;commat;egparedes &amp;zwj;&amp;rlm;' <<<"${out}" &&
     assert "bare ampersands untouched" grep -qF ' & a&b' <<<"${out}"
 }
