@@ -24,6 +24,7 @@ from gt4py.next.program_processors.runners.dace import (
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.itir_xform import scan_fusion as gtx_scan_fusion
 from gt4py.next.program_processors.runners.dace.workflow import common as gtx_wfdcommon
 from gt4py.next.type_system import type_specifications as ts
 
@@ -383,17 +384,49 @@ class DaCeTranslator(
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
+    def _preprocess_program(
+        self, ir: itir.Program, offset_provider: common.OffsetProvider
+    ) -> tuple[itir.Program, dict[str, Any]]:
+        """Prepare the IR in order and keep SDFG options separate."""
+        # This backend option acts on iterator IR before SDFG optimization.
+        auto_optimize_args = dict(self.auto_optimize_args or {})
+        fuse_scan_inputs = auto_optimize_args.pop("fuse_scan_inputs", False)
+        if not isinstance(fuse_scan_inputs, bool):
+            raise ValueError("'fuse_scan_inputs' must be a boolean.")
+        scan_fusion_scope = auto_optimize_args.pop("scan_fusion_scope", "immediate")
+        if scan_fusion_scope not in ("immediate", "field_operator"):
+            raise ValueError("'scan_fusion_scope' must be 'immediate' or 'field_operator'.")
+        if self.auto_optimize and fuse_scan_inputs and scan_fusion_scope == "field_operator":
+            ir = gtx_scan_fusion.normalize_scan_producers(
+                ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+            )
+
+        ir = itir_transforms.apply_fieldview_transforms(
+            ir,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+            offset_provider=offset_provider,
+        )
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+
+        if self.auto_optimize and fuse_scan_inputs:
+            fused = gtx_scan_fusion.fuse_scan_inputs(ir, offset_provider_type=offset_provider_type)
+            if fused is not ir:
+                # Fusion introduces field expressions whose domains need refreshing.
+                ir = itir_transforms.apply_fieldview_transforms(
+                    fused,
+                    offset_provider=offset_provider,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                )
+
+        return ir, auto_optimize_args
+
     def _generate_sdfg_without_configuring_dace(
         self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        ir = itir_transforms.apply_fieldview_transforms(
-            ir,
-            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-            offset_provider=offset_provider,
-        )
+        ir, auto_optimize_args = self._preprocess_program(ir, offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -408,8 +441,6 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
-
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
