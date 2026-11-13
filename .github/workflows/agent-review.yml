@@ -61,6 +61,10 @@ on:
 # Each job widens what it needs.
 permissions: {}
 
+# Every job pins the runner image ('ubuntu-24.04', not 'ubuntu-latest'): AWF
+# chroots into the host filesystem, so the image is the sandbox's userland,
+# and it supplies gh, jq, yq, git, npm, Docker and sudo.
+
 # No cancelling: a run joins its group when queued, before the job 'if' is
 # evaluated, so labelling a PR with an unrelated label would cancel its
 # in-flight review.
@@ -83,7 +87,7 @@ jobs:
           || (github.event.action != 'labeled' && github.event.pull_request.draft == false)
         )
       )
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -232,7 +236,7 @@ jobs:
   prepare:
     needs: authorize
     if: needs.authorize.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     # No secrets in this job: package install hooks, and a compromised
     # harness release, run where there is nothing to steal.
@@ -284,7 +288,7 @@ jobs:
   review:
     needs: [authorize, prepare]
     if: needs.authorize.outputs.allowed == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Backstop; the effective limit is on the 'Run the review' step.
     timeout-minutes: 45
     # Read-only: the token is used before the sandbox starts, and no step
@@ -347,7 +351,7 @@ jobs:
       - name: Unpack the harness
         run: |
           sudo mkdir -p "/opt/agent-review/harness/${HARNESS}"
-          sudo tar -xf "${RUNNER_TEMP}/harness-artifact/harness.tar" --no-same-owner \
+          sudo tar -xf "${RUNNER_TEMP}/harness-artifact/harness.tar" --no-same-owner --no-same-permissions \
             -C "/opt/agent-review/harness/${HARNESS}"
           sudo chown -R root:root /opt/agent-review
           sudo chmod -R a+rX,go-w /opt/agent-review
@@ -505,7 +509,7 @@ jobs:
   publish:
     needs: [authorize, prepare, review]
     if: always() && needs.authorize.outputs.allowed == 'true' && needs.review.result != 'skipped'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # The only job with a write token. It runs no model and no PR code, and
     # treats the review as hostile text ('publish-comment').
