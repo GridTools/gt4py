@@ -13,7 +13,6 @@ import dataclasses
 import enum
 import functools
 import math
-import sys
 import types
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import (
@@ -892,66 +891,28 @@ PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_rep
 
 @dataclasses.dataclass(frozen=True)
 class BufferInfo:
-    """Holds information about a buffer in memory."""
+    """Holds information about a buffer in memory.
+
+    Equal `BufferInfo`s (and equal `hash_key`s) describe buffers that behave the same apart
+    from their contents.
+
+    Args:
+        data_ptr: Address of the element at index `(0, ..., 0)`.
+        shape: Number of elements along each dimension.
+        elem_strides: Distance between consecutive elements along each dimension, in elements.
+        dtype: Data type of the elements.
+        device: Device the buffer is allocated on.
+    """
 
     data_ptr: int
-    ndim: int
     shape: tuple[int, ...]
     elem_strides: tuple[int, ...]
-    byte_strides: tuple[int, ...]
+    dtype: core_defs.DType
     device: core_defs.Device
-
-    @classmethod
-    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
-        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
-        #   The current implementation is messy and only works for numpy and cupy.
-        try:
-            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
-        except AttributeError:
-            array_ns = sys.modules[ndarray.__class__.__module__]
-
-        array_byte_bounds_func = (
-            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
-        )
-
-        data_ptr = array_byte_bounds_func(ndarray)[0]
-        ndim = ndarray.ndim
-        shape = ndarray.shape
-        byte_strides = ndarray.strides
-        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
-
-        try:
-            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
-        except AttributeError as err:
-            ns = ndarray.__class__.__module__
-            if ns.startswith("numpy"):
-                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-            elif ns.startswith("cupy"):
-                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
-            else:
-                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
-
-        return BufferInfo(
-            data_ptr=data_ptr,
-            ndim=ndim,
-            shape=shape,
-            elem_strides=elem_strides,
-            byte_strides=byte_strides,
-            device=device,
-        )
 
     @functools.cached_property
     def hash_key(self) -> int:
-        return hash(
-            (
-                self.data_ptr,
-                self.ndim,
-                self.shape,
-                self.elem_strides,
-                self.byte_strides,
-                self.device,
-            )
-        )
+        return hash((self.data_ptr, self.shape, self.elem_strides, self.dtype, self.device))
 
     def __hash__(self) -> int:
         return self.hash_key

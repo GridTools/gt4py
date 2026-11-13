@@ -33,6 +33,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
+from gt4py.next.embedded import _dlpack
 
 
 #: gt4py builtin and operator names whose Array API name differs.
@@ -193,7 +194,7 @@ class ArrayOps:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
     def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        return common.BufferInfo.from_ndarray(array)
+        return _dlpack.buffer_info(array)
 
 
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
