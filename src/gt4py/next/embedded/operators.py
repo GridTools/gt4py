@@ -157,7 +157,7 @@ def _tuple_assign_field(
     @named_collections.tree_map_named_collection
     def impl(target: common.MutableField, source: common.Field, domain: common.Domain) -> None:
         if isinstance(source, common.Field):
-            target[domain] = source[domain]
+            target[domain] = source if source.domain == domain else source[domain]
         else:
             assert core_defs.is_scalar_type(source)
             target[domain] = source
