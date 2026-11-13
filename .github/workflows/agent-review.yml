@@ -64,6 +64,12 @@ on:
 #   TEST_MODEL: ""
 #   TEST_DRY_RUN: "true"
 #   TEST_STUB_PADDING_KIB: "0"
+#   # Optional, to review a public pull request of another repository
+#   # (read-only; the run is forced to dry-run): its slug, and the head and
+#   # base commits to review instead of the ones the API reports now.
+#   TEST_REPO: ""
+#   TEST_HEAD_SHA: ""
+#   TEST_BASE_SHA: ""
 ## END
 
 # Each job widens what it needs.
@@ -109,6 +115,7 @@ jobs:
       model: ${{ steps.auth.outputs.model }}
       dry_run: ${{ steps.auth.outputs.dry_run }}
       stub_padding_kib: ${{ steps.auth.outputs.stub_padding_kib }}
+      source_repo: ${{ steps.auth.outputs.source_repo }}
     steps:
       # 'pull_request_target' ignores the fork-approval setting, so without
       # this gate anyone opening a PR could spend the CSCS allocation. The
@@ -146,6 +153,9 @@ jobs:
           TEST_MODEL: ${{ env.TEST_MODEL }}
           TEST_DRY_RUN: ${{ env.TEST_DRY_RUN }}
           TEST_STUB_PADDING_KIB: ${{ env.TEST_STUB_PADDING_KIB }}
+          TEST_REPO: ${{ env.TEST_REPO }}
+          TEST_HEAD_SHA: ${{ env.TEST_HEAD_SHA }}
+          TEST_BASE_SHA: ${{ env.TEST_BASE_SHA }}
         run: |
           fail() {
             echo "allowed=false" >> "$GITHUB_OUTPUT"
@@ -154,7 +164,7 @@ jobs:
           }
           resolve_pr() {
             [[ "$1" =~ ^[1-9][0-9]{0,9}$ ]] || fail "Invalid pull request number '$1'."
-            if ! shas=$(gh api "repos/${REPO}/pulls/$1" --jq '[.head.sha, .base.sha] | @tsv' 2>&1); then
+            if ! shas=$(gh api "repos/${source_repo}/pulls/$1" --jq '[.head.sha, .base.sha] | @tsv' 2>&1); then
               fail "Could not resolve pull request #$1: '${shas}'."
             fi
             read -r head_sha base_sha <<< "${shas}"
@@ -163,6 +173,9 @@ jobs:
           dry_run=false
           padding=0
           harness=default
+          # The repository whose pull request is reviewed; only the test path
+          # can change it.
+          source_repo=${REPO}
           case "${EVENT}" in
             pull_request_target)
               pr=${EVENT_PR}
@@ -180,11 +193,18 @@ jobs:
             push)
               [ -n "${TEST_PR}" ] || fail "The 'push' trigger is for testing only and needs the TEST_* block."
               pr=${TEST_PR}
+              source_repo=${TEST_REPO:-${REPO}}
+              [[ "${source_repo}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "Invalid repository '${source_repo}'."
               resolve_pr "${pr}"
+              [ -z "${TEST_HEAD_SHA}" ] || head_sha=${TEST_HEAD_SHA}
+              [ -z "${TEST_BASE_SHA}" ] || base_sha=${TEST_BASE_SHA}
               actor=${ACTOR}
               harness=${TEST_HARNESS:-stub}
               VAR_MODEL=${TEST_MODEL:-${VAR_MODEL}}
               dry_run=${TEST_DRY_RUN:-true}
+              # Never comment on a pull request of the fork that merely has
+              # the same number as the reviewed one.
+              [ "${source_repo}" = "${REPO}" ] || dry_run=true
               padding=${TEST_STUB_PADDING_KIB:-0}
               ;;
             *) fail "Unexpected event '${EVENT}'." ;;
@@ -238,6 +258,7 @@ jobs:
             echo "model=${model}"
             echo "dry_run=${dry_run}"
             echo "stub_padding_kib=${padding}"
+            echo "source_repo=${source_repo}"
           } >> "$GITHUB_OUTPUT"
           echo "::notice::Reviewing #${pr} at ${head_sha} with harness '${harness}', model '${model}'."
 
@@ -337,7 +358,7 @@ jobs:
       - name: Prepare the sandbox inputs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
+          REPO: ${{ needs.authorize.outputs.source_repo }}
           PR: ${{ needs.authorize.outputs.pr }}
           HEAD_SHA: ${{ needs.authorize.outputs.head_sha }}
           BASE_SHA: ${{ needs.authorize.outputs.base_sha }}
