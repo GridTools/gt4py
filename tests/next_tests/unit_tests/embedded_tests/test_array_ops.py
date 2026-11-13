@@ -91,7 +91,7 @@ def _take_ops(nd_array_implementation, standard):
 
 
 @pytest.mark.parametrize("standard", [False, True], ids=["registered", "standard"])
-@pytest.mark.parametrize("axis", [0, 1, 2])
+@pytest.mark.parametrize("axis", [0, 1, 2, -1, -3])
 def test_take(nd_array_implementation, standard, axis):
     ops = _take_ops(nd_array_implementation, standard)
     data = np.arange(4 * 5 * 6, dtype=np.float64).reshape(4, 5, 6)

@@ -26,7 +26,7 @@ from gt4py.next.common import (
     NamedRange,
     UnitRange,
 )
-from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
+from gt4py.next.embedded import array_ops, exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset, concat_where
@@ -926,6 +926,11 @@ def test_gather_premap_single_axis(nd_array_implementation, layout, start):
     )
     assert result.domain == common.Domain(dims=expected_dims, ranges=expected_ranges)
     assert np.array_equal(result.asnumpy(), np.take(data, table - start, axis=axis))
+    generic = nd_array_field._generic_gather_premap(
+        field, (conn,), result.domain, array_ops.of(field.ndarray)
+    )
+    assert generic.domain == result.domain
+    assert np.array_equal(generic.asnumpy(), result.asnumpy())
 
 
 def test_gather_premap_single_axis_narrowed(nd_array_implementation):
