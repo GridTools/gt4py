@@ -22,6 +22,7 @@ instance for its compat namespace with `register`.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Final
@@ -56,6 +57,7 @@ STANDARD_NAMES: Final[Mapping[str, str]] = {
 
 # TODO(havogt): Redesign coherent conversion rules when arrays/scalars of different array
 #   libraries are used together.
+@dataclasses.dataclass(frozen=True)
 class ArrayOps:
     """
     Operations on the buffers of embedded fields for one array namespace.
@@ -69,10 +71,9 @@ class ArrayOps:
     builtin_overrides: ClassVar[Mapping[Any, Callable[..., Any]]] = {}
 
     xp: ModuleType
-
-    def __init__(self, xp: ModuleType) -> None:
-        self.xp = xp
-        self._elementwise_function_cache: dict[str, Callable[..., Any]] = {}
+    _elementwise_function_cache: dict[str, Callable[..., Any]] = dataclasses.field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.xp.__name__})"
