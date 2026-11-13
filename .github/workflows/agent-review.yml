@@ -454,11 +454,33 @@ jobs:
           echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           exit "${rc}"
 
+      # 'collect-result' is race-free only once nothing in the sandbox runs:
+      # 'awf' normally removes its containers, but a step timeout or a
+      # cancellation may leave them. The job starts no container of its own,
+      # so all are removed. Nothing is collected if any survives.
+      - name: Stop the sandbox
+        id: teardown
+        if: always() && steps.agent.outputs.skipped != 'true'
+        shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+        env:
+          PATH: /usr/bin:/bin
+        run: |
+          ids=$(/usr/bin/sudo /usr/bin/docker ps -aq)
+          if [ -n "${ids}" ]; then
+            echo "Removing $(/usr/bin/wc -l <<< "${ids}") leftover container(s)."
+            # shellcheck disable=SC2086 # container ids, one per word
+            /usr/bin/sudo /usr/bin/docker rm -f ${ids} > /dev/null
+          fi
+          if [ -n "$(/usr/bin/sudo /usr/bin/docker ps -aq)" ]; then
+            echo "::error::Sandbox containers survived the teardown; not collecting the result."
+            exit 1
+          fi
+
       # Absolute paths and a fixed PATH: the runner's default PATH searches
       # home directories such as ~/.local/bin before /usr/bin, and the sandbox
       # could write there.
       - name: Collect the result
-        if: always() && steps.agent.outputs.skipped != 'true'
+        if: always() && steps.agent.outputs.skipped != 'true' && steps.teardown.outcome == 'success'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
