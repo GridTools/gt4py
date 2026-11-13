@@ -454,7 +454,7 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: stored for the `ArrayOps` of the table, which passes it to its table operations
+    #: created by the library of the table, for its `ArrayOps`; `restrict` passes it on as it is
     _static: Any = dataclasses.field(
         default=None,
         kw_only=True,
@@ -514,7 +514,7 @@ class NdArrayConnectivityField(
         raise TypeError("'Connectivity' does not support item assignment.")
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        cache_key = hash((id(self.ndarray), self.domain, image_range))
+        cache_key = ("inverse_image", image_range)
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
             assert common.UnitRange.is_finite(image_range)
@@ -531,18 +531,18 @@ class NdArrayConnectivityField(
         return new_domain
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
-        cache_key = (id(self.ndarray), self.domain, index)
-
-        if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
-            new_domain, buffer_slice = self._slice(index)
-            table, static = array_ops.of(self._ndarray).restrict_table(
-                self._ndarray, buffer_slice, static=self._static
-            )
-            restricted_connectivity = self.__class__(
-                new_domain, table, self.codomain, self.skip_value, _static=static
-            )
-            self._cache[cache_key] = restricted_connectivity
-
+        # no array is cached: whether a restricted table can be used again is up to its library
+        cache_key = ("restrict", index)
+        if (cached := self._cache.get(cache_key, None)) is None:
+            cached = self._cache[cache_key] = (*self._slice(index), {})
+        new_domain, buffer_slice, restricted_cache = cached
+        table = array_ops.of(self._ndarray).restrict_table(
+            self._ndarray, buffer_slice, static=self._static
+        )
+        restricted_connectivity = self.__class__(
+            new_domain, table, self.codomain, self.skip_value, _static=self._static
+        )
+        restricted_connectivity.__dict__["_cache"] = restricted_cache
         return restricted_connectivity
 
     __getitem__ = restrict
@@ -609,17 +609,12 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         start = data.domain[dim].unit_range.start
         if (conn := conn_by_codomain.get(dim)) is None:
             return _identity_index_array(new_domain, dim, ops, like=data._ndarray) - start
-        # skip entries read the domain start instead of wrapping around to an arbitrary element;
-        # what is gathered there, and its cotangent, is left to the reduction mask to discard
-        assert isinstance(conn, NdArrayConnectivityField)
-        index = (
+        # a skip value is no index of the field: these entries read the domain start
+        return (
             _connectivity_index_array(conn, new_domain, ops, skip_value_replacement=start) - start
         )
-        return array_ops.of(conn._ndarray).gather_index(
-            index, len(data.domain[dim].unit_range), conn._ndarray, static=conn._static
-        )
 
-    new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
+    new_buffer = ops.gather(data._ndarray, tuple(take_index(dim) for dim in data.domain.dims))
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 

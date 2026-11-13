@@ -189,9 +189,8 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
-    # The operations on a connectivity table which depend on its values. `static` belongs to
-    # the library and is stored by the connectivity next to its table: `None`, unless the
-    # library's arrays can be placeholders without values and it keeps a stand-in for them.
+    # The operations on a connectivity table. `static` is what the connectivity holds for the
+    # library of its table: `None`, unless the library created the connectivity with one.
 
     def hyperslice(
         self,
@@ -214,6 +213,9 @@ class ArrayOps:
             skip_value = -1
 
             would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+
+        A library which cannot read the values of `table` returns all of it. What an entry
+        outside of `image_range` reads is then defined by its `gather`.
         """
         xp = self.xp
         select_mask = (table >= image_range.start) & (table < image_range.stop)
@@ -242,20 +244,15 @@ class ArrayOps:
         key: common.RelativeIndexSequence,
         *,
         static: Any = None,
-    ) -> tuple[core_defs.NDArrayObject, Any]:
-        """Return `table[key]` and its `static`."""
-        return self.asarray(table[key]), None
-
-    def gather_index(
-        self,
-        index: core_defs.NDArrayObject,
-        size: int,
-        table: core_defs.NDArrayObject,
-        *,
-        static: Any = None,
     ) -> core_defs.NDArrayObject:
-        """Return the indices a gather reads from an axis of `size` elements for `index`, which was computed from `table`."""
-        return index
+        """Return `table[key]`."""
+        return self.asarray(table[key])
+
+    def gather(
+        self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
+    ) -> core_defs.NDArrayObject:
+        """Return `array[indices]` for one integer index array per axis, all of the same shape."""
+        return array[indices]
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
