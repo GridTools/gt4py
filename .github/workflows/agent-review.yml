@@ -432,26 +432,25 @@ jobs:
           # AWF v0.29.12 needs these mount points for 'filesystem.allowWrite'.
           mkdir -p /tmp/gh-aw/sandbox/firewall/audit /tmp/gh-aw/sandbox/firewall/logs /tmp/gh-aw/mcp-logs
 
-          # The sandbox's output is not trusted: stop the runner from
-          # interpreting workflow commands ('::...::') in it, with a token the
-          # sandbox cannot know.
-          stop_token=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
-
+          # The sandbox's output is not trusted: every line is prefixed (and
+          # carriage returns dropped), so none can start a workflow command
+          # ('::...::'). No '::stop-commands::': its token would be printed to
+          # the live log before the sandbox starts.
+          #
           # 'sudo -E' passes the environment through to AWF; AWF forwards
           # none of it to the agent except what it sets itself.
           set +e
-          echo "::stop-commands::${stop_token}"
           sudo -E "${awf_bin}" \
             --config "${RUNNER_TEMP}/awf.json" \
             --audit-dir "${RUNNER_TEMP}/awf-audit" \
             --proxy-logs-dir "${RUNNER_TEMP}/awf-logs" \
             --image-tag "${IMAGE_TAG}" \
             --container-workdir "${WS}" \
-            -- /opt/agent-review/bin/run-review "${WS}"
-          rc=$?
+            -- /opt/agent-review/bin/run-review "${WS}" 2>&1 \
+            | /usr/bin/sed -u -e 's/\r//g' -e 's/^/awf| /'
+          rc=${PIPESTATUS[0]}
           # The sandbox could write only to the workspace; still, treat the
           # host as tainted from here on: shell builtins only.
-          echo "::${stop_token}::"
           echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
           exit "${rc}"
 
