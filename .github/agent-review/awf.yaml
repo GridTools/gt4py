@@ -39,6 +39,16 @@ apiProxy:
   # get a 403 'model_policy_violation' from the proxy.
   allowedModels:
     - none
+  # Disable AWF's runtime model catalogue: in network-isolation mode its
+  # sidecar otherwise makes ~7 GETs per run to api.github.com (the
+  # github/gh-aw-firewall 'catalogue-data' branch) to refresh its pricing
+  # snapshot. Those carry no data about the run (GET only, no Authorization),
+  # but we do not use AWF's AI-credit accounting (the key budget and maxTurns
+  # are the caps), so the egress and the up-to-5 s first-request wait are
+  # pointless. Pricing then falls back to the bundled tables.
+  # (AWF v0.29.12: containers/api-proxy/catalogue-loader.js:91,237.)
+  modelCatalogue:
+    enabled: false
   # Spend caps. The primary cap is the dedicated CSCS key's own token budget.
   # AWF prices unpriced CSCS models with a median estimate, so its AI-credit
   # cap is not a hard limit; the turn cap is used here.
