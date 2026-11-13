@@ -88,7 +88,6 @@ jobs:
         src/gt4py/next/AGENTS.md
       # Read from this repository at this workflow's commit, never the PR's.
       prompt_addendum: .github/agent-review/prompt-addendum.md
-      api_base: ${{ vars.AGENT_REVIEW_API_BASE || 'https://api.inference.cscs.ch/v1' }}
       upload_audit: ${{ vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true' }}
     # Explicit mapping, resolved only in the called job that uses the
     # 'agent-review' environment (restricted to 'main'). Never

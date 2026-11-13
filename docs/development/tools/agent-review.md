@@ -31,13 +31,14 @@ In the workflow file:
 - The **pinned version** of the reusable workflow (see [Updating the pinned version](#updating-the-pinned-version)).
 - The **permission ceiling** for every called job, `contents: read` and `pull-requests: write`, and the explicit mapping of the key (never `secrets: inherit`).
 
+The inference endpoint is not configurable here: it is fixed centrally in GridTools/ci-workflows, so the key can only be sent to an allowlisted host and no repository variable can redirect it.
+
 Repository variables (**Settings → Secrets and variables → Actions → Variables**), changeable without a PR:
 
 | Variable                    | Meaning                                                                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `AGENT_REVIEW_HARNESS`      | `opencode` (default and recommended) or `pi`; `stub` for tests. A dispatch can choose another one.                              |
 | `AGENT_REVIEW_MODEL`        | Model id on the CSCS inference service, e.g. `zai-org/GLM-5.3-Flash`. No default: without it, a review with a model fails.      |
-| `AGENT_REVIEW_API_BASE`     | Optional OpenAI-compatible endpoint; default `https://api.inference.cscs.ch/v1`.                                                |
 | `AGENT_REVIEW_UPLOAD_AUDIT` | Optional, `true` to upload AWF's audit and proxy logs as an artifact; in this public repository any signed-in user can read it. |
 
 ## Required repository settings
