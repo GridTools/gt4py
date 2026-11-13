@@ -40,7 +40,7 @@ Without these, the workflow does not run, or runs without a key.
 3. **An Actions event policy** (**Settings → Actions → Policies**) scoped by workflow path to `.github/workflows/agent-review.yml`, this repository's caller file (not the path in GridTools/ci-workflows), allowing **`pull_request_target` and `workflow_dispatch`**. GitHub blocks `pull_request_target` by default in public repositories from **2 December 2026**, and a policy's event list is an exhaustive allowlist. PR Agent's policy (see [pr-agent.md](pr-agent.md#event-policy)) covers only `.github/workflows/pr-agent.yml`.
 4. The repository variables above and the label `agent-review`.
 
-**Deployment state in GridTools/gt4py (2026-11-13)**: items 1, 2 and 4 are in place (`AGENT_REVIEW_HARNESS=opencode`, `AGENT_REVIEW_MODEL=zai-org/GLM-5.3-Flash`). **No event policy covers this workflow yet** (item 3): the only one, "Allow PR Agent events" (policy 13604), is scoped to `.github/workflows/pr-agent.yml`.
+**Deployment state in GridTools/gt4py (2026-11-13)**: items 1 and 2 are in place, and so are the variables (`AGENT_REVIEW_HARNESS=opencode`, `AGENT_REVIEW_MODEL=zai-org/GLM-5.3-Flash`). Still missing: the **`agent-review` label**, and **an event policy for this workflow** (item 3): the only one, "Allow PR Agent events" (policy 13604), is scoped to `.github/workflows/pr-agent.yml`.
 
 ## Updating the pinned version
 

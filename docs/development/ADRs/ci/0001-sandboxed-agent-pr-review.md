@@ -29,7 +29,7 @@ We run the agent inside [AWF](https://github.com/github/gh-aw-firewall) (agentic
 3. `review` passes the key only to the `awf` step that runs the agent, from a GitHub environment restricted to the default branch. The host never handles PR content: the PR is fetched by git inside the sandbox, the sandbox can write only to the review workspace, and the host is still treated as tainted after `awf` returns. Only two small regular files leave the job, after the sandbox's containers are removed.
 4. `publish` posts the comment from a fresh VM with a write token, no model and no PR code, and sanitises the review (mentions, markup that renders as nothing, invisible characters, size) in a step without a token.
 
-The prompt, AWF configuration and harness come from the workflow's own commit, and the agent instruction files from the PR's base commit, never from the PR. The harness is an adapter with a small contract (`install.sh`, `run.sh`, `wire`) and is selected by a repository variable, one per run. Details and the invariants to keep are in [agent-review.md](../../tools/agent-review.md).
+The prompt, AWF configuration and harness come from the workflow's own commit, and the agent instruction files from the PR's base commit, never from the PR. The harness is an adapter with a small contract (`install.sh`, `run.sh`, `wire`) and is selected by a repository variable, one per run. Details and the invariants to keep are in [agent-review.md](../../tools/agent-review.md) and the GridTools/ci-workflows documentation it links.
 
 We chose AWF because it is the only option that provides credential isolation, egress control and per-run request limits together, maintained and used by GitHub's own agentic workflows, without infrastructure of our own.
 
@@ -68,6 +68,6 @@ We chose AWF because it is the only option that provides credential isolation, e
 
 ## References
 
-- [agent-review.md](../../tools/agent-review.md): usage, invariants, configuration, adapter contract.
+- [agent-review.md](../../tools/agent-review.md): usage and GT4Py configuration; the invariants and the adapter contract are in the GridTools/ci-workflows documentation it links.
 - [pr-agent.md](../../tools/pr-agent.md): the existing diff-based reviewer.
 - [AWF documentation](https://github.com/github/gh-aw-firewall)
