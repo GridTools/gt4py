@@ -14,7 +14,7 @@ import functools
 import itertools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
+from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeGuard, TypeVar, cast
 
 import array_api_compat
 import numpy as np
@@ -40,6 +40,15 @@ def _ops_of(*values: Any) -> array_ops.ArrayOps:
     raise AssertionError("No 'NdArrayField' found in the arguments.")
 
 
+def _is_field(value: Any) -> TypeGuard[common.Field]:
+    # `common.Field` is a runtime-checkable Protocol: a negative check (e.g. on a scalar) is slow.
+    if isinstance(value, NdArrayField):
+        return True
+    if isinstance(value, (bool, int, float, np.generic)):
+        return False
+    return isinstance(value, common.Field)
+
+
 def _make_builtin(
     builtin_name: str, array_builtin_name: str, reverse: bool = False
 ) -> Callable[..., NdArrayField]:
@@ -48,13 +57,13 @@ def _make_builtin(
         op = ops.elementwise_function(array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
-            *[f.domain for f in fields if isinstance(f, common.Field)]
+            *[f.domain for f in fields if _is_field(f)]
         )
 
         arrays: list[core_defs.NDArrayObject] = []
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
-            if isinstance(f, common.Field):
+            if _is_field(f):
                 if f.domain == domain_intersection:
                     array = ops.asarray(f.ndarray)
                 else:
@@ -275,8 +284,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
         for connectivity in connectivities:
             # For neighbor reductions, a FieldOffset is passed instead of an actual Connectivity
-            if not isinstance(connectivity, common.Connectivity):
-                assert isinstance(connectivity, fbuiltins.FieldOffset)
+            if isinstance(connectivity, fbuiltins.FieldOffset):
                 connectivity = connectivity.as_connectivity_field()
             assert isinstance(connectivity, common.Connectivity)
 
@@ -348,7 +356,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     ) -> None:
         target_domain, target_slice = self._slice(index, for_assignment=True)
 
-        if isinstance(value, common.Field):
+        if _is_field(value):
             if not value.domain == target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
@@ -762,7 +770,7 @@ def _to_field(value: common.Field | core_defs.Scalar, like: NdArrayField) -> com
     # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
     return (
         value
-        if isinstance(value, common.Field)
+        if _is_field(value)
         else NdArrayField.from_array(
             array_ops.of(like._ndarray).asarray(value, like=like.ndarray), domain=common.Domain()
         )
@@ -776,9 +784,7 @@ def _intersect_fields(
     # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
     # currently blocked, because requiring the `_to_field` function, see comment there.
     like = next(f for f in fields if isinstance(f, NdArrayField))
-    promoted_dims = common.promote_dims(
-        *(f.domain.dims for f in fields if isinstance(f, common.Field))
-    )
+    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if _is_field(f)))
     broadcasted_fields = [_broadcast(_to_field(f, like), promoted_dims) for f in fields]
 
     intersected_domains = embedded_common.restrict_to_intersection(
