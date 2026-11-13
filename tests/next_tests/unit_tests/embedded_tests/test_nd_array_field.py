@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import importlib
 import math
 import operator
 import pickle
@@ -37,6 +38,7 @@ from next_tests.unit_tests.conftest import (
     asarray,
     is_array_api_strict,
     is_cupy,
+    is_torch,
 )
 
 
@@ -113,7 +115,7 @@ def are_equal_fields(a: Field, b: Field) -> bool:
 
 def _skip_or_expect_no_buffer_info(xp) -> bool:
     """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
-    if xp.__name__ == "jax.numpy":
+    if xp.__name__ in ("jax.numpy", "torch"):
         return True
     if xp.__name__ not in ("numpy", "cupy"):
         pytest.skip(
@@ -1360,7 +1362,7 @@ def test_setitem_array_libraries(nd_array_implementation, index, source, make_va
     value = make_value(xp, source)
     if is_cupy(xp) and isinstance(value, np.ndarray):
         pytest.skip("CuPy does not assign a non-scalar NumPy array.")
-    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
+    if (is_array_api_strict(xp) or is_torch(xp)) and isinstance(value, np.ndarray):
         pytest.skip("Assigning an array of another library is tested separately.")
     field = common._field(
         asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
@@ -1389,9 +1391,12 @@ def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
     assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
 
 
-def test_setitem_array_of_other_library_raises():
+@pytest.mark.parametrize(
+    "xp_name", ["array_api_strict", pytest.param("torch", marks=pytest.mark.requires_torch)]
+)
+def test_setitem_array_of_other_library_raises(xp_name):
     field = common._field(
-        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        asarray(importlib.import_module(xp_name), np.arange(3), dtype=np.float64),
         domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
     )
 
