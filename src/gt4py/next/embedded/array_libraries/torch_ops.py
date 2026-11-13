@@ -37,6 +37,19 @@ class TorchOps(array_ops.ArrayOps):
     def array_ns(self) -> ModuleType:
         return torch
 
+    def asarray(
+        self,
+        data: Any,
+        *,
+        dtype: Any = None,
+        like: core_defs.NDArrayObject | None = None,
+    ) -> core_defs.NDArrayObject:
+        # before torch 2.15, `torch.asarray` reads an object with the buffer protocol but
+        # without `__array__` (e.g. an array-api-strict array) as raw bytes of the default dtype
+        if not isinstance(data, torch.Tensor | np.ndarray) and hasattr(data, "__dlpack__"):
+            data = torch.from_dlpack(data)
+        return super().asarray(data, dtype=dtype, like=like)
+
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         """
         `value` as an operand of an elementwise function next to the tensor `like`.
