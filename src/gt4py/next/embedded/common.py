@@ -103,7 +103,13 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
         ... )  # doctest: +ELLIPSIS
         Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
-    return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
+    if not domains:
+        return common.Domain()
+    first = domains[0]
+    if all(d == first for d in domains[1:]):
+        common.check_dims(first.dims)
+        return first
+    return functools.reduce(operator.and_, domains)
 
 
 def restrict_to_intersection(
