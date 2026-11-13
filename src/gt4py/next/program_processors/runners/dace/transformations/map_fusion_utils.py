@@ -271,10 +271,10 @@ def split_overlapping_map_range(
                         [(0, 2, 1), (3, 6, 1), (7, 9, 1)]
                 """
                 splitted_ranges = []
-                if range_[0] < start:
+                if (range_[0] < start) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools
                     splitted_ranges.append((range_[0], start - step, step))
                 splitted_ranges.append((start, stop, step))
-                if stop < range_[1]:
+                if (stop < range_[1]) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools
                     splitted_ranges.append((stop + step, range_[1], step))
                 return splitted_ranges
 
