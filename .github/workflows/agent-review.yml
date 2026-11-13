@@ -45,9 +45,9 @@ on:
   ## this repository with a PR to 'main' (the two events above read this file
   ## from 'main'). Re-enable together with the 'test' job marked like this
   ## one, and never merge either enabled.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   ## END
 
 # Each called job widens what it needs, within the calling job's ceiling.
@@ -99,21 +99,21 @@ jobs:
   ## COMMENTED OUT: the job for the 'pull_request' trigger above: the 'stub'
   ## harness (no model, no key), always a dry run, reviewing the PR itself.
   ## Keep its pin equal to the one of 'review'.
-  # test:
-  #   if: github.event_name == 'pull_request'
-  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@f0aa5db38da1853a0785debde61788d4da86ee10 # pre-release, PR #1
-  #   permissions:
-  #     contents: read
-  #     pull-requests: write
-  #   with:
-  #     harness: stub
-  #     pr: ${{ github.event.pull_request.number }}
-  #     dry_run: true
-  #     project_name: GT4Py
-  #     rule_files: |
-  #       .github/copilot-instructions.md
-  #       AGENTS.md
-  #       CODING_GUIDELINES.md
-  #       src/gt4py/next/AGENTS.md
-  #     prompt_addendum: .github/agent-review/prompt-addendum.md
+  test:
+    if: github.event_name == 'pull_request'
+    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@f0aa5db38da1853a0785debde61788d4da86ee10 # pre-release, PR #1
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      harness: stub
+      pr: ${{ github.event.pull_request.number }}
+      dry_run: true
+      project_name: GT4Py
+      rule_files: |
+        .github/copilot-instructions.md
+        AGENTS.md
+        CODING_GUIDELINES.md
+        src/gt4py/next/AGENTS.md
+      prompt_addendum: .github/agent-review/prompt-addendum.md
   ## END
