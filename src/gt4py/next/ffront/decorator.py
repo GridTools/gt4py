@@ -19,8 +19,10 @@ import functools
 import types
 import typing
 import warnings
-from collections.abc import Callable
-from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
+from collections.abc import Callable, Hashable
+from typing import Any, Final, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
+
+import numpy as np
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -300,6 +302,23 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         return self.backend.transforms
 
     @functools.cached_property
+    def _validated_arg_types(self) -> set[Hashable]:
+        return set()
+
+    def _validate_args(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
+        key = _args_type_key(args, kwargs)
+        if key is not None and key in self._validated_arg_types:
+            return
+        # TODO: remove or make dependency on self.past_stage optional
+        past_process_args._validate_args(
+            self.past_stage.past_node,
+            arg_types=[type_translation.from_value(arg) for arg in args],
+            kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
+        )
+        if key is not None:
+            self._validated_arg_types.add(key)
+
+    @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
         return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
 
@@ -352,12 +371,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             kwargs=kwargs,
         ):
             if __debug__:
-                # TODO: remove or make dependency on self.past_stage optional
-                past_process_args._validate_args(
-                    self.past_stage.past_node,
-                    arg_types=[type_translation.from_value(arg) for arg in args],
-                    kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
-                )
+                self._validate_args(args, kwargs)
 
             if self.backend is not None:
                 self._compiled_programs(
@@ -375,6 +389,41 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
+
+
+_INT32_BOUNDS: Final = (int(np.iinfo(np.int32).min), int(np.iinfo(np.int32).max))
+_INT64_BOUNDS: Final = (int(np.iinfo(np.int64).min), int(np.iinfo(np.int64).max))
+_TYPE_DETERMINED_SCALARS: Final = frozenset(core_defs.SCALAR_TYPES) - {int}
+
+
+def _arg_type_key(value: Any) -> Optional[Hashable]:
+    """
+    A key such that equal keys imply equal `type_translation.from_value` results, or `None`.
+
+    `None` for values whose type is not cheaply determined, which are then not cached.
+    """
+    value_type = type(value)
+    if value_type is next_embedded.nd_array_field.NdArrayField:
+        return (value_type, value.domain.dims, value.dtype.scalar_type)
+    if value_type in _TYPE_DETERMINED_SCALARS:
+        return (value_type,)
+    if value_type is int:
+        if _INT32_BOUNDS[0] <= value <= _INT32_BOUNDS[1]:
+            return (int, 32)
+        if _INT64_BOUNDS[0] <= value <= _INT64_BOUNDS[1]:
+            return (int, 64)
+        return None
+    if value_type is tuple:
+        keys = tuple(_arg_type_key(v) for v in value)
+        return None if any(k is None for k in keys) else (tuple, keys)
+    return None
+
+
+def _args_type_key(args: tuple[Any, ...], kwargs: dict[str, Any]) -> Optional[Hashable]:
+    keys = (*(_arg_type_key(a) for a in args), *(_arg_type_key(v) for v in kwargs.values()))
+    if any(k is None for k in keys):
+        return None
+    return (keys, tuple(kwargs))
 
 
 @typing.overload

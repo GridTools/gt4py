@@ -9,6 +9,8 @@
 import dataclasses
 from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
 
+import numpy as np
+
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
@@ -64,6 +66,14 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
         assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
         res = field_utils.field_from_typespec(init_type, out_domain, xp)
 
+        res_extracted = arguments.extract(res)
+        assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
+        views = _point_views(all_args, out_domain)
+        targets = _point_targets(res_extracted, out_domain)
+        if views is not None and targets is not None:
+            self._scan_points(args, kwargs, views, targets, out_domain)
+            return res
+
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
             acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
             for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
@@ -73,9 +83,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
                 # convert custom NamedCollections to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
-                res_extracted = arguments.extract(res)
                 assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
-                assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
                 _tuple_assign_value(pos, res_extracted, acc_extracted)
 
         if len(non_scan_domain) == 0:
@@ -86,6 +94,102 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 scan_loop(hpos)
 
         return res
+
+    def _scan_points(
+        self,
+        args: Sequence[common.Field | core_defs.Scalar],
+        kwargs: dict[str, common.Field | core_defs.Scalar],
+        views: Sequence[Optional[np.ndarray]],
+        targets: xtyping.MaybeNestedInTuple[np.ndarray],
+        domain: common.Domain,
+    ) -> None:
+        scan_index = domain.dims.index(self.axis)
+        shape = domain.shape
+        n_levels = shape[scan_index]
+        levels = range(n_levels) if self.forward else range(n_levels - 1, -1, -1)
+        arg_views, kwarg_views = views[: len(args)], views[len(args) :]
+        for column in np.ndindex(shape[:scan_index] + shape[scan_index + 1 :]):
+            head, tail = column[:scan_index], column[scan_index:]
+            acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init
+            for k in levels:
+                index = (*head, k, *tail)
+                new_args = [a if v is None else v[index] for a, v in zip(args, arg_views)]
+                new_kwargs = {
+                    name: a if v is None else v[index]
+                    for (name, a), v in zip(kwargs.items(), kwarg_views)
+                }
+                acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
+                acc_extracted = arguments.extract(acc)
+                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                _assign_point(targets, acc_extracted, index)
+
+
+def _point_views(
+    values: Sequence[Any], domain: common.Domain
+) -> Optional[list[Optional[np.ndarray]]]:
+    """
+    Each field of `values` as a NumPy array over `domain`, indexed by the position relative to it.
+
+    Scalars map to `None`. Returns `None` if a value is neither a field nor a scalar, or a field
+    cannot be read at every position of `domain`; reading point by point raises the error then.
+    """
+    if not common.Domain.is_finite(domain):
+        return None
+    views: list[Optional[np.ndarray]] = []
+    for value in values:
+        if not isinstance(value, common.Field):
+            if not core_defs.is_scalar_type(value):
+                return None
+            views.append(None)
+            continue
+        field_dims = value.domain.dims
+        if not all(d in domain.dims for d in field_dims):
+            return None
+        positions = [domain.dims.index(d) for d in field_dims]
+        if positions != sorted(positions):
+            return None
+        array = value.asnumpy()
+        key: list[slice | None] = []
+        for dim, rng in zip(domain.dims, domain.ranges):
+            if dim not in field_dims:
+                key.append(None)
+                continue
+            i = field_dims.index(dim)
+            field_range = value.domain.ranges[i]
+            if not rng <= field_range:
+                return None
+            if array.shape[i] == 1 and not (
+                common.UnitRange.is_finite(field_range) and len(field_range) == 1
+            ):
+                # a broadcast axis: its only element holds the value of the whole range
+                key.append(slice(None))
+            else:
+                key.append(slice(rng.start - field_range.start, rng.stop - field_range.start))
+        views.append(np.broadcast_to(array[tuple(key)], domain.shape))
+    return views
+
+
+def _point_targets(
+    res: xtyping.MaybeNestedInTuple[common.MutableField], domain: common.Domain
+) -> Optional[xtyping.MaybeNestedInTuple[np.ndarray]]:
+    """The NumPy buffers of `res`, if all are NumPy arrays on exactly `domain`."""
+    leaves = utils.flatten_nested_tuple((res,))
+    if not all(isinstance(f.ndarray, np.ndarray) and f.domain == domain for f in leaves):
+        return None
+    return utils.tree_map(lambda f: f.ndarray)(res)
+
+
+def _assign_point(
+    target: xtyping.MaybeNestedInTuple[np.ndarray],
+    value: xtyping.MaybeNestedInTuple[core_defs.Scalar],
+    index: tuple[int, ...],
+) -> None:
+    if isinstance(target, tuple):
+        assert isinstance(value, tuple) and len(value) == len(target)
+        for t, v in zip(target, value):
+            _assign_point(t, v, index)
+    else:
+        target[index] = value
 
 
 def _get_out_domain(out: xtyping.MaybeNestedInTuple[common.MutableField]) -> common.Domain:
@@ -157,7 +261,7 @@ def _tuple_assign_field(
     @named_collections.tree_map_named_collection
     def impl(target: common.MutableField, source: common.Field, domain: common.Domain) -> None:
         if isinstance(source, common.Field):
-            target[domain] = source[domain]
+            target[domain] = source if source.domain == domain else source[domain]
         else:
             assert core_defs.is_scalar_type(source)
             target[domain] = source
