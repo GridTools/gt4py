@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from types import ModuleType
+from typing import Any
 
 import numpy as np
 
@@ -28,10 +29,16 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    type_: ts.CollectionTypeSpec | ts.ScalarType, domain: common.Domain, xp: ModuleType
+    type_: ts.CollectionTypeSpec | ts.ScalarType,
+    domain: common.Domain,
+    xp: ModuleType,
+    *,
+    device: Any = None,
 ) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
     """
     Allocate a field or (arbitrarily nested) tuple(s) of fields.
+
+    The buffers are allocated with `xp.empty`, on `device` if it is given.
 
     The tuple structure and dtype is taken from a type_specifications.DataType,
     which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
@@ -72,6 +79,7 @@ def field_from_typespec(
                 dtype=core_ndarray_utils.namespace_dtype(
                     xp, type_translation.as_dtype(type_).scalar_type
                 ),
+                **({} if device is None else {"device": device}),
             ),
             domain=domain,
         )
