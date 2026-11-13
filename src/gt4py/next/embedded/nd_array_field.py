@@ -157,12 +157,8 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         """
         Interface to retrieve the low-level description of a Field buffer.
 
-        Since by default NdArrayFields are implemented as frozen dataclasses,
-        and therefore the backing ndarray cannot be replaced after creation,
-        this is implemented as a cached property for performance reasons.
-
-        NDArrayField subclasses where the backing ndarray can be replaced
-        should override this and make it a regular property.
+        Cached for performance reasons. Assignments into fields of immutable
+        array libraries (e.g. JAX) replace the backing ndarray and drop the cache.
         """
         return array_ops.of(self._ndarray).buffer_info(self.ndarray)
 
@@ -358,6 +354,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, value)
         if new_buffer is not self._ndarray:
             object.__setattr__(self, "_ndarray", new_buffer)
+            self.__dict__.pop("__gt_buffer_info__", None)
 
     __abs__ = _make_builtin("abs", "abs")
 

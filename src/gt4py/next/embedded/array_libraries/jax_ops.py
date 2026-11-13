@@ -20,7 +20,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.embedded import array_ops, nd_array_field
+from gt4py.next.embedded import _dlpack, array_ops, nd_array_field
 
 
 class JaxOps(array_ops.ArrayOps):
@@ -43,7 +43,14 @@ class JaxOps(array_ops.ArrayOps):
         return np.asarray(array)
 
     def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
+        # JAX's `__dlpack__` rejects `stream=-1` and blocks the host on `stream=None`.
+        return common.BufferInfo(
+            data_ptr=array.unsafe_buffer_pointer(),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+            shape=array.shape,
+            elem_strides=_dlpack.c_contiguous_strides(array.shape),
+            dtype=core_defs.dtype(self.scalar_type(array.dtype)),
+            device=_dlpack.device(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+        )
 
 
 array_ops.register(JaxOps(jnp))
