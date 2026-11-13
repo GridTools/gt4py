@@ -23,6 +23,7 @@ instance for its compat namespace with `register`.
 from __future__ import annotations
 
 import dataclasses
+import importlib
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Final
@@ -198,6 +199,7 @@ class ArrayOps:
 
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
+_registering_modules: dict[str, str] = {}
 
 
 def register(ops: ArrayOps) -> None:
@@ -206,13 +208,22 @@ def register(ops: ArrayOps) -> None:
     _ops_by_array_type.clear()
 
 
+def register_on_first_use(namespace_name: str, module_name: str) -> None:
+    """Import `module_name`, which registers the `ArrayOps` of the compat namespace `namespace_name`, when that namespace is first looked up."""
+    _registering_modules[namespace_name] = module_name
+
+
 def for_namespace(xp: ModuleType) -> ArrayOps:
     """The registered `ArrayOps` for the compat namespace `xp`, or the default one."""
     try:
         return _ops_by_namespace[xp]
     except KeyError:
-        ops = _ops_by_namespace[xp] = ArrayOps(xp)
-        return ops
+        pass
+    if (module_name := _registering_modules.pop(xp.__name__, None)) is not None:
+        importlib.import_module(module_name)
+        return for_namespace(xp)
+    ops = _ops_by_namespace[xp] = ArrayOps(xp)
+    return ops
 
 
 def of(array: Any) -> ArrayOps:
