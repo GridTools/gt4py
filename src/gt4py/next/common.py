@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import abc
-import collections
 import dataclasses
 import enum
 import functools
@@ -1388,42 +1387,6 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     promoted_dims = order_dimensions(unique_dims)
     check_dims(promoted_dims)
     return promoted_dims
-
-
-class FieldBuiltinFuncRegistry:
-    """
-    Mixin for adding `fbuiltins` registry to a `Field`.
-
-    Subclasses of a `Field` with `FieldBuiltinFuncRegistry` get their own registry,
-    dispatching (via ChainMap) to its parent's registries.
-    """
-
-    _builtin_func_map: collections.ChainMap[fbuiltins.BuiltInFunction, Callable] = (
-        collections.ChainMap()
-    )
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        cls._builtin_func_map = collections.ChainMap(
-            {},  # New empty `dict` for new registrations on this class
-            *[
-                c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
-                for c in cls.__mro__
-                if "_builtin_func_map" in c.__dict__
-            ],
-        )
-
-    @classmethod
-    def register_builtin_func(
-        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-    ) -> Any:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)
-        return cls._builtin_func_map.setdefault(op, op_func)
-
-    @classmethod
-    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
 
 
 #: Numeric value used to represent missing values in connectivities.

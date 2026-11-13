@@ -13,6 +13,7 @@ import pickle
 import re
 from typing import Callable, Iterable, Optional
 
+import array_api_strict
 import numpy as np
 import pytest
 
@@ -1366,6 +1367,8 @@ def test_setitem_array_libraries(nd_array_implementation, index, source, make_va
     value = make_value(xp, source)
     if is_cupy(xp) and isinstance(value, np.ndarray):
         pytest.skip("CuPy does not assign a non-scalar NumPy array.")
+    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
+        pytest.skip("Assigning an array of another library is tested separately.")
     field = common._field(
         asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
         domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
@@ -1391,6 +1394,16 @@ def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
 
     assert result.dtype == core_defs.dtype(expected)
     assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
+
+
+def test_setitem_array_of_other_library_raises():
+    field = common._field(
+        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
+    )
+
+    with pytest.raises(TypeError, match="Cannot assign an array of 'numpy'"):
+        field[...] = np.ones(3)
 
 
 def test_setitem_wrong_domain():
@@ -1962,6 +1975,35 @@ def test_jax_pytree_roundtrip():
     )
     # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
     assert jax.tree_util.tree_structure(other_field) != treedef
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_rejects_fields_of_other_libraries():
+    import jax
+
+    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
+
+    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
+        jax.jit(lambda f: f * 2.0)(field)
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_non_array_leaves():
+    import jax
+
+    D_BATCH = Dimension("D_BATCH")
+    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
+    batched = common._field(jax.numpy.ones((2, 3)), domain=common.domain({D_BATCH: 2, D0: 3}))
+
+    shapes = jax.tree.map(lambda x: x.shape, field)
+    assert jax.tree.leaves(shapes) == [3]
+    assert jax.eval_shape(lambda f: f * 2.0, field).ndarray.shape == (3,)
+    # a field with an axis index as leaf, as `vmap` prefix for the batched field's buffer
+    axes = nd_array_field.NdArrayField(common.domain({D0: 3}), 0)
+    sums = jax.vmap(lambda f: f.ndarray.sum(), in_axes=(axes,))(
+        nd_array_field.NdArrayField(common.domain({D0: 3}), batched.ndarray)
+    )
+    np.testing.assert_allclose(sums, [3.0, 3.0])
 
 
 @pytest.mark.requires_jax

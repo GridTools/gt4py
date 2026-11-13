@@ -22,6 +22,7 @@ instance for its compat namespace with `register`.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Final, Optional
@@ -34,10 +35,6 @@ from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_
 from gt4py.next import common
 
 
-# TODO(havogt): drop once gt4py requires NumPy >= 2.1, the first version whose `from_dlpack`
-#   takes `device` and `copy`; NumPy 2.0's `from_dlpack` cannot copy a non-CPU array to the host.
-_NUMPY_FROM_DLPACK_TAKES_DEVICE: Final = np.lib.NumpyVersion(np.__version__) >= "2.1.0"
-
 #: gt4py builtin and operator names whose Array API name differs.
 STANDARD_NAMES: Final[Mapping[str, str]] = {
     "neg": "negative",
@@ -47,7 +44,6 @@ STANDARD_NAMES: Final[Mapping[str, str]] = {
     "div": "divide",
     "floordiv": "floor_divide",
     "power": "pow",
-    "pow": "pow",
     "mod": "remainder",
     "invert": "logical_not",
     "arcsin": "asin",
@@ -59,6 +55,9 @@ STANDARD_NAMES: Final[Mapping[str, str]] = {
 }
 
 
+# TODO(havogt): Redesign coherent conversion rules when arrays/scalars of different array
+#   libraries are used together.
+@dataclasses.dataclass(frozen=True)
 class ArrayOps:
     """
     Operations on the buffers of embedded fields for one array namespace.
@@ -72,10 +71,9 @@ class ArrayOps:
     builtin_overrides: ClassVar[Mapping[Any, Callable[..., Any]]] = {}
 
     xp: ModuleType
-
-    def __init__(self, xp: ModuleType) -> None:
-        self.xp = xp
-        self._elementwise_function_cache: dict[str, Callable[..., Any]] = {}
+    _elementwise_function_cache: dict[str, Callable[..., Any]] = dataclasses.field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.xp.__name__})"
@@ -114,7 +112,10 @@ class ArrayOps:
 
         Python scalars stay Python scalars, so they keep the weak typing of the
         standard. NumPy scalars become 0-d arrays of their dtype, which promotes like
-        NumPy does with NumPy scalars.
+        NumPy does with NumPy scalars. They reach fields of every library, since gt4py's
+        scalar types are NumPy's, but the standard does not accept them as operands.
+        Libraries that do (NumPy, CuPy, JAX) override this to keep them as they are,
+        which spares creating a 0-d array, on the device, per operation.
         """
         if isinstance(value, np.generic):
             return self.asarray(value, dtype=type(value), like=like)
@@ -125,8 +126,9 @@ class ArrayOps:
         try:
             return self._elementwise_function_cache[name]
         except KeyError:
-            func = self._elementwise_function_cache[name] = self._elementwise_function(name)
-            return func
+            return self._elementwise_function_cache.setdefault(
+                name, self._elementwise_function(name)
+            )
 
     def _elementwise_function(self, name: str) -> Callable[..., Any]:
         if name == "where":
@@ -164,12 +166,26 @@ class ArrayOps:
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
-        """Write `value` into `array[key]`; returns the array holding the result."""
-        if not isinstance(value, bool | int | float):
-            # the standard leaves assigning another dtype or device unspecified
+        """
+        Write `value` into `array[key]`; returns the array holding the result.
+
+        `value` is a Python scalar, a NumPy scalar (gt4py's scalar types are NumPy's)
+        or an array of the same library as `array`; arrays of other libraries raise
+        `TypeError`. The standard leaves assigning a value of another dtype unspecified,
+        so it is cast to the dtype of `array` first. Libraries that cast on assignment
+        (NumPy, CuPy) assign directly; JAX arrays are immutable and need
+        `.at[key].set(value)`.
+        """
+        if isinstance(value, np.generic):
             value = self.xp.asarray(value, device=self.device(array))
-            if value.dtype != array.dtype:
-                value = self.xp.astype(value, array.dtype)
+        elif not isinstance(value, bool | int | float):
+            if array_api_compat.array_namespace(value) is not self.xp:
+                raise TypeError(
+                    f"Cannot assign an array of '{type(value).__module__}' to an array of"
+                    f" '{self.xp.__name__}'."
+                )
+        if not isinstance(value, bool | int | float) and value.dtype != array.dtype:
+            value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
@@ -242,9 +258,7 @@ class ArrayOps:
         return index
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
-        if _NUMPY_FROM_DLPACK_TAKES_DEVICE:
-            return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
-        return np.from_dlpack(array)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
+        return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
     def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
         return common.BufferInfo.from_ndarray(array)

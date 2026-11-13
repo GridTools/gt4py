@@ -32,6 +32,8 @@ from gt4py.next.ffront import experimental, fbuiltins
 
 
 def _ops_of(*values: Any) -> array_ops.ArrayOps:
+    # TODO(havogt): the first field's array library decides, so mixing libraries depends on the
+    #   order of the operands; reject mixed libraries or define a priority instead.
     for v in values:
         if isinstance(v, NdArrayField):
             return array_ops.of(v._ndarray)
@@ -98,10 +100,7 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayField(
-    common.MutableField[common.DimsT, core_defs.ScalarT],
-    common.FieldBuiltinFuncRegistry,
-):
+class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     """
     Field backed by an array of any Array API compatible library.
 
@@ -118,6 +117,10 @@ class NdArrayField(
         # TODO(havogt): return the Array API namespace (`array_ops.of(self._ndarray).xp`) instead of the library's
         #   own module; users comparing it to `numpy` should query the device instead.
         return array_ops.of(self._ndarray).array_ns
+
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return _builtin_implementations.get(func, NotImplemented)
 
     def __getstate__(self) -> dict[str, Any]:
         # Serialize only the dataclass fields, excluding cached properties
@@ -690,6 +693,9 @@ def _identity_index_array(
 # -- Specialized implementations for builtin operations on array fields --
 
 
+_builtin_implementations: dict[fbuiltins.BuiltInFunction, Callable[..., Any]] = {}
+
+
 def _register_builtin(builtin: fbuiltins.BuiltInFunction, impl: Callable[..., Any]) -> None:
     """Register `impl` for `builtin`, unless the `ArrayOps` of the first field argument replaces it."""
 
@@ -697,7 +703,8 @@ def _register_builtin(builtin: fbuiltins.BuiltInFunction, impl: Callable[..., An
         return _ops_of(*args).builtin_overrides.get(builtin, impl)(*args, **kwargs)
 
     dispatch.__name__ = getattr(impl, "__name__", builtin.name)
-    NdArrayField.register_builtin_func(builtin, dispatch)
+    assert builtin not in _builtin_implementations
+    _builtin_implementations[builtin] = dispatch
 
 
 _register_builtin(
