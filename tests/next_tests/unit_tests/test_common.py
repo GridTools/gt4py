@@ -9,12 +9,14 @@
 import operator
 from typing import Optional, Pattern
 
+import numpy as np
 import pytest
 import re
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
+from gt4py.next.embedded import array_ops
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -617,48 +619,158 @@ def test_dimension_promotion(
         assert exc_info.match(re.escape(expected_error_msg))
 
 
+def _read_only(array):
+    array = array.copy()
+    array.flags.writeable = False
+    return array
+
+
+def _buffer_info(array) -> common.BufferInfo:
+    return array_ops.of(array).buffer_info(array)
+
+
+_BASE = np.arange(5 * 6 * 7, dtype=np.float64).reshape(5, 6, 7)
+
+
 class TestBufferInfo:
-    def test_from_numpy_ndarray(self):
-        import numpy as np
+    @pytest.mark.parametrize(
+        "array",
+        [
+            _BASE,
+            _BASE[1:4, 2:, 3:5],
+            _BASE.transpose(2, 0, 1),
+            _BASE[::-1, :, ::-2],
+            np.asfortranarray(_BASE.astype(np.float32)),
+            np.asarray(3.0),
+            _BASE > 3,
+            np.arange(10, dtype=np.int32),
+            np.arange(10, dtype=np.uint16),
+            _read_only(_BASE),
+        ],
+        ids=[
+            "contiguous",
+            "view",
+            "transposed",
+            "negative_strides",
+            "fortran_float32",
+            "0d",
+            "bool",
+            "int32",
+            "uint16",
+            "read_only",
+        ],
+    )
+    def test_numpy(self, array):
+        buffer_info = _buffer_info(array)
 
-        a = np.asarray([1, 2, 3, 4, 5])
-        buffer_info = common.BufferInfo.from_ndarray(a)
+        assert buffer_info.data_ptr == array.__array_interface__["data"][0]
+        assert buffer_info.shape == array.shape
+        assert buffer_info.elem_strides == tuple(s // array.itemsize for s in array.strides)
+        assert buffer_info.dtype == core_defs.dtype(array.dtype)
+        assert buffer_info.device == core_defs.Device(core_defs.DeviceType.CPU, 0)
 
-        assert buffer_info.data_ptr == a.ctypes.data
-        assert buffer_info.ndim == a.ndim
-        assert buffer_info.shape == a.shape
-        assert buffer_info.byte_strides == a.strides
-        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
-        assert buffer_info.device.device_type == core_defs.DeviceType.CPU
-        assert buffer_info.device.device_id == 0
+    def test_array_api_strict(self):
+        import array_api_strict as xps
+
+        array = xps.reshape(xps.arange(5 * 6 * 7, dtype=xps.float64), (5, 6, 7))[1:4, 2:, 3:5]
+        # The wrapped NumPy array is the only witness that does not go through DLPack.
+        wrapped = array._array
+
+        buffer_info = _buffer_info(array)
+
+        assert buffer_info.data_ptr == wrapped.__array_interface__["data"][0]
+        assert buffer_info.shape == wrapped.shape
+        assert buffer_info.elem_strides == tuple(s // wrapped.itemsize for s in wrapped.strides)
+        assert buffer_info.dtype == core_defs.dtype(np.float64)
+        assert buffer_info.device == core_defs.Device(core_defs.DeviceType.CPU, 0)
 
     @pytest.mark.requires_gpu
-    def test_from_cupy_ndarray(self):
+    @pytest.mark.parametrize(
+        "key",
+        [
+            (slice(None),),
+            (slice(1, 4), slice(2, None), slice(3, 5)),
+            pytest.param(
+                (slice(None, None, -1), slice(None), slice(None, None, -2)),
+                marks=pytest.mark.xfail(
+                    strict=True,
+                    reason="CuPy 14.1.1 exports negative strides divided as unsigned integers"
+                    " through DLPack.",
+                ),
+            ),
+        ],
+        ids=["contiguous", "view", "negative_strides"],
+    )
+    def test_cupy(self, key):
         cp = pytest.importorskip("cupy")
+        array = cp.arange(5 * 6 * 7, dtype=cp.float64).reshape(5, 6, 7)[key]
 
-        a = cp.asarray([1, 2, 3, 4, 5])
-        buffer_info = common.BufferInfo.from_ndarray(a)
+        buffer_info = _buffer_info(array)
 
-        assert buffer_info.data_ptr == a.data.ptr
-        assert buffer_info.ndim == a.ndim
-        assert buffer_info.shape == a.shape
-        assert buffer_info.byte_strides == a.strides
-        assert all(b >= e for b, e in zip(buffer_info.byte_strides, buffer_info.elem_strides))
-        assert buffer_info.device.device_type == core_defs.CUPY_DEVICE_TYPE
-        assert buffer_info.device.device_id == a.device.id
+        assert buffer_info.data_ptr == array.data.ptr
+        assert buffer_info.shape == array.shape
+        assert buffer_info.elem_strides == tuple(s // array.itemsize for s in array.strides)
+        assert buffer_info.dtype == core_defs.dtype(np.float64)
+        assert buffer_info.device == core_defs.Device(core_defs.CUPY_DEVICE_TYPE, array.device.id)
 
-    def test_hashes(self):
-        import numpy as np
+    @pytest.mark.parametrize(
+        "platform", ["cpu", pytest.param("gpu", marks=pytest.mark.requires_gpu)]
+    )
+    def test_jax(self, platform):
+        jax = pytest.importorskip("jax")
+        devices = [d for d in jax.devices() if d.platform == platform] or (
+            jax.devices("cpu") if platform == "cpu" else []
+        )
+        if not devices:
+            pytest.skip(f"JAX has no '{platform}' device")
+        array = jax.device_put(jax.numpy.zeros((5, 6, 7), dtype=jax.numpy.int32), devices[0])
 
-        a = np.asarray([1, 2, 3, 4, 5])
-        buffer_info = common.BufferInfo.from_ndarray(a)
-        assert hash(buffer_info) == buffer_info.hash_key
+        buffer_info = _buffer_info(array)
 
-        # Create a view with the same data pointer and shape
-        b = a[0:None]
-        assert np.allclose(a, b)
-        assert a is not b
-        assert hash(common.BufferInfo.from_ndarray(b)) == buffer_info.hash_key
+        assert buffer_info.data_ptr == array.unsafe_buffer_pointer()
+        assert buffer_info.shape == (5, 6, 7)
+        assert buffer_info.elem_strides == (42, 7, 1)
+        assert buffer_info.dtype == core_defs.dtype(np.int32)
+        assert buffer_info.device == core_defs.Device(*array.__dlpack_device__())
+
+    def test_hash_key_tells_apart_dtypes_at_the_same_address(self):
+        a = np.zeros(4, dtype=np.float64)
+        scalar = np.zeros((), dtype=np.float64)
+        scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
+        assert scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
+
+        for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
+            assert _buffer_info(x) != _buffer_info(y)
+            assert _buffer_info(x).hash_key != _buffer_info(y).hash_key
+
+        assert _buffer_info(a[:]) == _buffer_info(a)
+        assert _buffer_info(a[:]).hash_key == _buffer_info(a).hash_key
+        assert hash(_buffer_info(a)) == _buffer_info(a).hash_key
+
+    def test_no_dlpack(self):
+        class NoDLPack:
+            def __array_namespace__(self):
+                return np
+
+        with pytest.raises(TypeError, match="DLPack"):
+            array_ops.ArrayOps(np).buffer_info(NoDLPack())
+
+    def test_producer_without_max_version(self):
+        class OnlyStream:
+            def __init__(self, array):
+                self.array = array
+
+            def __dlpack__(self, *, stream=None):
+                return self.array.__dlpack__(stream=stream)
+
+            def __dlpack_device__(self):
+                return self.array.__dlpack_device__()
+
+        array = _BASE[1:4]
+
+        buffer_info = array_ops.ArrayOps(np).buffer_info(OnlyStream(array))
+
+        assert buffer_info == _buffer_info(array)
 
 
 class TestCartesianConnectivity:
