@@ -118,14 +118,25 @@ def test_write_local_field(unstructured_case):
     def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
         return inp(V2E)
 
-    out = unstructured_case.as_field(
-        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].asnumpy())
-    )
+    v2e = unstructured_case.offset_provider["V2E"]
+    v2e_table = v2e.asnumpy()
+    out = unstructured_case.as_field([Vertex, V2EDim], np.zeros_like(v2e_table))
     inp = cases.allocate(unstructured_case, testee, "inp")()
+    # the value at a skipped neighbor is unspecified
+    is_neighbor = (
+        v2e_table != v2e.skip_value
+        if v2e.skip_value is not None
+        else np.ones_like(v2e_table, dtype=bool)
+    )
+
+    def equal_at_neighbors(ref, out):
+        return np.array_equal(ref[is_neighbor], out[is_neighbor])
+
     cases.verify(
         unstructured_case,
         testee,
         inp,
         out=out,
-        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].asnumpy()],
+        ref=inp.asnumpy()[v2e_table],
+        comparison=equal_at_neighbors,
     )

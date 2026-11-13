@@ -59,6 +59,11 @@ class NumPyOps(array_ops.ArrayOps):
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
+    ) -> core_defs.NDArrayObject:
+        return np.take(array, indices, axis=axis, mode="clip")  # type: ignore[call-overload] # `NDArrayObject` typing is not complete
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 

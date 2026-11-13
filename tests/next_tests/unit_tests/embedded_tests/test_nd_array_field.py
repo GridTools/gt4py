@@ -900,6 +900,178 @@ def test_premap_disjoint_inverse_image_raises():
         f.premap(conn)
 
 
+_GV = Dimension("GV")
+_GE = Dimension("GE")
+_GK = Dimension("GK", kind=DimensionKind.VERTICAL)
+_GX = Dimension("GX")
+_GE2V = Dimension("GE2V", kind=DimensionKind.LOCAL)
+_GV2V = Dimension("GV2V", kind=DimensionKind.LOCAL)
+
+
+def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
+    rng = np.random.default_rng(42)
+    data = rng.random(tuple(len(r) for _, r in field_dims))
+    field = common._field(
+        xp.asarray(data),
+        domain=common.Domain(
+            dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
+        ),
+    )
+    conn = common._connectivity(
+        xp.asarray(table),
+        domain=common.Domain(
+            dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
+        ),
+        codomain=codomain,
+        skip_value=skip_value,
+    )
+    return field, conn, data
+
+
+@pytest.mark.parametrize("start", [0, 3, -2])
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "neighbor_leading",
+        "neighbor_trailing",
+        "neighbor_middle",
+        "one_dim",
+        "same_dim",
+        "permutation",
+    ],
+)
+def test_gather_premap_single_axis(nd_array_implementation, layout, start):
+    NV, NK, NX, NE = 6, 3, 2, 5
+    rng = np.random.default_rng(0)
+    v_range = UnitRange(start, start + NV)
+    k, x = (_GK, UnitRange(0, NK)), (_GX, UnitRange(0, NX))
+    if layout == "same_dim":
+        conn_dims = [(_GV, v_range), (_GV2V, UnitRange(0, 3))]
+    elif layout == "permutation":
+        conn_dims = [(_GV, v_range)]
+    else:
+        conn_dims = [(_GE, UnitRange(0, NE)), (_GE2V, UnitRange(0, 2))]
+    field_dims = {
+        "neighbor_leading": [(_GV, v_range), k],
+        "neighbor_trailing": [k, (_GV, v_range)],
+        "neighbor_middle": [x, (_GV, v_range), k],
+        "one_dim": [(_GV, v_range)],
+        "same_dim": [(_GV, v_range), k],
+        "permutation": [(_GV, v_range), k],
+    }[layout]
+    table_shape = tuple(len(r) for _, r in conn_dims)
+    table = (
+        start + rng.permutation(NV)
+        if layout == "permutation"
+        else rng.integers(start, start + NV, size=table_shape)
+    ).astype(np.int32)
+    field, conn, data = _gather_case(nd_array_implementation, field_dims, conn_dims, _GV, table)
+
+    result = field.premap(conn)
+
+    axis = [d for d, _ in field_dims].index(_GV)
+    expected_dims = (
+        *(d for d, _ in field_dims[:axis]),
+        *(d for d, _ in conn_dims),
+        *(d for d, _ in field_dims[axis + 1 :]),
+    )
+    expected_ranges = (
+        *(r for _, r in field_dims[:axis]),
+        *(r for _, r in conn_dims),
+        *(r for _, r in field_dims[axis + 1 :]),
+    )
+    assert result.domain == common.Domain(dims=expected_dims, ranges=expected_ranges)
+    assert np.array_equal(result.asnumpy(), np.take(data, table - start, axis=axis))
+
+
+def test_gather_premap_single_axis_narrowed(nd_array_implementation):
+    # the last edge maps entirely outside the field, so the output loses it
+    table = np.asarray([[0, 1], [2, 3], [4, 5], [7, 8]], dtype=np.int32)
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 6)), (_GK, UnitRange(0, 2))],
+        [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GE, _GE2V, _GK), ranges=(UnitRange(0, 3), UnitRange(0, 2), UnitRange(0, 2))
+    )
+    assert np.array_equal(result.asnumpy(), np.take(data, table[:3], axis=0))
+
+
+@pytest.mark.parametrize("start", [0, 5, 8, -3])
+@pytest.mark.parametrize("with_second_connectivity", [False, True])
+def test_gather_premap_skip_values_on_offset_domain(
+    nd_array_implementation, start, with_second_connectivity
+):
+    NV, NK = 6, 3
+    table = np.asarray([[0, 1], [2, -1], [-1, 5], [3, 4]], dtype=np.int32)
+    table = np.where(table == -1, -1, table + start).astype(np.int32)
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(start, start + NV)), (_GK, UnitRange(0, NK))],
+        [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        table,
+        skip_value=-1,
+    )
+    connectivities = [conn]
+    k_table = np.asarray([2, 0, 1], dtype=np.int32)
+    if with_second_connectivity:  # two connectivities take the advanced-indexing path
+        connectivities.append(
+            common._connectivity(
+                nd_array_implementation.asarray(k_table),
+                domain=common.Domain(dims=(_GX,), ranges=(UnitRange(0, NK),)),
+                codomain=_GK,
+            )
+        )
+
+    result = field.premap(*connectivities)
+
+    expected = np.take(data, np.where(table == -1, 0, table - start), axis=0)
+    if with_second_connectivity:
+        expected = expected[..., k_table]
+    is_neighbor = table != -1
+    assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
+
+
+def test_gather_premap_uses_array_ops_take(monkeypatch):
+    from gt4py.next.embedded.array_libraries import numpy_ops
+
+    calls = []
+    original = numpy_ops.NumPyOps.take
+
+    def spy(self, *args, **kwargs):
+        calls.append(kwargs.get("axis"))
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(numpy_ops.NumPyOps, "take", spy)
+    field, conn, _ = _gather_case(
+        np,
+        [(_GK, UnitRange(0, 2)), (_GV, UnitRange(0, 4))],
+        [(_GE, UnitRange(0, 3)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        np.asarray([[0, 1], [2, 3], [1, 2]], dtype=np.int32),
+    )
+    field.premap(conn)
+    assert calls == [1]
+
+    calls.clear()
+    k_field, k_conn, _ = _gather_case(  # (GE, GK) -> GK reads another field dimension
+        np,
+        [(_GE, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
+        [(_GE, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
+        _GK,
+        np.asarray([[1, 0], [0, 1], [1, 1]], dtype=np.int32),
+    )
+    k_field.premap(k_conn)
+    assert calls == []
+
+
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
     I = Dimension("I")
