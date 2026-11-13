@@ -51,6 +51,17 @@ test_truncates_oversized_review() {
     assert "under 60000 bytes" test "$(stat -c %s ws/out/review.md)" -le 60000
 }
 
+test_truncates_oversized_review_in_two_phases() {
+  # The workflow runs the phases in separate sandbox runs (separate processes),
+  # so everything the review phase uses must be defined outside the fetch phase.
+  setup 100
+  bash root/bin/run-review --phase fetch "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
+  bash root/bin/run-review --phase review "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
+  assert "truncated flag" test "$(jq -r .truncated ws/out/meta.json)" = true &&
+    assert "under 60000 bytes" test "$(stat -c %s ws/out/review.md)" -le 60000 &&
+    assert "truncation note" grep -q 'Review truncated' ws/out/review.md
+}
+
 test_removes_instruction_files_added_by_the_pr() {
   # Adds .claude/, .opencode/, copilot-instructions.md and root and nested
   # AGENTS.md / CLAUDE.md, none of which exist in its parent.

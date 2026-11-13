@@ -40,6 +40,11 @@ die() {
   exit 1
 }
 
+# Byte truncation can split a multi-byte character; 'iconv -c' drops it (and
+# drops invalid bytes), exiting 1 when it does. Used by both phases, which run
+# as separate processes.
+clip() { head -c "$1" | { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; }; }
+
 PHASE=all
 if [ "${1:-}" = --phase ]; then
   PHASE=${2:-}
@@ -198,10 +203,6 @@ fetch_phase() {
   fi
 
   # --- Render the prompt -------------------------------------------------------
-  # Byte truncation can split a multi-byte character; 'iconv -c' drops it (and
-  # drops invalid bytes), exiting 1 when it does.
-  clip() { head -c "$1" | { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; }; }
-
   PR_TITLE=$(jq -r '.title // "" | tostring' "${IN_DIR}/pr.json" | tr -d '\r' | head -n 1 | clip "${PR_TITLE_MAX_BYTES}")
   PR_BODY=$(jq -r '.body // "" | tostring' "${IN_DIR}/pr.json" | tr -d '\r' | clip "${PR_BODY_MAX_BYTES}")
   NONCE=$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')
