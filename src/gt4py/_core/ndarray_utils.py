@@ -113,10 +113,9 @@ _SCALAR_TYPES: Final = frozenset(core_defs.SCALAR_TYPES)
 
 
 @functools.cache
-def _numpy_scalar_type(dtype: np.dtype) -> type[np.generic]:
-    # `dtype.type` is the scalar type of the dtype's C type, e.g. `np.longlong` for an int64
-    # array on Linux, which is not `np.int64`; kind and size identify the gt4py type
-    return np.dtype(f"{dtype.kind}{dtype.itemsize}").type
+def _canonicalize_numpy_dtype(dtype: np.dtype) -> np.dtype:
+    # dtypes named by C type map to distinct scalar types, e.g. `np.longlong` for int64 on Linux
+    return np.dtype(f"{dtype.kind}{dtype.itemsize}")
 
 
 @functools.cache
@@ -134,7 +133,7 @@ def _dtype_tables(
 def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar]) -> _ArrayDType:
     """The dtype object of `array_ns` for the gt4py scalar type `scalar_type`."""
     key: type = (
-        _numpy_scalar_type(np.dtype(scalar_type))
+        _canonicalize_numpy_dtype(np.dtype(scalar_type)).type
         if issubclass(scalar_type, np.generic)
         else scalar_type
     )
@@ -147,7 +146,7 @@ def namespace_dtype(array_ns: ArrayNamespace, scalar_type: type[core_defs.Scalar
 def scalar_type(array_ns: ArrayNamespace, dtype: _ArrayDType) -> type[core_defs.Scalar]:
     """The gt4py scalar type of the arrays of `array_ns` with dtype `dtype`."""
     result = (
-        _numpy_scalar_type(dtype)
+        _canonicalize_numpy_dtype(dtype).type
         if isinstance(dtype, np.dtype)
         else _dtype_tables(array_ns)[1].get(dtype)
     )
