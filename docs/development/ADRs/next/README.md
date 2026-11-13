@@ -38,7 +38,6 @@ Writing a new ADR is simple:
 ### Embedded Execution
 
 - [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
-- [0029 - PyTorch Tensors in Embedded Execution](0029-Torch_Embedded_Backend.md)
 
 ### Transformations
 
