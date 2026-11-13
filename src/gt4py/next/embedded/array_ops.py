@@ -189,6 +189,21 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
+    ) -> core_defs.NDArrayObject:
+        """
+        `array` gathered along `axis` at the integer array `indices`.
+
+        The result has shape `array.shape[:axis] + indices.shape + array.shape[axis + 1:]`.
+        Out-of-range entries of `indices` (skipped neighbors) select an unspecified element of
+        the axis; they never raise and never read out of bounds.
+        """
+        xp = self.xp
+        flat = xp.clip(xp.reshape(indices, (-1,)), 0, array.shape[axis] - 1)
+        out_shape = (*array.shape[:axis], *indices.shape, *array.shape[axis + 1 :])
+        return xp.reshape(xp.take(array, flat, axis=axis), out_shape)
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 

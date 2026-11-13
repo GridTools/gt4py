@@ -599,9 +599,14 @@ def _gather_output_domain(
 
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
-    """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
+    """`premap` via a single gather (dimension-preserving and -introducing cases)."""
     ops = array_ops.of(data._ndarray)
     new_domain = _gather_output_domain(data.domain, connectivities)
+    if len(connectivities) == 1:
+        result = _single_axis_gather_premap(data, connectivities[0], new_domain, ops)
+        if result is not None:
+            return result
+
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
     # one index array per original field dimension (the connectivity's, or identity), broadcast over
@@ -616,6 +621,32 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         for dim in data.domain.dims
     )
     new_buffer = data._ndarray[take_indices]
+    return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
+
+
+def _single_axis_gather_premap(
+    data: NdArrayField,
+    connectivity: common.GatherConnectivity,
+    new_domain: common.Domain,
+    ops: array_ops.ArrayOps,
+) -> Optional[NdArrayField]:
+    """
+    `premap` as one `ArrayOps.take` along the codomain axis, or `None` if the gather is not of that form.
+
+    That is the case when the output dimensions are the field dimensions with the codomain replaced,
+    in place, by the dimensions of the connectivity's domain, i.e. when the connectivity reads no
+    other dimension of the field.
+    """
+    dims = data.domain.dims
+    axis = data.domain.dim_index(connectivity.codomain, allow_missing=False)
+    if new_domain.dims != (*dims[:axis], *connectivity.domain.dims, *dims[axis + 1 :]):
+        return None
+    sub_domain = common.Domain(*(new_domain[d] for d in connectivity.domain.dims))
+    conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
+    indices = ops.asarray(conn.ndarray)
+    if (start := data.domain[axis].unit_range.start) != 0:
+        indices = indices - start
+    new_buffer = ops.take(data._ndarray, indices, axis=axis)
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 

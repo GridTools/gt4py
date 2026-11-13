@@ -39,6 +39,11 @@ class JaxOps(array_ops.ArrayOps):
     ) -> core_defs.NDArrayObject:
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
+    ) -> core_defs.NDArrayObject:
+        return jnp.take(array, indices, axis=axis, mode="clip")
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 

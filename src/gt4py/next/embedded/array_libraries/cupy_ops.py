@@ -44,6 +44,11 @@ class CuPyOps(array_ops.ArrayOps):
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
+    ) -> core_defs.NDArrayObject:
+        return cp.take(array, indices, axis=axis)  # out-of-range indices wrap around
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return cp.asnumpy(array)
 
