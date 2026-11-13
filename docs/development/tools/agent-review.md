@@ -68,6 +68,6 @@ The workflow file and the addendum are read from `main`, so a change takes effec
 2. The same with the default harness, dry run (this uses the key).
 3. The label on a PR.
 
-Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`, as for PR Agent; never merge them enabled. With the current pin this checks only that the run starts (the pin resolves and the permission ceiling is accepted): the called workflow accepts the `pull_request` event only in its own self-test, so `authorize` fails, and its `review` job would be denied the `main`-only environment on a branch ref anyway.
+Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`, as for PR Agent; never merge them enabled. With a pin that supports the caller test mode of `GridTools/ci-workflows` this runs the `stub` harness as a forced dry run in the keyless job (no key, no environment, nothing posted), which proves the plumbing only: under `pull_request` the workflow file, the rule files and the addendum are PR content, so the reset of the rule files is not tested. Enabled, the Actions event policy for this file must also allow `pull_request`.
 
 Changes to the pipeline itself are tested in GridTools/ci-workflows.
