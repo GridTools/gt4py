@@ -15,13 +15,13 @@ AR_DIR=$(cd "$(dirname "$0")/.." && pwd)
 PROMPT="${AR_DIR}/prompt.md.tmpl"
 LIST="${AR_DIR}/instruction-files.txt"
 
-# The instruction files the prompt names in its "Review rules" section. Keep
-# this in sync with prompt.md.tmpl; the asserts below check it two ways.
-REQUIRED=(
-  AGENTS.md
-  CODING_GUIDELINES.md
-  .github/copilot-instructions.md
-  src/gt4py/next/AGENTS.md
+# The instruction files the prompt names in its "Review rules" section are
+# extracted FROM the prompt (not hardcoded), so a rule file added to the prompt
+# later cannot slip past this check. Take every backticked path ending in '.md'
+# between '## Review rules' and the next '## ' heading.
+mapfile -t REQUIRED < <(
+  awk '/^## Review rules/{f=1; next} f && /^## /{exit} f' "${PROMPT}" |
+    grep -oE '`[^`]+\.md`' | tr -d '`' | sort -u
 )
 
 # True if path $1 is reset by some pattern in instruction-files.txt, matching
@@ -47,8 +47,9 @@ covered() {
 
 test_prompt_named_files_are_reset() {
   local f rc=0
+  assert "found the prompt's named rule files" test "${#REQUIRED[@]}" -ge 3 || rc=1
   for f in "${REQUIRED[@]}"; do
-    assert "'${f}' named in prompt.md.tmpl" grep -qF "${f}" "${PROMPT}" || rc=1
+    echo "    rule file from prompt: ${f}"
     assert "'${f}' reset by instruction-files.txt" covered "${f}" || rc=1
   done
   return "${rc}"
