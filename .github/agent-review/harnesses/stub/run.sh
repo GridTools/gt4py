@@ -4,9 +4,10 @@
 # It exists to test the pipeline (prepare -> AWF -> collect -> publish)
 # without any secret. The review deliberately contains hostile content that
 # the 'publish' job must neutralise: @mentions (also as character
-# references), HTML comments imitating the
-# comment marker, and optional padding (STUB_PADDING_KIB) to exceed the size
-# limits.
+# references), HTML comments imitating the comment marker, other markup that
+# GitHub renders as nothing, invisible characters, and optional padding
+# (STUB_PADDING_KIB) to exceed the size limits. The handle is not a valid
+# GitHub login (consecutive hyphens), so a sanitiser bug notifies nobody.
 #
 # Environment (the adapter contract, see harnesses/README.md): PROMPT_FILE,
 # REPO_DIR, OUT_DIR, MODEL, HARNESS_PREFIX, PR_NUMBER, CONTEXT_DIR, and here
@@ -34,12 +35,16 @@ env | cut -d= -f1 | grep -E 'KEY|TOKEN|SECRET|PASSWORD' | sort | sed 's/^/stub: 
   echo
   echo "### Findings"
   echo
-  echo "1. **Mention neutralisation**: these mentions must not notify anyone: @egparedes," \
-    "&#64;egparedes, &#x40;egparedes, &commat;egparedes."
+  echo "1. **Mention neutralisation**: these mentions must not notify anyone: @agent-review--stub," \
+    "&#64;agent-review--stub, &#x40;agent-review--stub, &commat;agent-review--stub."
   echo "2. **Marker spoofing**: the next lines must not hide text or imitate the comment marker."
   echo "   <!-- agent-review:stub -->"
   echo "   <!<!---- nested comment start -->"
   echo "   hidden text? -->"
+  echo "3. **Hidden markup**: each item must be visible: <?pi one ?>, <!DECL two>, <![CDATA[ three ]]>," \
+    $'zero\xe2\x80\x8bwidth, \xe2\x80\xaeright-to-left\xe2\x80\xac.'
+  echo
+  echo '[four]: https://example.org "link reference definition"'
   echo
   if [ "${STUB_PADDING_KIB:-0}" -gt 0 ]; then
     echo "### Padding"

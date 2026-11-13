@@ -23,5 +23,6 @@ the `case` in the `Authorize` step of `.github/workflows/agent-review.yml`.
 | [pi](pi/)             | 1.5.2    | `openai-chat` | `--no-approve --no-context-files`                               | AWF's only           |
 
 `stub` makes no model call and writes a fixed review with hostile content
-(an @mention, HTML comments imitating the comment marker, and optional
-padding); it tests the pipeline without any secret.
+(@mentions of a handle that is not a valid login, HTML comments imitating
+the comment marker, other markup that renders as nothing, invisible
+characters, and optional padding); it tests the pipeline without any secret.
