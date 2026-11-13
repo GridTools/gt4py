@@ -153,9 +153,9 @@ def function_signature_incompatibilities_fieldop(
 
 
 def _tree_map_type_constructor_drop_python_type(
-    value: ts.CollectionTypeSpecT,
+    value: ts.CollectionTypeSpecT | ts.VarLenTupleType,
     elems: Iterable[ts.DataType | ts.DimensionType | ts.DeferredType],
-) -> ts.CollectionTypeSpecT:
+) -> ts.CollectionTypeSpecT | ts.VarLenTupleType:
     result = type_info.tree_map_type_constructor(value, elems)
     if isinstance(value, ts.NamedCollectionType):
         result = datamodels.evolve(result, original_python_type=ts.ANY_PYTHON_TYPE_NAME)
@@ -164,7 +164,7 @@ def _tree_map_type_constructor_drop_python_type(
 
 def _scan_param_promotion(
     param: ts.TypeSpec, arg: ts.TypeSpec
-) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType:
+) -> ts.FieldType | ts.TupleType | ts.NamedCollectionType | ts.VarLenTupleType:
     """
     Promote parameter of a scan pass to match dimensions of respective scan operator argument.
 
@@ -183,14 +183,24 @@ def _scan_param_promotion(
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 8>, shape=None))
     """
 
-    def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
+    def _index_arg(type_: ts.TypeSpec, idx: int | type_info.VarLenTupleElementKey) -> ts.TypeSpec:
+        if isinstance(idx, type_info.VarLenTupleElementKey):
+            if isinstance(type_, ts.TupleType):
+                # case where `param` is variable length, but `arg` is actual tuple
+                if not all(el == type_.types[0] for el in type_.types):
+                    raise IndexError()
+                return type_.types[0]
+            elif isinstance(type_, ts.VarLenTupleType):
+                return type_.element_type
+            raise AttributeError
+        return type_.types[idx]  # type: ignore[attr-defined]
+
+    def _as_field(
+        dtype: ts.TypeSpec, path: tuple[int | type_info.VarLenTupleElementKey, ...]
+    ) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
-            el_type = functools.reduce(
-                lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
-                path,
-                arg,
-            )
+            el_type = functools.reduce(_index_arg, path, arg)
             return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
         except (IndexError, AttributeError):
             # The structure of the scan passes argument and the requested
@@ -208,7 +218,7 @@ def _scan_param_promotion(
         result_collection_constructor=_tree_map_type_constructor_drop_python_type,
         with_path_arg=True,
     )(param)
-    assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType))
+    assert isinstance(res, (ts.FieldType, ts.TupleType, ts.NamedCollectionType, ts.VarLenTupleType))
     return res
 
 

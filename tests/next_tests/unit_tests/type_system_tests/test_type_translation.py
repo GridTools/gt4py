@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import enum
 import types
 import typing
@@ -210,21 +211,52 @@ def test_make_symbol_type_from_typing(value, expected):
     assert type_translation.from_type_hint(value) == expected
 
 
+def test_generic_tuple_constructor_type():
+    # The type of the `tuple` builtin itself: `type[tuple]` (e.g. the symbol `tuple`
+    # referenced inside a field operator) maps to a constructor for a generic tuple.
+    expected = ts.ConstructorType(
+        definition=ts.FunctionType(
+            pos_only_args=[ts.DeferredType(constraint=None)],
+            pos_or_kw_args={},
+            kw_only_args={},
+            returns=ts.DeferredType(constraint=ts.VarLenTupleType),
+        )
+    )
+    assert (
+        type_translation.make_constructor_type(ts.DeferredType(constraint=ts.TupleType)) == expected
+    )
+    assert type_translation.from_type_hint(type[tuple]) == expected
+
+
 def test_invalid_symbol_types():
     # Forward references
     with pytest.raises(ValueError, match="undefined forward references"):
         type_translation.from_type_hint("foo")
 
     # Tuples
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(typing.Tuple)
-    with pytest.raises(ValueError, match="least one argument"):
-        type_translation.from_type_hint(tuple)
+    # Bare `tuple` and `typing.Tuple` (unparameterized) both return a DeferredType.
+    assert type_translation.from_type_hint(typing.Tuple) == ts.DeferredType(constraint=ts.TupleType)
+    assert type_translation.from_type_hint(tuple) == ts.DeferredType(constraint=ts.TupleType)
 
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(tuple[int, ...])
-    with pytest.raises(ValueError, match="Unbound tuples"):
-        type_translation.from_type_hint(typing.Tuple["float", ...])
+    # The empty-tuple annotation is not a valid type annotation.
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(tuple[()])
+    with pytest.raises(ValueError, match="Tuple annotation"):
+        type_translation.from_type_hint(typing.Tuple[()])
+
+    # Invalid element annotations are reported as ValueError, not internal errors.
+    with pytest.raises(ValueError, match="invalid element type"):
+        type_translation.from_type_hint(tuple[tuple, int])
+    with pytest.raises(ValueError, match="invalid element type"):
+        type_translation.from_type_hint(tuple[tuple, ...])
+
+    # Variadic tuples (`tuple[T, ...]`) are now valid — returns a VarLenTupleType.
+    assert type_translation.from_type_hint(tuple[int, ...]) == ts.VarLenTupleType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    )
+    assert type_translation.from_type_hint(typing.Tuple["float", ...]) == ts.VarLenTupleType(
+        element_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
     # Fields
     with pytest.raises(ValueError, match="Field type requires two arguments"):
@@ -282,6 +314,23 @@ def test_as_from_dtype(dtype):
 
 
 _FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
+_FIELD_TYPE = ts.FieldType(dims=[cnc.TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+
+
+class VarLenMemberNamedTuple(typing.NamedTuple):
+    tracers: tuple[gtx.Field[gtx.Dims[cnc.TDim], gtx.float32], ...]
+    rho: gtx.Field[gtx.Dims[cnc.TDim], gtx.float32]
+
+
+@dataclasses.dataclass
+class VarLenMemberDataclass:
+    tracers: tuple[gtx.Field[gtx.Dims[cnc.TDim], gtx.float32], ...]
+    rho: gtx.Field[gtx.Dims[cnc.TDim], gtx.float32]
+
+
+@dataclasses.dataclass
+class ScalarMemberDataclass:
+    value: gtx.float32
 
 
 @pytest.mark.parametrize(
@@ -395,6 +444,57 @@ _FIELD = constructors.empty({cnc.TDim: 1}, gtx.float32)
 )
 def test_from_value(value, expected):
     assert type_translation.from_value(value) == expected
+
+
+@pytest.mark.parametrize("container", [VarLenMemberNamedTuple, VarLenMemberDataclass])
+def test_from_value_named_collection_var_len_tuple_member(container):
+    # the declared type keeps the variable-length tuple ...
+    assert type_translation.from_type_hint(container) == ts.NamedCollectionType(
+        types=[ts.VarLenTupleType(element_type=_FIELD_TYPE), _FIELD_TYPE],
+        keys=["tracers", "rho"],
+        original_python_type=_make_type_string_for_container(container),
+    )
+    # ... while the member types of a value are taken from the runtime members, i.e.
+    # the tuple has a concrete length
+    value = container(tracers=(_FIELD, _FIELD), rho=_FIELD)
+    assert type_translation.from_value(value) == ts.NamedCollectionType(
+        types=[ts.TupleType(types=[_FIELD_TYPE, _FIELD_TYPE]), _FIELD_TYPE],
+        keys=["tracers", "rho"],
+        original_python_type=_make_type_string_for_container(container),
+    )
+
+
+def test_from_value_var_len_tuple_of_named_collections():
+    # the declared type is a variable-length tuple of named collections ...
+    assert type_translation.from_type_hint(
+        tuple[cnc.NamedTupleNamedCollection, ...]
+    ) == ts.VarLenTupleType(element_type=NamedTupleNamedCollectionTypeSpec)
+    # ... while the type of a value has a concrete length
+    value = (
+        cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+        cnc.NamedTupleNamedCollection(x=_FIELD, y=_FIELD),
+    )
+    assert type_translation.from_value(value) == ts.TupleType(
+        types=[NamedTupleNamedCollectionTypeSpec, NamedTupleNamedCollectionTypeSpec]
+    )
+
+
+def test_from_value_named_collection_scalar_member():
+    assert type_translation.from_value(
+        ScalarMemberDataclass(value=np.float32(0.0))
+    ) == ts.NamedCollectionType(
+        types=[ts.ScalarType(kind=ts.ScalarKind.FLOAT32)],
+        keys=["value"],
+        original_python_type=_make_type_string_for_container(ScalarMemberDataclass),
+    )
+
+
+@pytest.mark.skipif(not __debug__, reason="the member compatibility is only checked in debug mode")
+def test_from_value_named_collection_incompatible_member():
+    # a plain Python 'float' is typed 'float64' by convention, which is incompatible
+    # with the member annotation 'float32'; note that this is only checked in debug mode
+    with pytest.raises(ValueError, match="Member 'value' of 'ScalarMemberDataclass'"):
+        type_translation.from_value(ScalarMemberDataclass(value=0.0))
 
 
 def test_from_value_namespace_proxy():
