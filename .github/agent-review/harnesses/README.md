@@ -14,13 +14,17 @@ read from the workflow's own commit, never from the pull request.
 The harness name must also be added to the `workflow_dispatch` choice and to
 the `case` in the `Authorize` step of `.github/workflows/agent-review.yml`.
 
+Recommended: `opencode` with `zai-org/GLM-5.3-Flash`, `pi` as the alternative. `memdoor` is
+experimental and not recommended at the current caps: on real PRs it timed out at the 20-minute
+harness limit without a review.
+
 `common.sh` holds the helpers the adapters share: the scratch `HOME`, `NO_PROXY` for loopback and the listeners, and bounded diagnostics.
 
-| Harness               | Version  | Wire          | Ignores the repository's configuration with                     | Own turn cap         |
-| --------------------- | -------- | ------------- | --------------------------------------------------------------- | -------------------- |
-| [opencode](opencode/) | 2.2.7    | `openai-chat` | `OPENCODE_DISABLE_PROJECT_CONFIG=1`                             | 35 steps            |
-| [memdoor](memdoor/)   | v1.827.0 | `openai-chat` | nothing (`run-review` resets `AGENTS.md`); `skill` tool guarded | none                 |
-| [pi](pi/)             | 1.5.2    | `openai-chat` | `--no-approve --no-context-files`                               | none                 |
+| Harness               | Version  | Wire          | Ignores the repository's configuration with                     | Own turn cap |
+| --------------------- | -------- | ------------- | --------------------------------------------------------------- | ------------ |
+| [opencode](opencode/) | 2.2.7    | `openai-chat` | `OPENCODE_DISABLE_PROJECT_CONFIG=1`                             | 35 steps     |
+| [memdoor](memdoor/)   | v1.827.0 | `openai-chat` | nothing (`run-review` resets `AGENTS.md`); `skill` tool guarded | none         |
+| [pi](pi/)             | 1.5.2    | `openai-chat` | `--no-approve --no-context-files`                               | none         |
 
 `stub` makes no model call and writes a fixed review with hostile content
 (@mentions of a handle that is not a valid login, HTML comments imitating

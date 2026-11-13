@@ -28,7 +28,7 @@ A `PR Agent` workflow posts an advisory AI review on pull requests, using [PR Ag
 
 ### Sandboxed agent review (Agent Review)
 
-An `Agent Review` workflow posts an advisory review written by a coding agent that can explore the repository, running inside the [AWF](https://github.com/github/gh-aw-firewall) sandbox so that neither the inference key nor a write token is readable by the agent or by PR code. It runs automatically for pull requests whose author has write access, and on any pull request when a user with write access adds the `agent-review` label. It is never a required status check. See [agent-review.md](agent-review.md) for details.
+An `Agent Review` workflow posts an advisory review written by a coding agent that can explore the repository, running inside the [AWF](https://github.com/github/gh-aw-firewall) sandbox, without network access, designed so that neither the inference key nor a write token is readable by the agent or by PR code. It runs on a pull request when a user with write access adds the `agent-review` label, or by `workflow_dispatch`; it needs an Actions event policy that allows `pull_request_target` and a dedicated key in the `agent-review` environment. It is never a required status check. See [agent-review.md](agent-review.md) for details.
 
 ## CSCS-CI
 

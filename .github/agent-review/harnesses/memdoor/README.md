@@ -1,5 +1,9 @@
 # memdoor adapter
 
+> [!WARNING]
+> Experimental, not recommended at the current caps: in a quality evaluation on real PRs, memdoor
+> with `zai-org/GLM-5.3-Flash` timed out at the 20-minute harness limit without a review (3 of 3).
+
 [memdoor](https://github.com/guregodevo/memdoor) (Apache-2.0), a single static
 Go binary. Wire: OpenAI chat, through AWF's OpenAI listener.
 
