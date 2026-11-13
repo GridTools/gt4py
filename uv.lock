@@ -1589,7 +1589,7 @@ requires-dist = [
     { name = "setuptools", specifier = ">=77.0.3" },
     { name = "tabulate", specifier = ">=0.8.10" },
     { name = "toolz", specifier = ">=0.12.1" },
-    { name = "torch", marker = "extra == 'torch'", specifier = ">=2.5" },
+    { name = "torch", marker = "extra == 'torch'", specifier = ">=2.15" },
     { name = "typing-extensions", specifier = ">=4.12.0" },
     { name = "versioningit", specifier = ">=3.1.1" },
     { name = "xxhash", specifier = ">=3.5.0" },

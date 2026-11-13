@@ -158,7 +158,7 @@ rocm6 = ['cupy>=13.4.1,<14.0']
 rocm7 = ['cupy-rocm-7-0>=14.0']
 standard = ['scipy>=1.16.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
-torch = ['torch>=2.5']
+torch = ['torch>=2.15']
 
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
