@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+import threading
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Final
@@ -200,6 +201,7 @@ class ArrayOps:
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
 _registering_modules: dict[str, str] = {}
+_registration_lock = threading.RLock()
 
 
 def register(ops: ArrayOps) -> None:
@@ -219,11 +221,16 @@ def for_namespace(xp: ModuleType) -> ArrayOps:
         return _ops_by_namespace[xp]
     except KeyError:
         pass
-    if (module_name := _registering_modules.pop(xp.__name__, None)) is not None:
-        importlib.import_module(module_name)
-        return for_namespace(xp)
-    ops = _ops_by_namespace[xp] = ArrayOps(xp)
-    return ops
+    # a concurrent first use must not cache the default while the registering module is imported
+    with _registration_lock:
+        if xp in _ops_by_namespace:
+            return _ops_by_namespace[xp]
+        if (module_name := _registering_modules.get(xp.__name__)) is not None:
+            importlib.import_module(module_name)
+            del _registering_modules[xp.__name__]
+            return _ops_by_namespace[xp]
+        ops = _ops_by_namespace[xp] = ArrayOps(xp)
+        return ops
 
 
 def of(array: Any) -> ArrayOps:
