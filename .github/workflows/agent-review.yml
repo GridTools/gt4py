@@ -8,10 +8,11 @@ name: Agent Review
 #   authorize  permission checks only; pins the PR head sha.
 #   prepare    downloads the pinned harness, without secrets; runs none of
 #              its code (no install scripts, no version check).
-#   review     runs the agent on the PR inside AWF. The inference key is in
-#              ONE step's env and reaches only AWF's API-proxy sidecar. The
-#              host never touches PR content and is treated as tainted once
-#              'awf' returns.
+#   review     two AWF sandbox runs: a keyless one fetches the PR from
+#              github.com, then the agent runs with no network access but
+#              the API proxy. The inference key is in ONE step's env and
+#              reaches only AWF's API-proxy sidecar. The host never touches
+#              PR content and is treated as tainted once 'awf' returns.
 #   publish    fresh VM with a write token; validates the result and posts it.
 
 on:
@@ -313,9 +314,10 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
+      fetch_outcome: ${{ steps.fetch.outcome }}
       outcome: ${{ steps.agent.outcome }}
       exit_code: ${{ steps.agent.outputs.exit_code }}
-      skipped: ${{ steps.agent.outputs.skipped }}
+      skipped: ${{ steps.key.outputs.skipped }}
     env:
       # The sandbox's working area. AWF mounts the workspace read-write, so
       # everything under it is untrusted once the sandbox has run.
@@ -387,6 +389,15 @@ jobs:
       # '<provider>/<model>', so a bare 'zai-org/GLM-5.3' would match nothing;
       # 'openai/' because the only upstream is the OpenAI target. The
       # workspace is the only host directory the sandbox may write to.
+      # Two sandbox runs, so the agent never has network access: 'fetch'
+      # (keyless, only github.com allowed, no agent) fetches the PR and
+      # renders the prompt; 'review' runs the harness with no allowed domain
+      # and only the API proxy's listener. The model allowlist must match
+      # the configured model, and has no command-line flag. AWF matches
+      # patterns containing '/' against '<provider>/<model>', so a bare
+      # 'zai-org/GLM-5.3' would match nothing; 'openai/' because the only
+      # upstream is the OpenAI target. The workspace is the only host
+      # directory the sandbox may write to.
       - name: Render the AWF configuration
         env:
           MODEL: ${{ needs.authorize.outputs.model }}
@@ -395,9 +406,64 @@ jobs:
             | jq --arg model "${MODEL}" --arg ws "${WS}" \
               '.apiProxy.allowedModels = ["openai/" + $model] | .filesystem.allowWrite = [$ws]' \
             > "${RUNNER_TEMP}/awf.json"
+          jq '.network.allowDomains = ["github.com"] | .container.agentTimeout = 10' \
+            "${RUNNER_TEMP}/awf.json" > "${RUNNER_TEMP}/awf-fetch.json"
+          # Under $RUNNER_TEMP, root-only: without '--proxy-logs-dir', AWF
+          # moves its logs to /tmp after the run, where the sandbox can plant
+          # fake ones. No '--work-dir': it breaks 'filesystem.allowWrite'; the
+          # default one is root-only and hidden from the sandbox.
+          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-fetch-audit" "${RUNNER_TEMP}/awf-fetch-logs" \
+            "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
+          # AWF v0.29.12 needs these mount points for 'filesystem.allowWrite'.
+          mkdir -p /tmp/gh-aw/sandbox/firewall/audit /tmp/gh-aw/sandbox/firewall/logs /tmp/gh-aw/mcp-logs
+          echo "AWF_BIN=$(command -v awf)" >> "$GITHUB_ENV"
+
+      # The adapter declares whether it calls a model. The key is not read
+      # here: the expression yields only 'true' or 'false'.
+      - name: Check the inference key
+        id: key
+        env:
+          HAS_KEY: ${{ secrets.AGENT_REVIEW_INFERENCE_API_KEY != '' }}
+        run: |
+          wire=$(head -n 1 "/opt/agent-review/harnesses/${HARNESS}/wire")
+          case "${wire}" in
+            openai-chat)
+              if [ "${HAS_KEY}" != true ]; then
+                echo "::notice::Secret AGENT_REVIEW_INFERENCE_API_KEY is not set in the 'agent-review' environment; skipping the review."
+                echo "skipped=true" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            none) ;;
+            *) echo "::error::Unsupported wire '${wire}' for harness '${HARNESS}'."; exit 1 ;;
+          esac
+
+      # No key and no agent: only 'run-review' runs, and git on the PR with
+      # hooks, filters and submodules disabled. Its output is prefixed (and
+      # carriage returns dropped), so no line can start a workflow command
+      # ('::...::'); no '::stop-commands::', whose token would be printed to
+      # the live log first. 'sudo -E' passes the environment to AWF, which
+      # forwards none of it to the sandbox except what it sets itself.
+      - name: Fetch the pull request in the sandbox
+        id: fetch
+        if: steps.key.outputs.skipped != 'true'
+        continue-on-error: true
+        timeout-minutes: 12
+        env:
+          AGENT_REVIEW_OPENAI_BASE_URL: ${{ vars.AGENT_REVIEW_API_BASE || 'https://api.inference.cscs.ch/v1' }}
+          IMAGE_TAG: ${{ steps.awf.outputs.image-tag }}
+        run: |
+          sudo -E "${AWF_BIN}" \
+            --config "${RUNNER_TEMP}/awf-fetch.json" \
+            --audit-dir "${RUNNER_TEMP}/awf-fetch-audit" \
+            --proxy-logs-dir "${RUNNER_TEMP}/awf-fetch-logs" \
+            --image-tag "${IMAGE_TAG}" \
+            --container-workdir "${WS}" \
+            -- /opt/agent-review/bin/run-review --phase fetch "${WS}" 2>&1 \
+            | /usr/bin/sed -u -e 's/\r//g' -e 's/^/awf| /'
 
       - name: Run the review in the sandbox
         id: agent
+        if: steps.key.outputs.skipped != 'true' && steps.fetch.outcome == 'success'
         # The inference service has no availability guarantee, and an advisory
         # review must not look like a CI failure.
         continue-on-error: true
@@ -412,49 +478,23 @@ jobs:
           AGENT_REVIEW_OPENAI_BASE_URL: ${{ vars.AGENT_REVIEW_API_BASE || 'https://api.inference.cscs.ch/v1' }}
           IMAGE_TAG: ${{ steps.awf.outputs.image-tag }}
         run: |
-          # The adapter declares whether it calls a model. Only AWF's OpenAI
-          # listener is used: never pass ANTHROPIC_API_KEY. With it, AWF
-          # v0.29.12 configures an Anthropic listener whose 'POST /messages'
-          # escapes the 'maxTurns' cap, and its entrypoint fails under
-          # 'filesystem.allowWrite'.
-          wire=$(head -n 1 "/opt/agent-review/harnesses/${HARNESS}/wire")
-          case "${wire}" in
-            openai-chat)
-              if [ -z "${KEY}" ]; then
-                echo "::notice::Secret AGENT_REVIEW_INFERENCE_API_KEY is not set in the 'agent-review' environment; skipping the review."
-                echo "skipped=true" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              export OPENAI_API_KEY="${KEY}"
-              ;;
-            none) ;;
-            *) echo "::error::Unsupported wire '${wire}' for harness '${HARNESS}'."; exit 1 ;;
-          esac
+          # Only AWF's OpenAI listener is used: never pass ANTHROPIC_API_KEY.
+          # With it, AWF v0.29.12 configures an Anthropic listener whose
+          # 'POST /messages' escapes the 'maxTurns' count, and its entrypoint
+          # fails under 'filesystem.allowWrite'.
+          if [ "$(head -n 1 "/opt/agent-review/harnesses/${HARNESS}/wire")" = openai-chat ]; then
+            export OPENAI_API_KEY="${KEY}"
+          fi
           unset KEY
-          awf_bin=$(command -v awf)
-          # Under $RUNNER_TEMP, root-only: without '--proxy-logs-dir', AWF
-          # moves its logs to /tmp after the run, where the sandbox can plant
-          # fake ones. No '--work-dir': it breaks 'filesystem.allowWrite'; the
-          # default one is root-only and hidden from the sandbox.
-          sudo install -d -m 0700 "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
-          # AWF v0.29.12 needs these mount points for 'filesystem.allowWrite'.
-          mkdir -p /tmp/gh-aw/sandbox/firewall/audit /tmp/gh-aw/sandbox/firewall/logs /tmp/gh-aw/mcp-logs
-
-          # The sandbox's output is not trusted: every line is prefixed (and
-          # carriage returns dropped), so none can start a workflow command
-          # ('::...::'). No '::stop-commands::': its token would be printed to
-          # the live log before the sandbox starts.
-          #
-          # 'sudo -E' passes the environment through to AWF; AWF forwards
-          # none of it to the agent except what it sets itself.
+          # Output prefixed as in the fetch step.
           set +e
-          sudo -E "${awf_bin}" \
+          sudo -E "${AWF_BIN}" \
             --config "${RUNNER_TEMP}/awf.json" \
             --audit-dir "${RUNNER_TEMP}/awf-audit" \
             --proxy-logs-dir "${RUNNER_TEMP}/awf-logs" \
             --image-tag "${IMAGE_TAG}" \
             --container-workdir "${WS}" \
-            -- /opt/agent-review/bin/run-review "${WS}" 2>&1 \
+            -- /opt/agent-review/bin/run-review --phase review "${WS}" 2>&1 \
             | /usr/bin/sed -u -e 's/\r//g' -e 's/^/awf| /'
           rc=${PIPESTATUS[0]}
           # The sandbox could write only to the workspace; still, treat the
@@ -468,7 +508,7 @@ jobs:
       # so all are removed. Nothing is collected if any survives.
       - name: Stop the sandbox
         id: teardown
-        if: always() && steps.agent.outputs.skipped != 'true'
+        if: always() && steps.key.outputs.skipped != 'true'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
@@ -488,14 +528,14 @@ jobs:
       # home directories such as ~/.local/bin before /usr/bin, and the sandbox
       # could write there.
       - name: Collect the result
-        if: always() && steps.agent.outputs.skipped != 'true' && steps.teardown.outcome == 'success'
+        if: always() && steps.key.outputs.skipped != 'true' && steps.teardown.outcome == 'success'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
         run: /usr/bin/bash /opt/agent-review/bin/collect-result "${WS}/out" "${RUNNER_TEMP}/result"
 
       - name: Upload the result
-        if: always() && steps.agent.outputs.skipped != 'true'
+        if: always() && steps.key.outputs.skipped != 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-review-result
@@ -506,7 +546,7 @@ jobs:
       # Cost of the review, from the API proxy's own log (written by the
       # sidecar under $RUNNER_TEMP, out of the sandbox's reach). Numbers only.
       - name: Report token usage
-        if: always() && steps.agent.outputs.skipped != 'true'
+        if: always() && steps.key.outputs.skipped != 'true'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
@@ -527,18 +567,22 @@ jobs:
       # any signed-in user. The Phase 0 probe found no key or auth header in
       # the audit files or the proxy logs.
       - name: Make the AWF audit log readable
-        if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
+        if: always() && steps.key.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
         shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
         env:
           PATH: /usr/bin:/bin
-        run: /usr/bin/sudo /usr/bin/chmod -R a+rX "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
+        run: |
+          /usr/bin/sudo /usr/bin/chmod -R a+rX "${RUNNER_TEMP}/awf-fetch-audit" "${RUNNER_TEMP}/awf-fetch-logs" \
+            "${RUNNER_TEMP}/awf-audit" "${RUNNER_TEMP}/awf-logs"
 
       - name: Upload the AWF audit log
-        if: always() && steps.agent.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
+        if: always() && steps.key.outputs.skipped != 'true' && vars.AGENT_REVIEW_UPLOAD_AUDIT == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: agent-review-audit
           path: |
+            ${{ runner.temp }}/awf-fetch-audit
+            ${{ runner.temp }}/awf-fetch-logs
             ${{ runner.temp }}/awf-audit
             ${{ runner.temp }}/awf-logs
           if-no-files-found: ignore
@@ -629,11 +673,12 @@ jobs:
         if: steps.render.outputs.result == 'missing' || steps.render.outputs.result == 'invalid'
         env:
           RESULT: ${{ steps.render.outputs.result }}
+          FETCH_OUTCOME: ${{ needs.review.outputs.fetch_outcome }}
           OUTCOME: ${{ needs.review.outputs.outcome }}
           EXIT_CODE: ${{ needs.review.outputs.exit_code }}
         run: |
           case "${RESULT}" in
-            missing) reason="the agent produced no review (step outcome '${OUTCOME}', exit code '${EXIT_CODE}')" ;;
+            missing) reason="the agent produced no review (fetch outcome '${FETCH_OUTCOME}', review outcome '${OUTCOME}', exit code '${EXIT_CODE}')" ;;
             invalid) reason="the review was rejected as invalid (not UTF-8, or empty)" ;;
           esac
           echo "::warning title=Agent review failed::No review was posted: ${reason}. See the 'Run the review in the sandbox' log."

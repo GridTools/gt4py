@@ -67,5 +67,31 @@ test_removes_instruction_files_added_by_the_pr() {
   assert "unrelated file kept" test -f "${repo}/.gitignore"
 }
 
+test_review_phase_runs_offline_after_fetch() {
+  # The review phase runs with no allowed domain: everything the agent may
+  # read must be in the checkout already. 'protocol.allow=never' (and
+  # GIT_ALLOW_PROTOCOL for the driver) makes any lazy fetch fail.
+  setup 0
+  bash root/bin/run-review --phase fetch "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
+  local repo="${TMP}/ws/repo" offline=(git -c protocol.allow=never -C "${TMP}/ws/repo")
+  assert "no review after fetch" test ! -e ws/out/review.md &&
+    assert "prompt rendered" test -s ws/prompt.md &&
+    assert "not a partial clone" test -z "$(git -C "${repo}" config --get remote.origin.promisor)" &&
+    assert "log -p offline" "${offline[@]}" log -p -20 -- . >/dev/null &&
+    assert "show base file offline" "${offline[@]}" show "${BASE_SHA}:AGENTS.md" >/dev/null &&
+    assert "grep offline" "${offline[@]}" grep -q -e import -- '*.py' &&
+    assert "blame offline" "${offline[@]}" blame -- AGENTS.md >/dev/null &&
+    GIT_ALLOW_PROTOCOL=none bash root/bin/run-review --phase review "${TMP}/ws" >log 2>&1 ||
+    { cat log; return 1; }
+  assert "review written offline" test -s ws/out/review.md &&
+    assert "meta ok" test "$(jq -r .status ws/out/meta.json)" = ok
+}
+
+test_review_phase_needs_the_fetch_phase() {
+  setup 0
+  ! bash root/bin/run-review --phase review "${TMP}/ws" >log 2>&1 &&
+    assert "explains why" grep -q "run the fetch phase first" log
+}
+
 for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do run_test "$t"; done
 summary

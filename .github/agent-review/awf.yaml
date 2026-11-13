@@ -15,11 +15,12 @@
 # The bounds the agent can actually hit are in the 'Spend' notes below.
 
 network:
-  # Only for the in-sandbox 'git fetch' of the public repository. The
-  # inference host is added by AWF for the API-proxy sidecar from
-  # 'apiProxy.targets'; the agent reaching it directly has no key.
-  allowDomains:
-    - github.com
+  # None: the agent runs without network access. The 'review' job's first,
+  # keyless sandbox run, which fetches the PR and runs no agent, allows
+  # 'github.com' (and its subdomains). AWF still adds the inference host
+  # from 'apiProxy.targets' for the API-proxy sidecar; the agent can reach
+  # it directly too, but without a key.
+  allowDomains: []
 
 apiProxy:
   # The real key is given to the sidecar only, through the 'awf' step's
