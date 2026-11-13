@@ -1342,6 +1342,11 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
 
 
 def check_dims(dims: Sequence[Dimension]) -> None:
+    _check_dims(tuple(dims))
+
+
+@functools.cache
+def _check_dims(dims: tuple[Dimension, ...]) -> None:
     # A dimension and its staggered counterpart (i.e. sharing the same non-staggered base dimension)
     # denote different grid locations and must not appear together in the same field/domain: mixing
     # them is ambiguous (it makes `order_dimensions` non-total and produces duplicate backend tags).
@@ -1388,14 +1393,18 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         ...
         ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
+    return list(_promote_dims(tuple(tuple(dims) for dims in dims_list)))
 
+
+@functools.cache
+def _promote_dims(dims_list: tuple[tuple[Dimension, ...], ...]) -> tuple[Dimension, ...]:
     for dims in dims_list:
-        check_dims(list(dims))
+        check_dims(dims)
     unique_dims = {dim for dims in dims_list for dim in dims}
 
     promoted_dims = order_dimensions(unique_dims)
     check_dims(promoted_dims)
-    return promoted_dims
+    return tuple(promoted_dims)
 
 
 #: Numeric value used to represent missing values in connectivities.
