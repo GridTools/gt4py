@@ -102,6 +102,18 @@ wheels = [
 ]
 
 [[package]]
+name = "array-api-strict"
+version = "2.6.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/05/f338cb02b0ce864c567d756b865fd38b522fde9cf3523d02aed270145a0f/array_api_strict-2.6.1.tar.gz", hash = "sha256:27485fd687c678894fb193e8f9f5116651a0bfc19dccea164d7d5df83b4e9a82", size = 91482, upload-time = "2026-07-27T10:46:27.99Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ca/23/0b70060007470e1c3c3f74a2e362e11efdaa68d8d657793014e6a860638b/array_api_strict-2.6.1-py3-none-any.whl", hash = "sha256:84548915c11265f4b87070731bd26edf46b202a04e7491194abcb46f4986c88f", size = 78619, upload-time = "2026-07-27T10:46:26.771Z" },
+]
+
+[[package]]
 name = "ast-serialize"
 version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1351,6 +1363,7 @@ build = [
     { name = "wheel" },
 ]
 dev = [
+    { name = "array-api-strict" },
     { name = "atlas4py" },
     { name = "black" },
     { name = "clang-format" },
@@ -1421,6 +1434,7 @@ scripts = [
     { name = "typer" },
 ]
 test = [
+    { name = "array-api-strict" },
     { name = "black" },
     { name = "clang-format" },
     { name = "factory-boy" },
@@ -1481,7 +1495,7 @@ requires-dist = [
     { name = "gt4py", extras = ["jax", "standard", "testing"], marker = "extra == 'next'" },
     { name = "hypothesis", marker = "extra == 'testing'", specifier = ">=6.93" },
     { name = "jax", marker = "python_full_version >= '3.14' and extra == 'jax'", specifier = ">=0.9.1" },
-    { name = "jax", marker = "python_full_version < '3.14' and extra == 'jax'", specifier = ">=0.4.26" },
+    { name = "jax", marker = "python_full_version < '3.14' and extra == 'jax'", specifier = ">=0.4.32" },
     { name = "jax", extras = ["cuda12-local"], marker = "extra == 'jax-cuda12'", specifier = ">=0.6.0" },
     { name = "jax", extras = ["cuda13-local"], marker = "extra == 'jax-cuda13'", specifier = ">=0.7.0" },
     { name = "jinja2", specifier = ">=3.0.0" },
@@ -1489,7 +1503,7 @@ requires-dist = [
     { name = "mako", specifier = ">=1.3" },
     { name = "nanobind", specifier = ">=1.9.0" },
     { name = "ninja", specifier = ">=1.11" },
-    { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.0.0" },
+    { name = "numpy", marker = "python_full_version < '3.14'", specifier = ">=2.1.0" },
     { name = "numpy", marker = "python_full_version >= '3.14'", specifier = ">=2.3.2" },
     { name = "ordered-set", specifier = ">=4.1.0" },
     { name = "packaging", specifier = ">=24.2" },
@@ -1513,6 +1527,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
+    { name = "array-api-strict", specifier = ">=2.4" },
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "black", specifier = ">=25.11" },
     { name = "clang-format", specifier = ">=18.1" },
@@ -1581,6 +1596,7 @@ scripts = [
     { name = "typer", specifier = ">=0.16.0" },
 ]
 test = [
+    { name = "array-api-strict", specifier = ">=2.4" },
     { name = "black", specifier = ">=25.11" },
     { name = "clang-format", specifier = ">=18.1" },
     { name = "factory-boy", specifier = ">=3.3.3" },

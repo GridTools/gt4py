@@ -46,7 +46,7 @@ def _table_digest(table: np.ndarray) -> str:
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
-class _CompileTimeConnectivity(nd_array_field.NumPyArrayConnectivityField):
+class _CompileTimeConnectivity(nd_array_field.NdArrayConnectivityField):
     """
     Compile-time view of a connectivity: a read-only, C-contiguous host table,
     memory-mapped from a file named by the digest of its content.

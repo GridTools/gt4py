@@ -11,6 +11,7 @@ import operator
 import pickle
 from typing import Callable, Iterable, Optional
 
+import array_api_strict
 import numpy as np
 import pytest
 
@@ -28,9 +29,15 @@ from gt4py.next.common import (
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.ffront.experimental import as_offset, concat_where
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
+from next_tests.unit_tests.conftest import (
+    ND_ARRAY_IMPLEMENTATIONS,
+    asarray,
+    is_array_api_strict,
+    is_cupy,
+)
 
 
 D0 = Dimension("D0")
@@ -82,7 +89,7 @@ def _make_field_or_scalar(
         dtype = np.float32
     if isinstance(lst, core_defs.SCALAR_TYPES):
         return dtype(lst)
-    buffer = nd_array_implementation.asarray(lst, dtype=dtype)
+    buffer = asarray(nd_array_implementation, lst, dtype=dtype)
     if domain is None:
         domain = _make_default_domain(buffer.shape)
     return common._field(buffer, domain=domain)
@@ -104,11 +111,28 @@ def are_equal_fields(a: Field, b: Field) -> bool:
     return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
+def _skip_or_expect_no_buffer_info(xp) -> bool:
+    """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
+    if xp.__name__ == "jax.numpy":
+        return True
+    if xp.__name__ not in ("numpy", "cupy"):
+        pytest.skip(
+            "Buffer pointers and strides are outside the Array API standard; "
+            "'BufferInfo.from_ndarray' knows NumPy and CuPy only."
+        )
+    return False
+
+
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
-    data = nd_array_implementation.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    field = constructors.as_field((D0, D1), data)
+    data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+    field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
+    assert field.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            field.__gt_buffer_info__
+        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
@@ -125,6 +149,9 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
         assert field_ndarray is not field.ndarray
 
 
+_NOT_IN_ARRAY_API = ("fmod", "cbrt", "gamma")
+
+
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementation):
     if builtin_name == "gamma":
@@ -139,6 +166,10 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
     field_inputs = [_make_field_or_scalar(inp, nd_array_implementation) for inp in inputs]
 
     builtin = getattr(fbuiltins, builtin_name)
+    if is_array_api_strict(nd_array_implementation) and builtin_name in _NOT_IN_ARRAY_API:
+        with pytest.raises(NotImplementedError, match=builtin_name):
+            builtin(*field_inputs)
+        return
     result = builtin(*field_inputs)
 
     assert np.allclose(result.ndarray, expected)
@@ -150,7 +181,8 @@ def test_where_builtin(nd_array_implementation):
     false_ = np.asarray([3.0, 4.0], dtype=np.float32)
 
     field_inputs = [
-        _make_field_or_scalar(inp, nd_array_implementation) for inp in [cond, true_, false_]
+        _make_field_or_scalar(cond, nd_array_implementation, dtype=bool),
+        *(_make_field_or_scalar(inp, nd_array_implementation) for inp in [true_, false_]),
     ]
     expected = np.where(cond, true_, false_)
 
@@ -158,18 +190,32 @@ def test_where_builtin(nd_array_implementation):
     assert np.allclose(result.ndarray, expected)
 
 
+@pytest.mark.parametrize("condition", [True, False, np.bool_(True)])
+@pytest.mark.parametrize("scalar", [5.0, np.float64(5.0)], ids=["python", "numpy"])
+def test_where_builtin_scalar_condition(nd_array_implementation, condition, scalar):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation, dtype=np.float64)
+
+    result = fbuiltins.where(condition, scalar, field)
+
+    assert result.array_ns is nd_array_implementation
+    assert np.array_equal(result.asnumpy(), np.where(condition, 5.0, [1.0, 2.0, 3.0]))
+
+
 def test_where_builtin_different_domain(nd_array_implementation):
     cond = np.asarray([True, False])
     true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
     false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
 
-    cond_field = common._field(nd_array_implementation.asarray(cond), domain=common.domain({D1: 2}))
+    cond_field = common._field(
+        asarray(nd_array_implementation, cond), domain=common.domain({D1: 2})
+    )
     true_field = common._field(
-        nd_array_implementation.asarray(true_),
+        asarray(nd_array_implementation, true_),
         domain=common.domain({D0: common.UnitRange(0, 2), D1: common.UnitRange(-1, 2)}),
     )
     false_field = common._field(
-        nd_array_implementation.asarray(false_), domain=common.domain({D1: common.UnitRange(-1, 3)})
+        asarray(nd_array_implementation, false_),
+        domain=common.domain({D1: common.UnitRange(-1, 3)}),
     )
 
     expected = np.where(cond[np.newaxis, :], true_[:, 1:], false_[np.newaxis, 1:-1])
@@ -288,7 +334,7 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
 
 def test_as_scalar(nd_array_implementation):
     testee = common._field(
-        nd_array_implementation.asarray(42.0, dtype=np.float32), domain=common.Domain()
+        asarray(nd_array_implementation, 42.0, dtype=np.float32), domain=common.Domain()
     )
 
     result = testee.as_scalar()
@@ -297,10 +343,10 @@ def test_as_scalar(nd_array_implementation):
 
 
 def product_nd_array_implementation_params():
-    for xp1 in nd_array_field._nd_array_implementations:
-        for xp2 in nd_array_field._nd_array_implementations:
+    for xp1 in ND_ARRAY_IMPLEMENTATIONS:
+        for xp2 in ND_ARRAY_IMPLEMENTATIONS:
             marks = ()
-            if any(hasattr(nd_array_field, "cp") and xp == nd_array_field.cp for xp in (xp1, xp2)):
+            if any(is_cupy(xp) for xp in (xp1, xp2)):
                 marks = pytest.mark.requires_gpu
             yield pytest.param((xp1, xp2), id=f"{xp1.__name__}-{xp2.__name__}", marks=marks)
 
@@ -312,8 +358,8 @@ def product_nd_array_implementation(request):
 
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
-    if "numpy" in first_impl.__name__ and "cupy" in second_impl.__name__:
-        pytest.skip("Binary operation between NumPy and CuPy requires explicit conversion.")
+    if not is_cupy(first_impl) and is_cupy(second_impl):
+        pytest.skip("Binary operation between a CPU library and CuPy requires explicit conversion.")
 
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
@@ -325,6 +371,25 @@ def test_mixed_fields(product_nd_array_implementation):
 
     result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
+
+
+def test_mixed_fields_concat_where(product_nd_array_implementation):
+    first_impl, second_impl = product_nd_array_implementation
+    if not is_cupy(first_impl) and is_cupy(second_impl):
+        pytest.skip("Converting a CuPy array to a CPU library requires an explicit copy.")
+    K = Dimension("K")
+    domain = common.domain({K: 4})
+    true_field = common._field(
+        asarray(first_impl, [1.0, 2.0, 3.0, 4.0], dtype=np.float64), domain=domain
+    )
+    false_field = common._field(
+        asarray(second_impl, [10.0, 20.0, 30.0, 40.0], dtype=np.float64), domain=domain
+    )
+
+    result = concat_where(common.domain({K: (0, 2)}), true_field, false_field)
+
+    assert result.array_ns is first_impl
+    assert np.array_equal(result.asnumpy(), [1.0, 2.0, 30.0, 40.0])
 
 
 def test_non_dispatched_function():
@@ -1259,6 +1324,81 @@ def test_setitem(index, value):
     assert np.allclose(field.ndarray, expected)
 
 
+_ROW = np.arange(10) * 2.0
+
+
+@pytest.mark.parametrize(
+    "index, source, make_value",
+    [
+        ((1, 1), 42.0, lambda xp, v: v),
+        ((1, 1), 42, lambda xp, v: v),
+        ((1, 1), np.float32(42.5), lambda xp, v: v),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
+        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
+        ((1, slice(None)), _ROW, lambda xp, v: v),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float64),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
+    ],
+    ids=[
+        "python-float",
+        "python-int",
+        "numpy-scalar",
+        "array",
+        "array-other-dtype",
+        "numpy-array",
+        "field",
+    ],
+)
+def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
+    xp = nd_array_implementation
+    value = make_value(xp, source)
+    if is_cupy(xp) and isinstance(value, np.ndarray):
+        pytest.skip("CuPy does not assign a non-scalar NumPy array.")
+    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
+        pytest.skip("Assigning an array of another library is tested separately.")
+    field = common._field(
+        asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
+        domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+    )
+    expected = np.arange(100, dtype=np.float64).reshape(10, 10)
+    expected[index] = source
+
+    field[index] = value
+
+    assert field.array_ns is xp
+    assert field.dtype == core_defs.dtype(np.float64)
+    assert np.array_equal(field.asnumpy(), expected)
+
+
+@pytest.mark.parametrize("c_type, expected", [(np.longlong, np.int64), (np.intc, np.int32)])
+def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 2.0], dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 2))),
+    )
+
+    result = fbuiltins.astype(field, c_type)
+
+    assert result.dtype == core_defs.dtype(expected)
+    assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
+
+
+def test_setitem_array_of_other_library_raises():
+    field = common._field(
+        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
+    )
+
+    with pytest.raises(TypeError, match="Cannot assign an array of 'numpy'"):
+        field[...] = np.ones(3)
+
+
 def test_setitem_wrong_domain():
     field = common._field(
         np.arange(100).reshape(10, 10),
@@ -1323,10 +1463,15 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
     E_START, E_STOP = 0, 10
 
     e2v_conn = common._connectivity(
-        np.roll(np.arange(E_START, E_STOP), 1),
+        asarray(nd_array_implementation, np.roll(np.arange(E_START, E_STOP), 1), dtype=np.int32),
         domain=common.domain([common.named_range((E, (E_START, E_STOP)))]),
         codomain=V,
     )
+    assert e2v_conn.array_ns is nd_array_implementation
+    if _skip_or_expect_no_buffer_info(nd_array_implementation):
+        with pytest.raises(NotImplementedError):
+            e2v_conn.__gt_buffer_info__
+        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
     assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
@@ -1804,6 +1949,35 @@ def test_jax_pytree_roundtrip():
 
 
 @pytest.mark.requires_jax
+def test_jax_pytree_rejects_fields_of_other_libraries():
+    import jax
+
+    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
+
+    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
+        jax.jit(lambda f: f * 2.0)(field)
+
+
+@pytest.mark.requires_jax
+def test_jax_pytree_non_array_leaves():
+    import jax
+
+    D_BATCH = Dimension("D_BATCH")
+    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
+    batched = common._field(jax.numpy.ones((2, 3)), domain=common.domain({D_BATCH: 2, D0: 3}))
+
+    shapes = jax.tree.map(lambda x: x.shape, field)
+    assert jax.tree.leaves(shapes) == [3]
+    assert jax.eval_shape(lambda f: f * 2.0, field).ndarray.shape == (3,)
+    # a field with an axis index as leaf, as `vmap` prefix for the batched field's buffer
+    axes = nd_array_field.NdArrayField(common.domain({D0: 3}), 0)
+    sums = jax.vmap(lambda f: f.ndarray.sum(), in_axes=(axes,))(
+        nd_array_field.NdArrayField(common.domain({D0: 3}), batched.ndarray)
+    )
+    np.testing.assert_allclose(sums, [3.0, 3.0])
+
+
+@pytest.mark.requires_jax
 def test_jax_traced_array_dispatch():
     import jax
 
@@ -1812,7 +1986,8 @@ def test_jax_traced_array_dispatch():
 
     def loss(arr):
         field = common._field(arr, domain=domain)
-        assert isinstance(field, nd_array_field.JaxArrayField)
+        assert isinstance(field, nd_array_field.NdArrayField)
+        assert field.array_ns is jax.numpy
         return jax.numpy.sum((field * field).ndarray)
 
     np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())

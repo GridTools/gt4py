@@ -9,14 +9,17 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TypeAlias
+import importlib
+from types import ModuleType
+from typing import Final, TypeAlias
 
+import array_api_strict
+import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend, common
-from gt4py.next.embedded import nd_array_field
 from gt4py.next.iterator import runtime
 from gt4py.next.program_processors import program_formatter
 
@@ -99,9 +102,37 @@ class DummyConnectivity(common.Connectivity):
     codomain: gtx.Dimension = gtx.Dimension("dummy_neighbor")
 
 
+def _optional_module(name: str) -> list[ModuleType]:
+    try:
+        return [importlib.import_module(name)]
+    except ImportError:
+        return []
+
+
+ND_ARRAY_IMPLEMENTATIONS: Final[list[ModuleType]] = [
+    np,
+    *_optional_module("cupy"),
+    *_optional_module("jax.numpy"),
+    array_api_strict,
+]
+
+
+def is_cupy(xp: ModuleType) -> bool:
+    return xp.__name__ == "cupy"
+
+
+def is_array_api_strict(xp: ModuleType) -> bool:
+    return xp.__name__ == "array_api_strict"
+
+
+def asarray(xp: ModuleType, data, dtype=None):
+    """`xp.asarray` with a NumPy-style `dtype`, translated to the namespace's own dtype object."""
+    return xp.asarray(data, dtype=None if dtype is None else getattr(xp, np.dtype(dtype).name))
+
+
 def nd_array_implementation_params():
-    for xp in nd_array_field._nd_array_implementations:
-        if hasattr(nd_array_field, "cp") and xp == nd_array_field.cp:
+    for xp in ND_ARRAY_IMPLEMENTATIONS:
+        if is_cupy(xp):
             yield pytest.param(
                 (xp, core_defs.CUPY_DEVICE_TYPE), id=xp.__name__, marks=pytest.mark.requires_gpu
             )

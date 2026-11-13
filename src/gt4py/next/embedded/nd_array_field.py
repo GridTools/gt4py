@@ -12,17 +12,18 @@ import collections
 import dataclasses
 import functools
 import itertools
-import math
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
+from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
 
+import array_api_compat
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import (
+    array_ops,
     common as embedded_common,
     context as embedded_context,
     exceptions as embedded_exceptions,
@@ -30,23 +31,12 @@ from gt4py.next.embedded import (
 from gt4py.next.ffront import experimental, fbuiltins
 
 
-try:
-    import cupy as cp
-except ImportError:
-    cp: Optional[ModuleType] = None  # type: ignore[no-redef]
-
-try:
-    import jax
-    from jax import numpy as jnp
-except ImportError:
-    jax: Optional[ModuleType] = None  # type: ignore[no-redef]
-    jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
-
-
-def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
-    for f in fields:
-        if isinstance(f, NdArrayField):
-            return f.__class__
+def _ops_of(*values: Any) -> array_ops.ArrayOps:
+    # TODO(havogt): the first field's array library decides, so mixing libraries depends on the
+    #   order of the operands; reject mixed libraries or define a priority instead.
+    for v in values:
+        if isinstance(v, NdArrayField):
+            return array_ops.of(v._ndarray)
     raise AssertionError("No 'NdArrayField' found in the arguments.")
 
 
@@ -54,63 +44,54 @@ def _make_builtin(
     builtin_name: str, array_builtin_name: str, reverse: bool = False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
-        cls_ = _get_nd_array_class(*fields)
-        xp = cls_.array_ns
-        op = _get_builtin(xp, array_builtin_name)
+        ops = _ops_of(*fields)
+        op = ops.elementwise_function(array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if isinstance(f, common.Field)]
         )
 
+        arrays: list[core_defs.NDArrayObject] = []
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
             if isinstance(f, common.Field):
                 if f.domain == domain_intersection:
-                    transformed.append(xp.asarray(f.ndarray))
+                    array = ops.asarray(f.ndarray)
                 else:
                     f_broadcasted = _broadcast(f, domain_intersection.dims)
                     f_slices = _get_slices_from_domain_slice(
                         f_broadcasted.domain, domain_intersection
                     )
-                    transformed.append(xp.asarray(f_broadcasted.ndarray[f_slices]))
+                    array = ops.asarray(f_broadcasted.ndarray[f_slices])
+                arrays.append(array)
+                transformed.append(array)
             else:
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
+        if len(arrays) < len(transformed):
+            transformed = [ops.operand(v, arrays[0]) for v in transformed]
         if reverse:
             transformed.reverse()
         new_data = op(*transformed)
-        return cls_.from_array(new_data, domain=domain_intersection)
+        return NdArrayField.from_array(new_data, domain=domain_intersection)
 
     _builtin_op.__name__ = builtin_name
     return _builtin_op
 
 
-try:
-    from scipy.special import gamma as _np_gamma
-except ImportError:
-
-    def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
-        return np.vectorize(math.gamma, otypes=[a.dtype])(a)
-
-
-def _get_builtin(xp: ModuleType, name: str) -> Callable:
-    match name:
-        case "gamma":
-            if xp is np:
-                return _np_gamma
-            if xp is cp:
-                import cupyx.scipy.special
-
-                return cupyx.scipy.special.gamma
-            if xp is jnp:
-                import jax.scipy.special
-
-                return jax.scipy.special.gamma
-            raise NotImplementedError(
-                f"'gamma' is not implemented for array namespace '{xp.__name__}'."
-            )
-        case _:
-            return getattr(xp, name)
+def _asarray(
+    data: npt.ArrayLike | core_defs.NDArrayObject, dtype: Optional[core_defs.DTypeLike]
+) -> core_defs.NDArrayObject:
+    try:
+        ops = array_ops.of(data)
+    except TypeError:
+        ops = array_ops.default()
+    scalar_type = None if dtype is None else core_defs.dtype(dtype).scalar_type
+    array = ops.asarray(data, dtype=scalar_type)
+    assert ops.scalar_type(array.dtype) in (
+        core_defs.SCALAR_TYPES if scalar_type is None else (scalar_type,)
+    )
+    return array
 
 
 _Value: TypeAlias = common.Field | core_defs.ScalarT
@@ -119,23 +100,27 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayField(
-    common.MutableField[common.DimsT, core_defs.ScalarT],
-    common.FieldBuiltinFuncRegistry,
-):
+class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     """
-    Shared field implementation for NumPy-like fields.
+    Field backed by an array of any Array API compatible library.
 
-    Builtin function implementations are registered in a dictionary.
-    Note: Currently, all concrete NdArray-implementations share
-    the same implementation, dispatching is handled inside of the registered
-    function via its namespace.
+    The array operations are taken from the `array_ops.ArrayOps` of the buffer's
+    namespace, so one class serves all array libraries.
     """
 
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[ModuleType]  # TODO(havogt): introduce a NDArrayNamespace protocol
+    @property
+    def array_ns(self) -> ModuleType:
+        """The module of the array library holding the buffer, e.g. `numpy`."""
+        # TODO(havogt): return the Array API namespace (`array_ops.of(self._ndarray).xp`) instead of the library's
+        #   own module; users comparing it to `numpy` should query the device instead.
+        return array_ops.of(self._ndarray).array_ns
+
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return _builtin_implementations.get(func, NotImplemented)
 
     def __getstate__(self) -> dict[str, Any]:
         # Serialize only the dataclass fields, excluding cached properties
@@ -154,15 +139,7 @@ class NdArrayField(
         dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
-        xp = cls.array_ns
-
-        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
-        array = xp.asarray(data, dtype=xp_dtype)
-
-        if dtype is not None:
-            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
-
-        assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
+        array = _asarray(data, dtype)
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
@@ -187,7 +164,7 @@ class NdArrayField(
         NDArrayField subclasses where the backing ndarray can be replaced
         should override this and make it a regular property.
         """
-        return common.BufferInfo.from_ndarray(self.ndarray)
+        return array_ops.of(self._ndarray).buffer_info(self.ndarray)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -203,17 +180,14 @@ class NdArrayField(
 
     @functools.cached_property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return core_defs.dtype(self._ndarray.dtype.type)
+        return core_defs.dtype(array_ops.of(self._ndarray).scalar_type(self._ndarray.dtype))
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
     def asnumpy(self) -> np.ndarray:
-        if self.array_ns == cp:
-            return cp.asnumpy(self._ndarray)
-        else:
-            return np.asarray(self._ndarray)
+        return array_ops.of(self._ndarray).to_numpy(self._ndarray)
 
     def as_scalar(self) -> core_defs.ScalarT:
         if self.domain.ndim != 0:
@@ -363,9 +337,7 @@ class NdArrayField(
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayField:
         new_domain, buffer_slice = self._slice(index)
-        new_buffer = self.ndarray[buffer_slice]
-        new_buffer = self.__class__.array_ns.asarray(new_buffer)
-        return self.__class__.from_array(new_buffer, domain=new_domain)
+        return self.__class__.from_array(self.ndarray[buffer_slice], domain=new_domain)
 
     __getitem__ = restrict
 
@@ -374,7 +346,7 @@ class NdArrayField(
         index: common.AnyIndexSpec,
         value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
     ) -> None:
-        target_domain, target_slice = self._slice(index)
+        target_domain, target_slice = self._slice(index, for_assignment=True)
 
         if isinstance(value, common.Field):
             if not value.domain == target_domain:
@@ -383,8 +355,9 @@ class NdArrayField(
                 )
             value = value.ndarray
 
-        assert hasattr(self.ndarray, "__setitem__")
-        self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
+        new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, value)
+        if new_buffer is not self._ndarray:
+            object.__setattr__(self, "_ndarray", new_buffer)
 
     __abs__ = _make_builtin("abs", "abs")
 
@@ -449,19 +422,34 @@ class NdArrayField(
         raise NotImplementedError("'__invert__' not implemented for non-'bool' fields.")
 
     def _slice(
-        self, index: common.AnyIndexSpec
+        self, index: common.AnyIndexSpec, *, for_assignment: bool = False
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
         index = embedded_common.canonicalize_any_index_sequence(index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
-        slice_ = (
-            _get_slices_from_domain_slice(self.domain, index_sequence)
-            if common.is_absolute_index_sequence(index_sequence)
-            else index_sequence
-        )
-        assert common.is_relative_index_sequence(slice_)
-        return new_domain, slice_
+        if common.is_absolute_index_sequence(index_sequence):
+            buffer_slice = _get_slices_from_domain_slice(self.domain, index_sequence)
+            if for_assignment:
+                # writing the only element of a broadcast axis would change its whole range
+                return new_domain, buffer_slice
+            return new_domain, _broadcast_axes_slice(buffer_slice, self.domain, self._ndarray.shape)
+        assert common.is_relative_index_sequence(index_sequence)
+        if len(index_sequence) < self._ndarray.ndim and Ellipsis not in index_sequence:
+            return new_domain, (*index_sequence, Ellipsis)
+        return new_domain, index_sequence
+
+
+def _broadcast_axes_slice(
+    slice_: common.RelativeIndexSequence, domain: common.Domain, shape: tuple[int, ...]
+) -> common.RelativeIndexSequence:
+    """`slice_` with every index into a size-1 axis spanning a longer range (a broadcast axis) reading its only element."""
+    return tuple(
+        (slice(None) if isinstance(s, slice) else 0)
+        if size == 1 and not (common.UnitRange.is_finite(rng) and len(rng) == 1)
+        else s
+        for s, size, rng in zip(slice_, shape, domain.ranges, strict=True)
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -484,15 +472,9 @@ class NdArrayConnectivityField(
         skip_value: Optional[core_defs.IntegralScalar] = None,
     ) -> NdArrayConnectivityField:
         domain = common.domain(domain)
-        xp = cls.array_ns
+        array = _asarray(data, dtype)
 
-        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
-        array = xp.asarray(data, dtype=xp_dtype)
-
-        if dtype is not None:
-            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
-
-        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
+        assert issubclass(array_ops.of(array).scalar_type(array.dtype), core_defs.INTEGRAL_TYPES)
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
@@ -538,8 +520,9 @@ class NdArrayConnectivityField(
             assert isinstance(image_range, common.UnitRange)
             assert common.UnitRange.is_finite(image_range)
 
-            xp = self.array_ns
-            slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
+            slices = _hyperslice(
+                self._ndarray, image_range, array_ops.of(self._ndarray).xp, self.skip_value
+            )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
@@ -552,11 +535,13 @@ class NdArrayConnectivityField(
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
-            cls = self.__class__
-            xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
-            new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain, self.skip_value)
+            restricted_connectivity = self.__class__(
+                new_domain,
+                array_ops.of(self._ndarray).asarray(self.ndarray[buffer_slice]),
+                self.codomain,
+                self.skip_value,
+            )
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
@@ -615,7 +600,7 @@ def _gather_output_domain(
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
     """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
-    xp = data.array_ns
+    ops = array_ops.of(data._ndarray)
     new_domain = _gather_output_domain(data.domain, connectivities)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
@@ -623,9 +608,9 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
     take_indices = tuple(
         (
-            _connectivity_index_array(conn_by_codomain[dim], new_domain, xp)
+            _connectivity_index_array(conn_by_codomain[dim], new_domain, ops)
             if dim in conn_by_codomain
-            else _identity_index_array(new_domain, dim, xp)
+            else _identity_index_array(new_domain, dim, ops, like=data._ndarray)
         )
         - data.domain[dim].unit_range.start
         for dim in data.domain.dims
@@ -635,13 +620,14 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
 
 
 def _connectivity_index_array(
-    connectivity: common.GatherConnectivity, domain: common.Domain, xp: ModuleType
+    connectivity: common.GatherConnectivity, domain: common.Domain, ops: array_ops.ArrayOps
 ) -> core_defs.NDArrayObject:
     """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
     # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
-    arr = xp.asarray(conn.ndarray)
+    xp = ops.xp
+    arr = ops.asarray(conn.ndarray)
     # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
     fresh_axis = {
@@ -652,8 +638,8 @@ def _connectivity_index_array(
         for dim in domain.dims
     )
     if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
-        arr = xp.expand_dims(arr, axis=tuple(fresh_axis.values()))
-    arr = xp.transpose(arr, transposed_axes)  # reorder to the output dimension order
+        arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
+    arr = xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
     if arr.shape != domain.shape:
         arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
     return arr
@@ -662,14 +648,22 @@ def _connectivity_index_array(
 def _identity_index_array(
     domain: common.Domain,
     dim: common.Dimension,
-    xp: ModuleType,
-    dtype: Optional[npt.DTypeLike] = None,
+    ops: array_ops.ArrayOps,
+    *,
+    like: core_defs.NDArrayObject,
+    dtype: Optional[type] = None,
 ) -> core_defs.NDArrayObject:
-    """Index array selecting `dim` unchanged over `domain`, in the field's index space."""
+    """Index array selecting `dim` unchanged over `domain`, in the field's index space, on the device of `like`."""
+    xp = ops.xp
     d_idx = domain.dim_index(dim, allow_missing=False)
     unit_range = domain[d_idx].unit_range
-    indices = xp.arange(unit_range.start, unit_range.stop, dtype=dtype)
-    shape = tuple(len(indices) if i == d_idx else 1 for i in range(len(domain)))
+    indices = xp.arange(
+        unit_range.start,
+        unit_range.stop,
+        dtype=None if dtype is None else ops.dtype(dtype),
+        device=ops.device(like),
+    )
+    shape = tuple(len(unit_range) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
 
@@ -701,13 +695,13 @@ def _hyperslice(
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
     slices = tuple(
-        slice(xp.min(dim_nnz_indices).item(), xp.max(dim_nnz_indices).item() + 1)
+        slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
         for dim_nnz_indices in nnz
     )
     hcube = select_mask[tuple(slices)]
     if skip_value is not None:
         ignore_mask = index_array == skip_value
-        hcube |= ignore_mask[tuple(slices)]
+        hcube = hcube | ignore_mask[tuple(slices)]
     if not xp.all(hcube):
         return None
 
@@ -716,11 +710,26 @@ def _hyperslice(
 
 # -- Specialized implementations for builtin operations on array fields --
 
-NdArrayField.register_builtin_func(
+
+_builtin_implementations: dict[fbuiltins.BuiltInFunction, Callable[..., Any]] = {}
+
+
+def _register_builtin(builtin: fbuiltins.BuiltInFunction, impl: Callable[..., Any]) -> None:
+    """Register `impl` for `builtin`, unless the `ArrayOps` of the first field argument replaces it."""
+
+    def dispatch(*args: Any, **kwargs: Any) -> Any:
+        return _ops_of(*args).builtin_overrides.get(builtin, impl)(*args, **kwargs)
+
+    dispatch.__name__ = getattr(impl, "__name__", builtin.name)
+    assert builtin not in _builtin_implementations
+    _builtin_implementations[builtin] = dispatch
+
+
+_register_builtin(
     fbuiltins.abs,
     NdArrayField.__abs__,
 )
-NdArrayField.register_builtin_func(
+_register_builtin(
     fbuiltins.power,
     NdArrayField.__pow__,
 )
@@ -732,32 +741,30 @@ for name in (
 ):
     if name in ["abs", "power"]:
         continue
-    NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
+    _register_builtin(getattr(fbuiltins, name), _make_builtin(name, name))
 
-NdArrayField.register_builtin_func(
+_register_builtin(
     fbuiltins.minimum,
     _make_builtin("minimum", "minimum"),
 )
-NdArrayField.register_builtin_func(
+_register_builtin(
     fbuiltins.maximum,
     _make_builtin("maximum", "maximum"),
 )
-NdArrayField.register_builtin_func(
+_register_builtin(
     fbuiltins.fmod,
     _make_builtin("fmod", "fmod"),
 )
-NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
+_register_builtin(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _to_field(
-    value: common.Field | core_defs.Scalar, nd_array_field_type: type[NdArrayField]
-) -> common.Field:
+def _to_field(value: common.Field | core_defs.Scalar, like: NdArrayField) -> common.Field:
     # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
     return (
         value
         if isinstance(value, common.Field)
-        else nd_array_field_type.from_array(
-            nd_array_field_type.array_ns.asarray(value), domain=common.Domain()
+        else NdArrayField.from_array(
+            array_ops.of(like._ndarray).asarray(value, like=like.ndarray), domain=common.Domain()
         )
     )
 
@@ -768,19 +775,20 @@ def _intersect_fields(
 ) -> tuple[common.Field, ...]:
     # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
     # currently blocked, because requiring the `_to_field` function, see comment there.
-    nd_array_class = _get_nd_array_class(*fields)
+    like = next(f for f in fields if isinstance(f, NdArrayField))
     promoted_dims = common.promote_dims(
         *(f.domain.dims for f in fields if isinstance(f, common.Field))
     )
-    broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
+    broadcasted_fields = [_broadcast(_to_field(f, like), promoted_dims) for f in fields]
 
     intersected_domains = embedded_common.restrict_to_intersection(
         *[f.domain for f in broadcasted_fields], ignore_dims=ignore_dims
     )
 
+    ops = array_ops.of(like._ndarray)
     return tuple(
-        nd_array_class.from_array(
-            f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)],
+        NdArrayField.from_array(
+            ops.asarray(f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)]),
             domain=intersected_domain,
         )
         for f, intersected_domain in zip(broadcasted_fields, intersected_domains, strict=True)
@@ -808,13 +816,10 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
         if left < right:
             raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
     new_domain = _stack_domains(*[f.domain for f in sorted_fields], dim=dim)
-    nd_array_class = _get_nd_array_class(*sorted_fields)
-    return nd_array_class.from_array(
-        nd_array_class.array_ns.concatenate(
-            [
-                nd_array_class.array_ns.broadcast_to(f.ndarray, f.domain.shape)
-                for f in sorted_fields
-            ],
+    xp = _ops_of(*sorted_fields).xp
+    return NdArrayField.from_array(
+        xp.concat(
+            [xp.broadcast_to(f.ndarray, f.domain.shape) for f in sorted_fields],
             axis=new_domain.dim_index(dim, allow_missing=False),
         ),
         domain=new_domain,
@@ -846,10 +851,13 @@ def _invert_domain(domain: common.Domain) -> tuple[common.Domain, ...]:
 
 
 def _size0_field(
-    nd_array_class: type[NdArrayField], dims: tuple[common.Dimension, ...], dtype: core_defs.DType
+    like: NdArrayField, dims: tuple[common.Dimension, ...], dtype: core_defs.DType
 ) -> NdArrayField:
-    return nd_array_class.from_array(
-        nd_array_class.array_ns.empty((0,) * len(dims), dtype=dtype.scalar_type),
+    ops = array_ops.of(like._ndarray)
+    return NdArrayField.from_array(
+        ops.xp.empty(
+            (0,) * len(dims), dtype=ops.dtype(dtype.scalar_type), device=ops.device(like.ndarray)
+        ),
         domain=common.Domain(dims=dims, ranges=(common.UnitRange(0, 0),) * len(dims)),
     )
 
@@ -885,12 +893,12 @@ def _concat_where(
 
     if len(t_slices) + len(f_slices) == 0:
         # no data to concatenate, return an empty field
-        nd_array_class = _get_nd_array_class(true_field, false_field)
-        return _size0_field(nd_array_class, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
+        like = next(f for f in (true_field, false_field) if isinstance(f, NdArrayField))
+        return _size0_field(like, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
     return _concat(*f_slices, *t_slices, dim=domain_dim)
 
 
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type]
+_register_builtin(experimental.concat_where, _concat_where)
 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> common.Connectivity:
@@ -903,14 +911,18 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
         )
     source_dim = offset.source
     coords = _identity_index_array(
-        offset_field.domain, source_dim, offset_field.array_ns, dtype=fbuiltins.IndexType
+        offset_field.domain,
+        source_dim,
+        array_ops.of(offset_field._ndarray),
+        like=offset_field.ndarray,
+        dtype=fbuiltins.IndexType,
     )
     return common._connectivity(
         offset_field.ndarray + coords, codomain=source_dim, domain=offset_field.domain
     )
 
 
-NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)  # type: ignore[arg-type]
+_register_builtin(experimental.as_offset, _as_offset)
 
 
 def _make_reduction(
@@ -919,7 +931,7 @@ def _make_reduction(
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
-        xp = field.array_ns
+        ops = array_ops.of(field._ndarray)
 
         if not axis.kind == common.DimensionKind.LOCAL:
             raise ValueError("Can only reduce local dimensions.")
@@ -939,128 +951,69 @@ def _make_reduction(
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.domain.dims[0]] else xp.newaxis
+            slice(None) if d in [axis, offset_definition.domain.dims[0]] else None
             for d in field.domain.dims
         )
-        masked_array = xp.where(
-            xp.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
+        masked_array = ops.where(
+            ops.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )
 
-        return field.__class__.from_array(
-            getattr(xp, array_builtin_name)(masked_array, axis=reduce_dim_index), domain=new_domain
+        return NdArrayField.from_array(
+            getattr(ops.xp, array_builtin_name)(masked_array, axis=reduce_dim_index),
+            domain=new_domain,
         )
 
     _builtin_op.__name__ = builtin_name
     return _builtin_op
 
 
-NdArrayField.register_builtin_func(
+_register_builtin(
     fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum", lambda x: x.dtype.scalar_type(0))
 )
-NdArrayField.register_builtin_func(
-    fbuiltins.max_over, _make_reduction("max_over", "max", lambda x: x.array_ns.min(x._ndarray))
+_register_builtin(
+    fbuiltins.max_over,
+    _make_reduction("max_over", "max", lambda x: array_ops.of(x._ndarray).xp.min(x._ndarray)),
 )
-NdArrayField.register_builtin_func(
-    fbuiltins.min_over, _make_reduction("min_over", "min", lambda x: x.array_ns.max(x._ndarray))
+_register_builtin(
+    fbuiltins.min_over,
+    _make_reduction("min_over", "min", lambda x: array_ops.of(x._ndarray).xp.max(x._ndarray)),
 )
 
 
-# -- Concrete array implementations --
-# NumPy
-_nd_array_implementations = [np]
+def _field_from_array(
+    data: Any,
+    /,
+    *,
+    domain: Optional[common.DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
+) -> NdArrayField:
+    if not array_api_compat.is_array_api_obj(data):
+        raise NotImplementedError(f"Cannot construct a 'Field' from '{type(data)}'.")
+    assert domain is not None
+    return NdArrayField.from_array(data, domain=domain, dtype=dtype)
 
 
-@dataclasses.dataclass(frozen=True, eq=False)
-class NumPyArrayField(NdArrayField):
-    array_ns: ClassVar[ModuleType] = np
-
-
-common._field.register(np.ndarray, NumPyArrayField.from_array)
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class NumPyArrayConnectivityField(NdArrayConnectivityField):
-    array_ns: ClassVar[ModuleType] = np
-
-
-common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
-
-# CuPy
-if cp:
-    _nd_array_implementations.append(cp)
-
-    @dataclasses.dataclass(frozen=True, eq=False)
-    class CuPyArrayField(NdArrayField):
-        array_ns: ClassVar[ModuleType] = cp
-
-    common._field.register(cp.ndarray, CuPyArrayField.from_array)
-
-    @dataclasses.dataclass(frozen=True, eq=False)
-    class CuPyArrayConnectivityField(NdArrayConnectivityField):
-        array_ns: ClassVar[ModuleType] = cp
-
-    common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
-
-# JAX
-if jnp:
-    assert jax is not None
-
-    _nd_array_implementations.append(jnp)
-    # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
-    jax.config.update("jax_enable_x64", True)
-
-    @dataclasses.dataclass(frozen=True, eq=False)
-    class JaxArrayField(NdArrayField):
-        array_ns: ClassVar[ModuleType] = jnp
-
-        @property
-        def __gt_buffer_info__(self) -> common.BufferInfo:
-            raise NotImplementedError("'__gt_buffer_info__' for JaxArrayField not yet implemented.")
-
-        def __setitem__(
-            self,
-            index: common.AnyIndexSpec,
-            value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
-        ) -> None:
-            target_domain, target_slice = self._slice(index)
-
-            if isinstance(value, common.Field):
-                if not value.domain == target_domain:
-                    raise ValueError(
-                        f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
-                    )
-                value = value.ndarray
-
-            object.__setattr__(self, "_ndarray", self._ndarray.at[target_slice].set(value))  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
-
-    @dataclasses.dataclass(frozen=True, eq=False)
-    class JaxArrayConnectivityField(NdArrayConnectivityField):
-        array_ns: ClassVar[ModuleType] = jnp
-
-    common._field.register(jnp.ndarray, JaxArrayField.from_array)
-    common._connectivity.register(jnp.ndarray, JaxArrayConnectivityField.from_array)
-    # jax >= 0.11: 'Tracer' is no longer a subclass of 'jax.Array' (only 'isinstance' says so, via
-    # 'ArrayMeta.__instancecheck__'), and 'singledispatch' resolves on the class hierarchy.
-    common._field.register(jax.core.Tracer, JaxArrayField.from_array)
-    common._connectivity.register(jax.core.Tracer, JaxArrayConnectivityField.from_array)
-
-    def _flatten_jax_field(
-        field: JaxArrayField,
-    ) -> tuple[tuple[core_defs.NDArrayObject], common.Domain]:
-        return (field.ndarray,), field.domain
-
-    def _unflatten_jax_field(
-        domain: common.Domain, children: tuple[core_defs.NDArrayObject]
-    ) -> JaxArrayField:
-        return JaxArrayField(domain, children[0])  # type: ignore[abstract] # mypy does not see '__gt_builtin_func__' as implemented by 'FieldBuiltinFuncRegistry'
-
-    jax.tree_util.register_pytree_node(
-        JaxArrayField,  # type: ignore[type-abstract, unused-ignore] # only reported when 'jax' is installed, see '_unflatten_jax_field'
-        _flatten_jax_field,
-        _unflatten_jax_field,
+def _connectivity_from_array(
+    data: Any,
+    /,
+    codomain: common.Dimension,
+    *,
+    domain: Optional[common.DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> NdArrayConnectivityField:
+    if not array_api_compat.is_array_api_obj(data):
+        raise NotImplementedError(f"Cannot construct a 'Connectivity' from '{type(data)}'.")
+    assert domain is not None
+    return NdArrayConnectivityField.from_array(
+        data, codomain, domain=domain, dtype=dtype, skip_value=skip_value
     )
+
+
+common._field.register(object, _field_from_array)
+common._connectivity.register(object, _connectivity_from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
@@ -1073,7 +1026,7 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
             domain_slice.append(slice(None))
             named_ranges.append(common.NamedRange(dim, field.domain[pos].unit_range))
         else:
-            domain_slice.append(None)  # np.newaxis
+            domain_slice.append(None)
             named_ranges.append(common.NamedRange(dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
@@ -1086,16 +1039,19 @@ def _builtins_broadcast(
     raise AssertionError("Scalar case not reachable from 'fbuiltins.broadcast'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
+_register_builtin(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdArrayField:
     if isinstance(field, NdArrayField):
-        return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+        ops = array_ops.of(field._ndarray)
+        return NdArrayField.from_array(
+            ops.xp.astype(field.ndarray, ops.dtype(type_)), domain=field.domain
+        )
     raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type]  # because fbuiltins.astype is overloaded
+_register_builtin(fbuiltins.astype, _astype)  # type: ignore[arg-type]  # because fbuiltins.astype is overloaded
 
 
 def _get_slices_from_domain_slice(

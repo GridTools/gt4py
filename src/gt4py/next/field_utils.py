@@ -10,7 +10,7 @@ from types import ModuleType
 
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common, named_collections, utils
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -39,7 +39,7 @@ def field_from_typespec(
     >>> field_from_typespec(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
     ... )  # doctest: +ELLIPSIS
-    NumPyArrayField(... dtype=int32...)
+    NdArrayField(... dtype=int32...)
     >>> field_from_typespec(
     ...     ts.TupleType(
     ...         types=[
@@ -50,7 +50,7 @@ def field_from_typespec(
     ...     common.domain({common.Dimension("I"): 1}),
     ...     np,
     ... )  # doctest: +ELLIPSIS
-    (NumPyArrayField(... dtype=int32...), NumPyArrayField(... dtype=float32...))
+    (NdArrayField(... dtype=int32...), NdArrayField(... dtype=float32...))
     """
 
     def _constructor(
@@ -67,7 +67,12 @@ def field_from_typespec(
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
-            xp.empty(domain.shape, dtype=xp.dtype(type_translation.as_dtype(type_).scalar_type)),
+            xp.empty(
+                domain.shape,
+                dtype=core_ndarray_utils.namespace_dtype(
+                    xp, type_translation.as_dtype(type_).scalar_type
+                ),
+            ),
             domain=domain,
         )
         assert isinstance(res, common.MutableField)

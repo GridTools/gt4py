@@ -6,9 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import importlib
 from typing import Any
-from gt4py._core import ndarray_utils, definitions
+
+import numpy as np
 import pytest
+
+from gt4py._core import ndarray_utils, definitions
 
 
 def cuda_device(id_: int) -> Any:
@@ -45,3 +49,59 @@ def test_get_device_translator(array_ns, gt4py_device, expected_device):
 )
 def test_is_array_namespace(array_ns):
     assert ndarray_utils.is_array_namespace(array_ns)
+
+
+@pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
+@pytest.mark.parametrize(
+    "scalar_type", [np.bool_, np.int32, np.int64, np.uint8, np.float32, np.float64]
+)
+def test_dtype_translation(array_ns_name, scalar_type):
+    array_ns = importlib.import_module(array_ns_name)
+    name = np.dtype(scalar_type).name
+    array = array_ns.empty((2,), dtype=getattr(array_ns, name))
+
+    assert ndarray_utils.namespace_dtype(array_ns, scalar_type) == getattr(array_ns, name)
+    assert ndarray_utils.dtype_of(array) == definitions.dtype(scalar_type)
+
+
+@pytest.mark.parametrize("dtype", [">f8", "<f8", ">i4", "<i4"])
+def test_dtype_of_ignores_byte_order(dtype):
+    assert ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype)) == definitions.dtype(
+        np.dtype(dtype).newbyteorder("=").type
+    )
+
+
+@pytest.mark.requires_jax
+def test_dtype_of_jax_without_x64():
+    import jax
+
+    # `jax.enable_x64` replaced `jax.experimental.disable_x64` in newer JAX versions
+    disable_x64 = (
+        jax.enable_x64(False) if hasattr(jax, "enable_x64") else jax.experimental.disable_x64()
+    )
+    with disable_x64:
+        array = jax.numpy.zeros((2,), dtype=jax.numpy.float32)
+        assert ndarray_utils.dtype_of(array) == definitions.dtype(np.float32)
+
+
+@pytest.mark.parametrize(
+    "c_type, expected", [(np.longlong, np.int64), (np.ulonglong, np.uint64), (np.intc, np.int32)]
+)
+def test_dtype_of_c_type_aliases(c_type, expected):
+    assert ndarray_utils.dtype_of(np.zeros((2,), dtype=c_type)) == definitions.dtype(expected)
+
+
+@pytest.mark.parametrize("dtype", [np.float16, np.complex128])
+def test_dtype_of_rejects_non_gt4py_types(dtype):
+    with pytest.raises(TypeError, match="not a gt4py scalar type"):
+        ndarray_utils.dtype_of(np.zeros((2,), dtype=dtype))
+
+
+@pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
+@pytest.mark.parametrize(
+    "c_type, expected", [(np.longlong, "int64"), (np.ulonglong, "uint64"), (np.intc, "int32")]
+)
+def test_namespace_dtype_of_c_type_aliases(array_ns_name, c_type, expected):
+    array_ns = importlib.import_module(array_ns_name)
+
+    assert ndarray_utils.namespace_dtype(array_ns, c_type) == getattr(array_ns, expected)

@@ -102,6 +102,7 @@ no_backend = NoBackend(
             next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
             marks=pytest.mark.requires_jax,
         ),
+        next_tests.definitions.EmbeddedIds.ARRAY_API_STRICT_EXECUTION,
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.uses_dace,
