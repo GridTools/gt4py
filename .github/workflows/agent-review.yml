@@ -68,7 +68,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'agent-review'
     # Pinned by full commit SHA; bump it only to a reviewed release of
     # GridTools/ci-workflows, after reading its release notes.
-    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@b259354abbac0ccabffb1bf027d71fa66f0385a8 # pre-release, PR #1
+    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@a6d4ef72439268af8f61d1adefa9d40bc23f2463 # main, pre-release (v0.1.0 pending)
     # The ceiling for every job of the called workflow, checked at startup:
     # exactly the union of what its jobs request.
     permissions:
@@ -104,7 +104,7 @@ jobs:
   ## green with this configuration on the pre-release pin.
   # test:
   #   if: github.event_name == 'pull_request'
-  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@b259354abbac0ccabffb1bf027d71fa66f0385a8 # pre-release, PR #1
+  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@a6d4ef72439268af8f61d1adefa9d40bc23f2463 # main, pre-release (v0.1.0 pending)
   #   permissions:
   #     contents: read
   #     pull-requests: write
