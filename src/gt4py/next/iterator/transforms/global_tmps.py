@@ -119,21 +119,6 @@ def _is_as_fieldop_of_scan(expr: itir.Expr) -> bool:
     )
 
 
-def _intersect_domain(
-    domain: infer_domain.DomainAccess, restriction: infer_domain.DomainAccess
-) -> infer_domain.DomainAccess:
-    if isinstance(domain, SymbolicDomain) and isinstance(restriction, SymbolicDomain):
-        return domain_utils.domain_intersection(domain, restriction)
-    return restriction
-
-
-def _with_domain(expr: itir.Expr, domain: infer_domain.DomainAccess) -> itir.Expr:
-    # `expr` can be shared with other uses, so its annex must not be changed in place
-    new_expr = expr.__class__(**{str(name): child for name, child in expr.iter_children_items()})
-    new_expr.annex.__dict__.update(expr.annex.__dict__, domain=domain)
-    return new_expr
-
-
 def _transform_if(
     stmt: itir.Stmt,
     declarations: list[itir.Temporary],
@@ -142,17 +127,12 @@ def _transform_if(
     if isinstance(stmt, itir.SetAt) and cpm.is_call_to(stmt.expr, "if_"):
         cond, true_val, false_val = stmt.expr.args
 
-        # The domain of a branch is the domain it is evaluated on, e.g. for a reference to a
-        # temporary its allocation domain, which can be larger than the domain of the `if_`
-        # its value is written on.
-        if_domain = stmt.expr.annex.domain
+        # A reference to a temporary carries the domain the temporary is allocated on, which
+        # can be larger than the domain the `if_` is read on.
         true_val, false_val = (
-            _with_domain(
-                val,
-                next_utils.tree_map(_intersect_domain)(
-                    getattr(val.annex, "domain", if_domain), if_domain
-                ),
-            )
+            im.ref(val.id, val.type, annex={"domain": stmt.expr.annex.domain})
+            if isinstance(val, itir.SymRef)
+            else val
             for val in (true_val, false_val)
         )
         return [
