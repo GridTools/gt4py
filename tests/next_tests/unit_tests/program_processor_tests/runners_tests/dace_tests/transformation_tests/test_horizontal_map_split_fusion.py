@@ -13,6 +13,9 @@ import copy
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
 )
+from gt4py.next.program_processors.runners.dace.transformations import (
+    map_fusion_extended as gtx_map_fusion_extended,
+)
 from dace.sdfg import nodes as dace_nodes, propagation as dace_propagation
 from sympy.core.numbers import Number
 
@@ -306,3 +309,110 @@ def test_horizontal_map_fusion_rejects_contradictory_map_scopes():
             ),
             validate=False,
         )
+
+
+def _make_sdfg_with_splitable_maps_one_containing_a_nested_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace_nodes.MapEntry, dace_nodes.MapExit
+]:
+    """Creates an SDFG with two splitable sibling Maps, the first containing a `NestedSDFG`.
+
+    The first Map (`first_map`, range `i` in `[0, 10)`) contains a nested SDFG,
+    which computes `b = a + 1`, inside its scope, while the second Map
+    (`second_map_map`, range `i` in `[5, 15)`) is a tasklet-only Map. The two
+    ranges partially overlap, such that `SplitMapRange.split_maps()` splits
+    both Maps into fragments.
+    """
+    sdfg = dace.SDFG(util.unique_name("split_maps_with_nested_sdfg"))
+    state = sdfg.add_state(is_start_block=True)
+    for name in "ABCD":
+        sdfg.add_array(name, shape=(15,), dtype=dace.float64, transient=False)
+
+    inner_sdfg = dace.SDFG("nested_computation")
+    inner_state = inner_sdfg.add_state(is_start_block=True)
+    for name in "ab":
+        inner_sdfg.add_array(name, shape=(15,), dtype=dace.float64, transient=False)
+    tasklet = inner_state.add_tasklet("compute", {"__in"}, {"__out"}, "__out = __in + 1.0")
+    inner_state.add_edge(inner_state.add_access("a"), None, tasklet, "__in", dace.Memlet("a[0]"))
+    inner_state.add_edge(tasklet, "__out", inner_state.add_access("b"), None, dace.Memlet("b[0]"))
+
+    first_map_entry, first_map_exit = state.add_map("first_map", {"i": "0:10"})
+    A, B = (state.add_access(name) for name in "AB")
+    first_map_entry.add_scope_connectors("A")
+    first_map_exit.add_scope_connectors("B")
+    nsdfg = state.add_nested_sdfg(sdfg=inner_sdfg, inputs={"a"}, outputs={"b"}, symbol_mapping={})
+    state.add_edge(A, None, first_map_entry, "IN_A", dace.Memlet("A[0:10]"))
+    state.add_edge(first_map_entry, "OUT_A", nsdfg, "a", dace.Memlet("A[i]"))
+    state.add_edge(nsdfg, "b", first_map_exit, "IN_B", dace.Memlet("B[i]"))
+    state.add_edge(first_map_exit, "OUT_B", B, None, dace.Memlet("B[0:10]"))
+
+    state.add_mapped_tasklet(
+        "second_map",
+        map_ranges={"i": "5:15"},
+        inputs={"__in": dace.Memlet("C[i]")},
+        code="__out = __in + 2.0",
+        outputs={"__out": dace.Memlet("D[i]")},
+        external_edges=True,
+    )
+    sdfg.validate()
+    return sdfg, state, first_map_entry, first_map_exit
+
+
+def test_split_maps_does_not_resolve_symbols_for_tasklet_only_maps(monkeypatch):
+    """`split_maps()` must not resolve the symbols when both Maps are tasklet-only.
+
+    The symbol resolution is an expensive full-SDFG scan, however, its result is
+    only consumed by `add_nested_sdfg()`, which is never called when none of the
+    copied scopes contains a `NestedSDFG`.
+    """
+    sdfg, state = _make_sdfg_with_multiple_maps_that_share_inputs(20)
+    second_map_entry = next(
+        n
+        for n in state.nodes()
+        if isinstance(n, dace_nodes.MapEntry) and n.label == "second_computation_map"
+    )
+    fourth_map_entry = next(
+        n
+        for n in state.nodes()
+        if isinstance(n, dace_nodes.MapEntry) and n.label == "fourth_computation_map"
+    )
+
+    counter = util.DefinedSymbolsCounter(monkeypatch)
+    gtx_map_fusion_extended.HorizontalSplitMapRange(fuse_map_fragments=False).split_maps(
+        state,
+        sdfg,
+        second_map_entry,
+        state.exit_node(second_map_entry),
+        fourth_map_entry,
+        state.exit_node(fourth_map_entry),
+    )
+    assert counter.calls == 0
+
+
+def test_split_maps_resolves_symbols_once_when_a_scope_contains_a_nested_sdfg(monkeypatch):
+    """`split_maps()` must resolve the symbols once when a copied scope has a `NestedSDFG`.
+
+    The symbols must be resolved when one of the copied scopes contains a
+    `NestedSDFG`, but only once for all Maps split by the transformation, i.e.
+    the result must be shared by all fragments.
+    """
+    sdfg, state, first_map_entry, first_map_exit = (
+        _make_sdfg_with_splitable_maps_one_containing_a_nested_sdfg()
+    )
+    second_map_entry = next(
+        n
+        for n in state.nodes()
+        if isinstance(n, dace_nodes.MapEntry) and n.label.startswith("second_map")
+    )
+
+    counter = util.DefinedSymbolsCounter(monkeypatch)
+    gtx_map_fusion_extended.HorizontalSplitMapRange(fuse_map_fragments=False).split_maps(
+        state,
+        sdfg,
+        first_map_entry,
+        first_map_exit,
+        second_map_entry,
+        state.exit_node(second_map_entry),
+    )
+    assert counter.calls == 1
+    # The fragments of the first Map must still contain the nested SDFG.
+    assert sum(1 for node in state.nodes() if isinstance(node, dace_nodes.NestedSDFG)) == 2
