@@ -910,7 +910,7 @@ def test_synchronous_compilation(cartesian_case, compile_testee):
             out=out,
             offset_provider=cartesian_case.offset_provider,
         )
-        assert np.allclose(out.ndarray, a.ndarray + b.ndarray)
+        assert np.allclose(out.asnumpy(), a.asnumpy() + b.asnumpy())
 
 
 @pytest.mark.parametrize("mode", list(config.BuildJobsMode), ids=lambda m: m.name.lower())

@@ -195,10 +195,26 @@ if cupy is not None:
     _device_translation_registry[cupy] = _cupy_device_translator
 
 
+def _torch_device_translator(device: core_defs.Device | None) -> Any:
+    import torch
+
+    if device is None:
+        return None
+    if device.device_type == core_defs.DeviceType.CPU:
+        return torch.device("cpu")
+    # ROCm builds of torch use the 'cuda' device type
+    if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
+        return torch.device("cuda", device.device_id)
+    raise ValueError(f"torch does not support device type {device.device_type}.")
+
+
 def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device | None], Any]:
     """
     Returns a mapping from a GT4Py 'Device' to the corresponding device object for the given array namespace.
     """
+    # matched by name, so that importing gt4py does not import torch
+    if getattr(array_ns, "__name__", None) == "torch":
+        return _torch_device_translator
     try:
         return _device_translation_registry[array_ns]
     except KeyError:

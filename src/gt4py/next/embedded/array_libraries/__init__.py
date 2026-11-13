@@ -6,11 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`ArrayOps` of the array libraries whose arrays need more than the Array API standard, registered if importable."""
+"""`ArrayOps` of the array libraries whose arrays need more than the Array API standard; CuPy and JAX registered if importable."""
 
 import importlib
 
-from . import numpy_ops as numpy_ops
+from . import numpy_ops as numpy_ops, torch_ops as torch_ops
 
 
 for _library in ("cupy", "jax"):

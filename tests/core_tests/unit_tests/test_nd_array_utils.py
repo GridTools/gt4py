@@ -51,6 +51,31 @@ def test_is_array_namespace(array_ns):
     assert ndarray_utils.is_array_namespace(array_ns)
 
 
+@pytest.mark.requires_torch
+@pytest.mark.parametrize(
+    "gt4py_device, expected_device",
+    [
+        (None, None),
+        (definitions.Device(definitions.DeviceType.CPU, 0), "cpu"),
+        (definitions.Device(definitions.DeviceType.CUDA, 1), "cuda:1"),
+        (definitions.Device(definitions.DeviceType.ROCM, 0), "cuda:0"),
+    ],
+)
+def test_get_device_translator_torch(gt4py_device, expected_device):
+    import torch
+
+    translator = ndarray_utils.get_device_translator(torch)
+    expected = None if expected_device is None else torch.device(expected_device)
+    assert translator(gt4py_device) == expected
+
+
+@pytest.mark.requires_torch
+def test_is_array_namespace_torch():
+    import torch
+
+    assert ndarray_utils.is_array_namespace(torch)
+
+
 @pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
 @pytest.mark.parametrize(
     "scalar_type", [np.bool_, np.int32, np.int64, np.uint8, np.float32, np.float64]

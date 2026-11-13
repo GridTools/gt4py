@@ -274,7 +274,7 @@ def test_out_field_arg_with_non_zero_domain_start(cartesian_case, copy_program_d
         common.domain({IDim: (1, size - 2)}),
         allocator=cartesian_case.allocator,
     )
-    ref = inp.ndarray[1:-2]
+    ref = inp.asnumpy()[1:-2]
 
     cases.verify(cartesian_case, copy_program, inp, out=out, ref=ref)
 
