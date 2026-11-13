@@ -8,7 +8,8 @@
 # other: failure.
 #
 # Pi has no turn cap and no stall detection, and exits 0 when every request
-# failed: AWF's apiProxy.maxTurns and run-review's timeout bound a run.
+# failed: AWF's apiProxy.maxTurns stops a well-behaved run; AWF's rate limits
+# and run-review's timeout bound it (see awf.yaml).
 
 set -uo pipefail
 # shellcheck source=SCRIPTDIR/../common.sh

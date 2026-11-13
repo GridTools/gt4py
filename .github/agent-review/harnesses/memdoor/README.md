@@ -32,7 +32,8 @@ not to every release.
   model is told the tool is unavailable. `bash` stays; the sandbox is the
   boundary.
 - **No turn cap**, only a detector that stops after the same call is repeated
-  five times. AWF's `apiProxy.maxTurns` and the harness timeout bound a run.
+  five times. AWF's `apiProxy.maxTurns` stops a well-behaved run; the bound
+  is AWF's request rate limits and the harness timeout (see `../../awf.yaml`).
 
 ## Outbound calls
 

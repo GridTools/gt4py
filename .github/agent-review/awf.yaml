@@ -12,6 +12,7 @@
 # 43331077096): the dummy key is unreadable in the sandbox in every mode; the
 # CSCS path mapping; the model pattern format; 'maxTurns' and
 # 'rateLimiting' answer 429; 'agentTimeout' ends the agent with exit 124.
+# The bounds the agent can actually hit are in the 'Spend' notes below.
 
 network:
   # Only for the in-sandbox 'git fetch' of the public repository. The
@@ -43,21 +44,39 @@ apiProxy:
   # sidecar otherwise makes ~7 GETs per run to api.github.com (the
   # github/gh-aw-firewall 'catalogue-data' branch) to refresh its pricing
   # snapshot. Those carry no data about the run (GET only, no Authorization),
-  # but we do not use AWF's AI-credit accounting (the key budget and maxTurns
-  # are the caps), so the egress and the up-to-5 s first-request wait are
+  # but we do not use AWF's AI-credit accounting (see 'Spend' below), so the
+  # egress and the up-to-5 s first-request wait are
   # pointless. Pricing then falls back to the bundled tables.
   # (AWF v0.29.12: containers/api-proxy/catalogue-loader.js:91,237.)
   modelCatalogue:
     enabled: false
-  # Spend caps. The primary cap is the dedicated CSCS key's own token budget.
-  # AWF prices unpriced CSCS models with a median estimate, so its AI-credit
-  # cap is not a hard limit; the turn cap is used here.
+  # Spend. The only hard cap is the dedicated CSCS key's own token budget;
+  # within one run the bound is 'rateLimiting' below. 'maxTurns' stops a
+  # well-behaved harness, but the agent has a shell and can call the listener
+  # directly, and in AWF v0.29.12 'maxTurns':
+  #   - counts only POSTs to chat/completions, responses and messages paths:
+  #     any other method or path under /v1 (e.g. '/v1/embeddings') is
+  #     forwarded with the real key and never counted
+  #     (containers/api-proxy/upstream-log.js);
+  #   - counts a call when its 2xx response ends, but checks at admission, so
+  #     concurrent or long streaming calls are all admitted
+  #     (proxy-guards.js, upstream-response.js);
+  # 'allowedModels' is skipped for bodies without a string 'model', and
+  # neither 'max_tokens' nor the path is restricted: AWF has no output clamp
+  # or path allowlist for the OpenAI listener. AWF's AI-credit cap is not
+  # used: it prices CSCS models with a median estimate, after the response.
   maxTurns: 80
   maxPermissionDenied: 5
 
 rateLimiting:
-  # Answered with 429 above the limit.
+  # Counted at admission for every request to the listener, whatever its
+  # path, method or body (containers/api-proxy/rate-limiter.js), and answered
+  # with 429 above the limit; rejected requests are not counted. The hourly
+  # limit bounds a run (agentTimeout < 1 h) to this many upstream requests,
+  # of unbounded size within the model's context and output limits; the
+  # per-minute one paces them.
   requestsPerMinute: 30
+  requestsPerHour: 100
 
 container:
   # Minutes; the review step's own timeout is a few minutes longer so this

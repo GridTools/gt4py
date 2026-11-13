@@ -35,8 +35,9 @@ To upgrade, set the version in `package.json` and regenerate the lockfile with
   cannot be restricted; the sandbox is the boundary.
 - The prompt is passed on stdin: with stdin open and no prompt, Pi waits
   forever.
-- **No turn cap and no stall detection**: AWF's `apiProxy.maxTurns` and the
-  harness timeout bound a run.
+- **No turn cap and no stall detection**: AWF's `apiProxy.maxTurns` stops a
+  well-behaved run; the bound is AWF's request rate limits and the harness
+  timeout (see `../../awf.yaml`).
 
 ## Outbound calls
 

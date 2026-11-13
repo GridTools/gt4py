@@ -16,11 +16,11 @@ the `case` in the `Authorize` step of `.github/workflows/agent-review.yml`.
 
 `common.sh` holds the helpers the adapters share: the scratch `HOME`, `NO_PROXY` for loopback and the listeners, and bounded diagnostics.
 
-| Harness               | Version  | Wire          | Ignores the repository's configuration with                     | Turn cap             |
+| Harness               | Version  | Wire          | Ignores the repository's configuration with                     | Own turn cap         |
 | --------------------- | -------- | ------------- | --------------------------------------------------------------- | -------------------- |
-| [opencode](opencode/) | 2.2.7    | `openai-chat` | `OPENCODE_DISABLE_PROJECT_CONFIG=1`                             | 35 steps, then AWF's |
-| [memdoor](memdoor/)   | v1.827.0 | `openai-chat` | nothing (`run-review` resets `AGENTS.md`); `skill` tool guarded | AWF's only           |
-| [pi](pi/)             | 1.5.2    | `openai-chat` | `--no-approve --no-context-files`                               | AWF's only           |
+| [opencode](opencode/) | 2.2.7    | `openai-chat` | `OPENCODE_DISABLE_PROJECT_CONFIG=1`                             | 35 steps            |
+| [memdoor](memdoor/)   | v1.827.0 | `openai-chat` | nothing (`run-review` resets `AGENTS.md`); `skill` tool guarded | none                 |
+| [pi](pi/)             | 1.5.2    | `openai-chat` | `--no-approve --no-context-files`                               | none                 |
 
 `stub` makes no model call and writes a fixed review with hostile content
 (@mentions of a handle that is not a valid login, HTML comments imitating

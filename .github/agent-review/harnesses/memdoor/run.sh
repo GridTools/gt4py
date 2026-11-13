@@ -6,7 +6,8 @@
 # 2 no final answer, other: failure.
 #
 # memdoor has no turn cap, only a detector for an identical call repeated
-# five times: AWF's apiProxy.maxTurns and run-review's timeout bound a run.
+# five times: AWF's apiProxy.maxTurns stops a well-behaved run; AWF's rate
+# limits and run-review's timeout bound it (see awf.yaml).
 
 set -uo pipefail
 # shellcheck source=SCRIPTDIR/../common.sh
