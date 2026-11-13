@@ -26,7 +26,11 @@ from gt4py.next.common import (
     NamedRange,
     UnitRange,
 )
-from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
+from gt4py.next.embedded import (
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+    nd_array_field,
+)
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront.experimental import as_offset, concat_where
@@ -390,6 +394,58 @@ def test_mixed_fields_concat_where(product_nd_array_implementation):
 
     assert result.array_ns is first_impl
     assert np.array_equal(result.asnumpy(), [1.0, 2.0, 30.0, 40.0])
+
+
+@pytest.mark.parametrize(
+    "builtin, expected, expected_bool",
+    [
+        (fbuiltins.neighbor_sum, [3, 3], [True, False]),
+        (fbuiltins.max_over, [2, 3], [True, False]),
+        (fbuiltins.min_over, [1, 3], [False, False]),
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "bool",
+        "int8",
+        "uint8",
+        "int16",
+        "uint16",
+        "int32",
+        "uint32",
+        "int64",
+        "uint64",
+        "float32",
+        "float64",
+    ],
+)
+def test_neighbor_reduction_keeps_dtype(
+    builtin, expected, expected_bool, dtype, nd_array_implementation
+):
+    E = Dimension("E")
+    V = Dimension("V")
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [1, -1]], dtype=np.int32),
+        codomain=V,
+        domain={E: 2, E2V: 2},
+        skip_value=-1,
+    )
+    data = [[True, False], [False, True]] if dtype == "bool" else [[1, 2], [3, 4]]
+    field = common._field(
+        asarray(nd_array_implementation, data, dtype=dtype), domain={E: 2, E2V: 2}
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        if dtype == "bool" and is_array_api_strict(nd_array_implementation):
+            with pytest.raises(TypeError):
+                builtin(field, axis=E2V)
+            return
+        result = builtin(field, axis=E2V)
+
+    assert result.dtype == field.dtype
+    assert np.array_equal(result.asnumpy(), expected_bool if dtype == "bool" else expected)
 
 
 def test_non_dispatched_function():
