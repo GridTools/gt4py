@@ -26,7 +26,6 @@ import types
 import typing
 from typing import Any, Callable, Literal, Optional, Mapping, Protocol, Self, TypeAlias
 
-import array_api_compat
 import numpy as np
 import pytest
 import typing_extensions
@@ -42,7 +41,6 @@ from gt4py.next import (
     named_collections,
     utils as gt_utils,
 )
-from gt4py.next.embedded import array_ops
 from gt4py.next.ffront import decorator
 from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next.otf import arguments
@@ -438,16 +436,6 @@ def tree_mapped_np_allclose(
     return False
 
 
-@gt_utils.tree_map
-def _asnumpy(value: Any) -> Any:
-    """`value` as a NumPy array if it is a field or an array of any library, else unchanged."""
-    if isinstance(value, common.Field):
-        return value.asnumpy()
-    if isinstance(value, np.ndarray) or not array_api_compat.is_array_api_obj(value):
-        return value
-    return array_ops.of(value).to_numpy(value)
-
-
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -502,7 +490,7 @@ def verify(
     out_comp = arguments.extract(out_comp)
     out_comp_ndarray = field_utils.asnumpy(out_comp)
     ref = arguments.extract(ref)
-    ref_ndarray = _asnumpy(ref)
+    ref_ndarray = field_utils.asnumpy(ref)
 
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
