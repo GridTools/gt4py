@@ -312,3 +312,25 @@ class TestFieldConstructorInit:
         """allocator=invalid object → raises ValueError."""
         with pytest.raises(ValueError, match="Invalid field allocator"):
             constructors.FieldConstructor(allocator="not_an_allocator")
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize(
+    "device, expected_device_type",
+    [
+        (None, "cpu"),
+        (core_defs.Device(core_defs.DeviceType.CPU, 0), "cpu"),
+        pytest.param(
+            core_defs.Device(core_defs.DeviceType.CUDA, 0), "cuda", marks=pytest.mark.requires_gpu
+        ),
+    ],
+)
+def test_as_field_torch_allocator(device, expected_device_type):
+    import torch
+
+    field = gtx.as_field([I], np.arange(3.0), allocator=torch, device=device)
+
+    assert isinstance(field.ndarray, torch.Tensor)
+    assert field.ndarray.device.type == expected_device_type
+    assert field.dtype == core_defs.dtype(np.float64)
+    np.testing.assert_array_equal(field.asnumpy(), np.arange(3.0))
