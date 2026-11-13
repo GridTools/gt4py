@@ -87,6 +87,16 @@ test_review_phase_runs_offline_after_fetch() {
     assert "meta ok" test "$(jq -r .status ws/out/meta.json)" = ok
 }
 
+test_drops_text_before_the_first_heading() {
+  setup 0
+  # A stub variant that opens its answer with a note, as models do.
+  sed -i 's/^{$/{ echo "Writing the final review now."; echo;/' root/harnesses/stub/run.sh
+  bash root/bin/run-review "${TMP}/ws" >log 2>&1 || { cat log; return 1; }
+  assert "starts with the summary" test "$(head -n 1 ws/out/review.md)" = "### Summary" &&
+    assert "note dropped" test "$(grep -c 'Writing the final review' ws/out/review.md)" -eq 0 &&
+    assert "no leftover" test ! -e ws/out/review.body
+}
+
 test_review_phase_needs_the_fetch_phase() {
   setup 0
   ! bash root/bin/run-review --phase review "${TMP}/ws" >log 2>&1 &&

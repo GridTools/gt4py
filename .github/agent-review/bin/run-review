@@ -260,15 +260,26 @@ review_phase() {
     exit 1
   fi
 
-  size=$(stat -c %s -- "${candidate}")
+  # Models often open their answer with a note ("Writing the final review
+  # now.", "Maximum steps ... reached") although the prompt asks them to start
+  # with '### Summary'. Keep the review from its first '### ' heading, if any.
+  body="${RESULT_DIR}/review.body"
+  if grep -q '^### ' <"${candidate}"; then
+    awk 'f || /^### /{f = 1} f' <"${candidate}" >"${body}"
+  else
+    cat <"${candidate}" >"${body}"
+  fi
+
+  size=$(stat -c %s -- "${body}")
   truncated=false
   if [ "${size}" -gt "${REVIEW_MAX_BYTES}" ]; then
     truncated=true
-    clip "$((REVIEW_MAX_BYTES - 100))" <"${candidate}" >"${RESULT_DIR}/review.md"
+    clip "$((REVIEW_MAX_BYTES - 100))" <"${body}" >"${RESULT_DIR}/review.md"
     printf '\n\n_[Review truncated: it exceeded %d bytes.]_\n' "${REVIEW_MAX_BYTES}" >>"${RESULT_DIR}/review.md"
   else
-    { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; } <"${candidate}" >"${RESULT_DIR}/review.md"
+    { iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true; } <"${body}" >"${RESULT_DIR}/review.md"
   fi
+  rm -f "${body}"
   write_meta ok "${harness_exit}" "${truncated}" "$(stat -c %s -- "${RESULT_DIR}/review.md")"
   echo "run-review: review written ($(stat -c %s -- "${RESULT_DIR}/review.md") bytes, truncated=${truncated})."
 }

@@ -46,5 +46,6 @@ vLLM ports), which is harmless.
 ## Answer and exit codes
 
 `opencode run --format json` writes JSONL. The review is the text after the
-last `tool_use` event. opencode exits 0 when the step cap ends a run without
+last `tool_use` event (`run-review` then drops anything before its first
+`### ` heading, such as a note that the step cap was reached). opencode exits 0 when the step cap ends a run without
 an answer (then `run.sh` exits 2) and 1 when the endpoint is unreachable.
