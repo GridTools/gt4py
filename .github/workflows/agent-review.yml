@@ -18,8 +18,14 @@ on:
   # No 'issue_comment': PR Agent reacts to every comment starting with '/',
   # and a comment trigger would add a second privileged entry point. No
   # 'synchronize', as for PR Agent.
+  #
+  # Only the 'agent-review' label for now: the automatic review of PRs by
+  # writers ('opened', 'reopened', 'ready_for_review') is to be enabled once
+  # the label and dispatch paths have been observed upstream. The 'Authorize'
+  # step already handles those actions.
   pull_request_target:
-    types: [opened, reopened, ready_for_review, labeled]
+    types: [labeled]
+    # types: [opened, reopened, ready_for_review, labeled]
   workflow_dispatch:
     inputs:
       pr:
