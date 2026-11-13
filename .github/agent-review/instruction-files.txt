@@ -31,16 +31,13 @@ CODING_GUIDELINES.md
 .github/copilot-instructions.md
 .claude/
 .mcp.json
-# Skills; memdoor's 'skill' tool loads '.agents/skills'.
+# Skills shared across agents ('.agents/skills').
 .agents/
 
 # opencode
 opencode.json
 opencode.jsonc
 .opencode/
-
-# memdoor
-.memdoor/
 
 # Pi
 .pi/

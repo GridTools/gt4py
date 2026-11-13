@@ -9,7 +9,7 @@ Why-statement: In the context of advisory AI review of pull requests, including 
 
 ## Context
 
-[PR Agent](../../tools/pr-agent.md) reviews a PR from its diff, fetched through the API, with a single model call; it never sees the rest of the repository. A coding agent (opencode, memdoor, Pi, ...) can read related code, run `git log` and follow call sites, which is what a useful review of GT4Py needs. Such an agent executes tools on attacker-controlled content, so a prompt injection in a PR could make it read or send anything it can reach.
+[PR Agent](../../tools/pr-agent.md) reviews a PR from its diff, fetched through the API, with a single model call; it never sees the rest of the repository. A coding agent (opencode, Pi, ...) can read related code, run `git log` and follow call sites, which is what a useful review of GT4Py needs. Such an agent executes tools on attacker-controlled content, so a prompt injection in a PR could make it read or send anything it can reach.
 
 - Most GT4Py PRs come from forks, which get no secrets under `pull_request`; the inference key therefore requires `pull_request_target`, which runs with secrets.
 - The CSCS inference key is billed against the project's allocation; a write-capable token could alter the repository.

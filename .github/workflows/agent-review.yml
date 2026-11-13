@@ -39,7 +39,7 @@ on:
         # A choice because it becomes a path: never free text.
         type: choice
         default: default
-        options: [default, stub, opencode, memdoor, pi]
+        options: [default, stub, opencode, pi]
       dry_run:
         description: Show the comment in the run summary instead of posting it
         type: boolean
@@ -233,7 +233,7 @@ jobs:
           [[ "${base_sha}" =~ ^[0-9a-f]{40}$ ]] || fail "Invalid base sha '${base_sha}'."
           [ "${harness}" != default ] || harness=${VAR_HARNESS}
           case "${harness}" in
-            stub | opencode | memdoor | pi) ;;
+            stub | opencode | pi) ;;
             '') fail "Repository variable AGENT_REVIEW_HARNESS is not set." ;;
             *) fail "Unknown harness '${harness}'." ;;
           esac

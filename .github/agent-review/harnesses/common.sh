@@ -17,7 +17,7 @@ adapter_init() { # name
   export HOME="${SCRATCH}/home" XDG_CONFIG_HOME="${SCRATCH}/config" XDG_DATA_HOME="${SCRATCH}/data" \
     XDG_CACHE_HOME="${SCRATCH}/cache" XDG_STATE_HOME="${SCRATCH}/state" NO_COLOR=1
   mkdir -p "${HOME}" "${XDG_CONFIG_HOME}" "${XDG_DATA_HOME}" "${XDG_CACHE_HOME}" "${XDG_STATE_HOME}" "${OUT_DIR}"
-  # Loopback (memdoor's local gateway) and the AWF listeners must never go
+  # Loopback and the AWF listeners must never go
   # through an HTTP proxy, should the sandbox set one.
   local hosts="127.0.0.1,localhost,::1" url host
   url=${AWF_API_PROXY_OPENAI_URL:-}
