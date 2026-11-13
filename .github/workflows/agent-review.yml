@@ -685,10 +685,10 @@ jobs:
             missing) reason="the agent produced no review (fetch outcome '${FETCH_OUTCOME}', review outcome '${OUTCOME}', exit code '${EXIT_CODE}')" ;;
             invalid) reason="the review was rejected as invalid (not UTF-8, or empty)" ;;
           esac
-          echo "::warning title=Agent review failed::No review was posted: ${reason}. See the 'Run the review in the sandbox' log."
+          echo "::warning title=Agent review failed::No review was posted: ${reason}. See the 'Fetch the pull request in the sandbox' and 'Run the review in the sandbox' logs."
           {
             echo "### Agent review failed"
             echo
             echo "No review was posted: ${reason}; the run is green because the check is advisory."
-            echo "The cause is in the \`Run the review in the sandbox\` log of the \`review\` job; see docs/development/tools/agent-review.md."
+            echo "The cause is in the \`Fetch the pull request in the sandbox\` or \`Run the review in the sandbox\` log of the \`review\` job; see docs/development/tools/agent-review.md."
           } >> "$GITHUB_STEP_SUMMARY"
