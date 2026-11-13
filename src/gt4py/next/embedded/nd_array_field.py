@@ -604,7 +604,16 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
         result = _single_axis_gather_premap(data, connectivities[0], new_domain, ops)
         if result is not None:
             return result
+    return _generic_gather_premap(data, connectivities, new_domain, ops)
 
+
+def _generic_gather_premap(
+    data: NdArrayField,
+    connectivities: Sequence[common.GatherConnectivity],
+    new_domain: common.Domain,
+    ops: array_ops.ArrayOps,
+) -> NdArrayField:
+    """`premap` as one advanced-index gather; handles every case `_gather_premap` accepts."""
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
     # one index array per original field dimension (the connectivity's, or identity), broadcast over
@@ -636,9 +645,10 @@ def _single_axis_gather_premap(
     """
     `premap` as one `ArrayOps.take` along the codomain axis, or `None` if the gather is not of that form.
 
-    That is the case when the output dimensions are the field dimensions with the codomain replaced,
-    in place, by the dimensions of the connectivity's domain, i.e. when the connectivity reads no
-    other dimension of the field.
+    An optimization of `_generic_gather_premap` with the same result, except at skipped neighbors,
+    whose values are unspecified. It applies when the output dimensions are the field dimensions with
+    the codomain replaced, in place, by the dimensions of the connectivity's domain, i.e. when the
+    connectivity reads no other dimension of the field.
     """
     dims = data.domain.dims
     axis = data.domain.dim_index(connectivity.codomain, allow_missing=False)
