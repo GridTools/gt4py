@@ -204,7 +204,9 @@ def _unflatten_connectivity(
         # not only for tracers: jax compares the aux data of the branches of `lax.cond` and of
         # the carry of `lax.scan` on trees it rebuilds around other placeholders
         static = _StaticTable(static.values, table)
-    return nd_array_field.NdArrayConnectivityField(domain, table, codomain, skip_value, static)  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+    return nd_array_field.NdArrayConnectivityField(
+        domain, table, codomain, skip_value, _static=static
+    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 
 # jax registers pytree nodes by exact type, so the connectivity needs its own registration

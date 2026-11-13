@@ -454,6 +454,7 @@ class NdArrayConnectivityField(
     #: stored for the `ArrayOps` of the table, which passes it to its table operations
     _static: Any = dataclasses.field(
         default=None,
+        kw_only=True,
         compare=False,
         repr=False,
         metadata=utils.gt4py_metadata(fingerprint=False),
@@ -535,7 +536,7 @@ class NdArrayConnectivityField(
                 self._ndarray, buffer_slice, static=self._static
             )
             restricted_connectivity = self.__class__(
-                new_domain, table, self.codomain, self.skip_value, static
+                new_domain, table, self.codomain, self.skip_value, _static=static
             )
             self._cache[cache_key] = restricted_connectivity
 
