@@ -42,6 +42,7 @@ Writing a new ADR is simple:
 ### Transformations
 
 - [0018 - Canonical Form of an SDFG in GT4Py (Especially for Optimizations)](0018-Canonical_SDFG_in_GT4Py_Transformations.md)
+- [0029 - Guarded Fusion Through Shared Outputs](0029-Shared_Output_Fusion.md)
 
 ### Backends and Code Generation
 
