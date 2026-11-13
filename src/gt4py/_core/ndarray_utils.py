@@ -114,8 +114,8 @@ _SCALAR_TYPES: Final = frozenset(core_defs.SCALAR_TYPES)
 
 @functools.cache
 def _numpy_scalar_type(dtype: np.dtype) -> type[np.generic]:
-    # NumPy, CuPy and JAX describe dtypes as `np.dtype`, and its `type` depends on byte order
-    # and C type name (e.g. `np.longlong` is not `np.int64`); kind and size identify it
+    # `dtype.type` is the scalar type of the dtype's C type, e.g. `np.longlong` for an int64
+    # array on Linux, which is not `np.int64`; kind and size identify the gt4py type
     return np.dtype(f"{dtype.kind}{dtype.itemsize}").type
 
 
