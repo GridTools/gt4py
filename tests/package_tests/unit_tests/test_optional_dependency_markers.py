@@ -72,6 +72,11 @@ def test_requires_jax_marker_is_enforced():
     importlib.import_module("jax")
 
 
+@pytest.mark.requires_torch
+def test_requires_torch_marker_is_enforced():
+    importlib.import_module("torch")
+
+
 @pytest.mark.requires_gpu
 def test_requires_gpu_marker_is_enforced():
     # Touch the device for real. Asserting `gpu_device_count() > 0` here would be

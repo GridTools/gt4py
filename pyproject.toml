@@ -158,6 +158,7 @@ rocm6 = ['cupy>=13.4.1,<14.0']
 rocm7 = ['cupy-rocm-7-0>=14.0']
 standard = ['scipy>=1.16.1']
 testing = ['hypothesis>=6.93', 'pytest>=7.0']
+torch = ['torch>=2.5']
 
 [project.urls]
 Documentation = 'https://gridtools.github.io/gt4py'
@@ -242,6 +243,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
   'requires_jax: tests that require `jax` package',
+  'requires_torch: tests that require `torch` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_can_deref: tests that require backend support for can_deref builtin function',
   'uses_composite_shifts: tests that use composite shifts in unstructured domain',

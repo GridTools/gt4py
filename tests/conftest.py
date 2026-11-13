@@ -63,6 +63,7 @@ _REQUIREMENT_PROBES: Final[dict[str, tuple[collections.abc.Callable[[], bool], s
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
     "requires_gpu": (_is_gpu_available, "`cupy` and a reachable GPU device"),
     "requires_jax": (lambda: _is_importable("jax"), "the `jax` package"),
+    "requires_torch": (lambda: _is_importable("torch"), "the `torch` package"),
 }
 
 
