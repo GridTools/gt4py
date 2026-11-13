@@ -14,7 +14,6 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import Any
 
-import array_api_compat.cupy as compat_cupy
 import cupy as cp
 import numpy as np
 
@@ -48,4 +47,4 @@ class CuPyOps(array_ops.ArrayOps):
         return cp.asnumpy(array)
 
 
-array_ops.register(CuPyOps(compat_cupy))
+array_ops.register("array_api_compat.cupy", CuPyOps)

@@ -6,28 +6,34 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`ArrayOps` for torch tensors."""
+"""`ArrayOps` for torch tensors; importing it does not import torch."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from types import ModuleType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import array_api_compat.torch as compat_torch
 import numpy as np
-import torch
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import array_ops
 
 
+if TYPE_CHECKING:
+    import torch
+
+
 def _cbrt(x: torch.Tensor) -> torch.Tensor:
+    import torch
+
     return torch.sign(x) * torch.abs(x) ** (1.0 / 3.0)
 
 
 def _gamma(x: torch.Tensor) -> torch.Tensor:
+    import torch
+
     sign = torch.where((x < 0) & (torch.floor(x) % 2 == 1), -1.0, 1.0).to(x.dtype)
     result = sign * torch.exp(torch.lgamma(x))
     # the poles as in SciPy: +-inf at +-0, NaN at the negative integers
@@ -38,6 +44,8 @@ def _gamma(x: torch.Tensor) -> torch.Tensor:
 class TorchOps(array_ops.ArrayOps):
     @property
     def array_ns(self) -> ModuleType:
+        import torch
+
         return torch
 
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
@@ -52,12 +60,16 @@ class TorchOps(array_ops.ArrayOps):
         if isinstance(value, bool | int | float):
             like_dtype = like.dtype
             like_kind = (
-                bool if like_dtype == torch.bool else float if like_dtype.is_floating_point else int
+                bool
+                if like_dtype == self.xp.bool
+                else float
+                if like_dtype.is_floating_point
+                else int
             )
             dtype = like_dtype if type(value) is like_kind else self.dtype(type(value))
-            return torch.asarray(value, dtype=dtype, device="cpu")
+            return self.xp.asarray(value, dtype=dtype, device="cpu")
         if isinstance(value, np.generic):
-            return torch.asarray(value, device="cpu")
+            return self.xp.asarray(value, device="cpu")
         return value
 
     def _elementwise_function(self, name: str) -> Callable[..., Any]:
@@ -74,4 +86,4 @@ class TorchOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for torch tensors not yet implemented.")
 
 
-array_ops.register(TorchOps(compat_torch))
+array_ops.register("array_api_compat.torch", TorchOps)
