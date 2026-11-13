@@ -5,6 +5,9 @@
 - **Created**: 2026-11-13
 - **Updated**: 2026-11-13
 
+> [!NOTE]
+> **Update (2026-11-13)**: the decision below still holds, but its implementation moved, before it was first used in GT4Py, to the reusable workflow in [GridTools/ci-workflows](https://github.com/GridTools/ci-workflows), so that other repositories (icon4py) can use the same reviewed pipeline; see that repository's ADR 0002 (`docs/adr/0002-reusable-workflow.md`) and `docs/agent-review.md`. [`agent-review.yml`](../../../../.github/workflows/agent-review.yml) in GT4Py is now a small caller, pinned by commit SHA, that sets the triggers, the permission ceiling, the key mapping and the GT4Py rule files ([agent-review.md](../../tools/agent-review.md)). References below to the workflow's jobs, its files and how changes are tested now apply to the called workflow.
+
 Why-statement: In the context of advisory AI review of pull requests, including PRs from forks, facing the need to let a tool-using coding agent explore untrusted PR content next to an inference credential, we decided to run the agent inside the AWF sandbox from a `pull_request_target` workflow split into four jobs, with the harness as a pluggable adapter, to achieve reviews that can read the whole repository while no secret is readable by the agent or by PR code. We considered running the agent directly on the runner, a `pull_request`-only workflow, and an external proxy with OIDC token exchange, and accept that a sandbox escape would expose a low-budget key, that an injected agent can spend that key's budget, and that prompt injection can still steer the review's text.
 
 ## Context
