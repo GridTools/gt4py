@@ -1527,7 +1527,7 @@ build = [
     { name = "wheel", specifier = ">=0.33.6" },
 ]
 dev = [
-    { name = "array-api-strict", specifier = ">=2.4" },
+    { name = "array-api-strict", specifier = ">=2.5" },
     { name = "atlas4py", specifier = ">=0.41", index = "https://test.pypi.org/simple" },
     { name = "black", specifier = ">=25.11" },
     { name = "clang-format", specifier = ">=18.1" },
@@ -1596,7 +1596,7 @@ scripts = [
     { name = "typer", specifier = ">=0.16.0" },
 ]
 test = [
-    { name = "array-api-strict", specifier = ">=2.4" },
+    { name = "array-api-strict", specifier = ">=2.5" },
     { name = "black", specifier = ">=25.11" },
     { name = "clang-format", specifier = ">=18.1" },
     { name = "factory-boy", specifier = ">=3.3.3" },
