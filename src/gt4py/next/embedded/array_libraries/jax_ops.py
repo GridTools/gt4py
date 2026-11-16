@@ -18,9 +18,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, dlpack as core_dlpack
 from gt4py.next import common
-from gt4py.next.embedded import _dlpack, array_ops, nd_array_field
+from gt4py.next.embedded import array_ops, nd_array_field
 
 
 def _layout_strides(array: Any) -> tuple[int, ...]:
@@ -63,7 +63,7 @@ class JaxOps(array_ops.ArrayOps):
             shape=array.shape,
             elem_strides=_layout_strides(array),
             dtype=core_defs.dtype(self.scalar_type(array.dtype)),
-            device=_dlpack.device(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+            device=core_dlpack.device(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
         )
 
 

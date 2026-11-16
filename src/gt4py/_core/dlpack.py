@@ -6,17 +6,36 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`common.BufferInfo` of any array that exports DLPack, read from the capsule with `ctypes`."""
+"""Buffer metadata of any array that exports DLPack, read from its capsule with `ctypes`.
+
+The binary layout follows `dlpack.h` of DLPack v1.4
+(https://github.com/dmlc/dlpack/blob/v1.4/include/dlpack/dlpack.h, documented at
+https://dmlc.github.io/dlpack/latest/c_api.html); the exchange protocol is the Python
+specification of DLPack (https://dmlc.github.io/dlpack/latest/python_spec.html) and the Array
+API `__dlpack__` method
+(https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html).
+
+Supported capsules:
+- `"dltensor_versioned"` (`DLManagedTensorVersioned`, DLPack >= 1.0) of ABI major version 1,
+  any minor version. It is requested with `max_version=(1, 0)`.
+- `"dltensor"` (legacy `DLManagedTensor`, DLPack < 1.0), which producers without `max_version`
+  support, and JAX, return.
+
+Rejected:
+- `BufferError`: versioned capsules of major version 2 or later, exports that need a copy, and
+  strides of `2**63` bytes or more, which no buffer can have.
+- `TypeError`: arrays without `__dlpack__`/`__dlpack_device__`, and DLPack dtypes that are not
+  gt4py scalar types (bool, 8 to 64 bit signed and unsigned integers, float32, float64; one lane).
+
+NULL strides, allowed before DLPack 1.2, are read as C-contiguous.
+"""
 
 from __future__ import annotations
 
 import ctypes
-from typing import Any, Final
-
-import numpy as np
+from typing import Any, Final, NamedTuple
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
 
 
 class _DLDevice(ctypes.Structure):
@@ -57,20 +76,45 @@ _VERSIONED: Final = b"dltensor_versioned"
 _UNVERSIONED: Final = b"dltensor"
 _DL_TENSOR_OFFSET: Final[int] = _DLManagedTensorVersioned.dl_tensor.offset
 
-_capsule_is_valid = ctypes.pythonapi.PyCapsule_IsValid
-_capsule_is_valid.restype = ctypes.c_int
-_capsule_is_valid.argtypes = (ctypes.py_object, ctypes.c_char_p)
-_capsule_pointer = ctypes.pythonapi.PyCapsule_GetPointer
-_capsule_pointer.restype = ctypes.c_void_p
-_capsule_pointer.argtypes = (ctypes.py_object, ctypes.c_char_p)
+# Own prototypes instead of setting `argtypes` on the `ctypes.pythonapi` functions shared
+# with every other library in the process.
+_capsule_is_valid = ctypes.PYFUNCTYPE(ctypes.c_int, ctypes.py_object, ctypes.c_char_p)(
+    ("PyCapsule_IsValid", ctypes.pythonapi)
+)
+_capsule_pointer = ctypes.PYFUNCTYPE(ctypes.c_void_p, ctypes.py_object, ctypes.c_char_p)(
+    ("PyCapsule_GetPointer", ctypes.pythonapi)
+)
 
-_DLPACK_TYPE_CODES: Final = {"i": 0, "u": 1, "f": 2, "b": 6}
+_DLPACK_TYPE_CODES: Final = {
+    core_defs.DTypeKind.INT: 0,
+    core_defs.DTypeKind.UINT: 1,
+    core_defs.DTypeKind.FLOAT: 2,
+    core_defs.DTypeKind.BOOL: 6,
+}
 _DTYPES: Final[dict[tuple[int, int, int], core_defs.DType]] = {
     (_DLPACK_TYPE_CODES[dt.kind], dt.bit_width, dt.lanes): dt
-    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES if issubclass(t, np.generic))
+    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES)
 }
 _DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
 _NO_SYNC_STREAM_DEVICE_TYPES: Final = (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM)
+
+
+class TensorInfo(NamedTuple):
+    """Metadata of a DLPack tensor.
+
+    Args:
+        data_ptr: Address of the element at index `(0, ..., 0)`, i.e. `data + byte_offset`.
+        shape: Number of elements along each dimension.
+        elem_strides: Distance between consecutive elements along each dimension, in elements.
+        dtype: Data type of the elements.
+        device: Device the tensor is allocated on.
+    """
+
+    data_ptr: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    dtype: core_defs.DType
+    device: core_defs.Device
 
 
 def device(device_type: int, device_id: int) -> core_defs.Device:
@@ -88,7 +132,7 @@ def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(reversed(strides))
 
 
-def buffer_info(array: Any) -> common.BufferInfo:
+def tensor_info(array: Any) -> TensorInfo:
     """Describe the buffer of `array` from its DLPack capsule, without consuming the capsule.
 
     On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
@@ -139,7 +183,7 @@ def buffer_info(array: Any) -> common.BufferInfo:
             f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
             " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned integers)."
         )
-    return common.BufferInfo(
+    return TensorInfo(
         data_ptr=(tensor.data or 0) + tensor.byte_offset,
         shape=shape,
         elem_strides=strides,

@@ -40,7 +40,7 @@ from typing import (
 import numpy as np
 from typing_extensions import Protocol, runtime_checkable
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, dlpack as core_dlpack
 from gt4py.eve import utils, xtyping
 from gt4py.eve.type_definitions import StrEnum
 
@@ -909,6 +909,17 @@ class BufferInfo:
     elem_strides: tuple[int, ...]
     dtype: core_defs.DType
     device: core_defs.Device
+
+    @classmethod
+    def from_dlpack(cls, array: Any) -> BufferInfo:
+        """Describe the buffer of `array` from its DLPack export.
+
+        Raises:
+            TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
+            BufferError: `array` cannot be exported without a copy, or its DLPack export is
+                not supported (see `gt4py._core.dlpack`).
+        """
+        return cls(**core_dlpack.tensor_info(array)._asdict())
 
     @functools.cached_property
     def hash_key(self) -> int:
