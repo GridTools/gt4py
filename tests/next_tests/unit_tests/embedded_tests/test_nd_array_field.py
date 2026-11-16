@@ -928,25 +928,27 @@ def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
     return field, conn, data
 
 
-@pytest.mark.parametrize("start", [0, 5, 8, -3])
+# with start -3 the neighbor 2 becomes the valid index -1, so the skip value must lie outside the
+# codomain range there
+@pytest.mark.parametrize("start, skip_value", [(0, -1), (5, -1), (8, -1), (-3, -100)])
 @pytest.mark.parametrize("with_second_connectivity", [False, True])
 def test_gather_premap_skip_values_on_offset_domain(
-    nd_array_implementation, start, with_second_connectivity
+    nd_array_implementation, start, skip_value, with_second_connectivity
 ):
     NV, NK = 6, 3
-    table = np.asarray([[0, 1], [2, -1], [-1, 5], [3, 4]], dtype=np.int32)
-    table = np.where(table == -1, -1, table + start).astype(np.int32)
+    table = np.asarray([[0, 1], [2, -9], [-9, 5], [3, 4]], dtype=np.int32)
+    table = np.where(table == -9, skip_value, table + start).astype(np.int32)
     field, conn, data = _gather_case(
         nd_array_implementation,
         [(_GV, UnitRange(start, start + NV)), (_GK, UnitRange(0, NK))],
         [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
         _GV,
         table,
-        skip_value=-1,
+        skip_value=skip_value,
     )
     connectivities = [conn]
     k_table = np.asarray([2, 0, 1], dtype=np.int32)
-    if with_second_connectivity:  # two connectivities take the advanced-indexing path
+    if with_second_connectivity:  # also gathers along GK in the same premap
         connectivities.append(
             common._connectivity(
                 nd_array_implementation.asarray(k_table),
@@ -957,10 +959,10 @@ def test_gather_premap_skip_values_on_offset_domain(
 
     result = field.premap(*connectivities)
 
-    expected = np.take(data, np.where(table == -1, 0, table - start), axis=0)
+    is_neighbor = table != skip_value
+    expected = np.take(data, np.where(is_neighbor, table - start, 0), axis=0)
     if with_second_connectivity:
         expected = expected[..., k_table]
-    is_neighbor = table != -1
     assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
 
 
