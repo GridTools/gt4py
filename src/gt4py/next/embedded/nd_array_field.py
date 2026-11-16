@@ -958,6 +958,27 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
 _register_builtin(experimental.as_offset, _as_offset)
 
 
+def _neighbor_table_domain(
+    field_domain: common.Domain, connectivity: common.GatherConnectivity
+) -> common.Domain:
+    """
+    The part of `connectivity`'s table a reduction over a field on `field_domain` reads.
+
+    A dimension of the connectivity keeps the field's range where the field covers only part of
+    the table (e.g. after a narrowing premap), and the table's range otherwise, e.g. where the
+    field is broadcast along it.
+    """
+
+    def table_range(field_range: common.NamedRange) -> common.NamedRange:
+        if field_range.dim not in connectivity.domain.dims:
+            return field_range
+        table_range = connectivity.domain[field_range.dim]
+        covered = field_range.unit_range & table_range.unit_range == field_range.unit_range
+        return field_range if covered else table_range
+
+    return common.Domain(*(table_range(nr) for nr in field_domain))
+
+
 def _make_reduction(
     builtin_name: str,
     reduce_op: Callable[[ModuleType, core_defs.NDArrayObject, int], core_defs.NDArrayObject],
@@ -985,23 +1006,11 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        # the neighbor table in the field's dimension order, with size 1 along the other dimensions,
-        # restricted where the field covers only part of it (e.g. after a narrowing premap)
+        # the neighbor table in the field's dimension order, with size 1 along the other dimensions
         assert isinstance(offset_definition, common.GatherConnectivity)
-        table_domain = common.Domain(
-            *(
-                nr
-                if nr.dim not in offset_definition.domain.dims
-                or (
-                    common.UnitRange.is_finite(nr.unit_range)
-                    and offset_definition.domain[nr.dim].unit_range.start <= nr.unit_range.start
-                    and nr.unit_range.stop <= offset_definition.domain[nr.dim].unit_range.stop
-                )
-                else offset_definition.domain[nr.dim]
-                for nr in field.domain
-            )
+        table = _aligned_connectivity_table(
+            offset_definition, _neighbor_table_domain(field.domain, offset_definition), ops
         )
-        table = _aligned_connectivity_table(offset_definition, table_domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
             # table's neighbor count
