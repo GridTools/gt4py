@@ -964,19 +964,17 @@ def _make_reduction(
 
         mask_dims = (axis, offset_definition.domain.dims[0])
         if offset_definition.skip_value is None:
-            # a field broadcast along the neighbor or target dimension still reduces over every
-            # neighbor, as it would after `where` against the table
+            # without the `where` against the table, a field broadcast (size 1) along the neighbor
+            # dimension must still be expanded to the table's neighbor count
             mask_shape = tuple(
                 offset_definition.ndarray.shape[offset_definition.domain.dims.index(d)]
                 if d in mask_dims
                 else 1
                 for d in field.domain.dims
             )
-            masked_array = field.ndarray
-            if not all(m in (1, s) for m, s in zip(mask_shape, masked_array.shape)):
-                masked_array = ops.xp.broadcast_to(
-                    masked_array, tuple(max(m, s) for m, s in zip(mask_shape, masked_array.shape))
-                )
+            masked_array = ops.xp.broadcast_to(
+                field.ndarray, np.broadcast_shapes(field.ndarray.shape, mask_shape)
+            )
         else:
             broadcast_slice = tuple(
                 slice(None) if d in mask_dims else None for d in field.domain.dims

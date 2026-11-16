@@ -1059,6 +1059,27 @@ def test_neighbor_reduction_of_field_broadcast_along_neighbors(
     assert np.array_equal(result.asnumpy(), expected)
 
 
+@pytest.mark.parametrize("skip_value", [None, -2])
+def test_neighbor_reduction_with_mismatched_neighbor_count_raises(
+    nd_array_implementation, skip_value
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, np.ones((2, 3)), dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 3))),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, [[0, 1], [1, 0]], dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=skip_value,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        with pytest.raises(ValueError):
+            fbuiltins.neighbor_sum(field, axis=E2V)
+
+
 def test_as_offset_1d():
     # Dynamic per-point shift along I: out[i] == f[i + off[i]], full domain when all shifts in-bounds.
     I = Dimension("I")
