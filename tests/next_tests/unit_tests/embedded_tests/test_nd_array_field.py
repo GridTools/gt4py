@@ -444,6 +444,11 @@ def test_neighbor_reduction_keeps_dtype(
             with pytest.raises(TypeError):
                 builtin(field, axis=E2V)
             return
+        if dtype in ("uint16", "uint32", "uint64") and is_torch(nd_array_implementation):
+            # torch has no reductions for these dtypes
+            with pytest.raises(NotImplementedError):
+                builtin(field, axis=E2V)
+            return
         result = builtin(field, axis=E2V)
 
     assert result.dtype == field.dtype
