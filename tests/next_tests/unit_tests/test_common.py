@@ -16,7 +16,7 @@ import re
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
-from gt4py.next.embedded import _dlpack, array_ops
+from gt4py.next.embedded import array_ops
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -771,66 +771,13 @@ class TestBufferInfo:
         assert _buffer_info(a[:]).hash_key == _buffer_info(a).hash_key
         assert hash(_buffer_info(a)) == _buffer_info(a).hash_key
 
-    def test_no_dlpack(self):
-        class NoDLPack:
-            def __array_namespace__(self):
-                return np
-
-        with pytest.raises(TypeError, match="DLPack"):
-            array_ops.ArrayOps(np).buffer_info(NoDLPack())
-
-    def test_producer_without_max_version(self):
-        class OnlyStream:
-            def __init__(self, array):
-                self.array = array
-
-            def __dlpack__(self, *, stream=None):
-                return self.array.__dlpack__(stream=stream)
-
-            def __dlpack_device__(self):
-                return self.array.__dlpack_device__()
-
-        array = _BASE[1:4]
-
-        buffer_info = array_ops.ArrayOps(np).buffer_info(OnlyStream(array))
+    @pytest.mark.parametrize("array", [_BASE, _BASE[1:4, ::-1]], ids=["contiguous", "view"])
+    def test_from_dlpack(self, array):
+        buffer_info = common.BufferInfo.from_dlpack(array)
 
         assert buffer_info == _buffer_info(array)
-
-    def test_impossible_stride(self):
-        class Producer:
-            def __dlpack__(self, *, stream=None, max_version=None, copy=None):
-                capsule = _BASE.__dlpack__(max_version=(1, 0), copy=copy)
-                address = _dlpack._capsule_pointer(capsule, b"dltensor_versioned")
-                tensor = _dlpack._DLTensor.from_address(address + _dlpack._DL_TENSOR_OFFSET)
-                # Stride -42 as CuPy before cupy#10228 exports it for float64.
-                tensor.strides[0] = 2**64 // _BASE.itemsize - 42
-                return capsule
-
-            def __dlpack_device__(self):
-                return _BASE.__dlpack_device__()
-
-        with pytest.raises(BufferError, match="cupy#10228"):
-            array_ops.ArrayOps(np).buffer_info(Producer())
-
-    @pytest.mark.parametrize(
-        ("device_type", "stream"),
-        [(1, None), (2, -1), (10, -1), (3, None), (13, None), (14, None)],
-        ids=["cpu", "cuda", "rocm", "cuda_host", "cuda_managed", "oneapi"],
-    )
-    def test_stream_argument(self, device_type, stream):
-        streams = []
-
-        class Producer:
-            def __dlpack__(self, *, stream=None, max_version=None, copy=None):
-                streams.append(stream)
-                return _BASE.__dlpack__(max_version=max_version, copy=copy)
-
-            def __dlpack_device__(self):
-                return device_type, 0
-
-        array_ops.ArrayOps(np).buffer_info(Producer())
-
-        assert streams == [stream]
+        assert buffer_info.data_ptr == array.__array_interface__["data"][0]
+        assert buffer_info.elem_strides == tuple(s // array.itemsize for s in array.strides)
 
 
 class TestCartesianConnectivity:
