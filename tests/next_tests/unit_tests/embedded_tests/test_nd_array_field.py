@@ -397,6 +397,58 @@ def test_mixed_fields_concat_where(product_nd_array_implementation):
     assert np.array_equal(result.asnumpy(), [1.0, 2.0, 30.0, 40.0])
 
 
+@pytest.mark.parametrize(
+    "builtin, expected, expected_bool",
+    [
+        (fbuiltins.neighbor_sum, [3, 3], [True, False]),
+        (fbuiltins.max_over, [2, 3], [True, False]),
+        (fbuiltins.min_over, [1, 3], [False, False]),
+    ],
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "bool",
+        "int8",
+        "uint8",
+        "int16",
+        "uint16",
+        "int32",
+        "uint32",
+        "int64",
+        "uint64",
+        "float32",
+        "float64",
+    ],
+)
+def test_neighbor_reduction_keeps_dtype(
+    builtin, expected, expected_bool, dtype, nd_array_implementation
+):
+    E = Dimension("E")
+    V = Dimension("V")
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [1, -1]], dtype=np.int32),
+        codomain=V,
+        domain={E: 2, E2V: 2},
+        skip_value=-1,
+    )
+    data = [[True, False], [False, True]] if dtype == "bool" else [[1, 2], [3, 4]]
+    field = common._field(
+        asarray(nd_array_implementation, data, dtype=dtype), domain={E: 2, E2V: 2}
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        if dtype == "bool" and is_array_api_strict(nd_array_implementation):
+            with pytest.raises(TypeError):
+                builtin(field, axis=E2V)
+            return
+        result = builtin(field, axis=E2V)
+
+    assert result.dtype == field.dtype
+    assert np.array_equal(result.asnumpy(), expected_bool if dtype == "bool" else expected)
+
+
 def test_non_dispatched_function():
     @fbuiltins.BuiltInFunction
     def fma(a: common.Field, b: common.Field, c: common.Field, /) -> common.Field:
@@ -847,6 +899,361 @@ def test_premap_disjoint_inverse_image_raises():
 
     with pytest.raises(ValueError, match="empty"):
         f.premap(conn)
+
+
+_GV = Dimension("GV")
+_GE = Dimension("GE")
+_GK = Dimension("GK", kind=DimensionKind.VERTICAL)
+_GX = Dimension("GX")
+_GE2V = Dimension("GE2V", kind=DimensionKind.LOCAL)
+_GV2V = Dimension("GV2V", kind=DimensionKind.LOCAL)
+
+
+def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
+    rng = np.random.default_rng(42)
+    data = rng.random(tuple(len(r) for _, r in field_dims))
+    field = common._field(
+        xp.asarray(data),
+        domain=common.Domain(
+            dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
+        ),
+    )
+    conn = common._connectivity(
+        xp.asarray(table),
+        domain=common.Domain(
+            dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
+        ),
+        codomain=codomain,
+        skip_value=skip_value,
+    )
+    return field, conn, data
+
+
+# with start -3 the neighbor 2 becomes the valid index -1, so the skip value must lie outside the
+# codomain range there
+@pytest.mark.parametrize("start, skip_value", [(0, -1), (5, -1), (8, -1), (-3, -100)])
+@pytest.mark.parametrize("with_second_connectivity", [False, True])
+def test_gather_premap_skip_values_on_offset_domain(
+    nd_array_implementation, start, skip_value, with_second_connectivity
+):
+    NV, NK = 6, 3
+    table = np.asarray([[0, 1], [2, -9], [-9, 5], [3, 4]], dtype=np.int32)
+    table = np.where(table == -9, skip_value, table + start).astype(np.int32)
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(start, start + NV)), (_GK, UnitRange(0, NK))],
+        [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        table,
+        skip_value=skip_value,
+    )
+    connectivities = [conn]
+    k_table = np.asarray([2, 0, 1], dtype=np.int32)
+    if with_second_connectivity:  # also gathers along GK in the same premap
+        connectivities.append(
+            common._connectivity(
+                nd_array_implementation.asarray(k_table),
+                domain=common.Domain(dims=(_GX,), ranges=(UnitRange(0, NK),)),
+                codomain=_GK,
+            )
+        )
+
+    result = field.premap(*connectivities)
+
+    is_neighbor = table != skip_value
+    expected = np.take(data, np.where(is_neighbor, table - start, 0), axis=0)
+    if with_second_connectivity:
+        expected = expected[..., k_table]
+    assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
+
+
+@pytest.mark.parametrize(
+    "reduction, expected",
+    [
+        (fbuiltins.neighbor_sum, [6.0, 3.0, 7.0]),
+        (fbuiltins.max_over, [5.0, 3.0, 7.0]),
+        (fbuiltins.min_over, [1.0, 3.0, 7.0]),
+    ],
+)
+def test_neighbor_reduction_with_non_default_skip_value(
+    nd_array_implementation, reduction, expected
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 5.0, 3.0, 7.0], dtype=np.float64),
+        domain=common.Domain(dims=(_GV,), ranges=(UnitRange(0, 4),)),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, [[0, 1], [2, -2], [-2, 3]], dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=-2,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field.premap(conn), axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+_NEIGHBOR_REDUCTIONS = [
+    (fbuiltins.neighbor_sum, np.sum),
+    (fbuiltins.max_over, np.max),
+    (fbuiltins.min_over, np.min),
+]
+
+
+@pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
+@pytest.mark.parametrize(
+    "table", [[[0, 1], [2, 3]], [[0, -1], [2, 3]]], ids=["no_minus_one", "minus_one"]
+)
+def test_neighbor_reduction_without_skip_value_masks_nothing(
+    nd_array_implementation, reduction, np_reduction, table
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    values = np.asarray([[1.0, 5.0], [3.0, 7.0]])
+    field = common._field(
+        asarray(nd_array_implementation, values, dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, table, dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=None,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 2),))
+    assert np.array_equal(result.asnumpy(), np_reduction(values, axis=1))
+
+
+@pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
+@pytest.mark.parametrize("skip_value", [None, -2])
+def test_neighbor_reduction_of_field_broadcast_along_neighbors(
+    nd_array_implementation, reduction, np_reduction, skip_value
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    values = np.asarray([2.0, 3.0, 4.0])
+    table = np.asarray([[0, 1], [2, 0 if skip_value is None else skip_value], [1, 2]])
+    field = fbuiltins.broadcast(
+        common._field(
+            asarray(nd_array_implementation, values, dtype=np.float64),
+            domain=common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),)),
+        ),
+        (_GE, E2V),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, table, dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=skip_value,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field, axis=E2V)
+
+    is_neighbor = table != skip_value if skip_value is not None else np.ones(table.shape, bool)
+    expected = [np_reduction(np.full(int(n.sum()), v)) for v, n in zip(values, is_neighbor)]
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+@pytest.mark.parametrize("skip_value", [None, -2])
+def test_neighbor_reduction_ignores_field_values_beyond_the_neighbors(
+    nd_array_implementation, skip_value
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, [[1.0, 2.0, 100.0], [3.0, 4.0, 100.0]], dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 3))),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, [[0, 1], [1, 0]], dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=skip_value,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 2),))
+    assert np.array_equal(result.asnumpy(), [3.0, 7.0])
+
+
+@pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
+@pytest.mark.parametrize("skip_value", [None, -1])
+@pytest.mark.parametrize("start", [0, 3])
+def test_neighbor_reduction_after_narrowing_premap(
+    nd_array_implementation, reduction, np_reduction, skip_value, start
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [2, 3 if skip_value is None else skip_value], [4, 5], [6, 7]])
+    table = np.where(table == skip_value, table, table + start) if skip_value else table + start
+    values = np.arange(1.0, 5.0)
+    conn = common._connectivity(
+        asarray(nd_array_implementation, table, dtype=np.int32),
+        domain=common.Domain(
+            dims=(_GE, E2V), ranges=(UnitRange(start, start + 4), UnitRange(0, 2))
+        ),
+        codomain=_GV,
+        skip_value=skip_value,
+    )
+    field = common._field(
+        asarray(nd_array_implementation, values, dtype=np.float64),
+        domain=common.Domain(dims=(_GV,), ranges=(UnitRange(start, start + 4),)),
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field.premap(conn), axis=E2V)
+
+    # only the first two edges have all their neighbors in the field
+    expected = [
+        np_reduction([values[v - start] for v in row if v != skip_value]) for row in table[:2]
+    ]
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(start, start + 2),))
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+def test_neighbor_reduction_of_field_broadcast_along_another_dimension(nd_array_implementation):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    conn = common._connectivity(
+        asarray(nd_array_implementation, [[0, 1], [2, -1]], dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=-1,
+    )
+    field = common._field(
+        asarray(nd_array_implementation, [[1.0, 2.0], [4.0, 8.0]], dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(fbuiltins.broadcast(field, (_GE, E2V, K)), axis=E2V)
+
+    assert result.domain == common.Domain(
+        dims=(_GE, K), ranges=(UnitRange(0, 2), UnitRange.infinite())
+    )
+    assert np.array_equal(result.asnumpy().ravel(), [3.0, 4.0])
+
+
+_E2V_TABLE = [[0, -1], [1, 2], [3, -1], [4, 5]]
+
+
+def _e2v_on_edges_0_to_4(nd_array_implementation, neighbor_dim):
+    return common._connectivity(
+        asarray(nd_array_implementation, _E2V_TABLE, dtype=np.int32),
+        domain=common.Domain(dims=(_GE, neighbor_dim), ranges=(UnitRange(0, 4), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=-1,
+    )
+
+
+@pytest.mark.parametrize(
+    "edges, expected_edges, expected",
+    [((2, 6), (2, 4), [1.0, 30.0]), ((10, 14), (0, 0), [])],
+    ids=["overlapping", "disjoint"],
+)
+def test_neighbor_reduction_reads_where_field_and_table_overlap(
+    nd_array_implementation, edges, expected_edges, expected
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    values = [[1.0, 2.0], [10.0, 20.0], [100.0, 200.0], [1000.0, 2000.0]]
+    field = common._field(
+        asarray(nd_array_implementation, values, dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(*edges), UnitRange(0, 2))),
+    )
+
+    with embedded_context.update(
+        offset_provider={"E2V": _e2v_on_edges_0_to_4(nd_array_implementation, E2V)}
+    ):
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(*expected_edges),))
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+def test_neighbor_reduction_to_an_empty_domain_keeps_the_other_dimensions(nd_array_implementation):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    field = common._field(
+        asarray(nd_array_implementation, np.ones((4, 2, 3)), dtype=np.float32),
+        domain=common.Domain(
+            dims=(_GE, E2V, K), ranges=(UnitRange(10, 14), UnitRange(0, 2), UnitRange(0, 3))
+        ),
+    )
+
+    with embedded_context.update(
+        offset_provider={"E2V": _e2v_on_edges_0_to_4(nd_array_implementation, E2V)}
+    ):
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE, K), ranges=(UnitRange(0, 0), UnitRange(0, 3)))
+    assert result.asnumpy().shape == (0, 3)
+    assert result.dtype == field.dtype
+
+
+def test_neighbor_sum_over_no_neighbors(nd_array_implementation):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, np.ones((2, 2)), dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, np.zeros((2, 0)), dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 0))),
+        codomain=_GV,
+        skip_value=-1,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 2),))
+    assert np.array_equal(result.asnumpy(), [0.0, 0.0])
+
+
+@pytest.mark.parametrize("broadcast", [True, False], ids=["broadcast", "without_edges"])
+def test_neighbor_reduction_of_field_broadcast_along_the_table(nd_array_implementation, broadcast):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(nd_array_implementation, [1.0, 2.0], dtype=np.float64),
+        domain=common.Domain(dims=(E2V,), ranges=(UnitRange(0, 2),)),
+    )
+    if broadcast:
+        field = fbuiltins.broadcast(field, (_GE, E2V))
+
+    with embedded_context.update(
+        offset_provider={"E2V": _e2v_on_edges_0_to_4(nd_array_implementation, E2V)}
+    ):
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 4),))
+    assert np.array_equal(result.asnumpy(), [1.0, 3.0, 1.0, 3.0])
+
+
+@pytest.mark.parametrize("neighbors", [(0, 1), (1, 2), (1, 3)], ids=["fewer", "other", "shifted"])
+def test_neighbor_reduction_without_all_neighbors_of_the_table_raises(
+    nd_array_implementation, neighbors
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    field = common._field(
+        asarray(
+            nd_array_implementation, np.ones((4, neighbors[1] - neighbors[0])), dtype=np.float64
+        ),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 4), UnitRange(*neighbors))),
+    )
+
+    with embedded_context.update(
+        offset_provider={"E2V": _e2v_on_edges_0_to_4(nd_array_implementation, E2V)}
+    ):
+        with pytest.raises(ValueError, match="neighbors"):
+            fbuiltins.neighbor_sum(field, axis=E2V)
 
 
 def test_as_offset_1d():
@@ -1912,67 +2319,6 @@ def test_concat(fields_data, dim, expected_data, expect_error):
         np.testing.assert_allclose(result.asnumpy(), expected_array)
 
 
-def test_neighbor_sum_after_narrowing_premap():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    e2v = common._connectivity(
-        np.asarray([[0, 1], [2, -1], [4, 5], [6, 7]]),
-        codomain=V,
-        domain=common.domain({E: (0, 4), E2VDim: (0, 2)}),
-        skip_value=-1,
-    )
-    v_field = common._field(np.arange(1.0, 5.0), domain=common.domain({V: (0, 4)}))
-
-    with embedded_context.update(offset_provider={"E2V": e2v}):
-        result = fbuiltins.neighbor_sum(v_field.premap(e2v), axis=E2VDim)
-
-    assert result.domain == common.domain({E: (0, 2)})
-    np.testing.assert_array_equal(result.asnumpy(), [3.0, 3.0])
-
-
-def test_neighbor_sum_with_custom_skip_value_and_nonzero_domain_start():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    conn = common._connectivity(
-        np.asarray([[11, 12], [13, 99]]),
-        codomain=V,
-        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
-        skip_value=99,
-    )
-    field = common._field(np.asarray([1.0, 2.0, 4.0, 8.0]), domain=common.domain({V: (10, 14)}))
-
-    with embedded_context.update(offset_provider={"E2V": conn}):
-        result = fbuiltins.neighbor_sum(field.premap(conn), axis=E2VDim)
-
-    np.testing.assert_array_equal(result.asnumpy(), [6.0, 8.0])
-
-
-def test_neighbor_sum_over_infinite_range():
-    E = Dimension("E")
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    conn = common._connectivity(
-        np.asarray([[0, 1], [2, -1]]),
-        codomain=Dimension("V"),
-        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
-        skip_value=-1,
-    )
-    field = common._field(
-        np.asarray([[1.0, 2.0], [4.0, 8.0]]), domain=common.domain({E: (0, 2), E2VDim: (0, 2)})
-    )
-    broadcasted = fbuiltins.broadcast(field, (E, E2VDim, K))
-
-    with embedded_context.update(offset_provider={"E2V": conn}):
-        result = fbuiltins.neighbor_sum(broadcasted, axis=E2VDim)
-
-    assert result.domain == common.Domain(
-        common.named_range((E, (0, 2))), common.NamedRange(K, common.UnitRange.infinite())
-    )
-    np.testing.assert_array_equal(result.ndarray.ravel(), [3.0, 4.0])
-
-
 def test_connectivity_field_setitem_raises():
     conn = common._connectivity(
         np.asarray([[0, 1], [-1, -1]]),
@@ -1983,31 +2329,6 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
-
-
-def test_neighbor_sum_with_transposed_table_dims():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    table = np.asarray([[0, 1], [2, -1], [1, 3]])
-    e2v = common._connectivity(
-        table, codomain=V, domain=common.domain({E: (0, 3), E2VDim: (0, 2)}), skip_value=-1
-    )
-    data = np.arange(12, dtype=np.float64).reshape(4, 3)
-    ve_field = common._field(data, domain=common.domain({V: (0, 4), E: (0, 3)}))
-
-    with embedded_context.update(offset_provider={"E2V": e2v}):
-        premapped = ve_field.premap(e2v)
-        result = fbuiltins.neighbor_sum(premapped, axis=E2VDim)
-
-    assert premapped.domain == common.domain({E2VDim: (0, 2), E: (0, 3)})
-    expected = np.zeros(3)
-    for e in range(3):
-        for n in range(2):
-            if table[e, n] != -1:
-                expected[e] += data[table[e, n], e]
-    assert result.domain == common.domain({E: (0, 3)})
-    np.testing.assert_allclose(result.asnumpy(), expected)
 
 
 def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
