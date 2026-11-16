@@ -11,7 +11,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common, named_collections, utils
-from gt4py.next.embedded import array_ops
+from gt4py.next.embedded import array_ops, nd_array_field
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -84,9 +84,10 @@ def field_from_typespec(
 def first_buffer(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> core_defs.NDArrayObject | None:
-    """The buffer of the first field in the (nested tuples of) `args`, or `None` if there is none."""
+    """The buffer of the first buffer-backed field in the (nested tuples of) `args`, or `None`."""
+    # index, constant and strided connectivity fields are `common.Field`s without a buffer
     for arg in utils.flatten_nested_tuple(args):
-        if isinstance(arg, common.Field):
+        if isinstance(arg, nd_array_field.NdArrayField):
             return arg.ndarray
     return None
 
