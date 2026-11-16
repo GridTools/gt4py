@@ -196,8 +196,9 @@ class ArrayOps:
         `array` gathered along `axis` at the integer array `indices`.
 
         The result has shape `array.shape[:axis] + indices.shape + array.shape[axis + 1:]`.
-        Out-of-range entries of `indices` (skipped neighbors) select an unspecified element of
-        the axis; they never raise and never read out of bounds.
+        For an `array` of at least one dimension and a non-empty `axis`, out-of-range entries of
+        `indices` (skipped neighbors) select an unspecified element of the axis; they never raise
+        and never read out of bounds.
         """
         xp = self.xp
         axis %= array.ndim
