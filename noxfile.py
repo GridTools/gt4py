@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import platform
 import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -91,7 +92,7 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not uses_dace", "not requires_torch"]}
+    "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
     "dace": {"extras": [], "markers": ["uses_dace"]},
@@ -135,6 +136,18 @@ def install_session_venv(
             *((item,) if isinstance(item, str) else item),
             env=session.env | dict(UV_PROJECT_ENVIRONMENT=session.virtualenv.location),
         )
+
+
+def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
+    if device in ("rocm6", "rocm7"):
+        # the torch wheels on PyPI are CUDA-only
+        return False
+    if device != "cpu" and session.python == "3.14" and platform.machine() == "aarch64":
+        # torch 2.15.0 dies with 'Fatal Python error: Illegal instruction' in
+        # `array_api_compat.torch` elementwise functions on CUDA tensors on GH200 with
+        # Python 3.14, while Python 3.12 on the same nodes and wheels works
+        return False
+    return True
 
 
 # -- Sessions --
@@ -253,9 +266,17 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
+    torch_markers: list[str] = []
+    if codegen == "internal" and _session_runs_torch(session, device):
+        extras.append("torch")
+    else:
+        torch_markers.append("not requires_torch")
+
     install_session_venv(session, extras=extras, groups=groups)
 
-    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+    markers = " and ".join(
+        codegen_settings["markers"] + device_settings["markers"] + mesh_markers + torch_markers
+    )
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
