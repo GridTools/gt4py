@@ -962,32 +962,28 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        mask_dims = (axis, offset_definition.domain.dims[0])
-        if offset_definition.skip_value is None:
-            # without the `where` against the table, a field broadcast (size 1) along the neighbor
-            # dimension must still be expanded to the table's neighbor count
-            mask_shape = tuple(
-                offset_definition.ndarray.shape[offset_definition.domain.dims.index(d)]
-                if d in mask_dims
-                else 1
+        # the neighbor table in the field's dimension order, with size 1 along the other dimensions
+        table = offset_definition.ndarray[
+            tuple(
+                slice(None) if d in offset_definition.domain.dims else None
                 for d in field.domain.dims
             )
-            masked_array = ops.xp.broadcast_to(
-                field.ndarray, np.broadcast_shapes(field.ndarray.shape, mask_shape)
+        ]
+        if offset_definition.skip_value is None:
+            # a field broadcast (size 1) along the neighbor dimension must be expanded to the
+            # table's neighbor count
+            neighbor_values = ops.xp.broadcast_to(
+                field.ndarray, np.broadcast_shapes(field.ndarray.shape, table.shape)
             )
         else:
-            broadcast_slice = tuple(
-                slice(None) if d in mask_dims else None for d in field.domain.dims
-            )
-            masked_array = ops.where(
-                ops.asarray(offset_definition.ndarray[broadcast_slice])
-                != offset_definition.skip_value,
+            neighbor_values = ops.where(
+                ops.asarray(table) != offset_definition.skip_value,
                 field.ndarray,
                 initial_value_op(field),
             )
 
         return NdArrayField.from_array(
-            reduce_op(ops.xp, masked_array, reduce_dim_index), domain=new_domain
+            reduce_op(ops.xp, neighbor_values, reduce_dim_index), domain=new_domain
         )
 
     _builtin_op.__name__ = builtin_name
