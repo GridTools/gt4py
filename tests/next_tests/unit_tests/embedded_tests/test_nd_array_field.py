@@ -27,7 +27,6 @@ from gt4py.next.common import (
     UnitRange,
 )
 from gt4py.next.embedded import (
-    array_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -983,11 +982,6 @@ def test_gather_premap_single_axis(nd_array_implementation, layout, start):
     )
     assert result.domain == common.Domain(dims=expected_dims, ranges=expected_ranges)
     assert np.array_equal(result.asnumpy(), np.take(data, table - start, axis=axis))
-    generic = nd_array_field._generic_gather_premap(
-        field, (conn,), result.domain, array_ops.of(field.ndarray)
-    )
-    assert generic.domain == result.domain
-    assert np.array_equal(generic.asnumpy(), result.asnumpy())
 
 
 # with 3 neighbors the (GV, GV2V) block is square, so a transposed result has the right shape
@@ -1270,39 +1264,6 @@ def test_neighbor_reduction_of_field_broadcast_along_neighbors(
     expected = [np_reduction(np.full(int(n.sum()), v)) for v, n in zip(values, is_neighbor)]
     assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
     assert np.array_equal(result.asnumpy(), expected)
-
-
-def test_gather_premap_uses_array_ops_take(monkeypatch):
-    from gt4py.next.embedded.array_libraries import numpy_ops
-
-    calls = []
-    original = numpy_ops.NumPyOps.take
-
-    def spy(self, *args, **kwargs):
-        calls.append(kwargs.get("axis"))
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(numpy_ops.NumPyOps, "take", spy)
-    field, conn, _ = _gather_case(
-        np,
-        [(_GK, UnitRange(0, 2)), (_GV, UnitRange(0, 4))],
-        [(_GE, UnitRange(0, 3)), (_GE2V, UnitRange(0, 2))],
-        _GV,
-        np.asarray([[0, 1], [2, 3], [1, 2]], dtype=np.int32),
-    )
-    field.premap(conn)
-    assert calls == [1]
-
-    calls.clear()
-    k_field, k_conn, _ = _gather_case(  # (GE, GK) -> GK reads another field dimension
-        np,
-        [(_GE, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
-        [(_GE, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
-        _GK,
-        np.asarray([[1, 0], [0, 1], [1, 1]], dtype=np.int32),
-    )
-    k_field.premap(k_conn)
-    assert calls == []
 
 
 @pytest.mark.parametrize("skip_value", [None, -2])

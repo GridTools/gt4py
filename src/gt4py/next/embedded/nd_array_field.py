@@ -12,6 +12,8 @@ import collections
 import dataclasses
 import functools
 import itertools
+import math
+import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
@@ -594,106 +596,70 @@ def _gather_output_domain(
 
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
-    """`premap` via a single gather (dimension-preserving and -introducing cases)."""
+    """
+    `premap` as one `ArrayOps.take` along the field axes the connectivities touch, merged into one.
+
+    The field axes from the first to the last one that is a codomain or is read by a connectivity
+    are merged into one axis, indexed by a linear index laid out over the output dimensions that
+    replace them. Axes before and after that run pass through unchanged, so a connectivity that
+    reads no other field dimension takes along its codomain axis with its own table.
+    """
     ops = array_ops.of(data._ndarray)
-    new_domain = _gather_output_domain(data.domain, connectivities)
-    if len(connectivities) == 1:
-        result = _single_axis_gather_premap(data, connectivities[0], new_domain, ops)
-        if result is not None:
-            return result
-    return _generic_gather_premap(data, connectivities, new_domain, ops)
-
-
-def _generic_gather_premap(
-    data: NdArrayField,
-    connectivities: Sequence[common.GatherConnectivity],
-    new_domain: common.Domain,
-    ops: array_ops.ArrayOps,
-) -> NdArrayField:
-    """`premap` as one advanced-index gather; handles every case `_gather_premap` accepts."""
-    conn_by_codomain = {conn.codomain: conn for conn in connectivities}
-
-    # one index array per original field dimension (the connectivity's, or identity), broadcast over
-    # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
-    take_indices = tuple(
-        (
-            _connectivity_index_array(
-                conn_by_codomain[dim],
-                new_domain,
-                ops,
-                codomain_start=data.domain[dim].unit_range.start,
-            )
-            if dim in conn_by_codomain
-            else _identity_index_array(new_domain, dim, ops, like=data._ndarray)
-        )
-        - data.domain[dim].unit_range.start
-        for dim in data.domain.dims
-    )
-    new_buffer = data._ndarray[take_indices]
-    return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
-
-
-def _single_axis_gather_premap(
-    data: NdArrayField,
-    connectivity: common.GatherConnectivity,
-    new_domain: common.Domain,
-    ops: array_ops.ArrayOps,
-) -> Optional[NdArrayField]:
-    """
-    `premap` as one `ArrayOps.take` along the codomain axis, or `None` if the gather is not of that form.
-
-    An optimization of `_generic_gather_premap` with the same result, except at skipped neighbors,
-    whose values are unspecified. It applies when the output dimensions are the field dimensions with
-    the codomain replaced, in place, by the dimensions of the connectivity's domain, i.e. when the
-    connectivity reads no other dimension of the field.
-    """
-    dims = data.domain.dims
-    axis = data.domain.dim_index(connectivity.codomain, allow_missing=False)
-    if new_domain.dims != (*dims[:axis], *connectivity.domain.dims, *dims[axis + 1 :]):
-        return None
-    sub_domain = common.Domain(*(new_domain[d] for d in connectivity.domain.dims))
-    conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
-    indices = ops.asarray(conn.ndarray)
-    if (start := data.domain[axis].unit_range.start) != 0:
-        indices = indices - start
-    new_buffer = ops.take(data._ndarray, indices, axis=axis)
-    return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
-
-
-def _connectivity_index_array(
-    connectivity: common.GatherConnectivity,
-    domain: common.Domain,
-    ops: array_ops.ArrayOps,
-    *,
-    codomain_start: int,
-) -> core_defs.NDArrayObject:
-    """
-    `connectivity`'s index table laid out over `domain` (not yet shifted to 0-based).
-
-    Skip values are replaced by `codomain_start`, so that skipped neighbors index the field in bounds.
-    """
-    # restrict the table to the output ranges of the connectivity's own dimensions
-    sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
-    conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
-    arr = ops.asarray(conn.ndarray)
-    if conn.skip_value is not None:
-        arr = xp.where(arr == conn.skip_value, codomain_start, arr)
-    # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
-    ndim = conn.domain.ndim
-    fresh_axis = {
-        dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
-    }
-    transposed_axes = tuple(
-        fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
-        for dim in domain.dims
-    )
-    if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
-        arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
-    arr = xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
-    if arr.shape != domain.shape:
-        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
-    return arr
+    new_domain = _gather_output_domain(data.domain, connectivities)
+    conn_by_codomain = {conn.codomain: conn for conn in connectivities}
+    read = {*conn_by_codomain, *(dim for conn in connectivities for dim in conn.domain.dims)}
+    touched = [i for i, dim in enumerate(data.domain.dims) if dim in read]
+    lo, hi = touched[0], touched[-1] + 1
+    gathered = new_domain.dims[lo : new_domain.ndim - (data.domain.ndim - hi)]
+
+    buffer = data._ndarray
+    indices, offset, stride = [], 0, 1
+    for axis in reversed(range(lo, hi)):
+        dim = data.domain.dims[axis]
+        if dim in conn_by_codomain:
+            conn = conn_by_codomain[dim]
+            sub_domain = common.Domain(*(new_domain[d] for d in conn.domain.dims))
+            conn = conn if sub_domain == conn.domain else conn.restrict(sub_domain)
+            index, index_dims = ops.asarray(conn.ndarray), conn.domain.dims
+        else:
+            unit_range = new_domain[dim].unit_range
+            index = xp.arange(unit_range.start, unit_range.stop, device=ops.device(buffer))
+            index_dims = (dim,)
+        if index_dims != gathered:
+            index = _lay_out(index, index_dims, new_domain, gathered, xp)
+        if stride != 1:  # in int64, so that the linear index cannot overflow
+            index = xp.astype(index, xp.int64) * stride
+        indices.append(index)
+        offset += data.domain[axis].unit_range.start * stride
+        stride *= buffer.shape[axis]
+
+    if hi - lo > 1:
+        # the offset is subtracted from the smallest index array only; a skipped neighbor may now
+        # select another in-bounds element of the merged axis, which is allowed
+        indices.sort(key=lambda index: math.prod(index.shape))
+        indices[0] = xp.astype(indices[0], xp.int64)
+        buffer = xp.reshape(buffer, (*buffer.shape[:lo], stride, *buffer.shape[hi:]))
+    if offset != 0:
+        indices[0] = indices[0] - offset
+    flat_index = functools.reduce(operator.add, indices)
+    new_buffer = ops.take(buffer, flat_index, axis=lo)
+    return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
+
+
+def _lay_out(
+    array: core_defs.NDArrayObject,
+    dims: Sequence[common.Dimension],
+    domain: common.Domain,
+    target_dims: Sequence[common.Dimension],
+    xp: ModuleType,
+) -> core_defs.NDArrayObject:
+    """`array` over `dims` laid out over `target_dims` of `domain`, with size-1 axes for the others."""
+    order = sorted(range(len(dims)), key=lambda i: target_dims.index(dims[i]))
+    if order != list(range(len(dims))):
+        array = xp.permute_dims(array, tuple(order))
+    shape = tuple(len(domain[d].unit_range) if d in dims else 1 for d in target_dims)
+    return xp.reshape(array, shape)
 
 
 def _identity_index_array(
