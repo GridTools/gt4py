@@ -622,24 +622,6 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
-def _table_range(range_: common.NamedRange, table_range: common.NamedRange) -> common.NamedRange:
-    """
-    The part of a connectivity table's `table_range` that `range_` of the same dimension reads.
-
-    That is `range_` itself, or the whole `table_range` if `range_` is infinite, i.e. broadcast.
-
-    Raises:
-        ValueError: If `range_` is finite and not within `table_range`.
-    """
-    if not common.UnitRange.is_finite(range_.unit_range):
-        return table_range
-    if range_.unit_range & table_range.unit_range != range_.unit_range:
-        raise ValueError(
-            f"Range '{range_}' is not within the range '{table_range}' of the connectivity."
-        )
-    return range_
-
-
 def _aligned_connectivity_table(
     connectivity: common.GatherConnectivity,
     domain: common.Domain,
@@ -648,12 +630,10 @@ def _aligned_connectivity_table(
     """
     `connectivity`'s index table on `domain`, with one axis per dimension of `domain`.
 
-    The table is restricted to `domain` along its own dimensions, see `_table_range`. The axes of
-    dimensions the connectivity does not have are of size 1.
+    The table is restricted to `domain`, which lies within it along the connectivity's dimensions.
+    The axes of dimensions the connectivity does not have are of size 1.
     """
-    sub_domain = common.Domain(
-        *(_table_range(domain[d], connectivity.domain[d]) for d in connectivity.domain.dims)
-    )
+    sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
     arr = ops.asarray(conn.ndarray)
@@ -976,7 +956,6 @@ def _make_reduction(
             current_offset_provider, axis.value
         )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
-        new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         assert isinstance(offset_definition, common.GatherConnectivity)
         neighbors = field.domain[axis]
@@ -986,7 +965,23 @@ def _make_reduction(
             raise ValueError(
                 f"Field has neighbors '{neighbors}', but the connectivity '{table_neighbors}'."
             )
-        table = _aligned_connectivity_table(offset_definition, field.domain, ops)
+        # the field and the table are read where both are defined, as in field arithmetic
+        domain = common.Domain(
+            *(
+                common.NamedRange(
+                    nr.dim, nr.unit_range & offset_definition.domain[nr.dim].unit_range
+                )
+                if nr.dim in offset_definition.domain.dims
+                else nr
+                for nr in field.domain
+            )
+        )
+        new_domain = common.Domain(*[nr for nr in domain if nr.dim != axis])
+        if domain.is_empty():
+            return _size0_field(field, dims=new_domain.dims, dtype=field.dtype)
+        if domain != field.domain:
+            field = field.restrict(domain)
+        table = _aligned_connectivity_table(offset_definition, domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
             # table's neighbor count
