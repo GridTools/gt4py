@@ -22,6 +22,7 @@ from gt4py.next.iterator.transforms import (
     inline_dynamic_shifts,
     inline_fundefs,
     inline_lifts,
+    pin_if_branch_domains,
     prune_empty_concat_where,
     remove_broadcast,
     symbol_ref_utils,
@@ -191,6 +192,10 @@ def apply_common_transforms(
         ir, offset_provider=offset_provider, symbolic_domain_sizes=symbolic_domain_sizes
     )
     ir = remove_broadcast.RemoveBroadcast.apply(ir)
+    if extract_temporaries:
+        # before `concat_where.transform_to_as_fieldop` and the domain inference in
+        # `create_global_tmps`; `apply_fieldview_transforms` extracts no temporaries
+        ir = pin_if_branch_domains.PinIfBranchDomains.apply(ir)
 
     ir = concat_where.transform_to_as_fieldop(ir)
 
