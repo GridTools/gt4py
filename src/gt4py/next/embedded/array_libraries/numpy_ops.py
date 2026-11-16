@@ -55,6 +55,7 @@ class NumPyOps(array_ops.ArrayOps):
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
+        self.check_assignable(value)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
