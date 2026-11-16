@@ -176,18 +176,27 @@ class ArrayOps:
         (NumPy, CuPy) assign directly; JAX arrays are immutable and need
         `.at[key].set(value)`.
         """
+        self.check_assignable(value)
         if isinstance(value, np.generic):
             value = self.xp.asarray(value, device=self.device(array))
-        elif not isinstance(value, bool | int | float):
-            if array_api_compat.array_namespace(value) is not self.xp:
-                raise TypeError(
-                    f"Cannot assign an array of '{type(value).__module__}' to an array of"
-                    f" '{self.xp.__name__}'."
-                )
         if not isinstance(value, bool | int | float) and value.dtype != array.dtype:
             value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
+
+    def check_assignable(self, value: Any) -> None:
+        """Raise `TypeError` unless `value` is a scalar or an array of this namespace."""
+        if isinstance(value, bool | int | float | np.generic):
+            return
+        try:
+            same_library = array_api_compat.array_namespace(value) is self.xp
+        except TypeError:
+            same_library = False
+        if not same_library:
+            raise TypeError(
+                f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
+                f" to an array of '{self.xp.__name__}'."
+            )
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
