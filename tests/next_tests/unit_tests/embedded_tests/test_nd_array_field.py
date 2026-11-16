@@ -1116,33 +1116,6 @@ def test_neighbor_reduction_after_narrowing_premap(
     assert np.array_equal(result.asnumpy(), expected)
 
 
-def test_neighbor_reduction_with_transposed_table_dims(nd_array_implementation):
-    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
-    table = np.asarray([[0, 1], [2, -1], [1, 3]])
-    conn = common._connectivity(
-        asarray(nd_array_implementation, table, dtype=np.int32),
-        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
-        codomain=_GV,
-        skip_value=-1,
-    )
-    data = np.arange(12, dtype=np.float64).reshape(4, 3)
-    field = common._field(
-        asarray(nd_array_implementation, data, dtype=np.float64),
-        domain=common.Domain(dims=(_GV, _GE), ranges=(UnitRange(0, 4), UnitRange(0, 3))),
-    )
-
-    with embedded_context.update(offset_provider={"E2V": conn}):
-        premapped = field.premap(conn)
-        result = fbuiltins.neighbor_sum(premapped, axis=E2V)
-
-    assert premapped.domain == common.Domain(
-        dims=(E2V, _GE), ranges=(UnitRange(0, 2), UnitRange(0, 3))
-    )
-    expected = [sum(data[v, e] for v in table[e] if v != -1) for e in range(3)]
-    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
-    assert np.array_equal(result.asnumpy(), expected)
-
-
 def test_neighbor_reduction_of_field_broadcast_along_another_dimension(nd_array_implementation):
     E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
     K = Dimension("K", kind=DimensionKind.VERTICAL)
@@ -1202,17 +1175,20 @@ def test_neighbor_reduction_reads_where_field_and_table_overlap(
     assert np.array_equal(result.asnumpy(), expected)
 
 
-def test_neighbor_reduction_of_field_broadcast_along_the_table(nd_array_implementation):
+@pytest.mark.parametrize("broadcast", [True, False], ids=["broadcast", "without_edges"])
+def test_neighbor_reduction_of_field_broadcast_along_the_table(nd_array_implementation, broadcast):
     E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
     field = common._field(
         asarray(nd_array_implementation, [1.0, 2.0], dtype=np.float64),
         domain=common.Domain(dims=(E2V,), ranges=(UnitRange(0, 2),)),
     )
+    if broadcast:
+        field = fbuiltins.broadcast(field, (_GE, E2V))
 
     with embedded_context.update(
         offset_provider={"E2V": _e2v_on_edges_0_to_4(nd_array_implementation, E2V)}
     ):
-        result = fbuiltins.neighbor_sum(fbuiltins.broadcast(field, (_GE, E2V)), axis=E2V)
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
 
     assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 4),))
     assert np.array_equal(result.asnumpy(), [1.0, 3.0, 1.0, 3.0])

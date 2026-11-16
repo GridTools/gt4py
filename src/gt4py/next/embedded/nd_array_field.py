@@ -931,19 +931,6 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
 _register_builtin(experimental.as_offset, _as_offset)
 
 
-def _intersect_shared_dims(domain: common.Domain, other: common.Domain) -> common.Domain:
-    """`domain` intersected with `other` along the dimensions both have, in the order of `domain`."""
-    # unlike `Domain.__and__`, this accepts dimensions in any order
-    return common.Domain(
-        *(
-            common.NamedRange(nr.dim, nr.unit_range & other[nr.dim].unit_range)
-            if nr.dim in other.dims
-            else nr
-            for nr in domain
-        )
-    )
-
-
 def _make_reduction(
     builtin_name: str,
     reduce_op: Callable[[ModuleType, core_defs.NDArrayObject, int], core_defs.NDArrayObject],
@@ -962,7 +949,6 @@ def _make_reduction(
             raise NotImplementedError(
                 "Reducing a field with more than one local dimension is not supported."
             )
-        reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
@@ -979,12 +965,14 @@ def _make_reduction(
                 f"Field has neighbors '{neighbors}', but the connectivity '{table_neighbors}'."
             )
         # the field and the table are read where both are defined, as in field arithmetic
-        domain = _intersect_shared_dims(field.domain, offset_definition.domain)
+        domain = embedded_common.domain_intersection(field.domain, offset_definition.domain)
         new_domain = common.Domain(*[nr for nr in domain if nr.dim != axis])
         if domain.is_empty():
             return _size0_field(field, dims=new_domain.dims, dtype=field.dtype)
+        field = cast(NdArrayField, _broadcast(field, domain.dims))
         if domain != field.domain:
             field = field.restrict(domain)
+        reduce_dim_index = domain.dims.index(axis)
         table = _aligned_connectivity_table(offset_definition, domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
