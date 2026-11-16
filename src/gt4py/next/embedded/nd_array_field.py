@@ -344,7 +344,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def __setitem__(
         self: NdArrayField[common.DimsT, core_defs.ScalarT],
         index: common.AnyIndexSpec,
-        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+        value: common.Field | core_defs.ScalarT,
     ) -> None:
         target_domain, target_slice = self._slice(index, for_assignment=True)
 
@@ -354,6 +354,12 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
             value = value.ndarray
+        elif not isinstance(value, bool | int | float | np.generic):
+            raise TypeError(
+                f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
+                " to a 'Field': assign a 'Field' or a scalar, or write the buffer with"
+                " 'field.ndarray[...] = ...'."
+            )
 
         new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, value)
         if new_buffer is not self._ndarray:
