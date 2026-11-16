@@ -733,6 +733,30 @@ class TestBufferInfo:
         assert buffer_info.dtype == core_defs.dtype(np.int32)
         assert buffer_info.device == core_defs.Device(*array.__dlpack_device__())
 
+    @pytest.mark.parametrize(
+        "platform", ["cpu", pytest.param("gpu", marks=pytest.mark.requires_gpu)]
+    )
+    def test_jax_non_default_layout(self, platform):
+        jax = pytest.importorskip("jax")
+        jax_layout = pytest.importorskip("jax.experimental.layout")
+        devices = [d for d in jax.devices() if d.platform == platform] or (
+            jax.devices("cpu") if platform == "cpu" else []
+        )
+        if not devices:
+            pytest.skip(f"JAX has no '{platform}' device")
+        array = jax.device_put(
+            jax.numpy.arange(24, dtype=jax.numpy.float32).reshape(2, 3, 4),
+            jax_layout.Format(
+                jax_layout.Layout(major_to_minor=(2, 0, 1)),
+                jax.sharding.SingleDeviceSharding(devices[0]),
+            ),
+        )
+
+        buffer_info = _buffer_info(array)
+
+        assert buffer_info.data_ptr == array.unsafe_buffer_pointer()
+        assert buffer_info.elem_strides == (3, 1, 6)
+
     def test_hash_key_tells_apart_dtypes_at_the_same_address(self):
         a = np.zeros(4, dtype=np.float64)
         scalar = np.zeros((), dtype=np.float64)
@@ -774,6 +798,26 @@ class TestBufferInfo:
 
         assert buffer_info == _buffer_info(array)
 
+
+    @pytest.mark.parametrize(
+        ("device_type", "stream"),
+        [(1, None), (2, -1), (10, -1), (3, None), (13, None), (14, None)],
+        ids=["cpu", "cuda", "rocm", "cuda_host", "cuda_managed", "oneapi"],
+    )
+    def test_stream_argument(self, device_type, stream):
+        streams = []
+
+        class Producer:
+            def __dlpack__(self, *, stream=None, max_version=None, copy=None):
+                streams.append(stream)
+                return _BASE.__dlpack__(max_version=max_version, copy=copy)
+
+            def __dlpack_device__(self):
+                return device_type, 0
+
+        array_ops.ArrayOps(np).buffer_info(Producer())
+
+        assert streams == [stream]
 
 class TestCartesianConnectivity:
     def test_for_translation(self):
