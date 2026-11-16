@@ -2238,3 +2238,83 @@ def test_jax_traced_array_dispatch():
         return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
 
     np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)
+
+
+def test_neighbor_sum_after_narrowing_premap():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    e2v = common._connectivity(
+        np.asarray([[0, 1], [2, -1], [4, 5], [6, 7]]),
+        codomain=V,
+        domain=common.domain({E: (0, 4), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+    v_field = common._field(np.arange(1.0, 5.0), domain=common.domain({V: (0, 4)}))
+
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        result = fbuiltins.neighbor_sum(v_field.premap(e2v), axis=E2VDim)
+
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [3.0, 3.0])
+
+
+def test_neighbor_sum_over_infinite_range():
+    E = Dimension("E")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [2, -1]]),
+        codomain=Dimension("V"),
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=-1,
+    )
+    field = common._field(
+        np.asarray([[1.0, 2.0], [4.0, 8.0]]), domain=common.domain({E: (0, 2), E2VDim: (0, 2)})
+    )
+    broadcasted = fbuiltins.broadcast(field, (E, E2VDim, K))
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = fbuiltins.neighbor_sum(broadcasted, axis=E2VDim)
+
+    assert result.domain == common.Domain(
+        common.named_range((E, (0, 2))), common.NamedRange(K, common.UnitRange.infinite())
+    )
+    np.testing.assert_array_equal(result.ndarray.ravel(), [3.0, 4.0])
+
+
+def test_connectivity_field_setitem_raises():
+    conn = common._connectivity(
+        np.asarray([[0, 1], [-1, -1]]),
+        codomain=D0,
+        domain=common.domain({D1: (0, 2), D2: (0, 2)}),
+        skip_value=-1,
+    )
+
+    with pytest.raises(TypeError, match="item assignment"):
+        conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def test_neighbor_sum_with_transposed_table_dims():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    table = np.asarray([[0, 1], [2, -1], [1, 3]])
+    e2v = common._connectivity(
+        table, codomain=V, domain=common.domain({E: (0, 3), E2VDim: (0, 2)}), skip_value=-1
+    )
+    data = np.arange(12, dtype=np.float64).reshape(4, 3)
+    ve_field = common._field(data, domain=common.domain({V: (0, 4), E: (0, 3)}))
+
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        premapped = ve_field.premap(e2v)
+        result = fbuiltins.neighbor_sum(premapped, axis=E2VDim)
+
+    assert premapped.domain == common.domain({E2VDim: (0, 2), E: (0, 3)})
+    expected = np.zeros(3)
+    for e in range(3):
+        for n in range(2):
+            if table[e, n] != -1:
+                expected[e] += data[table[e, n], e]
+    assert result.domain == common.domain({E: (0, 3)})
+    np.testing.assert_allclose(result.asnumpy(), expected)

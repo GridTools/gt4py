@@ -526,6 +526,13 @@ class NdArrayConnectivityField(
 
         return new_domain
 
+    def __setitem__(
+        self,
+        index: common.AnyIndexSpec,
+        value: common.Field | core_defs.NDArrayObject | core_defs.IntegralScalar,
+    ) -> Never:
+        raise TypeError("'Connectivity' does not support item assignment.")
+
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
 
@@ -631,12 +638,31 @@ def _connectivity_index_array(
 
     Skip values are replaced by `codomain_start`, so that skipped neighbors index the field in bounds.
     """
+    arr = _aligned_connectivity_table(connectivity, domain, ops, codomain_start=codomain_start)
+    if arr.shape != domain.shape:
+        arr = ops.xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
+    return arr
+
+
+def _aligned_connectivity_table(
+    connectivity: common.GatherConnectivity,
+    domain: common.Domain,
+    ops: array_ops.ArrayOps,
+    *,
+    codomain_start: Optional[int] = None,
+) -> core_defs.NDArrayObject:
+    """
+    `connectivity`'s index table restricted to `domain`, with one axis per dimension of `domain`.
+
+    The axes of dimensions the connectivity does not have are of size 1. If `codomain_start` is
+    given, skip values are replaced by it.
+    """
     # restrict the table to the output ranges of the connectivity's own dimensions
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
     arr = ops.asarray(conn.ndarray)
-    if conn.skip_value is not None:
+    if codomain_start is not None and conn.skip_value is not None:
         arr = xp.where(arr == conn.skip_value, codomain_start, arr)
     # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
@@ -649,10 +675,7 @@ def _connectivity_index_array(
     )
     if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
         arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
-    arr = xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
-    if arr.shape != domain.shape:
-        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
-    return arr
+    return xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
 
 
 def _identity_index_array(
@@ -962,13 +985,23 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        # the neighbor table in the field's dimension order, with size 1 along the other dimensions
-        table = offset_definition.ndarray[
-            tuple(
-                slice(None) if d in offset_definition.domain.dims else None
-                for d in field.domain.dims
+        # the neighbor table in the field's dimension order, with size 1 along the other dimensions,
+        # restricted where the field covers only part of it (e.g. after a narrowing premap)
+        assert isinstance(offset_definition, common.GatherConnectivity)
+        table_domain = common.Domain(
+            *(
+                nr
+                if nr.dim not in offset_definition.domain.dims
+                or (
+                    common.UnitRange.is_finite(nr.unit_range)
+                    and offset_definition.domain[nr.dim].unit_range.start <= nr.unit_range.start
+                    and nr.unit_range.stop <= offset_definition.domain[nr.dim].unit_range.stop
+                )
+                else offset_definition.domain[nr.dim]
+                for nr in field.domain
             )
-        ]
+        )
+        table = _aligned_connectivity_table(offset_definition, table_domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
             # table's neighbor count
