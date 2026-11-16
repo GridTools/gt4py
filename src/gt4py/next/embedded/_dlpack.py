@@ -70,6 +70,7 @@ _DTYPES: Final[dict[tuple[int, int, int], core_defs.DType]] = {
     for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES if issubclass(t, np.generic))
 }
 _DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
+_NO_SYNC_STREAM_DEVICE_TYPES: Final = (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM)
 
 
 def device(device_type: int, device_id: int) -> core_defs.Device:
@@ -90,8 +91,10 @@ def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
 def buffer_info(array: Any) -> common.BufferInfo:
     """Describe the buffer of `array` from its DLPack capsule, without consuming the capsule.
 
-    The capsule is requested without stream synchronization: the result describes where the
-    data lives, not when it is ready.
+    On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
+    only devices for which the Array API standard defines that request; all other devices get
+    `stream=None`, which the standard requires on CPU and on devices without streams. The result
+    describes where the data lives, not when it is ready.
 
     Raises:
         TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
@@ -102,7 +105,7 @@ def buffer_info(array: Any) -> common.BufferInfo:
         device_type, _ = array.__dlpack_device__()
     except AttributeError:
         raise TypeError(f"'{type(array).__name__}' does not export DLPack.") from None
-    stream = None if device_type == core_defs.DeviceType.CPU else -1
+    stream = -1 if device_type in _NO_SYNC_STREAM_DEVICE_TYPES else None
     try:
         capsule = array.__dlpack__(stream=stream, max_version=(1, 0), copy=False)
     except TypeError:
