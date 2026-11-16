@@ -98,8 +98,8 @@ def buffer_info(array: Any) -> common.BufferInfo:
 
     Raises:
         TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
-        BufferError: `array` cannot be exported without a copy, or the capsule has an
-            unsupported DLPack major version.
+        BufferError: `array` cannot be exported without a copy, the capsule has an
+            unsupported DLPack major version, or it reports a stride of `2**63` bytes or more.
     """
     try:
         device_type, _ = array.__dlpack_device__()
@@ -132,6 +132,13 @@ def buffer_info(array: Any) -> common.BufferInfo:
     ndim = tensor.ndim
     shape = tuple(tensor.shape[:ndim])
     strides = tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape)
+    itemsize = dtype.byte_size
+    if any(abs(stride) * itemsize >= 2**63 for stride in strides):
+        raise BufferError(
+            f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
+            f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
+            " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned integers)."
+        )
     return common.BufferInfo(
         data_ptr=(tensor.data or 0) + tensor.byte_offset,
         shape=shape,
