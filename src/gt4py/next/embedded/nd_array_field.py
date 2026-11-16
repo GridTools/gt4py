@@ -622,6 +622,24 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
+def _table_range(range_: common.NamedRange, table_range: common.NamedRange) -> common.NamedRange:
+    """
+    The part of a connectivity table's `table_range` that `range_` of the same dimension reads.
+
+    That is `range_` itself, or the whole `table_range` if `range_` is infinite, i.e. broadcast.
+
+    Raises:
+        ValueError: If `range_` is finite and not within `table_range`.
+    """
+    if not common.UnitRange.is_finite(range_.unit_range):
+        return table_range
+    if range_.unit_range & table_range.unit_range != range_.unit_range:
+        raise ValueError(
+            f"Range '{range_}' is not within the range '{table_range}' of the connectivity."
+        )
+    return range_
+
+
 def _aligned_connectivity_table(
     connectivity: common.GatherConnectivity,
     domain: common.Domain,
@@ -630,17 +648,11 @@ def _aligned_connectivity_table(
     """
     `connectivity`'s index table on `domain`, with one axis per dimension of `domain`.
 
-    The table is restricted to the ranges of `domain` that lie within it, and kept whole along the
-    others, e.g. a dimension a field is broadcast along. The axes of dimensions the connectivity
-    does not have are of size 1.
+    The table is restricted to `domain` along its own dimensions, see `_table_range`. The axes of
+    dimensions the connectivity does not have are of size 1.
     """
     sub_domain = common.Domain(
-        *(
-            nr if nr.unit_range & table_nr.unit_range == nr.unit_range else table_nr
-            for nr, table_nr in (
-                (domain[d], connectivity.domain[d]) for d in connectivity.domain.dims
-            )
-        )
+        *(_table_range(domain[d], connectivity.domain[d]) for d in connectivity.domain.dims)
     )
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
@@ -966,8 +978,14 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        # the neighbor table in the field's dimension order, with size 1 along the other dimensions
         assert isinstance(offset_definition, common.GatherConnectivity)
+        neighbors = field.domain[axis]
+        if common.UnitRange.is_finite(neighbors.unit_range) and neighbors != (
+            table_neighbors := offset_definition.domain[axis]
+        ):
+            raise ValueError(
+                f"Field has neighbors '{neighbors}', but the connectivity '{table_neighbors}'."
+            )
         table = _aligned_connectivity_table(offset_definition, field.domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
@@ -977,7 +995,7 @@ def _make_reduction(
             )
         else:
             neighbor_values = ops.where(
-                ops.asarray(table) != offset_definition.skip_value,
+                table != offset_definition.skip_value,
                 field.ndarray,
                 initial_value_op(field),
             )
