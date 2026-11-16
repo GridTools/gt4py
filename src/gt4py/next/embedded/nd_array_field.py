@@ -280,11 +280,6 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 connectivity = connectivity.as_connectivity_field()
             assert isinstance(connectivity, common.Connectivity)
 
-            # Current implementation relies on skip_value == -1:
-            # if we assume the indexed array has at least one element,
-            # we wrap around without out of bounds access
-            assert connectivity.skip_value is None or connectivity.skip_value == -1
-
             conn_fields.append(connectivity)
             codomains_counter[connectivity.codomain] += 1
 
@@ -506,27 +501,16 @@ class NdArrayConnectivityField(
         return self._skip_value
 
     # This embedded run-time cache is only used to speed up repeated calls to
-    # `inverse_image` and `restrict`, and it should not be considered part of
+    # `_inverse_image` and `restrict`, and it should not be considered part of
     # the connectivity field definition, and therefore it should not be serialized.
     @functools.cached_property
     def _cache(self) -> dict:
         return {}
 
-    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
+    def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_domain := self._cache.get(cache_key, None)) is None:
-            if not isinstance(
-                image_range, common.UnitRange
-            ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
-                if image_range.dim != self.codomain:
-                    raise ValueError(
-                        f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
-                    )
-
-                image_range = image_range.unit_range
-
-            assert isinstance(image_range, common.UnitRange)
             assert common.UnitRange.is_finite(image_range)
 
             slices = _hyperslice(
@@ -539,6 +523,13 @@ class NdArrayConnectivityField(
             self._cache[cache_key] = new_domain
 
         return new_domain
+
+    def __setitem__(
+        self,
+        index: common.AnyIndexSpec,
+        value: common.Field | core_defs.NDArrayObject | core_defs.IntegralScalar,
+    ) -> Never:
+        raise TypeError("'Connectivity' does not support item assignment.")
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
@@ -571,7 +562,7 @@ def _domain_premap(data: NdArrayField, *connectivities: common.Connectivity) -> 
             )
 
         current_range: common.UnitRange = data.domain[dim_idx].unit_range
-        new_ranges = connectivity.inverse_image(current_range)
+        new_ranges = connectivity._inverse_image(current_range)
         new_domain = new_domain.replace(dim_idx, *new_ranges)
 
     return data.__class__.from_array(data._ndarray, domain=new_domain, dtype=data.dtype)
@@ -587,7 +578,7 @@ def _gather_output_domain(
         cod = conn.codomain
         # the connectivity's domain, restricted to where it maps into the codomain's range
         narrowed = {
-            nr.dim: nr.unit_range for nr in conn.inverse_image(field_domain[cod].unit_range)
+            nr.dim: nr.unit_range for nr in conn._inverse_image(field_domain[cod].unit_range)
         }
         # dimensions the connectivity adds that are not in the field yet
         introduced = [
@@ -613,26 +604,33 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     new_domain = _gather_output_domain(data.domain, connectivities)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
-    # one index array per original field dimension (the connectivity's, or identity), broadcast over
-    # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
-    take_indices = tuple(
-        (
-            _connectivity_index_array(conn_by_codomain[dim], new_domain, ops)
-            if dim in conn_by_codomain
-            else _identity_index_array(new_domain, dim, ops, like=data._ndarray)
-        )
-        - data.domain[dim].unit_range.start
-        for dim in data.domain.dims
-    )
-    new_buffer = data._ndarray[take_indices]
+    # one index array per original field dimension (the connectivity's, or identity), shifted to
+    # 0-based buffer indices; the advanced-index gather broadcasts them against each other
+    def take_index(dim: common.Dimension) -> core_defs.NDArrayObject:
+        start = data.domain[dim].unit_range.start
+        if (conn := conn_by_codomain.get(dim)) is None:
+            return _identity_index_array(new_domain, dim, ops, like=data._ndarray) - start
+        table = _aligned_connectivity_table(conn, new_domain, ops)
+        if conn.skip_value is not None:
+            # skipped neighbors index the field in bounds; the reduction mask discards what they read
+            table = ops.xp.where(table == conn.skip_value, start, table)
+        return table - start
+
+    new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
 
 
-def _connectivity_index_array(
-    connectivity: common.GatherConnectivity, domain: common.Domain, ops: array_ops.ArrayOps
+def _aligned_connectivity_table(
+    connectivity: common.GatherConnectivity,
+    domain: common.Domain,
+    ops: array_ops.ArrayOps,
 ) -> core_defs.NDArrayObject:
-    """`connectivity`'s index table laid out over `domain` (not yet shifted to 0-based)."""
-    # restrict the table to the output ranges of the connectivity's own dimensions
+    """
+    `connectivity`'s index table on `domain`, with one axis per dimension of `domain`.
+
+    The table is restricted to `domain`, which lies within it along the connectivity's dimensions.
+    The axes of dimensions the connectivity does not have are of size 1.
+    """
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
@@ -648,10 +646,7 @@ def _connectivity_index_array(
     )
     if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
         arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
-    arr = xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
-    if arr.shape != domain.shape:
-        arr = xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
-    return arr
+    return xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
 
 
 def _identity_index_array(
@@ -952,27 +947,57 @@ def _make_reduction(
             raise NotImplementedError(
                 "Reducing a field with more than one local dimension is not supported."
             )
-        reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(
             current_offset_provider, axis.value
         )  # assumes offset and local dimension have same name
         assert common.is_neighbor_table(offset_definition)
-        new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.domain.dims[0]] else None
-            for d in field.domain.dims
-        )
-        masked_array = ops.where(
-            ops.asarray(offset_definition.ndarray[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
-            field.ndarray,
-            initial_value_op(field),
-        )
+        assert isinstance(offset_definition, common.GatherConnectivity)
+        # unlike the other dimensions, the neighbor dimension is not intersected: a reduction
+        # needs the field at every neighbor of the table
+        neighbors, table_neighbors = field.domain[axis], offset_definition.domain[axis]
+        if not neighbors.unit_range >= table_neighbors.unit_range:
+            raise ValueError(
+                f"Field has neighbors '{neighbors}', which do not cover the neighbors "
+                f"'{table_neighbors}' of the connectivity."
+            )
+        # the field and the table are read where both are defined, as in field arithmetic
+        domain = embedded_common.domain_intersection(field.domain, offset_definition.domain)
+        new_domain = common.Domain(*[nr for nr in domain if nr.dim != axis])
+        if new_domain.is_empty():
+            shape = tuple(
+                len(nr.unit_range) if common.UnitRange.is_finite(nr.unit_range) else 1
+                for nr in new_domain
+            )
+            empty = ops.xp.empty(
+                shape, dtype=ops.dtype(field.dtype.scalar_type), device=ops.device(field.ndarray)
+            )
+            return NdArrayField.from_array(empty, domain=new_domain)
+        field = cast(NdArrayField, _broadcast(field, domain.dims))
+        if domain != field.domain:
+            field = field.restrict(domain)
+        reduce_dim_index = domain.dims.index(axis)
+        if offset_definition.skip_value is None:
+            # a field broadcast (size 1) along a dimension of the table is expanded to its extent
+            table_shape = tuple(
+                len(nr.unit_range) if nr.dim in offset_definition.domain.dims else 1
+                for nr in domain
+            )
+            neighbor_values = ops.xp.broadcast_to(
+                field.ndarray, np.broadcast_shapes(field.ndarray.shape, table_shape)
+            )
+        else:
+            table = _aligned_connectivity_table(offset_definition, domain, ops)
+            neighbor_values = ops.where(
+                table != offset_definition.skip_value,
+                field.ndarray,
+                initial_value_op(field),
+            )
 
         return NdArrayField.from_array(
-            reduce_op(ops.xp, masked_array, reduce_dim_index), domain=new_domain
+            reduce_op(ops.xp, neighbor_values, reduce_dim_index), domain=new_domain
         )
 
     _builtin_op.__name__ = builtin_name
