@@ -54,7 +54,9 @@ def test_producer_without_max_version():
 
     array = _BASE[1:4]
 
-    assert dlpack.BufferInfo.from_dlpack(_Wrapper(array, only_stream)) == dlpack.BufferInfo.from_dlpack(array)
+    assert dlpack.BufferInfo.from_dlpack(
+        _Wrapper(array, only_stream)
+    ) == dlpack.BufferInfo.from_dlpack(array)
 
 
 def test_unversioned_capsule():
@@ -63,7 +65,9 @@ def test_unversioned_capsule():
 
     array = _BASE[1:4]
 
-    assert dlpack.BufferInfo.from_dlpack(_Wrapper(array, unversioned)) == dlpack.BufferInfo.from_dlpack(array)
+    assert dlpack.BufferInfo.from_dlpack(
+        _Wrapper(array, unversioned)
+    ) == dlpack.BufferInfo.from_dlpack(array)
 
 
 def test_unsupported_dtype():
@@ -113,7 +117,9 @@ def test_hash_key_tells_apart_dtypes_at_the_same_address():
 
     for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
         assert dlpack.BufferInfo.from_dlpack(x) != dlpack.BufferInfo.from_dlpack(y)
-        assert dlpack.BufferInfo.from_dlpack(x).hash_key != dlpack.BufferInfo.from_dlpack(y).hash_key
+        assert (
+            dlpack.BufferInfo.from_dlpack(x).hash_key != dlpack.BufferInfo.from_dlpack(y).hash_key
+        )
 
     assert dlpack.BufferInfo.from_dlpack(a[:]) == dlpack.BufferInfo.from_dlpack(a)
     assert dlpack.BufferInfo.from_dlpack(a[:]).hash_key == dlpack.BufferInfo.from_dlpack(a).hash_key

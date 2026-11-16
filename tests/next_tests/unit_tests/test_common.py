@@ -762,6 +762,7 @@ class TestBufferInfo:
     def test_array_ops_entry_point_is_from_dlpack(self, array):
         assert _buffer_info(array) == core_dlpack.BufferInfo.from_dlpack(array)
 
+
 class TestCartesianConnectivity:
     def test_for_translation(self):
         offset = 5
