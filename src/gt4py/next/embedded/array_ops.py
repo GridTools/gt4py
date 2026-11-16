@@ -65,6 +65,18 @@ class ArrayOps:
     `xp` is the Array API namespace of the buffers. Field code uses `xp` directly
     for standard functions and the methods of this class wherever a library may
     need to differ; those methods are the override points.
+
+    The operations on a connectivity table (`hyperslice`, `restrict_table`) take the
+    connectivity's `_array_ops_state` as `state`: `None`, or the object a library passed
+    when it built the connectivity (for example in its pytree unflatten). Only that
+    library reads or changes it. The same object reaches every connectivity restricted
+    or copied from that one, also when the table was replaced, possibly by an array of
+    another library. So an implementation
+
+    - identifies the table a `state` describes itself and trusts no other pairing,
+    - treats a `state` it did not create like `None`,
+    - works with `None`: shared code may drop it, and a connectivity built from an
+      array never has one.
     """
 
     #: Replacements of whole `fbuiltins` implementations for fields of this namespace.
@@ -189,16 +201,6 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
-    # The operations on a connectivity table. `state` is the connectivity's `_array_ops_state`:
-    # `None`, or the object a library passed when it built a connectivity (for example in
-    # its pytree unflatten). Only that library reads or changes it. The same object reaches
-    # every connectivity restricted or copied from that one, also when the table was
-    # replaced, possibly by an array of another library. So an implementation
-    # - identifies the table a `state` describes itself and trusts no other pairing,
-    # - treats a `state` it did not create like `None`,
-    # - works with `None`: shared code may drop it, and a connectivity built from an array
-    #   never has one.
-
     def hyperslice(
         self,
         table: core_defs.NDArrayObject,
@@ -258,7 +260,7 @@ class ArrayOps:
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
     ) -> core_defs.NDArrayObject:
-        """Return `array[indices]` for one integer index array per axis, all of the same shape."""
+        """Return `array[indices]` for one integer index array per axis, broadcast against each other."""
         return array[indices]
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
