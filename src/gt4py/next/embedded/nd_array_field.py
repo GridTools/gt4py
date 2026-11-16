@@ -968,20 +968,30 @@ def _make_reduction(
         # the field and the table are read where both are defined, as in field arithmetic
         domain = embedded_common.domain_intersection(field.domain, offset_definition.domain)
         new_domain = common.Domain(*[nr for nr in domain if nr.dim != axis])
-        if domain.is_empty():
-            return _size0_field(field, dims=new_domain.dims, dtype=field.dtype)
+        if new_domain.is_empty():
+            shape = tuple(
+                len(nr.unit_range) if common.UnitRange.is_finite(nr.unit_range) else 1
+                for nr in new_domain
+            )
+            empty = ops.xp.empty(
+                shape, dtype=ops.dtype(field.dtype.scalar_type), device=ops.device(field.ndarray)
+            )
+            return NdArrayField.from_array(empty, domain=new_domain)
         field = cast(NdArrayField, _broadcast(field, domain.dims))
         if domain != field.domain:
             field = field.restrict(domain)
         reduce_dim_index = domain.dims.index(axis)
-        table = _aligned_connectivity_table(offset_definition, domain, ops)
         if offset_definition.skip_value is None:
-            # a field broadcast (size 1) along the neighbor dimension must be expanded to the
-            # table's neighbor count
+            # a field broadcast (size 1) along a dimension of the table is expanded to its extent
+            table_shape = tuple(
+                len(nr.unit_range) if nr.dim in offset_definition.domain.dims else 1
+                for nr in domain
+            )
             neighbor_values = ops.xp.broadcast_to(
-                field.ndarray, np.broadcast_shapes(field.ndarray.shape, table.shape)
+                field.ndarray, np.broadcast_shapes(field.ndarray.shape, table_shape)
             )
         else:
+            table = _aligned_connectivity_table(offset_definition, domain, ops)
             neighbor_values = ops.where(
                 table != offset_definition.skip_value,
                 field.ndarray,
