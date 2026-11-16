@@ -1075,6 +1075,71 @@ def test_neighbor_reduction_with_non_default_skip_value(
     assert np.array_equal(result.asnumpy(), expected)
 
 
+_NEIGHBOR_REDUCTIONS = [
+    (fbuiltins.neighbor_sum, np.sum),
+    (fbuiltins.max_over, np.max),
+    (fbuiltins.min_over, np.min),
+]
+
+
+@pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
+@pytest.mark.parametrize(
+    "table", [[[0, 1], [2, 3]], [[0, -1], [2, 3]]], ids=["no_minus_one", "minus_one"]
+)
+def test_neighbor_reduction_without_skip_value_masks_nothing(
+    nd_array_implementation, reduction, np_reduction, table
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    values = np.asarray([[1.0, 5.0], [3.0, 7.0]])
+    field = common._field(
+        asarray(nd_array_implementation, values, dtype=np.float64),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, table, dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=None,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 2),))
+    assert np.array_equal(result.asnumpy(), np_reduction(values, axis=1))
+
+
+@pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
+@pytest.mark.parametrize("skip_value", [None, -2])
+def test_neighbor_reduction_of_field_broadcast_along_neighbors(
+    nd_array_implementation, reduction, np_reduction, skip_value
+):
+    E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
+    values = np.asarray([2.0, 3.0, 4.0])
+    table = np.asarray([[0, 1], [2, 0 if skip_value is None else skip_value], [1, 2]])
+    field = fbuiltins.broadcast(
+        common._field(
+            asarray(nd_array_implementation, values, dtype=np.float64),
+            domain=common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),)),
+        ),
+        (_GE, E2V),
+    )
+    conn = common._connectivity(
+        asarray(nd_array_implementation, table, dtype=np.int32),
+        domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 3), UnitRange(0, 2))),
+        codomain=_GV,
+        skip_value=skip_value,
+    )
+
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        result = reduction(field, axis=E2V)
+
+    is_neighbor = table != skip_value if skip_value is not None else np.ones(table.shape, bool)
+    expected = [np_reduction(np.full(int(n.sum()), v)) for v, n in zip(values, is_neighbor)]
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 3),))
+    assert np.array_equal(result.asnumpy(), expected)
+
+
 def test_gather_premap_uses_array_ops_take(monkeypatch):
     from gt4py.next.embedded.array_libraries import numpy_ops
 
