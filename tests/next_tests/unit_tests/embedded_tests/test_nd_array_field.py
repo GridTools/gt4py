@@ -2638,14 +2638,14 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
 
 
 @pytest.mark.requires_jax
-def test_jax_pytree_of_concrete_connectivity_has_no_static():
+def test_jax_pytree_of_concrete_connectivity_has_no_array_ops_meta():
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
 
     rebuilt = jax.tree.map(lambda table: table + 1, conn_a)
 
-    assert rebuilt._static is None
+    assert rebuilt._array_ops_meta is None
     # targets 1, 2, 3, 4, 6 of a field on V:(1,4)
     result = field.premap(rebuilt)
     assert result.domain == common.domain({E: (0, 3)})

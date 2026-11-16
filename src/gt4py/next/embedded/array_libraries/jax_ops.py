@@ -98,11 +98,11 @@ def _has_values(table: Any) -> bool:
     return isinstance(table, jax.Array) and not isinstance(table, jax.core.Tracer)
 
 
-def _values(table: Any, static: Optional[_StaticValues]) -> Optional[core_defs.NDArrayObject]:
+def _values(table: Any, meta: Optional[_StaticValues]) -> Optional[core_defs.NDArrayObject]:
     """Return the concrete array with the values of `table`, `None` if they exist only at run time."""
     if _has_values(table):
         return table
-    return None if static is None else static.get(table)
+    return None if meta is None else meta.get(table)
 
 
 #: per concrete table, its restrictions by key: restricting the same table again returns the same
@@ -153,9 +153,9 @@ class JaxOps(array_ops.ArrayOps):
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
-        static: Optional[_StaticValues] = None,
+        meta: Optional[_StaticValues] = None,
     ) -> Optional[tuple[slice, ...]]:
-        values = _values(table, static)
+        values = _values(table, meta)
         if values is None:
             return (slice(None),) * table.ndim
         with jax.ensure_compile_time_eval():
@@ -166,17 +166,17 @@ class JaxOps(array_ops.ArrayOps):
         table: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
-        static: Optional[_StaticValues] = None,
+        meta: Optional[_StaticValues] = None,
     ) -> core_defs.NDArrayObject:
-        values = _values(table, static)
+        values = _values(table, meta)
         if values is None:
             return super().restrict_table(table, key)
         restricted_values = _restrict_values(values, key)
         if values is table:
             return restricted_values
-        assert static is not None
+        assert meta is not None
         restricted = super().restrict_table(table, key)
-        static.add_restricted(restricted, restricted_values)
+        meta.add_restricted(restricted, restricted_values)
         return restricted
 
     def gather(
@@ -236,7 +236,7 @@ def _flatten_connectivity(
     assert not (array_api_compat.is_numpy_array(table) or array_api_compat.is_cupy_array(table)), (
         f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(table)}'."
     )
-    values = _values(table, connectivity._static)
+    values = _values(table, connectivity._array_ops_meta)
     return (table,), (
         connectivity.domain,
         connectivity.codomain,
@@ -252,11 +252,9 @@ def _unflatten_connectivity(
     (table,) = children
     # a child without values stands for the flattened table: a tracer, or one of the placeholders
     # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around
-    static = (
-        None if identity is None or _has_values(table) else _StaticValues(identity.values, table)
-    )
+    meta = None if identity is None or _has_values(table) else _StaticValues(identity.values, table)
     return nd_array_field.NdArrayConnectivityField(
-        domain, table, codomain, skip_value, _static=static
+        domain, table, codomain, skip_value, _array_ops_meta=meta
     )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 

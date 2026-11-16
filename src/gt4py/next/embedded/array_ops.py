@@ -189,8 +189,7 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
-    # The operations on a connectivity table. `static` is what the connectivity holds for the
-    # library of its table: `None`, unless the library created the connectivity with one.
+    # The operations on a connectivity table. `meta` is the connectivity's `_array_ops_meta`.
 
     def hyperslice(
         self,
@@ -198,7 +197,7 @@ class ArrayOps:
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
-        static: Any = None,
+        meta: Any = None,
     ) -> Optional[tuple[slice, ...]]:
         """
         Return the hypercube slice that contains all indices in `table` that are within `image_range`, or `None` if no such hypercube exists.
@@ -243,7 +242,7 @@ class ArrayOps:
         table: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
-        static: Any = None,
+        meta: Any = None,
     ) -> core_defs.NDArrayObject:
         """Return `table[key]`."""
         return self.asarray(table[key])
