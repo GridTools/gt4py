@@ -990,6 +990,35 @@ def test_gather_premap_single_axis(nd_array_implementation, layout, start):
     assert np.array_equal(generic.asnumpy(), result.asnumpy())
 
 
+# with 3 neighbors the (GV, GV2V) block is square, so a transposed result has the right shape
+@pytest.mark.parametrize("n_neighbors", [3, 4])
+def test_gather_premap_codomain_in_non_leading_connectivity_position(
+    nd_array_implementation, n_neighbors
+):
+    # the output keeps the field's dimension order (GV, GV2V, GK), not the connectivity's (GV2V, GV)
+    rng = np.random.default_rng(7)
+    table = rng.integers(0, 3, size=(n_neighbors, 5)).astype(np.int32)  # (GV2V, GV) -> GV
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
+        [(_GV2V, UnitRange(5, 5 + n_neighbors)), (_GV, UnitRange(0, 5))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GV, _GV2V, _GK),
+        ranges=(UnitRange(0, 3), UnitRange(5, 5 + n_neighbors), UnitRange(0, 2)),
+    )
+    expected = np.empty((3, n_neighbors, 2))
+    for v in range(3):
+        for n in range(n_neighbors):
+            expected[v, n, :] = data[table[n, v], :]
+    assert np.array_equal(result.asnumpy(), expected)
+
+
 def test_gather_premap_single_axis_narrowed(nd_array_implementation):
     # the last edge maps entirely outside the field, so the output loses it
     table = np.asarray([[0, 1], [2, 3], [4, 5], [7, 8]], dtype=np.int32)
