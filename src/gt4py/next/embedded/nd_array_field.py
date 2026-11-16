@@ -962,20 +962,31 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
         new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
-        broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.domain.dims[0]] else None
-            for d in field.domain.dims
-        )
-        skip_value = (
-            common._DEFAULT_SKIP_VALUE
-            if offset_definition.skip_value is None
-            else offset_definition.skip_value
-        )
-        masked_array = ops.where(
-            ops.asarray(offset_definition.ndarray[broadcast_slice]) != skip_value,
-            field.ndarray,
-            initial_value_op(field),
-        )
+        mask_dims = (axis, offset_definition.domain.dims[0])
+        if offset_definition.skip_value is None:
+            # a field broadcast along the neighbor or target dimension still reduces over every
+            # neighbor, as it would after `where` against the table
+            mask_shape = tuple(
+                offset_definition.ndarray.shape[offset_definition.domain.dims.index(d)]
+                if d in mask_dims
+                else 1
+                for d in field.domain.dims
+            )
+            masked_array = field.ndarray
+            if not all(m in (1, s) for m, s in zip(mask_shape, masked_array.shape)):
+                masked_array = ops.xp.broadcast_to(
+                    masked_array, tuple(max(m, s) for m, s in zip(mask_shape, masked_array.shape))
+                )
+        else:
+            broadcast_slice = tuple(
+                slice(None) if d in mask_dims else None for d in field.domain.dims
+            )
+            masked_array = ops.where(
+                ops.asarray(offset_definition.ndarray[broadcast_slice])
+                != offset_definition.skip_value,
+                field.ndarray,
+                initial_value_op(field),
+            )
 
         return NdArrayField.from_array(
             reduce_op(ops.xp, masked_array, reduce_dim_index), domain=new_domain
