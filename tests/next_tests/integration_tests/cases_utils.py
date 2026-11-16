@@ -108,7 +108,11 @@ no_backend = NoBackend(
         ),
         pytest.param(
             next_tests.definitions.EmbeddedIds.TORCH_CUDA_EXECUTION,
-            marks=(pytest.mark.requires_torch, pytest.mark.requires_gpu),
+            marks=(
+                pytest.mark.requires_torch,
+                pytest.mark.requires_torch_cuda,
+                pytest.mark.requires_gpu,
+            ),
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,

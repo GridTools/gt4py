@@ -321,7 +321,9 @@ class TestFieldConstructorInit:
         (None, "cpu"),
         (core_defs.Device(core_defs.DeviceType.CPU, 0), "cpu"),
         pytest.param(
-            core_defs.Device(core_defs.DeviceType.CUDA, 0), "cuda", marks=pytest.mark.requires_gpu
+            core_defs.Device(core_defs.DeviceType.CUDA, 0),
+            "cuda",
+            marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda),
         ),
     ],
 )
@@ -337,6 +339,7 @@ def test_as_field_torch_allocator(device, expected_device_type):
 
 
 @pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
 @pytest.mark.requires_gpu
 def test_torch_allocator_follows_default_device():
     import torch

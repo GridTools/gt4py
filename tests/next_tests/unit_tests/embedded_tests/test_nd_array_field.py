@@ -2069,7 +2069,10 @@ def test_jax_traced_array_dispatch():
     np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)
 
 
-_TORCH_DEVICES = ["cpu", pytest.param("cuda", marks=pytest.mark.requires_gpu)]
+_TORCH_DEVICES = [
+    "cpu",
+    pytest.param("cuda", marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda)),
+]
 
 
 def _torch_field(values, device, dtype=None):
