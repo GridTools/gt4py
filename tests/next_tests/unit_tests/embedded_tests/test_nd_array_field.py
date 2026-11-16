@@ -1115,6 +1115,19 @@ def _multi_gather_case(name, rng):
         out_dims = [e, e2v, k]
     elif name == "per_level_neighbor":  # (GE, GK) -> GV on a (GV, GK) field
         field_dims, conns, out_dims = [v, k], [([e, k], _GV, -1)], [e, k]
+    elif name == "as_offset_narrowed":  # GE and GK narrowed by the table, negative GE start
+        field_dims = [(_GE, UnitRange(-2, 3)), k]
+        conn_dims = [(_GE, UnitRange(-1, 2)), (_GK, UnitRange(3, 5))]
+        conns, out_dims = [(conn_dims, _GK, -1)], conn_dims
+    elif name == "neighbor_and_level_narrowed":  # the level table narrows GK
+        field_dims = [v, k]
+        k_narrowed = (_GK, UnitRange(3, 5))
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k_narrowed], _GK, None)]
+        out_dims = [e, e2v, k_narrowed]
+    elif name == "per_level_neighbor_narrowed":  # the table narrows GK, negative GK starts
+        field_dims = [v, (_GK, UnitRange(-3, 2))]
+        k_narrowed = (_GK, UnitRange(-2, 1))
+        conns, out_dims = [([e, k_narrowed], _GV, -1)], [e, k_narrowed]
     elif name == "disjoint":  # (GE, GE2V) -> GV and a (GK,) -> GK permutation on (GV, GK)
         field_dims = [v, k]
         conns = [([e, e2v], _GV, -1), ([k], _GK, "permutation")]
@@ -1146,7 +1159,17 @@ def _multi_gather_case(name, rng):
 
 
 @pytest.mark.parametrize(
-    "name", ["as_offset", "neighbor_and_level", "per_level_neighbor", "disjoint", "diagonal"]
+    "name",
+    [
+        "as_offset",
+        "as_offset_narrowed",
+        "neighbor_and_level",
+        "neighbor_and_level_narrowed",
+        "per_level_neighbor",
+        "per_level_neighbor_narrowed",
+        "disjoint",
+        "diagonal",
+    ],
 )
 def test_gather_premap_multiple_or_reading_connectivities(nd_array_implementation, name):
     rng = np.random.default_rng(1)
