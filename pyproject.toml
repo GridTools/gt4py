@@ -19,12 +19,15 @@ dev = [
 ]
 docs = [
   'esbonio>=0.16.0',
+  'furo>=2025.12.19',
   'jupytext>=1.14',
   'matplotlib>=3.9.0',
-  'myst-parser>=4.0.0',
+  'myst-nb>=1.4.0',
+  'myst-parser>=5.2.0',
   'pygments>=2.7.3',
-  'sphinx>=7.3.7',
-  'sphinx-rtd-theme>=3.0.1',
+  'sphinx>=9.1.0 ; python_version < "3.13"',  # last version supporting Python 3.12
+  'sphinx>=9.2.0 ; python_version >= "3.13"',
+  'sphinx-design>=0.8.0',
   'sphinx-toolbox>=3.8.1'
 ]
 frameworks = [

@@ -30,9 +30,9 @@ pip install --upgrade git+https://github.com/gridtools/gt4py.git
 
 This section introduces three concepts for storing and manipulating data:
 
-- [Fields](#Fields),
-- [Field operators](#Field-operators), and
-- [Programs](#Programs).
+- [Fields](#fields),
+- [Field operators](#field-operators), and
+- [Programs](#programs).
 
 The concepts are demonstrated through a simple application that adds two fields.
 
@@ -95,7 +95,7 @@ def add(a: gtx.Field[Dims[CellDim, KDim], float64],
 ```
 
 \_Note: for now `Dims` is not mandatory, hence this type hint is also accepted: `gtx.Field[[CellDim, KDim], float64]`
-You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
+You can call field operators from [programs](#programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
 
 ```{code-cell} ipython3
 result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
@@ -150,10 +150,10 @@ The sign of the edge difference in the sum of the pseudo-laplacian is always suc
 
 This section approaches the pseudo-laplacian by introducing the required APIs progressively through the following subsections:
 
-- [Defining the mesh and the connectivities (adjacencies) between cells and edges](#Defining-the-mesh-and-its-connectivities)
-- [Using connectivities in field operators](#Using-connectivities-in-field-operators)
-- [Using reductions on connected mesh elements](#Using-reductions-on-connected-mesh-elements)
-- [Implementing the actual pseudo-laplacian](#Implementing-the-pseudo-laplacian)
+- [Defining the mesh and the connectivities (adjacencies) between cells and edges](#defining-the-mesh-and-its-connectivities)
+- [Using connectivities in field operators](#using-connectivities-in-field-operators)
+- [Using reductions on connected mesh elements](#using-reductions-on-connected-mesh-elements)
+- [Implementing the actual pseudo-laplacian](#implementing-the-pseudo-laplacian)
 
 #### Defining the mesh and its connectivities
 

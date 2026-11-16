@@ -1,4 +1,4 @@
-[![logo](https://raw.githubusercontent.com/GridTools/gt4py/gh-pages/v1.0/_static/logo.svg)](https://GridTools.github.io/gt4py)
+[![logo](https://raw.githubusercontent.com/GridTools/gt4py/main/docs/user/_static/logo.svg)](https://GridTools.github.io/gt4py)
 
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
 [![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-3pg63o8a8-huyrLZgLgC4RS42S9FGDZA)
@@ -100,20 +100,21 @@ Recurrent development tasks like bumping versions of used development tools or r
 
 ## 📖 Documentation
 
-GT4Py uses the Sphinx tool for the documentation. To build browseable HTML documentation, install the required tools provided in the `docs` dependency group:
+The user documentation is published at [gridtools.github.io/gt4py](https://GridTools.github.io/gt4py). It is a welcome page linking to two independent subsites, one for `gt4py.cartesian` and one for `gt4py.next`, whose sources live in [`docs/user/`](./docs/user) (the welcome page), [`docs/user/cartesian/`](./docs/user/cartesian) and [`docs/user/next/`](./docs/user/next).
+
+GT4Py uses the Sphinx tool for the documentation, with pages written in reStructuredText (`gt4py.cartesian`) or [MyST](https://myst-parser.readthedocs.io) Markdown (welcome page and `gt4py.next`). MyST pages with a `jupytext` header declaring the `myst` format are notebooks, which are executed when the site is built. To build the whole site in a dedicated environment, run the `docs` nox session:
 
 ```bash
-uv sync --group docs --extra standard  # or --group dev
+./noxfile.py -s docs  # the site is written to 'docs/user/_build/html'
 ```
 
-(Note that most likely these tools are already installed in your development environment, since the `docs` group is included in the `dev` group, which installed by default by `uv sync` if no dependency groups are specified.)
-
-Once the requirements are already installed, then build the docs using:
+The required tools are provided in the `docs` dependency group (included in the `dev` group, which is installed by default by `uv sync`), so a single site can also be built directly from the development environment:
 
 ```bash
-cd gt4py/docs/user/cartesian
-make html  # run 'make help' for a list of targets
+uv run sphinx-build -b html docs/user/next docs/user/_build/html/next
 ```
+
+See [docs/development/tools/documentation.md](./docs/development/tools/documentation.md) for a description of how the documentation is organized, built and published.
 
 ## ⚖️ License
 
