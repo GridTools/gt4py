@@ -957,12 +957,13 @@ def _make_reduction(
         assert common.is_neighbor_table(offset_definition)
 
         assert isinstance(offset_definition, common.GatherConnectivity)
-        neighbors = field.domain[axis]
-        if common.UnitRange.is_finite(neighbors.unit_range) and neighbors != (
-            table_neighbors := offset_definition.domain[axis]
-        ):
+        # unlike the other dimensions, the neighbor dimension is not intersected: a reduction
+        # needs the field at every neighbor of the table
+        neighbors, table_neighbors = field.domain[axis], offset_definition.domain[axis]
+        if not neighbors.unit_range >= table_neighbors.unit_range:
             raise ValueError(
-                f"Field has neighbors '{neighbors}', but the connectivity '{table_neighbors}'."
+                f"Field has neighbors '{neighbors}', which do not cover the neighbors "
+                f"'{table_neighbors}' of the connectivity."
             )
         # the field and the table are read where both are defined, as in field arithmetic
         domain = embedded_common.domain_intersection(field.domain, offset_definition.domain)

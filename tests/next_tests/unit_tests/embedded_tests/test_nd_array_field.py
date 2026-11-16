@@ -1062,12 +1062,12 @@ def test_neighbor_reduction_of_field_broadcast_along_neighbors(
 
 
 @pytest.mark.parametrize("skip_value", [None, -2])
-def test_neighbor_reduction_with_mismatched_neighbor_count_raises(
+def test_neighbor_reduction_ignores_field_values_beyond_the_neighbors(
     nd_array_implementation, skip_value
 ):
     E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
     field = common._field(
-        asarray(nd_array_implementation, np.ones((2, 3)), dtype=np.float64),
+        asarray(nd_array_implementation, [[1.0, 2.0, 100.0], [3.0, 4.0, 100.0]], dtype=np.float64),
         domain=common.Domain(dims=(_GE, E2V), ranges=(UnitRange(0, 2), UnitRange(0, 3))),
     )
     conn = common._connectivity(
@@ -1078,8 +1078,10 @@ def test_neighbor_reduction_with_mismatched_neighbor_count_raises(
     )
 
     with embedded_context.update(offset_provider={"E2V": conn}):
-        with pytest.raises(ValueError):
-            fbuiltins.neighbor_sum(field, axis=E2V)
+        result = fbuiltins.neighbor_sum(field, axis=E2V)
+
+    assert result.domain == common.Domain(dims=(_GE,), ranges=(UnitRange(0, 2),))
+    assert np.array_equal(result.asnumpy(), [3.0, 7.0])
 
 
 @pytest.mark.parametrize("reduction, np_reduction", _NEIGHBOR_REDUCTIONS)
@@ -1194,8 +1196,8 @@ def test_neighbor_reduction_of_field_broadcast_along_the_table(nd_array_implemen
     assert np.array_equal(result.asnumpy(), [1.0, 3.0, 1.0, 3.0])
 
 
-@pytest.mark.parametrize("neighbors", [(0, 1), (1, 2), (0, 3)], ids=["fewer", "other", "more"])
-def test_neighbor_reduction_with_other_neighbors_than_the_table_raises(
+@pytest.mark.parametrize("neighbors", [(0, 1), (1, 2), (1, 3)], ids=["fewer", "other", "shifted"])
+def test_neighbor_reduction_without_all_neighbors_of_the_table_raises(
     nd_array_implementation, neighbors
 ):
     E2V = Dimension("E2V", kind=DimensionKind.LOCAL)
