@@ -18,6 +18,7 @@ from gt4py.eve import NodeTranslator, traits
 from gt4py.next import common, config, errors, utils
 from gt4py.next.ffront import (
     fbuiltins,
+    field_operator_ast as foast,
     gtcallable,
     program_ast as past,
     stages as ffront_stages,
@@ -168,6 +169,17 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
     ).items():
         if isinstance((type_ := gt_callable.__gt_type__()), ts_ffront.ScanOperatorType):
             scanops_per_axis.setdefault(type_.axis, []).append(name)
+        elif isinstance(
+            foast_stage := getattr(gt_callable, "foast_stage", None), ffront_stages.FOASTOperatorDef
+        ):
+            for scan_call in (
+                foast_stage.foast_node.walk_values()
+                .if_isinstance(foast.Call)
+                .filter(lambda call: isinstance(call.type, ts_ffront.ScanOperatorType))
+            ):
+                scanops_per_axis.setdefault(scan_call.type.axis, []).append(
+                    f"scan in '{name}' (line {scan_call.location.line})"
+                )
 
     if len(scanops_per_axis.values()) == 0:
         return None
