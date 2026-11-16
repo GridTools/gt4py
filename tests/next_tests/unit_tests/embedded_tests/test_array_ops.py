@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 
+import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import array_api_strict as xs
 import numpy as np
@@ -18,6 +19,8 @@ import pytest
 from gt4py.next import common
 from gt4py.next.embedded import array_libraries, array_ops, nd_array_field
 from gt4py.next.ffront import fbuiltins
+
+from next_tests.unit_tests.conftest import asarray
 
 
 D = common.Dimension("D")
@@ -120,3 +123,38 @@ def test_torch_ops_registered_without_importing_torch():
         "assert type(array_ops.of(torch.empty(1))).__name__ == 'TorchOps'\n"
     )
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.float64])
+def test_empty(nd_array_implementation, dtype):
+    like = asarray(nd_array_implementation, [1.0])
+    ops = array_ops.of(like)
+
+    result = ops.empty((2, 3), dtype=dtype)
+
+    assert array_api_compat.array_namespace(result) is ops.xp
+    assert result.shape == (2, 3)
+    assert ops.scalar_type(result.dtype) is dtype
+
+
+def test_empty_on_device_of_like(nd_array_implementation):
+    like = asarray(nd_array_implementation, [1.0])
+    ops = array_ops.of(like)
+
+    result = ops.empty((2,), dtype=np.float64, like=like)
+
+    assert array_api_compat.array_namespace(result) is ops.xp
+    assert array_api_compat.device(result) == array_api_compat.device(like)
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
+@pytest.mark.requires_gpu
+def test_empty_on_cuda_device_of_torch_like():
+    import torch
+
+    like = torch.ones(1, device="cuda")
+
+    result = array_ops.of(like).empty((2,), dtype=np.float64, like=like)
+
+    assert result.device == like.device

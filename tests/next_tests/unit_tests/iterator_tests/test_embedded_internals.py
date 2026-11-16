@@ -151,3 +151,23 @@ def test_lift_accepts_cartesian_dimension_offset():
     K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
     lifted = embedded.lift(lambda *args: 0)()
     lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
+@pytest.mark.requires_gpu
+def test_as_fieldop_result_on_device_of_inputs():
+    import torch
+
+    from gt4py.next.iterator import builtins, runtime
+
+    I = common.Dimension("I")
+    inp = common._field(
+        torch.arange(3.0, dtype=torch.float64, device="cuda"), domain=common.domain({I: 3})
+    )
+
+    with embedded_context.update(offset_provider={}):
+        result = builtins.as_fieldop(builtins.deref, runtime.CartesianDomain({I: range(3)}))(inp)
+
+    assert result.ndarray.device.type == "cuda"
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0])
