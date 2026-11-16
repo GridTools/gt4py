@@ -20,7 +20,6 @@ from gt4py.next.program_processors.runners.dace import (
 )
 
 from . import util
-from .test_move_dataflow_into_if_body import _make_if_block
 
 import dace
 
@@ -38,7 +37,7 @@ def _make_if_block_with_tasklet(
     output_type: dace.typeclass = dace.float64,
     output_shape: Optional[tuple[int, ...]] = None,
 ) -> dace_nodes.NestedSDFG:
-    """Create an if block, see `_make_if_block()` for the meaning of `output_shape`."""
+    """Create an if block, see `util.make_if_block()` for the meaning of `output_shape`."""
     inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
 
     types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
@@ -187,7 +186,7 @@ def _make_map_with_conditional_blocks(
     #  to, the output of the if block is then the full array.
     output_shape_0 = None if create_temporary_c else (10,)
     if_block_0 = (
-        _make_if_block(state=state, outer_sdfg=sdfg, output_shape=output_shape_0)
+        util.make_if_block(state=state, output_shape=output_shape_0)
         if not both_ifs_with_taklets
         else _make_if_block_with_tasklet(
             state=state,

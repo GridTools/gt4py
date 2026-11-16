@@ -306,3 +306,94 @@ def test_horizontal_map_fusion_rejects_contradictory_map_scopes():
             ),
             validate=False,
         )
+
+
+def _make_sdfg_with_nested_sdfg_in_shared_input_map(N: int) -> dace.SDFG:
+    """Two Maps that share their input and have different ranges.
+
+    The second Map, which has the smaller range, contains a nested SDFG.
+    """
+    sdfg = dace.SDFG(util.unique_name("nested_sdfg_shared_input"))
+    A, _ = sdfg.add_array("A", [N], dtype=dace.float64)
+    B, _ = sdfg.add_array("B", [N], dtype=dace.float64)
+    C, _ = sdfg.add_array("C", [N], dtype=dace.float64)
+    M, _ = sdfg.add_array("M", [N], dtype=dace.bool_)
+
+    st = sdfg.add_state()
+    A_node = st.add_access(A)
+    B_node = st.add_access(B)
+    C_node = st.add_access(C)
+    M_node = st.add_access(M)
+
+    st.add_mapped_tasklet(
+        "map1",
+        map_ranges={"__i": f"0:{N}"},
+        code="__out = __inp + 1",
+        inputs={"__inp": dace.Memlet(data=A, subset="__i")},
+        outputs={"__out": dace.Memlet(data=B, subset="__i")},
+        input_nodes={A_node},
+        output_nodes={B_node},
+        external_edges=True,
+    )
+
+    map_entry, map_exit = st.add_map("map2", ndrange={"__i": f"1:{N}"})
+    nsdfg = util.make_if_block(st)
+    for conn, node, data, subset, inner_subset in [
+        ("__arg1", A_node, A, f"1:{N}", "__i"),
+        ("__arg2", A_node, A, f"0:{N - 1}", "__i - 1"),
+        ("__cond", M_node, M, f"1:{N}", "__i"),
+    ]:
+        map_entry.add_scope_connectors(conn)
+        st.add_edge(node, None, map_entry, f"IN_{conn}", dace.Memlet(data=data, subset=subset))
+        # Scalar connectors of the nested SDFG can not be connected to an array
+        #  element directly, thus the values pass through scalar transients.
+        scalar, _ = sdfg.add_scalar(
+            f"{conn}_val", dtype=sdfg.arrays[data].dtype, transient=True, find_new_name=True
+        )
+        scalar_node = st.add_access(scalar)
+        st.add_edge(
+            map_entry, f"OUT_{conn}", scalar_node, None, dace.Memlet(data=data, subset=inner_subset)
+        )
+        st.add_edge(scalar_node, None, nsdfg, conn, dace.Memlet(data=scalar, subset="0"))
+    map_exit.add_scope_connectors("C")
+    output, _ = sdfg.add_scalar("__output_val", dtype=dace.float64, transient=True)
+    output_node = st.add_access(output)
+    st.add_edge(nsdfg, "__output", output_node, None, dace.Memlet(data=output, subset="0"))
+    st.add_edge(output_node, None, map_exit, "IN_C", dace.Memlet(data=C, subset="__i"))
+    st.add_edge(map_exit, "OUT_C", C_node, None, dace.Memlet(data=C, subset=f"1:{N}"))
+
+    sdfg.validate()
+    return sdfg
+
+
+@pytest.mark.parametrize("split_maps_with_nested_sdfg", [True, False])
+def test_horizontal_map_split_fusion_with_nested_sdfg(split_maps_with_nested_sdfg: bool):
+    N = 20
+    sdfg = _make_sdfg_with_nested_sdfg_in_shared_input_map(N)
+    nb_sdfgs_before = sum(1 for _ in sdfg.all_sdfgs_recursive())
+    nb_maps_before = util.count_nodes(sdfg, dace_nodes.MapEntry)
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_horizontal_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=False,
+        fuse_map_fragments=True,
+        run_map_fusion=False,
+        consolidate_edges_only_if_not_extending=False,
+        split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
+        validate=True,
+        validate_all=True,
+    )
+
+    if split_maps_with_nested_sdfg:
+        assert ret > 0
+    else:
+        # The Map containing the nested SDFG must not be split.
+        assert ret == 0
+        assert sum(1 for _ in sdfg.all_sdfgs_recursive()) == nb_sdfgs_before
+        assert util.count_nodes(sdfg, dace_nodes.MapEntry) == nb_maps_before
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
