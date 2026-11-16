@@ -798,7 +798,6 @@ class TestBufferInfo:
 
         assert buffer_info == _buffer_info(array)
 
-
     @pytest.mark.parametrize(
         ("device_type", "stream"),
         [(1, None), (2, -1), (10, -1), (3, None), (13, None), (14, None)],
@@ -818,6 +817,7 @@ class TestBufferInfo:
         array_ops.ArrayOps(np).buffer_info(Producer())
 
         assert streams == [stream]
+
 
 class TestCartesianConnectivity:
     def test_for_translation(self):
