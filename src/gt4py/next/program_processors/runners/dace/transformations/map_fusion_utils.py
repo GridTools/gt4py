@@ -188,7 +188,6 @@ def delete_map(
 def map_scope_contains_nested_sdfg(
     state: dace.SDFGState,
     map_entries: Sequence[dace_nodes.MapEntry],
-    scope_dict: Optional[dict[dace_nodes.Node, Optional[dace_nodes.Node]]] = None,
 ) -> bool:
     """Tests if the scope of any of the given Maps contains a nested SDFG.
 
@@ -198,20 +197,12 @@ def map_scope_contains_nested_sdfg(
     Args:
         state: The state containing the Maps.
         map_entries: The `MapEntry` nodes of the Maps to inspect.
-        scope_dict: The scope dictionary of `state`, computed if not given.
     """
-    if scope_dict is None:
-        scope_dict = state.scope_dict()
-    map_entries_to_check = set(map_entries)
-    for node in state.nodes():
-        if not isinstance(node, dace_nodes.NestedSDFG):
-            continue
-        scope = scope_dict[node]
-        while scope is not None:
-            if scope in map_entries_to_check:
-                return True
-            scope = scope_dict[scope]
-    return False
+    return any(
+        isinstance(node, dace_nodes.NestedSDFG)
+        for map_entry in map_entries
+        for node in state.scope_subgraph(map_entry, include_entry=False, include_exit=False).nodes()
+    )
 
 
 def split_overlapping_map_range(

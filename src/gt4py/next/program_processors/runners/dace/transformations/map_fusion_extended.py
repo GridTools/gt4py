@@ -286,11 +286,8 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
     `VerticalSplitMapRange` transformations to fuse the maps together.
 
     If `split_maps_with_nested_sdfg` is `False`, Maps whose scope contains a nested
-    SDFG are not split. The reason is that the splitting creates a full copy of the
-    Map scope for every fragment, including a deep copy of every nested SDFG.
-    Because a split produces up to three fragments per dimension, this quickly
-    increases the number of nested SDFGs, which slows down every subsequent
-    transformation and increases the size of the generated code.
+    SDFG are not split, because every fragment gets a deep copy of the nested SDFGs,
+    which slows down the subsequent transformations and increases the code size.
     """
 
     only_toplevel_maps = dace_properties.Property(
@@ -494,7 +491,7 @@ class HorizontalSplitMapRange(SplitMapRange):
             return False
 
         if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
-            graph, [first_map_entry, second_map_entry], scope_dict
+            graph, [first_map_entry, second_map_entry]
         ):
             return False
 
@@ -689,7 +686,7 @@ class VerticalSplitMapRange(SplitMapRange):
             return False
 
         if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
-            graph, [first_map_entry, self.second_map_entry], scope_dict
+            graph, [first_map_entry, self.second_map_entry]
         ):
             return False
 
