@@ -492,3 +492,29 @@ def test_vertical_map_fusion_with_nested_sdfg_consumer():
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_vertical_map_fusion_with_nested_sdfg_consumer_no_split():
+    """Maps that contain a nested SDFG are not split if this is disabled."""
+    N = 80
+    sdfg = nested_sdfg_consumer_sdfg(N)
+    nb_nested_sdfgs_before = sum(1 for _ in sdfg.all_sdfgs_recursive())
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=False,
+        run_map_fusion=False,
+        fuse_map_fragments=True,
+        consolidate_edges_only_if_not_extending=False,
+        split_maps_with_nested_sdfg=False,
+        validate=True,
+        validate_all=True,
+    )
+    assert ret == 0
+    assert sum(1 for _ in sdfg.all_sdfgs_recursive()) == nb_nested_sdfgs_before
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
