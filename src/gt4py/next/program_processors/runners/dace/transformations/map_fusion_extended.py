@@ -230,7 +230,8 @@ def gt_vertical_map_split_fusion(
         allow_shared_output: Allow splitting pointwise external outputs while
             preserving their stores. Disabled until explicitly selected.
         shared_output_data: If given, restrict shared-output splitting to candidates
-            connected through these arrays. Requires `allow_shared_output=True`.
+            connected through these arrays. `None` allows any eligible array; an empty
+            sequence disables shared-output splitting. Requires `allow_shared_output=True`.
         shared_output_split_dimension: For shared outputs, allow different map
             ranges only along this dimension. Other ranges must match.
         skip: Skip these transformation during simplification.
@@ -611,6 +612,8 @@ class VerticalSplitMapRange(SplitMapRange):
         allow_shared_output: Also split pointwise external outputs. Their data
             descriptors and all stores are preserved. This is opt-in.
         shared_output_data: Restrict shared-output candidates by their connecting array.
+            `None` allows any eligible array; an empty sequence disables
+            shared-output splitting.
         shared_output_split_dimension: Limit shared-output splitting to this axis;
             all other map ranges must match.
 

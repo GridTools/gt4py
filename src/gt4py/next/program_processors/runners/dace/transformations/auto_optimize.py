@@ -228,8 +228,9 @@ def gt_auto_optimize(
         vertical_split_allow_shared_output: Allow vertical map splitting through
             shared outputs when their reads and writes form safe partitions.
         vertical_split_shared_output_data: If given, restrict shared-output splitting to
-            candidates connected through these arrays. Does not enable splitting
-            by itself; `vertical_split_allow_shared_output` must also be `True`.
+            candidates connected through these arrays. `None` allows any eligible array;
+            an empty sequence disables shared-output splitting. Does not enable
+            splitting by itself; `vertical_split_allow_shared_output` must also be `True`.
         vertical_split_shared_output_dimension: For shared outputs, require equal
             map ranges except along this dimension.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
