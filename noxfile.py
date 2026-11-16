@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import os
 import pathlib
-import platform
 import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -141,11 +140,6 @@ def install_session_venv(
 def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
     if device in ("rocm6", "rocm7"):
         # the torch wheels on PyPI are CUDA-only
-        return False
-    if device != "cpu" and session.python == "3.14" and platform.machine() == "aarch64":
-        # torch 2.15.0 dies with 'Fatal Python error: Illegal instruction' in
-        # `array_api_compat.torch` elementwise functions on CUDA tensors on GH200 with
-        # Python 3.14, while Python 3.12 on the same nodes and wheels works
         return False
     return True
 
