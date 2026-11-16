@@ -93,6 +93,7 @@ def gt_horizontal_map_split_fusion(
     check_split_callback: Optional[HorizontalMapSplitCallback] = None,
     check_fusion_callback: Optional["gtx_transformations.HorizontalMapFusionCallback"] = None,
     only_if_common_ancestor: bool = True,
+    split_maps_with_nested_sdfg: bool = True,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -121,6 +122,8 @@ def gt_horizontal_map_split_fusion(
             that are created during the splitting, see `fuse_map_fragments`.
         only_if_common_ancestor: Passed to `MapFusionHorizontal` only has an effect
             if `run_map_fusion` is `True`.
+        split_maps_with_nested_sdfg: If `False` do not split Maps that contain a
+            nested SDFG, see `SplitMapRange` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
     """
@@ -131,6 +134,7 @@ def gt_horizontal_map_split_fusion(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
             check_split_callback=check_split_callback,
+            split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
         )
     ]
 
@@ -177,6 +181,7 @@ def gt_vertical_map_split_fusion(
     skip: Optional[set[str]] = None,
     check_split_callback: Optional[VerticalMapSplitCallback] = None,
     check_fusion_callback: Optional["gtx_transformations.VerticalMapFusionCallback"] = None,
+    split_maps_with_nested_sdfg: bool = True,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -206,6 +211,8 @@ def gt_vertical_map_split_fusion(
         check_split_callback: Use this as callback for the split transformation, see
             `VerticalMapSplitCallback` for more information.
         check_fusion_callback: Use this as callback for `MapFusionVertical`.
+        split_maps_with_nested_sdfg: If `False` do not split Maps that contain a
+            nested SDFG, see `SplitMapRange` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -227,6 +234,7 @@ def gt_vertical_map_split_fusion(
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
             fuse_map_fragments=fuse_map_fragments,
             single_use_data=single_use_data,
+            split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
         )
     ]
 
@@ -276,6 +284,10 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
     map into four maps with ranges [0:10, 0:14], [0:10, 14:80] [10:15, 0:14]
     and [10:15, 14:80]. This will allow the `HorizontalSplitMapRange` or
     `VerticalSplitMapRange` transformations to fuse the maps together.
+
+    If `split_maps_with_nested_sdfg` is `False`, Maps whose scope contains a nested
+    SDFG are not split, because every fragment gets a deep copy of the nested SDFGs,
+    which slows down the subsequent transformations and increases the code size.
     """
 
     only_toplevel_maps = dace_properties.Property(
@@ -283,16 +295,24 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         default=False,
         desc="Only perform fusing if the Maps are in the top level.",
     )
+    split_maps_with_nested_sdfg = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `False`, do not split Maps whose scope contains a nested SDFG.",
+    )
 
     def __init__(
         self,
         only_toplevel_maps: Optional[bool] = None,
+        split_maps_with_nested_sdfg: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = only_toplevel_maps
+        if split_maps_with_nested_sdfg is not None:
+            self.split_maps_with_nested_sdfg = split_maps_with_nested_sdfg
 
     def split_maps(
         self,
@@ -492,6 +512,11 @@ class HorizontalSplitMapRange(SplitMapRange):
         if splitted_range is None:
             return False
 
+        if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
+            graph, [first_map_entry, second_map_entry]
+        ):
+            return False
+
         if not dace_mfhelper.is_parallel(
             graph=graph, node1=first_map_entry, node2=second_map_entry
         ):
@@ -670,7 +695,8 @@ class VerticalSplitMapRange(SplitMapRange):
                 return False
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[first_map_entry]
+        scope_dict = graph.scope_dict()
+        map_scope: Union[dace_nodes.Node, None] = scope_dict[first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
@@ -679,6 +705,11 @@ class VerticalSplitMapRange(SplitMapRange):
 
         splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
+            return False
+
+        if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
+            graph, [first_map_entry, self.second_map_entry]
+        ):
             return False
 
         # TODO(phimuell): Implement a check that the array is single use data?

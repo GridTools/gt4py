@@ -64,8 +64,13 @@ def pybuffer_to_sid(
 
 def bindings_main_template():
     return codegen.MakoTemplate(
-        """
+        """<%
+        params = [("std::array<gt::uint_t, 3>", "domain"), *entry_params, ("py::object", "exec_info")]
+        signature = ", ".join(f"{ctype} {cname}" for ctype, cname in params)
+        %>
         #include <chrono>
+        #include <cstddef>
+        #include <string>
         #include <pybind11/pybind11.h>
         #include <pybind11/stl.h>
         #include <gridtools/storage/adapter/python_sid_adapter.hpp>
@@ -76,10 +81,35 @@ def bindings_main_template():
         #include "computation.hpp"
         namespace gt = gridtools;
         namespace py = ::pybind11;
+        namespace {
+        // Positional argument `index` of run_computation converted to T (pybind11's converting
+        // cast); a failed conversion raises TypeError naming the argument.
+        template <typename T>
+        T gt_pyext_cast_arg(const py::args &args, std::size_t index, const char *name) {
+            try {
+                return args[index].cast<T>();
+            } catch (const py::cast_error &) {
+            } catch (const py::type_error &) {
+            }
+            throw py::type_error("run_computation(): positional argument " + std::to_string(index)
+                + " ('" + name + "') cannot be converted from Python type '"
+                + Py_TYPE(args[index].ptr())->tp_name + "'");
+        }
+        }  // namespace
         PYBIND11_MODULE(${module_name}, m) {
-            m.def("run_computation", [](
-            ${','.join(["std::array<gt::uint_t, 3> domain", *entry_params, 'py::object exec_info'])}
-            ){
+            // The arguments arrive as py::args and are cast one by one: typed lambda parameters
+            // make pybind11 build the function signature at compile time, at a cost roughly
+            // quadratic in the parameter count (hundreds of parameters exhaust the compiler).
+            // The generated Python wrapper calls run_computation positionally, in this order:
+            //   run_computation(${signature})
+            m.def("run_computation", [](py::args gt_pyext_args) {
+                if (gt_pyext_args.size() != ${len(params)}) {
+                    throw py::type_error("run_computation(): expected ${len(params)} positional arguments, got "
+                        + std::to_string(gt_pyext_args.size()));
+                }
+            % for index, (ctype, cname) in enumerate(params):
+                ${ctype} ${cname} = gt_pyext_cast_arg<${ctype}>(gt_pyext_args, ${index}, "${cname}");
+            % endfor
                 if (!exec_info.is(py::none()))
                 {
                     auto exec_info_dict = exec_info.cast<py::dict>();
@@ -98,7 +128,7 @@ def bindings_main_template():
                             std::chrono::high_resolution_clock::now().time_since_epoch()).count()/1e9);
                 }
 
-            }, "Runs the given computation");}
+            }, "Runs the given computation: run_computation(${signature})");}
         """
     )
 
