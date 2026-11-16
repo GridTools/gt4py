@@ -1076,6 +1076,107 @@ def test_gather_premap_skip_values_on_offset_domain(
     assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
 
 
+def _gather_reference(data, field_domain, connectivities, out_domain):
+    """Loop-based simultaneous gather and the mask of output positions without a skipped neighbor."""
+    by_codomain = {
+        codomain: (table, domain, skip) for table, domain, codomain, skip in connectivities
+    }
+    out = np.zeros(out_domain.shape)
+    valid = np.ones(out_domain.shape, dtype=bool)
+    for idx in np.ndindex(*out_domain.shape):
+        coord = {nr.dim: nr.unit_range.start + i for nr, i in zip(out_domain, idx)}
+        field_idx = []
+        for nr in field_domain:
+            if nr.dim in by_codomain:
+                table, domain, skip = by_codomain[nr.dim]
+                value = int(
+                    table[tuple(coord[d] - domain[d].unit_range.start for d in domain.dims)]
+                )
+                if value == skip:
+                    valid[idx] = False
+                    break
+            else:
+                value = coord[nr.dim]
+            field_idx.append(value - nr.unit_range.start)
+        else:
+            out[idx] = data[tuple(field_idx)]
+    return out, valid
+
+
+def _table(rng, domain, codomain_range, skip_value=None):
+    table = rng.integers(codomain_range.start, codomain_range.stop, size=domain.shape)
+    if skip_value is not None:
+        table[rng.random(domain.shape) < 0.25] = skip_value
+    return table.astype(np.int32)
+
+
+def _multi_gather_case(name, rng):
+    v, k = (_GV, UnitRange(3, 9)), (_GK, UnitRange(2, 6))
+    e, e2v, x = (_GE, UnitRange(0, 5)), (_GE2V, UnitRange(0, 2)), (_GX, UnitRange(0, 7))
+    if name == "as_offset":  # (GE, GK) -> GK on a (GE, GK) field
+        field_dims, conns, out_dims = [e, k], [([e, k], _GK, -1)], [e, k]
+    elif name == "neighbor_and_level":  # (GE, GE2V) -> GV and (GE, GE2V, GK) -> GK on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k], _GK, None)]
+        out_dims = [e, e2v, k]
+    elif name == "per_level_neighbor":  # (GE, GK) -> GV on a (GV, GK) field
+        field_dims, conns, out_dims = [v, k], [([e, k], _GV, -1)], [e, k]
+    elif name == "disjoint":  # (GE, GE2V) -> GV and a (GK,) -> GK permutation on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([k], _GK, "permutation")]
+        out_dims = [e, e2v, k]
+    else:
+        assert name == "diagonal"  # (GX,) -> GV and (GX,) -> GE on (GV, GE): out[x] = f[a[x], b[x]]
+        field_dims = [v, (_GE, UnitRange(-2, 3))]
+        conns = [([x], _GV, None), ([x], _GE, None)]
+        out_dims = [x]
+    field_domain = common.Domain(
+        dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
+    )
+    connectivities = []
+    for conn_dims, codomain, skip in conns:
+        domain = common.Domain(
+            dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
+        )
+        codomain_range = field_domain[codomain].unit_range
+        if skip == "permutation":
+            table = (codomain_range.start + rng.permutation(len(codomain_range))).astype(np.int32)
+            skip = None
+        else:
+            table = _table(rng, domain, codomain_range, skip)
+        connectivities.append((table, domain, codomain, skip))
+    out_domain = common.Domain(
+        dims=tuple(d for d, _ in out_dims), ranges=tuple(r for _, r in out_dims)
+    )
+    return field_domain, connectivities, out_domain
+
+
+@pytest.mark.parametrize(
+    "name", ["as_offset", "neighbor_and_level", "per_level_neighbor", "disjoint", "diagonal"]
+)
+def test_gather_premap_multiple_or_reading_connectivities(nd_array_implementation, name):
+    rng = np.random.default_rng(1)
+    field_domain, connectivities, out_domain = _multi_gather_case(name, rng)
+    data = rng.random(field_domain.shape)
+    field = common._field(asarray(nd_array_implementation, data), domain=field_domain)
+    conn_fields = [
+        common._connectivity(
+            asarray(nd_array_implementation, table),
+            domain=domain,
+            codomain=codomain,
+            skip_value=skip,
+        )
+        for table, domain, codomain, skip in connectivities
+    ]
+
+    result = field.premap(*conn_fields)
+
+    assert result.domain == out_domain
+    expected, valid = _gather_reference(data, field_domain, connectivities, out_domain)
+    assert valid.any()
+    assert np.array_equal(result.asnumpy()[valid], expected[valid])
+
+
 @pytest.mark.parametrize(
     "reduction, expected",
     [
