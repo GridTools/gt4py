@@ -56,9 +56,9 @@ class JaxOps(array_ops.ArrayOps):
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_dlpack.BufferInfo:
         # JAX's `__dlpack__` rejects `stream=-1` and blocks the host on `stream=None`.
-        return common.BufferInfo(
+        return core_dlpack.BufferInfo(
             data_ptr=array.unsafe_buffer_pointer(),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
             shape=array.shape,
             elem_strides=_layout_strides(array),

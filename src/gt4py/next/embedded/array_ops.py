@@ -31,7 +31,11 @@ import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import numpy as np
 
-from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py._core import (
+    definitions as core_defs,
+    dlpack as core_dlpack,
+    ndarray_utils as core_ndarray_utils,
+)
 from gt4py.next import common
 
 
@@ -192,8 +196,8 @@ class ArrayOps:
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        return common.BufferInfo.from_dlpack(array)
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_dlpack.BufferInfo:
+        return core_dlpack.BufferInfo.from_dlpack(array)
 
 
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
