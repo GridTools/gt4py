@@ -77,6 +77,7 @@ def test_requires_torch_marker_is_enforced():
     importlib.import_module("torch")
 
 
+@pytest.mark.requires_torch
 @pytest.mark.requires_torch_cuda
 def test_requires_torch_cuda_marker_is_enforced():
     torch = importlib.import_module("torch")
