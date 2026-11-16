@@ -1195,6 +1195,41 @@ def test_gather_premap_multiple_or_reading_connectivities(nd_array_implementatio
 
 
 @pytest.mark.parametrize(
+    "conn_dims, codomains, expected_dims",
+    [
+        # two connectivities over disjoint ranges of the same new dimension
+        ([[(_GX, UnitRange(0, 3))], [(_GX, UnitRange(3, 6))]], [_GV, _GE], (_GX,)),
+        # a reshuffle over a range of the field dimension the field does not have
+        ([[(_GE, UnitRange(5, 7))]], [_GE], (_GV, _GE)),
+    ],
+    ids=["disjoint_new_dimension", "outside_field"],
+)
+def test_gather_premap_empty_output(nd_array_implementation, conn_dims, codomains, expected_dims):
+    field_domain = common.Domain(dims=(_GV, _GE), ranges=(UnitRange(3, 9), UnitRange(-2, 3)))
+    field = common._field(
+        asarray(nd_array_implementation, np.ones(field_domain.shape)), domain=field_domain
+    )
+    conns = [
+        common._connectivity(
+            asarray(  # every entry maps into the field, so only the domains are disjoint
+                nd_array_implementation,
+                np.full([len(r) for _, r in dims], field_domain[codomain].unit_range.start),
+                dtype=np.int32,
+            ),
+            domain=common.Domain(dims=tuple(d for d, _ in dims), ranges=tuple(r for _, r in dims)),
+            codomain=codomain,
+        )
+        for dims, codomain in zip(conn_dims, codomains)
+    ]
+
+    result = field.premap(*conns)
+
+    assert result.domain.dims == expected_dims
+    assert result.domain.is_empty()
+    assert result.asnumpy().shape == result.domain.shape
+
+
+@pytest.mark.parametrize(
     "reduction, expected",
     [
         (fbuiltins.neighbor_sum, [6.0, 3.0, 7.0]),

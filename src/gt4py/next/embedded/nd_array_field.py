@@ -603,6 +603,13 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     ops = array_ops.of(data._ndarray)
     xp = ops.xp
     new_domain = _gather_output_domain(data.domain, connectivities)
+    if new_domain.is_empty():  # the tables cannot be restricted to an empty range
+        empty = xp.empty(
+            new_domain.shape,
+            dtype=ops.dtype(data.dtype.scalar_type),
+            device=ops.device(data._ndarray),
+        )
+        return data.__class__.from_array(empty, domain=new_domain, dtype=data.dtype)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
     read = {*conn_by_codomain, *(dim for conn in connectivities for dim in conn.domain.dims)}
     touched = [i for i, dim in enumerate(data.domain.dims) if dim in read]
