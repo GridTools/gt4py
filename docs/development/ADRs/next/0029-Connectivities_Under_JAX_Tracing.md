@@ -92,5 +92,4 @@ Accepting only concrete tables rules out dynamic offsets under `jit`. NaN makes 
 
 ## References
 
-- [Design proposal](https://github.com/GridTools/gt4py_knowledge/pull/25)
 - [ADR 0019 - Connectivities](0019-Connectivities.md)
