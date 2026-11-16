@@ -16,7 +16,7 @@ import re
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 import gt4py.next.common as common
-from gt4py.next.embedded import array_ops
+from gt4py.next.embedded import _dlpack, array_ops
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -690,14 +690,7 @@ class TestBufferInfo:
         [
             (slice(None),),
             (slice(1, 4), slice(2, None), slice(3, 5)),
-            pytest.param(
-                (slice(None, None, -1), slice(None), slice(None, None, -2)),
-                marks=pytest.mark.xfail(
-                    strict=True,
-                    reason="CuPy 14.1.1 exports negative strides divided as unsigned integers"
-                    " through DLPack.",
-                ),
-            ),
+            (slice(None, None, -1), slice(None), slice(None, None, -2)),
         ],
         ids=["contiguous", "view", "negative_strides"],
     )
@@ -705,7 +698,12 @@ class TestBufferInfo:
         cp = pytest.importorskip("cupy")
         array = cp.arange(5 * 6 * 7, dtype=cp.float64).reshape(5, 6, 7)[key]
 
-        buffer_info = _buffer_info(array)
+        try:
+            buffer_info = _buffer_info(array)
+        except BufferError:
+            # CuPy before cupy#10228 exports negative strides divided as unsigned integers.
+            assert any(s < 0 for s in array.strides)
+            return
 
         assert buffer_info.data_ptr == array.data.ptr
         assert buffer_info.shape == array.shape
@@ -797,6 +795,22 @@ class TestBufferInfo:
         buffer_info = array_ops.ArrayOps(np).buffer_info(OnlyStream(array))
 
         assert buffer_info == _buffer_info(array)
+
+    def test_impossible_stride(self):
+        class Producer:
+            def __dlpack__(self, *, stream=None, max_version=None, copy=None):
+                capsule = _BASE.__dlpack__(max_version=(1, 0), copy=copy)
+                address = _dlpack._capsule_pointer(capsule, b"dltensor_versioned")
+                tensor = _dlpack._DLTensor.from_address(address + _dlpack._DL_TENSOR_OFFSET)
+                # Stride -42 as CuPy before cupy#10228 exports it for float64.
+                tensor.strides[0] = 2**64 // _BASE.itemsize - 42
+                return capsule
+
+            def __dlpack_device__(self):
+                return _BASE.__dlpack_device__()
+
+        with pytest.raises(BufferError, match="cupy#10228"):
+            array_ops.ArrayOps(np).buffer_info(Producer())
 
     @pytest.mark.parametrize(
         ("device_type", "stream"),
