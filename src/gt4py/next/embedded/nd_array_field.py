@@ -606,57 +606,33 @@ def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivit
     new_domain = _gather_output_domain(data.domain, connectivities)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
 
-    # one index array per original field dimension (the connectivity's, or identity), broadcast over
-    # the output domain and shifted to 0-based buffer indices, then a single advanced-index gather
-    take_indices = tuple(
-        (
-            _connectivity_index_array(
-                conn_by_codomain[dim],
-                new_domain,
-                ops,
-                codomain_start=data.domain[dim].unit_range.start,
-            )
-            if dim in conn_by_codomain
-            else _identity_index_array(new_domain, dim, ops, like=data._ndarray)
-        )
-        - data.domain[dim].unit_range.start
-        for dim in data.domain.dims
-    )
-    new_buffer = data._ndarray[take_indices]
+    # one index array per original field dimension (the connectivity's, or identity), shifted to
+    # 0-based buffer indices; the advanced-index gather broadcasts them against each other
+    def take_index(dim: common.Dimension) -> core_defs.NDArrayObject:
+        start = data.domain[dim].unit_range.start
+        if (conn := conn_by_codomain.get(dim)) is None:
+            return _identity_index_array(new_domain, dim, ops, like=data._ndarray) - start
+        table = _aligned_connectivity_table(conn, new_domain, ops)
+        if conn.skip_value is not None:
+            # skipped neighbors index the field in bounds; the reduction mask discards what they read
+            table = ops.xp.where(table == conn.skip_value, start, table)
+        return table - start
+
+    new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
-
-
-def _connectivity_index_array(
-    connectivity: common.GatherConnectivity,
-    domain: common.Domain,
-    ops: array_ops.ArrayOps,
-    *,
-    codomain_start: int,
-) -> core_defs.NDArrayObject:
-    """
-    `connectivity`'s index table laid out over `domain` (not yet shifted to 0-based).
-
-    Skip values are replaced by `codomain_start`, so that skipped neighbors index the field in bounds.
-    """
-    arr = _aligned_connectivity_table(connectivity, domain, ops, codomain_start=codomain_start)
-    if arr.shape != domain.shape:
-        arr = ops.xp.broadcast_to(arr, domain.shape)  # broadcast the size-1 axes to the full shape
-    return arr
 
 
 def _aligned_connectivity_table(
     connectivity: common.GatherConnectivity,
     domain: common.Domain,
     ops: array_ops.ArrayOps,
-    *,
-    codomain_start: Optional[int] = None,
 ) -> core_defs.NDArrayObject:
     """
     `connectivity`'s index table on `domain`, with one axis per dimension of `domain`.
 
     The table is restricted to the ranges of `domain` that lie within it, and kept whole along the
     others, e.g. a dimension a field is broadcast along. The axes of dimensions the connectivity
-    does not have are of size 1. If `codomain_start` is given, skip values are replaced by it.
+    does not have are of size 1.
     """
     sub_domain = common.Domain(
         *(
@@ -669,8 +645,6 @@ def _aligned_connectivity_table(
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
     arr = ops.asarray(conn.ndarray)
-    if codomain_start is not None and conn.skip_value is not None:
-        arr = xp.where(arr == conn.skip_value, codomain_start, arr)
     # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
     ndim = conn.domain.ndim
     fresh_axis = {
