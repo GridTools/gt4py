@@ -407,3 +407,53 @@ def test_opage_arg_deduplication(uids: utils.IDGeneratorPool):
         testee, offset_provider_type={}, allow_undeclared_symbols=True, enable_cse=False, uids=uids
     )
     assert actual == expected
+
+
+def test_shifted_args_with_common_subexpression(uids: utils.IDGeneratorPool):
+    # Regression test: fusing `inner` triggers a CSE that extracts the `if_` into a let var
+    # `_cs_0`. Inlining the `tmp` let afterwards re-visits the body, where the
+    # type of the `as_fieldop(...)(_cs_0)` arg is re-inferred on its own (`type_inference.reinfer`),
+    # i.e. without the let binding `_cs_0` in scope. This used to fail since the CSE did not add
+    # the type to the extracted symbol, which was hence inferred as `DeferredType`.
+    d = im.domain("cartesian_domain", {IDim: (0, 1)})
+    bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    common_expr = im.if_(
+        im.ref("cond", bool_type), im.ref("a", field_type), im.ref("b", field_type)
+    )
+    shifted_fieldop = im.as_fieldop(
+        im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref(im.shift(IOff, 1)("y")))), d
+    )(im.ref("c", field_type), common_expr)
+    inner = im.op_as_fieldop("multiplies", d)(im.ref("tmp", field_type), im.ref("e", field_type))
+    testee = im.let("tmp", im.ref("f", field_type))(
+        im.as_fieldop(
+            im.lambda_("x", "y", "z")(
+                im.plus(
+                    im.plus(im.deref(im.shift(IOff, 1)("x")), im.deref(im.shift(IOff, 1)("y"))),
+                    im.deref("z"),
+                )
+            ),
+            d,
+        )(common_expr, shifted_fieldop, inner)
+    )
+    expected = im.let("_cs_0", common_expr)(
+        im.as_fieldop(
+            im.lambda_("x", "y", "tmp", "e")(
+                im.plus(
+                    im.plus(im.deref(im.shift(IOff, 1)("x")), im.deref(im.shift(IOff, 1)("y"))),
+                    im.multiplies_(im.deref("tmp"), im.deref("e")),
+                )
+            ),
+            d,
+        )(
+            "_cs_0",
+            im.as_fieldop(
+                im.lambda_("x", "y")(im.plus(im.deref("x"), im.deref(im.shift(IOff, 1)("y")))), d
+            )("c", "_cs_0"),
+            "f",
+            "e",
+        )
+    )
+    actual = fuse_as_fieldop.FuseAsFieldOp.apply(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, uids=uids
+    )
+    assert actual == expected
