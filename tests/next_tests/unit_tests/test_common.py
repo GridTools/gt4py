@@ -14,7 +14,7 @@ import pytest
 import re
 
 from gt4py import next as gtx
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, dlpack as core_dlpack
 import gt4py.next.common as common
 from gt4py.next.embedded import array_ops
 from gt4py.next.common import (
@@ -755,30 +755,12 @@ class TestBufferInfo:
         assert buffer_info.data_ptr == array.unsafe_buffer_pointer()
         assert buffer_info.elem_strides == (3, 1, 6)
 
-    def test_hash_key_tells_apart_dtypes_at_the_same_address(self):
-        a = np.zeros(4, dtype=np.float64)
-        scalar = np.zeros((), dtype=np.float64)
-        scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
-        assert (
-            scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
-        )
-
-        for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
-            assert _buffer_info(x) != _buffer_info(y)
-            assert _buffer_info(x).hash_key != _buffer_info(y).hash_key
-
-        assert _buffer_info(a[:]) == _buffer_info(a)
-        assert _buffer_info(a[:]).hash_key == _buffer_info(a).hash_key
-        assert hash(_buffer_info(a)) == _buffer_info(a).hash_key
+    def test_reexported_from_core(self):
+        assert common.BufferInfo is core_dlpack.BufferInfo
 
     @pytest.mark.parametrize("array", [_BASE, _BASE[1:4, ::-1]], ids=["contiguous", "view"])
-    def test_from_dlpack(self, array):
-        buffer_info = common.BufferInfo.from_dlpack(array)
-
-        assert buffer_info == _buffer_info(array)
-        assert buffer_info.data_ptr == array.__array_interface__["data"][0]
-        assert buffer_info.elem_strides == tuple(s // array.itemsize for s in array.strides)
-
+    def test_array_ops_entry_point_is_from_dlpack(self, array):
+        assert _buffer_info(array) == core_dlpack.BufferInfo.from_dlpack(array)
 
 class TestCartesianConnectivity:
     def test_for_translation(self):
