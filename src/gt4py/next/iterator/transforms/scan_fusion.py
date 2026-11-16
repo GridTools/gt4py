@@ -30,8 +30,8 @@ Newly exposed producers such as `producer(x)` are not revisited. A producer
 whose result is still needed elsewhere can remain outside the scan as well.
 Fusion preserves the recurrence and does not guarantee faster execution.
 
-The DaCe translator enables this pass with `fuse_scan_inputs=True` in
-`auto_optimize_args`; it defaults to off and requires auto-optimization.
+The DaCe translator enables this pass with its `fuse_scan_inputs=True`
+setting; it defaults to off and requires auto-optimization.
 `scan_fusion_scope="immediate"` uses one producer layer after the standard
 field-view transforms. The optional `"field_operator"` scope first calls
 `normalize_scan_producers` while function boundaries are still visible.
@@ -61,12 +61,7 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.transforms import (
-    fuse_as_fieldop,
-    inline_lambdas,
-    remap_symbols,
-    symbol_ref_utils,
-)
+from gt4py.next.iterator.transforms import fuse_as_fieldop, inline_lambdas, symbol_ref_utils
 from gt4py.next.iterator.type_system import inference
 from gt4py.next.type_system import type_specifications as ts
 
@@ -188,7 +183,7 @@ def normalize_scan_producers(
 
     class NormalizeProducer(eve.NodeTranslator):
         def visit_FunCall(self, node: ir.FunCall, **kwargs: Any) -> ir.Expr:
-            if not _is_non_scan_fieldop(node):
+            if not cpm.is_applied_as_fieldop(node) or cpm.is_call_to(node.fun.args[0], "scan"):
                 return node
             args = [self.visit(arg) for arg in node.args]
             node = inference.infer(
@@ -196,7 +191,6 @@ def normalize_scan_producers(
                 offset_provider_type=offset_provider_type,
                 allow_undeclared_symbols=True,
             )
-            assert cpm.is_applied_as_fieldop(node)
             # An empty set means unused; {()} means a read without a shift.
             return fuse_as_fieldop.FuseAsFieldOp.fuse_once(
                 node,
@@ -208,28 +202,42 @@ def normalize_scan_producers(
                 uids=utils.IDGeneratorPool(),
             )
 
+    def expand_bindings(expr: ir.Expr, bindings: dict[str, ir.Expr]) -> ir.Expr:
+        if not bindings:
+            return expr
+        # The inliner renames inner binders that would capture names in a replacement.
+        return inline_lambdas.inline_lambda(im.let(*bindings.items())(expr))
+
+    def uncaptured_bindings(
+        bindings: dict[str, ir.Expr], parameters: set[str]
+    ) -> dict[str, ir.Expr]:
+        # Keep the original reference if its replacement would resolve a name
+        # differently inside this scope.
+        return {
+            name: value
+            for name, value in bindings.items()
+            if not (set(symbol_ref_utils.collect_symbol_refs(value)) & parameters)
+        }
+
     class PrepareCall(eve.NodeTranslator):
         def visit_FunCall(self, node: ir.FunCall, **kwargs: Any) -> ir.Expr:
             bindings = kwargs.get("bindings", {})
             if cpm.is_let(node):
                 args = [self.visit(arg, bindings=bindings) for arg in node.args]
-                expanded = [
-                    remap_symbols.RemapSymbolRefs().visit(arg, symbol_map=bindings) for arg in args
-                ]
+                expanded = [expand_bindings(arg, bindings) for arg in args]
                 parameters = {
                     str(param.id): arg for param, arg in zip(node.fun.params, expanded, strict=True)
                 }
                 local = {
                     name: value for name, value in bindings.items() if name not in parameters
                 } | {name: arg for name, arg in parameters.items() if is_local_arithmetic(arg)}
+                local = uncaptured_bindings(local, set(parameters))
                 body = self.visit(node.fun.expr, bindings=local)
                 return im.call(im.lambda_(*node.fun.params)(body))(*args)
             if isinstance(node.fun, ir.SymRef) and str(node.fun.id) in scan_names:
                 return im.call(node.fun)(
                     *(
-                        NormalizeProducer().visit(
-                            remap_symbols.RemapSymbolRefs().visit(arg, symbol_map=bindings)
-                        )
+                        NormalizeProducer().visit(expand_bindings(arg, bindings))
                         for arg in node.args
                     )
                 )
@@ -240,6 +248,7 @@ def normalize_scan_producers(
         ) -> ir.Lambda:
             parameters = {str(param.id) for param in node.params}
             bindings = {name: value for name, value in bindings.items() if name not in parameters}
+            bindings = uncaptured_bindings(bindings, parameters)
             return ir.Lambda(params=node.params, expr=self.visit(node.expr, bindings=bindings))
 
     for function in result.function_definitions:

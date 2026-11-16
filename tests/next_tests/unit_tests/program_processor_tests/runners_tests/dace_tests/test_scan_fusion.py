@@ -21,7 +21,7 @@ from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.transforms import pass_manager
-from gt4py.next.program_processors.runners.dace.itir_xform import scan_fusion
+from gt4py.next.iterator.transforms import scan_fusion
 from gt4py.next.program_processors.runners.dace.workflow import backend, factory, translation
 from gt4py.next.program_processors.runners.dace.workflow.translation import DaCeTranslator
 from gt4py.next.type_system import type_specifications as ts
@@ -74,7 +74,8 @@ def translate(program, enabled, **extra_options):
     graph = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args=options,
+        auto_optimize_args={},
+        **options,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
@@ -88,9 +89,7 @@ def test_toolchain_scan_options_reach_lowering(enabled, expected_arrays):
     options = {"fuse_scan_inputs": enabled, "scan_fusion_scope": "immediate"}
     toolchain = backend.make_dace_toolchain(
         factory.DaCeConfig(cached_translation=False),
-        translation=functools.partial(
-            factory.make_dace_translator, auto_optimize_args=options, use_metrics=False
-        ),
+        translation=functools.partial(factory.make_dace_translator, **options, use_metrics=False),
     )
     graph = toolchain.executor.translation.generate_sdfg(
         make_program(), offset_provider={}, column_axis=K
@@ -228,7 +227,8 @@ def test_compiled_staggered_scan_fusion(tmp_path, input_dim, forward, mixed, lev
     graph = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args={"fuse_scan_inputs": True},
+        auto_optimize_args={},
+        fuse_scan_inputs=True,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
@@ -570,10 +570,55 @@ def test_no_rewrite_does_not_repeat_fieldview_pipeline(monkeypatch):
     translator = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args={"fuse_scan_inputs": True},
+        auto_optimize_args={},
+        fuse_scan_inputs=True,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
     )
     translator._preprocess_program(make_program(shift_axis=IDim), {})
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("option", ["fuse_scan_inputs", "scan_fusion_scope"])
+def test_scan_options_are_not_sdfg_options(option):
+    value = True if option == "fuse_scan_inputs" else "field_operator"
+    with pytest.raises(ValueError, match="directly on the translator"):
+        factory.make_dace_translator(factory.DaCeConfig(), auto_optimize_args={option: value})
+
+
+def test_scan_fusion_is_disabled_with_auto_optimization(monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Scan fusion must not run when auto-optimization is disabled.")
+
+    monkeypatch.setattr(scan_fusion, "normalize_scan_producers", unexpected)
+    monkeypatch.setattr(scan_fusion, "fuse_scan_inputs", unexpected)
+    translator = factory.make_dace_translator(
+        factory.DaCeConfig(auto_optimize=False),
+        fuse_scan_inputs=True,
+        scan_fusion_scope="field_operator",
+    )
+    translator._preprocess_program(make_program(), {})
+
+
+def test_scan_fusion_requires_boolean_option():
+    with pytest.raises(ValueError, match="must be a boolean"):
+        factory.make_dace_translator(factory.DaCeConfig(), fuse_scan_inputs="yes")
+
+
+@pytest.mark.parametrize("scope", ["nested_let", "lambda"])
+def test_compiled_shadowed_scan_inputs(tmp_path, scope):
+    from next_tests.unit_tests.iterator_tests.transforms_tests.test_scan_fusion import (
+        make_shadowed_program,
+    )
+
+    graph = translate(make_shadowed_program(scope), True, scan_fusion_scope="field_operator")
+    graph.build_folder = str(tmp_path / "build")
+    x = np.arange(1, 6, dtype=np.float64)
+    w = x + 100.0
+    out = np.full_like(x, -1.0)
+    args = dict(x=x, w=w, out=out)
+    for name in ("x", "w", "out"):
+        args.update({f"__{name}_K_range_0": 0, f"__{name}_K_range_1": 5, f"__{name}_K_stride": 1})
+    graph(**{key: value for key, value in args.items() if key in graph.arglist()})
+    np.testing.assert_array_equal(out, np.cumsum(2 * x))
