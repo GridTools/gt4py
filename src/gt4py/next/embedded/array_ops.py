@@ -189,7 +189,7 @@ class ArrayOps:
         if isinstance(value, bool | int | float | np.generic):
             return
         try:
-            same_library = array_api_compat.array_namespace(value) is self.xp
+            same_library = of(value).xp is self.xp
         except TypeError:
             same_library = False
         if not same_library:
