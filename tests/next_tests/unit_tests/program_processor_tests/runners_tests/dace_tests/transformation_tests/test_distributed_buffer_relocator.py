@@ -128,7 +128,7 @@ def test_distributed_buffer_global_memory_data_race():
     assert sdfg.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state2.number_of_nodes() == 2
 
 
@@ -182,7 +182,7 @@ def test_distributed_buffer_global_memory_data_race2():
     assert state2.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state1.number_of_nodes() == 10
     assert state2.number_of_nodes() == 2
 
@@ -445,3 +445,27 @@ def test_distributed_buffer_definition_in_loop():
     assert wb_state.number_of_nodes() == 2
     assert not any(dnode.data == "b" for dnode in body_state.data_nodes())
     sdfg.validate()
+
+
+def test_distributed_buffer_remover_in_nested_sdfg():
+    """The relocation must also be performed inside nested SDFGs."""
+    inner_sdfg, inner_state1, inner_state3 = _mk_distributed_buffer_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_outer_sdfg"))
+    for name in ["a", "b"]:
+        sdfg.add_datadesc(name, inner_sdfg.arrays[name].clone())
+    state = sdfg.add_state(is_start_block=True)
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs={"a"}, outputs={"a", "b"})
+    state.add_edge(state.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "a", state.add_access("a"), None, dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "b", state.add_access("b"), None, dace.Memlet("b[0:100, 0:100]"))
+    sdfg.validate()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res is not None
+    assert sdfg not in res
+    assert res[inner_sdfg]["DistributedBufferRelocator"][inner_state3] == {"tmp"}
+    assert any(dnode.data == "b" for dnode in inner_state1.data_nodes())
+
+    # Nothing is left to relocate.
+    assert gtx_transformations.gt_reduce_distributed_buffering(sdfg) is None
