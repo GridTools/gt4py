@@ -652,13 +652,20 @@ def _aligned_connectivity_table(
     codomain_start: Optional[int] = None,
 ) -> core_defs.NDArrayObject:
     """
-    `connectivity`'s index table restricted to `domain`, with one axis per dimension of `domain`.
+    `connectivity`'s index table on `domain`, with one axis per dimension of `domain`.
 
-    The axes of dimensions the connectivity does not have are of size 1. If `codomain_start` is
-    given, skip values are replaced by it.
+    The table is restricted to the ranges of `domain` that lie within it, and kept whole along the
+    others, e.g. a dimension a field is broadcast along. The axes of dimensions the connectivity
+    does not have are of size 1. If `codomain_start` is given, skip values are replaced by it.
     """
-    # restrict the table to the output ranges of the connectivity's own dimensions
-    sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
+    sub_domain = common.Domain(
+        *(
+            nr if nr.unit_range & table_nr.unit_range == nr.unit_range else table_nr
+            for nr, table_nr in (
+                (domain[d], connectivity.domain[d]) for d in connectivity.domain.dims
+            )
+        )
+    )
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
     xp = ops.xp
     arr = ops.asarray(conn.ndarray)
@@ -958,22 +965,6 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: NdArrayField) -> com
 _register_builtin(experimental.as_offset, _as_offset)
 
 
-def _neighbor_table_range(
-    field_range: common.NamedRange, connectivity: common.GatherConnectivity
-) -> common.NamedRange:
-    """
-    The range of `connectivity`'s table a reduction over a field with `field_range` reads.
-
-    That is the field's range where the field covers only part of the table (e.g. after a
-    narrowing premap), and the table's range otherwise, e.g. where the field is broadcast along it.
-    """
-    if field_range.dim not in connectivity.domain.dims:
-        return field_range
-    table_range = connectivity.domain[field_range.dim]
-    covered = field_range.unit_range & table_range.unit_range == field_range.unit_range
-    return field_range if covered else table_range
-
-
 def _make_reduction(
     builtin_name: str,
     reduce_op: Callable[[ModuleType, core_defs.NDArrayObject, int], core_defs.NDArrayObject],
@@ -1003,10 +994,7 @@ def _make_reduction(
 
         # the neighbor table in the field's dimension order, with size 1 along the other dimensions
         assert isinstance(offset_definition, common.GatherConnectivity)
-        table_domain = common.Domain(
-            *(_neighbor_table_range(nr, offset_definition) for nr in field.domain)
-        )
-        table = _aligned_connectivity_table(offset_definition, table_domain, ops)
+        table = _aligned_connectivity_table(offset_definition, field.domain, ops)
         if offset_definition.skip_value is None:
             # a field broadcast (size 1) along the neighbor dimension must be expanded to the
             # table's neighbor count
