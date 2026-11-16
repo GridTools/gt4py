@@ -454,12 +454,13 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: Metadata that the `ArrayOps` of the table attaches to the connectivity. Shared code never
-    #: creates, reads or changes it: it is `None` unless the library set it when building the
-    #: connectivity, `restrict` passes it on unchanged, and it is handed as `meta` to
-    #: `ArrayOps.hyperslice` and `ArrayOps.restrict_table`. It takes no part in equality, `repr`
-    #: or fingerprinting.
-    _array_ops_meta: Any = dataclasses.field(
+    #: Opaque value owned by the `ArrayOps` of the table; its contract is in `ArrayOps`.
+    #: Shared code only stores it and passes it on: `restrict` gives the restricted
+    #: connectivity the same object, `dataclasses.replace` and `copy` keep it, and it is
+    #: passed as `state` to `ArrayOps.hyperslice` and `ArrayOps.restrict_table`. It is `None`
+    #: unless the library built the connectivity with one. It takes no part in equality,
+    #: `repr` or fingerprinting.
+    _array_ops_state: Any = dataclasses.field(
         default=None,
         kw_only=True,
         compare=False,
@@ -524,7 +525,7 @@ class NdArrayConnectivityField(
             assert common.UnitRange.is_finite(image_range)
 
             slices = array_ops.of(self._ndarray).hyperslice(
-                self._ndarray, image_range, self.skip_value, meta=self._array_ops_meta
+                self._ndarray, image_range, self.skip_value, state=self._array_ops_state
             )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
@@ -541,10 +542,14 @@ class NdArrayConnectivityField(
             cached = self._cache[cache_key] = (*self._slice(index), {})
         new_domain, buffer_slice, restricted_cache = cached
         table = array_ops.of(self._ndarray).restrict_table(
-            self._ndarray, buffer_slice, meta=self._array_ops_meta
+            self._ndarray, buffer_slice, state=self._array_ops_state
         )
         restricted_connectivity = self.__class__(
-            new_domain, table, self.codomain, self.skip_value, _array_ops_meta=self._array_ops_meta
+            new_domain,
+            table,
+            self.codomain,
+            self.skip_value,
+            _array_ops_state=self._array_ops_state,
         )
         restricted_connectivity.__dict__["_cache"] = restricted_cache
         return restricted_connectivity

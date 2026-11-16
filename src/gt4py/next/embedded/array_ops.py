@@ -189,7 +189,15 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
-    # The operations on a connectivity table. `meta` is the connectivity's `_array_ops_meta`.
+    # The operations on a connectivity table. `state` is the connectivity's `_array_ops_state`:
+    # `None`, or the object a library passed when it built a connectivity (for example in
+    # its pytree unflatten). Only that library reads or changes it. The same object reaches
+    # every connectivity restricted or copied from that one, also when the table was
+    # replaced, possibly by an array of another library. So an implementation
+    # - identifies the table a `state` describes itself and trusts no other pairing,
+    # - treats a `state` it did not create like `None`,
+    # - works with `None`: shared code may drop it, and a connectivity built from an array
+    #   never has one.
 
     def hyperslice(
         self,
@@ -197,7 +205,7 @@ class ArrayOps:
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
-        meta: Any = None,
+        state: Any = None,
     ) -> Optional[tuple[slice, ...]]:
         """
         Return the hypercube slice that contains all indices in `table` that are within `image_range`, or `None` if no such hypercube exists.
@@ -242,7 +250,7 @@ class ArrayOps:
         table: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
-        meta: Any = None,
+        state: Any = None,
     ) -> core_defs.NDArrayObject:
         """Return `table[key]`."""
         return self.asarray(table[key])

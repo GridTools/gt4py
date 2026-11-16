@@ -98,11 +98,11 @@ def _has_values(table: Any) -> bool:
     return isinstance(table, jax.Array) and not isinstance(table, jax.core.Tracer)
 
 
-def _values(table: Any, meta: Optional[_StaticValues]) -> Optional[core_defs.NDArrayObject]:
+def _values(table: Any, state: Any) -> Optional[core_defs.NDArrayObject]:
     """Return the concrete array with the values of `table`, `None` if they exist only at run time."""
     if _has_values(table):
         return table
-    return None if meta is None else meta.get(table)
+    return state.get(table) if isinstance(state, _StaticValues) else None
 
 
 #: per concrete table, its restrictions by key: restricting the same table again returns the same
@@ -153,9 +153,9 @@ class JaxOps(array_ops.ArrayOps):
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
-        meta: Optional[_StaticValues] = None,
+        state: Any = None,
     ) -> Optional[tuple[slice, ...]]:
-        values = _values(table, meta)
+        values = _values(table, state)
         if values is None:
             return (slice(None),) * table.ndim
         with jax.ensure_compile_time_eval():
@@ -166,17 +166,17 @@ class JaxOps(array_ops.ArrayOps):
         table: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
-        meta: Optional[_StaticValues] = None,
+        state: Any = None,
     ) -> core_defs.NDArrayObject:
-        values = _values(table, meta)
+        values = _values(table, state)
         if values is None:
             return super().restrict_table(table, key)
         restricted_values = _restrict_values(values, key)
         if values is table:
             return restricted_values
-        assert meta is not None
+        assert isinstance(state, _StaticValues)
         restricted = super().restrict_table(table, key)
-        meta.add_restricted(restricted, restricted_values)
+        state.add_restricted(restricted, restricted_values)
         return restricted
 
     def gather(
@@ -201,10 +201,12 @@ jax.config.update("jax_enable_x64", True)
 def _flatten_field(
     field: nd_array_field.NdArrayField,
 ) -> tuple[tuple[core_defs.NDArrayObject], common.Domain]:
-    # JAX also flattens pytrees whose leaves are not arrays (e.g. `jax.tree.map` results or
-    # `vmap` axis specifications), so only arrays of other libraries are rejected
-    assert not array_api_compat.is_array_api_obj(field.ndarray) or array_api_compat.is_jax_array(
-        field.ndarray
+    # JAX also flattens pytrees whose leaves are not arrays (e.g. `jax.tree.map` results, `vmap`
+    # axis specifications, or the placeholders of `lax.cond` branches, which are array API objects
+    # too), so only arrays of other libraries are rejected
+    assert not (
+        array_api_compat.is_numpy_array(field.ndarray)
+        or array_api_compat.is_cupy_array(field.ndarray)
     ), f"Only fields of JAX arrays are JAX pytrees, got a field of '{type(field.ndarray)}'."
     return (field.ndarray,), field.domain
 
@@ -236,7 +238,7 @@ def _flatten_connectivity(
     assert not (array_api_compat.is_numpy_array(table) or array_api_compat.is_cupy_array(table)), (
         f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(table)}'."
     )
-    values = _values(table, connectivity._array_ops_meta)
+    values = _values(table, connectivity._array_ops_state)
     return (table,), (
         connectivity.domain,
         connectivity.codomain,
@@ -251,10 +253,17 @@ def _unflatten_connectivity(
     domain, codomain, skip_value, identity = aux_data
     (table,) = children
     # a child without values stands for the flattened table: a tracer, or one of the placeholders
-    # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around
-    meta = None if identity is None or _has_values(table) else _StaticValues(identity.values, table)
+    # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around. Under `vmap` the
+    # child is one element of the flattened table, whose values the aux data does not have.
+    state = (
+        None
+        if identity is None
+        or _has_values(table)
+        or getattr(table, "shape", identity.values.shape) != identity.values.shape
+        else _StaticValues(identity.values, table)
+    )
     return nd_array_field.NdArrayConnectivityField(
-        domain, table, codomain, skip_value, _array_ops_meta=meta
+        domain, table, codomain, skip_value, _array_ops_state=state
     )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 

@@ -619,15 +619,61 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
 
 
 @pytest.mark.requires_jax
-def test_jax_pytree_of_concrete_connectivity_has_no_array_ops_meta():
+def test_jax_pytree_of_concrete_connectivity_has_no_array_ops_state():
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
 
     rebuilt = jax.tree.map(lambda table: table + 1, conn_a)
 
-    assert rebuilt._array_ops_meta is None
+    assert rebuilt._array_ops_state is None
     # targets 1, 2, 3, 4, 6 of a field on V:(1,4)
     result = field.premap(rebuilt)
     assert result.domain == common.domain({E: (0, 3)})
     np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_vmap_premap_over_connectivities_has_no_values():
+    import jax
+
+    _, field, conn_a, conn_b = _jax_narrowing_setup()
+    stacked = jax.tree.unflatten(
+        jax.tree.structure(conn_a), [jax.numpy.stack([conn_a.ndarray, conn_b.ndarray])]
+    )
+
+    result = jax.vmap(lambda conn: field.premap(conn).ndarray)(stacked)
+
+    # each element is a table without values: not narrowed, out-of-range targets clamped
+    np.testing.assert_array_equal(
+        np.asarray(result), [[10.0, 10.0, 20.0, 30.0, 30.0], [10.0, 20.0, 30.0, 10.0, 30.0]]
+    )
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_premap_ignores_array_ops_state_of_another_library():
+    import jax
+
+    E, field, conn_a, _ = _jax_narrowing_setup()
+
+    def premap(field, conn):
+        return field.premap(dataclasses.replace(conn, _array_ops_state=object()))
+
+    result = jax.jit(premap)(field, conn_a)
+
+    assert result.domain == common.domain({E: (0, 5)})
+    np.testing.assert_array_equal(result.asnumpy(), [10.0, 10.0, 20.0, 30.0, 30.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_cond_returning_field():
+    import jax
+
+    _, field, _, _ = _jax_narrowing_setup()
+
+    result = jax.jit(
+        lambda predicate, field: jax.lax.cond(predicate, lambda: field, lambda: field * 2.0)
+    )(False, field)
+
+    assert result.domain == field.domain
+    np.testing.assert_array_equal(result.asnumpy(), [20.0, 40.0, 60.0])

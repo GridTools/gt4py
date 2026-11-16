@@ -24,7 +24,7 @@ Narrowing is the common case: the field usually covers only part of the connecti
 
 There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. The operations on a table are methods of `ArrayOps`: `hyperslice` (domain inference), `restrict_table` and `gather`. Their defaults are plain array code. `JaxOps` overrides them, and everything that knows about tracing is in `jax_ops.py`.
 
-A connectivity stores one opaque value for its `ArrayOps`, `_array_ops_meta`, and hands it as `meta` to `hyperslice` and `restrict_table`. Only the library creates it, and `restrict` passes it on unchanged. For a table that is a tracer, `JaxOps` keeps there the concrete array with the same values, the static values, for that tracer and for the tracers restricted from it. Tables are looked up by identity, so a connectivity that got another table, for example through `dataclasses.replace`, has none.
+A connectivity stores one opaque value for its `ArrayOps`, `_array_ops_state`, and hands it as `state` to `hyperslice` and `restrict_table`. Only the library creates it, and `restrict` passes it on unchanged. For a table that is a tracer, `JaxOps` keeps there the concrete array with the same values, the static values, for that tracer and for the tracers restricted from it. Tables are looked up by identity, so a connectivity that got another table, for example through `dataclasses.replace`, has none.
 
 `JaxOps.gather` clamps indices to the field at both ends, inside the gather. It does not need to know where an index came from.
 
