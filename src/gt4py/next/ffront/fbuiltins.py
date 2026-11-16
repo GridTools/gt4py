@@ -7,7 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import functools
 import inspect
 import math
 import operator
@@ -485,10 +484,6 @@ class FieldOffset(runtime.Offset):
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
 
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
-
     def __post_init__(self) -> None:
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
@@ -520,16 +515,10 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
-        cache_key = id(offset_definition)
-        if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.Connectivity):
-                connectivity = offset_definition
-            else:
-                raise NotImplementedError()
+        if not isinstance(offset_definition, common.Connectivity):
+            raise NotImplementedError()
 
-            self._cache[cache_key] = connectivity
-
-        return connectivity
+        return offset_definition
 
 
 def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
