@@ -926,7 +926,9 @@ _register_builtin(experimental.as_offset, _as_offset)
 
 
 def _make_reduction(
-    builtin_name: str, array_builtin_name: str, initial_value_op: Callable
+    builtin_name: str,
+    reduce_op: Callable[[ModuleType, core_defs.NDArrayObject, int], core_defs.NDArrayObject],
+    initial_value_op: Callable,
 ) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT]]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
@@ -961,8 +963,7 @@ def _make_reduction(
         )
 
         return NdArrayField.from_array(
-            getattr(ops.xp, array_builtin_name)(masked_array, axis=reduce_dim_index),
-            domain=new_domain,
+            reduce_op(ops.xp, masked_array, reduce_dim_index), domain=new_domain
         )
 
     _builtin_op.__name__ = builtin_name
@@ -970,15 +971,29 @@ def _make_reduction(
 
 
 _register_builtin(
-    fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum", lambda x: x.dtype.scalar_type(0))
+    fbuiltins.neighbor_sum,
+    _make_reduction(
+        "neighbor_sum",
+        # without `dtype`, `sum` promotes bool and integers narrower than the default integer
+        lambda xp, array, axis: xp.sum(array, axis=axis, dtype=array.dtype),
+        lambda x: x.dtype.scalar_type(0),
+    ),
 )
 _register_builtin(
     fbuiltins.max_over,
-    _make_reduction("max_over", "max", lambda x: array_ops.of(x._ndarray).xp.min(x._ndarray)),
+    _make_reduction(
+        "max_over",
+        lambda xp, array, axis: xp.max(array, axis=axis),
+        lambda x: array_ops.of(x._ndarray).xp.min(x._ndarray),
+    ),
 )
 _register_builtin(
     fbuiltins.min_over,
-    _make_reduction("min_over", "min", lambda x: array_ops.of(x._ndarray).xp.max(x._ndarray)),
+    _make_reduction(
+        "min_over",
+        lambda xp, array, axis: xp.min(array, axis=axis),
+        lambda x: array_ops.of(x._ndarray).xp.max(x._ndarray),
+    ),
 )
 
 
