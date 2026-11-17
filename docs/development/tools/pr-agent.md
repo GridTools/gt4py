@@ -48,7 +48,7 @@ Repository variables (**Settings → Secrets and variables → Actions → Varia
 3. **The Actions event policy** "Allow PR Agent events" (see [Event policy](#event-policy)).
 4. The repository variables above.
 
-**Migration state (2026-11-18)**: the workflow used to run PR Agent itself with the repository secret `CSCS_INFERENCE_API_KEY`. Items 3 and 4 are in place. Before the caller is merged, item 1 must be created with the key moved into it as `PR_AGENT_INFERENCE_API_KEY`; after the first successful runs, delete the repository secret `CSCS_INFERENCE_API_KEY`, which nothing else uses.
+**Migration state (2026-11-18)**: the workflow used to run PR Agent itself with the repository secret `CSCS_INFERENCE_API_KEY`. Items 3 and 4 are in place, and so is the `pr-agent` environment of item 1 (`main` only, administrator bypass off). Its secret `PR_AGENT_INFERENCE_API_KEY` must be added before the caller is merged. After one successful automatic review and one successful `/review`, delete the repository secret `CSCS_INFERENCE_API_KEY`, which nothing else uses.
 
 ## Event policy
 
