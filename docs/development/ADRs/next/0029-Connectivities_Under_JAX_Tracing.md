@@ -7,7 +7,7 @@ tags: [embedded, jax, connectivities]
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-11-06
-- **Updated**: 2026-11-13
+- **Updated**: 2026-11-17
 
 In the context of running embedded `premap` under `jax.jit`, facing a neighbor table that must be a runtime argument for the gather but concrete for domain inference, we decided to pass the concrete table along with its tracer through the pytree aux data of the connectivity, to get the same narrowing as eager execution without compiling tables into the program. We accept a table reference held by jax's jit cache and a silent clamp when the table is only known at runtime.
 
@@ -22,15 +22,15 @@ Narrowing is the common case: the field usually covers only part of the connecti
 
 ## Decision
 
-There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. The operations on a table are methods of `ArrayOps`: `hyperslice` (domain inference), `restrict_table` and `gather`. Their defaults are plain array code. `JaxOps` overrides them, and everything that knows about tracing is in `jax_ops.py`.
+There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. The operations that read the values of a table, `hyperslice` (domain inference) and `restrict`, are methods of `ConnectivityOps`. The gather is `ArrayOps.gather`, an operation on the field's buffer. The defaults are plain array code. `JaxOps` overrides `gather`, `JaxConnectivityOps` the table operations, and everything that knows about tracing is in `jax_ops.py`.
 
-A connectivity stores one opaque value for its `ArrayOps`, `_array_ops_state`, and hands it as `state` to `hyperslice` and `restrict_table`. Only the library creates it, and `restrict` passes it on unchanged. For a table that is a tracer, `JaxOps` keeps there the concrete array with the same values, the static values, for that tracer and for the tracers restricted from it. Tables are looked up by identity, so a connectivity that got another table, for example through `dataclasses.replace`, has none.
+Each connectivity has its own `ConnectivityOps` instance, which can carry what the library knows about the table beyond the table itself. It is not a dataclass field, so no copy inherits it: `restrict` sets the one returned for the restricted table, a library rebuilding a connectivity, as in its pytree unflatten, sets its own, and otherwise `ArrayOps.connectivity_ops` creates it from the table on first use. For a table that is a tracer, `JaxConnectivityOps` holds the concrete array with the same values, the static values. A connectivity that got another table, for example through `dataclasses.replace` or `copy`, has none.
 
 `JaxOps.gather` clamps indices to the field at both ends, inside the gather. It does not need to know where an index came from.
 
-The connectivity is a pytree node. The table is the child. The aux data holds domain, codomain, skip value and the static values, compared by the identity of the array: a new wrapper around the same buffer does not retrace, a new buffer does. Flattening emits them if the table is concrete or a tracer with static values. Unflattening attaches them to a child that is not a concrete array; a concrete child has its own values. Because identity only stands for the values of an immutable array, flattening rejects a connectivity with a NumPy or CuPy table: such a connectivity can be closed over, but not passed as a `jit` argument.
+The connectivity is a pytree node. The table is the child. The aux data holds domain, codomain, skip value and the static values, compared by the identity of the array: a new wrapper around the same buffer does not retrace, a new buffer does. Flattening emits them if the table is concrete or a tracer with static values. Unflattening attaches them, as the connectivity's `JaxConnectivityOps`, to a child that is not a concrete array; a concrete child has its own values. Because identity only stands for the values of an immutable array, flattening rejects a connectivity with a NumPy or CuPy table: such a connectivity can be closed over, but not passed as a `jit` argument.
 
-A connectivity caches domains and slices, never tables or restricted connectivities, so nothing cached can belong to a trace that has ended. `JaxOps` returns the same array when the same concrete table is restricted again with the same slice, which keeps a restricted connectivity from retracing.
+A connectivity caches domains and slices, never tables, restricted connectivities or `ConnectivityOps`, so nothing cached can belong to a trace that has ended. `JaxConnectivityOps` returns the same array when the same concrete table is restricted again with the same slice, which keeps a restricted connectivity from retracing.
 
 How a `premap` behaves under `jit` depends on how its connectivity reaches the compiled function:
 
@@ -59,6 +59,7 @@ A traced connectivity can also be closed over by the branches of `lax.cond`, the
 - Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
 - `restrict` builds a new connectivity on every call. It shares the cached domain lookups of the connectivity it was restricted from.
+- A traced connectivity that is copied, or rebuilt with `dataclasses.replace`, loses its static values: its domain is not narrowed and the gather clamps.
 - The restrictions of a concrete jax table are kept for as long as the table is alive.
 - Domain inference on static values is cached on the connectivity object, which is new in every trace, so it is repeated per trace but not per call.
 
@@ -72,7 +73,15 @@ Open questions, all caused by the static values in the aux data:
 
 ### A connectivity subclass per case
 
-One class each for a concrete table, a traced table with static values and a traced table without, chosen when the connectivity is constructed. This keeps `ArrayOps` free of table operations, but brings back per-library field classes and a second registry next to `ArrayOps`, which a connectivity built with `from_array` bypasses.
+One class each for a concrete table, a traced table with static values and a traced table without, chosen when the connectivity is constructed. This brings back per-library field classes, and the case is fixed at construction although `restrict`, a copy and the pytree API change it.
+
+### An opaque state passed back to `ArrayOps`
+
+The table operations were methods of `ArrayOps`, which took a `state` stored on the connectivity. Every copy inherited the state, also with another table, possibly of another library, so each operation had to check that the state described its table, and the static values of restricted tracers were kept in a weak map on the state of the connectivity they were restricted from.
+
+### Static values found by the table
+
+A map from table to static values, inside `jax_ops.py`, needs no state on the connectivity. But unflattening attaches static values to placeholders like `None`, integers and `object()`, which cannot be weakly referenced, and `None` is the same object everywhere.
 
 ### `is_traced` and `concrete_eval` on `ArrayOps`
 
@@ -80,7 +89,7 @@ Two small hooks, with the case distinction written out in `NdArrayConnectivityFi
 
 ### Static values that follow the connectivity instead of the table
 
-Earlier versions kept the concrete connectivity in a field that every copy of the connectivity inherits, and derived the aux data of a connectivity with a concrete leaf from that leaf. `dataclasses.replace` then attached the values to another table, and jax's comparison of branches and carries, which runs on trees with a shared placeholder leaf, found nothing to object to: `lax.cond` between two tables silently used the values of the first one.
+Earlier versions kept the concrete connectivity in a field that every copy of the connectivity inherits, and derived the aux data of a connectivity with a concrete leaf from that leaf. `dataclasses.replace` then attached the values to another table, and jax's comparison of branches and carries, which runs on trees with a shared placeholder leaf, found nothing to object to: `lax.cond` between two tables silently used the values of the first one. `ConnectivityOps` is not inherited, and a concrete table is its own values.
 
 ### Bounds in the aux data instead of the table
 
