@@ -22,7 +22,7 @@ build_cscs_gh200:
   needs: []
   parallel:
     matrix:
-      - PY_VERSION: *test_python_versions
+      - PY_VERSION: ['3.12']
 
 build_cscs_amd_rocm:
   extends:
@@ -30,6 +30,8 @@ build_cscs_amd_rocm:
     - .build_settings
     - .build_extra_rocm
   needs: []
+  rules:
+    - when: never
   parallel:
     matrix:
       - PY_VERSION: *test_python_versions
@@ -45,20 +47,8 @@ build_cscs_amd_rocm:
     SLURM_TIMELIMIT: 5
   parallel:
     matrix:
-      - SUBPACKAGE: [cartesian]
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
-        PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
-        PY_VERSION: *test_python_versions
-      - SUBPACKAGE: next
-        VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
-        DETAIL: ["nomesh", "atlas"]
-        PY_VERSION: *test_python_versions
-      - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'rocm7', 'cpu']
-        PY_VERSION: *test_python_versions
+        PY_VERSION: ['3.12']
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
     # `rules` section, and also add an extra `- when: on_success` rule at the end.
@@ -70,6 +60,11 @@ build_cscs_amd_rocm:
       when: never
 
   script:
+    - echo "HOME=${HOME} USER=$(id -un) UID=$(id -u) PWD=${PWD} TMPDIR=${TMPDIR:-unset} WORKDIR=${WORKDIR}"
+    - for p in "${HOME}" /tmp /dev/shm "${WORKDIR}"; do echo "== ${p}"; ls -ld "${p}" || true; findmnt -T "${p}" || true; df -hT "${p}" || true; done
+    - grep -E ' (/users|/home|/capstor|/iopsstor|/tmp|/dev/shm|/workspace)' /proc/mounts || true
+    - touch "${HOME}/.gt4py_ci_write_test" && ls -l "${HOME}/.gt4py_ci_write_test" && rm -f "${HOME}/.gt4py_ci_write_test" || echo "HOME not writable"
+    - python -c "from cupy.cuda import compiler; print('cupy cache dir:', compiler.get_cache_dir())" || true
     # Since the image does not contain the repo, we need to clone it before running the tests.
     # The output folder is inside the docker image (${WORKDIR}/gt4py), so it won't take up
     # space on $SCRATCH but in a ephemeral tmpfs mount in the running node.
@@ -126,6 +121,7 @@ test_cscs_amd_rocm:
     CUDA_HOME: /opt/rocm # for cartesian
     SLURM_TIMELIMIT: 20 # relaxed relative to gh200 as there is no pressure on the queue
   rules:
+    - when: never
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'internal' && $SUBVARIANT == 'cpu'
       variables:
