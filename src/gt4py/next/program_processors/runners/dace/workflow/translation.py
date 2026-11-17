@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Final, Optional
+from typing import Any, Final, Literal, Optional
 
 import dace
 
@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import scan_fusion as gtx_scan_fusion
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
@@ -345,6 +346,50 @@ _DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
     {"gpu", "constant_symbols", "unit_strides_kind"}
 )
 
+#: The accepted values of the `scan_fusion_scope` option in `auto_optimize_args`.
+_SCAN_FUSION_SCOPES: Final[frozenset[str]] = frozenset({"immediate", "field_operator"})
+
+
+def _preprocess_program(
+    ir: itir.Program,
+    offset_provider: common.OffsetProvider,
+    fuse_scan_inputs: bool,
+    scan_fusion_scope: Literal["immediate", "field_operator"],
+    use_max_domain_range_on_unstructured_shift: bool | None,
+) -> itir.Program:
+    """
+    Prepare scan producers and normalize field expressions before lowering.
+
+    `fuse_scan_inputs` enables bounded scan-input fusion when auto-optimization
+    is enabled. It is implemented as an ITIR transformation, therefore it is applied
+    before lowering to SDFG. The `scan_fusion_scope="immediate"` argument considers
+    one producer layer; `"field_operator"` first combines local arithmetic within
+    function boundaries.
+    """
+    if fuse_scan_inputs and scan_fusion_scope == "field_operator":
+        ir = gtx_scan_fusion.normalize_scan_producers(
+            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        )
+
+    ir = itir_transforms.apply_fieldview_transforms(
+        ir,
+        offset_provider=offset_provider,
+        use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
+
+    if fuse_scan_inputs:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+        fused = gtx_scan_fusion.fuse_scan_inputs(ir, offset_provider_type=offset_provider_type)
+        if fused is not ir:
+            # Fusion introduces field expressions whose domains need refreshing.
+            ir = itir_transforms.apply_fieldview_transforms(
+                fused,
+                offset_provider=offset_provider,
+                use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+            )
+
+    return ir
+
 
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
@@ -357,6 +402,8 @@ class DaCeTranslator(
         artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     ],
 ):
+    """Lower iterator IR and configure the generated SDFG."""
+
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
@@ -374,6 +421,14 @@ class DaCeTranslator(
             raise ValueError(
                 f"The following optimization arguments cannot be overridden: {derived_args}."
             )
+        if (
+            self.auto_optimize_args
+            and (scope := self.auto_optimize_args.get("scan_fusion_scope", "immediate"))
+            not in _SCAN_FUSION_SCOPES
+        ):
+            raise ValueError(
+                f"Invalid 'scan_fusion_scope' {scope!r}, expected one of {sorted(_SCAN_FUSION_SCOPES)}."
+            )
 
     def generate_sdfg(
         self,
@@ -389,13 +444,24 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        ir = itir_transforms.apply_fieldview_transforms(
-            ir,
-            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-            offset_provider=offset_provider,
-        )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
+
+        # `fuse_scan_inputs` enables bounded scan-input fusion when auto-optimization
+        # is enabled. It is implemented as an ITIR transformation, therefore it is applied
+        # before lowering to SDFG.
+        # The corresponding arguments are removed from (a copy of) `auto_optimize_args`
+        # to avoid passing them to `gt_auto_optimize()`.
+        auto_optimize_args = dict(self.auto_optimize_args or {})
+        fuse_scan_inputs = auto_optimize_args.pop("fuse_scan_inputs", False)
+        scan_fusion_scope = auto_optimize_args.pop("scan_fusion_scope", "immediate")
+        ir = _preprocess_program(
+            ir=ir,
+            offset_provider=offset_provider,
+            fuse_scan_inputs=(self.auto_optimize and fuse_scan_inputs),
+            scan_fusion_scope=scan_fusion_scope,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+        )
 
         sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
@@ -408,8 +474,6 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
-
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,

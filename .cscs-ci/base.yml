@@ -22,7 +22,7 @@ include:
 #   block_name_with_underscores -> defined in this file or other file in this repo
 
 variables:  # Default values for base variables (can be overridden in jobs definitions)
-  CUDA_VERSION: '12.6.2'
+  CUDA_VERSION: '13.2.1'
   ROCM_VERSION: '7.1.1'
   UBUNTU_VERSION: '24.04'
   UV_VERSION: '0.11.2'
@@ -57,7 +57,7 @@ stages:
   variables:
     # jfrog.svc.cscs.ch/dockerhub/nvidia is the cached version of docker.io/nvidia
     BASE_IMAGE: jfrog.svc.cscs.ch/dockerhub/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION}
-    EXTRA_UV_SYNC_ARGS: "--extra cuda12"
+    EXTRA_UV_SYNC_ARGS: "--extra cuda13"
 
 .build_extra_rocm:
   variables:

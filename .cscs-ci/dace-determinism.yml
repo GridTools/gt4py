@@ -72,13 +72,13 @@ build_cscs_amd_rocm:
   parallel:
     matrix:
       - SUBPACKAGE: [next]
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        SUBVARIANT: ['cuda13', 'rocm7', 'cpu']
         DETAIL: ["nomesh"]
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
     - if: '$SUBVARIANT == "cpu" && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
-    - if: '$SUBVARIANT == "cuda12" && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+    - if: '$SUBVARIANT == "cuda13" && ($TEST_VARIANTS !~ /(^|\s)cuda13(\s|$)/)'
       when: never
     - if: '$SUBVARIANT == "rocm7" && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
       when: never
@@ -103,7 +103,7 @@ dace_determinism_cscs_gh200:
   needs:
     - build_cscs_gh200
   variables:
-    TEST_VARIANTS: 'cpu cuda12'
+    TEST_VARIANTS: 'cpu cuda13'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'normal'
     GT4PY_BUILD_JOBS: 8
