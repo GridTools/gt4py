@@ -13,7 +13,7 @@ import functools
 import pathlib
 import warnings
 from collections.abc import Callable
-from typing import Any, ClassVar, Final, TypeAlias
+from typing import Any, ClassVar, Final, Literal, TypeAlias
 
 import gt4py
 from gt4py.next import backend as next_backend, config
@@ -54,6 +54,8 @@ def make_dace_translator(
     /,
     *,
     auto_optimize_args: dict[str, Any] | None = None,
+    fuse_scan_inputs: bool = False,
+    scan_fusion_scope: Literal["immediate", "field_operator"] = "immediate",
     async_sdfg_call: bool = True,
     use_metrics: bool = True,
     disable_field_origin_on_program_arguments: bool = False,
@@ -70,6 +72,8 @@ def make_dace_translator(
             see `gt_auto_optimize()`. The parameters `DaCeTranslator` derives
             itself cannot be set here. With an external workspace in `cfg`, the
             `transient_memory_mode` defaults to `EXTERNAL`.
+        fuse_scan_inputs: See `DaCeTranslator`.
+        scan_fusion_scope: See `DaCeTranslator`.
         async_sdfg_call: Make an asynchronous SDFG call, to overlap GPU kernel
             execution with the Python driver code. Only effective on GPU.
         use_metrics: Add SDFG instrumentation for stencil compute time.
@@ -116,6 +120,8 @@ def make_dace_translator(
         device_type=cfg.device_type,
         auto_optimize=cfg.auto_optimize,
         auto_optimize_args=optimization_args,
+        fuse_scan_inputs=fuse_scan_inputs,
+        scan_fusion_scope=scan_fusion_scope,
         async_sdfg_call=async_sdfg_call and cfg.gpu,
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride,
         use_metrics=use_metrics,

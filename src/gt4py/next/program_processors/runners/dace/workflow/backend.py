@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import warnings
-from typing import Any
+from typing import Any, Literal
 
 from gt4py.next import backend, config
 from gt4py.next.otf import artifacts
@@ -75,6 +75,7 @@ def make_dace_toolchain(
 
 def make_dace_backend(
     gpu: bool,
+    *,
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
@@ -83,6 +84,8 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
+    fuse_scan_inputs: bool = False,
+    scan_fusion_scope: Literal["immediate", "field_operator"] = "immediate",
 ) -> DaCeBackend:
     """Customize the dace backend with the given configuration parameters.
 
@@ -108,6 +111,10 @@ def make_dace_backend(
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
         use_max_domain_range_on_unstructured_shift: See `DaCeTranslator`.
+        fuse_scan_inputs: Enable ITIR transformation that inlines argument expressions
+            into scans. Requires `auto_optimize=True` to take effect.
+        scan_fusion_scope: Define the scope of scan-input fusion. See `DaCeTranslator`
+            for detailed information.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
     cannot be overridden, and therefore cannot appear in `optimization_args`.
@@ -136,6 +143,8 @@ def make_dace_backend(
         translation=functools.partial(
             gtx_wfdfactory.make_dace_translator,
             auto_optimize_args=optimization_args,
+            fuse_scan_inputs=fuse_scan_inputs,
+            scan_fusion_scope=scan_fusion_scope,
             async_sdfg_call=async_sdfg_call,
             use_metrics=use_metrics,
             disable_field_origin_on_program_arguments=use_zero_origin,
