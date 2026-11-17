@@ -24,7 +24,7 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 ### AI-assisted PR review (PR Agent)
 
-A `PR Agent` workflow posts an advisory AI review on pull requests, using [PR Agent](https://github.com/The-PR-Agent/pr-agent) on the [CSCS inference service](https://docs.cscs.ch/services/inference/). It is never a required status check. Only `/review` runs automatically, for pull requests whose author has write access; users with write access can also invoke `/review`, `/improve`, `/ask` and `/describe` by commenting. See [pr-agent.md](pr-agent.md) for details.
+A `PR Agent` workflow posts an advisory AI review on pull requests, using [PR Agent](https://github.com/The-PR-Agent/pr-agent) on the [CSCS inference service](https://docs.cscs.ch/services/inference/). It is a small caller of the reusable workflow in [GridTools/ci-workflows](https://github.com/GridTools/ci-workflows), pinned by commit SHA, which holds the pipeline; the key is in the `pr-agent` environment. It is never a required status check. Only `/review` runs automatically, for pull requests whose author has write access; users with write access can also invoke `/review`, `/improve`, `/ask` and `/describe` by commenting. See [pr-agent.md](pr-agent.md) for details.
 
 ### Sandboxed agent review (Agent Review)
 
