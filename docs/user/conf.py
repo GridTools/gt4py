@@ -42,8 +42,8 @@ globals().update(
         title="GT4Py",
         # Links to the other sites: (title, path relative to the root of this site)
         site_links=[
-            ("gt4py.cartesian", "cartesian/index.html"),
             ("gt4py.next", "next/index.html"),
+            ("gt4py.cartesian (previous generation)", "cartesian/index.html"),
         ],
     )
 )
