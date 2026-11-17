@@ -31,7 +31,7 @@ whose result is still needed elsewhere can remain outside the scan as well.
 Fusion preserves the recurrence and does not guarantee faster execution.
 
 The DaCe translator enables this pass with its `fuse_scan_inputs=True`
-setting; it defaults to off and requires auto-optimization.
+setting; it defaults to off and requires auto-optimization to be enabled.
 `scan_fusion_scope="immediate"` uses one producer layer after the standard
 field-view transforms. The optional `"field_operator"` scope first calls
 `normalize_scan_producers` while function boundaries are still visible.
