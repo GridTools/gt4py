@@ -94,6 +94,8 @@ test_cscs_gh200:
     CUDAARCHS: '90'
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    # Dump the Python stacks of a test that runs longer than this, to diagnose hangs.
+    PYTEST_ADDOPTS: '-o faulthandler_timeout=300'
   rules:
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
