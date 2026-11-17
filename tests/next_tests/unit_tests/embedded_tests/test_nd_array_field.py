@@ -140,6 +140,23 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
         assert field_ndarray is not field.ndarray
 
 
+def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement():
+    jnp = pytest.importorskip("jax.numpy")
+    data = asarray(jnp, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+    exported = common._field(data, domain=common.domain({D0: 2, D1: 2}))
+    not_exported = common._field(data, domain=common.domain({D0: 2, D1: 2}))
+    exported.__gt_buffer_info__
+
+    exported[...] = 1.0
+    not_exported[...] = 1.0
+
+    assert exported.__dict__["__gt_buffer_info__"] == array_ops.of(exported.ndarray).buffer_info(
+        exported.ndarray
+    )
+    assert exported.__gt_buffer_info__.data_ptr != array_ops.of(data).buffer_info(data).data_ptr
+    assert "__gt_buffer_info__" not in not_exported.__dict__
+
+
 _NOT_IN_ARRAY_API = ("fmod", "cbrt", "gamma")
 
 
