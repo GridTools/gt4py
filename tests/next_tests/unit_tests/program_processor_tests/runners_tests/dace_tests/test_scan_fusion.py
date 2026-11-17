@@ -556,7 +556,7 @@ def test_no_rewrite_does_not_repeat_fieldview_pipeline(monkeypatch):
     # Horizontal input shifts are outside the supported scan rewrite.
     translation._preprocess_program(
         make_program(shift_axis=IDim),
-        {},
+        offset_provider={},
         fuse_scan_inputs=True,
         scan_fusion_scope="immediate",
         use_max_domain_range_on_unstructured_shift=None,
