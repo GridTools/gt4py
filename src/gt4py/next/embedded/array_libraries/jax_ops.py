@@ -149,33 +149,33 @@ class JaxOps(array_ops.ArrayOps):
 
     def hyperslice(
         self,
-        table: core_defs.NDArrayObject,
+        ndarray: core_defs.NDArrayObject,
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
         state: Any = None,
     ) -> Optional[tuple[slice, ...]]:
-        values = _values(table, state)
+        values = _values(ndarray, state)
         if values is None:
-            return (slice(None),) * table.ndim
+            return (slice(None),) * ndarray.ndim
         with jax.ensure_compile_time_eval():
             return super().hyperslice(values, image_range, skip_value)
 
     def restrict_table(
         self,
-        table: core_defs.NDArrayObject,
+        ndarray: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
         state: Any = None,
     ) -> core_defs.NDArrayObject:
-        values = _values(table, state)
+        values = _values(ndarray, state)
         if values is None:
-            return super().restrict_table(table, key)
+            return super().restrict_table(ndarray, key)
         restricted_values = _restrict_values(values, key)
-        if values is table:
+        if values is ndarray:
             return restricted_values
         assert isinstance(state, _StaticValues)
-        restricted = super().restrict_table(table, key)
+        restricted = super().restrict_table(ndarray, key)
         state.add_restricted(restricted, restricted_values)
         return restricted
 

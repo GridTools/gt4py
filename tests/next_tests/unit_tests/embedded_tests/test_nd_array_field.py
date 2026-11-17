@@ -1900,7 +1900,7 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     )
 
     _ = e2v_conn._inverse_image(UnitRange(2, 5))
-    assert "_cache" in e2v_conn.__dict__
+    assert "_inverse_image_cache" in e2v_conn.__dict__
 
     _ = e2v_conn.__gt_buffer_info__
     assert "__gt_buffer_info__" in e2v_conn.__dict__
@@ -1908,7 +1908,8 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     state = e2v_conn.__getstate__()
     assert state["_codomain"] == V
     assert state["_skip_value"] is None
-    assert "_cache" not in state
+    assert "_inverse_image_cache" not in state
+    assert "_restrict_cache" not in state
     assert "__gt_buffer_info__" not in state
 
 
@@ -1933,7 +1934,8 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
     assert restored.codomain == original.codomain
     assert restored.skip_value == original.skip_value
     assert np.array_equal(restored.ndarray, original.ndarray)
-    assert "_cache" not in restored.__dict__
+    assert "_inverse_image_cache" not in restored.__dict__
+    assert "_restrict_cache" not in restored.__dict__
     assert "__gt_buffer_info__" not in restored.__dict__
 
 

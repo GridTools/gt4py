@@ -203,31 +203,31 @@ class ArrayOps:
 
     def hyperslice(
         self,
-        table: core_defs.NDArrayObject,
+        ndarray: core_defs.NDArrayObject,
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
         *,
         state: Any = None,
     ) -> Optional[tuple[slice, ...]]:
         """
-        Return the hypercube slice that contains all indices in `table` that are within `image_range`, or `None` if no such hypercube exists.
+        Return the hypercube slice that contains all indices in `ndarray` that are within `image_range`, or `None` if no such hypercube exists.
 
         If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
         A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
 
         Example:
-            table =  0  1 -1
-                     3  4 -1
-                    -1 -1 -1
+            ndarray =  0  1 -1
+                       3  4 -1
+                      -1 -1 -1
             skip_value = -1
 
             would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
 
-        A library which cannot read the values of `table` returns all of it. What an entry
+        A library which cannot read the values of `ndarray` returns all of it. What an entry
         outside of `image_range` reads is then defined by its `gather`.
         """
         xp = self.xp
-        select_mask = (table >= image_range.start) & (table < image_range.stop)
+        select_mask = (ndarray >= image_range.start) & (ndarray < image_range.stop)
 
         if not xp.any(select_mask):
             return None
@@ -240,7 +240,7 @@ class ArrayOps:
         )
         hcube = select_mask[tuple(slices)]
         if skip_value is not None:
-            ignore_mask = table == skip_value
+            ignore_mask = ndarray == skip_value
             hcube = hcube | ignore_mask[tuple(slices)]
         if not xp.all(hcube):
             return None
@@ -249,13 +249,13 @@ class ArrayOps:
 
     def restrict_table(
         self,
-        table: core_defs.NDArrayObject,
+        ndarray: core_defs.NDArrayObject,
         key: common.RelativeIndexSequence,
         *,
         state: Any = None,
     ) -> core_defs.NDArrayObject:
-        """Return `table[key]`."""
-        return self.asarray(table[key])
+        """Return `ndarray[key]`."""
+        return self.asarray(ndarray[key])
 
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]

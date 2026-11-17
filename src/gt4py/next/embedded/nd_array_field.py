@@ -504,17 +504,19 @@ class NdArrayConnectivityField(
     def skip_value(self) -> Optional[core_defs.IntegralScalar]:
         return self._skip_value
 
-    # This embedded run-time cache is only used to speed up repeated calls to
-    # `_inverse_image` and `restrict`, and it should not be considered part of
-    # the connectivity field definition, and therefore it should not be serialized.
+    # These embedded run-time caches are only used to speed up repeated calls to
+    # `_inverse_image` and `restrict`, and they should not be considered part of
+    # the connectivity field definition, and therefore they should not be serialized.
     @functools.cached_property
-    def _cache(self) -> dict:
+    def _inverse_image_cache(self) -> dict[common.UnitRange, common.Domain]:
+        return {}
+
+    @functools.cached_property
+    def _restrict_cache(self) -> dict[Any, tuple[common.Domain, Any, dict, dict]]:
         return {}
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        cache_key = ("inverse_image", image_range)
-
-        if (new_domain := self._cache.get(cache_key, None)) is None:
+        if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
             slices = array_ops.of(self._ndarray).hyperslice(
@@ -524,7 +526,7 @@ class NdArrayConnectivityField(
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
             new_domain = self.domain.slice_at[slices]
-            self._cache[cache_key] = new_domain
+            self._inverse_image_cache[image_range] = new_domain
 
         return new_domain
 
@@ -537,21 +539,15 @@ class NdArrayConnectivityField(
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         # Arrays must not be cached: whether a restricted table can be used again is up to its library
-        cache_key = ("restrict", index)
-        if (cached := self._cache.get(cache_key, None)) is None:
-            cached = self._cache[cache_key] = (*self._slice(index), {})
-        new_domain, buffer_slice, restricted_cache = cached
-        table = array_ops.of(self._ndarray).restrict_table(
+        if (cached := self._restrict_cache.get(index, None)) is None:
+            cached = self._restrict_cache[index] = (*self._slice(index), {}, {})
+        new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
+        ndarray = array_ops.of(self._ndarray).restrict_table(
             self._ndarray, buffer_slice, state=self._array_ops_state
         )
-        restricted_connectivity = self.__class__(
-            new_domain,
-            table,
-            self.codomain,
-            self.skip_value,
-            _array_ops_state=self._array_ops_state,
-        )
-        restricted_connectivity.__dict__["_cache"] = restricted_cache
+        restricted_connectivity = dataclasses.replace(self, _domain=new_domain, _ndarray=ndarray)
+        restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
+        restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
         return restricted_connectivity
 
     __getitem__ = restrict
