@@ -1,0 +1,30 @@
+name: PR Agent caller test
+
+# TEMPORARY, never merge: caller test mode of GridTools/ci-workflows'
+# pr-agent.yml (dry run: no key, no environment, nothing posted). Same pin,
+# permissions, inputs and secret mapping as pr-agent.yml.
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  test:
+    uses: GridTools/ci-workflows/.github/workflows/pr-agent.yml@fce720199ea669941f688b41dff6857e97faa401 # v0.1.0
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    with:
+      model: ${{ vars.PR_AGENT_MODEL }}
+      fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
+      token_budget: ${{ vars.PR_AGENT_TOKEN_BUDGET }}
+      max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS }}
+      ai_timeout: ${{ vars.PR_AGENT_AI_TIMEOUT }}
+      docs_url: https://github.com/GridTools/gt4py/blob/main/docs/development/tools/pr-agent.md
+      dry_run: true
+    secrets:
+      inference_api_key: ${{ secrets.PR_AGENT_INFERENCE_API_KEY }}
