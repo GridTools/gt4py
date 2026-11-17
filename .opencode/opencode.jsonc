@@ -8,29 +8,8 @@
 
   // `build` is the full-access primary agent; switch to `plan` for
   // read-only planning sessions.
-  "default_agent": "build",
+  "default_agent": "build"
 
-  // Permission policy — mirrors the allow/deny lists in .claude/settings.json.
-  "permission": {
-    "bash": {
-      "*": "ask",
-      "uv *": "allow",
-      "nox *": "allow",
-      "pre-commit *": "allow",
-      "pytest *": "allow",
-      "ruff *": "allow",
-      "mypy *": "allow",
-      "tach *": "allow",
-      "git status": "allow",
-      "git diff*": "allow",
-      "git log*": "allow",
-      "git show*": "allow",
-      "rg *": "allow",
-      "ls *": "allow",
-      "find *": "allow",
-      "git push --force*": "deny",
-      "git reset --hard origin*": "deny",
-      "rm -rf*": "deny"
-    }
-  }
+  // No `permission` block: this file overrides each contributor's global config, so
+  // set agent permissions in your own config (https://opencode.ai/docs/permissions/).
 }
