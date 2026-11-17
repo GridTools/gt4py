@@ -338,7 +338,7 @@ def test_if_mover_independent_branches():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = util.make_if_block(state=state)
+    if_block = util.make_if_block(state)
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
@@ -446,7 +446,7 @@ def test_if_mover_invalid_if_block():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = util.make_if_block(state=state)
+    if_block = util.make_if_block(state)
 
     # Replace the reads to `__arg2` with ones to `__arg1`. This means the dataflow
     #  that goes into `__arg1` would have to be replicated into two different places
@@ -571,7 +571,7 @@ def test_if_mover_dependent_branch_1():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = util.make_if_block(state=state)
+    if_block = util.make_if_block(state)
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
@@ -683,7 +683,7 @@ def test_if_mover_dependent_branch_2():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = util.make_if_block(state=state)
+    if_block = util.make_if_block(state)
     state.add_edge(a1, None, if_block, "__arg1", dace.Memlet("a1[0]"))
     state.add_edge(b1, None, if_block, "__arg2", dace.Memlet("b1[0]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
@@ -752,7 +752,7 @@ def test_if_mover_dependent_branch_3():
     t1, t2 = (state.add_access(name) for name in temp_names)
 
     me, mx = state.add_map("map", ndrange={"__i": "0:10"})
-    if_block = util.make_if_block(state=state)
+    if_block = util.make_if_block(state)
     tlet1 = state.add_tasklet(
         "tlet1", inputs={"__in1", "__in2"}, outputs={"__out"}, code="__out = __in1 + __in2"
     )
@@ -930,7 +930,7 @@ def test_if_mover_dependent_branch_4():
     state.add_edge(tasklet_node_reuse, "__out", a3, None, dace.Memlet("a3[0]"))
 
     # Make the if selection.
-    if_block = _make_if_block_with_two_args(state=state)
+    if_block = _make_if_block_with_two_args(state)
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
     state.add_edge(a3, None, if_block, "__arg3", dace.Memlet("a3[0]"))
@@ -1114,7 +1114,7 @@ def test_if_mover_dependent_branch_5():
     state.add_edge(tasklet_node_reuse, "__out", a3, None, dace.Memlet("a3[0]"))
 
     # Make the if selection.
-    if_block = _make_if_block_with_two_args(state=state)
+    if_block = _make_if_block_with_two_args(state)
     state.add_edge(a2a, None, if_block, "__arg1", dace.Memlet("a2a[0]"))
     state.add_edge(b2, None, if_block, "__arg2", dace.Memlet("b2[0]"))
     state.add_edge(a3, None, if_block, "__arg3", dace.Memlet("a3[0]"))
@@ -1475,7 +1475,7 @@ def test_if_mover_one_branch_is_nothing():
     state.add_edge(tasklet_cond, "__out", c1, None, dace.Memlet("c1[0]"))
 
     # Make the if selection.
-    if_block = util.make_if_block(state=state, b2_shape=(10,))
+    if_block = util.make_if_block(state, b2_shape=(10,))
     state.add_edge(a2, None, if_block, "__arg1", dace.Memlet("a2[0]"))
     state.add_edge(me, "OUT_b", if_block, "__arg2", dace.Memlet("b[__i]"))
     state.add_edge(c1, None, if_block, "__cond", dace.Memlet("c1[0]"))
