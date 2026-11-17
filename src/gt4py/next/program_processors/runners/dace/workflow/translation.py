@@ -346,6 +346,9 @@ _DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
     {"gpu", "constant_symbols", "unit_strides_kind"}
 )
 
+#: The accepted values of the `scan_fusion_scope` option in `auto_optimize_args`.
+_SCAN_FUSION_SCOPES: Final[frozenset[str]] = frozenset({"immediate", "field_operator"})
+
 
 def _preprocess_program(
     ir: itir.Program,
@@ -417,6 +420,14 @@ class DaCeTranslator(
         ):
             raise ValueError(
                 f"The following optimization arguments cannot be overridden: {derived_args}."
+            )
+        if (
+            self.auto_optimize_args
+            and (scope := self.auto_optimize_args.get("scan_fusion_scope", "immediate"))
+            not in _SCAN_FUSION_SCOPES
+        ):
+            raise ValueError(
+                f"Invalid 'scan_fusion_scope' {scope!r}, expected one of {sorted(_SCAN_FUSION_SCOPES)}."
             )
 
     def generate_sdfg(

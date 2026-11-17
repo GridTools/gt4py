@@ -579,6 +579,18 @@ def test_scan_fusion_is_disabled_with_auto_optimization(monkeypatch):
     translator.generate_sdfg(make_program(), offset_provider={}, column_axis=K)
 
 
+def test_invalid_scan_fusion_scope_is_rejected():
+    with pytest.raises(ValueError, match="Invalid 'scan_fusion_scope' 'field_operators'"):
+        DaCeTranslator(
+            device_type=core_defs.DeviceType.CPU,
+            auto_optimize=True,
+            auto_optimize_args={"fuse_scan_inputs": True, "scan_fusion_scope": "field_operators"},
+            async_sdfg_call=False,
+            unstructured_horizontal_has_unit_stride=False,
+            use_metrics=False,
+        )
+
+
 @pytest.mark.parametrize("scope", ["nested_let", "lambda"])
 def test_compiled_shadowed_scan_inputs(tmp_path, scope):
     from next_tests.unit_tests.iterator_tests.transforms_tests.test_scan_fusion import (
