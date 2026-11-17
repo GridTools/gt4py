@@ -73,12 +73,10 @@ def translate(program, enabled, **extra_options):
     translator = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args=None,
-        fuse_scan_inputs=enabled,
+        auto_optimize_args={"fuse_scan_inputs": enabled, **extra_options},
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
-        **extra_options,
     )
     return translator.generate_sdfg(program, offset_provider={}, column_axis=K)
 
@@ -88,7 +86,9 @@ def test_toolchain_scan_options_reach_lowering(enabled, expected_arrays):
     options = {"fuse_scan_inputs": enabled, "scan_fusion_scope": "immediate"}
     toolchain = backend.make_dace_toolchain(
         factory.DaCeConfig(cached_translation=False),
-        translation=functools.partial(factory.make_dace_translator, **options, use_metrics=False),
+        translation=functools.partial(
+            factory.make_dace_translator, auto_optimize_args=options, use_metrics=False
+        ),
     )
     graph = toolchain.executor.translation.generate_sdfg(
         make_program(), offset_provider={}, column_axis=K
@@ -225,8 +225,7 @@ def test_compiled_staggered_scan_fusion(tmp_path, input_dim, forward, mixed, lev
     graph = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args=None,
-        fuse_scan_inputs=True,
+        auto_optimize_args={"fuse_scan_inputs": True},
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
@@ -555,16 +554,13 @@ def test_no_rewrite_does_not_repeat_fieldview_pipeline(monkeypatch):
 
     monkeypatch.setattr(translation.itir_transforms, "apply_fieldview_transforms", record)
     # Horizontal input shifts are outside the supported scan rewrite.
-    translator = DaCeTranslator(
-        device_type=core_defs.DeviceType.CPU,
-        auto_optimize=True,
-        auto_optimize_args=None,
+    translation._preprocess_program(
+        make_program(shift_axis=IDim),
+        {},
         fuse_scan_inputs=True,
-        async_sdfg_call=False,
-        unstructured_horizontal_has_unit_stride=False,
-        use_metrics=False,
+        scan_fusion_scope="immediate",
+        use_max_domain_range_on_unstructured_shift=None,
     )
-    translator._preprocess_program(make_program(shift_axis=IDim), {})
     assert len(calls) == 1
 
 
@@ -574,12 +570,13 @@ def test_scan_fusion_is_disabled_with_auto_optimization(monkeypatch):
 
     monkeypatch.setattr(scan_fusion, "normalize_scan_producers", unexpected)
     monkeypatch.setattr(scan_fusion, "fuse_scan_inputs", unexpected)
-    translator = factory.make_dace_translator(
-        factory.DaCeConfig(auto_optimize=False),
-        fuse_scan_inputs=True,
-        scan_fusion_scope="field_operator",
-    )
-    translator._preprocess_program(make_program(), {})
+    with pytest.warns(UserWarning, match="auto-optimize is disabled"):
+        translator = factory.make_dace_translator(
+            factory.DaCeConfig(auto_optimize=False),
+            auto_optimize_args={"fuse_scan_inputs": True, "scan_fusion_scope": "field_operator"},
+            use_metrics=False,
+        )
+    translator.generate_sdfg(make_program(), offset_provider={}, column_axis=K)
 
 
 @pytest.mark.parametrize("scope", ["nested_let", "lambda"])
