@@ -33,13 +33,16 @@ In the workflow file:
 
 The inference endpoint is not configurable here: it is fixed centrally in GridTools/ci-workflows, so the key can only be sent to an allowlisted host and no repository variable can redirect it.
 
-Repository variables (**Settings → Secrets and variables → Actions → Variables**), changeable without a PR:
+Repository variables (**Settings → Secrets and variables → Actions → Variables**), changeable without a PR by anyone with write access:
 
-| Variable                    | Meaning                                                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `AGENT_REVIEW_HARNESS`      | `opencode` (default and recommended) or `pi`; `stub` for tests. A dispatch can choose another one.                              |
-| `AGENT_REVIEW_MODEL`        | Model id on the CSCS inference service, e.g. `zai-org/GLM-5.3-Flash`. No default: without it, a review with a model fails.      |
-| `AGENT_REVIEW_UPLOAD_AUDIT` | Optional, `true` to upload AWF's audit and proxy logs as an artifact; in this public repository any signed-in user can read it. |
+| Variable               | Meaning                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_REVIEW_HARNESS` | `opencode` (default and recommended) or `pi`; `stub` for tests. A dispatch can choose another one.                         |
+| `AGENT_REVIEW_MODEL`   | Model id on the CSCS inference service, e.g. `zai-org/GLM-5.3-Flash`. No default: without it, a review with a model fails. |
+
+Only these two inputs come from variables: a harness from the central allowlist, which a writer can choose by dispatch anyway, and a model id for the fixed endpoint, which the key's model restriction and budget bound. Every other input is set in the workflow file, so changing it needs a reviewed PR.
+
+The **audit upload** (`upload_audit`, AWF's audit and proxy logs as an artifact) is off and is not mapped from a variable: in this public repository any signed-in user can download the artifact. Enable it only for debugging, by a reviewed PR (for example a temporary dispatch input mapped to `upload_audit`), and remove it afterwards.
 
 ## Required repository settings
 
@@ -50,7 +53,7 @@ Without these, the workflow does not run, or runs without a key.
 3. **An Actions event policy** (**Settings → Actions → Policies**) scoped by workflow path to `.github/workflows/agent-review.yml`, this repository's caller file (not the path in GridTools/ci-workflows), allowing **`pull_request_target` and `workflow_dispatch`**. GitHub blocks `pull_request_target` by default in public repositories from **2 December 2026**, and a policy's event list is an exhaustive allowlist. PR Agent's policy (see [pr-agent.md](pr-agent.md#event-policy)) covers only `.github/workflows/pr-agent.yml`.
 4. The repository variables above and the label `agent-review`.
 
-**Deployment state in GridTools/gt4py (2026-11-13)**: items 1 and 2 are in place, and so are the variables (`AGENT_REVIEW_HARNESS=opencode`, `AGENT_REVIEW_MODEL=zai-org/GLM-5.3-Flash`). Still missing: the **`agent-review` label**, and **an event policy for this workflow** (item 3): the only one, "Allow PR Agent events" (policy 13604), is scoped to `.github/workflows/pr-agent.yml`.
+**Deployment state in GridTools/gt4py (2026-11-18)**: items 1, 2 and 4 are in place: the environment with its key, the variables (`AGENT_REVIEW_HARNESS=opencode`, `AGENT_REVIEW_MODEL=zai-org/GLM-5.3-Flash`) and the `agent-review` label. The event policy for this workflow (item 3) is to be created right after this workflow is merged; until then the only policy, "Allow PR Agent events" (policy 13604), is scoped to `.github/workflows/pr-agent.yml`.
 
 ## Updating the pinned version
 
@@ -77,6 +80,6 @@ The workflow file and the addendum are read from `main`, so a change takes effec
 2. The same with the default harness, dry run (this uses the key).
 3. The label on a PR.
 
-Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`, as for PR Agent; never merge them enabled. With a pin that supports the caller test mode of `GridTools/ci-workflows` (`v0.1.0` does) this runs the `stub` harness as a forced dry run in the keyless job (no key, no environment, nothing posted), which proves the plumbing only: under `pull_request` the workflow file, the rule files and the addendum are PR content, so the reset of the rule files is not tested. Enabled, the Actions event policy for this file must also allow `pull_request`.
+Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`; never merge them enabled. With a pin that supports the caller test mode of `GridTools/ci-workflows` (`v0.1.0` does) this runs the `stub` harness as a forced dry run in the keyless job (no key, no environment, nothing posted), which proves the plumbing only: under `pull_request` the workflow file, the rule files and the addendum are PR content, so the reset of the rule files is not tested. Enabled, the Actions event policy for this file must also allow `pull_request`.
 
 Changes to the pipeline itself are tested in GridTools/ci-workflows.
