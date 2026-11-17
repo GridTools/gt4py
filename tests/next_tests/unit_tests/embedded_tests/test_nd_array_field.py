@@ -140,12 +140,14 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
         assert field_ndarray is not field.ndarray
 
 
-def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement():
-    jnp = pytest.importorskip("jax.numpy")
-    data = asarray(jnp, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
-    exported = common._field(data, domain=common.domain({D0: 2, D1: 2}))
-    not_exported = common._field(data, domain=common.domain({D0: 2, D1: 2}))
-    exported.__gt_buffer_info__
+def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement(nd_array_implementation):
+    def make_field():
+        data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+        return common._field(data, domain=common.domain({D0: 2, D1: 2}))
+
+    exported, not_exported = make_field(), make_field()
+    old_buffer = exported.ndarray
+    old_data_ptr = exported.__gt_buffer_info__.data_ptr
 
     exported[...] = 1.0
     not_exported[...] = 1.0
@@ -153,7 +155,8 @@ def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement():
     assert exported.__dict__["__gt_buffer_info__"] == array_ops.of(exported.ndarray).buffer_info(
         exported.ndarray
     )
-    assert exported.__gt_buffer_info__.data_ptr != array_ops.of(data).buffer_info(data).data_ptr
+    if exported.ndarray is not old_buffer:
+        assert exported.__gt_buffer_info__.data_ptr != old_data_ptr
     assert "__gt_buffer_info__" not in not_exported.__dict__
 
 
