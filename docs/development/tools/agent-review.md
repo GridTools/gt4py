@@ -54,11 +54,20 @@ Without these, the workflow does not run, or runs without a key.
 
 ## Updating the pinned version
 
-The `uses:` line pins a full commit SHA of GridTools/ci-workflows, with the release tag in a comment (`# vX.Y.Z`); never a branch or a tag name. To update it:
+The workflow currently uses the release **`v0.1.0`** of GridTools/ci-workflows (commit `fce720199ea669941f688b41dff6857e97faa401`, the tag's target). The `uses:` line pins a full commit SHA, with the release tag in a comment (`# vX.Y.Z`); never a branch or a tag name. To update it:
 
-1. Read the release notes. A new permission, a new required input, a raised cap or a harness or AWF change is marked as breaking there; a new permission must also be added to the calling job's `permissions:`, or every run fails at startup.
-2. Replace the SHA (the commit the tag points to) and the comment, also in the commented-out `test` job.
-3. After merging, check it with **Run workflow** as below.
+1. Read the [release notes](https://github.com/GridTools/ci-workflows/releases). A new permission, a new required input, a raised cap or a harness or AWF change is marked as breaking there; a new permission must also be added to the calling job's `permissions:`, or every run fails at startup. Check the notes' "stricter behaviour" section against the rule files and the addendum configured here (for example, an instruction-file symlink in this repository that no reset pattern covers stops the review).
+
+2. Check the new pin, as the called workflow's documentation requires (see "Pinning and updating" there). The commit must be on its `main` and the tag must point to it:
+
+   ```bash
+   gh api repos/GridTools/ci-workflows/compare/main...<sha> --jq .status   # expect 'identical' or 'behind'
+   gh api repos/GridTools/ci-workflows/git/ref/tags/<tag> --jq .object.sha  # expect <sha> (annotated tags: dereference)
+   ```
+
+3. Replace the SHA (the commit the tag points to) and the comment, also in the commented-out `test` job.
+
+4. Before merging, run the `test` job as described in [Testing changes](#testing-changes); after merging, check it with **Run workflow** as below.
 
 ## Testing changes
 
@@ -68,6 +77,6 @@ The workflow file and the addendum are read from `main`, so a change takes effec
 2. The same with the default harness, dry run (this uses the key).
 3. The label on a PR.
 
-Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`, as for PR Agent; never merge them enabled. With a pin that supports the caller test mode of `GridTools/ci-workflows` this runs the `stub` harness as a forced dry run in the keyless job (no key, no environment, nothing posted), which proves the plumbing only: under `pull_request` the workflow file, the rule files and the addendum are PR content, so the reset of the rule files is not tested. Enabled, the Actions event policy for this file must also allow `pull_request`.
+Before merging, the blocks marked `COMMENTED OUT` in the workflow can be enabled on a branch of this repository with a PR to `main`, as for PR Agent; never merge them enabled. With a pin that supports the caller test mode of `GridTools/ci-workflows` (`v0.1.0` does) this runs the `stub` harness as a forced dry run in the keyless job (no key, no environment, nothing posted), which proves the plumbing only: under `pull_request` the workflow file, the rule files and the addendum are PR content, so the reset of the rule files is not tested. Enabled, the Actions event policy for this file must also allow `pull_request`.
 
 Changes to the pipeline itself are tested in GridTools/ci-workflows.
