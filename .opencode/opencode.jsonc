@@ -13,6 +13,7 @@
   // Permission policy — mirrors the allow/deny lists in .claude/settings.json.
   "permission": {
     "bash": {
+      "*": "ask",
       "uv *": "allow",
       "nox *": "allow",
       "pre-commit *": "allow",
@@ -29,8 +30,7 @@
       "find *": "allow",
       "git push --force*": "deny",
       "git reset --hard origin*": "deny",
-      "rm -rf*": "deny",
-      "*": "ask"
+      "rm -rf*": "deny"
     }
   }
 }
