@@ -1215,14 +1215,14 @@ def test_if_mover_dependent_branch_6():
         )
     a, b, c, d, e, cond = (state.add_access(name) for name in gnames)
 
-    temp_names = ["t1", "t2", "t3"]
+    temp_names = ["t1", "t2", "t3", "t4"]
     for name in temp_names:
         sdfg.add_scalar(
             name,
             dtype=dace.float64,
             transient=True,
         )
-    t1, t2, t3 = (state.add_access(name) for name in temp_names)
+    t1, t2, t3, t4 = (state.add_access(name) for name in temp_names)
 
     me, mx = state.add_map("map", ndrange={"__i": "0:10"})
     if_block = _make_if_block_with_different_number_of_outputs_in_branches(state)
@@ -1281,11 +1281,9 @@ def test_if_mover_dependent_branch_6():
     state.add_edge(t3, None, if_block, "__arg3", dace.Memlet("t3[0]"))
 
     # Forward the old value of `e`, it is written by the true branch.
-    sdfg.add_scalar("e_if_in", dtype=dace.float64, transient=True)
-    e_if_in = state.add_access("e_if_in")
     state.add_edge(state.add_access("e"), None, me, "IN_e", dace.Memlet("e[0:10]"))
-    state.add_edge(me, "OUT_e", e_if_in, None, dace.Memlet("e[__i]"))
-    state.add_edge(e_if_in, None, if_block, "__output2_prev", dace.Memlet("e_if_in[0]"))
+    state.add_edge(me, "OUT_e", t4, None, dace.Memlet("e[__i]"))
+    state.add_edge(t4, None, if_block, "__output2_prev", dace.Memlet("t4[0]"))
     me.add_scope_connectors("e")
 
     _write_if_output(state, if_block, "__output1", mx, "d")
@@ -1344,7 +1342,7 @@ def test_if_mover_dependent_branch_6():
         "b",
         "e",
         "t1",
-        "e_if_in",
+        "t4",
         "__arg1",
         "__output1",
         "__output2_prev",
