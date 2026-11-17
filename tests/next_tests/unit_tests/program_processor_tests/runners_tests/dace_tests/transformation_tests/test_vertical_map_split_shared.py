@@ -110,6 +110,9 @@ def test_shared_output_split_preserves_values(
         "other_access",
         "dynamic",
         "reduction",
+        "nonstandard_read_connector",
+        "empty_read",
+        "empty_write",
     ],
 )
 def test_shared_output_split_rejects_unsafe_partition(unsafe):
@@ -149,6 +152,18 @@ def test_shared_output_split_rejects_unsafe_partition(unsafe):
         next(iter(state.out_edges(theta))).data.dynamic = True
     elif unsafe == "reduction":
         next(iter(state.in_edges(theta))).data.wcr = "lambda a, b: a + b"
+    elif unsafe == "nonstandard_read_connector":
+        outer = next(edge for edge in state.out_edges(theta) if edge.dst is consumers[0])
+        consumers[0].remove_in_connector(outer.dst_conn)
+        consumers[0].add_in_connector("XX_theta")
+        outer.dst_conn = "XX_theta"
+    elif unsafe in ("empty_read", "empty_write"):
+        inner_edges = (
+            state.in_edges(producer_exit)
+            if unsafe == "empty_write"
+            else state.out_edges(consumers[0])
+        )
+        next(edge for edge in inner_edges if edge.data.data == "theta").data = dace.Memlet()
     before = sdfg.to_json()
     assert not map_fusion_extended.VerticalSplitMapRange.can_be_applied_to(
         sdfg,
@@ -220,7 +235,7 @@ def test_shared_output_split_auto_optimizer_option(tmp_path, enabled, selected, 
     expected_warning = (
         "Shared-output selection is ignored"
         if not enabled and selected is not None
-        else "The shared-output selection is empty"
+        else "no data is eligible for shared-output splitting"
         if selected == []
         else None
     )
@@ -370,7 +385,7 @@ def test_shared_output_multiple_connecting_arrays(alias):
         ({"shared_output_split_dimension": "k"}, "Shared-output selection is ignored"),
         (
             {"allow_shared_output": True, "shared_output_data": []},
-            "The shared-output selection is empty",
+            "no data is eligible for shared-output splitting",
         ),
     ],
 )

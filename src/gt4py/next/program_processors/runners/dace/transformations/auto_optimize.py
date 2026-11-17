@@ -284,7 +284,7 @@ def gt_auto_optimize(
         vertical_split_allow_shared_output,
         vertical_split_shared_output_data,
         vertical_split_shared_output_dimension,
-    ) = map_fusion_extended.check_shared_output_options(
+    ) = map_fusion_extended._check_shared_output_options(
         vertical_split_allow_shared_output,
         vertical_split_shared_output_data,
         vertical_split_shared_output_dimension,

@@ -38,27 +38,6 @@ from gt4py.next.program_processors.runners.dace.transformations import (
 )
 
 
-def check_shared_output_options(
-    allow_shared_output: bool,
-    shared_output_data: Optional[Sequence[str]],
-    split_dimension: Optional[Union[gtx_common.Dimension, str]],
-) -> tuple[bool, Optional[Sequence[str]], Optional[Union[gtx_common.Dimension, str]]]:
-    """Warn about inactive selections and avoid warning again when forwarding them."""
-    if not allow_shared_output and (shared_output_data is not None or split_dimension is not None):
-        warnings.warn(
-            "Shared-output selection is ignored because shared-output splitting is disabled.",
-            stacklevel=2,
-        )
-        return False, None, None
-    if shared_output_data is not None and not shared_output_data:
-        warnings.warn(
-            "The shared-output selection is empty; shared-output splitting is disabled.",
-            stacklevel=2,
-        )
-        return False, None, None
-    return allow_shared_output, shared_output_data, split_dimension
-
-
 VerticalMapSplitCallback: TypeAlias = Callable[
     ["VerticalSplitMapRange", dace_nodes.MapExit, dace_nodes.MapEntry, dace.SDFGState, dace.SDFG],
     bool,
@@ -667,16 +646,16 @@ class VerticalSplitMapRange(SplitMapRange):
         consolidate_edges_only_if_not_extending: Optional[bool] = None,
         **kwargs: Any,
     ) -> None:
-        if allow_shared_output is not None:
-            self.allow_shared_output = allow_shared_output
         if fuse_map_fragments is not None:
             self.fuse_map_fragments = fuse_map_fragments
         if consolidate_edges_only_if_not_extending is not None:
             self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
         self._check_split_callback = check_split_callback
+        if allow_shared_output is None:
+            allow_shared_output = False
         self.allow_shared_output, shared_output_data, shared_output_split_dimension = (
-            check_shared_output_options(
-                self.allow_shared_output, shared_output_data, shared_output_split_dimension
+            _check_shared_output_options(
+                allow_shared_output, shared_output_data, shared_output_split_dimension
             )
         )
         self._shared_output_data = (
@@ -836,10 +815,12 @@ class VerticalSplitMapRange(SplitMapRange):
         connector = edge.src_conn if is_write else edge.dst_conn
         if not isinstance(scope_node, expected_type) or connector is None:
             return None
+        if not is_write and not connector.startswith("IN_"):
+            return None
         entry = graph.entry_node(scope_node) if is_write else scope_node
         if graph.scope_dict()[entry] is not None:
             return None
-        map_ = entry.map
+        map_ = scope_node.map
         if len(map_.params) != len(desc.shape) or any(step != 1 for _, _, step in map_.range):
             return None
         inner_edges = list(
@@ -849,8 +830,11 @@ class VerticalSplitMapRange(SplitMapRange):
         )
         if not inner_edges or edge.data.is_empty() or edge.data.dynamic or edge.data.wcr:
             return None
+        # Each iteration must access exactly the array element at its map indices.
         point = dace_subsets.Range.from_string(", ".join(map_.params))
         for inner in inner_edges:
+            if inner.data.is_empty():
+                return None
             subset = (
                 inner.data.get_dst_subset(inner, graph)
                 if is_write
@@ -1042,3 +1026,24 @@ class VerticalSplitMapRange(SplitMapRange):
 
             # This is not efficient, but it is currently the only way to run it
             sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)
+
+
+def _check_shared_output_options(
+    allow_shared_output: bool,
+    shared_output_data: Optional[Sequence[str]],
+    split_dimension: Optional[Union[gtx_common.Dimension, str]],
+) -> tuple[bool, Optional[Sequence[str]], Optional[Union[gtx_common.Dimension, str]]]:
+    """Warn about inactive selections and avoid warning again when forwarding them."""
+    if not allow_shared_output and (shared_output_data is not None or split_dimension is not None):
+        warnings.warn(
+            "Shared-output selection is ignored because shared-output splitting is disabled.",
+            stacklevel=2,
+        )
+        return False, None, None
+    if shared_output_data is not None and len(shared_output_data) == 0:
+        warnings.warn(
+            "The shared-output selection is empty; no data is eligible for shared-output splitting.",
+            stacklevel=2,
+        )
+        return False, None, None
+    return allow_shared_output, shared_output_data, split_dimension
