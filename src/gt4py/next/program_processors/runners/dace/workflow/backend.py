@@ -75,6 +75,7 @@ def make_dace_toolchain(
 
 def make_dace_backend(
     gpu: bool,
+    *,
     auto_optimize: bool = True,
     async_sdfg_call: bool = True,
     optimization_args: dict[str, Any] | None = None,
@@ -83,7 +84,6 @@ def make_dace_backend(
     use_metrics: bool = True,
     use_zero_origin: bool = False,
     use_max_domain_range_on_unstructured_shift: bool | None = None,
-    *,
     fuse_scan_inputs: bool = False,
     scan_fusion_scope: Literal["immediate", "field_operator"] = "immediate",
 ) -> DaCeBackend:
@@ -111,8 +111,10 @@ def make_dace_backend(
             arguments have zero-based origin. This setting will skip generation
             of range start-symbols `_range_0` since they can be assumed to be zero.
         use_max_domain_range_on_unstructured_shift: See `DaCeTranslator`.
-        fuse_scan_inputs: See `DaCeTranslator`.
-        scan_fusion_scope: See `DaCeTranslator`.
+        fuse_scan_inputs: Enable ITIR transformation that inlines argument expressions
+            into scans. Requires `auto_optimize=True` to take effect.
+        scan_fusion_scope: Define the scope of scan-input fusion. See `DaCeTranslator`
+            for detailed information.
 
     Note that `gt_auto_optimize()` parameters that are derived from GT4Py configuration
     cannot be overridden, and therefore cannot appear in `optimization_args`.

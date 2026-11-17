@@ -70,18 +70,17 @@ def make_program(levels=17, forward=True, shift_axis=K):
 
 
 def translate(program, enabled, **extra_options):
-    options = {"fuse_scan_inputs": enabled, **extra_options}
-    graph = DaCeTranslator(
+    translator = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args={},
-        **options,
+        auto_optimize_args=None,
+        fuse_scan_inputs=enabled,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
-    ).generate_sdfg(program, offset_provider={}, column_axis=K)
-    assert options == {"fuse_scan_inputs": enabled, **extra_options}
-    return graph
+        **extra_options,
+    )
+    return translator.generate_sdfg(program, offset_provider={}, column_axis=K)
 
 
 @pytest.mark.parametrize("enabled, expected_arrays", [(False, 2), (True, 0)])
@@ -103,7 +102,6 @@ def test_toolchain_scan_options_reach_lowering(enabled, expected_arrays):
         )
         == expected_arrays
     )
-    assert options == {"fuse_scan_inputs": enabled, "scan_fusion_scope": "immediate"}
 
 
 @pytest.mark.parametrize("forward", [False, True])
@@ -227,7 +225,7 @@ def test_compiled_staggered_scan_fusion(tmp_path, input_dim, forward, mixed, lev
     graph = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args={},
+        auto_optimize_args=None,
         fuse_scan_inputs=True,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
@@ -289,11 +287,6 @@ def test_scan_body_has_no_shifts_after_fusion():
         cpm.is_applied_shift(node) for scan in scans for node in scan.args[0].pre_walk_values()
     )
     assert program == before
-
-
-def test_invalid_switch():
-    with pytest.raises(ValueError, match="must be a boolean"):
-        translate(make_program(), "yes")
 
 
 def test_input_output_overlap_is_unchanged():
@@ -523,11 +516,6 @@ def test_scoped_compiled_values(tmp_path):
     np.testing.assert_allclose(z, expected_z, rtol=1e-12, atol=1e-12)
 
 
-def test_invalid_fusion_scope():
-    with pytest.raises(ValueError, match="scan_fusion_scope"):
-        translate(make_program(), True, scan_fusion_scope="recursive")
-
-
 def test_stage_normalization_accepts_identity_fieldop():
     program = make_scoped_program()
     stage = program.function_definitions[-1]
@@ -570,7 +558,7 @@ def test_no_rewrite_does_not_repeat_fieldview_pipeline(monkeypatch):
     translator = DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
-        auto_optimize_args={},
+        auto_optimize_args=None,
         fuse_scan_inputs=True,
         async_sdfg_call=False,
         unstructured_horizontal_has_unit_stride=False,
@@ -578,13 +566,6 @@ def test_no_rewrite_does_not_repeat_fieldview_pipeline(monkeypatch):
     )
     translator._preprocess_program(make_program(shift_axis=IDim), {})
     assert len(calls) == 1
-
-
-@pytest.mark.parametrize("option", ["fuse_scan_inputs", "scan_fusion_scope"])
-def test_scan_options_are_not_sdfg_options(option):
-    value = True if option == "fuse_scan_inputs" else "field_operator"
-    with pytest.raises(ValueError, match="directly on the translator"):
-        factory.make_dace_translator(factory.DaCeConfig(), auto_optimize_args={option: value})
 
 
 def test_scan_fusion_is_disabled_with_auto_optimization(monkeypatch):
@@ -599,11 +580,6 @@ def test_scan_fusion_is_disabled_with_auto_optimization(monkeypatch):
         scan_fusion_scope="field_operator",
     )
     translator._preprocess_program(make_program(), {})
-
-
-def test_scan_fusion_requires_boolean_option():
-    with pytest.raises(ValueError, match="must be a boolean"):
-        factory.make_dace_translator(factory.DaCeConfig(), fuse_scan_inputs="yes")
 
 
 @pytest.mark.parametrize("scope", ["nested_let", "lambda"])

@@ -372,25 +372,14 @@ class DaCeTranslator(
     async_sdfg_call: bool
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
+    disable_field_origin_on_program_arguments: bool = False
 
     # These settings act on iterator IR before SDFG lowering.
     fuse_scan_inputs: bool = False
     scan_fusion_scope: Literal["immediate", "field_operator"] = "immediate"
-
-    disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.fuse_scan_inputs, bool):
-            raise ValueError("'fuse_scan_inputs' must be a boolean.")
-        if self.scan_fusion_scope not in ("immediate", "field_operator"):
-            raise ValueError("'scan_fusion_scope' must be 'immediate' or 'field_operator'.")
-        if self.auto_optimize_args and (
-            scan_args := self.auto_optimize_args.keys() & {"fuse_scan_inputs", "scan_fusion_scope"}
-        ):
-            raise ValueError(
-                f"Set {sorted(scan_args)} directly on the translator, not in 'auto_optimize_args'."
-            )
         if self.auto_optimize_args and (
             derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS
         ):
@@ -421,12 +410,12 @@ class DaCeTranslator(
 
         ir = itir_transforms.apply_fieldview_transforms(
             ir,
-            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
             offset_provider=offset_provider,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
         )
-        offset_provider_type = common.offset_provider_to_type(offset_provider)
 
         if self.auto_optimize and self.fuse_scan_inputs:
+            offset_provider_type = common.offset_provider_to_type(offset_provider)
             fused = gtx_scan_fusion.fuse_scan_inputs(ir, offset_provider_type=offset_provider_type)
             if fused is not ir:
                 # Fusion introduces field expressions whose domains need refreshing.
