@@ -12,7 +12,7 @@ import io
 import os
 import shutil
 import threading
-from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypedDict, Union
+from typing import Any, Dict, Final, List, Literal, Optional, Tuple, Type, TypedDict, Union
 
 import pybind11
 import setuptools
@@ -200,15 +200,12 @@ def build_pybind_ext(
     verbose: bool = False,
     clean: bool = False,
 ) -> Tuple[str, str]:
-    # Hack to remove warning about "-Wstrict-prototypes" not having effect in C++
-    replaced_flags_backup = copy.deepcopy(distutils.sysconfig._config_vars)
-    _clean_build_flags(distutils.sysconfig._config_vars)
-
     include_dirs = include_dirs or []
     library_dirs = library_dirs or []
     libraries = libraries or []
     extra_compile_args = extra_compile_args or []
     extra_link_args = extra_link_args or []
+    build_ext_class = build_ext_class or BuildExtension
 
     # Build extension module
     py_extension = setuptools.Extension(
@@ -258,11 +255,6 @@ def build_pybind_ext(
     if clean:
         shutil.rmtree(build_path)
 
-    # Restore original distutils flag config to not break functionality with "-Wstrict-prototypes"-hack for other
-    # tools using distutils.
-    for key, value in replaced_flags_backup.items():
-        distutils.sysconfig._config_vars[key] = value
-
     return module_name, dest_path
 
 
@@ -307,21 +299,64 @@ def build_pybind_cuda_ext(
     )
 
 
-def _clean_build_flags(config_vars: Dict[str, str]) -> None:
-    for key, value in config_vars.items():
-        if isinstance(value, str):
-            value = " " + value + " "
-            for s in value.split(" "):
-                if (
-                    s in ["-Wstrict-prototypes", "-DNDEBUG", "-pg"]
-                    or s.startswith("-O")
-                    or s.startswith("-g")
-                ):
-                    value = value.replace(" " + s + " ", " ")
-            config_vars[key] = " ".join(value.split())
+#: Flags that CPython records in its own build configuration (`CFLAGS`, `OPT`,
+#: `LDSHARED`, ...) and that `distutils` would otherwise pass on to every
+#: extension module we generate. They are dropped because:
+#:
+#: - `-g*` makes each object file and shared library carry full debug info,
+#:   which inflates the GT4Py cache by more than an order of magnitude.
+#: - `-O*` and `-DNDEBUG` would compete with the optimization settings GT4Py
+#:   appends itself (see `get_gt_pyext_build_opts`).
+#: - `-pg` adds profiling instrumentation GT4Py only wants on request.
+#: - `-Wstrict-prototypes` has no effect in C++ and warns about that for every
+#:   translation unit.
+_DISCARDED_BASE_FLAGS: Final = frozenset({"-Wstrict-prototypes", "-DNDEBUG", "-pg"})
+_DISCARDED_BASE_FLAG_PREFIXES: Final = ("-g", "-O")
 
 
-class CUDABuildExtension(build_ext, object):
+def _is_discarded_base_flag(arg: str) -> bool:
+    return arg in _DISCARDED_BASE_FLAGS or arg.startswith(_DISCARDED_BASE_FLAG_PREFIXES)
+
+
+def _clean_compiler_flags(compiler: Any) -> None:
+    """
+    Remove CPython's own build flags from an already configured compiler.
+
+    The flags listed in `_DISCARDED_BASE_FLAGS` and
+    `_DISCARDED_BASE_FLAG_PREFIXES` are filtered out of every command list the
+    compiler holds (`compiler_so`, `compiler_so_cxx`, `linker_so`, ...), as
+    named by its own `executables` mapping. Attributes that are absent or not
+    a list of strings are left alone, so this degrades to a no-op rather than
+    failing on compilers that do not follow the `UnixCCompiler` layout.
+
+    This operates on the compiler instance of a single `build_ext` command
+    rather than on the `sysconfig` dictionaries it was configured from. Those
+    dictionaries are process-global state shared by every thread compiling a
+    stencil, and setuptools 84.0.0 stopped reading build configuration from
+    `distutils.sysconfig` altogether (it reads the standard library's
+    `sysconfig` instead), which made patching them a silent no-op.
+    """
+    for name in getattr(compiler, "executables", None) or ():
+        command = getattr(compiler, name, None)
+        if isinstance(command, list) and all(isinstance(arg, str) for arg in command):
+            setattr(compiler, name, [arg for arg in command if not _is_discarded_base_flag(arg)])
+
+
+class BuildExtension(build_ext):
+    """
+    A `build_ext` command that compiles without CPython's own build flags.
+
+    GT4Py passes the flags it wants through `extra_compile_args` /
+    `extra_link_args`, which `distutils` appends after the base flags, so
+    scrubbing the base flags here keeps those effective.
+    """
+
+    def build_extensions(self) -> None:
+        _clean_compiler_flags(self.compiler)
+        super().build_extensions()
+
+
+class CUDABuildExtension(BuildExtension):
     # Refs:
     #   - https://github.com/pytorch/pytorch/torch/utils/cpp_extension.py
     #   - https://github.com/rmcgibbo/npcuda-example/blob/master/cython/setup.py
@@ -355,5 +390,5 @@ class CUDABuildExtension(build_ext, object):
                 self.compiler.set_executable("compiler_so", original_compiler_so)
 
         self.compiler._compile = cuda_compile
-        build_ext.build_extensions(self)
+        super().build_extensions()
         self.compiler._compile = original_compile

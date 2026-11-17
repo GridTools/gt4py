@@ -128,7 +128,7 @@ def test_distributed_buffer_global_memory_data_race():
     assert sdfg.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state2.number_of_nodes() == 2
 
 
@@ -182,7 +182,7 @@ def test_distributed_buffer_global_memory_data_race2():
     assert state2.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state1.number_of_nodes() == 10
     assert state2.number_of_nodes() == 2
 
@@ -445,3 +445,76 @@ def test_distributed_buffer_definition_in_loop():
     assert wb_state.number_of_nodes() == 2
     assert not any(dnode.data == "b" for dnode in body_state.data_nodes())
     sdfg.validate()
+
+
+def test_distributed_buffer_remover_in_nested_sdfg():
+    """The relocation must also be performed inside nested SDFGs."""
+    inner_sdfg, inner_state1, inner_state3 = _mk_distributed_buffer_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_outer_sdfg"))
+    for name in ["a", "b"]:
+        sdfg.add_datadesc(name, inner_sdfg.arrays[name].clone())
+    state = sdfg.add_state(is_start_block=True)
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs={"a"}, outputs={"a", "b"})
+    state.add_edge(state.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "a", state.add_access("a"), None, dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "b", state.add_access("b"), None, dace.Memlet("b[0:100, 0:100]"))
+    sdfg.validate()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res is not None
+    assert sdfg not in res
+    assert res[inner_sdfg]["DistributedBufferRelocator"][inner_state3] == {"tmp"}
+    assert any(dnode.data == "b" for dnode in inner_state1.data_nodes())
+
+    # Nothing is left to relocate.
+    assert gtx_transformations.gt_reduce_distributed_buffering(sdfg) is None
+
+
+def test_distributed_buffer_remover_in_root_and_nested_sdfg():
+    """The relocation must be performed both in the root and in the nested SDFG."""
+    inner_sdfg, inner_state1, inner_state3 = _mk_distributed_buffer_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_outer_sdfg"))
+    for name in ["a", "b"]:
+        sdfg.add_datadesc(name, inner_sdfg.arrays[name].clone())
+    for name in ["c", "d", "otmp"]:
+        sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
+    sdfg.arrays["otmp"].transient = True
+
+    # Computation of the outer write back buffer.
+    state1 = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "outer_computation",
+        map_ranges={"__i1": "0:10", "__i2": "0:10"},
+        inputs={"__in": dace.Memlet("c[__i1, __i2]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("otmp[__i1, __i2]")},
+        external_edges=True,
+    )
+
+    # The nested SDFG, that contains a relocatable buffer itself.
+    state2 = sdfg.add_state_after(state1)
+    nsdfg = state2.add_nested_sdfg(inner_sdfg, inputs={"a"}, outputs={"a", "b"})
+    state2.add_edge(state2.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 0:10]"))
+    state2.add_edge(nsdfg, "a", state2.add_access("a"), None, dace.Memlet("a[0:10, 0:10]"))
+    state2.add_edge(nsdfg, "b", state2.add_access("b"), None, dace.Memlet("b[0:100, 0:100]"))
+
+    # Write back of the outer buffer.
+    state3 = sdfg.add_state_after(state2)
+    state3.add_nedge(
+        state3.add_access("otmp"), state3.add_access("d"), dace.Memlet("otmp[0:10, 0:10]")
+    )
+    sdfg.validate()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res is not None
+    assert set(res.keys()) == {sdfg, inner_sdfg}
+    assert res[sdfg]["DistributedBufferRelocator"][state3] == {"otmp"}
+    assert res[inner_sdfg]["DistributedBufferRelocator"][inner_state3] == {"tmp"}
+    assert any(dnode.data == "d" for dnode in state1.data_nodes())
+    assert any(dnode.data == "b" for dnode in inner_state1.data_nodes())
+    sdfg.validate()
+
+    # Nothing is left to relocate.
+    assert gtx_transformations.gt_reduce_distributed_buffering(sdfg) is None

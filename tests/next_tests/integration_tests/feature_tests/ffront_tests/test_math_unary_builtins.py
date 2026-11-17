@@ -214,6 +214,7 @@ def test_exp_log(cartesian_case):
     )
 
 
+@pytest.mark.uses_math_outside_array_api
 def test_gamma(cartesian_case):
     @gtx.field_operator
     def gamma_fieldop(inp1: cases.IFloatField) -> cases.IFloatField:
@@ -224,6 +225,7 @@ def test_gamma(cartesian_case):
     )
 
 
+@pytest.mark.uses_math_outside_array_api
 def test_roots(cartesian_case):
     @gtx.field_operator
     def roots_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:

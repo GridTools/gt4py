@@ -50,7 +50,7 @@ def test_fold_shifts(cartesian_case):
     b = cases.allocate(cartesian_case, testee, "b").extend({cases.IDim: (0, 2)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
+    cases.verify(cartesian_case, testee, a, b, out=out, ref=a.asnumpy()[1:] + b.asnumpy()[2:])
 
 
 @pytest.mark.uses_cartesian_shift
