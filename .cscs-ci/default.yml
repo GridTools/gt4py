@@ -96,7 +96,7 @@ test_cscs_gh200:
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
     # Dump the Python stacks of a test that runs longer than this, to diagnose hangs.
     PYTEST_ADDOPTS: '-o faulthandler_timeout=300'
-    # Keep CuPy's compiled kernels in memory instead of the on-disk cache in $HOME.
+    # With CuPy's on-disk kernel cache in $HOME the tests can hang; keep compiled kernels in memory.
     CUPY_CACHE_IN_MEMORY: '1'
   rules:
     - *exclude_variants_rules
