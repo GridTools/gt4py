@@ -100,8 +100,9 @@ jobs:
   ## harness (no model, no key), always a dry run, reviewing the PR itself, in
   ## the called workflow's keyless job (no environment). Keep its pin equal to
   ## the one of 'review'. Under 'pull_request' the caller's file, rule files
-  ## and addendum are PR content: this proves the plumbing only. Run it
-  ## again after every bump of the pin.
+  ## and addendum are PR content: this proves the plumbing only. Last run
+  ## green with this configuration on v0.1.0; run it again after every bump
+  ## of the pin.
   # test:
   #   if: github.event_name == 'pull_request'
   #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@fce720199ea669941f688b41dff6857e97faa401 # v0.1.0
