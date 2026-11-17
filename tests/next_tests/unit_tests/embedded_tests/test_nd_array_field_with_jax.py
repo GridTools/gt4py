@@ -619,14 +619,13 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
 
 
 @pytest.mark.requires_jax
-def test_jax_pytree_of_concrete_connectivity_has_no_array_ops_state():
+def test_jax_pytree_of_concrete_connectivity_reads_its_own_values():
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
 
     rebuilt = jax.tree.map(lambda table: table + 1, conn_a)
 
-    assert rebuilt._array_ops_state is None
     # targets 1, 2, 3, 4, 6 of a field on V:(1,4)
     result = field.premap(rebuilt)
     assert result.domain == common.domain({E: (0, 3)})
@@ -648,21 +647,6 @@ def test_jax_vmap_premap_over_connectivities_has_no_values():
     np.testing.assert_array_equal(
         np.asarray(result), [[10.0, 10.0, 20.0, 30.0, 30.0], [10.0, 20.0, 30.0, 10.0, 30.0]]
     )
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_premap_ignores_array_ops_state_of_another_library():
-    import jax
-
-    E, field, conn_a, _ = _jax_narrowing_setup()
-
-    def premap(field, conn):
-        return field.premap(dataclasses.replace(conn, _array_ops_state=object()))
-
-    result = jax.jit(premap)(field, conn_a)
-
-    assert result.domain == common.domain({E: (0, 5)})
-    np.testing.assert_array_equal(result.asnumpy(), [10.0, 10.0, 20.0, 30.0, 30.0])
 
 
 @pytest.mark.requires_jax

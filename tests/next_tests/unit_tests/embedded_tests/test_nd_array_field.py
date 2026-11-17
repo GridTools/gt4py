@@ -29,6 +29,7 @@ from gt4py.next.common import (
 )
 from gt4py.next.embedded import (
     array_ops,
+    connectivity_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -2111,7 +2112,11 @@ def test_hyperslice(index_array, expected):
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = array_ops.of(index_array).hyperslice(index_array, image_range, skip_value)
+    result = (
+        array_ops.of(index_array)
+        .connectivity_ops(index_array)
+        .hyperslice(index_array, image_range, skip_value)
+    )
 
     assert result == expected
 
@@ -2344,14 +2349,14 @@ def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     )
     field = common._field(np.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
     calls = 0
-    hyperslice = array_ops.ArrayOps.hyperslice
+    hyperslice = connectivity_ops.ConnectivityOps.hyperslice
 
     def counting_hyperslice(*args, **kwargs):
         nonlocal calls
         calls += 1
         return hyperslice(*args, **kwargs)
 
-    monkeypatch.setattr(array_ops.ArrayOps, "hyperslice", counting_hyperslice)
+    monkeypatch.setattr(connectivity_ops.ConnectivityOps, "hyperslice", counting_hyperslice)
 
     for _ in range(3):
         result = field.premap(conn[NamedIndex(E2VDim, 0)])

@@ -21,10 +21,11 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, utils
+from gt4py.next import common
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
+    connectivity_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
 )
@@ -454,19 +455,6 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: Opaque value owned by the `ArrayOps` of the table; its contract is in `ArrayOps`.
-    #: Shared code only stores it and passes it on: `restrict` gives the restricted
-    #: connectivity the same object, `dataclasses.replace` and `copy` keep it, and it is
-    #: passed as `state` to `ArrayOps.hyperslice` and `ArrayOps.restrict_table`. It is `None`
-    #: unless the library built the connectivity with one. It takes no part in equality,
-    #: `repr` or fingerprinting.
-    _array_ops_state: Any = dataclasses.field(
-        default=None,
-        kw_only=True,
-        compare=False,
-        repr=False,
-        metadata=utils.gt4py_metadata(fingerprint=False),
-    )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -515,13 +503,17 @@ class NdArrayConnectivityField(
     def _restrict_cache(self) -> dict[Any, tuple[common.Domain, Any, dict, dict]]:
         return {}
 
+    # Not a field, so that no copy inherits it: `restrict` and a library rebuilding a
+    # connectivity set it, otherwise it is created from the buffer.
+    @functools.cached_property
+    def _connectivity_ops(self) -> connectivity_ops.ConnectivityOps:
+        return array_ops.of(self._ndarray).connectivity_ops(self._ndarray)
+
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = array_ops.of(self._ndarray).hyperslice(
-                self._ndarray, image_range, self.skip_value, state=self._array_ops_state
-            )
+            slices = self._connectivity_ops.hyperslice(self._ndarray, image_range, self.skip_value)
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
@@ -538,16 +530,15 @@ class NdArrayConnectivityField(
         raise TypeError("'Connectivity' does not support item assignment.")
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
-        # Arrays must not be cached: whether a restricted table can be used again is up to its library
+        # Arrays and `ConnectivityOps` must not be cached: whether they can be used again is up to their library
         if (cached := self._restrict_cache.get(index, None)) is None:
             cached = self._restrict_cache[index] = (*self._slice(index), {}, {})
         new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
-        ndarray = array_ops.of(self._ndarray).restrict_table(
-            self._ndarray, buffer_slice, state=self._array_ops_state
-        )
+        ndarray, ops = self._connectivity_ops.restrict(self._ndarray, buffer_slice)
         restricted_connectivity = dataclasses.replace(self, _domain=new_domain, _ndarray=ndarray)
         restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
         restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
+        restricted_connectivity.__dict__["_connectivity_ops"] = ops
         return restricted_connectivity
 
     __getitem__ = restrict

@@ -25,7 +25,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
-from typing import Any, ClassVar, Final, Optional
+from typing import Any, ClassVar, Final
 
 import array_api_compat
 import array_api_compat.numpy as compat_numpy
@@ -33,6 +33,7 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
+from gt4py.next.embedded import connectivity_ops
 
 
 #: gt4py builtin and operator names whose Array API name differs.
@@ -65,18 +66,6 @@ class ArrayOps:
     `xp` is the Array API namespace of the buffers. Field code uses `xp` directly
     for standard functions and the methods of this class wherever a library may
     need to differ; those methods are the override points.
-
-    The operations on a connectivity table (`hyperslice`, `restrict_table`) take the
-    connectivity's `_array_ops_state` as `state`: `None`, or the object a library passed
-    when it built the connectivity (for example in its pytree unflatten). Only that
-    library reads or changes it. The same object reaches every connectivity restricted
-    or copied from that one, also when the table was replaced, possibly by an array of
-    another library. So an implementation
-
-    - identifies the table a `state` describes itself and trusts no other pairing,
-    - treats a `state` it did not create like `None`,
-    - works with `None`: shared code may drop it, and a connectivity built from an
-      array never has one.
     """
 
     #: Replacements of whole `fbuiltins` implementations for fields of this namespace.
@@ -201,61 +190,11 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
-    def hyperslice(
-        self,
-        ndarray: core_defs.NDArrayObject,
-        image_range: common.UnitRange,
-        skip_value: Optional[core_defs.IntegralScalar] = None,
-        *,
-        state: Any = None,
-    ) -> Optional[tuple[slice, ...]]:
-        """
-        Return the hypercube slice that contains all indices in `ndarray` that are within `image_range`, or `None` if no such hypercube exists.
-
-        If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
-        A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
-
-        Example:
-            ndarray =  0  1 -1
-                       3  4 -1
-                      -1 -1 -1
-            skip_value = -1
-
-            would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
-
-        A library which cannot read the values of `ndarray` returns all of it. What an entry
-        outside of `image_range` reads is then defined by its `gather`.
-        """
-        xp = self.xp
-        select_mask = (ndarray >= image_range.start) & (ndarray < image_range.stop)
-
-        if not xp.any(select_mask):
-            return None
-
-        nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
-
-        slices = tuple(
-            slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
-            for dim_nnz_indices in nnz
-        )
-        hcube = select_mask[tuple(slices)]
-        if skip_value is not None:
-            ignore_mask = ndarray == skip_value
-            hcube = hcube | ignore_mask[tuple(slices)]
-        if not xp.all(hcube):
-            return None
-
-        return slices
-
-    def restrict_table(
-        self,
-        ndarray: core_defs.NDArrayObject,
-        key: common.RelativeIndexSequence,
-        *,
-        state: Any = None,
-    ) -> core_defs.NDArrayObject:
-        """Return `ndarray[key]`."""
-        return self.asarray(ndarray[key])
+    def connectivity_ops(
+        self, ndarray: core_defs.NDArrayObject
+    ) -> connectivity_ops.ConnectivityOps:
+        """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`."""
+        return connectivity_ops.ConnectivityOps(self.xp)
 
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
