@@ -46,9 +46,9 @@ on:
   ## from 'main'). Re-enable together with the 'test' job marked like this
   ## one, and never merge either enabled: the Actions event policy for this
   ## file would then have to allow 'pull_request' too.
-  pull_request:
-    branches:
-      - main
+  # pull_request:
+  #   branches:
+  #     - main
   ## END
 
 # Each called job widens what it needs, within the calling job's ceiling.
@@ -102,21 +102,21 @@ jobs:
   ## the one of 'review'. Under 'pull_request' the caller's file, rule files
   ## and addendum are PR content: this proves the plumbing only. Run it
   ## again after every bump of the pin.
-  test:
-    if: github.event_name == 'pull_request'
-    uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@fce720199ea669941f688b41dff6857e97faa401 # v0.1.0
-    permissions:
-      contents: read
-      pull-requests: write
-    with:
-      harness: stub
-      pr: ${{ github.event.pull_request.number }}
-      dry_run: true
-      project_name: GT4Py
-      rule_files: |
-        .github/copilot-instructions.md
-        AGENTS.md
-        CODING_GUIDELINES.md
-        src/gt4py/next/AGENTS.md
-      prompt_addendum: .github/agent-review/prompt-addendum.md
+  # test:
+  #   if: github.event_name == 'pull_request'
+  #   uses: GridTools/ci-workflows/.github/workflows/agent-review.yml@fce720199ea669941f688b41dff6857e97faa401 # v0.1.0
+  #   permissions:
+  #     contents: read
+  #     pull-requests: write
+  #   with:
+  #     harness: stub
+  #     pr: ${{ github.event.pull_request.number }}
+  #     dry_run: true
+  #     project_name: GT4Py
+  #     rule_files: |
+  #       .github/copilot-instructions.md
+  #       AGENTS.md
+  #       CODING_GUIDELINES.md
+  #       src/gt4py/next/AGENTS.md
+  #     prompt_addendum: .github/agent-review/prompt-addendum.md
   ## END
