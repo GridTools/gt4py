@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Final, Optional
+from typing import Any, Final, Literal, Optional
 
 import dace
 
@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import scan_fusion as gtx_scan_fusion
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
@@ -357,14 +358,25 @@ class DaCeTranslator(
         artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     ],
 ):
+    """Lower iterator IR and configure the generated SDFG.
+
+    `fuse_scan_inputs` enables bounded scan-input fusion when auto-optimization
+    is enabled. `scan_fusion_scope="immediate"` considers one producer layer;
+    `"field_operator"` first combines local arithmetic within function boundaries.
+    These iterator-IR settings are separate from the SDFG `auto_optimize_args`.
+    """
+
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
     async_sdfg_call: bool
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
-
     disable_field_origin_on_program_arguments: bool = False
+
+    # These settings act on iterator IR before SDFG lowering.
+    fuse_scan_inputs: bool = False
+    scan_fusion_scope: Literal["immediate", "field_operator"] = "immediate"
     use_max_domain_range_on_unstructured_shift: bool | None = None
 
     def __post_init__(self) -> None:
@@ -383,17 +395,45 @@ class DaCeTranslator(
         with gtx_wfdcommon.dace_context(device_type=self.device_type):
             return self._generate_sdfg_without_configuring_dace(*args, **kwargs)
 
+    def _preprocess_program(
+        self, ir: itir.Program, offset_provider: common.OffsetProvider
+    ) -> itir.Program:
+        """Prepare scan producers and normalize field expressions before lowering."""
+        if (
+            self.auto_optimize
+            and self.fuse_scan_inputs
+            and self.scan_fusion_scope == "field_operator"
+        ):
+            ir = gtx_scan_fusion.normalize_scan_producers(
+                ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+            )
+
+        ir = itir_transforms.apply_fieldview_transforms(
+            ir,
+            offset_provider=offset_provider,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+        )
+
+        if self.auto_optimize and self.fuse_scan_inputs:
+            offset_provider_type = common.offset_provider_to_type(offset_provider)
+            fused = gtx_scan_fusion.fuse_scan_inputs(ir, offset_provider_type=offset_provider_type)
+            if fused is not ir:
+                # Fusion introduces field expressions whose domains need refreshing.
+                ir = itir_transforms.apply_fieldview_transforms(
+                    fused,
+                    offset_provider=offset_provider,
+                    use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+                )
+
+        return ir
+
     def _generate_sdfg_without_configuring_dace(
         self,
         ir: itir.Program,
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        ir = itir_transforms.apply_fieldview_transforms(
-            ir,
-            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-            offset_provider=offset_provider,
-        )
+        ir = self._preprocess_program(ir, offset_provider)
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
@@ -408,8 +448,6 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
-
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
@@ -419,7 +457,7 @@ class DaCeTranslator(
                     if self.unstructured_horizontal_has_unit_stride
                     else None
                 ),
-                **auto_optimize_args,
+                **(self.auto_optimize_args or {}),
             )
         elif on_gpu:
             # Note that `gt_substitute_compiletime_symbols()` will run `gt_simplify()`
