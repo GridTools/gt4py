@@ -816,7 +816,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  the matching. One idea would be to use `cover()`, however, there are
         #  some rare cases where this is not possible. For that reason we use
         #  the lower bound. This might be a bit dangerous.
-        lower_bound = dace_sbs.Indices(tdesc.subset.min_element())
+        lower_bound = dace_sbs.Range.from_indices(tdesc.subset.min_element())
         associated_tmp_subset: Optional[dace_sbs.Subset] = next(
             (
                 merged_tmp_subset

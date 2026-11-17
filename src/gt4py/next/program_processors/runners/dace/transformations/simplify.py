@@ -474,15 +474,34 @@ def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
     validate: bool = True,
     validate_all: bool = False,
-) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
-    """Removes distributed write back buffers."""
-    pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
-    all_result = {}
+) -> Optional[dict[dace.SDFG, dict[str, dict[dace.SDFGState, set[str]]]]]:
+    """Removes distributed write back buffers.
 
+    `DistributedBufferRelocator` is applied to `sdfg` and to all of its nested SDFGs.
+    The function returns `None` if nothing was relocated. Otherwise it returns a
+    `dict` that maps every SDFG in which a relocation happened to
+    `{"DistributedBufferRelocator": <result of the pass>}`.
+
+    Note:
+        The analyses the pass depends on are computed once for the whole SDFG
+        hierarchy, their results are indexed by `cfg_id`. A relocation only modifies
+        the SDFG it is performed in, thus it does not invalidate the results of the
+        other SDFGs, and every SDFG is processed only once.
+    """
+    relocator = DistributedBufferRelocator()
+    analysis_results = dace_ppl.Pipeline(
+        [
+            dace_transformation.passes.StateReachability(),
+            dace_transformation.passes.FindAccessStates(),
+        ]
+    ).apply_pass(sdfg, {})
+    assert analysis_results is not None
+
+    all_result: dict[dace.SDFG, dict[str, dict[dace.SDFGState, set[str]]]] = {}
     for rsdfg in sdfg.all_sdfgs_recursive():
-        ret = pipeline.apply_pass(sdfg, {})
+        ret = relocator.apply_pass(rsdfg, analysis_results)
         if ret is not None:
-            all_result[rsdfg] = ret
+            all_result[rsdfg] = {type(relocator).__name__: ret}
 
         if validate_all:
             rsdfg.validate()
@@ -1329,9 +1348,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
-        # Recursively visit the nested SDFGs for mapping of strides from inner to outer array
-        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
-
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(
@@ -1369,3 +1385,12 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
                 curr_edge.data.data = glob_data
             if curr_dst_subset is not None:
                 curr_dst_subset.offset(correcting_offset, negative=False)
+            # A NestedSDFG inside the Map now writes into `G`, thus its connector,
+            #  which has to be equivalent to the data connected to it, is restated.
+            if isinstance(curr_edge.src, dace_nodes.NestedSDFG):
+                gtx_transformations.utils.restate_nested_sdfg_connector(
+                    nsdfg_node=curr_edge.src,
+                    connector=curr_edge.src_conn,
+                    new_desc=glob_ac.desc(sdfg),
+                    ss_offset=correcting_offset.min_element(),
+                )

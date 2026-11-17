@@ -167,6 +167,18 @@ def set_dace_config(
         value=("development" if gtx_config.KEEP_DACE_BUILD_FILES else "production"),
     )
 
+    # Do not lift implicit copies to `CopyLibraryNode` instances during code generation.
+    #  The lowering and the transformations of the conditional expressions (`if_`) that
+    #  GT4Py performs produce direct array-to-array copy edges, inside the branch states
+    #  of nested SDFGs, that memlet propagation marks as dynamic. The `CopyLibraryNode`
+    #  that the pass inserts for such an edge is expanded into a tasklet, whose dynamic
+    #  output write is then silently dropped by the CPU code generator (the write is
+    #  supposed to be emitted inline in the tasklet body, but the corresponding code
+    #  path calls `TargetCodeGenerator.ptr()` with an outdated signature, raising a
+    #  `TypeError` that is swallowed). Keeping the copies implicit makes the code
+    #  generator handle them through the array copy path instead, which is correct.
+    dace.Config.set("compiler.cpu.explicit_copy", value=False)
+
     # We are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)
 

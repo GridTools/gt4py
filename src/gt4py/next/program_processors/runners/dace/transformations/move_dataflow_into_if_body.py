@@ -896,7 +896,7 @@ class MoveDataflowIntoIfBody(dace_transformation.SingleStateTransformation):
 
         # Now inspect all states.
         for _, if_branch in inner_if_block.branches:
-            for inner_state in if_branch.all_states():
+            for inner_state in if_branch.states():
                 for dnode in inner_state.data_nodes():
                     node_data = dnode.data
 

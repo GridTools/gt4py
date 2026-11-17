@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, ClassVar
 from dace import SDFG, Memlet, SDFGState, config, data, dtypes, nodes, subsets, symbolic
 from dace.codegen import codeobject
 from dace.sdfg.analysis.schedule_tree import treenodes as tn
+from dace.sdfg.dealias import convert_legacy_nested_sdfgs
 from dace.sdfg.utils import inline_sdfgs
 from dace.transformation.dataflow import MapCollapse
 
@@ -287,7 +288,7 @@ def freeze_origin_domain_sdfg(
 
     # in special case of empty domain, remove entire SDFG.
     if any(d == 0 for d in domain):
-        states = wrapper_sdfg.states()
+        states = list(wrapper_sdfg.states())
         assert len(states) == 1
         for node in states[0].nodes():
             state.remove_node(node)
@@ -296,6 +297,9 @@ def freeze_origin_domain_sdfg(
     for symbol in nsdfg.sdfg.free_symbols:
         if symbol not in wrapper_sdfg.symbols:
             wrapper_sdfg.add_symbol(symbol, nsdfg.sdfg.symbols[symbol])
+
+    # Converts the legacy nested SDFGs of `wrapper_sdfg` before handing it to `inline_sdfgs`
+    convert_legacy_nested_sdfgs(wrapper_sdfg)
 
     # Try to inline wrapped SDFG before symbols are specialized to avoid extra views
     inline_sdfgs(wrapper_sdfg)
@@ -790,33 +794,33 @@ class DaCeBindingsCodegen:
 
     mako_template = bindings_main_template()
 
-    def generate_entry_params(self, sdfg: SDFG) -> list[str]:
-        res: dict[str, str] = {}
+    def generate_entry_params(self, sdfg: SDFG) -> list[tuple[str, str]]:
+        """Return the ``(C++ type, name)`` pairs of the ``run_computation`` parameters."""
+        pybind_type = "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+        res: dict[str, list[tuple[str, str]]] = {}
 
         for name in sdfg.signature_arglist(with_types=False, for_call=True):
             if name in sdfg.arrays:
                 container = sdfg.arrays[name]
                 if isinstance(container, data.Scalar):
-                    res[name] = f"{container.ctype} {name}"
+                    res[name] = [(container.ctype, name)]
                 elif isinstance(container, data.Array):
-                    res[name] = (
-                        "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                            pybind_type=(
-                                "object"
-                                if self.backend.storage_info["device"] == "gpu"
-                                else "buffer"
-                            ),
-                            name=name,
-                            ndim=len(container.shape),
-                        )
-                    )
+                    res[name] = [
+                        (f"py::{pybind_type}", name),
+                        (f"std::array<gt::int_t,{len(container.shape)}>", f"{name}_origin"),
+                    ]
                 else:
                     raise NotImplementedError(
                         f"generate_entry_params(): unexpected type {type(container)}"
                     )
             elif name in sdfg.symbols and not name.startswith("__"):
-                res[name] = f"{sdfg.symbols[name].ctype} {name}"
-        return list(res[node.name] for node in self.backend.builder.gtir.params if node.name in res)
+                res[name] = [(sdfg.symbols[name].ctype, name)]
+        return [
+            param
+            for node in self.backend.builder.gtir.params
+            if node.name in res
+            for param in res[node.name]
+        ]
 
     def generate_sid_params(self, sdfg: SDFG) -> list[str]:
         res: list[str] = []

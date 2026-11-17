@@ -43,14 +43,15 @@ profiling = [
 ]
 scripts = ["pyyaml>=6.0.1", "typer>=0.16.0", "packaging"]
 test = [
+  'array-api-strict>=2.5',  # first version whose arrays can be pickled (and deep-copied)
   'black>=25.11',
   'clang-format>=18.1',
   'factory-boy>=3.3.3',
   'hypothesis>=6.0.0',
   'nbmake>=1.4.6',
   'nox>=2025.02.09',
-  'pytest>=8.0.1',
-  'pytest-benchmark>=5.0.0',
+  'pytest>=8.0.1, <9.2.0',  # TODO(romanc): check why cartesian tests fail with `pytest==9.2.0`
+  'pytest-benchmark>=5.3.1',
   'pytest-cache>=1.0',
   'pytest-factoryboy>=2.6.1',
   'pytest-instafail>=0.5.0',
@@ -98,7 +99,7 @@ dependencies = [
   'click>=8.0.0',
   'cmake>=3.22',
   'cytoolz>=1.0.1',
-  'dace==2.0.0a10',
+  'dace==2.0.0b2',
   'deepdiff>=8.1.0',
   'devtools>=0.6',
   "filelock>=3.18.0",
@@ -109,7 +110,7 @@ dependencies = [
   'mako>=1.3',
   'nanobind>=1.9.0',
   'ninja>=1.11',
-  'numpy>=2.0.0 ; python_version < "3.14"',
+  'numpy>=2.1.0 ; python_version < "3.14"',  # first version whose `from_dlpack` takes `device` and `copy`
   'numpy>=2.3.2 ; python_version >= "3.14"',  # first version with pre-built wheel for Python 3.14
   'ordered-set>=4.1.0',
   'packaging>=24.2',
@@ -147,7 +148,7 @@ cartesian = ['black>=25.11', 'clang-format>=18.1', 'gt4py[jax,standard,testing]'
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
 jax = [
-  'jax>=0.4.26 ; python_version < "3.14"',
+  'jax>=0.4.32 ; python_version < "3.14"',  # first version whose array API namespace is jax.numpy
   'jax>=0.9.1 ; python_version >= "3.14"'  # first version with pre-built wheel for Python 3.14
 ]
 jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
@@ -248,6 +249,7 @@ markers = [
   'uses_dace: tests that exercise the `dace` backend',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
   'uses_floordiv: tests that require backend support for floor division',
+  'uses_math_outside_array_api: tests of math builtins the Array API standard does not define (cbrt, fmod, gamma)',
   'uses_if_stmts: tests that require backend support for if-statements',
   'uses_index_fields: tests that require backend support for index fields',
   'uses_ir_if_stmts',
@@ -437,7 +439,7 @@ atlas4py = { index = "test.pypi" }
 
 # -- versioningit --
 [tool.versioningit]
-default-version = "1.2.3+unknown.version.details"
+default-version = "1.2.4+unknown.version.details"
 
 [tool.versioningit.format]
 dirty = "{base_version}+dirty"  # Example: 1.2.3+dirty

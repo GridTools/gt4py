@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 import itertools
-from typing import Optional
+from typing import Any, Optional, Sequence
 
 import dace
 from dace import subsets as dace_subsets
@@ -27,6 +27,7 @@ def copy_map_graph(
     map_entry: dace_nodes.MapEntry,
     map_exit: dace_nodes.MapExit,
     suffix: Optional[str] = None,
+    defined_symbols: Optional[dict[str, Any]] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
     """Performs a full copy of the dataflow inside the Map.
 
@@ -39,6 +40,10 @@ def copy_map_graph(
         map_entry: The entry node of the map graph.
         map_exit: The exit node of the map graph.
         suffix: String to append to the label of the copied nodes.
+        defined_symbols: The result of ``graph.defined_symbols()``. This is intended
+            for cases where multiple nested SDFGs are inserted, then the symbols can be
+            computed once and reused multiple times, instead recomputing them for every
+            insertion.
 
     Returns:
         A tuple of map entry and exit nodes, for the new map.
@@ -76,12 +81,19 @@ def copy_map_graph(
             new_data_names[data_name] = new_data_name
             new_data_descriptors[data_name] = new_data_desc
         elif isinstance(node, dace_nodes.NestedSDFG):
+            # The symbols are only consumed while copying a nested SDFG: they are
+            # resolved when the first one is copied and the result is reused for
+            # all nested SDFGs of the scope, while tasklet-only scopes never
+            # resolve them.
+            if defined_symbols is None:
+                defined_symbols = graph.defined_symbols()
             node_ = graph.add_nested_sdfg(
                 sdfg=copy.deepcopy(node.sdfg),
                 inputs={k: None for k in sorted(node.in_connectors.keys())},
                 outputs={k: None for k in sorted(node.out_connectors.keys())},
                 symbol_mapping=node.symbol_mapping.copy(),
                 debuginfo=copy.copy(node.debuginfo),
+                defined_symbols=defined_symbols,
             )
             # ensure the correct reference to parent
             node_.sdfg.parent_nsdfg_node = node_
@@ -146,6 +158,7 @@ def copy_map_graph_with_new_range(
     map_exit: dace_nodes.MapExit,
     map_range: dace_subsets.Range,
     suffix: str,
+    defined_symbols: Optional[dict[str, Any]] = None,
 ) -> tuple[dace_nodes.MapEntry, dace_nodes.MapExit]:
     """Wrapper of `copy_map_graph` that additionally calls `update_map_range` on the new map.
 
@@ -163,7 +176,9 @@ def copy_map_graph_with_new_range(
     Returns:
         A tuple of map entry and exit nodes, for the new map.
     """
-    new_map_entry, new_map_exit = copy_map_graph(sdfg, state, map_entry, map_exit, suffix)
+    new_map_entry, new_map_exit = copy_map_graph(
+        sdfg, state, map_entry, map_exit, suffix, defined_symbols
+    )
     update_map_range(new_map_entry.map, map_range)
     assert new_map_entry.range == map_range
     assert new_map_exit.map.range == map_range
@@ -182,6 +197,26 @@ def delete_map(
     """
     graph.remove_nodes_from(
         list(graph.scope_subgraph(map_entry, include_entry=True, include_exit=True).nodes())
+    )
+
+
+def map_scope_contains_nested_sdfg(
+    state: dace.SDFGState,
+    map_entries: Sequence[dace_nodes.MapEntry],
+) -> bool:
+    """Tests if the scope of any of the given Maps contains a nested SDFG.
+
+    Nested Maps are considered as well, i.e. the nested SDFG does not need to be
+    located directly inside the Map scope.
+
+    Args:
+        state: The state containing the Maps.
+        map_entries: The `MapEntry` nodes of the Maps to inspect.
+    """
+    return any(
+        isinstance(node, dace_nodes.NestedSDFG)
+        for map_entry in map_entries
+        for node in state.scope_subgraph(map_entry, include_entry=False, include_exit=False).nodes()
     )
 
 
@@ -256,10 +291,10 @@ def split_overlapping_map_range(
                         [(0, 2, 1), (3, 6, 1), (7, 9, 1)]
                 """
                 splitted_ranges = []
-                if range_[0] < start:
+                if (range_[0] < start) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools
                     splitted_ranges.append((range_[0], start - step, step))
                 splitted_ranges.append((start, stop, step))
-                if stop < range_[1]:
+                if (stop < range_[1]) == True:  # noqa: E712 [true-false-comparison]  # SymPy fuzzy bools
                     splitted_ranges.append((stop + step, range_[1], step))
                 return splitted_ranges
 

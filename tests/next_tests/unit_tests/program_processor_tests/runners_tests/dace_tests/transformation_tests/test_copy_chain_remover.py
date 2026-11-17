@@ -724,13 +724,11 @@ def test_linear_chain_with_nested_sdfg():
     assert {ac.data for ac in acnodes} == {"a", "e"}
     assert util.count_nodes(sdfg, dace_nodes.NestedSDFG) == 1
 
-    # The shapes should be the same as before.
-    assert inner_sdfg.arrays["i0"].shape == inner_sdfg.arrays["o0"].shape
+    # The input descriptor should be the same as before, but the output descriptor
+    #  should now be the same as `e`.
     assert inner_sdfg.arrays["i0"].shape == sdfg.arrays["a"].shape
-
-    # The strides of `i0` should also be the same as before, but the strides
-    #  of `o0` should now be the same as `e`.
     assert inner_sdfg.arrays["i0"].strides == sdfg.arrays["a"].strides
+    assert inner_sdfg.arrays["o0"].shape == sdfg.arrays["e"].shape
     assert inner_sdfg.arrays["o0"].strides == sdfg.arrays["e"].strides
 
     # Now run the transformed SDFG to see if the same output is generated.
