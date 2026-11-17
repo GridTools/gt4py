@@ -830,7 +830,10 @@ class VerticalSplitMapRange(SplitMapRange):
         )
         if not inner_edges or edge.data.is_empty() or edge.data.dynamic or edge.data.wcr:
             return None
-        # Each iteration must access exactly the array element at its map indices.
+        # Check the edges inside the map: each iteration may only touch its own
+        #  element, no shifts or offsets. Below, the outer memlet must also cover
+        #  the whole map range. Otherwise, splitting the map range would not split
+        #  the array accesses the same way.
         point = dace_subsets.Range.from_string(", ".join(map_.params))
         for inner in inner_edges:
             if inner.data.is_empty():
