@@ -41,7 +41,7 @@ import numpy as np
 from typing_extensions import Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
-from gt4py._core.dlpack import BufferInfo as BufferInfo
+from gt4py._core.ndarray_utils import BufferInfo as BufferInfo
 from gt4py.eve import utils, xtyping
 from gt4py.eve.type_definitions import StrEnum
 

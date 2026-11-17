@@ -18,7 +18,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gt4py._core import definitions as core_defs, dlpack as core_dlpack
+from gt4py._core import (
+    definitions as core_defs,
+    dlpack as core_dlpack,
+    ndarray_utils as core_ndarray_utils,
+)
 from gt4py.next import common
 from gt4py.next.embedded import array_ops, nd_array_field
 
@@ -56,9 +60,9 @@ class JaxOps(array_ops.ArrayOps):
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> core_dlpack.BufferInfo:
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_ndarray_utils.BufferInfo:
         # JAX's `__dlpack__` rejects `stream=-1` and blocks the host on `stream=None`.
-        return core_dlpack.BufferInfo(
+        return core_ndarray_utils.BufferInfo(
             data_ptr=array.unsafe_buffer_pointer(),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
             shape=array.shape,
             elem_strides=_layout_strides(array),

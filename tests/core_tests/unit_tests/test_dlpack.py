@@ -29,23 +29,21 @@ class _Wrapper:
         return self.array.__dlpack_device__()
 
 
-def test_from_dlpack():
+def test_buffer_attributes():
     array = _BASE[1:4, 2:, ::-2]
 
-    info = dlpack.BufferInfo.from_dlpack(array)
-
-    assert isinstance(info, dlpack.BufferInfo)
-
-    assert info.data_ptr == array.__array_interface__["data"][0]
-    assert info.shape == array.shape
-    assert info.elem_strides == tuple(s // array.itemsize for s in array.strides)
-    assert info.dtype == core_defs.dtype(np.float64)
-    assert info.device == core_defs.Device(core_defs.DeviceType.CPU, 0)
+    assert dlpack.buffer_attributes(array) == {
+        "data_ptr": array.__array_interface__["data"][0],
+        "shape": array.shape,
+        "elem_strides": tuple(s // array.itemsize for s in array.strides),
+        "dtype": core_defs.dtype(np.float64),
+        "device": core_defs.Device(core_defs.DeviceType.CPU, 0),
+    }
 
 
 def test_no_dlpack():
     with pytest.raises(TypeError, match="DLPack"):
-        dlpack.BufferInfo.from_dlpack(object())
+        dlpack.buffer_attributes(object())
 
 
 def test_producer_without_max_version():
@@ -54,9 +52,7 @@ def test_producer_without_max_version():
 
     array = _BASE[1:4]
 
-    assert dlpack.BufferInfo.from_dlpack(
-        _Wrapper(array, only_stream)
-    ) == dlpack.BufferInfo.from_dlpack(array)
+    assert dlpack.buffer_attributes(_Wrapper(array, only_stream)) == dlpack.buffer_attributes(array)
 
 
 def test_unversioned_capsule():
@@ -65,14 +61,12 @@ def test_unversioned_capsule():
 
     array = _BASE[1:4]
 
-    assert dlpack.BufferInfo.from_dlpack(
-        _Wrapper(array, unversioned)
-    ) == dlpack.BufferInfo.from_dlpack(array)
+    assert dlpack.buffer_attributes(_Wrapper(array, unversioned)) == dlpack.buffer_attributes(array)
 
 
 def test_unsupported_dtype():
     with pytest.raises(TypeError, match="not a gt4py scalar type"):
-        dlpack.BufferInfo.from_dlpack(np.zeros(3, dtype=np.float16))
+        dlpack.buffer_attributes(np.zeros(3, dtype=np.float16))
 
 
 def test_impossible_stride():
@@ -85,7 +79,7 @@ def test_impossible_stride():
         return capsule
 
     with pytest.raises(BufferError, match="cupy#10228"):
-        dlpack.BufferInfo.from_dlpack(_Wrapper(_BASE, cupy_before_10228))
+        dlpack.buffer_attributes(_Wrapper(_BASE, cupy_before_10228))
 
 
 @pytest.mark.parametrize(
@@ -104,23 +98,6 @@ def test_stream_argument(device_type, stream):
         def __dlpack_device__(self):
             return device_type, 0
 
-    dlpack.BufferInfo.from_dlpack(Producer())
+    dlpack.buffer_attributes(Producer())
 
     assert streams == [stream]
-
-
-def test_hash_key_tells_apart_dtypes_at_the_same_address():
-    a = np.zeros(4, dtype=np.float64)
-    scalar = np.zeros((), dtype=np.float64)
-    scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
-    assert scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
-
-    for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
-        assert dlpack.BufferInfo.from_dlpack(x) != dlpack.BufferInfo.from_dlpack(y)
-        assert (
-            dlpack.BufferInfo.from_dlpack(x).hash_key != dlpack.BufferInfo.from_dlpack(y).hash_key
-        )
-
-    assert dlpack.BufferInfo.from_dlpack(a[:]) == dlpack.BufferInfo.from_dlpack(a)
-    assert dlpack.BufferInfo.from_dlpack(a[:]).hash_key == dlpack.BufferInfo.from_dlpack(a).hash_key
-    assert hash(dlpack.BufferInfo.from_dlpack(a)) == dlpack.BufferInfo.from_dlpack(a).hash_key

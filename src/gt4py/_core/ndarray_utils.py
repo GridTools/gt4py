@@ -6,14 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import functools
 from collections.abc import Hashable
-from typing import Any, Callable, Final, Protocol, TypeGuard, cast
+from typing import Any, Callable, Final, Protocol, Self, TypeGuard, cast
 
 import array_api_compat
 import numpy as np
 
-from gt4py._core import definitions as core_defs, types as core_types
+from gt4py._core import definitions as core_defs, dlpack as core_dlpack, types as core_types
 
 
 try:
@@ -205,3 +206,43 @@ def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Devic
         raise ValueError(
             f"No device translator registered for array namespace {array_ns}."
         ) from None
+
+
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory.
+
+    Equal `BufferInfo`s (and equal `hash_key`s) describe buffers that behave the same apart
+    from their contents.
+
+    Args:
+        data_ptr: Address of the element at index `(0, ..., 0)`.
+        shape: Number of elements along each dimension.
+        elem_strides: Distance between consecutive elements along each dimension, in elements.
+        dtype: Data type of the elements.
+        device: Device the buffer is allocated on.
+    """
+
+    data_ptr: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    dtype: core_defs.DType
+    device: core_defs.Device
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash((self.data_ptr, self.shape, self.elem_strides, self.dtype, self.device))
+
+    def __hash__(self) -> int:
+        return self.hash_key
+
+    @classmethod
+    def from_dlpack(cls, array: Any) -> Self:
+        """Describe the buffer of `array` from its DLPack export.
+
+        Raises:
+            TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
+            BufferError: `array` cannot be exported without a copy, or its DLPack export is
+                not supported (see `gt4py._core.dlpack.buffer_attributes`).
+        """
+        return cls(**core_dlpack.buffer_attributes(array))

@@ -14,7 +14,7 @@ import pytest
 import re
 
 from gt4py import next as gtx
-from gt4py._core import definitions as core_defs, dlpack as core_dlpack
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 import gt4py.next.common as common
 from gt4py.next.embedded import array_ops
 from gt4py.next.common import (
@@ -756,11 +756,11 @@ class TestBufferInfo:
         assert buffer_info.elem_strides == (3, 1, 6)
 
     def test_reexported_from_core(self):
-        assert common.BufferInfo is core_dlpack.BufferInfo
+        assert common.BufferInfo is core_ndarray_utils.BufferInfo
 
     @pytest.mark.parametrize("array", [_BASE, _BASE[1:4, ::-1]], ids=["contiguous", "view"])
     def test_array_ops_entry_point_is_from_dlpack(self, array):
-        assert _buffer_info(array) == core_dlpack.BufferInfo.from_dlpack(array)
+        assert _buffer_info(array) == core_ndarray_utils.BufferInfo.from_dlpack(array)
 
 
 class TestCartesianConnectivity:

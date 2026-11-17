@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`BufferInfo`: buffer metadata of any array that exports DLPack, read from its capsule with `ctypes`.
+"""Buffer attributes of any array that exports DLPack, read from its capsule with `ctypes`.
 
 The binary layout follows `dlpack.h` of DLPack v1.4
 (https://github.com/dmlc/dlpack/blob/v1.4/include/dlpack/dlpack.h, documented at
@@ -33,8 +33,6 @@ NULL strides, allowed before DLPack 1.2, are read as C-contiguous.
 from __future__ import annotations
 
 import ctypes
-import dataclasses
-import functools
 from typing import Any, Final
 
 from gt4py._core import definitions as core_defs
@@ -116,90 +114,65 @@ def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(reversed(strides))
 
 
-@dataclasses.dataclass(frozen=True)
-class BufferInfo:
-    """Holds information about a buffer in memory.
+def buffer_attributes(array: Any) -> dict[str, Any]:
+    """Attributes of the buffer of `array`, read from its DLPack capsule without consuming it.
 
-    Equal `BufferInfo`s (and equal `hash_key`s) describe buffers that behave the same apart
-    from their contents.
+    The result has the keys `data_ptr` (address of the element at index `(0, ..., 0)`, i.e.
+    `data + byte_offset`), `shape`, `elem_strides` (in elements), `dtype` (a gt4py `DType`) and
+    `device` (a gt4py `Device`).
 
-    Args:
-        data_ptr: Address of the element at index `(0, ..., 0)`.
-        shape: Number of elements along each dimension.
-        elem_strides: Distance between consecutive elements along each dimension, in elements.
-        dtype: Data type of the elements.
-        device: Device the buffer is allocated on.
+    On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
+    only devices for which the Array API standard defines that request; all other devices get
+    `stream=None`, which the standard requires on CPU and on devices without streams. The result
+    describes where the data lives, not when it is ready.
+
+    Raises:
+        TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
+        BufferError: `array` cannot be exported without a copy, the capsule has an
+            unsupported DLPack major version, or it reports a stride of `2**63` bytes or more.
     """
+    try:
+        device_type, _ = array.__dlpack_device__()
+    except AttributeError:
+        raise TypeError(f"'{type(array).__name__}' does not export DLPack.") from None
+    stream = -1 if device_type in _NO_SYNC_STREAM_DEVICE_TYPES else None
+    try:
+        capsule = array.__dlpack__(stream=stream, max_version=(1, 0), copy=False)
+    except TypeError:
+        capsule = array.__dlpack__(stream=stream)
 
-    data_ptr: int
-    shape: tuple[int, ...]
-    elem_strides: tuple[int, ...]
-    dtype: core_defs.DType
-    device: core_defs.Device
+    # Not renaming the capsule leaves it unconsumed, so its destructor calls the producer's deleter.
+    if _capsule_is_valid(capsule, _VERSIONED):
+        address = _capsule_pointer(capsule, _VERSIONED)
+        version = _DLPackVersion.from_address(address)
+        if version.major > 1:
+            raise BufferError(f"Unsupported DLPack version {version.major}.{version.minor}.")
+        tensor = _DLTensor.from_address(address + _DL_TENSOR_OFFSET)
+    else:
+        tensor = _DLTensor.from_address(_capsule_pointer(capsule, _UNVERSIONED))
 
-    @functools.cached_property
-    def hash_key(self) -> int:
-        return hash((self.data_ptr, self.shape, self.elem_strides, self.dtype, self.device))
-
-    def __hash__(self) -> int:
-        return self.hash_key
-
-    @classmethod
-    def from_dlpack(cls, array: Any) -> BufferInfo:
-        """Describe the buffer of `array` from its DLPack capsule, without consuming the capsule.
-
-        On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
-        only devices for which the Array API standard defines that request; all other devices get
-        `stream=None`, which the standard requires on CPU and on devices without streams. The result
-        describes where the data lives, not when it is ready.
-
-        Raises:
-            TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
-            BufferError: `array` cannot be exported without a copy, the capsule has an
-                unsupported DLPack major version, or it reports a stride of `2**63` bytes or more.
-        """
-        try:
-            device_type, _ = array.__dlpack_device__()
-        except AttributeError:
-            raise TypeError(f"'{type(array).__name__}' does not export DLPack.") from None
-        stream = -1 if device_type in _NO_SYNC_STREAM_DEVICE_TYPES else None
-        try:
-            capsule = array.__dlpack__(stream=stream, max_version=(1, 0), copy=False)
-        except TypeError:
-            capsule = array.__dlpack__(stream=stream)
-
-        # Not renaming the capsule leaves it unconsumed, so its destructor calls the producer's deleter.
-        if _capsule_is_valid(capsule, _VERSIONED):
-            address = _capsule_pointer(capsule, _VERSIONED)
-            version = _DLPackVersion.from_address(address)
-            if version.major > 1:
-                raise BufferError(f"Unsupported DLPack version {version.major}.{version.minor}.")
-            tensor = _DLTensor.from_address(address + _DL_TENSOR_OFFSET)
-        else:
-            tensor = _DLTensor.from_address(_capsule_pointer(capsule, _UNVERSIONED))
-
-        dl_dtype = tensor.dtype
-        try:
-            dtype = _DTYPES[dl_dtype.code, dl_dtype.bits, dl_dtype.lanes]
-        except KeyError:
-            raise TypeError(
-                f"DLPack dtype (code={dl_dtype.code}, bits={dl_dtype.bits}, lanes={dl_dtype.lanes})"
-                f" of '{type(array).__name__}' is not a gt4py scalar type."
-            ) from None
-        ndim = tensor.ndim
-        shape = tuple(tensor.shape[:ndim])
-        strides = tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape)
-        itemsize = dtype.byte_size
-        if any(abs(stride) * itemsize >= 2**63 for stride in strides):
-            raise BufferError(
-                f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
-                f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
-                " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned integers)."
-            )
-        return cls(
-            data_ptr=(tensor.data or 0) + tensor.byte_offset,
-            shape=shape,
-            elem_strides=strides,
-            dtype=dtype,
-            device=device(tensor.device.device_type, tensor.device.device_id),
+    dl_dtype = tensor.dtype
+    try:
+        dtype = _DTYPES[dl_dtype.code, dl_dtype.bits, dl_dtype.lanes]
+    except KeyError:
+        raise TypeError(
+            f"DLPack dtype (code={dl_dtype.code}, bits={dl_dtype.bits}, lanes={dl_dtype.lanes})"
+            f" of '{type(array).__name__}' is not a gt4py scalar type."
+        ) from None
+    ndim = tensor.ndim
+    shape = tuple(tensor.shape[:ndim])
+    strides = tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape)
+    itemsize = dtype.byte_size
+    if any(abs(stride) * itemsize >= 2**63 for stride in strides):
+        raise BufferError(
+            f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
+            f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
+            " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned integers)."
         )
+    return {
+        "data_ptr": (tensor.data or 0) + tensor.byte_offset,
+        "shape": shape,
+        "elem_strides": strides,
+        "dtype": dtype,
+        "device": device(tensor.device.device_type, tensor.device.device_id),
+    }

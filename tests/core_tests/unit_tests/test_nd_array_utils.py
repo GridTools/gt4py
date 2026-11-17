@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py._core import ndarray_utils, definitions
+from gt4py._core import definitions, dlpack, ndarray_utils
 
 
 def cuda_device(id_: int) -> Any:
@@ -105,3 +105,33 @@ def test_namespace_dtype_of_c_type_aliases(array_ns_name, c_type, expected):
     array_ns = importlib.import_module(array_ns_name)
 
     assert ndarray_utils.namespace_dtype(array_ns, c_type) == getattr(array_ns, expected)
+
+
+_BASE = np.arange(5 * 6 * 7, dtype=np.float64).reshape(5, 6, 7)
+
+
+@pytest.mark.parametrize("array", [_BASE, _BASE[1:4, 2:, ::-2]], ids=["contiguous", "view"])
+def test_buffer_info_from_dlpack(array):
+    info = ndarray_utils.BufferInfo.from_dlpack(array)
+
+    assert info == ndarray_utils.BufferInfo(**dlpack.buffer_attributes(array))
+    assert info.data_ptr == array.__array_interface__["data"][0]
+    assert info.elem_strides == tuple(s // array.itemsize for s in array.strides)
+
+
+def test_buffer_info_hash_key_tells_apart_dtypes_at_the_same_address():
+    def info(array):
+        return ndarray_utils.BufferInfo.from_dlpack(array)
+
+    a = np.zeros(4, dtype=np.float64)
+    scalar = np.zeros((), dtype=np.float64)
+    scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
+    assert scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
+
+    for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
+        assert info(x) != info(y)
+        assert info(x).hash_key != info(y).hash_key
+
+    assert info(a[:]) == info(a)
+    assert info(a[:]).hash_key == info(a).hash_key
+    assert hash(info(a)) == info(a).hash_key
