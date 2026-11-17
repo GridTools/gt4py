@@ -25,7 +25,6 @@ from gt4py.next.program_processors.runners.dace import (
     library_nodes as gtx_library_nodes,
     transformations as gtx_transformations,
 )
-from gt4py.next.program_processors.runners.dace.transformations import map_fusion_extended
 
 
 class GT4PyAutoOptHook(enum.Enum):
@@ -279,16 +278,6 @@ def gt_auto_optimize(
     uids = gtx_utils.IDGeneratorPool()
     device = dace.DeviceType.GPU if gpu else dace.DeviceType.CPU
     optimization_hooks = optimization_hooks or {}
-
-    (
-        vertical_split_allow_shared_output,
-        vertical_split_shared_output_data,
-        vertical_split_shared_output_dimension,
-    ) = map_fusion_extended._check_shared_output_options(
-        vertical_split_allow_shared_output,
-        vertical_split_shared_output_data,
-        vertical_split_shared_output_dimension,
-    )
 
     with dace.config.temporary_config():
         # Do not store which transformations were applied inside the SDFG.

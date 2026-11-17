@@ -1036,7 +1036,7 @@ def _check_shared_output_options(
     shared_output_data: Optional[Sequence[str]],
     split_dimension: Optional[Union[gtx_common.Dimension, str]],
 ) -> tuple[bool, Optional[Sequence[str]], Optional[Union[gtx_common.Dimension, str]]]:
-    """Warn about inactive selections and avoid warning again when forwarding them."""
+    """Warn about inactive or empty shared-output selections."""
     if not allow_shared_output and (shared_output_data is not None or split_dimension is not None):
         warnings.warn(
             "Shared-output selection is ignored because shared-output splitting is disabled.",

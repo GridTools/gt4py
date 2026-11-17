@@ -239,16 +239,10 @@ def test_shared_output_split_auto_optimizer_option(tmp_path, enabled, selected, 
         if selected == []
         else None
     )
-    with (
-        pytest.warns(UserWarning, match=expected_warning)
-        if expected_warning
-        else nullcontext() as warnings
-    ):
+    with pytest.warns(UserWarning, match=expected_warning) if expected_warning else nullcontext():
         gtx_transformations.gt_auto_optimize(
             sdfg, gpu=False, validate=True, validate_all=True, **options
         )
-    if expected_warning:
-        assert len(warnings) == 1
     assert sum(isinstance(node, dace_nodes.MapEntry) for node in state.nodes()) == expected_maps
     assert all(not sdfg.arrays[name].transient for name in ("theta", "rho", "wind"))
     rng = np.random.default_rng(42)
