@@ -455,8 +455,9 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: The `ConnectivityOps` of the connectivity if its creator knows them, as `restrict` does.
-    #: Not a field, so that no copy inherits them; without them, they are created from the buffer.
+    #: The `ConnectivityOps` of a connectivity whose buffer does not determine them, e.g. a tracer
+    #: standing for a concrete table. Not a field, so that no copy inherits them; without them,
+    #: they are created from the buffer.
     connectivity_ops: dataclasses.InitVar[Optional[embedded_connectivity_ops.ConnectivityOps]] = (
         dataclasses.field(default=None, kw_only=True)
     )
