@@ -111,7 +111,7 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
             return super().hyperslice(self.values, image_range, skip_value)
 
     def for_ndarray(self, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
-        return JaxConnectivityOps(self.xp, ndarray if _has_values(ndarray) else None)
+        return JaxConnectivityOps(self.array_ops, ndarray if _has_values(ndarray) else None)
 
     def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
         # a tracer belongs to a trace, which may end before the cache
@@ -168,8 +168,9 @@ class JaxOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
 
 
-array_ops.register(JaxOps(jnp))
-connectivity_ops.register(JaxConnectivityOps(jnp))
+_jax_ops = JaxOps(jnp)
+array_ops.register(_jax_ops)
+connectivity_ops.register(JaxConnectivityOps(_jax_ops))
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)
@@ -246,7 +247,7 @@ def _unflatten_connectivity(
         or _has_values(ndarray)
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
     ):
-        connectivity.__dict__["_connectivity_ops"] = JaxConnectivityOps(jnp, identity.values)
+        connectivity.__dict__["_connectivity_ops"] = connectivity_ops.of(identity.values)
     return connectivity
 
 
