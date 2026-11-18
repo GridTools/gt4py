@@ -2641,3 +2641,21 @@ def test_scan_result_on_non_default_device_of_inputs():
 
     assert result.ndarray.device == data.device
     np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_buffer_info(device):
+    import torch
+
+    data = torch.arange(24.0, dtype=torch.float64, device=device).reshape(2, 3, 4)[:, 1:, ::2]
+    field = common._field(data, domain=common.domain({D0: 2, D1: 2, D2: 2}))
+
+    buffer_info = field.__gt_buffer_info__
+
+    assert buffer_info.data_ptr == data.data_ptr()
+    assert buffer_info.shape == tuple(data.shape)
+    assert buffer_info.elem_strides == data.stride()
+    assert buffer_info.device.device_type == (
+        core_defs.DeviceType.CUDA if device == "cuda" else core_defs.DeviceType.CPU
+    )

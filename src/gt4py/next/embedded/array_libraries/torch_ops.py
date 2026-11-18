@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
 from gt4py.next.embedded import array_ops
 
 
@@ -81,9 +80,6 @@ class TorchOps(array_ops.ArrayOps):
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return array.detach().cpu().numpy()  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
-
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        raise NotImplementedError("'__gt_buffer_info__' for torch tensors not yet implemented.")
 
 
 array_ops.register("array_api_compat.torch", TorchOps)
