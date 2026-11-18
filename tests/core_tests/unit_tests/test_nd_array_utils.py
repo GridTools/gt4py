@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py._core import ndarray_utils, definitions
+from gt4py._core import definitions, dlpack, ndarray_utils
 
 
 def cuda_device(id_: int) -> Any:
@@ -130,3 +130,116 @@ def test_namespace_dtype_of_c_type_aliases(array_ns_name, c_type, expected):
     array_ns = importlib.import_module(array_ns_name)
 
     assert ndarray_utils.namespace_dtype(array_ns, c_type) == getattr(array_ns, expected)
+
+
+_BASE = np.arange(5 * 6 * 7, dtype=np.float64).reshape(5, 6, 7)
+
+
+@pytest.mark.parametrize("array", [_BASE, _BASE[1:4, 2:, ::-2]], ids=["contiguous", "view"])
+def test_buffer_info_from_dlpack(array):
+    info = ndarray_utils.BufferInfo.from_dlpack(array)
+
+    assert info.data_ptr == array.__array_interface__["data"][0]
+    assert info.shape == array.shape
+    assert info.elem_strides == tuple(s // array.itemsize for s in array.strides)
+    assert info.dtype == definitions.dtype(np.float64)
+    assert info.device == definitions.Device(definitions.DeviceType.CPU, 0)
+
+
+class _PatchedExport:
+    """Exports `array` through DLPack after `patch` modified the capsule's `DLTensor`."""
+
+    def __init__(self, array, patch):
+        self.array = array
+        self.patch = patch
+
+    def __dlpack__(self, *, stream=None, max_version=None, copy=None):
+        capsule = self.array.__dlpack__(max_version=(1, 0), copy=copy)
+        address = dlpack._capsule_pointer(capsule, b"dltensor_versioned")
+        self.patch(dlpack._DLTensor.from_address(address + dlpack._DL_TENSOR_OFFSET))
+        return capsule
+
+    def __dlpack_device__(self):
+        return self.array.__dlpack_device__()
+
+
+def test_buffer_info_adds_byte_offset():
+    def move_offset(tensor):
+        tensor.data -= 16
+        tensor.byte_offset = 16
+
+    array = _BASE[1:4]
+
+    info = ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(array, move_offset))
+
+    assert info.data_ptr == array.__array_interface__["data"][0]
+
+
+def test_buffer_info_null_strides_are_c_contiguous():
+    def null_strides(tensor):
+        tensor.strides = type(tensor.strides)()
+
+    info = ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(_BASE, null_strides))
+
+    assert info.elem_strides == (42, 7, 1)
+
+
+def test_buffer_info_impossible_stride():
+    def cupy_before_10228(tensor):
+        # Stride -42 as CuPy before cupy#10228 exports it for float64.
+        tensor.strides[0] = 2**64 // _BASE.itemsize - 42
+
+    with pytest.raises(BufferError, match="cupy#10228"):
+        ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(_BASE, cupy_before_10228))
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [np.bool_, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64]
+    + [np.float32, np.float64],
+)
+def test_buffer_info_dtype(dtype):
+    info = ndarray_utils.BufferInfo.from_dlpack(np.zeros(3, dtype=dtype))
+
+    assert info.dtype == definitions.dtype(dtype)
+
+
+@pytest.mark.parametrize("dtype", [np.float16, np.complex64])
+def test_buffer_info_unsupported_dtype(dtype):
+    with pytest.raises(TypeError, match="not a gt4py scalar type"):
+        ndarray_utils.BufferInfo.from_dlpack(np.zeros(3, dtype=dtype))
+
+
+@pytest.mark.parametrize(
+    ("dlpack_device", "device"),
+    [
+        ((1, 0), definitions.Device(definitions.DeviceType.CPU, 0)),
+        ((2, 1), definitions.Device(definitions.DeviceType.CUDA, 1)),
+        ((10, 0), definitions.Device(definitions.DeviceType.ROCM, 0)),
+        ((13, 0), definitions.Device(13, 0)),
+    ],
+    ids=["cpu", "cuda", "rocm", "unnamed_cuda_managed"],
+)
+def test_device_from_dlpack(dlpack_device, device):
+    result = ndarray_utils.device_from_dlpack(*dlpack_device)
+
+    assert result == device
+    assert type(result.device_type) is type(device.device_type)
+
+
+def test_buffer_info_hash_key_tells_apart_dtypes_at_the_same_address():
+    def info(array):
+        return ndarray_utils.BufferInfo.from_dlpack(array)
+
+    a = np.zeros(4, dtype=np.float64)
+    scalar = np.zeros((), dtype=np.float64)
+    scalar_float32 = scalar.reshape(1).view(np.float32)[:1].reshape(())
+    assert scalar_float32.__array_interface__["data"][0] == scalar.__array_interface__["data"][0]
+
+    for x, y in [(a, a.view(np.int64)), (scalar, scalar_float32)]:
+        assert info(x) != info(y)
+        assert info(x).hash_key != info(y).hash_key
+
+    assert info(a[:]) == info(a)
+    assert info(a[:]).hash_key == info(a).hash_key
+    assert hash(info(a)) == info(a).hash_key

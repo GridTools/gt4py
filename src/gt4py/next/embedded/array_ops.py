@@ -215,8 +215,8 @@ class ArrayOps:
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        return common.BufferInfo.from_ndarray(array)
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_ndarray_utils.BufferInfo:
+        return core_ndarray_utils.BufferInfo.from_dlpack(array)
 
 
 _ops_types: dict[str, type[ArrayOps]] = {}
