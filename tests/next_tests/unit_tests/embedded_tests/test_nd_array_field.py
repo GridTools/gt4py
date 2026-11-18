@@ -2338,6 +2338,19 @@ def test_connectivity_field_setitem_raises():
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
 
 
+def test_connectivity_field_restrict_is_cached():
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [1, 2], [2, 3]]),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+
+    assert conn[NamedIndex(E2VDim, 0)] is conn[NamedIndex(E2VDim, 0)]
+
+
 def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     V = Dimension("V")
     E = Dimension("E")

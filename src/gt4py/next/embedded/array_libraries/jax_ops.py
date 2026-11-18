@@ -110,6 +110,10 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
         with jax.ensure_compile_time_eval():
             return super().hyperslice(self.values, image_range, skip_value)
 
+    def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
+        # a tracer belongs to a trace, which may end before the cache
+        return _has_values(ndarray)
+
     def restrict(
         self, ndarray: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence
     ) -> tuple[core_defs.NDArrayObject, connectivity_ops.ConnectivityOps]:

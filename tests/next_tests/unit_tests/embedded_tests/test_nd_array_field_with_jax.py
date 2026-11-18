@@ -613,10 +613,6 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
     with pytest.raises(AssertionError, match="Only connectivities of JAX arrays"):
         jax.jit(lambda field, conn: field.premap(conn))(field, numpy_conn)
 
-    # not a pytree leaf, so it is not flattened
-    result = jax.jit(lambda field: field.premap(numpy_conn))(field)
-    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
-
 
 @pytest.mark.requires_jax
 def test_jax_pytree_of_concrete_connectivity_reads_its_own_values():

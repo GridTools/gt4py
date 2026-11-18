@@ -76,6 +76,10 @@ class ConnectivityOps:
 
         return slices
 
+    def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
+        """Whether a connectivity with the buffer `ndarray` may be kept beyond the current call, e.g. in a cache."""
+        return True
+
     def restrict(
         self, ndarray: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence
     ) -> tuple[core_defs.NDArrayObject, ConnectivityOps]:
