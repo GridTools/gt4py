@@ -22,8 +22,7 @@ from typing import Any, Optional
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.embedded import array_ops
-from gt4py.next.embedded.array_ops import ArrayOps
+from gt4py.next.embedded import array_ops as embedded_array_ops
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -39,10 +38,12 @@ class ConnectivityOps:
     instances.
     """
 
-    array_ops: ArrayOps
+    array_ops: embedded_array_ops.ArrayOps
 
     @classmethod
-    def from_ndarray(cls, ops: ArrayOps, ndarray: core_defs.NDArrayObject) -> ConnectivityOps:
+    def from_ndarray(
+        cls, ops: embedded_array_ops.ArrayOps, ndarray: core_defs.NDArrayObject
+    ) -> ConnectivityOps:
         """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`, of the namespace of `ops`."""
         return cls(ops)
 
@@ -115,5 +116,5 @@ def register(xp: ModuleType, ops_type: type[ConnectivityOps]) -> None:
 
 def of(ndarray: Any) -> ConnectivityOps:
     """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`; raises `TypeError` if it is not an array."""
-    ops = array_ops.of(ndarray)
+    ops = embedded_array_ops.of(ndarray)
     return _types_by_namespace.get(ops.xp, ConnectivityOps).from_ndarray(ops, ndarray)

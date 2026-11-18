@@ -25,11 +25,10 @@ from gt4py.next import common
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
-    connectivity_ops,
+    connectivity_ops as embedded_connectivity_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
 )
-from gt4py.next.embedded.connectivity_ops import ConnectivityOps
 from gt4py.next.ffront import experimental, fbuiltins
 
 
@@ -458,11 +457,13 @@ class NdArrayConnectivityField(
     _skip_value: Optional[core_defs.IntegralScalar]
     #: The `ConnectivityOps` of the connectivity if its creator knows them, as `restrict` does.
     #: Not a field, so that no copy inherits them; without them, they are created from the buffer.
-    connectivity_ops: dataclasses.InitVar[Optional[ConnectivityOps]] = dataclasses.field(
-        default=None, kw_only=True
+    connectivity_ops: dataclasses.InitVar[Optional[embedded_connectivity_ops.ConnectivityOps]] = (
+        dataclasses.field(default=None, kw_only=True)
     )
 
-    def __post_init__(self, connectivity_ops: Optional[ConnectivityOps]) -> None:
+    def __post_init__(
+        self, connectivity_ops: Optional[embedded_connectivity_ops.ConnectivityOps]
+    ) -> None:
         if connectivity_ops is not None:
             self.__dict__["_connectivity_ops"] = connectivity_ops
 
@@ -514,8 +515,8 @@ class NdArrayConnectivityField(
         return {}
 
     @functools.cached_property
-    def _connectivity_ops(self) -> ConnectivityOps:
-        return connectivity_ops.of(self._ndarray)
+    def _connectivity_ops(self) -> embedded_connectivity_ops.ConnectivityOps:
+        return embedded_connectivity_ops.of(self._ndarray)
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
