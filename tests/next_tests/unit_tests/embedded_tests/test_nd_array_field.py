@@ -1718,7 +1718,6 @@ def test_field_unsupported_index(index):
     "index, value",
     [
         ((1, 1), 42.0),
-        ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
             common._field(
@@ -1750,8 +1749,6 @@ _ROW = np.arange(10) * 2.0
         ((1, 1), 42.0, lambda xp, v: v),
         ((1, 1), 42, lambda xp, v: v),
         ((1, 1), np.float32(42.5), lambda xp, v: v),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
         (
             (1, slice(None)),
             _ROW,
@@ -1760,14 +1757,21 @@ _ROW = np.arange(10) * 2.0
                 domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
             ),
         ),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float32),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
     ],
     ids=[
         "python-float",
         "python-int",
         "numpy-scalar",
-        "array",
-        "array-other-dtype",
         "field",
+        "field-other-dtype",
     ],
 )
 def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
@@ -1811,14 +1815,24 @@ def _other_library_pairs():
 
 
 @pytest.mark.parametrize("field_xp, value_xp", _other_library_pairs())
-def test_setitem_array_of_other_library_raises(field_xp, value_xp):
+def test_setitem_field_of_other_library_raises(field_xp, value_xp):
+    domain = common.Domain(NamedRange(D0, UnitRange(0, 3)))
+    field = common._field(asarray(field_xp, np.arange(3), dtype=np.float64), domain=domain)
+    value = common._field(asarray(value_xp, np.ones(3), dtype=np.float64), domain=domain)
+
+    with pytest.raises(TypeError, match="Cannot assign"):
+        field[...] = value
+
+
+def test_setitem_plain_array_raises(nd_array_implementation):
+    xp = nd_array_implementation
     field = common._field(
-        asarray(field_xp, np.arange(3), dtype=np.float64),
+        asarray(xp, np.arange(3), dtype=np.float64),
         domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
     )
 
-    with pytest.raises(TypeError, match="Cannot assign"):
-        field[...] = asarray(value_xp, np.ones(3), dtype=np.float64)
+    with pytest.raises(TypeError, match=r"ndarray\[\.\.\.\]"):
+        field[...] = asarray(xp, np.ones(3), dtype=np.float64)
 
 
 def test_setitem_wrong_domain():
