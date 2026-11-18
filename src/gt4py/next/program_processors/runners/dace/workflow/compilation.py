@@ -23,7 +23,7 @@ from gt4py._core import definitions as core_defs, locking
 from gt4py.eve import xtyping
 from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import artifacts, workflow
-from gt4py.next.otf.compilation import cache as gtx_cache
+from gt4py.next.otf.compilation import cache as gtx_cache, toolchain as gtx_toolchain
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
     decoration as gtx_wfddecoration,
@@ -312,11 +312,18 @@ class DaCeCompiler(
                 sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
             # Fingerprint the non-default ``dace.Config`` so the SDFG rebuilds when the
-            # user changes the backend configuration (PR #2650).
+            # user changes the backend configuration (PR #2650), and the toolchain.
             sdfg_build_folder = gtx_cache.get_cache_folder(
                 inp,
                 self.cache_lifetime,
-                build_context_id=fingerprinting.strict_fingerprinter(self.dace_config_nondefaults),
+                build_context_id=fingerprinting.strict_fingerprinter(
+                    (
+                        self.dace_config_nondefaults,
+                        gtx_toolchain.fingerprint(
+                            gtx_toolchain.device_language(self.device_type), ("dace",)
+                        ),
+                    )
+                ),
             )
             sdfg_build_folder.mkdir(parents=True, exist_ok=True)
 
