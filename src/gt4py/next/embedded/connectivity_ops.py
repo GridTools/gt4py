@@ -6,13 +6,20 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Operations of the embedded connectivities that read the values of their table."""
+"""
+Operations of the embedded connectivities that read the values of their table, per array namespace.
+
+A library that needs different behaviour subclasses `ConnectivityOps` and registers an
+instance for its compat namespace with `register`, as for `array_ops.ArrayOps`.
+"""
 
 from __future__ import annotations
 
 import dataclasses
 from types import ModuleType
-from typing import Optional
+from typing import Any, Optional
+
+import array_api_compat
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
@@ -24,13 +31,17 @@ class ConnectivityOps:
     Operations on the buffer of one connectivity.
 
     An instance belongs to one connectivity and is never inherited by a copy of it:
-    `ArrayOps.connectivity_ops` creates it from the connectivity's buffer, and `restrict`
-    returns the one of the restricted buffer. A library whose connectivities know more
+    `of` creates it from the connectivity's buffer, and `restrict` returns the one of the
+    restricted buffer. A library whose connectivities know more
     about their buffer than the buffer itself, e.g. the values of a traced table,
     subclasses `ConnectivityOps` and keeps that in its instances.
     """
 
     xp: ModuleType
+
+    def for_ndarray(self, ndarray: core_defs.NDArrayObject) -> ConnectivityOps:
+        """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`, called on the registered instance."""
+        return self
 
     def hyperslice(
         self,
@@ -85,3 +96,32 @@ class ConnectivityOps:
     ) -> tuple[core_defs.NDArrayObject, ConnectivityOps]:
         """Return `ndarray[buffer_slice]` and the `ConnectivityOps` of the restricted connectivity."""
         return self.xp.asarray(ndarray[buffer_slice]), self
+
+
+_ops_by_namespace: dict[ModuleType, ConnectivityOps] = {}
+_ops_by_array_type: dict[type, ConnectivityOps] = {}
+
+
+def register(ops: ConnectivityOps) -> None:
+    """Use `ops` for the buffers whose compat namespace is `ops.xp`, replacing an earlier registration."""
+    _ops_by_namespace[ops.xp] = ops
+    _ops_by_array_type.clear()
+
+
+def _for_namespace(xp: ModuleType) -> ConnectivityOps:
+    try:
+        return _ops_by_namespace[xp]
+    except KeyError:
+        ops = _ops_by_namespace[xp] = ConnectivityOps(xp)
+        return ops
+
+
+def of(ndarray: Any) -> ConnectivityOps:
+    """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`; raises `TypeError` if it is not an array."""
+    try:
+        ops = _ops_by_array_type[type(ndarray)]
+    except KeyError:
+        ops = _ops_by_array_type[type(ndarray)] = _for_namespace(
+            array_api_compat.array_namespace(ndarray)
+        )
+    return ops.for_ndarray(ndarray)

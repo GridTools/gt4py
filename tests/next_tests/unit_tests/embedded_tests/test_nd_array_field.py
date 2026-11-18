@@ -2112,11 +2112,7 @@ def test_hyperslice(index_array, expected):
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = (
-        array_ops.of(index_array)
-        .connectivity_ops(index_array)
-        .hyperslice(index_array, image_range, skip_value)
-    )
+    result = connectivity_ops.of(index_array).hyperslice(index_array, image_range, skip_value)
 
     assert result == expected
 

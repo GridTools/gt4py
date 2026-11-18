@@ -507,7 +507,7 @@ class NdArrayConnectivityField(
     # connectivity set it, otherwise it is created from the buffer.
     @functools.cached_property
     def _connectivity_ops(self) -> connectivity_ops.ConnectivityOps:
-        return array_ops.of(self._ndarray).connectivity_ops(self._ndarray)
+        return connectivity_ops.of(self._ndarray)
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:

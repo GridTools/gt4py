@@ -33,7 +33,6 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
-from gt4py.next.embedded import connectivity_ops
 
 
 #: gt4py builtin and operator names whose Array API name differs.
@@ -189,12 +188,6 @@ class ArrayOps:
             value = self.xp.astype(value, array.dtype)
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
-
-    def connectivity_ops(
-        self, ndarray: core_defs.NDArrayObject
-    ) -> connectivity_ops.ConnectivityOps:
-        """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`."""
-        return connectivity_ops.ConnectivityOps(self.xp)
 
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]

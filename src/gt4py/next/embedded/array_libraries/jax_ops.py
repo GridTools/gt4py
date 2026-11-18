@@ -110,6 +110,9 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
         with jax.ensure_compile_time_eval():
             return super().hyperslice(self.values, image_range, skip_value)
 
+    def for_ndarray(self, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
+        return JaxConnectivityOps(self.xp, ndarray if _has_values(ndarray) else None)
+
     def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
         # a tracer belongs to a trace, which may end before the cache
         return _has_values(ndarray)
@@ -152,9 +155,6 @@ class JaxOps(array_ops.ArrayOps):
     ) -> core_defs.NDArrayObject:
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
-    def connectivity_ops(self, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
-        return JaxConnectivityOps(self.xp, ndarray if _has_values(ndarray) else None)
-
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
     ) -> core_defs.NDArrayObject:
@@ -169,6 +169,7 @@ class JaxOps(array_ops.ArrayOps):
 
 
 array_ops.register(JaxOps(jnp))
+connectivity_ops.register(JaxConnectivityOps(jnp))
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)
