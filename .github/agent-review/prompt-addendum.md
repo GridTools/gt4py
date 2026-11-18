@@ -1,0 +1,4 @@
+- `.github/copilot-instructions.md` says what to flag, what not to comment on, and the review style.
+- `AGENTS.md` and `CODING_GUIDELINES.md` are the project conventions.
+- `src/gt4py/next/AGENTS.md` applies to changes under `src/gt4py/next/` or `tests/next_tests/`.
+- Do not comment on anything that `ruff`, `mypy` or `tach` enforce.

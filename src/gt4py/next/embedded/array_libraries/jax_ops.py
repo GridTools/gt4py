@@ -156,6 +156,7 @@ class JaxOps(array_ops.ArrayOps):
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
+        self.check_assignable(value)
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
     def gather(
