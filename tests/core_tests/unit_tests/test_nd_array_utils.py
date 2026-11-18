@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py._core import definitions, ndarray_utils
+from gt4py._core import definitions, dlpack, ndarray_utils
 
 
 def cuda_device(id_: int) -> Any:
@@ -119,6 +119,53 @@ def test_buffer_info_from_dlpack(array):
     assert info.elem_strides == tuple(s // array.itemsize for s in array.strides)
     assert info.dtype == definitions.dtype(np.float64)
     assert info.device == definitions.Device(definitions.DeviceType.CPU, 0)
+
+
+class _PatchedExport:
+    """Exports `array` through DLPack after `patch` modified the capsule's `DLTensor`."""
+
+    def __init__(self, array, patch):
+        self.array = array
+        self.patch = patch
+
+    def __dlpack__(self, *, stream=None, max_version=None, copy=None):
+        capsule = self.array.__dlpack__(max_version=(1, 0), copy=copy)
+        address = dlpack._capsule_pointer(capsule, b"dltensor_versioned")
+        self.patch(dlpack._DLTensor.from_address(address + dlpack._DL_TENSOR_OFFSET))
+        return capsule
+
+    def __dlpack_device__(self):
+        return self.array.__dlpack_device__()
+
+
+def test_buffer_info_adds_byte_offset():
+    def move_offset(tensor):
+        tensor.data -= 16
+        tensor.byte_offset = 16
+
+    array = _BASE[1:4]
+
+    info = ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(array, move_offset))
+
+    assert info.data_ptr == array.__array_interface__["data"][0]
+
+
+def test_buffer_info_null_strides_are_c_contiguous():
+    def null_strides(tensor):
+        tensor.strides = type(tensor.strides)()
+
+    info = ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(_BASE, null_strides))
+
+    assert info.elem_strides == (42, 7, 1)
+
+
+def test_buffer_info_impossible_stride():
+    def cupy_before_10228(tensor):
+        # Stride -42 as CuPy before cupy#10228 exports it for float64.
+        tensor.strides[0] = 2**64 // _BASE.itemsize - 42
+
+    with pytest.raises(BufferError, match="cupy#10228"):
+        ndarray_utils.BufferInfo.from_dlpack(_PatchedExport(_BASE, cupy_before_10228))
 
 
 @pytest.mark.parametrize(

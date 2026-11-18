@@ -29,16 +29,30 @@ class _Wrapper:
         return self.array.__dlpack_device__()
 
 
-def test_tensor_attributes():
+def test_tensor_fields():
     array = _BASE[1:4, 2:, ::-2]
 
-    assert dlpack.tensor_attributes(array) == {
-        "data_ptr": array.__array_interface__["data"][0],
+    # NumPy folds the view offset into `data` and exports `byte_offset == 0`.
+    assert dlpack.tensor_fields(array) == {
+        "data": array.__array_interface__["data"][0],
+        "device": (dlpack.DeviceType.CPU, 0),
+        "ndim": 3,
+        "dtype": (dlpack.DataTypeCode.FLOAT, 64, 1),
         "shape": array.shape,
         "strides": tuple(s // array.itemsize for s in array.strides),
-        "dtype": (dlpack.DataTypeCode.FLOAT, 64, 1),
-        "device": (dlpack.DeviceType.CPU, 0),
+        "byte_offset": 0,
     }
+
+
+def test_null_strides():
+    def null_strides(array, *, stream=None, max_version=None, copy=None):
+        capsule = array.__dlpack__(max_version=(1, 0), copy=copy)
+        address = dlpack._capsule_pointer(capsule, b"dltensor_versioned")
+        tensor = dlpack._DLTensor.from_address(address + dlpack._DL_TENSOR_OFFSET)
+        tensor.strides = type(tensor.strides)()
+        return capsule
+
+    assert dlpack.tensor_fields(_Wrapper(_BASE, null_strides))["strides"] is None
 
 
 @pytest.mark.parametrize(
@@ -53,12 +67,12 @@ def test_tensor_attributes():
     ],
 )
 def test_dtype_codes(dtype, code, bits):
-    assert dlpack.tensor_attributes(np.zeros(3, dtype=dtype))["dtype"] == (code, bits, 1)
+    assert dlpack.tensor_fields(np.zeros(3, dtype=dtype))["dtype"] == (code, bits, 1)
 
 
 def test_no_dlpack():
     with pytest.raises(TypeError, match="DLPack"):
-        dlpack.tensor_attributes(object())
+        dlpack.tensor_fields(object())
 
 
 def test_producer_without_max_version():
@@ -67,7 +81,7 @@ def test_producer_without_max_version():
 
     array = _BASE[1:4]
 
-    assert dlpack.tensor_attributes(_Wrapper(array, only_stream)) == dlpack.tensor_attributes(array)
+    assert dlpack.tensor_fields(_Wrapper(array, only_stream)) == dlpack.tensor_fields(array)
 
 
 def test_unversioned_capsule():
@@ -76,20 +90,7 @@ def test_unversioned_capsule():
 
     array = _BASE[1:4]
 
-    assert dlpack.tensor_attributes(_Wrapper(array, unversioned)) == dlpack.tensor_attributes(array)
-
-
-def test_impossible_stride():
-    def cupy_before_10228(array, *, stream=None, max_version=None, copy=None):
-        capsule = array.__dlpack__(max_version=(1, 0), copy=copy)
-        address = dlpack._capsule_pointer(capsule, b"dltensor_versioned")
-        tensor = dlpack._DLTensor.from_address(address + dlpack._DL_TENSOR_OFFSET)
-        # Stride -42 as CuPy before cupy#10228 exports it for float64.
-        tensor.strides[0] = 2**64 // array.itemsize - 42
-        return capsule
-
-    with pytest.raises(BufferError, match="cupy#10228"):
-        dlpack.tensor_attributes(_Wrapper(_BASE, cupy_before_10228))
+    assert dlpack.tensor_fields(_Wrapper(array, unversioned)) == dlpack.tensor_fields(array)
 
 
 @pytest.mark.parametrize(
@@ -108,6 +109,6 @@ def test_stream_argument(device_type, stream):
         def __dlpack_device__(self):
             return device_type, 0
 
-    dlpack.tensor_attributes(Producer())
+    dlpack.tensor_fields(Producer())
 
     assert streams == [stream]
