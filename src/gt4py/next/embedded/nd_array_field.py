@@ -532,7 +532,9 @@ class NdArrayConnectivityField(
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = self._connectivity_ops.hyperslice(self._ndarray, image_range, self.skip_value)
+            slices = self._connectivity_ops.inverse_image_box(
+                self._ndarray, image_range, self.skip_value
+            )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 

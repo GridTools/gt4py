@@ -2124,14 +2124,16 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
         ([[1, 0, -1], [1, 0, 0]], [(0, 2), (1, 3)]),
     ],
 )
-def test_hyperslice(index_array, expected):
+def test_inverse_image_box(index_array, expected):
     index_array = np.asarray(index_array)
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = connectivity_ops.of(index_array).hyperslice(index_array, image_range, skip_value)
+    result = connectivity_ops.of(index_array).inverse_image_box(
+        index_array, image_range, skip_value
+    )
 
     assert result == expected
 
@@ -2375,14 +2377,16 @@ def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     )
     field = common._field(np.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
     calls = 0
-    hyperslice = connectivity_ops.ConnectivityOps.hyperslice
+    inverse_image_box = connectivity_ops.ConnectivityOps.inverse_image_box
 
-    def counting_hyperslice(*args, **kwargs):
+    def counting_inverse_image_box(*args, **kwargs):
         nonlocal calls
         calls += 1
-        return hyperslice(*args, **kwargs)
+        return inverse_image_box(*args, **kwargs)
 
-    monkeypatch.setattr(connectivity_ops.ConnectivityOps, "hyperslice", counting_hyperslice)
+    monkeypatch.setattr(
+        connectivity_ops.ConnectivityOps, "inverse_image_box", counting_inverse_image_box
+    )
 
     for _ in range(3):
         result = field.premap(conn[NamedIndex(E2VDim, 0)])

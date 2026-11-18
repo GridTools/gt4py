@@ -99,7 +99,7 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
     #: only at run time. The table itself if it is concrete.
     values: Optional[core_defs.NDArrayObject] = None
 
-    def hyperslice(
+    def inverse_image_box(
         self,
         ndarray: core_defs.NDArrayObject,
         image_range: common.UnitRange,
@@ -108,7 +108,7 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
         if self.values is None:
             return (slice(None),) * ndarray.ndim
         with jax.ensure_compile_time_eval():
-            return super().hyperslice(self.values, image_range, skip_value)
+            return super().inverse_image_box(self.values, image_range, skip_value)
 
     @classmethod
     def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:

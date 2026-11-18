@@ -45,17 +45,17 @@ class ConnectivityOps:
         """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`."""
         return cls(embedded_array_ops.of(ndarray))
 
-    def hyperslice(
+    def inverse_image_box(
         self,
         ndarray: core_defs.NDArrayObject,
         image_range: common.UnitRange,
         skip_value: Optional[core_defs.IntegralScalar] = None,
     ) -> Optional[tuple[slice, ...]]:
         """
-        Return the hypercube slice that contains all indices in `ndarray` that are within `image_range`, or `None` if no such hypercube exists.
+        Return the slices of the smallest box of `ndarray` containing all entries within `image_range`, or `None` if that box contains other entries.
 
-        If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
-        A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+        If `skip_value` is given, entries equal to it are ignored. A bigger box could be
+        constructed by adding lines that contain only `skip_value`s.
 
         Example:
             ndarray =  0  1 -1
