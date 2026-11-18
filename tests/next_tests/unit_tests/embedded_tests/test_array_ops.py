@@ -20,7 +20,7 @@ from gt4py.next import common
 from gt4py.next.embedded import array_libraries, array_ops, nd_array_field
 from gt4py.next.ffront import fbuiltins
 
-from next_tests.unit_tests.conftest import asarray
+from next_tests.unit_tests.conftest import asarray, strict_array_on_device1
 
 
 D = common.Dimension("D")
@@ -127,8 +127,7 @@ def test_torch_ops_registered_without_importing_torch():
 
 @pytest.mark.parametrize("dtype", [np.int32, np.float64])
 def test_empty(nd_array_implementation, dtype):
-    like = asarray(nd_array_implementation, [1.0])
-    ops = array_ops.of(like)
+    ops = array_ops.of(asarray(nd_array_implementation, [1.0]))
 
     result = ops.empty((2, 3), dtype=dtype)
 
@@ -158,3 +157,11 @@ def test_empty_on_cuda_device_of_torch_like():
     result = array_ops.of(like).empty((2,), dtype=np.float64, like=like)
 
     assert result.device == like.device
+
+
+def test_empty_on_non_default_device_of_like():
+    like = strict_array_on_device1([1.0])
+
+    result = array_ops.of(like).empty((2,), dtype=np.float64, like=like)
+
+    assert result.device == like.device != xs.empty((1,)).device

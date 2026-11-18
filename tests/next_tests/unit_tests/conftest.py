@@ -153,3 +153,10 @@ def nd_array_implementation(request):
 @pytest.fixture(params=nd_array_implementation_params())
 def nd_array_implementation_and_device_type(request):
     yield request.param
+
+
+def strict_array_on_device1(data):
+    """An array-api-strict float64 array on a device other than its default one."""
+    return array_api_strict.asarray(
+        data, dtype=array_api_strict.float64, device=array_api_strict.Device("device1")
+    )

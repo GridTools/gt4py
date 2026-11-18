@@ -8,9 +8,13 @@
 
 import math
 import operator
+import os
 import pickle
+import subprocess
+import sys
 from typing import Callable, Iterable, Optional
 
+import array_api_compat
 import array_api_strict
 import numpy as np
 import pytest
@@ -42,6 +46,7 @@ from next_tests.unit_tests.conftest import (
     is_array_api_strict,
     is_cupy,
     is_torch,
+    strict_array_on_device1,
 )
 
 
@@ -2601,3 +2606,94 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def _scan_cumsum(x, k_dim):
+    from gt4py.next.embedded import context as embedded_context, operators
+
+    scan = operators.ScanOperator(lambda state, v: state + v, forward=True, init=0.0, axis=k_dim)
+    with embedded_context.update(
+        closure_column_range=NamedRange(k_dim, UnitRange(0, 4)), offset_provider={}
+    ):
+        return scan(x)
+
+
+def test_scan_result_in_namespace_and_on_device_of_inputs(nd_array_implementation):
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = asarray(nd_array_implementation, np.ones(4), dtype=np.float64)
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert array_api_compat.array_namespace(result.ndarray) is array_api_compat.array_namespace(
+        data
+    )
+    assert array_api_compat.device(result.ndarray) == array_api_compat.device(data)
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+def test_scan_result_on_non_default_device_of_inputs():
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = strict_array_on_device1(np.ones(4))
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert result.ndarray.device == data.device
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+_JAX_SECOND_HOST_DEVICE_CHECK = """
+import jax, numpy as np
+from gt4py.next import common
+from gt4py.next.embedded import array_ops, context as embedded_context, operators
+from gt4py.next.iterator import builtins, runtime
+
+cpu1 = jax.devices("cpu")[1]
+K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
+x = jax.device_put(jax.numpy.ones(4), cpu1)
+field = common._field(x, domain=common.domain({K: 4}))
+scan = operators.ScanOperator(lambda state, v: state + v, forward=True, init=0.0, axis=K)
+
+
+def empty():
+    return array_ops.of(x).empty((2,), dtype=np.float64, like=x)
+
+
+def scan_result():
+    with embedded_context.update(
+        closure_column_range=common.NamedRange(K, common.UnitRange(0, 4)), offset_provider={}
+    ):
+        return scan(field).ndarray
+
+
+def as_fieldop_result():
+    with embedded_context.update(offset_provider={}):
+        domain = runtime.CartesianDomain({K: range(4)})
+        return builtins.as_fieldop(builtins.deref, domain)(field).ndarray
+
+
+wrong = {}
+for check in (empty, scan_result, as_fieldop_result):
+    try:
+        devices = check().devices()
+    except Exception as e:
+        devices = f"{type(e).__name__}: {e}"
+    if devices != {cpu1}:
+        wrong[check.__name__] = str(devices)
+assert not wrong, f"not on {cpu1}: {wrong}"
+"""
+
+
+@pytest.mark.requires_jax
+def test_allocation_on_non_default_jax_device():
+    # two host devices exist only if XLA_FLAGS is set before JAX initialises
+    env = os.environ | {
+        "XLA_FLAGS": "--xla_force_host_platform_device_count=2",
+        "JAX_PLATFORMS": "cpu",
+    }
+    proc = subprocess.run(
+        [sys.executable, "-c", _JAX_SECOND_HOST_DEVICE_CHECK],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stderr[-2000:]
