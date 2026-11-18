@@ -208,6 +208,24 @@ def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Devic
         ) from None
 
 
+_DLPACK_TYPE_CODES: Final = {
+    core_defs.DTypeKind.INT: core_dlpack.DataTypeCode.INT,
+    core_defs.DTypeKind.UINT: core_dlpack.DataTypeCode.UINT,
+    core_defs.DTypeKind.FLOAT: core_dlpack.DataTypeCode.FLOAT,
+    core_defs.DTypeKind.BOOL: core_dlpack.DataTypeCode.BOOL,
+}
+_DTYPES_BY_DLPACK_DTYPE: Final[dict[tuple[int, int, int], core_defs.DType]] = {
+    (_DLPACK_TYPE_CODES[dt.kind], dt.bit_width, dt.lanes): dt
+    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES)
+}
+_DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
+
+
+def device_from_dlpack(device_type: int, device_id: int) -> core_defs.Device:
+    """The `Device` of a DLPack device pair; device types gt4py does not name are kept as integers."""
+    return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))
+
+
 @dataclasses.dataclass(frozen=True)
 class BufferInfo:
     """Holds information about a buffer in memory.
@@ -243,6 +261,21 @@ class BufferInfo:
         Raises:
             TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
             BufferError: `array` cannot be exported without a copy, or its DLPack export is
-                not supported (see `gt4py._core.dlpack.buffer_attributes`).
+                not supported (see `gt4py._core.dlpack.tensor_attributes`).
         """
-        return cls(**core_dlpack.buffer_attributes(array))
+        attrs = core_dlpack.tensor_attributes(array)
+        try:
+            dtype = _DTYPES_BY_DLPACK_DTYPE[attrs["dtype"]]
+        except KeyError:
+            code, bits, lanes = attrs["dtype"]
+            raise TypeError(
+                f"DLPack dtype (code={code}, bits={bits}, lanes={lanes})"
+                f" of '{type(array).__name__}' is not a gt4py scalar type."
+            ) from None
+        return cls(
+            data_ptr=attrs["data_ptr"],
+            shape=attrs["shape"],
+            elem_strides=attrs["strides"],
+            dtype=dtype,
+            device=device_from_dlpack(*attrs["device"]),
+        )

@@ -18,11 +18,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gt4py._core import (
-    definitions as core_defs,
-    dlpack as core_dlpack,
-    ndarray_utils as core_ndarray_utils,
-)
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
 from gt4py.next.embedded import array_ops, nd_array_field
 
@@ -68,7 +64,7 @@ class JaxOps(array_ops.ArrayOps):
             shape=array.shape,
             elem_strides=_layout_strides(array),
             dtype=core_defs.dtype(self.scalar_type(array.dtype)),
-            device=core_dlpack.device(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+            device=core_ndarray_utils.device_from_dlpack(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
         )
 
 

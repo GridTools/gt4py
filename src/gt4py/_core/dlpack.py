@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Buffer attributes of any array that exports DLPack, read from its capsule with `ctypes`.
+"""Raw DLPack attributes of any array that exports DLPack, read from its capsule with `ctypes`.
 
 The binary layout follows `dlpack.h` of DLPack v1.4
 (https://github.com/dmlc/dlpack/blob/v1.4/include/dlpack/dlpack.h, documented at
@@ -24,8 +24,7 @@ Supported capsules:
 Rejected:
 - `BufferError`: versioned capsules of major version 2 or later, exports that need a copy, and
   strides of `2**63` bytes or more, which no buffer can have.
-- `TypeError`: arrays without `__dlpack__`/`__dlpack_device__`, and DLPack dtypes that are not
-  gt4py scalar types (bool, 8 to 64 bit signed and unsigned integers, float32, float64; one lane).
+- `TypeError`: arrays without `__dlpack__`/`__dlpack_device__`.
 
 NULL strides, allowed before DLPack 1.2, are read as C-contiguous.
 """
@@ -33,9 +32,28 @@ NULL strides, allowed before DLPack 1.2, are read as C-contiguous.
 from __future__ import annotations
 
 import ctypes
+import enum
 from typing import Any, Final
 
-from gt4py._core import definitions as core_defs
+
+class DeviceType(enum.IntEnum):
+    """The `DLDeviceType` values this module needs to name."""
+
+    CPU = 1
+    CUDA = 2
+    ROCM = 10
+
+
+class DataTypeCode(enum.IntEnum):
+    """`DLDataTypeCode` values up to `kDLBool`."""
+
+    INT = 0
+    UINT = 1
+    FLOAT = 2
+    OPAQUE_HANDLE = 3
+    BFLOAT = 4
+    COMPLEX = 5
+    BOOL = 6
 
 
 class _DLDevice(ctypes.Structure):
@@ -85,26 +103,10 @@ _capsule_pointer = ctypes.PYFUNCTYPE(ctypes.c_void_p, ctypes.py_object, ctypes.c
     ("PyCapsule_GetPointer", ctypes.pythonapi)
 )
 
-_DLPACK_TYPE_CODES: Final = {
-    core_defs.DTypeKind.INT: 0,
-    core_defs.DTypeKind.UINT: 1,
-    core_defs.DTypeKind.FLOAT: 2,
-    core_defs.DTypeKind.BOOL: 6,
-}
-_DTYPES: Final[dict[tuple[int, int, int], core_defs.DType]] = {
-    (_DLPACK_TYPE_CODES[dt.kind], dt.bit_width, dt.lanes): dt
-    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES)
-}
-_DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
-_NO_SYNC_STREAM_DEVICE_TYPES: Final = (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM)
+_NO_SYNC_STREAM_DEVICE_TYPES: Final = (DeviceType.CUDA, DeviceType.ROCM)
 
 
-def device(device_type: int, device_id: int) -> core_defs.Device:
-    """The `Device` of a DLPack device pair; device types gt4py does not name are kept as integers."""
-    return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))
-
-
-def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
+def _c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
     """Element strides of a C-contiguous array of `shape`."""
     strides = []
     stride = 1
@@ -114,12 +116,12 @@ def c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
     return tuple(reversed(strides))
 
 
-def buffer_attributes(array: Any) -> dict[str, Any]:
-    """Attributes of the buffer of `array`, read from its DLPack capsule without consuming it.
+def tensor_attributes(array: Any) -> dict[str, Any]:
+    """Raw DLPack attributes of the buffer of `array`, read from its capsule without consuming it.
 
     The result has the keys `data_ptr` (address of the element at index `(0, ..., 0)`, i.e.
-    `data + byte_offset`), `shape`, `elem_strides` (in elements), `dtype` (a gt4py `DType`) and
-    `device` (a gt4py `Device`).
+    `data + byte_offset`), `shape`, `strides` (in elements), `dtype` (the `DLDataType` as
+    `(code, bits, lanes)`) and `device` (the `DLDevice` as `(device_type, device_id)`).
 
     On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
     only devices for which the Array API standard defines that request; all other devices get
@@ -127,7 +129,7 @@ def buffer_attributes(array: Any) -> dict[str, Any]:
     describes where the data lives, not when it is ready.
 
     Raises:
-        TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
+        TypeError: `array` does not export DLPack.
         BufferError: `array` cannot be exported without a copy, the capsule has an
             unsupported DLPack major version, or it reports a stride of `2**63` bytes or more.
     """
@@ -152,17 +154,10 @@ def buffer_attributes(array: Any) -> dict[str, Any]:
         tensor = _DLTensor.from_address(_capsule_pointer(capsule, _UNVERSIONED))
 
     dl_dtype = tensor.dtype
-    try:
-        dtype = _DTYPES[dl_dtype.code, dl_dtype.bits, dl_dtype.lanes]
-    except KeyError:
-        raise TypeError(
-            f"DLPack dtype (code={dl_dtype.code}, bits={dl_dtype.bits}, lanes={dl_dtype.lanes})"
-            f" of '{type(array).__name__}' is not a gt4py scalar type."
-        ) from None
     ndim = tensor.ndim
     shape = tuple(tensor.shape[:ndim])
-    strides = tuple(tensor.strides[:ndim]) if tensor.strides else c_contiguous_strides(shape)
-    itemsize = dtype.byte_size
+    strides = tuple(tensor.strides[:ndim]) if tensor.strides else _c_contiguous_strides(shape)
+    itemsize = (dl_dtype.bits * dl_dtype.lanes + 7) // 8
     if any(abs(stride) * itemsize >= 2**63 for stride in strides):
         raise BufferError(
             f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
@@ -172,7 +167,7 @@ def buffer_attributes(array: Any) -> dict[str, Any]:
     return {
         "data_ptr": (tensor.data or 0) + tensor.byte_offset,
         "shape": shape,
-        "elem_strides": strides,
-        "dtype": dtype,
-        "device": device(tensor.device.device_type, tensor.device.device_id),
+        "strides": strides,
+        "dtype": (dl_dtype.code, dl_dtype.bits, dl_dtype.lanes),
+        "device": (tensor.device.device_type, tensor.device.device_id),
     }
