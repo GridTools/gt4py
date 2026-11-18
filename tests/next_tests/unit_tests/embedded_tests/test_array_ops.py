@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import array_api_strict as xs
 import numpy as np
@@ -14,6 +15,8 @@ import pytest
 from gt4py.next import common
 from gt4py.next.embedded import array_libraries, array_ops, nd_array_field
 from gt4py.next.ffront import fbuiltins
+
+from next_tests.unit_tests.conftest import asarray, strict_array_on_device1
 
 
 D = common.Dimension("D")
@@ -120,3 +123,32 @@ def test_take_out_of_range_does_not_raise(nd_array_implementation, standard):
     in_range = (indices >= 0) & (indices < 5)
     assert np.array_equal(result[in_range], data[indices[in_range]])
     assert np.all(np.isin(result[~in_range], data))
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.float64])
+def test_empty(nd_array_implementation, dtype):
+    ops = array_ops.of(asarray(nd_array_implementation, [1.0]))
+
+    result = ops.empty((2, 3), dtype=dtype)
+
+    assert array_api_compat.array_namespace(result) is ops.xp
+    assert result.shape == (2, 3)
+    assert ops.scalar_type(result.dtype) is dtype
+
+
+def test_empty_on_device_of_like(nd_array_implementation):
+    like = asarray(nd_array_implementation, [1.0])
+    ops = array_ops.of(like)
+
+    result = ops.empty((2,), dtype=np.float64, like=like)
+
+    assert array_api_compat.array_namespace(result) is ops.xp
+    assert array_api_compat.device(result) == array_api_compat.device(like)
+
+
+def test_empty_on_non_default_device_of_like():
+    like = strict_array_on_device1([1.0])
+
+    result = array_ops.of(like).empty((2,), dtype=np.float64, like=like)
+
+    assert result.device == like.device != xs.empty((1,)).device

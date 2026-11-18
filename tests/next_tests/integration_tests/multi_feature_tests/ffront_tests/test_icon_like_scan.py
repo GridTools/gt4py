@@ -209,7 +209,7 @@ def test_setup(exec_alloc_descriptor):
         w = test_case.as_field(
             [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
+        z_q_ref, w_ref = reference(z_alpha.asnumpy(), z_beta.asnumpy(), z_q.asnumpy(), w.asnumpy())
         dummy = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
         z_q_out = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
 

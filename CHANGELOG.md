@@ -2,6 +2,21 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.5] - 2026-11-17
+
+### General
+
+- Update DaCe to 2.0.0b2.
+
+### Cartesian
+
+- Fix stencil extension modules being built with debug info under setuptools 84+, which inflated the build cache size.
+- Reduce compiler memory and time when building stencils with many arguments on C++ backends.
+
+### Next
+
+See commit history.
+
 ## [1.2.4] - 2026-11-04
 
 ### General

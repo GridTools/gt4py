@@ -159,12 +159,8 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         """
         Interface to retrieve the low-level description of a Field buffer.
 
-        Since by default NdArrayFields are implemented as frozen dataclasses,
-        and therefore the backing ndarray cannot be replaced after creation,
-        this is implemented as a cached property for performance reasons.
-
-        NDArrayField subclasses where the backing ndarray can be replaced
-        should override this and make it a regular property.
+        Cached for performance reasons. Assignments into fields of immutable
+        array libraries (e.g. JAX) replace the backing ndarray and refresh a cached value.
         """
         return array_ops.of(self._ndarray).buffer_info(self.ndarray)
 
@@ -341,20 +337,33 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def __setitem__(
         self: NdArrayField[common.DimsT, core_defs.ScalarT],
         index: common.AnyIndexSpec,
-        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+        value: common.Field | core_defs.ScalarT,
     ) -> None:
         target_domain, target_slice = self._slice(index, for_assignment=True)
 
+        assigned: core_defs.NDArrayObject | core_defs.Scalar | np.generic
         if isinstance(value, common.Field):
             if not value.domain == target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
-            value = value.ndarray
+            assigned = value.ndarray
+        elif isinstance(value, bool | int | float | np.generic):
+            assigned = value
+        else:
+            raise TypeError(
+                f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
+                " to a 'Field': assign a 'Field' or a scalar, or write the buffer with"
+                " 'field.ndarray[...] = ...'."
+            )
 
-        new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, value)
+        ops = array_ops.of(self._ndarray)
+        new_buffer = ops.setitem(self._ndarray, target_slice, assigned)
         if new_buffer is not self._ndarray:
             object.__setattr__(self, "_ndarray", new_buffer)
+            # A field whose buffer info was requested is likely exported again.
+            if "__gt_buffer_info__" in self.__dict__:
+                self.__dict__["__gt_buffer_info__"] = ops.buffer_info(new_buffer)
 
     __abs__ = _make_builtin("abs", "abs")
 

@@ -386,37 +386,6 @@ def test_vertical_map_fusion_with_neighbor_access(run_map_fusion: bool):
         assert util.count_nodes(sdfg, dace_nodes.MapEntry) == initial_map_entries_nb
 
 
-def _make_if_block(state: dace.SDFGState) -> dace_nodes.NestedSDFG:
-    inner_sdfg = dace.SDFG(util.unique_name("if_stmt_"))
-    for name, dtype in [
-        ("__arg1", dace.float64),
-        ("__arg2", dace.float64),
-        ("__cond", dace.bool_),
-        ("__output", dace.float64),
-    ]:
-        inner_sdfg.add_scalar(name, dtype=dtype, transient=False)
-
-    if_region = dace.sdfg.state.ConditionalBlock(util.unique_name("if"))
-    inner_sdfg.add_node(if_region, is_start_block=True)
-
-    for branch, arg in [("then_body", "__arg1"), ("else_body", "__arg2")]:
-        body = dace.sdfg.state.ControlFlowRegion(branch, sdfg=inner_sdfg)
-        bstate = body.add_state(branch, is_start_block=True)
-        bstate.add_nedge(
-            bstate.add_access(arg),
-            bstate.add_access("__output"),
-            dace.Memlet(data="__output", subset="0"),
-        )
-        cond = "__cond" if arg == "__arg1" else "not __cond"
-        if_region.add_branch(dace.sdfg.state.CodeBlock(cond), body)
-
-    return state.add_nested_sdfg(
-        sdfg=inner_sdfg,
-        inputs={"__arg1", "__arg2", "__cond"},
-        outputs={"__output"},
-    )
-
-
 def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
     """The second Map consumes the intermediate through a NestedSDFG."""
     sdfg = dace.SDFG(util.unique_name("nested_sdfg_consumer"))
@@ -445,7 +414,7 @@ def nested_sdfg_consumer_sdfg(N: int) -> dace.SDFG:
     # The scalar connectors of the if block can not be connected to an element of an
     #  array directly, thus the values pass through scalar transients, as in the lowering.
     map_entry, map_exit = st.add_map("map2", ndrange={"__i": f"1:{N}"})
-    nsdfg = _make_if_block(st)
+    nsdfg = util.make_if_block(st)
     for conn, node, data, subset in [
         ("__arg1", tmp_node, tmp, f"1:{N}"),
         ("__arg2", A_node, A, f"1:{N}"),
@@ -489,6 +458,32 @@ def test_vertical_map_fusion_with_nested_sdfg_consumer():
         validate_all=True,
     )
     assert ret == 1
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def test_vertical_map_fusion_with_nested_sdfg_consumer_no_split():
+    """Maps that contain a nested SDFG are not split if this is disabled."""
+    N = 80
+    sdfg = nested_sdfg_consumer_sdfg(N)
+    nb_nested_sdfgs_before = sum(1 for _ in sdfg.all_sdfgs_recursive())
+
+    res, ref = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+
+    ret = gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg=sdfg,
+        run_simplify=False,
+        run_map_fusion=False,
+        fuse_map_fragments=True,
+        consolidate_edges_only_if_not_extending=False,
+        split_maps_with_nested_sdfg=False,
+        validate=True,
+        validate_all=True,
+    )
+    assert ret == 0
+    assert sum(1 for _ in sdfg.all_sdfgs_recursive()) == nb_nested_sdfgs_before
 
     util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)

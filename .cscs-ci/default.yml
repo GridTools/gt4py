@@ -39,7 +39,7 @@ build_cscs_amd_rocm:
   stage: test
   image: ${CSCS_REGISTRY_PATH}/public/${ARCH}/base/gt4py-ci-${PY_VERSION}:${DOCKER_TAG}
   variables:
-    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda12, rocm7) to test
+    TEST_VARIANTS: 'cpu'  # Extended jobs should redefine which variants (cpu, cuda13, rocm7) to test
     USE_MPI: 0 # TODO(havogt): to workaround the libfabric hook injecting incompatible libraries
     SLURM_JOB_NUM_NODES: 1
     SLURM_TIMELIMIT: 5
@@ -47,24 +47,24 @@ build_cscs_amd_rocm:
     matrix:
       - SUBPACKAGE: [cartesian]
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        SUBVARIANT: ['cuda13', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
         VARIANT: ['internal', 'dace']
-        SUBVARIANT: ['cuda12', 'rocm7', 'cpu']
+        SUBVARIANT: ['cuda13', 'rocm7', 'cpu']
         DETAIL: ["nomesh", "atlas"]
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: [storage]
-        VARIANT: ['cuda12', 'rocm7', 'cpu']
+        VARIANT: ['cuda13', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
     # `rules` section, and also add an extra `- when: on_success` rule at the end.
     - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "cuda12" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda12")) && ($TEST_VARIANTS !~ /(^|\s)cuda12(\s|$)/)'
+    - if: '($SUBVARIANT == "cuda13" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda13")) && ($TEST_VARIANTS !~ /(^|\s)cuda13(\s|$)/)'
       when: never
     - if: '($SUBVARIANT == "rocm7" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm7")) && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
       when: never
@@ -86,7 +86,7 @@ test_cscs_gh200:
   needs:
     - build_cscs_gh200
   variables:
-    TEST_VARIANTS: 'cpu cuda12'
+    TEST_VARIANTS: 'cpu cuda13'
     SLURM_GPUS_PER_NODE: 1
     SLURM_PARTITION: 'normal'
     GT4PY_BUILD_JOBS: 8
@@ -94,17 +94,19 @@ test_cscs_gh200:
     CUDAARCHS: '90'
     # Limit test parallelism to avoid "OSError: too many open files" in the gt4py build stage.
     PYTEST_XDIST_AUTO_NUM_WORKERS: 32
+    # Dump the Python stacks of a test that runs longer than this, to diagnose hangs.
+    PYTEST_ADDOPTS: '-o faulthandler_timeout=300'
+    # With CuPy's on-disk kernel cache in $HOME the tests can hang; keep compiled kernels in memory.
+    CUPY_CACHE_IN_MEMORY: '1'
   rules:
     - *exclude_variants_rules
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
-        # TODO: investigate why the dace tests seem to hang with multiple jobs
-        GT4PY_BUILD_JOBS: 1
         SLURM_TIMELIMIT: "00:15:00"
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
-    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda12'
+    - if: $SUBPACKAGE == 'cartesian' && $VARIANT == 'dace' && $SUBVARIANT == 'cuda13'
       variables:
         SLURM_TIMELIMIT: "00:10:00"
     - when: on_success
