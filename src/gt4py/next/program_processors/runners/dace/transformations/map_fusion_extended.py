@@ -8,7 +8,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional, TypeAlias, Union
+import warnings
+from typing import Any, Callable, Dict, Optional, Sequence, TypeAlias, Union
 
 import dace
 from dace import (
@@ -25,7 +26,9 @@ from dace.sdfg import (
 from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
 from dace.transformation.passes import analysis as dace_analysis
 
+from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
+    lowering as gtx_dace_lowering,
     sdfg_args as gtx_dace_args,
     transformations as gtx_transformations,
 )
@@ -93,6 +96,7 @@ def gt_horizontal_map_split_fusion(
     check_split_callback: Optional[HorizontalMapSplitCallback] = None,
     check_fusion_callback: Optional["gtx_transformations.HorizontalMapFusionCallback"] = None,
     only_if_common_ancestor: bool = True,
+    split_maps_with_nested_sdfg: bool = True,
     validate: bool = True,
     validate_all: bool = False,
 ) -> int:
@@ -121,6 +125,8 @@ def gt_horizontal_map_split_fusion(
             that are created during the splitting, see `fuse_map_fragments`.
         only_if_common_ancestor: Passed to `MapFusionHorizontal` only has an effect
             if `run_map_fusion` is `True`.
+        split_maps_with_nested_sdfg: If `False` do not split Maps that contain a
+            nested SDFG, see `SplitMapRange` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
     """
@@ -131,6 +137,7 @@ def gt_horizontal_map_split_fusion(
             only_toplevel_maps=True,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
             check_split_callback=check_split_callback,
+            split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
         )
     ]
 
@@ -177,8 +184,12 @@ def gt_vertical_map_split_fusion(
     skip: Optional[set[str]] = None,
     check_split_callback: Optional[VerticalMapSplitCallback] = None,
     check_fusion_callback: Optional["gtx_transformations.VerticalMapFusionCallback"] = None,
+    split_maps_with_nested_sdfg: bool = True,
     validate: bool = True,
     validate_all: bool = False,
+    allow_shared_output: bool = False,
+    shared_output_data: Optional[Sequence[str]] = None,
+    shared_output_split_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
 ) -> int:
     """Performs vertical map splitting on the provided SDFG.
 
@@ -200,12 +211,21 @@ def gt_vertical_map_split_fusion(
             Note that this is limited to the Maps that are were created. Furthermore,
             `check_fusion_callback` is not used.
         single_use_data: Precomputed single use data.
+        allow_shared_output: Allow splitting pointwise external outputs while
+            preserving their stores. Disabled until explicitly selected.
+        shared_output_data: If given, restrict shared-output splitting to candidates
+            connected through these arrays. `None` allows any eligible array; an empty
+            sequence disables shared-output splitting. Requires `allow_shared_output=True`.
+        shared_output_split_dimension: For shared outputs, allow different map
+            ranges only along this dimension. Other ranges must match.
         skip: Skip these transformation during simplification.
         run_map_fusion: Also run `MapFusionVertical`. Note that it acts on the entire SDFG.
             This call uses `check_fusion_callback`.
         check_split_callback: Use this as callback for the split transformation, see
             `VerticalMapSplitCallback` for more information.
         check_fusion_callback: Use this as callback for `MapFusionVertical`.
+        split_maps_with_nested_sdfg: If `False` do not split Maps that contain a
+            nested SDFG, see `SplitMapRange` for more.
         validate: Perform validation during the steps.
         validate_all: Perform extensive validation.
 
@@ -227,6 +247,10 @@ def gt_vertical_map_split_fusion(
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
             fuse_map_fragments=fuse_map_fragments,
             single_use_data=single_use_data,
+            split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
+            allow_shared_output=allow_shared_output,
+            shared_output_data=shared_output_data,
+            shared_output_split_dimension=shared_output_split_dimension,
         )
     ]
 
@@ -276,6 +300,10 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
     map into four maps with ranges [0:10, 0:14], [0:10, 14:80] [10:15, 0:14]
     and [10:15, 14:80]. This will allow the `HorizontalSplitMapRange` or
     `VerticalSplitMapRange` transformations to fuse the maps together.
+
+    If `split_maps_with_nested_sdfg` is `False`, Maps whose scope contains a nested
+    SDFG are not split, because every fragment gets a deep copy of the nested SDFGs,
+    which slows down the subsequent transformations and increases the code size.
     """
 
     only_toplevel_maps = dace_properties.Property(
@@ -283,16 +311,24 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
         default=False,
         desc="Only perform fusing if the Maps are in the top level.",
     )
+    split_maps_with_nested_sdfg = dace_properties.Property(
+        dtype=bool,
+        default=True,
+        desc="If `False`, do not split Maps whose scope contains a nested SDFG.",
+    )
 
     def __init__(
         self,
         only_toplevel_maps: Optional[bool] = None,
+        split_maps_with_nested_sdfg: Optional[bool] = None,
         *args: Any,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         if only_toplevel_maps is not None:
             self.only_toplevel_maps = only_toplevel_maps
+        if split_maps_with_nested_sdfg is not None:
+            self.split_maps_with_nested_sdfg = split_maps_with_nested_sdfg
 
     def split_maps(
         self,
@@ -320,6 +356,28 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
 
         first_map_splitted_range, second_map_splitted_range = splitted_range
 
+        # Resolve the symbols of the state once for all maps split by this transformation:
+        # copying a map graph adds data descriptors and nested SDFGs, but none of the symbols
+        # the copies need -- they are clones -- so the answer stays valid for the whole loop.
+        # However, the cache is only consumed by ``add_nested_sdfg()`` while copying a
+        # nested SDFG, so it is only computed if one of the copied scopes actually contains
+        # one; splitting tasklet-only maps never resolves the symbols.
+
+        def _scope_contains_nested_sdfg(scope_map_entry: dace_nodes.MapEntry) -> bool:
+            return any(
+                isinstance(scope_node, dace_nodes.NestedSDFG)
+                for scope_node in graph.scope_subgraph(
+                    scope_map_entry, include_entry=False, include_exit=False
+                ).nodes()
+            )
+
+        defined_symbols: Optional[dict[str, Any]] = (
+            graph.defined_symbols()
+            if _scope_contains_nested_sdfg(first_map_entry)
+            or _scope_contains_nested_sdfg(second_map_entry)
+            else None
+        )
+
         def _replace_ranged_map(
             map_entry: dace_nodes.MapEntry,
             map_exit: dace_nodes.MapExit,
@@ -329,7 +387,7 @@ class SplitMapRange(dace_transformation.SingleStateTransformation):
             new_map_entries: list[dace_nodes.MapEntry] = []
             for i, r in enumerate(new_ranges):
                 new_map_entry, _ = gtx_mfutils.copy_map_graph_with_new_range(
-                    sdfg, graph, map_entry, map_exit, r, str(i)
+                    sdfg, graph, map_entry, map_exit, r, str(i), defined_symbols=defined_symbols
                 )
                 new_map_entries.append(new_map_entry)
             gtx_mfutils.delete_map(graph, map_entry, map_exit)  # remove the original first map
@@ -470,6 +528,11 @@ class HorizontalSplitMapRange(SplitMapRange):
         if splitted_range is None:
             return False
 
+        if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
+            graph, [first_map_entry, second_map_entry]
+        ):
+            return False
+
         if not dace_mfhelper.is_parallel(
             graph=graph, node1=first_map_entry, node2=second_map_entry
         ):
@@ -572,6 +635,13 @@ class VerticalSplitMapRange(SplitMapRange):
         fuse_map_fragments: Immediately apply fusion and node splitting on the
             generated Maps.
         single_use_data: Use this as single use data and do not compute it on the fly.
+        allow_shared_output: Also split pointwise external outputs. Their data
+            descriptors and all stores are preserved. This is opt-in.
+        shared_output_data: Restrict shared-output candidates by their connecting array.
+            `None` allows any eligible array; an empty sequence disables
+            shared-output splitting.
+        shared_output_split_dimension: Limit shared-output splitting to this axis;
+            all other map ranges must match.
 
     Note:
         - Even if `fuse_map_fragments` is `True` it might be that some fusion involving
@@ -596,7 +666,15 @@ class VerticalSplitMapRange(SplitMapRange):
         desc="Only consolidate if this does not lead to an extension of the subset.",
     )
 
+    allow_shared_output = dace_properties.Property(
+        dtype=bool,
+        default=False,
+        desc="Allow splitting pointwise external outputs without removing their stores.",
+    )
+
     _check_split_callback: Optional[VerticalMapSplitCallback]
+    _shared_output_data: Optional[frozenset[str]]
+    _shared_output_split_parameter: Optional[str]
 
     # Name of all data that is used at only one place. Is computed by the
     #  `FindSingleUseData` pass and be passed at construction time. Needed until
@@ -608,6 +686,9 @@ class VerticalSplitMapRange(SplitMapRange):
         *args: Any,
         check_split_callback: Optional[VerticalMapSplitCallback] = None,
         fuse_map_fragments: Optional[bool] = None,
+        allow_shared_output: Optional[bool] = None,
+        shared_output_data: Optional[Sequence[str]] = None,
+        shared_output_split_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
         single_use_data: Optional[dict[dace.SDFG, set[str]]] = None,
         consolidate_edges_only_if_not_extending: Optional[bool] = None,
         **kwargs: Any,
@@ -617,6 +698,21 @@ class VerticalSplitMapRange(SplitMapRange):
         if consolidate_edges_only_if_not_extending is not None:
             self.consolidate_edges_only_if_not_extending = consolidate_edges_only_if_not_extending
         self._check_split_callback = check_split_callback
+        if allow_shared_output is None:
+            allow_shared_output = False
+        self.allow_shared_output, shared_output_data, shared_output_split_dimension = (
+            _check_shared_output_options(
+                allow_shared_output, shared_output_data, shared_output_split_dimension
+            )
+        )
+        self._shared_output_data = (
+            None if shared_output_data is None else frozenset(shared_output_data)
+        )
+        self._shared_output_split_parameter = (
+            gtx_dace_lowering.get_map_variable(shared_output_split_dimension)
+            if isinstance(shared_output_split_dimension, gtx_common.Dimension)
+            else shared_output_split_dimension
+        )
         self._single_use_data = single_use_data
         super().__init__(*args, **kwargs)
 
@@ -648,16 +744,63 @@ class VerticalSplitMapRange(SplitMapRange):
                 return False
 
         # Test if the map is in the right scope.
-        map_scope: Union[dace_nodes.Node, None] = graph.scope_dict()[first_map_entry]
+        scope_dict = graph.scope_dict()
+        map_scope: Union[dace_nodes.Node, None] = scope_dict[first_map_entry]
         if self.only_toplevel_maps and (map_scope is not None):
             return False
 
-        if not self.access_node.desc(graph).transient:
-            return False
+        # More than one array can connect these maps. Check each before splitting.
+        for edge in graph.out_edges(self.first_map_exit):
+            access = edge.dst
+            if isinstance(access, dace_nodes.AccessNode) and any(
+                reader.dst is self.second_map_entry for reader in graph.out_edges(access)
+            ):
+                desc = access.desc(sdfg)
+                if (
+                    not isinstance(desc, dace.data.Array)
+                    or gtx_transformations.utils.is_view(desc, sdfg)
+                    or desc.may_alias
+                ):
+                    return False
+
+        is_shared_output = not self.access_node.desc(sdfg).transient
+        if is_shared_output:
+            if not self.allow_shared_output:
+                return False
+            if (
+                self._shared_output_data is not None
+                and self.access_node.data not in self._shared_output_data
+            ):
+                return False
+            if self._shared_output_split_parameter is not None:
+                first = dict(zip(first_map.params, first_map.range, strict=True))
+                second = dict(zip(second_map.params, second_map.range, strict=True))
+                parameter = self._shared_output_split_parameter
+                if first.keys() != second.keys() or parameter not in first:
+                    return False
+                if first[parameter] == second[parameter] or any(
+                    first[p] != second[p] for p in first if p != parameter
+                ):
+                    return False
 
         splitted_range = gtx_mfutils.split_overlapping_map_range(first_map, second_map)
         if splitted_range is None:
             return False
+
+        if not self.split_maps_with_nested_sdfg and gtx_mfutils.map_scope_contains_nested_sdfg(
+            graph, [first_map_entry, self.second_map_entry]
+        ):
+            return False
+
+        if is_shared_output:
+            # Preview the exact partition before mutating the graph. Every read
+            # must remain served by one writer, including other consumers.
+            split_ranges = {
+                first_map: splitted_range[0],
+                second_map: splitted_range[1],
+            }
+            if self._shared_access_partition(graph, sdfg, self.access_node, split_ranges) is None:
+                return False
 
         # TODO(phimuell): Implement a check that the array is single use data?
 
@@ -707,6 +850,144 @@ class VerticalSplitMapRange(SplitMapRange):
 
         return True
 
+    @staticmethod
+    def _pointwise_access_map(
+        graph: dace.SDFGState,
+        edge: dace_graph.MultiConnectorEdge,
+        desc: dace.data.Array,
+        *,
+        is_write: bool,
+    ) -> Optional[dace_nodes.MapEntry]:
+        """Find a top-level map with direct, unit-stride array indexing.
+
+        Translated indices such as `a[i - 50]` are deliberately rejected.
+        Supporting them requires translating the split ranges into array coordinates.
+        """
+        scope_node = edge.src if is_write else edge.dst
+        expected_type = dace_nodes.MapExit if is_write else dace_nodes.MapEntry
+        connector = edge.src_conn if is_write else edge.dst_conn
+        if not isinstance(scope_node, expected_type) or connector is None:
+            return None
+        if not is_write and not connector.startswith("IN_"):
+            return None
+        entry = graph.entry_node(scope_node) if is_write else scope_node
+        if graph.scope_dict()[entry] is not None:
+            return None
+        map_ = scope_node.map
+        if len(map_.params) != len(desc.shape) or any(step != 1 for _, _, step in map_.range):
+            return None
+        inner_edges = list(
+            graph.in_edges_by_connector(scope_node, "IN_" + connector[4:])
+            if is_write
+            else graph.out_edges_by_connector(scope_node, "OUT_" + connector[3:])
+        )
+        if not inner_edges or edge.data.is_empty() or edge.data.dynamic or edge.data.wcr:
+            return None
+        # Check the edges inside the map: each iteration may only touch its own
+        #  element, no shifts or offsets. Below, the outer memlet must also cover
+        #  the whole map range. Otherwise, splitting the map range would not split
+        #  the array accesses the same way.
+        point = dace_subsets.Range.from_string(", ".join(map_.params))
+        for inner in inner_edges:
+            if inner.data.is_empty():
+                return None
+            subset = (
+                inner.data.get_dst_subset(inner, graph)
+                if is_write
+                else inner.data.get_src_subset(inner, graph)
+            )
+            if subset != point or inner.data.dynamic or inner.data.wcr:
+                return None
+        subset = (
+            edge.data.get_dst_subset(edge, graph)
+            if is_write
+            else edge.data.get_src_subset(edge, graph)
+        )
+        return entry if subset == map_.range else None
+
+    @staticmethod
+    def _shared_access_partition(
+        graph: dace.SDFGState,
+        sdfg: dace.SDFG,
+        access: dace_nodes.AccessNode,
+        split_ranges: Optional[dict[dace_nodes.Map, list[dace_subsets.Range]]] = None,
+    ) -> Optional[list[tuple[dace_graph.MultiConnectorEdge, list[dace_graph.MultiConnectorEdge]]]]:
+        """Check a disjoint pointwise partition without changing storage.
+
+        With `split_ranges`, preview the proposed map split. Otherwise return
+        the writer/reader groups for the already split graph. Restrict this
+        first implementation to one access node per external array per state,
+        top-level maps, unit strides, and identical pointwise indexing.
+        """
+        desc = access.desc(sdfg)
+        if (
+            desc.transient
+            or not isinstance(desc, dace.data.Array)
+            or gtx_transformations.utils.is_view(desc, sdfg)
+            or desc.may_alias
+            or sum(
+                isinstance(node, dace_nodes.AccessNode) and node.data == access.data
+                for node in graph.nodes()
+            )
+            != 1
+        ):
+            return None
+        split_ranges = split_ranges or {}
+        parameter_order: Optional[list[str]] = None
+        writers: list[tuple[dace_graph.MultiConnectorEdge, dace_subsets.Range]] = []
+        readers: list[tuple[dace_graph.MultiConnectorEdge, dace_subsets.Range]] = []
+        for is_write, edges, regions in (
+            (True, graph.in_edges(access), writers),
+            (False, graph.out_edges(access), readers),
+        ):
+            for edge in edges:
+                entry = VerticalSplitMapRange._pointwise_access_map(
+                    graph, edge, desc, is_write=is_write
+                )
+                if entry is None:
+                    return None
+                map_ = entry.map
+                if parameter_order is None:
+                    parameter_order = list(map_.params)
+                # Ranges are compared directly, without renaming their coordinates.
+                if list(map_.params) != parameter_order:
+                    return None
+                regions.extend((edge, region) for region in split_ranges.get(map_, [map_.range]))
+        if len(writers) < 2 or not readers:
+            return None
+        for i, (_, region) in enumerate(writers):
+            if any(
+                gtx_dace_split.maybe_intersecting(region, other) for _, other in writers[i + 1 :]
+            ):
+                return None
+        groups: list[tuple[dace_graph.MultiConnectorEdge, list[dace_graph.MultiConnectorEdge]]] = [
+            (edge, []) for edge, _ in writers
+        ]
+        for reader, region in readers:
+            # covers() compares bounding boxes. This is exact here because the
+            # guards above require unit-stride, pointwise accesses with outer
+            # subsets equal to map ranges. Keep those guards when extending this.
+            owners = [i for i, (_, written) in enumerate(writers) if written.covers(region)]
+            if len(owners) != 1:
+                return None
+            groups[owners[0]][1].append(reader)
+        return groups
+
+    def _split_shared_access(
+        self, graph: dace.SDFGState, sdfg: dace.SDFG, access: dace_nodes.AccessNode
+    ) -> bool:
+        """Separate dependency paths, retaining the original external array."""
+        groups = self._shared_access_partition(graph, sdfg, access)
+        if groups is None:
+            return False
+        for writer, readers in groups:
+            fragment = graph.add_access(access.data)
+            graph.add_edge(writer.src, writer.src_conn, fragment, writer.dst_conn, writer.data)
+            for reader in readers:
+                graph.add_edge(fragment, reader.src_conn, reader.dst, reader.dst_conn, reader.data)
+        graph.remove_node(access)
+        return True
+
     def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
         """Split the map range in order to obtain an overlapping range between the first and second map."""
 
@@ -737,7 +1018,12 @@ class VerticalSplitMapRange(SplitMapRange):
         # TODO(phimuell): Make it possible to pass `self.single_use_data` to transformation.
         has_performed_a_split = False
         for intermediate_to_split in intermediates_that_might_need_splitting:
-            if gtx_transformations.SplitAccessNode.can_be_applied_to(
+            if not intermediate_to_split.desc(sdfg).transient:
+                if self.allow_shared_output:
+                    has_performed_a_split |= self._split_shared_access(
+                        graph, sdfg, intermediate_to_split
+                    )
+            elif gtx_transformations.SplitAccessNode.can_be_applied_to(
                 sdfg=sdfg,
                 options={},
                 access_node=intermediate_to_split,
@@ -796,3 +1082,24 @@ class VerticalSplitMapRange(SplitMapRange):
 
             # This is not efficient, but it is currently the only way to run it
             sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)
+
+
+def _check_shared_output_options(
+    allow_shared_output: bool,
+    shared_output_data: Optional[Sequence[str]],
+    split_dimension: Optional[Union[gtx_common.Dimension, str]],
+) -> tuple[bool, Optional[Sequence[str]], Optional[Union[gtx_common.Dimension, str]]]:
+    """Warn about inactive or empty shared-output selections."""
+    if not allow_shared_output and (shared_output_data is not None or split_dimension is not None):
+        warnings.warn(
+            "Shared-output selection is ignored because shared-output splitting is disabled.",
+            stacklevel=2,
+        )
+        return False, None, None
+    if shared_output_data is not None and len(shared_output_data) == 0:
+        warnings.warn(
+            "The shared-output selection is empty; no data is eligible for shared-output splitting.",
+            stacklevel=2,
+        )
+        return False, None, None
+    return allow_shared_output, shared_output_data, split_dimension
