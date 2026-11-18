@@ -29,6 +29,7 @@ from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
 )
+from gt4py.next.embedded.connectivity_ops import ConnectivityOps
 from gt4py.next.ffront import experimental, fbuiltins
 
 
@@ -455,6 +456,15 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: The `ConnectivityOps` of the connectivity if its creator knows them, as `restrict` does.
+    #: Not a field, so that no copy inherits them; without them, they are created from the buffer.
+    connectivity_ops: dataclasses.InitVar[Optional[ConnectivityOps]] = dataclasses.field(
+        default=None, kw_only=True
+    )
+
+    def __post_init__(self, connectivity_ops: Optional[ConnectivityOps]) -> None:
+        if connectivity_ops is not None:
+            self.__dict__["_connectivity_ops"] = connectivity_ops
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -503,10 +513,8 @@ class NdArrayConnectivityField(
     def _restrict_cache(self) -> dict[Any, NdArrayConnectivityField]:
         return {}
 
-    # Not a field, so that no copy inherits it: `restrict` and a library rebuilding a
-    # connectivity set it, otherwise it is created from the buffer.
     @functools.cached_property
-    def _connectivity_ops(self) -> connectivity_ops.ConnectivityOps:
+    def _connectivity_ops(self) -> ConnectivityOps:
         return connectivity_ops.of(self._ndarray)
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
@@ -534,9 +542,8 @@ class NdArrayConnectivityField(
             new_domain, buffer_slice = self._slice(index)
             ndarray, ops = self._connectivity_ops.restrict(self._ndarray, buffer_slice)
             restricted_connectivity = dataclasses.replace(
-                self, _domain=new_domain, _ndarray=ndarray
+                self, _domain=new_domain, _ndarray=ndarray, connectivity_ops=ops
             )
-            restricted_connectivity.__dict__["_connectivity_ops"] = ops
             if ops.may_cache(ndarray):
                 self._restrict_cache[index] = restricted_connectivity
         return restricted_connectivity

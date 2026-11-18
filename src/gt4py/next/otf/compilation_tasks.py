@@ -24,7 +24,7 @@ import pathlib
 import tempfile
 import typing
 import weakref
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import numpy as np
 import xxhash
@@ -32,6 +32,7 @@ import xxhash
 from gt4py._core import definitions as core_defs
 from gt4py.next import backend as gtx_backend, common, utils as next_utils
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.embedded.connectivity_ops import ConnectivityOps
 from gt4py.next.otf import arguments, artifacts, runners, stages
 from gt4py.next.otf.compilation import cache as _cache
 
@@ -62,7 +63,8 @@ class _CompileTimeConnectivity(nd_array_field.NdArrayConnectivityField):
     )
     _digest: str = dataclasses.field(init=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, connectivity_ops: Optional[ConnectivityOps]) -> None:
+        super().__post_init__(connectivity_ops)
         table = np.ascontiguousarray(np.asarray(self._ndarray))
         object.__setattr__(self, "_digest", _table_digest(table))
 

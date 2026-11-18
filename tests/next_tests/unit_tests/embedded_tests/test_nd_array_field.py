@@ -2334,6 +2334,17 @@ def test_connectivity_field_setitem_raises():
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
 
 
+def test_connectivity_ops_use_the_registered_array_ops(monkeypatch):
+    table = np.asarray([0, 1, 2])
+    numpy_ops = array_ops.of(table)
+    connectivity_ops.of(table)
+    replacement = dataclasses.replace(numpy_ops)
+    monkeypatch.setattr(array_ops, "_ops_by_namespace", {numpy_ops.xp: replacement})
+    monkeypatch.setattr(array_ops, "_ops_by_array_type", {})
+
+    assert connectivity_ops.of(table).array_ops is replacement
+
+
 def test_connectivity_field_restrict_is_cached():
     V = Dimension("V")
     E = Dimension("E")

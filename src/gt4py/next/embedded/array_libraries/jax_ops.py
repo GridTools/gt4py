@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-`ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
+`ArrayOps` and `ConnectivityOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
 Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
 connectivity table inside a trace is in one of three cases, told apart by
@@ -25,7 +25,7 @@ from __future__ import annotations
 import dataclasses
 import weakref
 from collections.abc import Callable, Mapping
-from typing import Any, ClassVar, Optional, TypeAlias
+from typing import Any, ClassVar, NamedTuple, Optional
 
 import array_api_compat
 import jax
@@ -93,7 +93,7 @@ def _restrict_values(
     return restricted
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
     #: The concrete array with the values of the connectivity's table, `None` if they exist
     #: only at run time. The table itself if it is concrete.
@@ -110,8 +110,11 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
         with jax.ensure_compile_time_eval():
             return super().hyperslice(self.values, image_range, skip_value)
 
-    def for_ndarray(self, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
-        return JaxConnectivityOps(self.array_ops, ndarray if _has_values(ndarray) else None)
+    @classmethod
+    def from_ndarray(
+        cls, ops: array_ops.ArrayOps, ndarray: core_defs.NDArrayObject
+    ) -> JaxConnectivityOps:
+        return cls(ops, ndarray if _has_values(ndarray) else None)
 
     def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
         # a tracer belongs to a trace, which may end before the cache
@@ -168,9 +171,8 @@ class JaxOps(array_ops.ArrayOps):
         raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
 
 
-_jax_ops = JaxOps(jnp)
-array_ops.register(_jax_ops)
-connectivity_ops.register(JaxConnectivityOps(_jax_ops))
+array_ops.register(JaxOps(jnp))
+connectivity_ops.register(jnp, JaxConnectivityOps)
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)
@@ -202,9 +204,11 @@ jax.tree_util.register_pytree_node(
 )
 
 
-_ConnectivityAuxData: TypeAlias = tuple[
-    common.Domain, common.Dimension, Optional[core_defs.IntegralScalar], Optional[_TableIdentity]
-]
+class _ConnectivityAuxData(NamedTuple):
+    domain: common.Domain
+    codomain: common.Dimension
+    skip_value: Optional[core_defs.IntegralScalar]
+    values: Optional[_TableIdentity]
 
 
 def _flatten_connectivity(
@@ -216,14 +220,13 @@ def _flatten_connectivity(
     assert not (
         array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray)
     ), f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
-    # a placeholder has no `ArrayOps`, only the ones `_unflatten_connectivity` attached
-    ops = (
-        connectivity._connectivity_ops
-        if isinstance(ndarray, jax.Array)
-        else connectivity.__dict__.get("_connectivity_ops")
-    )
+    try:
+        ops = connectivity._connectivity_ops
+    except TypeError:
+        # a placeholder that is no array has `ConnectivityOps` only if unflattening gave it some
+        ops = None
     values = ops.values if isinstance(ops, JaxConnectivityOps) else None
-    return (ndarray,), (
+    return (ndarray,), _ConnectivityAuxData(
         connectivity.domain,
         connectivity.codomain,
         connectivity.skip_value,
@@ -234,21 +237,25 @@ def _flatten_connectivity(
 def _unflatten_connectivity(
     aux_data: _ConnectivityAuxData, children: tuple[core_defs.NDArrayObject]
 ) -> nd_array_field.NdArrayConnectivityField:
-    domain, codomain, skip_value, identity = aux_data
     (ndarray,) = children
-    connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
-        domain, ndarray, codomain, skip_value
-    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+    identity = aux_data.values
     # a child without values stands for the flattened table: a tracer, or one of the placeholders
     # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around. Under `vmap` the
     # child is one element of the flattened table, whose values the aux data does not have.
-    if not (
-        identity is None
+    ops = (
+        None
+        if identity is None
         or _has_values(ndarray)
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
-    ):
-        connectivity.__dict__["_connectivity_ops"] = connectivity_ops.of(identity.values)
-    return connectivity
+        else connectivity_ops.of(identity.values)
+    )
+    return nd_array_field.NdArrayConnectivityField(
+        aux_data.domain,
+        ndarray,
+        aux_data.codomain,
+        aux_data.skip_value,
+        connectivity_ops=ops,
+    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 
 # jax registers pytree nodes by exact type, so the connectivity needs its own registration
