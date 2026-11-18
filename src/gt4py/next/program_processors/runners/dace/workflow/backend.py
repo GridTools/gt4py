@@ -79,6 +79,7 @@ def make_dace_toolchain(
 
 def make_dace_backend(
     gpu: bool,
+    *,
     auto_optimize: bool = True,
     sync_sdfg_call: bool = False,
     optimization_args: dict[str, Any] | None = None,
@@ -102,7 +103,8 @@ def make_dace_backend(
         sync_sdfg_call: Force a synchronous SDFG call on GPU, instead of allowing
             the GPU kernel execution to overlap with the Python driver code.
         optimization_args: A `dict` containing configuration parameters for
-            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`.
+            the SDFG auto-optimize pipeline, see `gt_auto_optimize()`. It also
+            accepts the scan-fusion options `fuse_scan_inputs` and `scan_fusion_scope`.
         external_gpu_stream: An external GPU stream to be used for the SDFG call,
             which allows to synchronize the execution of GPU kernels with external
             workload and to share the stream memory pool. It can be the pointer

@@ -81,13 +81,12 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             data_ndim = len(node.data_dims)
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
-                return "py::{pybind_type} {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
-                    pybind_type=(
-                        "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
-                    ),
-                    name=node.name,
-                    sid_ndim=sid_ndim,
-                )
+                # (C++ type, name) pairs of the run_computation parameters bound to this field
+                pybind_type = "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                return [
+                    (f"py::{pybind_type}", node.name),
+                    (f"std::array<gt::int_t,{sid_ndim}>", f"{node.name}_origin"),
+                ]
             else:
                 return pybuffer_to_sid(
                     name=node.name,
@@ -101,13 +100,17 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
     def visit_GlobalParamDecl(self, node: gtcpp.GlobalParamDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return f"{self.visit(node.dtype)} {node.name}"
+                return [(self.visit(node.dtype), node.name)]
 
             return f"gridtools::stencil::global_parameter({node.name})"
 
     def visit_Program(self, node: gtcpp.Program, **kwargs):
         assert "module_name" in kwargs
-        entry_params = self.visit(node.parameters, external_arg=True, **kwargs)
+        entry_params = [
+            param
+            for params in self.visit(node.parameters, external_arg=True, **kwargs)
+            for param in params
+        ]
         sid_params = self.visit(node.parameters, external_arg=False, **kwargs)
         return self.generic_visit(node, entry_params=entry_params, sid_params=sid_params, **kwargs)
 

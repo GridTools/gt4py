@@ -316,7 +316,8 @@ def _are_gpu_operations_on_sdfg_streams(
     platform = _gpu_platform(device)
     re_gpu_operation = {
         "kernel": re.compile(r"\b__dace_runkernel_\w+\(__state\b.*,\s*(\w+)\);"),
-        "copy": re.compile(rf"\b{platform}Memcpy\w*Async\(.*,\s*(\w+)\);"),
+        # The copy call may be wrapped in an error-checking macro, e.g. `DACE_GPU_CHECK(...)`.
+        "copy": re.compile(rf"\b{platform}Memcpy\w*Async\(.*,\s*(\w+)\)"),
     }[gpu_operation]
 
     with dace_wf_common.dace_context(device_type=device):
@@ -512,14 +513,7 @@ def _make_multi_state_sdfg_3(
     [
         (False, _make_multi_state_sdfg_0),
         (True, _make_multi_state_sdfg_1),
-        pytest.param(
-            (True, _make_multi_state_sdfg_2),
-            marks=pytest.mark.xfail(
-                reason="DaCe does not synchronize the GPU stream before reading the result "
-                "of a device-to-host copy in the condition of an InterState edge.",
-                strict=True,
-            ),
-        ),
+        (True, _make_multi_state_sdfg_2),
         (True, _make_multi_state_sdfg_3),
     ],
 )
