@@ -1712,7 +1712,6 @@ def test_field_unsupported_index(index):
     "index, value",
     [
         ((1, 1), 42.0),
-        ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
             common._field(
@@ -1744,9 +1743,6 @@ _ROW = np.arange(10) * 2.0
         ((1, 1), 42.0, lambda xp, v: v),
         ((1, 1), 42, lambda xp, v: v),
         ((1, 1), np.float32(42.5), lambda xp, v: v),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
-        ((1, slice(None)), _ROW, lambda xp, v: v),
         (
             (1, slice(None)),
             _ROW,
@@ -1755,24 +1751,26 @@ _ROW = np.arange(10) * 2.0
                 domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
             ),
         ),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float32),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
     ],
     ids=[
         "python-float",
         "python-int",
         "numpy-scalar",
-        "array",
-        "array-other-dtype",
-        "numpy-array",
         "field",
+        "field-other-dtype",
     ],
 )
 def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
     xp = nd_array_implementation
     value = make_value(xp, source)
-    if is_cupy(xp) and isinstance(value, np.ndarray):
-        pytest.skip("CuPy does not assign a non-scalar NumPy array.")
-    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
-        pytest.skip("Assigning an array of another library is tested separately.")
     field = common._field(
         asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
         domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
@@ -1800,14 +1798,35 @@ def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
     assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
 
 
-def test_setitem_array_of_other_library_raises():
+def _other_library_pairs():
+    for field_xp in ND_ARRAY_IMPLEMENTATIONS:
+        for value_xp in ND_ARRAY_IMPLEMENTATIONS:
+            if field_xp is not value_xp:
+                marks = pytest.mark.requires_gpu if is_cupy(field_xp) or is_cupy(value_xp) else ()
+                yield pytest.param(
+                    field_xp, value_xp, id=f"{field_xp.__name__}-{value_xp.__name__}", marks=marks
+                )
+
+
+@pytest.mark.parametrize("field_xp, value_xp", _other_library_pairs())
+def test_setitem_field_of_other_library_raises(field_xp, value_xp):
+    domain = common.Domain(NamedRange(D0, UnitRange(0, 3)))
+    field = common._field(asarray(field_xp, np.arange(3), dtype=np.float64), domain=domain)
+    value = common._field(asarray(value_xp, np.ones(3), dtype=np.float64), domain=domain)
+
+    with pytest.raises(TypeError, match="Cannot assign"):
+        field[...] = value
+
+
+def test_setitem_plain_array_raises(nd_array_implementation):
+    xp = nd_array_implementation
     field = common._field(
-        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        asarray(xp, np.arange(3), dtype=np.float64),
         domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
     )
 
-    with pytest.raises(TypeError, match="Cannot assign an array of 'numpy'"):
-        field[...] = np.ones(3)
+    with pytest.raises(TypeError, match=r"ndarray\[\.\.\.\]"):
+        field[...] = asarray(xp, np.ones(3), dtype=np.float64)
 
 
 def test_setitem_wrong_domain():
