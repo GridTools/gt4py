@@ -28,6 +28,7 @@ from gt4py.next.common import (
     UnitRange,
 )
 from gt4py.next.embedded import (
+    array_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -117,32 +118,18 @@ def are_equal_fields(a: Field, b: Field) -> bool:
     return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
-def _skip_or_expect_no_buffer_info(xp) -> bool:
-    """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
-    if xp.__name__ == "jax.numpy":
-        return True
-    if xp.__name__ not in ("numpy", "cupy"):
-        pytest.skip(
-            "Buffer pointers and strides are outside the Array API standard; "
-            "'BufferInfo.from_ndarray' knows NumPy and CuPy only."
-        )
-    return False
-
-
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
     assert field.array_ns is nd_array_implementation
-    if _skip_or_expect_no_buffer_info(nd_array_implementation):
-        with pytest.raises(NotImplementedError):
-            field.__gt_buffer_info__
-        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
-    assert buffer_info == common.BufferInfo.from_ndarray(field_ndarray)
+    assert buffer_info == array_ops.of(field_ndarray).buffer_info(field_ndarray)
+    assert buffer_info.shape == (2, 2)
+    assert buffer_info.dtype == core_defs.dtype(np.float64)
 
     field[...] = 1.0
     if field.__gt_buffer_info__ is buffer_info:
@@ -153,6 +140,26 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
             field.ndarray = data
     else:
         assert field_ndarray is not field.ndarray
+
+
+def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement(nd_array_implementation):
+    def make_field():
+        data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+        return common._field(data, domain=common.domain({D0: 2, D1: 2}))
+
+    exported, not_exported = make_field(), make_field()
+    old_buffer = exported.ndarray
+    old_data_ptr = exported.__gt_buffer_info__.data_ptr
+
+    exported[...] = 1.0
+    not_exported[...] = 1.0
+
+    assert exported.__dict__["__gt_buffer_info__"] == array_ops.of(exported.ndarray).buffer_info(
+        exported.ndarray
+    )
+    if exported.ndarray is not old_buffer:
+        assert exported.__gt_buffer_info__.data_ptr != old_data_ptr
+    assert "__gt_buffer_info__" not in not_exported.__dict__
 
 
 _NOT_IN_ARRAY_API = ("fmod", "cbrt", "gamma")
@@ -1900,13 +1907,11 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
         codomain=V,
     )
     assert e2v_conn.array_ns is nd_array_implementation
-    if _skip_or_expect_no_buffer_info(nd_array_implementation):
-        with pytest.raises(NotImplementedError):
-            e2v_conn.__gt_buffer_info__
-        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
-    assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
+    assert buffer_info == array_ops.of(e2v_conn.ndarray).buffer_info(e2v_conn.ndarray)
+    assert buffer_info.shape == (E_STOP - E_START,)
+    assert buffer_info.dtype == core_defs.dtype(np.int32)
     assert buffer_info is e2v_conn.__gt_buffer_info__
 
 
