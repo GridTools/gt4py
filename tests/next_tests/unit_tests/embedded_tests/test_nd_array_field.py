@@ -11,6 +11,7 @@ import operator
 import pickle
 from typing import Callable, Iterable, Optional
 
+import array_api_compat
 import array_api_strict
 import numpy as np
 import pytest
@@ -41,6 +42,7 @@ from next_tests.unit_tests.conftest import (
     asarray,
     is_array_api_strict,
     is_cupy,
+    strict_array_on_device1,
 )
 
 
@@ -2445,3 +2447,36 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def _scan_cumsum(x, k_dim):
+    from gt4py.next.embedded import context as embedded_context, operators
+
+    scan = operators.ScanOperator(lambda state, v: state + v, forward=True, init=0.0, axis=k_dim)
+    with embedded_context.update(
+        closure_column_range=NamedRange(k_dim, UnitRange(0, 4)), offset_provider={}
+    ):
+        return scan(x)
+
+
+def test_scan_result_in_namespace_and_on_device_of_inputs(nd_array_implementation):
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = asarray(nd_array_implementation, np.ones(4), dtype=np.float64)
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert array_api_compat.array_namespace(result.ndarray) is array_api_compat.array_namespace(
+        data
+    )
+    assert array_api_compat.device(result.ndarray) == array_api_compat.device(data)
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+def test_scan_result_on_non_default_device_of_inputs():
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = strict_array_on_device1(np.ones(4))
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert result.ndarray.device == data.device
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
