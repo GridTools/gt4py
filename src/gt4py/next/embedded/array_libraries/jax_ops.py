@@ -18,9 +18,23 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
 from gt4py.next.embedded import array_ops, nd_array_field
+
+
+def _layout_strides(array: Any) -> tuple[int, ...]:
+    """Element strides of the physical layout of `array`, which need not be row-major."""
+    # Older JAX versions name `format` `layout`, and its device-local part `device_local_layout`.
+    array_format = getattr(array, "format", None) or array.layout
+    layout = getattr(array_format, "device_local_layout", None) or array_format.layout
+    shape = array.shape
+    strides = [0] * len(shape)
+    stride = 1
+    for dim in reversed(layout.major_to_minor):
+        strides[dim] = stride
+        stride *= shape[dim]
+    return tuple(strides)
 
 
 class JaxOps(array_ops.ArrayOps):
@@ -37,13 +51,21 @@ class JaxOps(array_ops.ArrayOps):
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
+        self.check_assignable(value)
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        raise NotImplementedError("'__gt_buffer_info__' for JAX arrays not yet implemented.")
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_ndarray_utils.BufferInfo:
+        # JAX's `__dlpack__` rejects `stream=-1` and blocks the host on `stream=None`.
+        return core_ndarray_utils.BufferInfo(
+            data_ptr=array.unsafe_buffer_pointer(),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+            shape=array.shape,
+            elem_strides=_layout_strides(array),
+            dtype=core_defs.dtype(self.scalar_type(array.dtype)),
+            device=core_ndarray_utils.device_from_dlpack(*array.__dlpack_device__()),  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+        )
 
 
 array_ops.register(JaxOps(jnp))

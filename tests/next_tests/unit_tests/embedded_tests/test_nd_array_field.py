@@ -11,6 +11,7 @@ import operator
 import pickle
 from typing import Callable, Iterable, Optional
 
+import array_api_compat
 import array_api_strict
 import numpy as np
 import pytest
@@ -27,6 +28,7 @@ from gt4py.next.common import (
     UnitRange,
 )
 from gt4py.next.embedded import (
+    array_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -41,6 +43,7 @@ from next_tests.unit_tests.conftest import (
     asarray,
     is_array_api_strict,
     is_cupy,
+    strict_array_on_device1,
 )
 
 
@@ -115,32 +118,18 @@ def are_equal_fields(a: Field, b: Field) -> bool:
     return (a.domain == b.domain) and (a.asnumpy() == b.asnumpy()).all()
 
 
-def _skip_or_expect_no_buffer_info(xp) -> bool:
-    """Whether `xp` arrays have no buffer info; skips libraries for which it is undefined."""
-    if xp.__name__ == "jax.numpy":
-        return True
-    if xp.__name__ not in ("numpy", "cupy"):
-        pytest.skip(
-            "Buffer pointers and strides are outside the Array API standard; "
-            "'BufferInfo.from_ndarray' knows NumPy and CuPy only."
-        )
-    return False
-
-
 def test_nd_array_field_buffer_info(nd_array_implementation):
     import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
     assert field.array_ns is nd_array_implementation
-    if _skip_or_expect_no_buffer_info(nd_array_implementation):
-        with pytest.raises(NotImplementedError):
-            field.__gt_buffer_info__
-        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
-    assert buffer_info == common.BufferInfo.from_ndarray(field_ndarray)
+    assert buffer_info == array_ops.of(field_ndarray).buffer_info(field_ndarray)
+    assert buffer_info.shape == (2, 2)
+    assert buffer_info.dtype == core_defs.dtype(np.float64)
 
     field[...] = 1.0
     if field.__gt_buffer_info__ is buffer_info:
@@ -151,6 +140,26 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
             field.ndarray = data
     else:
         assert field_ndarray is not field.ndarray
+
+
+def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement(nd_array_implementation):
+    def make_field():
+        data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
+        return common._field(data, domain=common.domain({D0: 2, D1: 2}))
+
+    exported, not_exported = make_field(), make_field()
+    old_buffer = exported.ndarray
+    old_data_ptr = exported.__gt_buffer_info__.data_ptr
+
+    exported[...] = 1.0
+    not_exported[...] = 1.0
+
+    assert exported.__dict__["__gt_buffer_info__"] == array_ops.of(exported.ndarray).buffer_info(
+        exported.ndarray
+    )
+    if exported.ndarray is not old_buffer:
+        assert exported.__gt_buffer_info__.data_ptr != old_data_ptr
+    assert "__gt_buffer_info__" not in not_exported.__dict__
 
 
 _NOT_IN_ARRAY_API = ("fmod", "cbrt", "gamma")
@@ -1712,7 +1721,6 @@ def test_field_unsupported_index(index):
     "index, value",
     [
         ((1, 1), 42.0),
-        ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
             common._field(
@@ -1744,9 +1752,6 @@ _ROW = np.arange(10) * 2.0
         ((1, 1), 42.0, lambda xp, v: v),
         ((1, 1), 42, lambda xp, v: v),
         ((1, 1), np.float32(42.5), lambda xp, v: v),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float64)),
-        ((1, slice(None)), _ROW, lambda xp, v: asarray(xp, v, dtype=np.float32)),
-        ((1, slice(None)), _ROW, lambda xp, v: v),
         (
             (1, slice(None)),
             _ROW,
@@ -1755,24 +1760,26 @@ _ROW = np.arange(10) * 2.0
                 domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
             ),
         ),
+        (
+            (1, slice(None)),
+            _ROW,
+            lambda xp, v: common._field(
+                asarray(xp, v, dtype=np.float32),
+                domain=common.Domain(NamedRange(D1, UnitRange(0, 10))),
+            ),
+        ),
     ],
     ids=[
         "python-float",
         "python-int",
         "numpy-scalar",
-        "array",
-        "array-other-dtype",
-        "numpy-array",
         "field",
+        "field-other-dtype",
     ],
 )
 def test_setitem_array_libraries(nd_array_implementation, index, source, make_value):
     xp = nd_array_implementation
     value = make_value(xp, source)
-    if is_cupy(xp) and isinstance(value, np.ndarray):
-        pytest.skip("CuPy does not assign a non-scalar NumPy array.")
-    if is_array_api_strict(xp) and isinstance(value, np.ndarray):
-        pytest.skip("Assigning an array of another library is tested separately.")
     field = common._field(
         asarray(xp, np.arange(100).reshape(10, 10), dtype=np.float64),
         domain=common.Domain(dims=(D0, D1), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
@@ -1800,14 +1807,35 @@ def test_astype_c_type_alias(nd_array_implementation, c_type, expected):
     assert np.array_equal(result.asnumpy(), np.asarray([1, 2], dtype=expected))
 
 
-def test_setitem_array_of_other_library_raises():
+def _other_library_pairs():
+    for field_xp in ND_ARRAY_IMPLEMENTATIONS:
+        for value_xp in ND_ARRAY_IMPLEMENTATIONS:
+            if field_xp is not value_xp:
+                marks = pytest.mark.requires_gpu if is_cupy(field_xp) or is_cupy(value_xp) else ()
+                yield pytest.param(
+                    field_xp, value_xp, id=f"{field_xp.__name__}-{value_xp.__name__}", marks=marks
+                )
+
+
+@pytest.mark.parametrize("field_xp, value_xp", _other_library_pairs())
+def test_setitem_field_of_other_library_raises(field_xp, value_xp):
+    domain = common.Domain(NamedRange(D0, UnitRange(0, 3)))
+    field = common._field(asarray(field_xp, np.arange(3), dtype=np.float64), domain=domain)
+    value = common._field(asarray(value_xp, np.ones(3), dtype=np.float64), domain=domain)
+
+    with pytest.raises(TypeError, match="Cannot assign"):
+        field[...] = value
+
+
+def test_setitem_plain_array_raises(nd_array_implementation):
+    xp = nd_array_implementation
     field = common._field(
-        asarray(array_api_strict, np.arange(3), dtype=np.float64),
+        asarray(xp, np.arange(3), dtype=np.float64),
         domain=common.Domain(NamedRange(D0, UnitRange(0, 3))),
     )
 
-    with pytest.raises(TypeError, match="Cannot assign an array of 'numpy'"):
-        field[...] = np.ones(3)
+    with pytest.raises(TypeError, match=r"ndarray\[\.\.\.\]"):
+        field[...] = asarray(xp, np.ones(3), dtype=np.float64)
 
 
 def test_setitem_wrong_domain():
@@ -1879,13 +1907,11 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
         codomain=V,
     )
     assert e2v_conn.array_ns is nd_array_implementation
-    if _skip_or_expect_no_buffer_info(nd_array_implementation):
-        with pytest.raises(NotImplementedError):
-            e2v_conn.__gt_buffer_info__
-        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
-    assert buffer_info == common.BufferInfo.from_ndarray(e2v_conn.ndarray)
+    assert buffer_info == array_ops.of(e2v_conn.ndarray).buffer_info(e2v_conn.ndarray)
+    assert buffer_info.shape == (E_STOP - E_START,)
+    assert buffer_info.dtype == core_defs.dtype(np.int32)
     assert buffer_info is e2v_conn.__gt_buffer_info__
 
 
@@ -2426,3 +2452,36 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def _scan_cumsum(x, k_dim):
+    from gt4py.next.embedded import context as embedded_context, operators
+
+    scan = operators.ScanOperator(lambda state, v: state + v, forward=True, init=0.0, axis=k_dim)
+    with embedded_context.update(
+        closure_column_range=NamedRange(k_dim, UnitRange(0, 4)), offset_provider={}
+    ):
+        return scan(x)
+
+
+def test_scan_result_in_namespace_and_on_device_of_inputs(nd_array_implementation):
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = asarray(nd_array_implementation, np.ones(4), dtype=np.float64)
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert array_api_compat.array_namespace(result.ndarray) is array_api_compat.array_namespace(
+        data
+    )
+    assert array_api_compat.device(result.ndarray) == array_api_compat.device(data)
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+def test_scan_result_on_non_default_device_of_inputs():
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    data = strict_array_on_device1(np.ones(4))
+
+    result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
+
+    assert result.ndarray.device == data.device
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])

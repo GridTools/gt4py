@@ -6,13 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from types import ModuleType
-
 import numpy as np
 
-from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py._core import definitions as core_defs
 from gt4py.eve.xtyping import NestedTuple
 from gt4py.next import common, named_collections, utils
+from gt4py.next.embedded import array_ops, nd_array_field
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -28,16 +27,22 @@ def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
 
 
 def field_from_typespec(
-    type_: ts.CollectionTypeSpec | ts.ScalarType, domain: common.Domain, xp: ModuleType
+    type_: ts.CollectionTypeSpec | ts.ScalarType,
+    domain: common.Domain,
+    *,
+    like: core_defs.NDArrayObject | None = None,
 ) -> common.MutableField | tuple[common.MutableField | tuple, ...]:
     """
     Allocate a field or (arbitrarily nested) tuple(s) of fields.
+
+    The buffers are allocated in the array namespace of `like`, on its device, or with
+    NumPy if `like` is not given.
 
     The tuple structure and dtype is taken from a type_specifications.DataType,
     which is either ScalarType or a CollectionTypeSpec of ScalarType (possibly nested).
 
     >>> field_from_typespec(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1}), np
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT32), common.domain({common.Dimension("I"): 1})
     ... )  # doctest: +ELLIPSIS
     NdArrayField(... dtype=int32...)
     >>> field_from_typespec(
@@ -48,10 +53,10 @@ def field_from_typespec(
     ...         ]
     ...     ),
     ...     common.domain({common.Dimension("I"): 1}),
-    ...     np,
     ... )  # doctest: +ELLIPSIS
     (NdArrayField(... dtype=int32...), NdArrayField(... dtype=float32...))
     """
+    ops = array_ops.of(like) if like is not None else array_ops.default()
 
     def _constructor(
         type_: ts.CollectionTypeSpec,
@@ -67,12 +72,7 @@ def field_from_typespec(
     )
     def impl(type_: ts.ScalarType) -> common.MutableField:
         res = common._field(
-            xp.empty(
-                domain.shape,
-                dtype=core_ndarray_utils.namespace_dtype(
-                    xp, type_translation.as_dtype(type_).scalar_type
-                ),
-            ),
+            ops.empty(domain.shape, dtype=type_translation.as_dtype(type_).scalar_type, like=like),
             domain=domain,
         )
         assert isinstance(res, common.MutableField)
@@ -81,13 +81,14 @@ def field_from_typespec(
     return impl(type_)
 
 
-def get_array_ns(
+def first_buffer(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
-) -> ModuleType:
+) -> core_defs.NDArrayObject | None:
+    """The buffer of the first buffer-backed field in the (nested tuples of) `args`, or `None`."""
     for arg in utils.flatten_nested_tuple(args):
-        if hasattr(arg, "array_ns"):
-            return arg.array_ns
-    return np
+        if isinstance(arg, nd_array_field.NdArrayField):
+            return arg.ndarray
+    return None
 
 
 def verify_device_field_type(field: common.Field, device: core_defs.DeviceType) -> bool:

@@ -27,3 +27,29 @@ def test_verify_device_field_type(nd_array_implementation_and_device_type, devic
 
     is_correct_device = compatible_device_type == device_type
     assert field_utils.verify_device_field_type(testee, device_type) == is_correct_device
+
+
+def test_first_buffer_skips_fields_without_a_buffer():
+    import numpy as np
+
+    from gt4py.next.iterator import embedded as iterator_embedded
+
+    I = common.Dimension("I")
+    J = common.Dimension("J")
+    field = common._field(np.arange(3.0), domain=common.domain({I: 3}))
+    args = (
+        iterator_embedded.IndexField(I),
+        (iterator_embedded.ConstantField(1.0), 2.0),
+        iterator_embedded.StridedConnectivityField([I, J], I, 2),
+        field,
+    )
+
+    assert field_utils.first_buffer(*args) is field.ndarray
+
+
+def test_first_buffer_without_a_buffer():
+    from gt4py.next.iterator import embedded as iterator_embedded
+
+    assert (
+        field_utils.first_buffer(iterator_embedded.IndexField(common.Dimension("I")), 1.0) is None
+    )

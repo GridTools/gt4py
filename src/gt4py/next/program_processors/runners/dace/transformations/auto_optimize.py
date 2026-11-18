@@ -161,6 +161,7 @@ def gt_auto_optimize(
     scan_loop_unrolling: bool = False,
     scan_loop_unrolling_factor: int = 0,
     disable_splitting: bool = False,
+    split_maps_with_nested_sdfg: bool = True,
     reuse_transients: bool = False,
     gpu_launch_bounds: Optional[int | str] = None,
     gpu_launch_factor: Optional[int] = None,
@@ -171,6 +172,9 @@ def gt_auto_optimize(
     fuse_tasklets: bool = False,
     validate: bool = True,
     validate_all: bool = False,
+    vertical_split_allow_shared_output: bool = False,
+    vertical_split_shared_output_data: Optional[Sequence[str]] = None,
+    vertical_split_shared_output_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
     **kwargs: Any,
 ) -> dace.SDFG:
     """Performs GT4Py specific optimizations on the SDFG in place.
@@ -221,6 +225,20 @@ def gt_auto_optimize(
         scan_loop_unrolling: Whether to unroll scan loops.
         scan_loop_unrolling_factor: The unroll factor to use when unrolling scan loops.
         disable_splitting: Disable the splitting transformations.
+        split_maps_with_nested_sdfg: If `False` the Map range splitting
+            transformations (used by `gt_vertical_map_split_fusion()` and
+            `gt_horizontal_map_split_fusion()`) will not split Maps that contain a
+            nested SDFG. Splitting such Maps creates a deep copy of the nested SDFGs
+            for every fragment, which can make the optimization and compilation
+            very slow. Defaults to `True`. Has no effect if `disable_splitting` is set.
+        vertical_split_allow_shared_output: Allow vertical map splitting through
+            shared outputs when their reads and writes form safe partitions.
+        vertical_split_shared_output_data: If given, restrict shared-output splitting to
+            candidates connected through these arrays. `None` allows any eligible array;
+            an empty sequence disables shared-output splitting. Does not enable
+            splitting by itself; `vertical_split_allow_shared_output` must also be `True`.
+        vertical_split_shared_output_dimension: For shared outputs, require equal
+            map ranges except along this dimension.
         reuse_transients: Run the `TransientReuse` transformation, might reduce memory footprint.
         gpu_launch_bounds: Use this value as `__launch_bounds__` for _all_ GPU Maps.
         gpu_launch_factor: Use the number of threads times this value as `__launch_bounds__`
@@ -344,6 +362,10 @@ def gt_auto_optimize(
             sdfg=sdfg,
             assume_pointwise=assume_pointwise,
             disable_splitting=disable_splitting,
+            split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
+            vertical_split_allow_shared_output=vertical_split_allow_shared_output,
+            vertical_split_shared_output_data=vertical_split_shared_output_data,
+            vertical_split_shared_output_dimension=vertical_split_shared_output_dimension,
             optimization_hooks=optimization_hooks,
             validate_all=validate_all,
         )
@@ -460,7 +482,11 @@ def _gt_auto_process_top_level_maps(
     assume_pointwise: bool,
     optimization_hooks: dict[GT4PyAutoOptHook, GT4PyAutoOptHookFun],
     disable_splitting: bool,
+    split_maps_with_nested_sdfg: bool,
     validate_all: bool,
+    vertical_split_allow_shared_output: bool = False,
+    vertical_split_shared_output_data: Optional[Sequence[str]] = None,
+    vertical_split_shared_output_dimension: Optional[Union[gtx_common.Dimension, str]] = None,
 ) -> dace.SDFG:
     """Optimize the Maps at the top level of the SDFG inplace.
 
@@ -656,6 +682,9 @@ def _gt_auto_process_top_level_maps(
                 run_simplify=False,
                 run_map_fusion=True,
                 fuse_map_fragments=False,  # To avoid uncontrolled Map fusing.
+                allow_shared_output=vertical_split_allow_shared_output,
+                shared_output_data=vertical_split_shared_output_data,
+                shared_output_split_dimension=vertical_split_shared_output_dimension,
                 skip=gtx_transformations.constants._GT_AUTO_OPT_TOP_LEVEL_STAGE_SIMPLIFY_SKIP_LIST,
                 consolidate_edges_only_if_not_extending=True,
                 single_use_data=single_use_data,
@@ -665,6 +694,7 @@ def _gt_auto_process_top_level_maps(
                 check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
                     GT4PyAutoOptHook.TopLevelDataFlowMapFusionVerticalCallBack, None
                 ),
+                split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
                 validate=False,
                 validate_all=validate_all,
             )
@@ -681,6 +711,7 @@ def _gt_auto_process_top_level_maps(
                 check_fusion_callback=optimization_hooks.get(  # type: ignore[arg-type]
                     GT4PyAutoOptHook.TopLevelDataFlowMapFusionHorizontalCallBack, None
                 ),
+                split_maps_with_nested_sdfg=split_maps_with_nested_sdfg,
                 validate=False,
                 validate_all=validate_all,
             )

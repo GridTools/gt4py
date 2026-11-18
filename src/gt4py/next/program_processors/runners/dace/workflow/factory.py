@@ -69,7 +69,9 @@ def make_dace_translator(
         auto_optimize_args: Configuration for the SDFG auto-optimize pipeline,
             see `gt_auto_optimize()`. The parameters `DaCeTranslator` derives
             itself cannot be set here. With an external workspace in `cfg`, the
-            `transient_memory_mode` defaults to `EXTERNAL`.
+            `transient_memory_mode` defaults to `EXTERNAL`. It also accepts the
+            iterator-IR scan-fusion options `fuse_scan_inputs` and
+            `scan_fusion_scope`, which are applied before SDFG lowering.
         async_sdfg_call: Make an asynchronous SDFG call, to overlap GPU kernel
             execution with the Python driver code. Only effective on GPU.
         use_metrics: Add SDFG instrumentation for stencil compute time.

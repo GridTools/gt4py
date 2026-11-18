@@ -1699,7 +1699,7 @@ def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[
 def temporary(domain: runtime.CartesianDomain | runtime.UnstructuredDomain, dtype):
     type_ = runtime._dtypebuiltin_to_ts(dtype)
     new_domain = common.domain(domain)
-    tmp = field_utils.field_from_typespec(type_, new_domain, np)
+    tmp = field_utils.field_from_typespec(type_, new_domain)
     return tmp
 
 
@@ -1780,11 +1780,12 @@ def _fieldspec_list_to_value(
 @builtins.as_fieldop.register(EMBEDDED)
 def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
-        xp = field_utils.get_array_ns(*args)
         type_ = _get_output_type(fun, domain, [promote_scalars(arg) for arg in args])
 
         new_domain, type_ = _fieldspec_list_to_value(common.domain(domain), type_)
-        out = field_utils.field_from_typespec(type_, new_domain, xp)
+        out = field_utils.field_from_typespec(
+            type_, new_domain, like=field_utils.first_buffer(*args)
+        )
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function
