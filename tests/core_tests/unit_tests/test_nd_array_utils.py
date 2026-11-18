@@ -12,7 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from gt4py._core import definitions, dlpack, ndarray_utils
+from gt4py._core import definitions, ndarray_utils
 
 
 def cuda_device(id_: int) -> Any:
@@ -114,9 +114,45 @@ _BASE = np.arange(5 * 6 * 7, dtype=np.float64).reshape(5, 6, 7)
 def test_buffer_info_from_dlpack(array):
     info = ndarray_utils.BufferInfo.from_dlpack(array)
 
-    assert info == ndarray_utils.BufferInfo(**dlpack.buffer_attributes(array))
     assert info.data_ptr == array.__array_interface__["data"][0]
+    assert info.shape == array.shape
     assert info.elem_strides == tuple(s // array.itemsize for s in array.strides)
+    assert info.dtype == definitions.dtype(np.float64)
+    assert info.device == definitions.Device(definitions.DeviceType.CPU, 0)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [np.bool_, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64]
+    + [np.float32, np.float64],
+)
+def test_buffer_info_dtype(dtype):
+    info = ndarray_utils.BufferInfo.from_dlpack(np.zeros(3, dtype=dtype))
+
+    assert info.dtype == definitions.dtype(dtype)
+
+
+@pytest.mark.parametrize("dtype", [np.float16, np.complex64])
+def test_buffer_info_unsupported_dtype(dtype):
+    with pytest.raises(TypeError, match="not a gt4py scalar type"):
+        ndarray_utils.BufferInfo.from_dlpack(np.zeros(3, dtype=dtype))
+
+
+@pytest.mark.parametrize(
+    ("dlpack_device", "device"),
+    [
+        ((1, 0), definitions.Device(definitions.DeviceType.CPU, 0)),
+        ((2, 1), definitions.Device(definitions.DeviceType.CUDA, 1)),
+        ((10, 0), definitions.Device(definitions.DeviceType.ROCM, 0)),
+        ((13, 0), definitions.Device(13, 0)),
+    ],
+    ids=["cpu", "cuda", "rocm", "unnamed_cuda_managed"],
+)
+def test_device_from_dlpack(dlpack_device, device):
+    result = ndarray_utils.device_from_dlpack(*dlpack_device)
+
+    assert result == device
+    assert type(result.device_type) is type(device.device_type)
 
 
 def test_buffer_info_hash_key_tells_apart_dtypes_at_the_same_address():

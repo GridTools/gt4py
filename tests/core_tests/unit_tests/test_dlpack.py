@@ -9,7 +9,7 @@
 import numpy as np
 import pytest
 
-from gt4py._core import definitions as core_defs, dlpack
+from gt4py._core import dlpack
 
 
 _BASE = np.arange(5 * 6 * 7, dtype=np.float64).reshape(5, 6, 7)
@@ -29,21 +29,36 @@ class _Wrapper:
         return self.array.__dlpack_device__()
 
 
-def test_buffer_attributes():
+def test_tensor_attributes():
     array = _BASE[1:4, 2:, ::-2]
 
-    assert dlpack.buffer_attributes(array) == {
+    assert dlpack.tensor_attributes(array) == {
         "data_ptr": array.__array_interface__["data"][0],
         "shape": array.shape,
-        "elem_strides": tuple(s // array.itemsize for s in array.strides),
-        "dtype": core_defs.dtype(np.float64),
-        "device": core_defs.Device(core_defs.DeviceType.CPU, 0),
+        "strides": tuple(s // array.itemsize for s in array.strides),
+        "dtype": (dlpack.DataTypeCode.FLOAT, 64, 1),
+        "device": (dlpack.DeviceType.CPU, 0),
     }
+
+
+@pytest.mark.parametrize(
+    ("dtype", "code", "bits"),
+    [
+        (np.bool_, 6, 8),
+        (np.int8, 0, 8),
+        (np.uint16, 1, 16),
+        (np.int32, 0, 32),
+        (np.float16, 2, 16),
+        (np.complex64, 5, 64),
+    ],
+)
+def test_dtype_codes(dtype, code, bits):
+    assert dlpack.tensor_attributes(np.zeros(3, dtype=dtype))["dtype"] == (code, bits, 1)
 
 
 def test_no_dlpack():
     with pytest.raises(TypeError, match="DLPack"):
-        dlpack.buffer_attributes(object())
+        dlpack.tensor_attributes(object())
 
 
 def test_producer_without_max_version():
@@ -52,7 +67,7 @@ def test_producer_without_max_version():
 
     array = _BASE[1:4]
 
-    assert dlpack.buffer_attributes(_Wrapper(array, only_stream)) == dlpack.buffer_attributes(array)
+    assert dlpack.tensor_attributes(_Wrapper(array, only_stream)) == dlpack.tensor_attributes(array)
 
 
 def test_unversioned_capsule():
@@ -61,12 +76,7 @@ def test_unversioned_capsule():
 
     array = _BASE[1:4]
 
-    assert dlpack.buffer_attributes(_Wrapper(array, unversioned)) == dlpack.buffer_attributes(array)
-
-
-def test_unsupported_dtype():
-    with pytest.raises(TypeError, match="not a gt4py scalar type"):
-        dlpack.buffer_attributes(np.zeros(3, dtype=np.float16))
+    assert dlpack.tensor_attributes(_Wrapper(array, unversioned)) == dlpack.tensor_attributes(array)
 
 
 def test_impossible_stride():
@@ -79,7 +89,7 @@ def test_impossible_stride():
         return capsule
 
     with pytest.raises(BufferError, match="cupy#10228"):
-        dlpack.buffer_attributes(_Wrapper(_BASE, cupy_before_10228))
+        dlpack.tensor_attributes(_Wrapper(_BASE, cupy_before_10228))
 
 
 @pytest.mark.parametrize(
@@ -98,6 +108,6 @@ def test_stream_argument(device_type, stream):
         def __dlpack_device__(self):
             return device_type, 0
 
-    dlpack.buffer_attributes(Producer())
+    dlpack.tensor_attributes(Producer())
 
     assert streams == [stream]
