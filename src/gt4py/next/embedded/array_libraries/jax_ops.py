@@ -111,14 +111,8 @@ class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
             return super().hyperslice(self.values, image_range, skip_value)
 
     @classmethod
-    def from_ndarray(
-        cls, ops: array_ops.ArrayOps, ndarray: core_defs.NDArrayObject
-    ) -> JaxConnectivityOps:
-        return cls(ops, ndarray if _has_values(ndarray) else None)
-
-    def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
-        # a tracer belongs to a trace, which may end before the cache
-        return _has_values(ndarray)
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
+        return cls(array_ops.of(ndarray), ndarray if _has_values(ndarray) else None)
 
     def restrict(
         self, ndarray: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence

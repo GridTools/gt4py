@@ -26,7 +26,7 @@ Each connectivity has its own `ConnectivityOps` instance, which can carry what t
 
 The connectivity is a pytree node with the table as its child. The aux data holds domain, codomain, skip value and, if the table is concrete or a tracer with static values, the static values. They are compared by identity, so two connectivities have the same aux data only if they have the same static values. Unflattening gives a child that is not a concrete array the static values from the aux data, in its `JaxConnectivityOps`.
 
-Nothing that belongs to a trace may be kept beyond it, so a connectivity caches a restricted connectivity only if its `ConnectivityOps` allows it (`may_cache`), which `JaxConnectivityOps` does for a concrete table only. `JaxConnectivityOps` also returns the same array when the same concrete table is restricted again with the same slice. A restriction then has the same aux data in every call, so it does not cause a retrace.
+Nothing that belongs to a trace may be kept beyond it, so a connectivity caches domains and slices, never tables or restricted connectivities. `JaxConnectivityOps` returns the same array when the same concrete table is restricted again with the same slice. A restriction then has the same aux data in every call, so it does not cause a retrace.
 
 How a `premap` behaves under `jit` depends on how its connectivity reaches the compiled function:
 
@@ -54,7 +54,7 @@ A traced connectivity can also be closed over by the branches of `lax.cond`, the
 - Every gather of a jax field uses `mode="clip", wrap_negative_indices=False`. That clamps both ends with no operation besides the gather, where jax's default indexing clamps past the end but emits a select to wrap negative indices. With a table that has values the clamp never acts.
 - Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
-- `restrict` of a traced table builds a new connectivity on every call, with its own domain lookups.
+- `restrict` builds a new connectivity on every call. It shares the cached domain lookups of the connectivity it was restricted from.
 - A traced connectivity that is copied, or rebuilt with `dataclasses.replace`, loses its static values: its domain is not narrowed and the gather clamps.
 - The restrictions of a concrete jax table are kept for as long as the table is alive.
 - Domain inference on static values is cached on the connectivity object, which is new in every trace, so it is repeated per trace but not per call.

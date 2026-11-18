@@ -41,11 +41,9 @@ class ConnectivityOps:
     array_ops: embedded_array_ops.ArrayOps
 
     @classmethod
-    def from_ndarray(
-        cls, ops: embedded_array_ops.ArrayOps, ndarray: core_defs.NDArrayObject
-    ) -> ConnectivityOps:
-        """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`, of the namespace of `ops`."""
-        return cls(ops)
+    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> ConnectivityOps:
+        """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`."""
+        return cls(embedded_array_ops.of(ndarray))
 
     def hyperslice(
         self,
@@ -91,14 +89,14 @@ class ConnectivityOps:
 
         return slices
 
-    def may_cache(self, ndarray: core_defs.NDArrayObject) -> bool:
-        """Whether a connectivity with the buffer `ndarray` may be kept beyond the current call, e.g. in a cache."""
-        return True
-
     def restrict(
         self, ndarray: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence
     ) -> tuple[core_defs.NDArrayObject, ConnectivityOps]:
-        """Return `ndarray[buffer_slice]` and the `ConnectivityOps` of the restricted connectivity."""
+        """
+        Return `ndarray[buffer_slice]` and the `ConnectivityOps` of the restricted connectivity.
+
+        `ndarray[buffer_slice]` is returned as an array: indexing with integers only gives a scalar.
+        """
         return self.array_ops.asarray(ndarray[buffer_slice]), self
 
 
@@ -116,5 +114,5 @@ def register(xp: ModuleType, ops_type: type[ConnectivityOps]) -> None:
 
 def of(ndarray: Any) -> ConnectivityOps:
     """The `ConnectivityOps` of a connectivity whose buffer is `ndarray`; raises `TypeError` if it is not an array."""
-    ops = embedded_array_ops.of(ndarray)
-    return _types_by_namespace.get(ops.xp, ConnectivityOps).from_ndarray(ops, ndarray)
+    xp = embedded_array_ops.of(ndarray).xp
+    return _types_by_namespace.get(xp, ConnectivityOps).from_ndarray(ndarray)

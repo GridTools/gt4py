@@ -2364,19 +2364,6 @@ def test_connectivity_ops_use_the_registered_array_ops(monkeypatch):
     assert connectivity_ops.of(table).array_ops is replacement
 
 
-def test_connectivity_field_restrict_is_cached():
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    conn = common._connectivity(
-        np.asarray([[0, 1], [1, 2], [2, 3]]),
-        codomain=V,
-        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
-    )
-
-    assert conn[NamedIndex(E2VDim, 0)] is conn[NamedIndex(E2VDim, 0)]
-
-
 def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     V = Dimension("V")
     E = Dimension("E")

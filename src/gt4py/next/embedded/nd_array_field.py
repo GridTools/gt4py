@@ -521,7 +521,7 @@ class NdArrayConnectivityField(
         return {}
 
     @functools.cached_property
-    def _restrict_cache(self) -> dict[Any, NdArrayConnectivityField]:
+    def _restrict_cache(self) -> dict[Any, tuple[common.Domain, Any, dict, dict]]:
         return {}
 
     @functools.cached_property
@@ -549,14 +549,16 @@ class NdArrayConnectivityField(
         raise TypeError("'Connectivity' does not support item assignment.")
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
-        if (restricted_connectivity := self._restrict_cache.get(index, None)) is None:
-            new_domain, buffer_slice = self._slice(index)
-            ndarray, ops = self._connectivity_ops.restrict(self._ndarray, buffer_slice)
-            restricted_connectivity = dataclasses.replace(
-                self, _domain=new_domain, _ndarray=ndarray, connectivity_ops=ops
-            )
-            if ops.may_cache(ndarray):
-                self._restrict_cache[index] = restricted_connectivity
+        # Connectivities and arrays are not cached: they may belong to a trace that ends before the cache
+        if (cached := self._restrict_cache.get(index, None)) is None:
+            cached = self._restrict_cache[index] = (*self._slice(index), {}, {})
+        new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
+        ndarray, ops = self._connectivity_ops.restrict(self._ndarray, buffer_slice)
+        restricted_connectivity = dataclasses.replace(
+            self, _domain=new_domain, _ndarray=ndarray, connectivity_ops=ops
+        )
+        restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
+        restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
         return restricted_connectivity
 
     __getitem__ = restrict
