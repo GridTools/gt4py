@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Raw DLPack attributes of any array that exports DLPack, read from its capsule with `ctypes`.
+"""The `DLTensor` of any array that exports DLPack, read from its capsule with `ctypes`.
 
 The binary layout follows `dlpack.h` of DLPack v1.4
 (https://github.com/dmlc/dlpack/blob/v1.4/include/dlpack/dlpack.h, documented at
@@ -22,11 +22,8 @@ Supported capsules:
   support, and JAX, return.
 
 Rejected:
-- `BufferError`: versioned capsules of major version 2 or later, exports that need a copy, and
-  strides of `2**63` bytes or more, which no buffer can have.
+- `BufferError`: versioned capsules of major version 2 or later, and exports that need a copy.
 - `TypeError`: arrays without `__dlpack__`/`__dlpack_device__`.
-
-NULL strides, allowed before DLPack 1.2, are read as C-contiguous.
 """
 
 from __future__ import annotations
@@ -106,22 +103,13 @@ _capsule_pointer = ctypes.PYFUNCTYPE(ctypes.c_void_p, ctypes.py_object, ctypes.c
 _NO_SYNC_STREAM_DEVICE_TYPES: Final = (DeviceType.CUDA, DeviceType.ROCM)
 
 
-def _c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
-    """Element strides of a C-contiguous array of `shape`."""
-    strides = []
-    stride = 1
-    for size in reversed(shape):
-        strides.append(stride)
-        stride *= size
-    return tuple(reversed(strides))
+def tensor_fields(array: Any) -> dict[str, Any]:
+    """The `DLTensor` fields of the DLPack export of `array`, read without consuming the capsule.
 
-
-def tensor_attributes(array: Any) -> dict[str, Any]:
-    """Raw DLPack attributes of the buffer of `array`, read from its capsule without consuming it.
-
-    The result has the keys `data_ptr` (address of the element at index `(0, ..., 0)`, i.e.
-    `data + byte_offset`), `shape`, `strides` (in elements), `dtype` (the `DLDataType` as
-    `(code, bits, lanes)`) and `device` (the `DLDevice` as `(device_type, device_id)`).
+    The keys are the `DLTensor` field names, with the values as exported: `data` (address,
+    0 for NULL), `device` as `(device_type, device_id)`, `ndim`, `dtype` as `(code, bits,
+    lanes)`, `shape`, `strides` in elements (`None` for NULL, which DLPack before 1.2 allows
+    for C-contiguous tensors) and `byte_offset`.
 
     On CUDA and ROCm the capsule is requested without stream synchronization (`stream=-1`), the
     only devices for which the Array API standard defines that request; all other devices get
@@ -130,8 +118,8 @@ def tensor_attributes(array: Any) -> dict[str, Any]:
 
     Raises:
         TypeError: `array` does not export DLPack.
-        BufferError: `array` cannot be exported without a copy, the capsule has an
-            unsupported DLPack major version, or it reports a stride of `2**63` bytes or more.
+        BufferError: `array` cannot be exported without a copy, or the capsule has an
+            unsupported DLPack major version.
     """
     try:
         device_type, _ = array.__dlpack_device__()
@@ -153,21 +141,13 @@ def tensor_attributes(array: Any) -> dict[str, Any]:
     else:
         tensor = _DLTensor.from_address(_capsule_pointer(capsule, _UNVERSIONED))
 
-    dl_dtype = tensor.dtype
     ndim = tensor.ndim
-    shape = tuple(tensor.shape[:ndim])
-    strides = tuple(tensor.strides[:ndim]) if tensor.strides else _c_contiguous_strides(shape)
-    itemsize = (dl_dtype.bits * dl_dtype.lanes + 7) // 8
-    if any(abs(stride) * itemsize >= 2**63 for stride in strides):
-        raise BufferError(
-            f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
-            f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
-            " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned integers)."
-        )
     return {
-        "data_ptr": (tensor.data or 0) + tensor.byte_offset,
-        "shape": shape,
-        "strides": strides,
-        "dtype": (dl_dtype.code, dl_dtype.bits, dl_dtype.lanes),
+        "data": tensor.data or 0,
         "device": (tensor.device.device_type, tensor.device.device_id),
+        "ndim": ndim,
+        "dtype": (tensor.dtype.code, tensor.dtype.bits, tensor.dtype.lanes),
+        "shape": tuple(tensor.shape[:ndim]),
+        "strides": tuple(tensor.strides[:ndim]) if tensor.strides else None,
+        "byte_offset": tensor.byte_offset,
     }

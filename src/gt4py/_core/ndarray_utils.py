@@ -226,6 +226,15 @@ def device_from_dlpack(device_type: int, device_id: int) -> core_defs.Device:
     return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))
 
 
+def _c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
+    strides = []
+    stride = 1
+    for size in reversed(shape):
+        strides.append(stride)
+        stride *= size
+    return tuple(reversed(strides))
+
+
 @dataclasses.dataclass(frozen=True)
 class BufferInfo:
     """Holds information about a buffer in memory.
@@ -261,21 +270,34 @@ class BufferInfo:
         Raises:
             TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
             BufferError: `array` cannot be exported without a copy, or its DLPack export is
-                not supported (see `gt4py._core.dlpack.tensor_attributes`).
+                not supported (see `gt4py._core.dlpack.tensor_fields`), or it reports a stride
+                of `2**63` bytes or more.
         """
-        attrs = core_dlpack.tensor_attributes(array)
+        tensor = core_dlpack.tensor_fields(array)
+        code, bits, lanes = tensor["dtype"]
         try:
-            dtype = _DTYPES_BY_DLPACK_DTYPE[attrs["dtype"]]
+            dtype = _DTYPES_BY_DLPACK_DTYPE[code, bits, lanes]
         except KeyError:
-            code, bits, lanes = attrs["dtype"]
             raise TypeError(
                 f"DLPack dtype (code={code}, bits={bits}, lanes={lanes})"
                 f" of '{type(array).__name__}' is not a gt4py scalar type."
             ) from None
+        shape = tensor["shape"]
+        strides = tensor["strides"]
+        if strides is None:
+            strides = _c_contiguous_strides(shape)
+        itemsize = (bits * lanes + 7) // 8
+        if any(abs(stride) * itemsize >= 2**63 for stride in strides):
+            raise BufferError(
+                f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
+                f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
+                " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned"
+                " integers)."
+            )
         return cls(
-            data_ptr=attrs["data_ptr"],
-            shape=attrs["shape"],
-            elem_strides=attrs["strides"],
+            data_ptr=tensor["data"] + tensor["byte_offset"],
+            shape=shape,
+            elem_strides=strides,
             dtype=dtype,
-            device=device_from_dlpack(*attrs["device"]),
+            device=device_from_dlpack(*tensor["device"]),
         )
