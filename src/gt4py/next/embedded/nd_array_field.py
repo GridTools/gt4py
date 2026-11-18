@@ -335,19 +335,28 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def __setitem__(
         self: NdArrayField[common.DimsT, core_defs.ScalarT],
         index: common.AnyIndexSpec,
-        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+        value: common.Field | core_defs.ScalarT,
     ) -> None:
         target_domain, target_slice = self._slice(index, for_assignment=True)
 
+        assigned: core_defs.NDArrayObject | core_defs.Scalar | np.generic
         if isinstance(value, common.Field):
             if not value.domain == target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
-            value = value.ndarray
+            assigned = value.ndarray
+        elif isinstance(value, bool | int | float | np.generic):
+            assigned = value
+        else:
+            raise TypeError(
+                f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
+                " to a 'Field': assign a 'Field' or a scalar, or write the buffer with"
+                " 'field.ndarray[...] = ...'."
+            )
 
         ops = array_ops.of(self._ndarray)
-        new_buffer = ops.setitem(self._ndarray, target_slice, value)
+        new_buffer = ops.setitem(self._ndarray, target_slice, assigned)
         if new_buffer is not self._ndarray:
             object.__setattr__(self, "_ndarray", new_buffer)
             # A field whose buffer info was requested is likely exported again.
