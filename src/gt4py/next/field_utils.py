@@ -85,7 +85,6 @@ def first_buffer(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> core_defs.NDArrayObject | None:
     """The buffer of the first buffer-backed field in the (nested tuples of) `args`, or `None`."""
-    # index, constant and strided connectivity fields are `common.Field`s without a buffer
     for arg in utils.flatten_nested_tuple(args):
         if isinstance(arg, nd_array_field.NdArrayField):
             return arg.ndarray
