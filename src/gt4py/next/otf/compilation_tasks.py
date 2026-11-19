@@ -24,7 +24,7 @@ import pathlib
 import tempfile
 import typing
 import weakref
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import numpy as np
 import xxhash
@@ -62,7 +62,7 @@ class _CompileTimeConnectivity(nd_array_field.NdArrayConnectivityField):
     )
     _digest: str = dataclasses.field(init=False)
 
-    def __post_init__(self, static_values: Optional[core_defs.NDArrayObject]) -> None:
+    def __post_init__(self, static_values: nd_array_field.StaticValues) -> None:
         super().__post_init__(static_values)
         table = np.ascontiguousarray(np.asarray(self._ndarray))
         object.__setattr__(self, "_digest", _table_digest(table))

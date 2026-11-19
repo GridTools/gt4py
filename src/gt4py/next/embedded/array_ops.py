@@ -25,7 +25,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
-from typing import Any, ClassVar, Final, Optional
+from typing import Any, ClassVar, Final
 
 import array_api_compat
 import array_api_compat.numpy as compat_numpy
@@ -211,15 +211,6 @@ class ArrayOps:
                 f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
                 f" to an array of '{self.xp.__name__}'."
             )
-
-    def static_values(self, array: core_defs.NDArrayObject) -> Optional[core_defs.NDArrayObject]:
-        """
-        An array with the values of `array` that can be computed on now, not necessarily of this namespace.
-
-        `None` if the values are known only at run time, e.g. for an array standing for the
-        argument of a compiled program; `gather` must then accept out-of-range indices.
-        """
-        return array
 
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]

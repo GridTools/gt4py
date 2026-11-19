@@ -10,18 +10,20 @@
 `ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
 Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
-connectivity table inside a trace is in one of three cases, told apart by its
-static values:
+connectivity table inside a trace is a tracer, and one of two cases:
 
-- concrete: its static values are a NumPy view of it;
-- a tracer standing for a concrete table, which it got as a pytree leaf, or
-  restricted from such a tracer: the static values are those of the concrete table;
-- any other tracer: there are no static values, all its targets are assumed to be
-  in range and the gather clamps them.
+- it stands for a concrete table, which it got as a pytree leaf, or it was
+  restricted from such a tracer: its static values are a NumPy view of the
+  concrete table, from the pytree aux data;
+- it was computed in the trace by `as_offset`: there are no static values, all
+  its targets are assumed to be in range and the gather clamps them.
+
+A concrete table closed over by a trace is not supported.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -74,10 +76,19 @@ def _has_values(ndarray: Any) -> bool:
     return isinstance(ndarray, jax.Array) and not isinstance(ndarray, jax.core.Tracer)
 
 
+def _read_only_view(array: jax.Array) -> np.ndarray:
+    values = np.asarray(array)
+    values.flags.writeable = False
+    return values
+
+
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
-    # adding the coordinates would stage the table under a trace even for concrete offsets
-    with jax.ensure_compile_time_eval():
-        return nd_array_field._as_offset(offset, offset_field)
+    connectivity = nd_array_field._as_offset(offset, offset_field)
+    assert isinstance(connectivity, nd_array_field.NdArrayConnectivityField)
+    if isinstance(connectivity.ndarray, jax.core.Tracer):
+        # computed in the trace: its values exist only at run time
+        return dataclasses.replace(connectivity, static_values=None)
+    return connectivity
 
 
 def _layout_strides(array: Any) -> tuple[int, ...]:
@@ -114,14 +125,6 @@ class JaxOps(array_ops.ArrayOps):
     ) -> core_defs.NDArrayObject:
         self.check_assignable(value)
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
-
-    def static_values(self, array: core_defs.NDArrayObject) -> Optional[core_defs.NDArrayObject]:
-        if isinstance(array, jax.core.Tracer):
-            return None
-        # NumPy, so that computing on the values is not staged when a trace closes over the array
-        values = np.asarray(array)
-        values.flags.writeable = False
-        return values  # type: ignore[return-value] # `NDArrayObject` typing is not complete
 
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
@@ -191,11 +194,11 @@ def _flatten_connectivity(
     assert not (
         array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray)
     ), f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
-    try:
-        values = connectivity._static_values
-    except TypeError:
-        # a placeholder that is no array has static values only if unflattening gave it some
-        values = None
+    values: Any = connectivity._static_values
+    if values is ndarray:
+        # a placeholder that is no array has no values; NumPy, so that a restriction inside the
+        # trace is not staged
+        values = _read_only_view(ndarray) if _has_values(ndarray) else None
     return (ndarray,), _ConnectivityAuxData(
         connectivity.domain,
         connectivity.codomain,
@@ -209,13 +212,17 @@ def _unflatten_connectivity(
 ) -> nd_array_field.NdArrayConnectivityField:
     (ndarray,) = children
     identity = aux_data.values
-    # a child without values stands for the flattened table: a tracer, or one of the placeholders
-    # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around. Under `vmap` the
-    # child is one element of the flattened table, whose values the aux data does not have.
+    # a child that is not a concrete array stands for the flattened table: a tracer, or one of the
+    # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
+    # Under `vmap` the child is one element of the flattened table, whose values the aux data
+    # does not have.
     static_values = (
-        None
+        nd_array_field._FromBuffer.TOKEN
+        if _has_values(ndarray)
+        or array_api_compat.is_numpy_array(ndarray)
+        or array_api_compat.is_cupy_array(ndarray)
+        else None
         if identity is None
-        or _has_values(ndarray)
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
         else identity.values
     )

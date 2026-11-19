@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import enum
 import functools
 import itertools
 from collections.abc import Callable, Sequence
@@ -456,6 +457,15 @@ def _broadcast_axes_slice(
     )
 
 
+class _FromBuffer(enum.Enum):
+    """The default `static_values` of a connectivity: its buffer holds them itself."""
+
+    TOKEN = enum.auto()
+
+
+StaticValues: TypeAlias = Optional[core_defs.NDArrayObject] | _FromBuffer
+
+
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
     common.GatherConnectivity[common.DimsT, common.DimT],
@@ -463,15 +473,16 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: The static values of a connectivity whose buffer does not determine them, e.g. a tracer
-    #: standing for a concrete table (see `ArrayOps.static_values`). Not a field, so that no
-    #: copy inherits them; without them, they are taken from the buffer.
-    static_values: dataclasses.InitVar[Optional[core_defs.NDArrayObject]] = dataclasses.field(
-        default=None, kw_only=True
+    #: The static values of the table: an array with its values that can be computed on now.
+    #: By default the buffer itself. A creator gives another array for a buffer that does
+    #: not hold them, e.g. a tracer standing for a concrete table, or `None` if they exist
+    #: only at run time. Not a field, so that no copy inherits them.
+    static_values: dataclasses.InitVar[StaticValues] = dataclasses.field(
+        default=_FromBuffer.TOKEN, kw_only=True
     )
 
-    def __post_init__(self, static_values: Optional[core_defs.NDArrayObject]) -> None:
-        if static_values is not None:
+    def __post_init__(self, static_values: StaticValues) -> None:
+        if static_values is not _FromBuffer.TOKEN:
             self.__dict__["_static_values"] = static_values
 
     @classmethod
@@ -523,7 +534,7 @@ class NdArrayConnectivityField(
 
     @functools.cached_property
     def _static_values(self) -> Optional[core_defs.NDArrayObject]:
-        return array_ops.of(self._ndarray).static_values(self._ndarray)
+        return self._ndarray
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
@@ -570,7 +581,11 @@ class NdArrayConnectivityField(
             _ndarray=self._ndarray[buffer_slice],
             # static values that are not the buffer itself are restricted along with it
             static_values=(
-                None if values is None or values is self._ndarray else values[buffer_slice]
+                _FromBuffer.TOKEN
+                if values is self._ndarray
+                else None
+                if values is None
+                else values[buffer_slice]
             ),
         )
         restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
