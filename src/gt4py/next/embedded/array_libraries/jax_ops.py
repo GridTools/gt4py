@@ -40,10 +40,10 @@ from gt4py.next.ffront import experimental, fbuiltins
 
 class _StaticValuesByMemory:
     """
-    Static values in pytree aux data: equal to others if both are the same read-only memory.
+    Static values in pytree aux data, as a read-only NumPy array: equal if the same memory.
 
     NumPy returns a new view of a JAX array on every `np.asarray`, so the views of one
-    buffer, and their restrictions with the same slice, are told apart by their memory.
+    buffer, and their restrictions with the same slice, are compared by their memory.
     """
 
     __slots__ = ("_key", "values")
@@ -51,8 +51,10 @@ class _StaticValuesByMemory:
     values: np.ndarray
     _key: tuple[int, tuple[int, ...], tuple[int, ...], str]
 
-    def __init__(self, values: np.ndarray) -> None:
-        assert not values.flags.writeable
+    def __init__(self, array: Any) -> None:
+        # NumPy, so that restricting the values inside a trace is not staged
+        values = np.asarray(array)
+        values.flags.writeable = False
         # holding the array keeps its memory alive, so no other array can get its address
         self.values = values
         self._key = (
@@ -72,14 +74,17 @@ class _StaticValuesByMemory:
         return f"<static values at {self._key[0]:#x}>"
 
 
-def _is_concrete(ndarray: Any) -> bool:
-    return isinstance(ndarray, jax.Array) and not isinstance(ndarray, jax.core.Tracer)
+def _is_concrete(leaf: Any) -> bool:
+    """Whether `leaf` is an array, of any library, with values; tracers and placeholders have none."""
+    # jax rebuilds the trees of `lax.cond` branches and carries around `ShapedArray` placeholders,
+    # which are array API objects too
+    return array_api_compat.is_array_api_obj(leaf) and not isinstance(
+        leaf, (jax.core.Tracer, jax.core.ShapedArray)
+    )
 
 
-def _read_only_view(array: jax.Array) -> np.ndarray:
-    values = np.asarray(array)
-    values.flags.writeable = False
-    return values
+def _is_of_other_library(leaf: Any) -> bool:
+    return _is_concrete(leaf) and not array_api_compat.is_jax_array(leaf)
 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
@@ -157,11 +162,8 @@ def _flatten_field(
     field: nd_array_field.NdArrayField,
 ) -> tuple[tuple[core_defs.NDArrayObject], common.Domain]:
     # JAX also flattens pytrees whose leaves are not arrays (e.g. `jax.tree.map` results, `vmap`
-    # axis specifications, or the placeholders of `lax.cond` branches, which are array API objects
-    # too), so only arrays of other libraries are rejected
-    if array_api_compat.is_numpy_array(field.ndarray) or array_api_compat.is_cupy_array(
-        field.ndarray
-    ):
+    # axis specifications, or placeholders), so only arrays of other libraries are rejected
+    if _is_of_other_library(field.ndarray):
         raise TypeError(
             f"Only fields of JAX arrays are JAX pytrees, got a field of '{type(field.ndarray)}'."
         )
@@ -193,19 +195,18 @@ def _flatten_connectivity(
     connectivity: nd_array_field.NdArrayConnectivityField,
 ) -> tuple[tuple[core_defs.NDArrayObject], _ConnectivityAuxData]:
     ndarray = connectivity._ndarray
-    # the aux data identifies the static values by their memory, which a mutable array does not
-    # allow. The placeholders of JAX are array API objects too, so "not a JAX array" is no test.
-    if array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray):
+    # the aux data identifies the static values by their memory, which a mutable array does not allow
+    if _is_of_other_library(ndarray):
         raise TypeError(
             f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
         )
-    static_values: Any = connectivity._static_values
-    if static_values is nd_array_field.StaticValues.IN_BUFFER and _is_concrete(ndarray):
-        # NumPy, so that a restriction inside the trace is not staged
-        static_values = _StaticValuesByMemory(_read_only_view(ndarray))
-    elif not isinstance(static_values, nd_array_field.StaticValues):
-        static_values = _StaticValuesByMemory(static_values)
-    # otherwise the kind is kept: `IN_BUFFER` of a tracer keeps an unsupported connectivity unsupported
+    values: Any = connectivity._static_values
+    if values is nd_array_field.StaticValues.IN_BUFFER and _is_concrete(ndarray):
+        values = ndarray
+    # `IN_BUFFER` of a tracer keeps an unsupported connectivity unsupported
+    static_values = (
+        values if isinstance(values, nd_array_field.StaticValues) else _StaticValuesByMemory(values)
+    )
     return (ndarray,), _ConnectivityAuxData(
         connectivity.domain, connectivity.codomain, connectivity.skip_value, static_values
     )
@@ -219,11 +220,8 @@ def _unflatten_connectivity(
     # a child that is not a concrete array stands for the flattened table: a tracer, or one of the
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
     # Under `vmap` the child is one element of the flattened table, which has another shape.
-    if (
-        _is_concrete(ndarray)
-        or array_api_compat.is_numpy_array(ndarray)
-        or array_api_compat.is_cupy_array(ndarray)
-    ):
+    if _is_concrete(ndarray):
+        # e.g. a NumPy leaf of an eager `jax.tree.map`: it has values of its own
         static_values = nd_array_field.StaticValues.IN_BUFFER
     elif isinstance(static_values, _StaticValuesByMemory):
         values = static_values.values
