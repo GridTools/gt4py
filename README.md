@@ -14,7 +14,7 @@
 
 GT4Py is a Python library for generating high performance implementations of stencil kernels from a high-level definition using regular Python functions. GT4Py is part of the GridTools framework, a set of libraries and utilities to develop performance portable applications in the area of weather and climate modeling.
 
-**NOTE:** The `gt4py.next` subpackage contains a new version of GT4Py which is not compatible with the current _stable_ version defined in `gt4py.cartesian`. The new version is still experimental.
+**NOTE:** GT4Py contains two generations of the library, which are not compatible with each other. `gt4py.next` is the current one, where all new development happens, and the one to choose for new projects. `gt4py.cartesian` is the previous generation, limited to Cartesian grids: it is still maintained for the models relying on it, but it does not get new features.
 
 ## 📃 Description
 
