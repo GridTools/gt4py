@@ -221,7 +221,6 @@ def _unflatten_connectivity(
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
     # Under `vmap` the child is one element of the flattened table, which has another shape.
     if _is_concrete(ndarray):
-        # e.g. a NumPy leaf of an eager `jax.tree.map`: it has values of its own
         static_values = nd_array_field.StaticValues.IN_BUFFER
     elif isinstance(static_values, _StaticValuesByMemory):
         values = static_values.values
