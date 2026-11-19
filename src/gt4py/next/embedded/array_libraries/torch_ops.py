@@ -22,8 +22,8 @@ the trace. A connectivity table inside the trace is one of two cases:
 
 A connectivity reaches the trace through the pytree context only if it was
 created by `common._connectivity`, e.g. `gtx.as_connectivity`, outside of the
-region; `restrict`, `dataclasses.replace` and `copy` give connectivities that
-are not supported in the region.
+region; `restrict`, `dataclasses.replace` and `NdArrayConnectivityField.from_array`
+give connectivities that are not supported in the region.
 """
 
 from __future__ import annotations
@@ -67,7 +67,9 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArr
     assert isinstance(connectivity, nd_array_field.NdArrayConnectivityField)
     if not _is_concrete(connectivity.ndarray):
         # computed in the trace: its values exist only at run time
-        return dataclasses.replace(connectivity, static_values=None)
+        return dataclasses.replace(
+            connectivity, _static_values=nd_array_field.StaticValues.RUN_TIME_ONLY
+        )
     return connectivity
 
 
@@ -231,7 +233,10 @@ def _flatten_connectivity(
     ndarray = connectivity.ndarray
     _check_tensor("connectivities", ndarray)
     identity = getattr(connectivity, _TABLE_IDENTITY, None)
-    if identity is None and connectivity._static_values is not None:
+    if (
+        identity is None
+        and connectivity._static_values is not nd_array_field.StaticValues.RUN_TIME_ONLY
+    ):
         if torch.compiler.is_compiling() or not _is_concrete(ndarray):
             raise TypeError(
                 "A connectivity in a 'torch.compile' region has to be created by"
@@ -256,9 +261,9 @@ def _unflatten_connectivity(
     domain, codomain_value, codomain_kind, skip_value, identity = context
     static_values: Any
     if _is_concrete(ndarray):
-        static_values = nd_array_field._FromBuffer.TOKEN
+        static_values = nd_array_field.StaticValues.IN_BUFFER
     elif identity is None or tuple(ndarray.shape) != identity.values.shape:
-        static_values = None
+        static_values = nd_array_field.StaticValues.RUN_TIME_ONLY
     else:
         static_values = identity.values
     connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
@@ -266,7 +271,7 @@ def _unflatten_connectivity(
         ndarray,
         common.Dimension(codomain_value, codomain_kind),
         skip_value,
-        static_values=static_values,
+        _static_values=static_values,
     )  # type: ignore[abstract, unused-ignore] # see 'jax_ops._unflatten_connectivity'
     if identity is not None:
         # a trace flattens the connectivities it unflattened again
