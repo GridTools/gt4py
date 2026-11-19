@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+import functools
 import re
 
 import numpy as np
@@ -71,7 +72,7 @@ def test_jax_pytree_rejects_fields_of_other_libraries():
 
     field = common._field(np.ones(3), domain=common.domain({D0: 3}))
 
-    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
+    with pytest.raises(TypeError, match="Only fields of JAX arrays"):
         jax.jit(lambda f: f * 2.0)(field)
 
 
@@ -244,18 +245,15 @@ def test_jax_jit_premap_with_as_offset_computed_in_trace():
         result.asnumpy(), np.take_along_axis(values, np.arange(4) + offsets, axis=1)
     )
 
-    # out-of-range targets read the boundary value under a trace
-    beyond = common._field(jax.numpy.asarray(np.full((2, 4), 3, dtype=np.int32)), domain=domain)
-    np.testing.assert_array_equal(
-        jax.jit(shifted)(field, beyond).asnumpy(), np.repeat(values[:, -1:], 4, axis=1)
-    )
-    below = common._field(jax.numpy.asarray(np.full((2, 4), -3, dtype=np.int32)), domain=domain)
-    np.testing.assert_array_equal(
-        jax.jit(shifted)(field, below).asnumpy(),
-        np.take_along_axis(
-            values, np.maximum(np.arange(4) - 3, 0)[None, :].repeat(2, axis=0), axis=1
-        ),
-    )
+    # out-of-range targets read some element of the field under a trace, without an error
+    for shift in (3, -3):
+        result = jax.jit(shifted)(
+            field, common._field(jax.numpy.full((2, 4), shift, dtype=np.int32), domain=domain)
+        ).asnumpy()
+        targets = np.arange(4) + shift
+        in_range = (targets >= 0) & (targets < 4)
+        np.testing.assert_array_equal(result[:, in_range], values[:, targets[in_range]])
+        assert np.isin(result, values).all()
 
 
 @pytest.mark.requires_jax
@@ -611,7 +609,7 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
         np.asarray([0, 1, 2, 3, 5], dtype=np.int32), codomain=conn_a.codomain, domain=conn_a.domain
     )
 
-    with pytest.raises(AssertionError, match="Only connectivities of JAX arrays"):
+    with pytest.raises(TypeError, match="Only connectivities of JAX arrays"):
         jax.jit(lambda field, conn: field.premap(conn))(field, numpy_conn)
 
 
@@ -672,3 +670,114 @@ def test_jax_jit_cond_returning_field():
 
     assert result.domain == field.domain
     np.testing.assert_array_equal(result.asnumpy(), [20.0, 40.0, 60.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_table_computed_in_trace_raises_behind_a_pytree_boundary():
+    import jax
+
+    _, field, conn_a, _ = _jax_narrowing_setup()
+
+    def premap(field, conn):
+        return field.premap(conn).ndarray
+
+    def nested_jit(field, conn):
+        return jax.jit(premap)(field, dataclasses.replace(conn, _ndarray=conn.ndarray + 0))
+
+    def cond_operand(predicate, field, conn):
+        built = dataclasses.replace(conn, _ndarray=conn.ndarray + 0)
+        return jax.lax.cond(predicate, premap, premap, field, built)
+
+    with pytest.raises(jax.errors.ConcretizationTypeError):
+        jax.jit(nested_jit)(field, conn_a)
+    with pytest.raises(jax.errors.ConcretizationTypeError):
+        jax.jit(cond_operand)(True, field, conn_a)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_grad_through_premap_with_connectivity_argument():
+    import jax
+
+    _, field, conn_a, conn_b = _jax_narrowing_setup()
+
+    def loss(x, conn):
+        return jax.numpy.sum(common._field(x, domain=field.domain).premap(conn).ndarray ** 2)
+
+    x = field.ndarray
+    for conn in (conn_a, conn_b):
+        np.testing.assert_allclose(jax.jit(jax.grad(loss))(x, conn), jax.grad(loss)(x, conn))
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_vmap_over_fields_with_connectivity_argument():
+    import jax
+
+    _, field, conn_a, _ = _jax_narrowing_setup()
+    xs = jax.numpy.stack([field.ndarray, 2.0 * field.ndarray])
+
+    def premap_each(xs, conn):
+        return jax.vmap(lambda x: common._field(x, domain=field.domain).premap(conn).ndarray)(xs)
+
+    np.testing.assert_array_equal(
+        jax.jit(premap_each)(xs, conn_a), [[10.0, 20.0, 30.0], [20.0, 40.0, 60.0]]
+    )
+
+
+@pytest.mark.requires_jax
+def test_jax_loop_carry_with_connectivity():
+    import jax
+
+    E, field, conn_a, conn_b = _jax_narrowing_setup()
+
+    def fori(conn, next_conn):
+        carried = jax.lax.fori_loop(0, 2, lambda i, c: c if next_conn is None else next_conn, conn)
+        return field.premap(carried)
+
+    def while_(conn, next_conn):
+        def body(state):
+            i, c = state
+            return i + 1, (c if next_conn is None else next_conn)
+
+        _, carried = jax.lax.while_loop(lambda state: state[0] < 2, body, (0, conn))
+        return field.premap(carried)
+
+    for loop in (fori, while_):
+        result = jax.jit(functools.partial(loop, next_conn=None))(conn_a)
+        assert result.domain == common.domain({E: (1, 4)})
+        np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
+        with pytest.raises(TypeError):
+            jax.jit(loop)(conn_a, conn_b)
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_as_offset_connectivity_through_cond_and_scan():
+    import jax
+
+    from gt4py.next.ffront import experimental
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({K: (0, 4)})
+    field = common._field(jax.numpy.asarray([0.0, 1.0, 2.0, 3.0]), domain=domain)
+    offsets = common._field(jax.numpy.asarray([1, 1, 0, -1], dtype=np.int32), domain=domain)
+
+    def via_cond(predicate, field, offset_field):
+        conn = experimental.as_offset(Koff, offset_field)
+        return jax.lax.cond(
+            predicate,
+            lambda c: field.premap(c).ndarray,
+            lambda c: 2.0 * field.premap(c).ndarray,
+            conn,
+        )
+
+    def via_scan(field, offset_field):
+        conn = experimental.as_offset(Koff, offset_field)
+        return jax.lax.scan(
+            lambda c, x: (c, x * field.premap(c).ndarray), conn, jax.numpy.asarray([1.0, 2.0])
+        )[1]
+
+    np.testing.assert_array_equal(jax.jit(via_cond)(True, field, offsets), [1.0, 2.0, 2.0, 2.0])
+    np.testing.assert_array_equal(jax.jit(via_cond)(False, field, offsets), [2.0, 4.0, 4.0, 4.0])
+    np.testing.assert_array_equal(
+        jax.jit(via_scan)(field, offsets), [[1.0, 2.0, 2.0, 2.0], [2.0, 4.0, 4.0, 4.0]]
+    )

@@ -577,18 +577,19 @@ class NdArrayConnectivityField(
             cached = self._restrict_cache[index] = (new_domain, buffer_slice, {}, {})
         new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
         values = self._static_values
+        static_values: StaticValues
+        if values is self._ndarray:
+            static_values = _FromBuffer.TOKEN
+        elif values is None:
+            static_values = None
+        else:
+            # static values that are not the buffer itself are restricted along with it
+            static_values = values[buffer_slice]
         restricted_connectivity = dataclasses.replace(
             self,
             _domain=new_domain,
             _ndarray=self._ndarray[buffer_slice],
-            # static values that are not the buffer itself are restricted along with it
-            static_values=(
-                _FromBuffer.TOKEN
-                if values is self._ndarray
-                else None
-                if values is None
-                else values[buffer_slice]
-            ),
+            static_values=static_values,
         )
         restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
         restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache

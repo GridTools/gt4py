@@ -51,8 +51,8 @@ class _TableIdentity:
     values: np.ndarray
     _key: tuple[int, tuple[int, ...], tuple[int, ...], str]
 
-    def __init__(self, values: core_defs.NDArrayObject) -> None:
-        assert isinstance(values, np.ndarray) and not values.flags.writeable
+    def __init__(self, values: np.ndarray) -> None:
+        assert not values.flags.writeable
         # holding the array keeps its memory alive, so no other array can get its address
         self.values = values
         self._key = (
@@ -157,10 +157,12 @@ def _flatten_field(
     # JAX also flattens pytrees whose leaves are not arrays (e.g. `jax.tree.map` results, `vmap`
     # axis specifications, or the placeholders of `lax.cond` branches, which are array API objects
     # too), so only arrays of other libraries are rejected
-    assert not (
-        array_api_compat.is_numpy_array(field.ndarray)
-        or array_api_compat.is_cupy_array(field.ndarray)
-    ), f"Only fields of JAX arrays are JAX pytrees, got a field of '{type(field.ndarray)}'."
+    if array_api_compat.is_numpy_array(field.ndarray) or array_api_compat.is_cupy_array(
+        field.ndarray
+    ):
+        raise TypeError(
+            f"Only fields of JAX arrays are JAX pytrees, got a field of '{type(field.ndarray)}'."
+        )
     return (field.ndarray,), field.domain
 
 
@@ -181,7 +183,8 @@ class _ConnectivityAuxData(NamedTuple):
     domain: common.Domain
     codomain: common.Dimension
     skip_value: Optional[core_defs.IntegralScalar]
-    values: Optional[_TableIdentity]
+    #: `None` if the values exist only at run time
+    values: Optional[_TableIdentity] | nd_array_field._FromBuffer
 
 
 def _flatten_connectivity(
@@ -190,19 +193,26 @@ def _flatten_connectivity(
     ndarray = connectivity._ndarray
     # the aux data identifies the values of a table by its buffer, which a mutable array does not
     # allow. The placeholders of JAX are array API objects too, so "not a JAX array" is no test.
-    assert not (
-        array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray)
-    ), f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
-    values: Any = connectivity._static_values
-    if values is ndarray:
-        # a placeholder that is no array has no values; NumPy, so that a restriction inside the
-        # trace is not staged
-        values = _read_only_view(ndarray) if _has_values(ndarray) else None
+    if array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray):
+        raise TypeError(
+            f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
+        )
+    values = connectivity._static_values
+    identity: Optional[_TableIdentity] | nd_array_field._FromBuffer
+    if values is None:
+        identity = None
+    elif values is not ndarray:
+        # given by the unflattening, or restricted from such values
+        assert isinstance(values, np.ndarray)
+        identity = _TableIdentity(values)
+    elif _has_values(ndarray):
+        # NumPy, so that a restriction inside the trace is not staged
+        identity = _TableIdentity(_read_only_view(ndarray))
+    else:
+        # a tracer whose values are its own, i.e. not supported: unflattening keeps it that way
+        identity = nd_array_field._FromBuffer.TOKEN
     return (ndarray,), _ConnectivityAuxData(
-        connectivity.domain,
-        connectivity.codomain,
-        connectivity.skip_value,
-        None if values is None else _TableIdentity(values),
+        connectivity.domain, connectivity.codomain, connectivity.skip_value, identity
     )
 
 
@@ -215,22 +225,27 @@ def _unflatten_connectivity(
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
     # Under `vmap` the child is one element of the flattened table, whose values the aux data
     # does not have.
-    static_values = (
-        nd_array_field._FromBuffer.TOKEN
-        if _has_values(ndarray)
+    static_values: Any
+    if (
+        identity is nd_array_field._FromBuffer.TOKEN
+        or _has_values(ndarray)
         or array_api_compat.is_numpy_array(ndarray)
         or array_api_compat.is_cupy_array(ndarray)
-        else None
-        if identity is None
+    ):
+        static_values = nd_array_field._FromBuffer.TOKEN
+    elif (
+        identity is None
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
-        else identity.values
-    )
+    ):
+        static_values = None
+    else:
+        static_values = identity.values
     return nd_array_field.NdArrayConnectivityField(
         aux_data.domain,
         ndarray,
         aux_data.codomain,
         aux_data.skip_value,
-        static_values=static_values,  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
+        static_values=static_values,
     )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 
