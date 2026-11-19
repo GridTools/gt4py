@@ -113,12 +113,17 @@ ND_ARRAY_IMPLEMENTATIONS: Final[list[ModuleType]] = [
     np,
     *_optional_module("cupy"),
     *_optional_module("jax.numpy"),
+    *_optional_module("torch"),
     array_api_strict,
 ]
 
 
 def is_cupy(xp: ModuleType) -> bool:
     return xp.__name__ == "cupy"
+
+
+def is_torch(xp: ModuleType) -> bool:
+    return xp.__name__ == "torch"
 
 
 def is_array_api_strict(xp: ModuleType) -> bool:

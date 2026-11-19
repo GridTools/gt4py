@@ -11,6 +11,7 @@
 import dataclasses
 import enum
 import importlib
+import types
 from types import ModuleType
 from typing import Final, Optional
 
@@ -18,7 +19,8 @@ import array_api_strict
 import numpy as np
 import pytest
 
-from gt4py.next import constructors
+from gt4py._core import definitions as core_defs
+from gt4py.next import common, constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -71,6 +73,33 @@ numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", np)
 cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
 jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
 array_api_strict_execution = EmbeddedDummyBackend("EmbeddedArrayAPIStrict", array_api_strict)
+torch_execution = EmbeddedDummyBackend("EmbeddedTorch", _optional_module("torch"))
+
+
+class _TorchCUDAAllocator:
+    """Allocates torch tensors on a CUDA device given explicitly, not through the torch default device."""
+
+    __gt_device_type__ = core_defs.DeviceType.CUDA
+
+    def __gt_allocate__(
+        self,
+        domain: common.Domain,
+        dtype: core_defs.DType,
+        device_id: int = 0,
+        aligned_index: object = None,
+    ) -> types.SimpleNamespace:
+        import torch
+
+        return types.SimpleNamespace(
+            ndarray=torch.empty(
+                domain.shape,
+                dtype=getattr(torch, np.dtype(dtype.scalar_type).name),
+                device=torch.device("cuda", device_id),
+            )
+        )
+
+
+torch_cuda_execution = EmbeddedDummyBackend("EmbeddedTorchCUDA", _TorchCUDAAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -78,6 +107,8 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
     JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
     ARRAY_API_STRICT_EXECUTION = "next_tests.definitions.array_api_strict_execution"
+    TORCH_EXECUTION = "next_tests.definitions.torch_execution"
+    TORCH_CUDA_EXECUTION = "next_tests.definitions.torch_cuda_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -268,6 +299,8 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
     EmbeddedIds.ARRAY_API_STRICT_EXECUTION: ARRAY_API_STRICT_EMBEDDED_SKIP_LIST,
+    EmbeddedIds.TORCH_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.TORCH_CUDA_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
