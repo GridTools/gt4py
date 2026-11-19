@@ -23,6 +23,7 @@ A concrete table closed over by a trace is not supported.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -86,7 +87,9 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArr
     assert isinstance(connectivity, nd_array_field.NdArrayConnectivityField)
     if isinstance(connectivity.ndarray, jax.core.Tracer):
         # computed in the trace: its values exist only at run time
-        return connectivity._with_static_values(nd_array_field._StaticValuesKind.NO_STATIC_VALUES)
+        return dataclasses.replace(
+            connectivity, static_values=nd_array_field._StaticValuesKind.NO_STATIC_VALUES
+        )
     return connectivity
 
 
@@ -221,22 +224,28 @@ def _unflatten_connectivity(
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
     # Under `vmap` the child is one element of the flattened table, whose values the aux data
     # does not have.
-    connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
-        aux_data.domain, ndarray, aux_data.codomain, aux_data.skip_value
-    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+    static_values: Any
     if (
         identity is nd_array_field._StaticValuesKind.FROM_BUFFER
         or _has_values(ndarray)
         or array_api_compat.is_numpy_array(ndarray)
         or array_api_compat.is_cupy_array(ndarray)
     ):
-        return connectivity
-    if (
+        static_values = nd_array_field._StaticValuesKind.FROM_BUFFER
+    elif (
         identity is nd_array_field._StaticValuesKind.NO_STATIC_VALUES
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
     ):
-        return connectivity._with_static_values(nd_array_field._StaticValuesKind.NO_STATIC_VALUES)
-    return connectivity._with_static_values(identity.values)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
+        static_values = nd_array_field._StaticValuesKind.NO_STATIC_VALUES
+    else:
+        static_values = identity.values
+    return nd_array_field.NdArrayConnectivityField(
+        aux_data.domain,
+        ndarray,
+        aux_data.codomain,
+        aux_data.skip_value,
+        static_values=static_values,
+    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 
 # jax registers pytree nodes by exact type, so the connectivity needs its own registration

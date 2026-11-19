@@ -478,6 +478,15 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: The static values of the table, given by a creator that knows better than the buffer,
+    #: e.g. for a tracer standing for a concrete table. Not a field, so that no copy inherits them.
+    static_values: dataclasses.InitVar[StaticValues] = dataclasses.field(
+        default=_StaticValuesKind.FROM_BUFFER, kw_only=True
+    )
+
+    def __post_init__(self, static_values: StaticValues) -> None:
+        if static_values is not _StaticValuesKind.FROM_BUFFER:
+            object.__setattr__(self, "_given_static_values", static_values)
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -531,15 +540,10 @@ class NdArrayConnectivityField(
         """
         The static values of the table: an array with its values that can be computed on now.
 
-        The array may be of another library. By default the buffer holds them itself. A creator
-        that knows better sets them with `_with_static_values`; no copy inherits them.
+        The array may be of another library. Only given ones are stored, so that the paths
+        that skip `__post_init__` (pickling, copying) take them from the buffer.
         """
         return getattr(self, "_given_static_values", _StaticValuesKind.FROM_BUFFER)
-
-    def _with_static_values(self, static_values: StaticValues) -> NdArrayConnectivityField:
-        """Set the static values of `self`, a connectivity its creator has just built."""
-        object.__setattr__(self, "_given_static_values", static_values)
-        return self
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
@@ -579,15 +583,13 @@ class NdArrayConnectivityField(
                 buffer_slice = (*buffer_slice, Ellipsis)
             cached = self._restrict_cache[index] = (new_domain, buffer_slice, {}, {})
         new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
-        restricted_connectivity = dataclasses.replace(
-            self, _domain=new_domain, _ndarray=self._ndarray[buffer_slice]
-        )
         values = self._static_values
         if not isinstance(values, _StaticValuesKind):
             # static values that are not the buffer itself are restricted along with it
             values = values[buffer_slice]
-        if values is not _StaticValuesKind.FROM_BUFFER:
-            restricted_connectivity._with_static_values(values)
+        restricted_connectivity = dataclasses.replace(
+            self, _domain=new_domain, _ndarray=self._ndarray[buffer_slice], static_values=values
+        )
         restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
         restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
         return restricted_connectivity
