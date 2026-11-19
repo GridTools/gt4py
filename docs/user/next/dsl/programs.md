@@ -94,10 +94,10 @@ warning is not shown in the rest of this page.
 
 ```{note}
 All the fields used by a program have to be allocated outside, including the
-ones for intermediate results like `work`. When an intermediate result is only
-used inside one operator, there is no need for such a field: call one field
-operator from the other, as in
-`diffuse(phi, laplacian(phi), coefficient, out=new_phi, ...)`.
+ones for intermediate results like `work`. Operators cannot be nested in the
+calls of a program. When an intermediate result is only needed by one operator,
+avoid the extra field by writing a field operator which calls the other one, as
+in `return phi + coefficient * laplacian(phi)`.
 ```
 
 ## Destination of the results
