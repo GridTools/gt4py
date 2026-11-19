@@ -29,7 +29,6 @@ from gt4py.next.common import (
 )
 from gt4py.next.embedded import (
     array_ops,
-    connectivity_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
     nd_array_field,
@@ -2131,9 +2130,7 @@ def test_inverse_image_box(index_array, expected):
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = connectivity_ops.of(index_array).inverse_image_box(
-        index_array, image_range, skip_value
-    )
+    result = nd_array_field._inverse_image_box(index_array, image_range, np, skip_value)
 
     assert result == expected
 
@@ -2355,17 +2352,6 @@ def test_connectivity_field_setitem_raises():
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
 
 
-def test_connectivity_ops_use_the_registered_array_ops(monkeypatch):
-    table = np.asarray([0, 1, 2])
-    numpy_ops = array_ops.of(table)
-    connectivity_ops.of(table)
-    replacement = dataclasses.replace(numpy_ops)
-    monkeypatch.setattr(array_ops, "_ops_by_namespace", {numpy_ops.xp: replacement})
-    monkeypatch.setattr(array_ops, "_ops_by_array_type", {})
-
-    assert connectivity_ops.of(table).array_ops is replacement
-
-
 def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     V = Dimension("V")
     E = Dimension("E")
@@ -2377,16 +2363,14 @@ def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
     )
     field = common._field(np.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
     calls = 0
-    inverse_image_box = connectivity_ops.ConnectivityOps.inverse_image_box
+    inverse_image_box = nd_array_field._inverse_image_box
 
     def counting_inverse_image_box(*args, **kwargs):
         nonlocal calls
         calls += 1
         return inverse_image_box(*args, **kwargs)
 
-    monkeypatch.setattr(
-        connectivity_ops.ConnectivityOps, "inverse_image_box", counting_inverse_image_box
-    )
+    monkeypatch.setattr(nd_array_field, "_inverse_image_box", counting_inverse_image_box)
 
     for _ in range(3):
         result = field.premap(conn[NamedIndex(E2VDim, 0)])

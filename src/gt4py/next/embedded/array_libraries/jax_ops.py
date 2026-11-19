@@ -7,23 +7,21 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-`ArrayOps` and `ConnectivityOps` for JAX arrays, and the embedded fields as JAX pytrees.
+`ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
 Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
-connectivity table inside a trace is in one of three cases, told apart by
-`JaxConnectivityOps.values`:
+connectivity table inside a trace is in one of three cases, told apart by its
+static values:
 
-- concrete: operations reading its values run under `jax.ensure_compile_time_eval`;
+- concrete: its static values are a NumPy view of it;
 - a tracer standing for a concrete table, which it got as a pytree leaf, or
-  restricted from such a tracer: the values are those of the concrete table;
-- any other tracer: there are no values, all its targets are assumed to be in
-  range and the gather clamps them.
+  restricted from such a tracer: the static values are those of the concrete table;
+- any other tracer: there are no static values, all its targets are assumed to be
+  in range and the gather clamps them.
 """
 
 from __future__ import annotations
 
-import dataclasses
-import weakref
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -34,96 +32,46 @@ import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.embedded import array_ops, connectivity_ops, nd_array_field
+from gt4py.next.embedded import array_ops, nd_array_field
 from gt4py.next.ffront import experimental, fbuiltins
 
 
-class _WeakIdDict:
-    """Values for objects which are found by identity and referenced weakly."""
-
-    __slots__ = ("_items",)
-
-    def __init__(self) -> None:
-        self._items: dict[int, tuple[weakref.ref, Any]] = {}
-
-    def __setitem__(self, obj: Any, value: Any) -> None:
-        key = id(obj)
-        self._items[key] = (weakref.ref(obj, lambda _: self._items.pop(key, None)), value)
-
-    def get(self, obj: Any) -> Any:
-        ref, value = self._items.get(id(obj), (None, None))
-        return value if ref is not None and ref() is obj else None
-
-
 class _TableIdentity:
-    """Pytree aux data of a connectivity: equal if `values` is the same array."""
+    """
+    Pytree aux data of a connectivity: equal if `values` is the same read-only memory.
 
-    __slots__ = ("values",)
+    NumPy returns a new view of a JAX array on every `np.asarray`, so the views of one
+    buffer, and their restrictions with the same slice, are told apart by their memory.
+    """
+
+    __slots__ = ("_key", "values")
+
+    values: np.ndarray
+    _key: tuple[int, tuple[int, ...], tuple[int, ...], str]
 
     def __init__(self, values: core_defs.NDArrayObject) -> None:
+        assert isinstance(values, np.ndarray) and not values.flags.writeable
+        # holding the array keeps its memory alive, so no other array can get its address
         self.values = values
+        self._key = (
+            values.__array_interface__["data"][0],
+            values.shape,
+            values.strides,
+            values.dtype.str,
+        )
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, _TableIdentity) and self.values is other.values
+        return isinstance(other, _TableIdentity) and self._key == other._key
 
     def __hash__(self) -> int:
-        return id(self.values)
+        return hash(self._key)
 
     def __repr__(self) -> str:
-        return f"<values of the array at {id(self.values):#x}>"
+        return f"<values of the array at {self._key[0]:#x}>"
 
 
 def _has_values(ndarray: Any) -> bool:
     return isinstance(ndarray, jax.Array) and not isinstance(ndarray, jax.core.Tracer)
-
-
-#: per concrete table, its restrictions by buffer slice: restricting the same table again returns
-#: the same array, which the pytree aux data identifies
-_restricted_values = _WeakIdDict()
-
-
-def _restrict_values(
-    values: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence
-) -> core_defs.NDArrayObject:
-    if (by_slice := _restricted_values.get(values)) is None:
-        by_slice = _restricted_values[values] = {}
-    if (restricted := by_slice.get(buffer_slice)) is None:
-        with jax.ensure_compile_time_eval():
-            restricted = by_slice[buffer_slice] = values[buffer_slice]
-    return restricted
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class JaxConnectivityOps(connectivity_ops.ConnectivityOps):
-    #: The concrete array with the values of the connectivity's table, `None` if they exist
-    #: only at run time. The table itself if it is concrete.
-    values: Optional[core_defs.NDArrayObject] = None
-
-    def inverse_image_box(
-        self,
-        ndarray: core_defs.NDArrayObject,
-        image_range: common.UnitRange,
-        skip_value: Optional[core_defs.IntegralScalar] = None,
-    ) -> Optional[tuple[slice, ...]]:
-        if self.values is None:
-            return (slice(None),) * ndarray.ndim
-        with jax.ensure_compile_time_eval():
-            return super().inverse_image_box(self.values, image_range, skip_value)
-
-    @classmethod
-    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> JaxConnectivityOps:
-        return cls(array_ops.of(ndarray), ndarray if _has_values(ndarray) else None)
-
-    def restrict(
-        self, ndarray: core_defs.NDArrayObject, buffer_slice: common.RelativeIndexSequence
-    ) -> tuple[core_defs.NDArrayObject, connectivity_ops.ConnectivityOps]:
-        if self.values is None:
-            return super().restrict(ndarray, buffer_slice)
-        values = _restrict_values(self.values, buffer_slice)
-        restricted = (
-            values if self.values is ndarray else super().restrict(ndarray, buffer_slice)[0]
-        )
-        return restricted, dataclasses.replace(self, values=values)
 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
@@ -153,6 +101,14 @@ class JaxOps(array_ops.ArrayOps):
         self.check_assignable(value)
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
+    def static_values(self, array: core_defs.NDArrayObject) -> Optional[core_defs.NDArrayObject]:
+        if isinstance(array, jax.core.Tracer):
+            return None
+        # NumPy, so that computing on the values is not staged when a trace closes over the array
+        values = np.asarray(array)
+        values.flags.writeable = False
+        return values  # type: ignore[return-value] # `NDArrayObject` typing is not complete
+
     def gather(
         self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
     ) -> core_defs.NDArrayObject:
@@ -167,7 +123,6 @@ class JaxOps(array_ops.ArrayOps):
 
 
 array_ops.register(JaxOps(jnp))
-connectivity_ops.register(jnp, JaxConnectivityOps)
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)
@@ -216,11 +171,10 @@ def _flatten_connectivity(
         array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray)
     ), f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
     try:
-        ops = connectivity._connectivity_ops
+        values = connectivity._static_values
     except TypeError:
-        # a placeholder that is no array has `ConnectivityOps` only if unflattening gave it some
-        ops = None
-    values = ops.values if isinstance(ops, JaxConnectivityOps) else None
+        # a placeholder that is no array has static values only if unflattening gave it some
+        values = None
     return (ndarray,), _ConnectivityAuxData(
         connectivity.domain,
         connectivity.codomain,
@@ -237,19 +191,19 @@ def _unflatten_connectivity(
     # a child without values stands for the flattened table: a tracer, or one of the placeholders
     # jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around. Under `vmap` the
     # child is one element of the flattened table, whose values the aux data does not have.
-    ops = (
+    static_values = (
         None
         if identity is None
         or _has_values(ndarray)
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
-        else connectivity_ops.of(identity.values)
+        else identity.values
     )
     return nd_array_field.NdArrayConnectivityField(
         aux_data.domain,
         ndarray,
         aux_data.codomain,
         aux_data.skip_value,
-        connectivity_ops=ops,
+        static_values=static_values,  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
     )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 

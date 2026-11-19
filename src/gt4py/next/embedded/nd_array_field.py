@@ -25,7 +25,6 @@ from gt4py.next import common
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
-    connectivity_ops as embedded_connectivity_ops,
     context as embedded_context,
     exceptions as embedded_exceptions,
 )
@@ -457,6 +456,48 @@ def _broadcast_axes_slice(
     )
 
 
+def _inverse_image_box(
+    ndarray: core_defs.NDArrayObject,
+    image_range: common.UnitRange,
+    xp: ModuleType,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Optional[tuple[slice, ...]]:
+    """
+    Return the slices of the smallest box of `ndarray` containing all entries within `image_range`, or `None` if that box contains other entries.
+
+    If `skip_value` is given, entries equal to it are ignored. A bigger box could be
+    constructed by adding lines that contain only `skip_value`s.
+
+    Example:
+        ndarray =  0  1 -1
+                   3  4 -1
+                  -1 -1 -1
+        skip_value = -1
+
+        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+
+    """
+    select_mask = (ndarray >= image_range.start) & (ndarray < image_range.stop)
+
+    if not xp.any(select_mask):
+        return None
+
+    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
+
+    slices = tuple(
+        slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
+        for dim_nnz_indices in nnz
+    )
+    hcube = select_mask[tuple(slices)]
+    if skip_value is not None:
+        ignore_mask = ndarray == skip_value
+        hcube = hcube | ignore_mask[tuple(slices)]
+    if not xp.all(hcube):
+        return None
+
+    return slices
+
+
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
     common.GatherConnectivity[common.DimsT, common.DimT],
@@ -464,18 +505,16 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
-    #: The `ConnectivityOps` of a connectivity whose buffer does not determine them, e.g. a tracer
-    #: standing for a concrete table. Not a field, so that no copy inherits them; without them,
-    #: they are created from the buffer.
-    connectivity_ops: dataclasses.InitVar[Optional[embedded_connectivity_ops.ConnectivityOps]] = (
-        dataclasses.field(default=None, kw_only=True)
+    #: The static values of a connectivity whose buffer does not determine them, e.g. a tracer
+    #: standing for a concrete table (see `ArrayOps.static_values`). Not a field, so that no
+    #: copy inherits them; without them, they are taken from the buffer.
+    static_values: dataclasses.InitVar[Optional[core_defs.NDArrayObject]] = dataclasses.field(
+        default=None, kw_only=True
     )
 
-    def __post_init__(
-        self, connectivity_ops: Optional[embedded_connectivity_ops.ConnectivityOps]
-    ) -> None:
-        if connectivity_ops is not None:
-            self.__dict__["_connectivity_ops"] = connectivity_ops
+    def __post_init__(self, static_values: Optional[core_defs.NDArrayObject]) -> None:
+        if static_values is not None:
+            self.__dict__["_static_values"] = static_values
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -525,15 +564,22 @@ class NdArrayConnectivityField(
         return {}
 
     @functools.cached_property
-    def _connectivity_ops(self) -> embedded_connectivity_ops.ConnectivityOps:
-        return embedded_connectivity_ops.of(self._ndarray)
+    def _static_values(self) -> Optional[core_defs.NDArrayObject]:
+        return array_ops.of(self._ndarray).static_values(self._ndarray)
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = self._connectivity_ops.inverse_image_box(
-                self._ndarray, image_range, self.skip_value
+            values = self._static_values
+            # without static values, all targets are assumed to be in range; the gather decides
+            # what the others read
+            slices = (
+                (slice(None),) * self._ndarray.ndim
+                if values is None
+                else _inverse_image_box(
+                    values, image_range, array_ops.of(values).xp, self.skip_value
+                )
             )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
@@ -553,11 +599,21 @@ class NdArrayConnectivityField(
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         # Connectivities and arrays are not cached: they may belong to a trace that ends before the cache
         if (cached := self._restrict_cache.get(index, None)) is None:
-            cached = self._restrict_cache[index] = (*self._slice(index), {}, {})
+            new_domain, buffer_slice = self._slice(index)
+            # the trailing `Ellipsis` makes indexing with integers only return an array, not a scalar
+            if Ellipsis not in buffer_slice:
+                buffer_slice = (*buffer_slice, Ellipsis)
+            cached = self._restrict_cache[index] = (new_domain, buffer_slice, {}, {})
         new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
-        ndarray, ops = self._connectivity_ops.restrict(self._ndarray, buffer_slice)
+        values = self._static_values
         restricted_connectivity = dataclasses.replace(
-            self, _domain=new_domain, _ndarray=ndarray, connectivity_ops=ops
+            self,
+            _domain=new_domain,
+            _ndarray=self._ndarray[buffer_slice],
+            # static values that are not the buffer itself are restricted along with it
+            static_values=(
+                None if values is None or values is self._ndarray else values[buffer_slice]
+            ),
         )
         restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
         restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
