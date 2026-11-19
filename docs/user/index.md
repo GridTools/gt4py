@@ -7,9 +7,9 @@ framework, a set of libraries and utilities to develop performance portable
 applications in this area.
 
 Currently, two generations live side by side in the library: `gt4py.next` and
-`gt4py.cartesian`. `gt4py.next` is where all new development happens.
+`gt4py.cartesian`. `gt4py.next` is where most of the active development happens.
 `gt4py.cartesian` is the previous generation, which is still maintained for
-the models relying on it.
+the models relying on it and enriched with features where needed.
 
 To install GT4Py or get involved in its development, check the
 [project repository](https://github.com/GridTools/gt4py).
@@ -43,13 +43,8 @@ generated code, instead of being executed as regular Python, and which is
 limited to Cartesian grids. It still delivers excellent performance, and it
 is used by several models.
 
-Its current status is:
-
-- **Maintained**: it is part of the `gt4py` package, and the GT4Py team keeps
-  fixing bugs, reviewing contributions and taking part in discussions with
-  external developers.
-- **Feature complete**: the core team does not develop new features for it.
-- **Not recommended for new developments**: use `gt4py.next` instead.
+Its design and performance are described in the paper
+[GT4Py: High Performance Stencils for Weather and Climate Applications using Python](https://arxiv.org/abs/2311.08322).
 
 ```{card} gt4py.cartesian documentation →
 ---
@@ -58,7 +53,7 @@ link: cartesian/index.html
 Quick start, GTScript language reference and API documentation.
 ```
 
-`gt4py.next` and `gt4py.cartesian` are independent from each other and each one
+`gt4py.next` and `gt4py.cartesian` share common infrastructure, but are independent DSLs and each one
 has its own documentation. Note that although both can easily interoperate via
 buffer sharing, code written for one of them does not work with the other.
 
