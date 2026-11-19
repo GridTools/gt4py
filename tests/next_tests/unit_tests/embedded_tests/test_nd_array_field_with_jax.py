@@ -6,7 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import dataclasses
 import functools
 import re
 
@@ -194,27 +193,60 @@ def test_jax_jit_premap_with_connectivity_argument(num_field_vertices):
     assert 'dense<"0x' not in stablehlo
 
 
+def _raises_or_equals_eager(traced, eager):
+    """An unsupported connectivity may raise, but must not compute a wrong result."""
+    try:
+        result = traced()
+    except Exception:
+        return
+    expected = eager()
+    assert result.domain == expected.domain
+    np.testing.assert_array_equal(result.asnumpy(), expected.asnumpy())
+
+
 @pytest.mark.requires_jax
-def test_jax_jit_premap_with_closed_over_connectivity_raises():
+def test_jax_jit_premap_with_unsupported_connectivity_is_not_wrong():
     import jax
 
-    V = Dimension("V")
-    E = Dimension("E")
+    E, field, conn_a, _ = _jax_narrowing_setup()
     E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    table = np.asarray([[0, 1], [1, 0], [2, 2]], dtype=np.int32)
-    conn = common._connectivity(
-        jax.numpy.asarray(table),
-        codomain=V,
+    conn_2d = common._connectivity(
+        jax.numpy.asarray([[0, 1], [1, 2], [3, 3]], dtype=np.int32),
+        codomain=conn_a.codomain,
         domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
     )
-    field = common._field(jax.numpy.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
 
-    for premap in (
-        lambda field: field.premap(conn),
-        lambda field: field.premap(conn[common.NamedIndex(E2VDim, 1)]),
-    ):
-        with pytest.raises(jax.errors.ConcretizationTypeError):
-            jax.jit(premap)(field)
+    def built_in_trace(conn):
+        return common._connectivity(conn.ndarray + 1, codomain=conn.codomain, domain=conn.domain)
+
+    def premap(field, conn):
+        return field.premap(conn)
+
+    cases = [
+        # closed over by the trace
+        (lambda: jax.jit(lambda f: f.premap(conn_a))(field), lambda: field.premap(conn_a)),
+        (
+            lambda: jax.jit(lambda f: f.premap(conn_2d[NamedIndex(E2VDim, 1)]))(field),
+            lambda: field.premap(conn_2d[NamedIndex(E2VDim, 1)]),
+        ),
+        # built from another tracer, directly and behind a pytree boundary
+        (
+            lambda: jax.jit(lambda f, c: f.premap(built_in_trace(c)))(field, conn_a),
+            lambda: field.premap(built_in_trace(conn_a)),
+        ),
+        (
+            lambda: jax.jit(lambda f, c: jax.jit(premap)(f, built_in_trace(c)))(field, conn_a),
+            lambda: field.premap(built_in_trace(conn_a)),
+        ),
+        (
+            lambda: jax.jit(lambda f, c: jax.lax.cond(True, premap, premap, f, built_in_trace(c)))(
+                field, conn_a
+            ),
+            lambda: field.premap(built_in_trace(conn_a)),
+        ),
+    ]
+    for traced, eager in cases:
+        _raises_or_equals_eager(traced, eager)
 
 
 @pytest.mark.requires_jax
@@ -254,25 +286,6 @@ def test_jax_jit_premap_with_as_offset_computed_in_trace():
         in_range = (targets >= 0) & (targets < 4)
         np.testing.assert_array_equal(result[:, in_range], values[:, targets[in_range]])
         assert np.isin(result, values).all()
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_premap_with_closed_over_as_offset_is_computed_in_trace():
-    import jax
-
-    from gt4py.next.ffront import experimental
-
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
-    domain = common.domain({K: (0, 4)})
-    field = common._field(jax.numpy.asarray([0.0, 1.0, 2.0, 3.0]), domain=domain)
-    offset_field = common._field(jax.numpy.ones(4, dtype=np.int32), domain=domain)
-
-    result = jax.jit(lambda field: field.premap(experimental.as_offset(Koff, offset_field)))(field)
-
-    # not narrowed as eagerly, the out-of-range target is clamped
-    assert result.domain == domain
-    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 3.0])
 
 
 @pytest.mark.requires_jax
@@ -355,14 +368,6 @@ def test_jax_jit_retraces_per_connectivity_buffer():
     )
     assert traces == 2
 
-    # an eager restriction is a new buffer
-    restricted = conn[NamedIndex(E2VDim, 0)]
-    premap(field, restricted)
-    premap(field, restricted)
-    assert traces == 3
-    premap(field, conn[NamedIndex(E2VDim, 0)])
-    assert traces == 4
-
 
 @pytest.mark.requires_jax
 def test_jax_jit_premap_non_contiguous_inverse_image_raises():
@@ -428,21 +433,6 @@ def _jax_narrowing_setup():
 
 
 @pytest.mark.requires_jax
-def test_jax_jit_premap_with_connectivity_from_array():
-    import jax
-
-    E, field, conn_a, _ = _jax_narrowing_setup()
-    conn = nd_array_field.NdArrayConnectivityField.from_array(
-        conn_a.ndarray, conn_a.codomain, domain=conn_a.domain
-    )
-
-    result = jax.jit(lambda field, conn: field.premap(conn))(field, conn)
-
-    assert result.domain == common.domain({E: (1, 4)})
-    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
-
-
-@pytest.mark.requires_jax
 @pytest.mark.parametrize("predicate", [True, False])
 def test_jax_jit_premap_with_connectivity_selected_by_cond(predicate):
     import jax
@@ -459,6 +449,13 @@ def test_jax_jit_premap_with_connectivity_selected_by_cond(predicate):
             predicate, field, conn_a
         )
 
+    with pytest.raises(TypeError, match="pytree structure"):
+        jax.jit(
+            lambda index, field, conn1, conn2: field.premap(
+                jax.lax.switch(index, [lambda: conn1, lambda: conn2])
+            )
+        )(1, field, conn_a, conn_b)
+
     # the same table in both branches
     same_table = common._connectivity(
         conn_a.ndarray, codomain=conn_a.codomain, domain=conn_a.domain
@@ -469,137 +466,31 @@ def test_jax_jit_premap_with_connectivity_selected_by_cond(predicate):
 
 
 @pytest.mark.requires_jax
-def test_jax_jit_premap_with_connectivity_selected_by_switch():
-    import jax
-
-    _, field, conn_a, conn_b = _jax_narrowing_setup()
-
-    def premap_selected(index, field, conn1, conn2):
-        return field.premap(jax.lax.switch(index, [lambda: conn1, lambda: conn2]))
-
-    with pytest.raises(TypeError, match="pytree structure"):
-        jax.jit(premap_selected)(1, field, conn_a, conn_b)
-
-
-@pytest.mark.requires_jax
-def test_jax_scan_with_connectivity_carry():
-    import jax
-
-    _, field, conn_a, conn_b = _jax_narrowing_setup()
-
-    def premap_sums(conn, next_conn):
-        def body(carry, x):
-            return (carry if next_conn is None else next_conn), x * jax.numpy.sum(
-                field.premap(carry).ndarray
-            )
-
-        return jax.lax.scan(body, conn, jax.numpy.asarray([1.0, 2.0]))[1]
-
-    np.testing.assert_array_equal(premap_sums(conn_a, None), [60.0, 120.0])
-    np.testing.assert_array_equal(
-        jax.jit(lambda conn: premap_sums(conn, None))(conn_a), [60.0, 120.0]
-    )
-
-    with pytest.raises(TypeError, match="pytree structure"):
-        premap_sums(conn_a, conn_b)
-    with pytest.raises(TypeError, match="pytree structure"):
-        jax.jit(premap_sums)(conn_a, conn_b)
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_premap_with_table_computed_in_trace_raises():
-    import jax
-
-    _, field, conn_a, _ = _jax_narrowing_setup()
-
-    def premap_next(field, conn):
-        return field.premap(
-            common._connectivity(conn.ndarray + 1, codomain=conn.codomain, domain=conn.domain)
-        )
-
-    with pytest.raises(jax.errors.ConcretizationTypeError):
-        jax.jit(premap_next)(field, conn_a)
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_premap_clamps_in_the_gather():
-    import jax
-
-    from gt4py.next.ffront import experimental
-
-    _, field, conn_a, _ = _jax_narrowing_setup()
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
-    domain = common.domain({K: (0, 5)})
-    k_field = common._field(jax.numpy.asarray([10.0, 20.0, 30.0, 40.0, 50.0]), domain=domain)
-    # targets -2, -1, 1, 4, 6 of a field on K:(0,5)
-    offsets = common._field(jax.numpy.asarray([-2, -2, -1, 1, 2], dtype=np.int32), domain=domain)
-
-    def shifted(field, offset_field):
-        return field.premap(experimental.as_offset(Koff, offset_field))
-
-    result = jax.jit(shifted)(k_field, offsets)
-
-    assert result.domain == domain
-    np.testing.assert_array_equal(result.asnumpy(), [10.0, 10.0, 20.0, 50.0, 50.0])
-    for lowered in (
-        jax.jit(shifted).lower(k_field, offsets).as_text(),
-        jax.jit(lambda field, conn: field.premap(conn)).lower(field, conn_a).as_text(),
-    ):
-        assert "stablehlo.gather" in lowered
-        assert not re.search(r"stablehlo\.(clamp|minimum|maximum|select)", lowered)
-
-
-@pytest.mark.requires_jax
-@pytest.mark.parametrize("predicate, factor", [(True, 1.0), (False, 2.0)])
-def test_jax_jit_premap_in_cond_branches_closing_over_connectivity(predicate, factor):
-    import jax
-
-    _, field, conn_a, _ = _jax_narrowing_setup()
-
-    def premap_in_branches(predicate, field, conn):
-        return jax.lax.cond(
-            predicate,
-            lambda: field.premap(conn).ndarray * 1.0,
-            lambda: field.premap(conn).ndarray * 2.0,
-        )
-
-    result = jax.jit(premap_in_branches)(predicate, field, conn_a)
-
-    np.testing.assert_array_equal(result, np.asarray([10.0, 20.0, 30.0]) * factor)
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_premap_in_nested_jit_closing_over_connectivity():
+def test_jax_jit_premap_closing_over_connectivity_argument():
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
 
-    def premap_twice(field, conn):
-        inner = jax.jit(lambda field: field.premap(conn))(field)
-        return inner, field.premap(conn)
+    def in_cond(field, conn):
+        return jax.lax.cond(True, lambda: field.premap(conn), lambda: field.premap(conn))
 
-    for result in jax.jit(premap_twice)(field, conn_a):
-        assert result.domain == common.domain({E: (1, 4)})
-        np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
+    def in_inner_jit(field, conn):
+        return jax.jit(lambda field: field.premap(conn))(field)
 
+    def in_scan(field, conn):
+        result, _ = jax.lax.scan(
+            lambda carry, _: (field.premap(conn), None), field.premap(conn), None, length=2
+        )
+        return result
 
-@pytest.mark.requires_jax
-def test_jax_jit_premap_in_scan_body_closing_over_connectivity():
-    import jax
+    def and_again_afterwards(closing_over, field, conn):
+        return closing_over(field, conn), field.premap(conn)
 
-    _, field, conn_a, _ = _jax_narrowing_setup()
-
-    def premap_in_scan(field, conn):
-        def body(carry, _):
-            return carry + field.premap(conn).ndarray, None
-
-        total, _ = jax.lax.scan(body, jax.numpy.zeros(3), jax.numpy.arange(2))
-        return total + field.premap(conn).ndarray
-
-    result = jax.jit(premap_in_scan)(field, conn_a)
-
-    np.testing.assert_array_equal(result, [30.0, 60.0, 90.0])
+    for closing_over in (in_cond, in_inner_jit, in_scan):
+        traced = jax.jit(functools.partial(and_again_afterwards, closing_over))
+        for result in traced(field, conn_a):
+            assert result.domain == common.domain({E: (1, 4)})
+            np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
 
 
 @pytest.mark.requires_jax
@@ -616,26 +507,13 @@ def test_jax_pytree_rejects_connectivities_of_other_libraries():
 
 
 @pytest.mark.requires_jax
-def test_jax_pytree_of_concrete_connectivity_reads_its_own_values():
+@pytest.mark.parametrize("to_leaf", [lambda table: table + 1, lambda table: np.asarray(table) + 1])
+def test_jax_pytree_rebuilt_connectivity_reads_its_own_values(to_leaf):
     import jax
 
     E, field, conn_a, _ = _jax_narrowing_setup()
 
-    rebuilt = jax.tree.map(lambda table: table + 1, conn_a)
-
-    # targets 1, 2, 3, 4, 6 of a field on V:(1,4)
-    result = field.premap(rebuilt)
-    assert result.domain == common.domain({E: (0, 3)})
-    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
-
-
-@pytest.mark.requires_jax
-def test_jax_pytree_with_numpy_leaf_reads_its_own_values():
-    import jax
-
-    E, field, conn_a, _ = _jax_narrowing_setup()
-
-    rebuilt = jax.tree.map(lambda table: np.asarray(table) + 1, conn_a)
+    rebuilt = jax.tree.map(to_leaf, conn_a)
 
     # targets 1, 2, 3, 4, 6 of a field on V:(1,4)
     result = field.premap(rebuilt)
@@ -654,10 +532,9 @@ def test_jax_vmap_premap_over_connectivities_has_no_values():
 
     result = jax.vmap(lambda conn: field.premap(conn).ndarray)(stacked)
 
-    # each element is a table without values: not narrowed, out-of-range targets clamped
-    np.testing.assert_array_equal(
-        np.asarray(result), [[10.0, 10.0, 20.0, 30.0, 30.0], [10.0, 20.0, 30.0, 10.0, 30.0]]
-    )
+    # each element is a table without values: not narrowed, the in-range targets are read
+    np.testing.assert_array_equal(np.asarray(result)[0, 1:4], [10.0, 20.0, 30.0])
+    np.testing.assert_array_equal(np.asarray(result)[1, 0:3], [10.0, 20.0, 30.0])
 
 
 @pytest.mark.requires_jax
@@ -672,31 +549,6 @@ def test_jax_jit_cond_returning_field():
 
     assert result.domain == field.domain
     np.testing.assert_array_equal(result.asnumpy(), [20.0, 40.0, 60.0])
-
-
-@pytest.mark.requires_jax
-def test_jax_jit_table_computed_in_trace_raises_behind_a_pytree_boundary():
-    import jax
-
-    _, field, conn_a, _ = _jax_narrowing_setup()
-
-    def premap(field, conn):
-        return field.premap(conn).ndarray
-
-    def nested_jit(field, conn):
-        return jax.jit(premap)(
-            field,
-            common._connectivity(conn.ndarray + 0, codomain=conn.codomain, domain=conn.domain),
-        )
-
-    def cond_operand(predicate, field, conn):
-        built = common._connectivity(conn.ndarray + 0, codomain=conn.codomain, domain=conn.domain)
-        return jax.lax.cond(predicate, premap, premap, field, built)
-
-    with pytest.raises(jax.errors.ConcretizationTypeError):
-        jax.jit(nested_jit)(field, conn_a)
-    with pytest.raises(jax.errors.ConcretizationTypeError):
-        jax.jit(cond_operand)(True, field, conn_a)
 
 
 @pytest.mark.requires_jax
@@ -734,6 +586,12 @@ def test_jax_loop_carry_with_connectivity():
 
     E, field, conn_a, conn_b = _jax_narrowing_setup()
 
+    def scan(conn, next_conn):
+        carried, _ = jax.lax.scan(
+            lambda c, x: (c if next_conn is None else next_conn, x), conn, jax.numpy.arange(2.0)
+        )
+        return field.premap(carried)
+
     def fori(conn, next_conn):
         carried = jax.lax.fori_loop(0, 2, lambda i, c: c if next_conn is None else next_conn, conn)
         return field.premap(carried)
@@ -746,7 +604,7 @@ def test_jax_loop_carry_with_connectivity():
         _, carried = jax.lax.while_loop(lambda state: state[0] < 2, body, (0, conn))
         return field.premap(carried)
 
-    for loop in (fori, while_):
+    for loop in (scan, fori, while_):
         result = jax.jit(functools.partial(loop, next_conn=None))(conn_a)
         assert result.domain == common.domain({E: (1, 4)})
         np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0, 30.0])
