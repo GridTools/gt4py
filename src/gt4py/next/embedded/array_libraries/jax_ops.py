@@ -38,9 +38,9 @@ from gt4py.next.embedded import array_ops, nd_array_field
 from gt4py.next.ffront import experimental, fbuiltins
 
 
-class _TableIdentity:
+class _StaticValuesByMemory:
     """
-    Pytree aux data of a connectivity: equal if `values` is the same read-only memory.
+    Static values in pytree aux data: equal to others if both are the same read-only memory.
 
     NumPy returns a new view of a JAX array on every `np.asarray`, so the views of one
     buffer, and their restrictions with the same slice, are told apart by their memory.
@@ -63,16 +63,16 @@ class _TableIdentity:
         )
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, _TableIdentity) and self._key == other._key
+        return isinstance(other, _StaticValuesByMemory) and self._key == other._key
 
     def __hash__(self) -> int:
         return hash(self._key)
 
     def __repr__(self) -> str:
-        return f"<values of the array at {self._key[0]:#x}>"
+        return f"<static values at {self._key[0]:#x}>"
 
 
-def _has_values(ndarray: Any) -> bool:
+def _is_concrete(ndarray: Any) -> bool:
     return isinstance(ndarray, jax.Array) and not isinstance(ndarray, jax.core.Tracer)
 
 
@@ -88,7 +88,7 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArr
     if isinstance(connectivity.ndarray, jax.core.Tracer):
         # computed in the trace: its values exist only at run time
         return dataclasses.replace(
-            connectivity, static_values=nd_array_field._StaticValuesKind.NO_STATIC_VALUES
+            connectivity, _static_values=nd_array_field.StaticValues.RUN_TIME_ONLY
         )
     return connectivity
 
@@ -185,33 +185,29 @@ class _ConnectivityAuxData(NamedTuple):
     domain: common.Domain
     codomain: common.Dimension
     skip_value: Optional[core_defs.IntegralScalar]
-    values: _TableIdentity | nd_array_field._StaticValuesKind
+    #: as `NdArrayConnectivityField._static_values`, with an array as NumPy compared by memory
+    static_values: _StaticValuesByMemory | nd_array_field.StaticValues
 
 
 def _flatten_connectivity(
     connectivity: nd_array_field.NdArrayConnectivityField,
 ) -> tuple[tuple[core_defs.NDArrayObject], _ConnectivityAuxData]:
     ndarray = connectivity._ndarray
-    # the aux data identifies the values of a table by its buffer, which a mutable array does not
+    # the aux data identifies the static values by their memory, which a mutable array does not
     # allow. The placeholders of JAX are array API objects too, so "not a JAX array" is no test.
     if array_api_compat.is_numpy_array(ndarray) or array_api_compat.is_cupy_array(ndarray):
         raise TypeError(
             f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
         )
-    values = connectivity._static_values
-    identity: _TableIdentity | nd_array_field._StaticValuesKind
-    if values is nd_array_field._StaticValuesKind.FROM_BUFFER and _has_values(ndarray):
+    static_values: Any = connectivity._static_values
+    if static_values is nd_array_field.StaticValues.IN_BUFFER and _is_concrete(ndarray):
         # NumPy, so that a restriction inside the trace is not staged
-        identity = _TableIdentity(_read_only_view(ndarray))
-    elif isinstance(values, nd_array_field._StaticValuesKind):
-        # of a tracer, `FROM_BUFFER` keeps an unsupported connectivity unsupported
-        identity = values
-    else:
-        # given by the unflattening, or restricted from such values
-        assert isinstance(values, np.ndarray)
-        identity = _TableIdentity(values)
+        static_values = _StaticValuesByMemory(_read_only_view(ndarray))
+    elif not isinstance(static_values, nd_array_field.StaticValues):
+        static_values = _StaticValuesByMemory(static_values)
+    # otherwise the kind is kept: `IN_BUFFER` of a tracer keeps an unsupported connectivity unsupported
     return (ndarray,), _ConnectivityAuxData(
-        connectivity.domain, connectivity.codomain, connectivity.skip_value, identity
+        connectivity.domain, connectivity.codomain, connectivity.skip_value, static_values
     )
 
 
@@ -219,32 +215,29 @@ def _unflatten_connectivity(
     aux_data: _ConnectivityAuxData, children: tuple[core_defs.NDArrayObject]
 ) -> nd_array_field.NdArrayConnectivityField:
     (ndarray,) = children
-    identity = aux_data.values
+    static_values: Any = aux_data.static_values
     # a child that is not a concrete array stands for the flattened table: a tracer, or one of the
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
-    # Under `vmap` the child is one element of the flattened table, whose values the aux data
-    # does not have.
-    static_values: Any
+    # Under `vmap` the child is one element of the flattened table, which has another shape.
     if (
-        identity is nd_array_field._StaticValuesKind.FROM_BUFFER
-        or _has_values(ndarray)
+        _is_concrete(ndarray)
         or array_api_compat.is_numpy_array(ndarray)
         or array_api_compat.is_cupy_array(ndarray)
     ):
-        static_values = nd_array_field._StaticValuesKind.FROM_BUFFER
-    elif (
-        identity is nd_array_field._StaticValuesKind.NO_STATIC_VALUES
-        or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
-    ):
-        static_values = nd_array_field._StaticValuesKind.NO_STATIC_VALUES
-    else:
-        static_values = identity.values
+        static_values = nd_array_field.StaticValues.IN_BUFFER
+    elif isinstance(static_values, _StaticValuesByMemory):
+        values = static_values.values
+        static_values = (
+            values
+            if getattr(ndarray, "shape", values.shape) == values.shape
+            else nd_array_field.StaticValues.RUN_TIME_ONLY
+        )
     return nd_array_field.NdArrayConnectivityField(
         aux_data.domain,
         ndarray,
         aux_data.codomain,
         aux_data.skip_value,
-        static_values=static_values,
+        _static_values=static_values,
     )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
 
 

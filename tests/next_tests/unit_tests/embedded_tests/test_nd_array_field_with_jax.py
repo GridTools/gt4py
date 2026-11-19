@@ -513,7 +513,9 @@ def test_jax_jit_premap_with_table_computed_in_trace_raises():
     _, field, conn_a, _ = _jax_narrowing_setup()
 
     def premap_next(field, conn):
-        return field.premap(dataclasses.replace(conn, _ndarray=conn.ndarray + 1))
+        return field.premap(
+            common._connectivity(conn.ndarray + 1, codomain=conn.codomain, domain=conn.domain)
+        )
 
     with pytest.raises(jax.errors.ConcretizationTypeError):
         jax.jit(premap_next)(field, conn_a)
@@ -682,10 +684,13 @@ def test_jax_jit_table_computed_in_trace_raises_behind_a_pytree_boundary():
         return field.premap(conn).ndarray
 
     def nested_jit(field, conn):
-        return jax.jit(premap)(field, dataclasses.replace(conn, _ndarray=conn.ndarray + 0))
+        return jax.jit(premap)(
+            field,
+            common._connectivity(conn.ndarray + 0, codomain=conn.codomain, domain=conn.domain),
+        )
 
     def cond_operand(predicate, field, conn):
-        built = dataclasses.replace(conn, _ndarray=conn.ndarray + 0)
+        built = common._connectivity(conn.ndarray + 0, codomain=conn.codomain, domain=conn.domain)
         return jax.lax.cond(predicate, premap, premap, field, built)
 
     with pytest.raises(jax.errors.ConcretizationTypeError):
