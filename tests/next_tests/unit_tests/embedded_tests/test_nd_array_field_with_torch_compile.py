@@ -13,6 +13,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common
+from gt4py.next.embedded import nd_array_field
 from gt4py.next import astype, neighbor_sum
 from gt4py.next.experimental import as_offset
 
@@ -269,17 +270,23 @@ def test_retraces_per_connectivity_buffer(device):
     assert len(graphs) == 2
 
 
-def test_connectivity_not_created_by_constructor_raises(device):
+@pytest.mark.parametrize("create", ["restrict", "from_array"])
+def test_connectivity_not_created_by_constructor_raises(device, create):
     table = _skip_value_e2v_table(4)
     e2v = _connectivity(table, device, skip_value=-1)
     v = _field([Vertex], np.arange(4.0), device)
-    restricted = e2v[gtx.domain({Edge: (0, 4), E2VDim: (0, 2)})]
+    if create == "restrict":
+        e2v = e2v[gtx.domain({Edge: (0, 4), E2VDim: (0, 2)})]
+    else:
+        e2v = nd_array_field.NdArrayConnectivityField.from_array(
+            e2v.ndarray[:4], Vertex, domain=gtx.domain({Edge: 4, E2VDim: 2}), skip_value=-1
+        )
     out = _field([Edge], np.zeros(4), device)
 
     compiled, _ = _compile(_with_out(_neighbor_sum))
 
     with pytest.raises(Exception) as excinfo:
-        compiled(v, restricted, out)
+        compiled(v, e2v, out)
     assert "gtx.as_connectivity" in _chain(excinfo.value)
 
 
