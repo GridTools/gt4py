@@ -13,6 +13,8 @@ import dataclasses
 import enum
 import functools
 import itertools
+import math
+import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
@@ -645,25 +647,77 @@ def _gather_output_domain(
 
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
-    """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
+    """
+    `premap` as one `ArrayOps.take` along the field axes the connectivities touch, merged into one.
+
+    The field axes from the first to the last one that is a codomain or is read by a connectivity
+    are merged into one axis, indexed by a linear index laid out over the output dimensions that
+    replace them. Axes before and after that run pass through unchanged, so a connectivity that
+    reads no other field dimension takes along its codomain axis with its own table.
+    """
     ops = array_ops.of(data._ndarray)
+    xp = ops.xp
     new_domain = _gather_output_domain(data.domain, connectivities)
+    if new_domain.is_empty():  # the tables cannot be restricted to an empty range
+        empty = xp.empty(
+            new_domain.shape,
+            dtype=ops.dtype(data.dtype.scalar_type),
+            device=ops.device(data._ndarray),
+        )
+        return data.__class__.from_array(empty, domain=new_domain, dtype=data.dtype)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
+    read = {*conn_by_codomain, *(dim for conn in connectivities for dim in conn.domain.dims)}
+    touched = [i for i, dim in enumerate(data.domain.dims) if dim in read]
+    lo, hi = touched[0], touched[-1] + 1
+    gathered = new_domain.dims[lo : new_domain.ndim - (data.domain.ndim - hi)]
 
-    # one index array per original field dimension (the connectivity's, or identity), shifted to
-    # 0-based buffer indices; the gather broadcasts them against each other
-    def take_index(dim: common.Dimension) -> core_defs.NDArrayObject:
-        start = data.domain[dim].unit_range.start
-        if (conn := conn_by_codomain.get(dim)) is None:
-            return _identity_index_array(new_domain, dim, ops, like=data._ndarray) - start
-        table = _aligned_connectivity_table(conn, new_domain, ops)
-        if conn.skip_value is not None:
-            # skipped neighbors index the field in bounds; the reduction mask discards what they read
-            table = ops.xp.where(table == conn.skip_value, start, table)
-        return table - start
+    buffer = data._ndarray
+    indices, offset, stride = [], 0, 1
+    for axis in reversed(range(lo, hi)):
+        dim = data.domain.dims[axis]
+        if dim in conn_by_codomain:
+            conn = conn_by_codomain[dim]
+            sub_domain = common.Domain(*(new_domain[d] for d in conn.domain.dims))
+            conn = conn if sub_domain == conn.domain else conn.restrict(sub_domain)
+            index, index_dims = ops.asarray(conn.ndarray), conn.domain.dims
+        else:
+            unit_range = new_domain[dim].unit_range
+            index = xp.arange(unit_range.start, unit_range.stop, device=ops.device(buffer))
+            index_dims = (dim,)
+        if index_dims != gathered:
+            index = _lay_out(index, index_dims, new_domain, gathered, xp)
+        if stride != 1:  # in int64, so that the linear index cannot overflow
+            index = xp.astype(index, xp.int64) * stride
+        indices.append(index)
+        offset += data.domain[axis].unit_range.start * stride
+        stride *= buffer.shape[axis]
 
-    new_buffer = ops.gather(data._ndarray, tuple(take_index(dim) for dim in data.domain.dims))
+    if hi - lo > 1:
+        # the offset is subtracted from the smallest index array only; a skipped neighbor may now
+        # select another in-bounds element of the merged axis, which is allowed
+        indices.sort(key=lambda index: math.prod(index.shape))
+        indices[0] = xp.astype(indices[0], xp.int64)
+        buffer = xp.reshape(buffer, (*buffer.shape[:lo], stride, *buffer.shape[hi:]))
+    if offset != 0:
+        indices[0] = indices[0] - offset
+    flat_index = functools.reduce(operator.add, indices)
+    new_buffer = ops.take(buffer, flat_index, axis=lo)
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
+
+
+def _lay_out(
+    array: core_defs.NDArrayObject,
+    dims: Sequence[common.Dimension],
+    domain: common.Domain,
+    target_dims: Sequence[common.Dimension],
+    xp: ModuleType,
+) -> core_defs.NDArrayObject:
+    """`array` over `dims` laid out over `target_dims` of `domain`, with size-1 axes for the others."""
+    order = sorted(range(len(dims)), key=lambda i: target_dims.index(dims[i]))
+    if order != list(range(len(dims))):
+        array = xp.permute_dims(array, tuple(order))
+    shape = tuple(len(domain[d].unit_range) if d in dims else 1 for d in target_dims)
+    return xp.reshape(array, shape)
 
 
 def _aligned_connectivity_table(
@@ -679,20 +733,7 @@ def _aligned_connectivity_table(
     """
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
-    xp = ops.xp
-    arr = ops.asarray(conn.ndarray)
-    # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
-    ndim = conn.domain.ndim
-    fresh_axis = {
-        dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
-    }
-    transposed_axes = tuple(
-        fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
-        for dim in domain.dims
-    )
-    if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
-        arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
-    return xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
+    return _lay_out(ops.asarray(conn.ndarray), conn.domain.dims, domain, domain.dims, ops.xp)
 
 
 def _identity_index_array(

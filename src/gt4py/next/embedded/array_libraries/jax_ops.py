@@ -126,11 +126,10 @@ class JaxOps(array_ops.ArrayOps):
         self.check_assignable(value)
         return array.at[key].set(value)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
-    def gather(
-        self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
     ) -> core_defs.NDArrayObject:
-        # an index from a table without values may be out of range: it is clamped, at both ends
-        return array.at[indices].get(mode="clip", wrap_negative_indices=False)  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
+        return jnp.take(array, indices, axis=axis, mode="clip")
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)

@@ -198,6 +198,23 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
+    def take(
+        self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
+    ) -> core_defs.NDArrayObject:
+        """
+        `array` gathered along `axis` at the integer array `indices`.
+
+        The result has shape `array.shape[:axis] + indices.shape + array.shape[axis + 1:]`.
+        For an `array` of at least one dimension and a non-empty `axis`, out-of-range entries of
+        `indices` (skipped neighbors) select an unspecified element of the axis; they never raise
+        and never read out of bounds.
+        """
+        xp = self.xp
+        axis %= array.ndim
+        flat = xp.clip(xp.reshape(indices, (-1,)), 0, array.shape[axis] - 1)
+        out_shape = (*array.shape[:axis], *indices.shape, *array.shape[axis + 1 :])
+        return xp.reshape(xp.take(array, flat, axis=axis), out_shape)
+
     def check_assignable(self, value: Any) -> None:
         """Raise `TypeError` unless `value` is a scalar or an array of this namespace."""
         if isinstance(value, bool | int | float | np.generic):
@@ -211,12 +228,6 @@ class ArrayOps:
                 f"Cannot assign an object of type '{type(value).__module__}.{type(value).__name__}'"
                 f" to an array of '{self.xp.__name__}'."
             )
-
-    def gather(
-        self, array: core_defs.NDArrayObject, indices: tuple[core_defs.NDArrayObject, ...]
-    ) -> core_defs.NDArrayObject:
-        """Return `array[indices]` for one integer index array per axis, broadcast against each other."""
-        return array[indices]
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
