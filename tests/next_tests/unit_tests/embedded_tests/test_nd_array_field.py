@@ -943,6 +943,110 @@ def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
     return field, conn, data
 
 
+@pytest.mark.parametrize("start", [0, 3, -2])
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "neighbor_leading",
+        "neighbor_trailing",
+        "neighbor_middle",
+        "one_dim",
+        "same_dim",
+        "permutation",
+    ],
+)
+def test_gather_premap_single_axis(nd_array_implementation, layout, start):
+    NV, NK, NX, NE = 6, 3, 2, 5
+    rng = np.random.default_rng(0)
+    v_range = UnitRange(start, start + NV)
+    k, x = (_GK, UnitRange(0, NK)), (_GX, UnitRange(0, NX))
+    if layout == "same_dim":
+        conn_dims = [(_GV, v_range), (_GV2V, UnitRange(0, 3))]
+    elif layout == "permutation":
+        conn_dims = [(_GV, v_range)]
+    else:
+        conn_dims = [(_GE, UnitRange(0, NE)), (_GE2V, UnitRange(0, 2))]
+    field_dims = {
+        "neighbor_leading": [(_GV, v_range), k],
+        "neighbor_trailing": [k, (_GV, v_range)],
+        "neighbor_middle": [x, (_GV, v_range), k],
+        "one_dim": [(_GV, v_range)],
+        "same_dim": [(_GV, v_range), k],
+        "permutation": [(_GV, v_range), k],
+    }[layout]
+    table_shape = tuple(len(r) for _, r in conn_dims)
+    table = (
+        start + rng.permutation(NV)
+        if layout == "permutation"
+        else rng.integers(start, start + NV, size=table_shape)
+    ).astype(np.int32)
+    field, conn, data = _gather_case(nd_array_implementation, field_dims, conn_dims, _GV, table)
+
+    result = field.premap(conn)
+
+    axis = [d for d, _ in field_dims].index(_GV)
+    expected_dims = (
+        *(d for d, _ in field_dims[:axis]),
+        *(d for d, _ in conn_dims),
+        *(d for d, _ in field_dims[axis + 1 :]),
+    )
+    expected_ranges = (
+        *(r for _, r in field_dims[:axis]),
+        *(r for _, r in conn_dims),
+        *(r for _, r in field_dims[axis + 1 :]),
+    )
+    assert result.domain == common.Domain(dims=expected_dims, ranges=expected_ranges)
+    assert np.array_equal(result.asnumpy(), np.take(data, table - start, axis=axis))
+
+
+# with 3 neighbors the (GV, GV2V) block is square, so a transposed result has the right shape
+@pytest.mark.parametrize("n_neighbors", [3, 4])
+def test_gather_premap_codomain_in_non_leading_connectivity_position(
+    nd_array_implementation, n_neighbors
+):
+    # the output keeps the field's dimension order (GV, GV2V, GK), not the connectivity's (GV2V, GV)
+    rng = np.random.default_rng(7)
+    table = rng.integers(0, 3, size=(n_neighbors, 5)).astype(np.int32)  # (GV2V, GV) -> GV
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
+        [(_GV2V, UnitRange(5, 5 + n_neighbors)), (_GV, UnitRange(0, 5))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GV, _GV2V, _GK),
+        ranges=(UnitRange(0, 3), UnitRange(5, 5 + n_neighbors), UnitRange(0, 2)),
+    )
+    expected = np.empty((3, n_neighbors, 2))
+    for v in range(3):
+        for n in range(n_neighbors):
+            expected[v, n, :] = data[table[n, v], :]
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+def test_gather_premap_single_axis_narrowed(nd_array_implementation):
+    # the last edge maps entirely outside the field, so the output loses it
+    table = np.asarray([[0, 1], [2, 3], [4, 5], [7, 8]], dtype=np.int32)
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 6)), (_GK, UnitRange(0, 2))],
+        [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GE, _GE2V, _GK), ranges=(UnitRange(0, 3), UnitRange(0, 2), UnitRange(0, 2))
+    )
+    assert np.array_equal(result.asnumpy(), np.take(data, table[:3], axis=0))
+
+
 # with start -3 the neighbor 2 becomes the valid index -1, so the skip value must lie outside the
 # codomain range there
 @pytest.mark.parametrize("start, skip_value", [(0, -1), (5, -1), (8, -1), (-3, -100)])
@@ -979,6 +1083,165 @@ def test_gather_premap_skip_values_on_offset_domain(
     if with_second_connectivity:
         expected = expected[..., k_table]
     assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
+
+
+def _gather_reference(data, field_domain, connectivities, out_domain):
+    """Loop-based simultaneous gather and the mask of output positions without a skipped neighbor."""
+    by_codomain = {
+        codomain: (table, domain, skip) for table, domain, codomain, skip in connectivities
+    }
+    out = np.zeros(out_domain.shape)
+    valid = np.ones(out_domain.shape, dtype=bool)
+    for idx in np.ndindex(*out_domain.shape):
+        coord = {nr.dim: nr.unit_range.start + i for nr, i in zip(out_domain, idx)}
+        field_idx = []
+        for nr in field_domain:
+            if nr.dim in by_codomain:
+                table, domain, skip = by_codomain[nr.dim]
+                value = int(
+                    table[tuple(coord[d] - domain[d].unit_range.start for d in domain.dims)]
+                )
+                if value == skip:
+                    valid[idx] = False
+                    break
+            else:
+                value = coord[nr.dim]
+            field_idx.append(value - nr.unit_range.start)
+        else:
+            out[idx] = data[tuple(field_idx)]
+    return out, valid
+
+
+def _table(rng, domain, codomain_range, skip_value=None):
+    table = rng.integers(codomain_range.start, codomain_range.stop, size=domain.shape)
+    if skip_value is not None:
+        table[rng.random(domain.shape) < 0.25] = skip_value
+    return table.astype(np.int32)
+
+
+def _multi_gather_case(name, rng):
+    v, k = (_GV, UnitRange(3, 9)), (_GK, UnitRange(2, 6))
+    e, e2v, x = (_GE, UnitRange(0, 5)), (_GE2V, UnitRange(0, 2)), (_GX, UnitRange(0, 7))
+    if name == "as_offset":  # (GE, GK) -> GK on a (GE, GK) field
+        field_dims, conns, out_dims = [e, k], [([e, k], _GK, -1)], [e, k]
+    elif name == "neighbor_and_level":  # (GE, GE2V) -> GV and (GE, GE2V, GK) -> GK on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k], _GK, None)]
+        out_dims = [e, e2v, k]
+    elif name == "per_level_neighbor":  # (GE, GK) -> GV on a (GV, GK) field
+        field_dims, conns, out_dims = [v, k], [([e, k], _GV, -1)], [e, k]
+    elif name == "as_offset_narrowed":  # GE and GK narrowed by the table, negative GE start
+        field_dims = [(_GE, UnitRange(-2, 3)), k]
+        conn_dims = [(_GE, UnitRange(-1, 2)), (_GK, UnitRange(3, 5))]
+        conns, out_dims = [(conn_dims, _GK, -1)], conn_dims
+    elif name == "neighbor_and_level_narrowed":  # the level table narrows GK
+        field_dims = [v, k]
+        k_narrowed = (_GK, UnitRange(3, 5))
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k_narrowed], _GK, None)]
+        out_dims = [e, e2v, k_narrowed]
+    elif name == "per_level_neighbor_narrowed":  # the table narrows GK, negative GK starts
+        field_dims = [v, (_GK, UnitRange(-3, 2))]
+        k_narrowed = (_GK, UnitRange(-2, 1))
+        conns, out_dims = [([e, k_narrowed], _GV, -1)], [e, k_narrowed]
+    elif name == "disjoint":  # (GE, GE2V) -> GV and a (GK,) -> GK permutation on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([k], _GK, "permutation")]
+        out_dims = [e, e2v, k]
+    else:
+        assert name == "diagonal"  # (GX,) -> GV and (GX,) -> GE on (GV, GE): out[x] = f[a[x], b[x]]
+        field_dims = [v, (_GE, UnitRange(-2, 3))]
+        conns = [([x], _GV, None), ([x], _GE, None)]
+        out_dims = [x]
+    field_domain = common.Domain(
+        dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
+    )
+    connectivities = []
+    for conn_dims, codomain, skip in conns:
+        domain = common.Domain(
+            dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
+        )
+        codomain_range = field_domain[codomain].unit_range
+        if skip == "permutation":
+            table = (codomain_range.start + rng.permutation(len(codomain_range))).astype(np.int32)
+            skip = None
+        else:
+            table = _table(rng, domain, codomain_range, skip)
+        connectivities.append((table, domain, codomain, skip))
+    out_domain = common.Domain(
+        dims=tuple(d for d, _ in out_dims), ranges=tuple(r for _, r in out_dims)
+    )
+    return field_domain, connectivities, out_domain
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "as_offset",
+        "as_offset_narrowed",
+        "neighbor_and_level",
+        "neighbor_and_level_narrowed",
+        "per_level_neighbor",
+        "per_level_neighbor_narrowed",
+        "disjoint",
+        "diagonal",
+    ],
+)
+def test_gather_premap_multiple_or_reading_connectivities(nd_array_implementation, name):
+    rng = np.random.default_rng(1)
+    field_domain, connectivities, out_domain = _multi_gather_case(name, rng)
+    data = rng.random(field_domain.shape)
+    field = common._field(asarray(nd_array_implementation, data), domain=field_domain)
+    conn_fields = [
+        common._connectivity(
+            asarray(nd_array_implementation, table),
+            domain=domain,
+            codomain=codomain,
+            skip_value=skip,
+        )
+        for table, domain, codomain, skip in connectivities
+    ]
+
+    result = field.premap(*conn_fields)
+
+    assert result.domain == out_domain
+    expected, valid = _gather_reference(data, field_domain, connectivities, out_domain)
+    assert valid.any()
+    assert np.array_equal(result.asnumpy()[valid], expected[valid])
+
+
+@pytest.mark.parametrize(
+    "conn_dims, codomains, expected_dims",
+    [
+        # two connectivities over disjoint ranges of the same new dimension
+        ([[(_GX, UnitRange(0, 3))], [(_GX, UnitRange(3, 6))]], [_GV, _GE], (_GX,)),
+        # a reshuffle over a range of the field dimension the field does not have
+        ([[(_GE, UnitRange(5, 7))]], [_GE], (_GV, _GE)),
+    ],
+    ids=["disjoint_new_dimension", "outside_field"],
+)
+def test_gather_premap_empty_output(nd_array_implementation, conn_dims, codomains, expected_dims):
+    field_domain = common.Domain(dims=(_GV, _GE), ranges=(UnitRange(3, 9), UnitRange(-2, 3)))
+    field = common._field(
+        asarray(nd_array_implementation, np.ones(field_domain.shape)), domain=field_domain
+    )
+    conns = [
+        common._connectivity(
+            asarray(  # every entry maps into the field, so only the domains are disjoint
+                nd_array_implementation,
+                np.full([len(r) for _, r in dims], field_domain[codomain].unit_range.start),
+                dtype=np.int32,
+            ),
+            domain=common.Domain(dims=tuple(d for d, _ in dims), ranges=tuple(r for _, r in dims)),
+            codomain=codomain,
+        )
+        for dims, codomain in zip(conn_dims, codomains)
+    ]
+
+    result = field.premap(*conns)
+
+    assert result.domain.dims == expected_dims
+    assert result.domain.is_empty()
+    assert result.asnumpy().shape == result.domain.shape
 
 
 @pytest.mark.parametrize(
