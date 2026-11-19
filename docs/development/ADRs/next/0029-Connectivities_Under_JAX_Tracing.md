@@ -48,11 +48,11 @@ A connectivity passed to `jit` can also be used by the branches of `lax.cond`, t
 
 ### Under `torch.compile`
 
-The same static values give torch connectivities the same narrowing under `torch.compile`, and everything that knows about it is in `torch_ops.py`. Dynamo does not trace the embedded code itself: an embedded program or field operator called in a compiled region is one `torch.compiler.nonstrict_trace` call, so a call with `fullgraph=True` is one graph without breaks. Inside it the embedded code runs on fake tensors; a backend that only runs the Dynamo graph, without AOT tracing, runs it eagerly on the concrete tensors instead.
+Torch connectivities get the same narrowing under `torch.compile`, and everything that knows about it is in `torch_ops.py`. An embedded program or field operator called in a compiled region is one `torch.compiler.nonstrict_trace` call: Dynamo does not trace the embedded code, so a call with `fullgraph=True` is one graph without breaks, and the embedded code runs on fake tensors.
 
-Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context: the domain is in it as plain tuples, and so is the `domain` argument of a field operator call. The concrete table of a connectivity cannot be read from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor an identity object of its table, registered with `torch.utils._pytree.register_constant`. Dynamo guards it by equality, which compares the memory of the table as the aux data does for jax. Unflattening gives a fake child the identity's table as NumPy static values, read on first use. `as_offset` in the trace gives `None`, as for jax.
+Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples, as is the `domain` argument of a field operator call. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor an identity of its table, a `torch.utils._pytree.register_constant` object that compares the memory of the table, as the aux data does for jax. Dynamo guards it by equality. Unflattening gives a fake child the identity's table as NumPy static values, read on first use. A table computed by `as_offset` in the trace has none, as for jax.
 
-Every tensor a compiled region reads reaches the call as an argument, so a connectivity closed over by the region, e.g. in an offset provider built outside it, is supported. A connectivity that did not get an identity, because `restrict`, `dataclasses.replace`, `copy` or `NdArrayConnectivityField.from_array` created it, raises a `TypeError` when it is flattened in the region.
+Every tensor a compiled region reads reaches the call as an argument, so a connectivity closed over by the region, e.g. in an offset provider built outside it, is supported. A connectivity without an identity, built by `restrict`, `dataclasses.replace` or `NdArrayConnectivityField.from_array`, raises a `TypeError` when it is flattened in the region.
 
 ## Consequences
 
@@ -65,7 +65,7 @@ Every tensor a compiled region reads reaches the call as an argument, so a conne
 - `restrict` builds a new connectivity on every call. It shares the cached domain lookups of the connectivity it was restricted from.
 - On a GPU, every flatten of a concrete connectivity (`jit`, `device_put`, `tree_map`) reads a host copy of the table, which jax keeps as long as the array, and the jit cache keeps alive. The aux data's identity relies on jax keeping that copy, which is not public API. Eagerly, domain inference runs on the table itself.
 - Domain inference is cached on the connectivity object. A connectivity rebuilt in a trace is new in every trace, so its domain inference is repeated per trace but not per call.
-- Under `torch.compile` a compiled graph is specific to the buffers of its connectivities, as under `jit`. A connectivity restricted eagerly is not supported; JAX supports it.
+- Under `torch.compile` a compiled graph is specific to the buffers of its connectivities, as under `jit`. Unlike under `jit`, a connectivity restricted eagerly is not supported.
 - The identity of a torch connectivity holds its tensor, so a cached graph keeps every table it has seen alive, until `torch._dynamo.reset()`. On a GPU the first trace of a connectivity reads a host copy of its table, which the identity keeps.
 
 Open questions, all caused by the static values in the aux data:
