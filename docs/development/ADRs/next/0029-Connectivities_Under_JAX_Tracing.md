@@ -22,12 +22,12 @@ In the context of running embedded `premap` under `jax.jit`, facing a neighbor t
 
 There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. As for every embedded field, the connectivity does the domain operations, and `ArrayOps` only works on plain arrays. Domain inference reads the table's *static values*: an array with the table's values that can be computed on now, possibly of another library. By default they are the buffer itself. The box of entries that map into an image range is computed on them by one plain function for all libraries. The gather is `ArrayOps.take`, and everything that knows about tracing is in `jax_ops.py`.
 
-Under a trace, a connectivity is supported in two cases, and its creator gives it its static values through a keyword-only init-only constructor argument:
+Under a trace, a connectivity is supported in two cases, and its creator sets its static values on the new connectivity:
 
 - A connectivity passed to `jit` is rebuilt by the pytree unflatten around a tracer, which gets a read-only NumPy view of the concrete table from the aux data.
-- A connectivity that `as_offset` computes from traced offsets gets `None`: its values exist only at run time, so the connectivity assumes that every target lies in range.
+- A connectivity that `as_offset` computes from traced offsets gets none: its values exist only at run time, so the connectivity assumes that every target lies in range.
 
-The static values are not a dataclass field, so no copy inherits them: a connectivity that got another table, for example through `dataclasses.replace` or `copy`, takes its static values from the new table. `restrict` restricts static values that are not the buffer itself along with the buffer, so a restriction inside a trace keeps them.
+The static values are not a dataclass field but an attribute that only these creators set, so no copy inherits them: a connectivity that got another table, for example through `dataclasses.replace` or `copy`, takes its static values from the new table. `restrict` restricts static values that are not the buffer itself along with the buffer, so a restriction inside a trace keeps them.
 
 A concrete connectivity closed over by a trace is not supported, nor is any other connectivity built from a tracer, for example by `dataclasses.replace` or `copy` of a traced one. It either raises, usually jax's `ConcretizationTypeError` when domain inference computes on the traced buffer, or works, for example from domain lookups cached by an eager use; it does not compute a wrong result. Flattening keeps such a connectivity unsupported, so that it raises behind a pytree boundary as well.
 
@@ -85,7 +85,7 @@ A hook `ArrayOps.static_values` would give the static values of any buffer: for 
 
 ### Static values in a side table keyed by the connectivity
 
-A weak map from connectivity to static values in `jax_ops.py` needs no constructor argument, but `restrict` would need a hook to hand the restricted values back, and `ArrayOps` would have to take connectivities.
+A weak map from connectivity to static values in `jax_ops.py` needs no attribute on the connectivity, but `restrict` would need a hook to hand the restricted values back, and `ArrayOps` would have to take connectivities.
 
 ### Static values found by the table
 

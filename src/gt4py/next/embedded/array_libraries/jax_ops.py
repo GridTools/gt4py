@@ -23,7 +23,6 @@ A concrete table closed over by a trace is not supported.
 
 from __future__ import annotations
 
-import dataclasses
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -87,7 +86,7 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArr
     assert isinstance(connectivity, nd_array_field.NdArrayConnectivityField)
     if isinstance(connectivity.ndarray, jax.core.Tracer):
         # computed in the trace: its values exist only at run time
-        return dataclasses.replace(connectivity, static_values=None)
+        return connectivity._with_static_values(nd_array_field._StaticValuesKind.NO_STATIC_VALUES)
     return connectivity
 
 
@@ -183,8 +182,7 @@ class _ConnectivityAuxData(NamedTuple):
     domain: common.Domain
     codomain: common.Dimension
     skip_value: Optional[core_defs.IntegralScalar]
-    #: `None` if the values exist only at run time
-    values: Optional[_TableIdentity] | nd_array_field._FromBuffer
+    values: _TableIdentity | nd_array_field._StaticValuesKind
 
 
 def _flatten_connectivity(
@@ -198,19 +196,17 @@ def _flatten_connectivity(
             f"Only connectivities of JAX arrays are JAX pytrees, got a table of '{type(ndarray)}'."
         )
     values = connectivity._static_values
-    identity: Optional[_TableIdentity] | nd_array_field._FromBuffer
-    if values is None:
-        identity = None
-    elif values is not ndarray:
+    identity: _TableIdentity | nd_array_field._StaticValuesKind
+    if values is nd_array_field._StaticValuesKind.FROM_BUFFER and _has_values(ndarray):
+        # NumPy, so that a restriction inside the trace is not staged
+        identity = _TableIdentity(_read_only_view(ndarray))
+    elif isinstance(values, nd_array_field._StaticValuesKind):
+        # of a tracer, `FROM_BUFFER` keeps an unsupported connectivity unsupported
+        identity = values
+    else:
         # given by the unflattening, or restricted from such values
         assert isinstance(values, np.ndarray)
         identity = _TableIdentity(values)
-    elif _has_values(ndarray):
-        # NumPy, so that a restriction inside the trace is not staged
-        identity = _TableIdentity(_read_only_view(ndarray))
-    else:
-        # a tracer whose values are its own, i.e. not supported: unflattening keeps it that way
-        identity = nd_array_field._FromBuffer.TOKEN
     return (ndarray,), _ConnectivityAuxData(
         connectivity.domain, connectivity.codomain, connectivity.skip_value, identity
     )
@@ -225,28 +221,22 @@ def _unflatten_connectivity(
     # placeholders jax rebuilds the branches of `lax.cond` and the carry of `lax.scan` around.
     # Under `vmap` the child is one element of the flattened table, whose values the aux data
     # does not have.
-    static_values: Any
+    connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
+        aux_data.domain, ndarray, aux_data.codomain, aux_data.skip_value
+    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
     if (
-        identity is nd_array_field._FromBuffer.TOKEN
+        identity is nd_array_field._StaticValuesKind.FROM_BUFFER
         or _has_values(ndarray)
         or array_api_compat.is_numpy_array(ndarray)
         or array_api_compat.is_cupy_array(ndarray)
     ):
-        static_values = nd_array_field._FromBuffer.TOKEN
-    elif (
-        identity is None
+        return connectivity
+    if (
+        identity is nd_array_field._StaticValuesKind.NO_STATIC_VALUES
         or getattr(ndarray, "shape", identity.values.shape) != identity.values.shape
     ):
-        static_values = None
-    else:
-        static_values = identity.values
-    return nd_array_field.NdArrayConnectivityField(
-        aux_data.domain,
-        ndarray,
-        aux_data.codomain,
-        aux_data.skip_value,
-        static_values=static_values,
-    )  # type: ignore[abstract, unused-ignore] # see '_unflatten_field'
+        return connectivity._with_static_values(nd_array_field._StaticValuesKind.NO_STATIC_VALUES)
+    return connectivity._with_static_values(identity.values)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
 
 # jax registers pytree nodes by exact type, so the connectivity needs its own registration
