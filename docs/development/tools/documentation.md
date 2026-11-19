@@ -12,7 +12,7 @@ The site is made of three **independent Sphinx projects**, each one with its own
 | `gt4py.cartesian` | [`docs/user/cartesian/`](../../user/cartesian) | `/cartesian/` | reStructuredText              |
 | `gt4py.next`      | [`docs/user/next/`](../../user/next)           | `/next/`      | MyST Markdown, MyST notebooks |
 
-Keeping them as separate projects means that each subsite has its own navigation, search and API reference, and can be browsed without the other one. The welcome page only introduces the project and links to both subsites.
+Keeping them as separate projects means that each subsite has its own navigation and search, and can be browsed without the other one. The welcome page only introduces the project and links to both subsites.
 
 What the three projects share lives directly in `docs/user/`:
 
@@ -62,12 +62,11 @@ Prefer executable pages for anything showing GT4Py code.
 
 - Grids, cards and tabs are available through [`sphinx-design`](https://sphinx-design.readthedocs.io).
 
-## API references
+## API reference
 
-- `gt4py.cartesian`: generated for all modules with `sphinx-apidoc` at build time into `docs/user/cartesian/_source/` (not tracked by git). It covers every subpackage except `gt4py.next` and `gt4py.eve`.
-- `gt4py.next`: a **curated** page, [`docs/user/next/apiref.md`](../../user/next/apiref.md), which documents only the public API, that is, the names exported in `gt4py.next.__all__`. When a new name is exported there, add it to this page.
+Only the `gt4py.cartesian` subsite has an API reference. It is generated for all modules with `sphinx-apidoc` at build time into `docs/user/cartesian/_source/` (not tracked by git), and it covers every subpackage except `gt4py.next` and `gt4py.eve`. Docstrings are written in Google style (see the [coding guidelines](../../../CODING_GUIDELINES.md)) and rendered with `sphinx.ext.napoleon`.
 
-Docstrings are written in Google style (see the [coding guidelines](../../../CODING_GUIDELINES.md)) and rendered with `sphinx.ext.napoleon`.
+The `gt4py.next` subsite does not include an API reference generated from docstrings.
 
 ## Publication
 

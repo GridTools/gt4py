@@ -17,11 +17,3 @@ maxdepth: 2
 ---
 QuickstartGuide
 ```
-
-```{toctree}
----
-caption: Reference
-maxdepth: 1
----
-apiref
-```

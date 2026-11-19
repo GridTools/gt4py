@@ -33,9 +33,6 @@ release = gt4py.__version__
 # 'myst_nb' already loads and configures 'myst_parser'
 extensions = [
     "myst_nb",
-    "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
-    "sphinx.ext.viewcode",
     "sphinx_design",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
@@ -59,9 +56,6 @@ myst_heading_anchors = 4
 nb_execution_mode = "force"
 nb_execution_raise_on_error = True
 nb_execution_timeout = 600  # seconds per cell: some cells compile generated C++ code
-
-autodoc_default_options = {"undoc-members": True}
-napoleon_numpy_docstring = False
 
 intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),

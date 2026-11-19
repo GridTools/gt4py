@@ -159,7 +159,7 @@ def docs(session: nox.Session) -> None:
         shutil.rmtree(html_dir)
 
     # API reference of the `cartesian` subsite: all subpackages except `next` and `eve`
-    # (the `next` subsite has a curated reference of its public API instead)
+    # (the `next` subsite has no API reference)
     src_dir = REPO_ROOT / "src" / "gt4py"
     apidoc_dir = docs_dir / "cartesian" / "_source"
     for generated in apidoc_dir.glob("*.rst"):
