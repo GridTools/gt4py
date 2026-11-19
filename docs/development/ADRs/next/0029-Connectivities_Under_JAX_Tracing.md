@@ -20,7 +20,7 @@ In the context of running embedded `premap` under `jax.jit`, facing a neighbor t
 
 ## Decision
 
-There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. As for every embedded field, the connectivity does the domain operations, and `ArrayOps` only works on plain arrays. Domain inference reads the table's *static values*: an array with the table's values that can be computed on now, possibly of another library. By default they are the buffer itself. The box of entries that map into an image range is computed on them by one plain function for all libraries. The gather is `ArrayOps.gather`, which `JaxOps` overrides, and everything that knows about tracing is in `jax_ops.py`.
+There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. As for every embedded field, the connectivity does the domain operations, and `ArrayOps` only works on plain arrays. Domain inference reads the table's *static values*: an array with the table's values that can be computed on now, possibly of another library. By default they are the buffer itself. The box of entries that map into an image range is computed on them by one plain function for all libraries. The gather is `ArrayOps.take`, and everything that knows about tracing is in `jax_ops.py`.
 
 Under a trace, a connectivity is supported in two cases, and its creator gives it its static values through a keyword-only init-only constructor argument:
 
@@ -29,7 +29,7 @@ Under a trace, a connectivity is supported in two cases, and its creator gives i
 
 The static values are not a dataclass field, so no copy inherits them: a connectivity that got another table, for example through `dataclasses.replace` or `copy`, takes its static values from the new table. `restrict` restricts static values that are not the buffer itself along with the buffer, so a restriction inside a trace keeps them.
 
-A concrete connectivity closed over by a trace is not supported, nor is any other connectivity built from a tracer. Domain inference then computes on the traced buffer, and jax raises a `ConcretizationTypeError`.
+A concrete connectivity closed over by a trace is not supported, nor is any other connectivity built from a tracer, for example by `dataclasses.replace` or `copy` of a traced one. It either raises, usually jax's `ConcretizationTypeError` when domain inference computes on the traced buffer, or works, for example from domain lookups cached by an eager use; it does not compute a wrong result. Flattening keeps such a connectivity unsupported, so that it raises behind a pytree boundary as well.
 
 The connectivity is a pytree node with the table as its child. The aux data holds domain, codomain, skip value and, if the table is concrete or a tracer with static values, the static values as a read-only NumPy array. They are compared by their memory, because NumPy returns a new view of a jax array on every call: two connectivities have the same aux data only if their static values are the same memory, which holds for every wrapper of one buffer and for its restrictions inside a trace with the same slice. Unflattening gives a child that is not a concrete array the static values from the aux data if it has their shape, and `None` otherwise, as under `vmap`, where the child is one element of the flattened table.
 
@@ -38,7 +38,7 @@ Nothing that belongs to a trace may be kept beyond it, so a connectivity caches 
 How a `premap` behaves under `jit` in the two supported cases:
 
 - **Passed as a jit argument** (`jax.jit(lambda f, c: f.premap(c))(field, conn)`). The table is a tracer with static values. Domain inference and `restrict` read the static values, and the gather takes the table as a runtime argument. A neighbor reduction takes its table from the offset provider, so the provider has to be built from the traced connectivity inside the jitted function; a provider set outside is closed over.
-- **Computed by `as_offset`** in the trace, from a traced offset field or from a closed-over one, whose table the trace computes. No concrete values exist at trace time. Domain inference assumes every target lies inside the field, so the output domain is not narrowed. `JaxOps.gather` clamps every index to the field at both ends, so an out-of-range target reads the field's boundary value.
+- **Computed by `as_offset`** in the trace, from a traced offset field or from a closed-over one, whose table the trace computes. No concrete values exist at trace time. Domain inference assumes every target lies inside the field, so the output domain is not narrowed. The gather clamps its indices, so an out-of-range target reads some element of the field.
 
 A tracer of any jax transformation counts as traced, not only one of `jit`. In particular a table that depends on a `vmap`ped value has no values even when `vmap` is called eagerly, because it differs per batch element.
 
@@ -58,13 +58,13 @@ A traced connectivity can also be closed over by the branches of `lax.cond`, the
 - Domains under `jit` match eager execution when the connectivity is a `jit` argument.
 - A compiled program is specific to the buffers of its connectivities: another buffer, even with equal values, retraces, and an ahead-of-time compiled program rejects it. A connectivity restricted eagerly has a new buffer.
 - The tables must not change after they are used. A jax array that shares its memory with a NumPy array, as `jax.device_put` can on a CPU, must not be refilled through that array: the aux data would take the new table for the old one.
-- A table computed by `as_offset` behaves differently from eager execution when a target is out of range. Eagerly, a uniform offset narrows the domain and a non-contiguous one raises. Under `jit` the domain stays as it is and those targets read the field's boundary value, without an error.
-- Every gather of a jax field uses `mode="clip", wrap_negative_indices=False`. That clamps both ends with no operation besides the gather, where jax's default indexing clamps past the end but emits a select to wrap negative indices. With a table that has values the clamp never acts.
-- Skip entries read the field's first element, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of a first element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
+- A table computed by `as_offset` behaves differently from eager execution when a target is out of range. Eagerly, a uniform offset narrows the domain and a non-contiguous one raises. Under `jit` the domain stays as it is and those targets read some element of the field, without an error.
+- The gather of a jax field is `jnp.take` with `mode="clip"`, which clamps both ends with no operation besides the gather.
+- Skip entries read some element of the field, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of an element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
 - `restrict` builds a new connectivity on every call. It shares the cached domain lookups of the connectivity it was restricted from.
-- A traced connectivity that is copied, or rebuilt with `dataclasses.replace`, loses its static values and raises like one closed over.
-- The static values in the aux data are NumPy, so on a GPU a `jit` argument is copied to the host once per table; jax keeps that copy as long as the array, and the jit cache keeps it alive. Eagerly, domain inference runs on the table itself.
+- A traced connectivity that is copied, or rebuilt with `dataclasses.replace`, loses its static values and is not supported, like one closed over.
+- The static values in the aux data are NumPy, so on a GPU every flatten of a concrete connectivity, as a `jit` argument, by `device_put` or by `tree_map`, reads a host copy of the table. jax makes that copy once per array and keeps it as long as the array; the jit cache keeps it alive. Eagerly, domain inference runs on the table itself. On a GPU the aux identity relies on jax keeping that copy, which is not public API.
 - Domain inference is cached on the connectivity object. A connectivity rebuilt in a trace is new in every trace, so its domain inference is repeated per trace but not per call.
 
 Open questions, all caused by the static values in the aux data:
