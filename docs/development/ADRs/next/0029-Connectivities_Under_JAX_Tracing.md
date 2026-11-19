@@ -74,7 +74,6 @@ Every tensor a compiled region reads reaches the call as an argument, so a conne
 - A traced connectivity that is copied, or rebuilt with `dataclasses.replace`, loses its static values and is not supported, like one closed over.
 - The static values in the aux data are NumPy, so on a GPU every flatten of a concrete connectivity, as a `jit` argument, by `device_put` or by `tree_map`, reads a host copy of the table. jax makes that copy once per array and keeps it as long as the array; the jit cache keeps it alive. Eagerly, domain inference runs on the table itself. On a GPU the aux identity relies on jax keeping that copy, which is not public API.
 - Domain inference is cached on the connectivity object. A connectivity rebuilt in a trace is new in every trace, so its domain inference is repeated per trace but not per call.
-
 - Under `torch.compile` a compiled graph is specific to the buffers of its connectivities, as under `jit`. A connectivity restricted eagerly is not supported; JAX supports it.
 - The identity of a torch connectivity holds its tensor, so a cached graph keeps every table it has seen alive, until `torch._dynamo.reset()`. On a GPU the first trace of a connectivity reads a host copy of its table, which the identity keeps.
 
