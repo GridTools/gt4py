@@ -50,7 +50,7 @@ New pages should be written in [MyST Markdown](https://myst-parser.readthedocs.i
 
 ### Executable pages (MyST notebooks)
 
-In the `next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date. `QuickstartGuide.md` is an example.
+In the `next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date. `quickstart.md` is an example.
 
 Markdown files without that header are rendered as they are, without running their code blocks.
 

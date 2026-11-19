@@ -9,7 +9,7 @@
 """Sphinx configuration of the `gt4py.next` documentation subsite.
 
 Pages are MyST Markdown files. The ones with a `jupytext` header declaring the
-`myst` format (like `QuickstartGuide.md`) are notebooks which get executed at
+`myst` format (like `quickstart.md`) are notebooks which get executed at
 build time, so their outputs are always up to date. Any other Markdown page is
 rendered as is, without executing its code blocks.
 """
@@ -42,6 +42,7 @@ exclude_patterns = [
     "_build",
     # Paired notebooks generated from the '.md' sources (e.g. by 'nox -s test_examples')
     "*.ipynb",
+    "**/*.ipynb",
     ".ipynb_checkpoints",
     "**/.ipynb_checkpoints",
     # Advanced guides and workshop material are not part of the site (yet)

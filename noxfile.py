@@ -261,13 +261,21 @@ def test_examples(session: nox.Session) -> None:
 
     install_session_venv(session, extras=["testing"], groups=["docs", "test"])
 
-    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
+    # Pages of the `next` documentation site which are executable notebooks
+    next_docs_dir = pathlib.Path("docs") / "user" / "next"
+    next_docs_pages = sorted(
+        str(page)
+        for folder in (".", "dsl", "python", "examples")
+        for page in (next_docs_dir / folder).glob("*.md")
+        if "format_name: myst" in page.read_text()
+    )
+    session.run("jupytext", *next_docs_pages, "--to", ".ipynb")
     session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
         ("docs/user/next/workshop/exercises", ["-k", "solution"]),
-        ("docs/user/next/QuickstartGuide.ipynb", None),
+        (" ".join(page.removesuffix(".md") + ".ipynb" for page in next_docs_pages), None),
         ("docs/user/next/advanced", None),
         ("examples", (None)),
     ]:
