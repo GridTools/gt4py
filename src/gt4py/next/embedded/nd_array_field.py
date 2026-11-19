@@ -456,48 +456,6 @@ def _broadcast_axes_slice(
     )
 
 
-def _inverse_image_box(
-    ndarray: core_defs.NDArrayObject,
-    image_range: common.UnitRange,
-    xp: ModuleType,
-    skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[tuple[slice, ...]]:
-    """
-    Return the slices of the smallest box of `ndarray` containing all entries within `image_range`, or `None` if that box contains other entries.
-
-    If `skip_value` is given, entries equal to it are ignored. A bigger box could be
-    constructed by adding lines that contain only `skip_value`s.
-
-    Example:
-        ndarray =  0  1 -1
-                   3  4 -1
-                  -1 -1 -1
-        skip_value = -1
-
-        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
-
-    """
-    select_mask = (ndarray >= image_range.start) & (ndarray < image_range.stop)
-
-    if not xp.any(select_mask):
-        return None
-
-    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
-
-    slices = tuple(
-        slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
-        for dim_nnz_indices in nnz
-    )
-    hcube = select_mask[tuple(slices)]
-    if skip_value is not None:
-        ignore_mask = ndarray == skip_value
-        hcube = hcube | ignore_mask[tuple(slices)]
-    if not xp.all(hcube):
-        return None
-
-    return slices
-
-
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
     common.GatherConnectivity[common.DimsT, common.DimT],
@@ -742,6 +700,47 @@ def _identity_index_array(
     )
     shape = tuple(len(unit_range) if i == d_idx else 1 for i in range(len(domain)))
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
+
+
+def _inverse_image_box(
+    index_array: core_defs.NDArrayObject,
+    image_range: common.UnitRange,
+    xp: ModuleType,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Optional[tuple[slice, ...]]:
+    """
+    Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+
+    If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
+    A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+
+    Example:
+        index_array =  0  1 -1
+                       3  4 -1
+                      -1 -1 -1
+        skip_value = -1
+
+        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+    """
+    select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
+
+    if not xp.any(select_mask):
+        return None
+
+    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
+
+    slices = tuple(
+        slice(int(xp.min(dim_nnz_indices)), int(xp.max(dim_nnz_indices)) + 1)
+        for dim_nnz_indices in nnz
+    )
+    hcube = select_mask[tuple(slices)]
+    if skip_value is not None:
+        ignore_mask = index_array == skip_value
+        hcube = hcube | ignore_mask[tuple(slices)]
+    if not xp.all(hcube):
+        return None
+
+    return slices
 
 
 # -- Specialized implementations for builtin operations on array fields --
