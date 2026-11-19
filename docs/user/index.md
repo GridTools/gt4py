@@ -32,7 +32,7 @@ target hardware.
 ---
 link: next/index.html
 ---
-Getting started guide and reference of the public API.
+Getting started guide.
 ```
 
 ## GT4Py Cartesian
