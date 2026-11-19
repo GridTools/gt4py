@@ -17,7 +17,7 @@ import subprocess
 from typing import Final, Optional, TypeVar
 
 from gt4py._core import file_utils, locking
-from gt4py.next import config, errors, fingerprinting
+from gt4py.next import config, errors
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -61,10 +61,19 @@ class CompiledbFactory(
         header_name = f"{name}.{source.program_source.code_spec.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.code_spec.file_extension}"
 
+        # The device architecture is resolved by `CMakeFactory` at configure time; naming it
+        # here as well puts it into the name of the prototype.
+        cmake_flags = [*self.cmake_extra_flags]
+        if source.program_source.code_spec.source_language in (
+            artifacts.CUDACodeSpec.source_language,
+            artifacts.HIPCodeSpec.source_language,
+        ) and (device_arch_flag := cmake.get_cmake_device_arch_option()):
+            cmake_flags.append(device_arch_flag)
+
         cc_prototype_program_source = _cc_prototype_program_source(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
-            cmake_flags=self.cmake_extra_flags or [],
+            cmake_flags=cmake_flags,
             code_spec=source.program_source.code_spec,
         )
 
@@ -72,7 +81,7 @@ class CompiledbFactory(
             self.renew_compiledb,
             cc_prototype_program_source,
             build_type=self.cmake_build_type,
-            cmake_flags=self.cmake_extra_flags or [],
+            cmake_flags=cmake_flags,
             cache_lifetime=cache_lifetime,
         )
 
@@ -80,7 +89,7 @@ class CompiledbFactory(
             root_path=cache.get_cache_folder(
                 source,
                 cache_lifetime,
-                build_context_id=fingerprinting.strict_fingerprinter(self),
+                build_context_id=compiler.build_context_id(self, source),
             ),
             program_name=name,
             source_files={

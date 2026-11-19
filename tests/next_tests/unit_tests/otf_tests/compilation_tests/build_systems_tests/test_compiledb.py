@@ -6,14 +6,19 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
+import os
 import pathlib
 import shutil
 import tempfile
+from unittest import mock
 
 import pytest
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import config, fingerprinting
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf import artifacts
+from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
@@ -91,3 +96,54 @@ def test_compiledb_project_is_relocatable(extension_source_example, clean_compil
         assert hasattr(
             importer.import_from_path(relocated_dir / new_data.module), new_data.entry_point_name
         )
+
+
+def _with_code_spec(
+    source: artifacts.ExtensionSource, code_spec: artifacts.CPPLikeCodeSpec
+) -> artifacts.ExtensionSource:
+    return dataclasses.replace(
+        source, program_source=dataclasses.replace(source.program_source, code_spec=code_spec)
+    )
+
+
+def test_build_context_id_of_cpu_source_is_the_builder_fingerprint(extension_source_example):
+    factory = compiledb.CompiledbFactory()
+    with (
+        mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
+        mock.patch.dict(os.environ, {"CUDAARCHS": "90"}),
+    ):
+        assert compiler.build_context_id(
+            factory, extension_source_example
+        ) == fingerprinting.strict_fingerprinter(factory)
+
+
+def test_build_context_id_of_gpu_source_depends_on_device_arch(extension_source_example):
+    factory = compiledb.CompiledbFactory()
+    cuda_source = _with_code_spec(extension_source_example, artifacts.CUDACodeSpec())
+    with mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA):
+        with mock.patch.dict(os.environ, {"CUDAARCHS": "80"}):
+            id_80 = compiler.build_context_id(factory, cuda_source)
+        with mock.patch.dict(os.environ, {"CUDAARCHS": "90"}):
+            id_90 = compiler.build_context_id(factory, cuda_source)
+            assert compiler.build_context_id(factory, cuda_source) == id_90
+
+    assert id_80 != id_90
+
+
+def test_compiledb_prototype_name_depends_on_device_arch(extension_source_example):
+    factory = compiledb.CompiledbFactory()
+    cuda_source = _with_code_spec(extension_source_example, artifacts.CUDACodeSpec())
+    prototype_names = {}
+    with (
+        mock.patch("gt4py._core.definitions.CUPY_DEVICE_TYPE", core_defs.DeviceType.CUDA),
+        mock.patch.object(compiledb, "_cc_get_compiledb") as get_compiledb,
+    ):
+        for arch in ("80", "90"):
+            with mock.patch.dict(os.environ, {"CUDAARCHS": arch}):
+                project = factory(cuda_source, cache_lifetime=config.BuildCacheLifetime.SESSION)
+                context_id = compiler.build_context_id(factory, cuda_source)
+            prototype_names[arch] = get_compiledb.call_args.args[1].entry_point.name
+            assert project.root_path.name.endswith(context_id)
+
+    assert prototype_names["80"] != prototype_names["90"]
+    assert factory.cmake_extra_flags == []

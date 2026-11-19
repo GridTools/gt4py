@@ -10,12 +10,12 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-from typing import Protocol, TypeGuard, TypeVar
+from typing import Any, Protocol, TypeGuard, TypeVar
 
 from gt4py._core import definitions as core_defs, locking
 from gt4py.next import config, fingerprinting
 from gt4py.next.otf import artifacts, workflow
-from gt4py.next.otf.compilation import build_data, cache, importer
+from gt4py.next.otf.compilation import build_data, cache, common, importer
 
 
 def is_compiled(data: build_data.BuildData) -> bool:
@@ -35,6 +35,21 @@ def is_usable(
     without the artifact; such a build folder must be rebuilt, not reused.
     """
     return data is not None and is_compiled(data) and module_exists(data, src_dir)
+
+
+def build_context_id(builder_factory: Any, source: artifacts.ExtensionSource) -> str:
+    """Identify the context in which `builder_factory` builds `source`.
+
+    The context is the build system configuration and, for GPU sources, the device
+    architecture the code is compiled for. The compile step and the build system pass it
+    to `cache.get_cache_folder`, so both name the same folder.
+    """
+    if source.program_source.code_spec.source_language in (
+        artifacts.CUDACodeSpec.source_language,
+        artifacts.HIPCodeSpec.source_language,
+    ):
+        return fingerprinting.strict_fingerprinter((builder_factory, common.get_device_arch()))
+    return fingerprinting.strict_fingerprinter(builder_factory)
 
 
 CodeSpecT = TypeVar("CodeSpecT", bound=artifacts.SourceCodeSpec)
@@ -101,12 +116,10 @@ class CPPCompiler(
         self,
         inp: artifacts.ExtensionSource[CPPLikeCodeSpecT, artifacts.PythonCodeSpec],
     ) -> CPPCompilationArtifact:
-        build_context_id = (
-            fingerprinting.strict_fingerprinter(self.builder_factory)
-            if self.fingerprint_builder_factory
-            else ""
+        context_id = (
+            build_context_id(self.builder_factory, inp) if self.fingerprint_builder_factory else ""
         )
-        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, build_context_id)
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime, context_id)
 
         # If we are compiling the same program at the same time (e.g. multiple MPI ranks),
         # we need to make sure that only one of them accesses the same build directory for compilation.
