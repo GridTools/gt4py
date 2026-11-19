@@ -22,16 +22,16 @@ In the context of running embedded `premap` under `jax.jit`, facing a neighbor t
 
 There is one connectivity class, `NdArrayConnectivityField`, for all array libraries and for all cases below. As for every embedded field, the connectivity does the domain operations, and `ArrayOps` only works on plain arrays. Domain inference reads the table's *static values*: an array with the table's values that can be computed on now, possibly of another library. By default they are the buffer itself. The box of entries that map into an image range is computed on them by one plain function for all libraries. The gather is `ArrayOps.take`, and everything that knows about tracing is in `jax_ops.py`.
 
-Under a trace, a connectivity is supported in two cases, and its creator sets its static values in the private field `_static_values` (by default `StaticValues.IN_BUFFER`: the buffer holds them itself):
+The static values are the private field `_static_values`, which takes no part in equality, `repr` or fingerprinting. Its default, `StaticValues.IN_BUFFER`, takes them from the buffer, so a connectivity built from a table never carries the static values of another. Under a trace, two connectivities are supported, and their creators set the field:
 
-- A connectivity passed to `jit` is rebuilt by the pytree unflatten around a tracer, which gets a read-only NumPy view of the concrete table from the aux data.
+- A connectivity passed to `jit` is rebuilt by the pytree unflatten around a tracer. It gets a read-only NumPy view of the concrete table from the aux data.
 - A connectivity that `as_offset` computes from traced offsets gets `StaticValues.RUN_TIME_ONLY`: its values exist only at run time, so the connectivity assumes that every target lies in range.
 
-The field takes no part in equality, `repr` or fingerprinting. Its default derives the static values from the buffer, so a connectivity built from another table, for example with `common._connectivity` or `from_array`, never carries those of an earlier one. `restrict` restricts static values that are not the buffer itself along with the buffer, so a restriction inside a trace keeps them. Replacing `_ndarray` with `dataclasses.replace` without `_static_values` is a misuse of the interface: it would keep the static values of the old table.
+`restrict` restricts static values that are not the buffer itself along with the buffer. Replacing `_ndarray` with `dataclasses.replace` and keeping `_static_values` is a misuse of the interface.
 
-A concrete connectivity closed over by a trace is not supported, nor is any other connectivity built from a tracer, for example by `dataclasses.replace` or `copy` of a traced one. It either raises, usually jax's `ConcretizationTypeError` when domain inference computes on the traced buffer, or works, for example from domain lookups cached by an eager use; it does not compute a wrong result. Flattening keeps such a connectivity unsupported, so that it raises behind a pytree boundary as well.
+A concrete connectivity closed over by a trace is not supported, nor is a connectivity built from another tracer. It either raises, usually jax's `ConcretizationTypeError` from domain inference on the traced buffer, or works, for example from domain lookups cached by an eager use; it does not compute a wrong result. This also holds behind a pytree boundary, because flattening keeps such a connectivity unsupported.
 
-The connectivity is a pytree node with the table as its child. The aux data holds domain, codomain, skip value and, if the table is concrete or a tracer with static values, the static values as a read-only NumPy array. They are compared by their memory, because NumPy returns a new view of a jax array on every call: two connectivities have the same aux data only if their static values are the same memory, which holds for every wrapper of one buffer and for its restrictions inside a trace with the same slice. Unflattening gives a child that is not a concrete array the static values from the aux data if it has their shape, and `None` otherwise, as under `vmap`, where the child is one element of the flattened table.
+The connectivity is a pytree node with the table as its child. The aux data holds domain, codomain, skip value and the static values: a read-only NumPy array if the table is concrete or a tracer with static values. The arrays are compared by their memory, because NumPy returns a new view of a jax array on every call, so every wrapper of one buffer, and its restrictions with the same slice, have equal aux data. Unflattening gives a child that is not a concrete array the static values from the aux data if it has their shape, and `RUN_TIME_ONLY` otherwise, as under `vmap`, where the child is one element of the flattened table.
 
 Nothing that belongs to a trace may be kept beyond it, so a connectivity caches domains and slices, never tables or restricted connectivities.
 
@@ -62,8 +62,7 @@ A traced connectivity can also be closed over by the branches of `lax.cond`, the
 - Skip entries read some element of the field, and reductions mask the result afterwards. A gradient through an operator that is singular at that value is NaN (`0 * inf`), for example `sqrt` of an element that is zero. The gather cannot prevent this, because no replacement value is safe for every operator.
 - Connectivities reject item assignment, because their domain lookups are cached. Writing into the buffer through `.ndarray` is not detected and leaves those lookups stale, so it is not supported.
 - `restrict` builds a new connectivity on every call. It shares the cached domain lookups of the connectivity it was restricted from.
-- A copy of a connectivity keeps its static values, which belong to the same buffer.
-- The static values in the aux data are NumPy, so on a GPU every flatten of a concrete connectivity, as a `jit` argument, by `device_put` or by `tree_map`, reads a host copy of the table. jax makes that copy once per array and keeps it as long as the array; the jit cache keeps it alive. Eagerly, domain inference runs on the table itself. On a GPU the aux identity relies on jax keeping that copy, which is not public API.
+- On a GPU, every flatten of a concrete connectivity (`jit`, `device_put`, `tree_map`) reads a host copy of the table, which jax keeps as long as the array, and the jit cache keeps alive. The aux data's identity relies on jax keeping that copy, which is not public API. Eagerly, domain inference runs on the table itself.
 - Domain inference is cached on the connectivity object. A connectivity rebuilt in a trace is new in every trace, so its domain inference is repeated per trace but not per call.
 
 Open questions, all caused by the static values in the aux data:
@@ -76,15 +75,15 @@ Open questions, all caused by the static values in the aux data:
 
 ### Table operations on a per-connectivity object
 
-Domain inference and `restrict` were methods of a `ConnectivityOps` object, one per connectivity and registered per library, which held the static values and returned its successor from `restrict`. Its methods took plain arrays, but the object carried state about one buffer and the decision what a table without values means, which is the connectivity's. It needed its own registry next to `ArrayOps`. An earlier variant passed an opaque `state` stored on the connectivity back to `ArrayOps`; every copy inherited it, so each operation had to check that the state described its table.
+A `ConnectivityOps` object per connectivity, registered per library, could hold the static values and do domain inference and `restrict` on plain arrays. But it carries state about one buffer and the decision what a table without values means, which is the connectivity's, and needs a second registry next to `ArrayOps`.
 
 ### Supporting closed-over connectivities
 
-A hook `ArrayOps.static_values` would give the static values of any buffer: for a concrete jax array a NumPy view, so that domain inference on a closed-over table is not staged, and `None` for any tracer. It would also support connectivities built from other tracers, with a clamped gather. icon4py passes its connectivities as `jit` arguments, and a closed-over table is inlined into the program, which is slower; no use case needs the hook.
+A hook `ArrayOps.static_values` could give the static values of any buffer: for a concrete jax array a NumPy view, so that domain inference on a closed-over table is not staged, and none for a tracer, which would also support connectivities built from other tracers. No use case needs it: icon4py passes its connectivities as `jit` arguments, and a closed-over table is inlined into the program, which is slower.
 
 ### Static values in a side table keyed by the connectivity
 
-A weak map from connectivity to static values in `jax_ops.py` needs no attribute on the connectivity, but `restrict` would need a hook to hand the restricted values back, and `ArrayOps` would have to take connectivities.
+A weak map from connectivity to static values in `jax_ops.py` needs no field, but `restrict` would need a hook to hand the restricted values back, and `ArrayOps` would have to take connectivities.
 
 ### Static values found by the table
 
@@ -92,11 +91,11 @@ A map from table to static values, inside `jax_ops.py`, needs no state on the co
 
 ### `is_traced` and `concrete_eval` on `ArrayOps`
 
-Two small hooks, with the case distinction written out in `NdArrayConnectivityField`. The connectivity would then have to know when to evaluate concretely. Its creators instead give it static values that can be computed on, so the connectivity needs no evaluation mode.
+Two small hooks, with the case distinction written out in `NdArrayConnectivityField`, which would then have to know when to evaluate concretely. With static values that can be computed on, it needs no evaluation mode.
 
-### Static values that follow the connectivity instead of the table
+### Aux data from the static values of a concrete connectivity
 
-Earlier versions kept the concrete connectivity in a field that every copy of the connectivity inherits, and derived the aux data of a connectivity with a concrete leaf from that leaf. `dataclasses.replace` then attached the values to another table, and jax's comparison of branches and carries, which runs on trees with a shared placeholder leaf, found nothing to object to: `lax.cond` between two tables silently used the values of the first one. Here the default derives the static values from the buffer, and a concrete table always derives its own.
+Deriving the aux data of a connectivity with a concrete leaf from a field that `dataclasses.replace` carries over would attach the values to another table. jax's comparison of branches and carries runs on trees with a shared placeholder leaf, so `lax.cond` between two tables would silently use the values of the first. A concrete table therefore always takes its static values from itself.
 
 ### Bounds in the aux data instead of the table
 
