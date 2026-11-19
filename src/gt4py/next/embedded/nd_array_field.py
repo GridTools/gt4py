@@ -476,7 +476,8 @@ class NdArrayConnectivityField(
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
     #: The values of the table as an array that can be computed on now, possibly of another
-    #: library, for domain inference. A creator sets them for a buffer that is a tracer.
+    #: library, for domain inference. A creator sets them for a buffer that is a tracer; they
+    #: must be the values of `_ndarray`.
     _static_values: core_defs.NDArrayObject | StaticValues = dataclasses.field(
         default=StaticValues.IN_BUFFER,
         kw_only=True,
