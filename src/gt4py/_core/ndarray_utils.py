@@ -6,14 +6,15 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import functools
 from collections.abc import Hashable
-from typing import Any, Callable, Final, Protocol, TypeGuard, cast
+from typing import Any, Callable, Final, Protocol, Self, TypeGuard, cast
 
 import array_api_compat
 import numpy as np
 
-from gt4py._core import definitions as core_defs, types as core_types
+from gt4py._core import definitions as core_defs, dlpack as core_dlpack, types as core_types
 
 
 try:
@@ -205,3 +206,98 @@ def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Devic
         raise ValueError(
             f"No device translator registered for array namespace {array_ns}."
         ) from None
+
+
+_DLPACK_TYPE_CODES: Final = {
+    core_defs.DTypeKind.INT: core_dlpack.DataTypeCode.INT,
+    core_defs.DTypeKind.UINT: core_dlpack.DataTypeCode.UINT,
+    core_defs.DTypeKind.FLOAT: core_dlpack.DataTypeCode.FLOAT,
+    core_defs.DTypeKind.BOOL: core_dlpack.DataTypeCode.BOOL,
+}
+_DTYPES_BY_DLPACK_DTYPE: Final[dict[tuple[int, int, int], core_defs.DType]] = {
+    (_DLPACK_TYPE_CODES[dt.kind], dt.bit_width, dt.lanes): dt
+    for dt in (core_defs.dtype(t) for t in core_defs.SCALAR_TYPES)
+}
+_DEVICE_TYPES: Final = {t.value: t for t in core_defs.DeviceType}
+
+
+def device_from_dlpack(device_type: int, device_id: int) -> core_defs.Device:
+    """The `Device` of a DLPack device pair; device types gt4py does not name are kept as integers."""
+    return core_defs.Device(_DEVICE_TYPES.get(int(device_type), int(device_type)), int(device_id))
+
+
+def _c_contiguous_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
+    strides = []
+    stride = 1
+    for size in reversed(shape):
+        strides.append(stride)
+        stride *= size
+    return tuple(reversed(strides))
+
+
+@dataclasses.dataclass(frozen=True)
+class BufferInfo:
+    """Holds information about a buffer in memory.
+
+    Equal `BufferInfo`s (and equal `hash_key`s) describe buffers that behave the same apart
+    from their contents.
+
+    Args:
+        data_ptr: Address of the element at index `(0, ..., 0)`.
+        shape: Number of elements along each dimension.
+        elem_strides: Distance between consecutive elements along each dimension, in elements.
+        dtype: Data type of the elements.
+        device: Device the buffer is allocated on.
+    """
+
+    data_ptr: int
+    shape: tuple[int, ...]
+    elem_strides: tuple[int, ...]
+    dtype: core_defs.DType
+    device: core_defs.Device
+
+    @functools.cached_property
+    def hash_key(self) -> int:
+        return hash((self.data_ptr, self.shape, self.elem_strides, self.dtype, self.device))
+
+    def __hash__(self) -> int:
+        return self.hash_key
+
+    @classmethod
+    def from_dlpack(cls, array: Any) -> Self:
+        """Describe the buffer of `array` from its DLPack export.
+
+        Raises:
+            TypeError: `array` does not export DLPack, or its dtype is not a gt4py scalar type.
+            BufferError: `array` cannot be exported without a copy, or its DLPack export is
+                not supported (see `gt4py._core.dlpack.tensor_fields`), or it reports a stride
+                of `2**63` bytes or more.
+        """
+        tensor = core_dlpack.tensor_fields(array)
+        code, bits, lanes = tensor["dtype"]
+        try:
+            dtype = _DTYPES_BY_DLPACK_DTYPE[code, bits, lanes]
+        except KeyError:
+            raise TypeError(
+                f"DLPack dtype (code={code}, bits={bits}, lanes={lanes})"
+                f" of '{type(array).__name__}' is not a gt4py scalar type."
+            ) from None
+        shape = tensor["shape"]
+        strides = tensor["strides"]
+        if strides is None:
+            strides = _c_contiguous_strides(shape)
+        itemsize = (bits * lanes + 7) // 8
+        if any(abs(stride) * itemsize >= 2**63 for stride in strides):
+            raise BufferError(
+                f"'{type(array).__name__}' exports DLPack element strides {strides} that no buffer"
+                f" of {itemsize}-byte elements can have: the exporter reports an impossible stride"
+                " (e.g. CuPy before cupy#10228 exports negative strides divided as unsigned"
+                " integers)."
+            )
+        return cls(
+            data_ptr=tensor["data"] + tensor["byte_offset"],
+            shape=shape,
+            elem_strides=strides,
+            dtype=dtype,
+            device=device_from_dlpack(*tensor["device"]),
+        )

@@ -14,7 +14,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
 from gt4py.next import common, errors, field_utils, named_collections, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
-from gt4py.next.field_utils import get_array_ns
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -59,10 +58,13 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
 
-        xp = get_array_ns(*(arguments.extract(arg) for arg in all_args))
         init_type = type_translation.from_value(self.init)
         assert isinstance(init_type, ts.TupleType | ts.ScalarType | ts.NamedCollectionType)
-        res = field_utils.field_from_typespec(init_type, out_domain, xp)
+        res = field_utils.field_from_typespec(
+            init_type,
+            out_domain,
+            like=field_utils.first_buffer(*(arguments.extract(arg) for arg in all_args)),
+        )
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
             acc: xtyping.MaybeNestedInTuple[core_defs.ScalarT] = self.init

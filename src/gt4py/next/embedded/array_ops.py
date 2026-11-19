@@ -106,6 +106,20 @@ class ArrayOps:
             device=None if like is None else self.device(like),
         )
 
+    def empty(
+        self,
+        shape: tuple[int, ...],
+        *,
+        dtype: Any,
+        like: core_defs.NDArrayObject | None = None,
+    ) -> core_defs.NDArrayObject:
+        """An uninitialized array of this namespace, on the device of `like` if given."""
+        return self.xp.empty(
+            shape,
+            dtype=self.dtype(dtype),
+            device=None if like is None else self.device(like),
+        )
+
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         """
         `value` as an operand of an elementwise function next to the array `like`.
@@ -216,8 +230,8 @@ class ArrayOps:
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
-    def buffer_info(self, array: core_defs.NDArrayObject) -> common.BufferInfo:
-        return common.BufferInfo.from_ndarray(array)
+    def buffer_info(self, array: core_defs.NDArrayObject) -> core_ndarray_utils.BufferInfo:
+        return core_ndarray_utils.BufferInfo.from_dlpack(array)
 
 
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
