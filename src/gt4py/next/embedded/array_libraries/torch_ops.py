@@ -34,6 +34,7 @@ from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Optional
 
+import array_api_compat
 import array_api_compat.torch as compat_torch
 import numpy as np
 import torch
@@ -120,13 +121,13 @@ class TorchOps(array_ops.ArrayOps):
 array_ops.register(TorchOps(compat_torch))
 
 
-class _TableIdentity:
+class _StaticValuesByMemory:
     """
-    The concrete table of a connectivity, for the pytree context: equal if it is the same memory.
+    Static values in the pytree context, of a concrete tensor: equal if the same memory.
 
     `torch.compile` guards a constant of the context by equality, so a call with another
     buffer, even with equal values, retraces, while a new connectivity around the same
-    buffer does not. The values are read on first use, in a trace that needs them.
+    buffer does not. The values are read as NumPy on first use, in a trace that needs them.
     """
 
     __slots__ = ("__weakref__", "_key", "_table", "_values")
@@ -159,25 +160,28 @@ class _TableIdentity:
         return self._values
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, _TableIdentity) and self._key == other._key
+        return isinstance(other, _StaticValuesByMemory) and self._key == other._key
 
     def __hash__(self) -> int:
         return hash(self._key)
 
     def __repr__(self) -> str:
-        return f"<table of the tensor at {self._key[0]:#x}>"
+        return f"<static values at {self._key[0]:#x}>"
 
 
-torch_pytree.register_constant(_TableIdentity)
+torch_pytree.register_constant(_StaticValuesByMemory)
 
-# the connectivity attribute with the identity of its concrete table, set by its creator
-_TABLE_IDENTITY = "_torch_table_identity"
+# the connectivity attribute with its static values for the pytree context, set by its creator:
+# `torch.compile` accepts only constants there that exist before the region
+_STATIC_VALUES_BY_MEMORY = "_torch_static_values_by_memory"
 
 
 def _connectivity(data: torch.Tensor, /, *args: Any, **kwargs: Any) -> Any:
     connectivity = nd_array_field._connectivity_from_array(data, *args, **kwargs)
     if _is_concrete(connectivity.ndarray):
-        connectivity.__dict__[_TABLE_IDENTITY] = _TableIdentity(connectivity.ndarray)
+        connectivity.__dict__[_STATIC_VALUES_BY_MEMORY] = _StaticValuesByMemory(
+            connectivity.ndarray
+        )
     return connectivity
 
 
@@ -203,13 +207,15 @@ def _context_domain(context: _DomainContext) -> common.Domain:
     )
 
 
-def _check_tensor(kind: str, ndarray: Any) -> None:
-    if not isinstance(ndarray, torch.Tensor):
-        raise TypeError(f"Only {kind} of torch tensors are torch pytrees, got '{type(ndarray)}'.")
+def _is_of_other_library(leaf: Any) -> bool:
+    return array_api_compat.is_array_api_obj(leaf) and not isinstance(leaf, torch.Tensor)
 
 
 def _flatten_field(field: nd_array_field.NdArrayField) -> tuple[list[torch.Tensor], _DomainContext]:
-    _check_tensor("fields", field.ndarray)
+    if _is_of_other_library(field.ndarray):
+        raise TypeError(
+            f"Only fields of torch tensors are torch pytrees, got a field of '{type(field.ndarray)}'."
+        )
     return [field.ndarray], _domain_context(field.domain)
 
 
@@ -222,27 +228,38 @@ def _unflatten_field(
 torch_pytree.register_pytree_node(nd_array_field.NdArrayField, _flatten_field, _unflatten_field)
 
 
+#: domain, codomain, skip value and static values, as `NdArrayConnectivityField._static_values`
+#: with an array compared by memory
 _ConnectivityContext = tuple[
-    _DomainContext, str, common.DimensionKind, Optional[int], Optional[_TableIdentity]
+    _DomainContext,
+    str,
+    common.DimensionKind,
+    Optional[int],
+    _StaticValuesByMemory | nd_array_field.StaticValues,
 ]
 
 
 def _flatten_connectivity(
     connectivity: nd_array_field.NdArrayConnectivityField,
 ) -> tuple[list[torch.Tensor], _ConnectivityContext]:
-    ndarray = connectivity.ndarray
-    _check_tensor("connectivities", ndarray)
-    identity = getattr(connectivity, _TABLE_IDENTITY, None)
-    if (
-        identity is None
-        and connectivity._static_values is not nd_array_field.StaticValues.RUN_TIME_ONLY
-    ):
-        if torch.compiler.is_compiling() or not _is_concrete(ndarray):
+    ndarray = connectivity._ndarray
+    if _is_of_other_library(ndarray):
+        raise TypeError(
+            f"Only connectivities of torch tensors are torch pytrees, got a table of '{type(ndarray)}'."
+        )
+    static_values: _StaticValuesByMemory | nd_array_field.StaticValues | None = getattr(
+        connectivity, _STATIC_VALUES_BY_MEMORY, None
+    )
+    if static_values is None:
+        if connectivity._static_values is nd_array_field.StaticValues.RUN_TIME_ONLY:
+            static_values = nd_array_field.StaticValues.RUN_TIME_ONLY
+        elif torch.compiler.is_compiling() or not _is_concrete(ndarray):
             raise TypeError(
                 "A connectivity in a 'torch.compile' region has to be created by"
                 " 'gtx.as_connectivity' outside of the region."
             )
-        identity = _TableIdentity(ndarray)
+        else:
+            static_values = _StaticValuesByMemory(ndarray)
     codomain = connectivity.codomain
     skip_value = connectivity.skip_value
     return [ndarray], (
@@ -250,7 +267,7 @@ def _flatten_connectivity(
         codomain.value,
         codomain.kind,
         None if skip_value is None else int(skip_value),
-        identity,
+        static_values,
     )
 
 
@@ -258,14 +275,17 @@ def _unflatten_connectivity(
     children: list[torch.Tensor], context: _ConnectivityContext
 ) -> nd_array_field.NdArrayConnectivityField:
     (ndarray,) = children
-    domain, codomain_value, codomain_kind, skip_value, identity = context
-    static_values: Any
+    domain, codomain_value, codomain_kind, skip_value, context_static_values = context
+    static_values: Any = context_static_values
     if _is_concrete(ndarray):
         static_values = nd_array_field.StaticValues.IN_BUFFER
-    elif identity is None or tuple(ndarray.shape) != identity.values.shape:
-        static_values = nd_array_field.StaticValues.RUN_TIME_ONLY
-    else:
-        static_values = identity.values
+    elif isinstance(static_values, _StaticValuesByMemory):
+        values = static_values.values
+        static_values = (
+            values
+            if tuple(ndarray.shape) == values.shape
+            else nd_array_field.StaticValues.RUN_TIME_ONLY
+        )
     connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
         _context_domain(domain),
         ndarray,
@@ -273,9 +293,9 @@ def _unflatten_connectivity(
         skip_value,
         _static_values=static_values,
     )  # type: ignore[abstract, unused-ignore] # see 'jax_ops._unflatten_connectivity'
-    if identity is not None:
+    if isinstance(context_static_values, _StaticValuesByMemory):
         # a trace flattens the connectivities it unflattened again
-        connectivity.__dict__[_TABLE_IDENTITY] = identity
+        connectivity.__dict__[_STATIC_VALUES_BY_MEMORY] = context_static_values
     return connectivity
 
 

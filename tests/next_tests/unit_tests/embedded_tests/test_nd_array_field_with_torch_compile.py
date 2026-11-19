@@ -105,7 +105,7 @@ def _scale_shift_program(
     _scale_shift(a, n, out=out, domain={K: (0, 3)})
 
 
-def test_program_and_field_operator(device):
+def test_torch_compile_program_and_field_operator(device):
     a = _field([K], np.arange(4.0), device)
     out, out2, expected, expected2 = (_field([K], np.zeros(4), device) for _ in range(4))
 
@@ -136,7 +136,7 @@ def _pair_sum(
     return p[0] + p[1]
 
 
-def test_namedtuple_argument(device):
+def test_torch_compile_namedtuple_argument(device):
     a = _field([K], np.arange(3.0), device)
     b = _field([K], np.arange(3.0) * 10.0, device)
     out = _field([K], np.zeros(3), device)
@@ -169,7 +169,7 @@ def _neighbor_sum_program(
 
 
 @pytest.mark.parametrize("num_field_vertices", [300, 600], ids=["narrowing", "covering"])
-def test_neighbor_sum_with_connectivity_argument(device, num_field_vertices):
+def test_torch_compile_neighbor_sum_with_connectivity_argument(device, num_field_vertices):
     import torch
 
     table = _skip_value_e2v_table(300)
@@ -200,7 +200,7 @@ def test_neighbor_sum_with_connectivity_argument(device, num_field_vertices):
     assert not any(isinstance(c, torch.Tensor) for c in constants)
 
 
-def test_program_with_closed_over_offset_provider(device):
+def test_torch_compile_program_with_closed_over_offset_provider(device):
     import torch
 
     table = _skip_value_e2v_table(2)
@@ -222,7 +222,7 @@ def test_program_with_closed_over_offset_provider(device):
     assert len(graphs) == 1
 
 
-def test_premap_with_restricted_connectivity(device):
+def test_torch_compile_premap_with_restricted_connectivity(device):
     table = _skip_value_e2v_table(8)
     e2v = _connectivity(table, device, skip_value=-1)
     v = _field([Vertex], np.arange(4.0), device)
@@ -236,7 +236,7 @@ def test_premap_with_restricted_connectivity(device):
     assert len(graphs) == 1
 
 
-def test_retraces_per_connectivity_buffer(device):
+def test_torch_compile_retraces_per_connectivity_buffer(device):
     import torch
 
     tensor = torch.asarray(_skip_value_e2v_table(8), device=device)
@@ -271,7 +271,7 @@ def test_retraces_per_connectivity_buffer(device):
 
 
 @pytest.mark.parametrize("create", ["restrict", "from_array"])
-def test_connectivity_not_created_by_constructor_raises(device, create):
+def test_torch_compile_connectivity_not_created_by_constructor_raises(device, create):
     table = _skip_value_e2v_table(4)
     e2v = _connectivity(table, device, skip_value=-1)
     v = _field([Vertex], np.arange(4.0), device)
@@ -299,7 +299,7 @@ def _chain(error: BaseException) -> str:
     return "\n".join(messages)
 
 
-def test_non_contiguous_inverse_image_raises(device):
+def test_torch_compile_non_contiguous_inverse_image_raises(device):
     import torch
 
     e2v = _connectivity(torch.asarray([[0, 0], [5, 5], [1, 1]], dtype=torch.int32), device)
@@ -320,7 +320,7 @@ def _shift_by_field(
     return a(as_offset(Koff, offset))
 
 
-def test_as_offset_computed_in_trace(device):
+def test_torch_compile_as_offset_computed_in_trace(device):
     values = np.arange(8.0).reshape(2, 4)
     offsets = np.asarray([[1, 1, 0, -1], [0, 2, 1, 0]], dtype=np.int32)
     a = _field([Edge, K], values, device)
@@ -350,7 +350,7 @@ def test_as_offset_computed_in_trace(device):
     assert len(graphs) == 1
 
 
-def test_grad_through_neighbor_sum_with_connectivity_argument(device):
+def test_torch_compile_grad_through_neighbor_sum_with_connectivity_argument(device):
     import torch
 
     table = np.asarray([[0, 1], [2, -1]], dtype=np.int32)
@@ -374,7 +374,7 @@ def test_grad_through_neighbor_sum_with_connectivity_argument(device):
     assert len(graphs) == 1
 
 
-def test_neighbor_sum_with_inductor(device):
+def test_torch_compile_neighbor_sum_with_inductor(device):
     table = _skip_value_e2v_table(4)
     values = np.arange(8.0)
     e2v = _connectivity(table, device, skip_value=-1)
