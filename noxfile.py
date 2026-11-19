@@ -137,6 +137,13 @@ def install_session_venv(
         )
 
 
+def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
+    if device in ("rocm6", "rocm7"):
+        # the torch wheels on PyPI are CUDA-only
+        return False
+    return True
+
+
 # -- Sessions --
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
 @nox.parametrize("device", [*DeviceNoxParam.values()])
@@ -253,9 +260,17 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
+    torch_markers: list[str] = []
+    if codegen == "internal" and _session_runs_torch(session, device):
+        extras.append("torch")
+    else:
+        torch_markers.append("not requires_torch")
+
     install_session_venv(session, extras=extras, groups=groups)
 
-    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+    markers = " and ".join(
+        codegen_settings["markers"] + device_settings["markers"] + mesh_markers + torch_markers
+    )
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),

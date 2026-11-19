@@ -146,6 +146,19 @@ def test_empty_on_device_of_like(nd_array_implementation):
     assert array_api_compat.device(result) == array_api_compat.device(like)
 
 
+@pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
+@pytest.mark.requires_gpu
+def test_empty_on_cuda_device_of_torch_like():
+    import torch
+
+    like = torch.ones(1, device="cuda")
+
+    result = array_ops.of(like).empty((2,), dtype=np.float64, like=like)
+
+    assert result.device == like.device
+
+
 def test_empty_on_non_default_device_of_like():
     like = strict_array_on_device1([1.0])
 
