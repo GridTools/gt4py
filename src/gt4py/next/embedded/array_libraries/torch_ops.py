@@ -6,33 +6,27 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""`ArrayOps` for torch tensors; importing it does not import torch."""
+"""`ArrayOps` for torch tensors."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from types import ModuleType
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import array_api_compat.torch as compat_torch
 import numpy as np
+import torch
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.embedded import array_ops
 
 
-if TYPE_CHECKING:
-    import torch
-
-
 def _cbrt(x: torch.Tensor) -> torch.Tensor:
-    import torch
-
     return torch.sign(x) * torch.abs(x) ** (1.0 / 3.0)
 
 
 def _gamma(x: torch.Tensor) -> torch.Tensor:
-    import torch
-
     sign = torch.where((x < 0) & (torch.floor(x) % 2 == 1), -1.0, 1.0).to(x.dtype)
     result = sign * torch.exp(torch.lgamma(x))
     # the poles as in SciPy: +-inf at +-0, NaN at the negative integers
@@ -43,8 +37,6 @@ def _gamma(x: torch.Tensor) -> torch.Tensor:
 class TorchOps(array_ops.ArrayOps):
     @property
     def array_ns(self) -> ModuleType:
-        import torch
-
         return torch
 
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
@@ -82,4 +74,4 @@ class TorchOps(array_ops.ArrayOps):
         return array.detach().cpu().numpy()  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
 
-array_ops.register("array_api_compat.torch", TorchOps)
+array_ops.register(TorchOps(compat_torch))

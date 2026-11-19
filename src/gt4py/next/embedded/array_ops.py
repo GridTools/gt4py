@@ -16,8 +16,8 @@ works without registration; earlier revisions do not take Python scalars as
 arguments of elementwise functions, which `ArrayOps` passes for scalar operands.
 
 A library that needs different behaviour, or has a faster path outside the
-standard, subclasses `ArrayOps`, overrides only those methods and registers the
-subclass for the name of its compat namespace with `register`.
+standard, subclasses `ArrayOps`, overrides only those methods and registers an
+instance for its compat namespace with `register`.
 """
 
 from __future__ import annotations
@@ -219,15 +219,13 @@ class ArrayOps:
         return core_ndarray_utils.BufferInfo.from_dlpack(array)
 
 
-_ops_types: dict[str, type[ArrayOps]] = {}
 _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
 
 
-def register(namespace_name: str, ops_type: type[ArrayOps]) -> None:
-    """Use `ops_type` for the buffers whose compat namespace is named `namespace_name`, replacing an earlier registration."""
-    _ops_types[namespace_name] = ops_type
-    _ops_by_namespace.clear()
+def register(ops: ArrayOps) -> None:
+    """Use `ops` for the buffers whose compat namespace is `ops.xp`, replacing an earlier registration."""
+    _ops_by_namespace[ops.xp] = ops
     _ops_by_array_type.clear()
 
 
@@ -236,7 +234,8 @@ def for_namespace(xp: ModuleType) -> ArrayOps:
     try:
         return _ops_by_namespace[xp]
     except KeyError:
-        return _ops_by_namespace.setdefault(xp, _ops_types.get(xp.__name__, ArrayOps)(xp))
+        ops = _ops_by_namespace[xp] = ArrayOps(xp)
+        return ops
 
 
 def of(array: Any) -> ArrayOps:

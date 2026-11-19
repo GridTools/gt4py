@@ -15,6 +15,7 @@ from typing import Any
 
 import array_api_compat
 import jax
+import jax.numpy as jnp
 import numpy as np
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
@@ -67,7 +68,7 @@ class JaxOps(array_ops.ArrayOps):
         )
 
 
-array_ops.register("jax.numpy", JaxOps)
+array_ops.register(JaxOps(jnp))
 
 # TODO(havogt): we currently enable 64-bit support by default, but we might want to make this configurable via the GT4Py config
 jax.config.update("jax_enable_x64", True)
