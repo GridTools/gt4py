@@ -17,9 +17,11 @@ import multiprocessing
 import os
 import pathlib
 import pickle
+import signal
 import sys
 import threading
 import warnings
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
@@ -61,8 +63,14 @@ class Runner(Protocol):
         """
         ...
 
-    def shutdown(self, wait: bool = True) -> None:
-        """Release the resources backing this runner (workers, threads)."""
+    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
+        """Release the resources backing this runner (workers, threads).
+
+        Args:
+            wait: Wait for the running tasks to finish before returning.
+            cancel_pending: Drop the tasks that have not started yet instead of
+                running them first.
+        """
         ...
 
 
@@ -85,7 +93,7 @@ class SerialRunner:
     ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return _run_in_calling_thread(task)
 
-    def shutdown(self, wait: bool = True) -> None:
+    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
         return None
 
 
@@ -100,8 +108,8 @@ class ThreadRunner:
     ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return self._pool.submit(task.compile)
 
-    def shutdown(self, wait: bool = True) -> None:
-        self._pool.shutdown(wait=wait)
+    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
+        self._pool.shutdown(wait=wait, cancel_futures=cancel_pending)
 
 
 def _detect_cuda_archs() -> str | None:
@@ -134,7 +142,14 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     at backend construction, no detection inside the build). The architecture
     then travels to workers as part of the pickled executor and this
     ``CUDAARCHS`` export becomes obsolete.
+
+    Workers also ignore ``SIGINT``: terminal Ctrl-C and the interrupt / shutdown
+    of a Jupyter kernel are delivered to the whole process group, which would
+    otherwise print a ``KeyboardInterrupt`` traceback from every idle worker and
+    kill them (leaving the pool broken for the rest of the session). The main
+    process stays in charge: it shuts the pool down at exit.
     """
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
         os.environ["CUDAARCHS"] = cuda_archs
@@ -183,6 +198,35 @@ def _run_compilation_task_in_worker(
     return executor(compilable)
 
 
+_BROKEN_POOL_HINT = (
+    "A compilation worker process terminated abruptly. If this happens in a plain "
+    "script that calls a compiled program at module level, guard the entry point of "
+    'the script with `if __name__ == "__main__":` (the workers import the main '
+    "module); alternatively set `GT4PY_BUILD_JOBS_MODE=serial` to compile in the "
+    "calling process."
+)
+
+
+def add_hint_to_broken_pool_error(error: BaseException) -> None:
+    """Add a note with the usual causes to a `BrokenProcessPool` error (in place).
+
+    Other exceptions, and errors already carrying the hint, are left untouched.
+    """
+    if isinstance(error, BrokenProcessPool) and (
+        _BROKEN_POOL_HINT not in getattr(error, "__notes__", ())
+    ):
+        error.add_note(_BROKEN_POOL_HINT)
+
+
+def _is_importing_main_module_in_worker() -> bool:
+    """Whether this is a spawned worker that is still importing the parent's `__main__`.
+
+    ``spawn`` workers re-import the main module of the parent, before they are
+    flagged as child processes (`multiprocessing.parent_process()` is still `None`).
+    """
+    return getattr(multiprocessing.current_process(), "_inheriting", False)
+
+
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
@@ -195,6 +239,13 @@ class ProcessRunner:
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
+        if _is_importing_main_module_in_worker():
+            raise RuntimeError(
+                "A compiled GT4Py program was called while a compilation worker process was "
+                "importing the main module of the script. Guard the entry point of the "
+                'script with `if __name__ == "__main__":` so that the calls only happen '
+                "in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
+            )
         # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
         # this pool's own manager thread), CUDA contexts and MPI state, none of which
         # survive fork safely. The gtfn GPU build even touches CUDA at *compile* time
@@ -246,8 +297,8 @@ class ProcessRunner:
             recursion_limit=sys.getrecursionlimit(),
         )
 
-    def shutdown(self, wait: bool = True) -> None:
-        self._pool.shutdown(wait=wait)
+    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
+        self._pool.shutdown(wait=wait, cancel_futures=cancel_pending)
 
 
 def from_config() -> Runner:
@@ -288,17 +339,27 @@ def get_default_runner() -> Runner:
         return _default_runner
 
 
-def reset_default_runner() -> None:
+def reset_default_runner(*, cancel_pending: bool = False) -> None:
     """Shut down and discard the default runner, waiting for its ongoing jobs.
 
     The next `get_default_runner` call creates a fresh runner from the
     current configuration.
+
+    Args:
+        cancel_pending: Drop the jobs that have not started yet instead of
+            running them before returning. Jobs already running are still awaited.
     """
     global _default_runner
     with _default_runner_lock:
         if _default_runner is not None:
-            _default_runner.shutdown(wait=True)
+            _default_runner.shutdown(wait=True, cancel_pending=cancel_pending)
             _default_runner = None
+
+
+def _shutdown_default_runner_at_exit() -> None:
+    # Nobody can use the result of a compilation at interpreter exit: do not
+    # start the queued ones (e.g. after a Ctrl-C).
+    reset_default_runner(cancel_pending=True)
 
 
 # Shut down worker pools while the interpreter is still intact; relying on
@@ -308,4 +369,4 @@ def reset_default_runner() -> None:
 # ``weakref.finalize``, whose exit hook is registered no later than the import
 # of `otf.compilation.cache` above — atexit runs LIFO, so this shutdown runs
 # before those directories disappear.
-atexit.register(reset_default_runner)
+atexit.register(_shutdown_default_runner_at_exit)

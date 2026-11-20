@@ -13,7 +13,10 @@ import hashlib
 import multiprocessing
 import os
 import pickle
+import signal
+import subprocess
 import sys
+import threading
 import unittest.mock as mock
 
 import numpy as np
@@ -609,3 +612,103 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
         assert isinstance(runners.get_default_runner(), runners.SerialRunner)
         runners.reset_default_runner()
+
+
+@dataclasses.dataclass(frozen=True)
+class _SelfInterruptingExecutor:
+    """Delivers SIGINT to its own process, as a terminal Ctrl-C or a Jupyter kernel
+    interrupt would do to the whole process group."""
+
+    def __call__(self, compilable):
+        os.kill(os.getpid(), signal.SIGINT)
+        return _NoOpArtifact()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_process_runner_workers_survive_sigint(process_runner):
+    """SIGINT sent to the process group must neither make workers print a
+    `KeyboardInterrupt` traceback nor break the pool for later compilations."""
+    interrupted = process_runner.submit(_decomposed_task(_SelfInterruptingExecutor()))
+    assert callable(interrupted.result(timeout=120).load())
+
+    later = process_runner.submit(_decomposed_task(_RecursingExecutor(depth=1)))
+    assert callable(later.result(timeout=120).load())
+
+
+@dataclasses.dataclass(frozen=True)
+class _BlockingExecutor:
+    release: threading.Event
+    started: threading.Event
+
+    def __call__(self, compilable):
+        self.started.set()
+        assert self.release.wait(timeout=60)
+        return _NoOpArtifact()
+
+
+def test_shutdown_can_cancel_pending_tasks():
+    started, release = threading.Event(), threading.Event()
+    runner = runners.ThreadRunner(max_workers=1)
+    try:
+        running = runner.submit(_decomposed_task(_BlockingExecutor(release, started)))
+        assert started.wait(timeout=60)
+        queued = runner.submit(_decomposed_task(_BlockingExecutor(release, started)))
+
+        runner.shutdown(wait=False, cancel_pending=True)
+        release.set()
+
+        assert queued.cancelled()
+        assert callable(running.result(timeout=60).load())  # running tasks are not cancelled
+    finally:
+        release.set()
+        runner.shutdown(wait=True)
+
+
+def test_process_runner_refuses_to_start_while_a_worker_imports_main(tmp_path, monkeypatch):
+    monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
+
+    with pytest.raises(RuntimeError, match=r'if __name__ == "__main__"'):
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
+
+
+_UNGUARDED_SCRIPT = """
+import gt4py.next.otf.runners as runners
+
+
+def executor(compilable):
+    raise AssertionError("must not run: the worker cannot even import this script")
+
+
+task = runners.CompilationTask(name="t", compilable=None, executor=executor)
+{call}
+"""
+
+
+@pytest.mark.parametrize("guarded", [False, True], ids=["unguarded", "guarded"])
+def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
+    """A script submitting compilations at module level is re-imported by every
+    spawned worker: that must give an actionable error, not a bare
+    `RuntimeError: ... bootstrapping phase` followed by `BrokenProcessPool`."""
+    call = (
+        "runner = runners.ProcessRunner(max_workers=1, shared_session_cache_dir="
+        f"{str(tmp_path)!r})\n"
+        "try:\n    runner.submit(task).result(timeout=120)\nfinally:\n    runner.shutdown(wait=True)"
+    )
+    if guarded:
+        call = 'if __name__ == "__main__":\n' + "\n".join("    " + l for l in call.splitlines())
+    script = tmp_path / "script.py"
+    script.write_text(_UNGUARDED_SCRIPT.format(call=call))
+
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, timeout=300, cwd=tmp_path
+    )
+
+    assert "bootstrapping phase" not in result.stderr
+    if guarded:
+        # The worker imports the script without calling anything; the task itself
+        # then fails with the executor's own error, which is propagated unchanged.
+        assert "AssertionError: must not run" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert 'if __name__ == "__main__"' in result.stderr
+        assert "BrokenProcessPool" in result.stderr
