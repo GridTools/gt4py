@@ -58,12 +58,19 @@ caption: Getting started
 maxdepth: 1
 ---
 quickstart
+```
+
+```{toctree}
+---
+caption: Data structures
+maxdepth: 1
+---
 python/grids-and-fields
 ```
 
 ```{toctree}
 ---
-caption: The DSL
+caption: GT4Py DSL
 maxdepth: 1
 ---
 dsl/field-operators

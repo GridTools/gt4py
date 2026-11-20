@@ -177,7 +177,7 @@ neighbor to the right, and GT4Py tracks this for you.
 
 - [Grids and fields](python/grids-and-fields.md): dimensions, domains, allocation
   of fields, and connectivities of unstructured meshes.
-- **The DSL**: what can be written inside operators.
+- **GT4Py DSL**: what can be written inside operators.
   - [Field operators](dsl/field-operators.md): types, expressions, conditionals and built-in functions.
   - [Shifts and neighbors](dsl/shifts.md): Cartesian shifts and unstructured meshes.
   - [Scan operators](dsl/scan-operators.md): computations which advance along the vertical.
