@@ -6,26 +6,22 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import NamedTuple
-
 import numpy as np
 import pytest
 
-import gt4py.next as gtx
 from gt4py.next import common
-from gt4py.next.embedded import nd_array_field
-from gt4py.next import astype, neighbor_sum
-from gt4py.next.experimental import as_offset
+from gt4py.next.common import Dimension, DimensionKind, NamedIndex
+from gt4py.next.embedded import context as embedded_context, nd_array_field
+from gt4py.next.ffront import experimental, fbuiltins
 
 
 pytestmark = pytest.mark.requires_torch
 
-K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-Vertex = gtx.Dimension("Vertex")
-Edge = gtx.Dimension("Edge")
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-Koff = gtx.FieldOffset("Koff", source=K, target=(K,))
+D0 = Dimension("D0")
+D1 = Dimension("D1")
+V = Dimension("V")
+E = Dimension("E")
+E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
 
 
 @pytest.fixture(
@@ -42,7 +38,11 @@ def device(request):
 
 
 def _compile(fn, backend="aot_eager"):
-    """`fn` compiled with `fullgraph`, and the Dynamo graphs of its compilations."""
+    """
+    `fn` called through `nonstrict_trace` in a region compiled with `fullgraph`, and the Dynamo graphs.
+
+    Dynamo does not trace embedded code, so a region calls it non-strictly.
+    """
     import torch
 
     graphs = []
@@ -51,34 +51,25 @@ def _compile(fn, backend="aot_eager"):
     def recorder(gm, example_inputs):
         graphs.append(gm)
         # a backend that only runs the Dynamo graph would run the non-strictly traced
-        # functions eagerly, on the concrete tensors
+        # function eagerly, on the concrete tensors
         return compiler(gm, example_inputs)
 
-    return torch.compile(fn, fullgraph=True, backend=recorder), graphs
+    traced = torch.compiler.nonstrict_trace(fn)
+    return torch.compile(lambda *args: traced(*args), fullgraph=True, backend=recorder), graphs
 
 
-def _field(dims, values, device):
+def _field(values, domain, device):
     import torch
 
-    tensor = torch.asarray(values, device=device)
-    return common._field(tensor, domain=gtx.domain(dict(zip(dims, tensor.shape))))
+    return common._field(torch.asarray(values, device=device), domain=domain)
 
 
-def _connectivity(table, device, **kwargs):
+def _connectivity(table, device, *, domain=None, **kwargs):
     import torch
 
     tensor = torch.asarray(table, device=device)
-    return common._connectivity(
-        tensor, codomain=Vertex, domain=gtx.domain({Edge: tensor.shape[0], E2VDim: 2}), **kwargs
-    )
-
-
-def _with_out(field_operator):
-    def step(v, e2v, out):
-        field_operator(v, out=out, offset_provider={"E2V": e2v})
-        return out
-
-    return step
+    domain = domain or common.domain({E: tensor.shape[0], E2VDim: tensor.shape[1]})
+    return common._connectivity(tensor, codomain=V, domain=domain, **kwargs)
 
 
 def _skip_value_e2v_table(num_vertices: int) -> np.ndarray:
@@ -89,107 +80,86 @@ def _skip_value_e2v_table(num_vertices: int) -> np.ndarray:
     return table
 
 
-def _reference_neighbor_sum(values: np.ndarray, table: np.ndarray) -> np.ndarray:
-    return np.where(table != -1, values[table], 0.0).sum(axis=1)
+def _premap_and_reduce(field, conn):
+    with embedded_context.update(offset_provider={"E2V": conn}):
+        return fbuiltins.neighbor_sum(field.premap(conn), axis=E2VDim)
 
 
-@gtx.field_operator
-def _scale_shift(a: gtx.Field[gtx.Dims[K], float], n: gtx.int32) -> gtx.Field[gtx.Dims[K], float]:
-    return a(K + 1) * 2.0 + astype(n, float)
+def test_torch_compile_field_arguments(device):
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    a = _field(np.arange(6.0).reshape(2, 3), domain, device)
+    b = _field(np.ones((2, 3)), domain, device)
 
+    compiled, graphs = _compile(lambda x, y: x + y)
+    result = compiled(a, b)
 
-@gtx.program
-def _scale_shift_program(
-    a: gtx.Field[gtx.Dims[K], float], n: gtx.int32, out: gtx.Field[gtx.Dims[K], float]
-):
-    _scale_shift(a, n, out=out, domain={K: (0, 3)})
-
-
-def test_torch_compile_program_and_field_operator(device):
-    a = _field([K], np.arange(4.0), device)
-    out, out2, expected, expected2 = (_field([K], np.zeros(4), device) for _ in range(4))
-
-    def step(a, out, out2):
-        _scale_shift_program(a, 3, out, offset_provider={})
-        _scale_shift(out, 1, out=out2, offset_provider={}, domain={K: (0, 2)})
-        return out2
-
-    step(a, expected, expected2)
-    compiled, graphs = _compile(step)
-    result = compiled(a, out, out2)
-
-    assert len(graphs) == 1
+    assert isinstance(result, common.Field)
+    assert result.domain == domain
     assert result.ndarray.device.type == device.type
-    np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
-    np.testing.assert_array_equal(result.asnumpy(), expected2.asnumpy())
-
-
-class _Pair(NamedTuple):
-    a: gtx.Field[gtx.Dims[K], float]
-    b: gtx.Field[gtx.Dims[K], float]
-
-
-@gtx.field_operator
-def _pair_sum(
-    p: tuple[gtx.Field[gtx.Dims[K], float], gtx.Field[gtx.Dims[K], float]],
-) -> gtx.Field[gtx.Dims[K], float]:
-    return p[0] + p[1]
-
-
-def test_torch_compile_namedtuple_argument(device):
-    a = _field([K], np.arange(3.0), device)
-    b = _field([K], np.arange(3.0) * 10.0, device)
-    out = _field([K], np.zeros(3), device)
-
-    def step(a, b, out):
-        _pair_sum(_Pair(a, b), out=out, offset_provider={})
-        return out
-
-    compiled, graphs = _compile(step)
-
-    np.testing.assert_array_equal(compiled(a, b, out).asnumpy(), np.arange(3.0) * 11.0)
+    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
     assert len(graphs) == 1
 
 
-@gtx.field_operator
-def _neighbor_sum(v: gtx.Field[gtx.Dims[Vertex], float]) -> gtx.Field[gtx.Dims[Edge], float]:
-    return neighbor_sum(v(E2V), axis=E2VDim)
+def test_torch_pytree_roundtrip(device):
+    import torch.utils._pytree as torch_pytree
+
+    domain = common.domain({D0: (1, 3), D1: (2, 5)})
+    field = _field(np.ones((2, 3)), domain, device)
+
+    children, treespec = torch_pytree.tree_flatten(field)
+
+    assert len(children) == 1
+    assert children[0] is field.ndarray
+    assert torch_pytree.tree_unflatten(children, treespec).domain == domain
+    # the domain is part of the tree structure, hence a domain change forces a retrace
+    other_field = _field(np.ones((2, 3)), common.domain({D0: (0, 2), D1: (2, 5)}), device)
+    assert torch_pytree.tree_structure(other_field) != treespec
 
 
-@gtx.field_operator
-def _first_neighbor(v: gtx.Field[gtx.Dims[Vertex], float]) -> gtx.Field[gtx.Dims[Edge], float]:
-    return v(E2V[0])
+def test_torch_pytree_rejects_fields_of_other_libraries():
+    import torch.utils._pytree as torch_pytree
+
+    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
+
+    with pytest.raises(TypeError, match="Only fields of torch tensors"):
+        torch_pytree.tree_flatten(field)
 
 
-@gtx.program
-def _neighbor_sum_program(
-    v: gtx.Field[gtx.Dims[Vertex], float], out: gtx.Field[gtx.Dims[Edge], float]
-):
-    _neighbor_sum(v, out=out)
+def test_torch_pytree_rejects_connectivities_of_other_libraries():
+    import torch.utils._pytree as torch_pytree
+
+    conn = common._connectivity(
+        np.asarray([0, 1], dtype=np.int32), codomain=V, domain=common.domain({E: 2})
+    )
+
+    with pytest.raises(TypeError, match="Only connectivities of torch tensors"):
+        torch_pytree.tree_flatten(conn)
 
 
 @pytest.mark.parametrize("num_field_vertices", [300, 600], ids=["narrowing", "covering"])
-def test_torch_compile_neighbor_sum_with_connectivity_argument(device, num_field_vertices):
+def test_torch_compile_premap_with_connectivity_argument(device, num_field_vertices):
     import torch
 
     table = _skip_value_e2v_table(300)
-    num_edges = 2 * num_field_vertices
-    values = np.arange(float(num_field_vertices))
-    e2v = _connectivity(table, device, skip_value=-1)
-    v = _field([Vertex], values, device)
+    field_domain = common.domain({V: (0, num_field_vertices)})
+    expected = _premap_and_reduce(
+        common._field(np.arange(float(num_field_vertices)), domain=field_domain),
+        common._connectivity(
+            table,
+            codomain=V,
+            domain=common.domain({E: table.shape[0], E2VDim: 2}),
+            skip_value=-1,
+        ),
+    )
 
-    out, expected = (_field([Edge], np.zeros(num_edges), device) for _ in range(2))
+    compiled, graphs = _compile(_premap_and_reduce)
+    result = compiled(
+        _field(np.arange(float(num_field_vertices)), field_domain, device),
+        _connectivity(table, device, skip_value=-1),
+    )
 
-    def neighbor_sum_of(v, e2v, out):
-        _neighbor_sum(v, out=out, offset_provider={"E2V": e2v})
-        return out
-
-    neighbor_sum_of(v, e2v, expected)
-    compiled, graphs = _compile(neighbor_sum_of)
-    result = compiled(v, e2v, out)
-
+    assert result.domain == expected.domain
     np.testing.assert_allclose(result.asnumpy(), expected.asnumpy())
-    np.testing.assert_allclose(result.asnumpy(), _reference_neighbor_sum(values, table[:num_edges]))
     (graph,) = graphs
     # the table is a graph input, not a constant
     input_shapes = [
@@ -200,94 +170,62 @@ def test_torch_compile_neighbor_sum_with_connectivity_argument(device, num_field
     assert not any(isinstance(c, torch.Tensor) for c in constants)
 
 
-def test_torch_compile_program_with_closed_over_offset_provider(device):
+def test_torch_compile_premap_with_connectivity_closed_over_by_the_region(device):
     import torch
 
     table = _skip_value_e2v_table(2)
-    with device:
-        e2v = gtx.as_connectivity([Edge, E2VDim], Vertex, table, skip_value=-1, allocator=torch)
-    v = _field([Vertex], np.arange(4.0), device)
-    out = _field([Edge], np.zeros(table.shape[0]), device)
-    offset_provider = {"E2V": e2v}
+    conn = _connectivity(table, device, skip_value=-1)
+    field = _field(np.arange(4.0), common.domain({V: 4}), device)
+    traced = torch.compiler.nonstrict_trace(_premap_and_reduce)
 
-    def step(v, out):
-        _neighbor_sum_program(v, out, offset_provider=offset_provider)
-        return out
+    result = torch.compile(lambda f: traced(f, conn), fullgraph=True, backend="aot_eager")(field)
 
-    compiled, graphs = _compile(step)
-
-    np.testing.assert_allclose(
-        compiled(v, out).asnumpy(), _reference_neighbor_sum(np.arange(4.0), table)
-    )
-    assert len(graphs) == 1
+    np.testing.assert_allclose(result.asnumpy(), _premap_and_reduce(field, conn).asnumpy())
 
 
-def test_torch_compile_premap_with_restricted_connectivity(device):
+def test_torch_compile_premap_with_restricted_connectivity_argument(device):
     table = _skip_value_e2v_table(8)
-    e2v = _connectivity(table, device, skip_value=-1)
-    v = _field([Vertex], np.arange(4.0), device)
+    field_domain = common.domain({V: (0, 4)})
 
-    out = _field([Edge], np.zeros(8), device)
+    def premap_first_neighbor(field, conn):
+        return field.premap(conn[NamedIndex(E2VDim, 0)])
 
-    compiled, graphs = _compile(_with_out(_first_neighbor))
-    result = compiled(v, e2v, out)
+    field = _field(np.arange(4.0), field_domain, device)
+    conn = _connectivity(table, device, skip_value=-1)
+    expected = premap_first_neighbor(field, conn)
 
-    np.testing.assert_array_equal(result.asnumpy(), np.arange(4.0)[table[:8, 0]])
+    compiled, graphs = _compile(premap_first_neighbor)
+    result = compiled(field, conn)
+
+    assert result.domain == expected.domain
+    assert result.domain == common.domain({E: (0, 8)})
+    np.testing.assert_array_equal(result.asnumpy(), expected.asnumpy())
     assert len(graphs) == 1
 
 
 def test_torch_compile_retraces_per_connectivity_buffer(device):
     import torch
 
-    tensor = torch.asarray(_skip_value_e2v_table(8), device=device)
-    v = _field([Vertex], np.arange(8.0), device)
+    table = torch.asarray(_skip_value_e2v_table(8), device=device)
+    field = _field(np.arange(8.0), common.domain({V: (0, 8)}), device)
 
-    def connectivity(tensor):
-        return common._connectivity(
-            tensor,
-            codomain=Vertex,
-            domain=gtx.domain({Edge: tensor.shape[0], E2VDim: 2}),
-            skip_value=-1,
-        )
+    def connectivity(table):
+        return _connectivity(table, device, skip_value=-1)
 
-    out = _field([Edge], np.zeros(16), device)
-
-    compiled, graphs = _compile(_with_out(_neighbor_sum))
-    e2v = connectivity(tensor)
-    compiled(v, e2v, out)
-    compiled(v, e2v, out)
+    compiled, graphs = _compile(lambda f, c: f.premap(c))
+    conn = connectivity(table)
+    compiled(field, conn)
+    compiled(field, conn)
     assert len(graphs) == 1
 
-    compiled(v, connectivity(tensor), out)
+    compiled(field, connectivity(table))
     assert len(graphs) == 1
 
-    table = _skip_value_e2v_table(8)
-    table[0, 0] = 7
-    np.testing.assert_allclose(
-        compiled(v, connectivity(torch.asarray(table, device=device)), out).asnumpy(),
-        _reference_neighbor_sum(np.arange(8.0), table[:16]),
-    )
+    copy = table.clone()
+    copy[0, 0] = 7
+    result = compiled(field, connectivity(copy))
     assert len(graphs) == 2
-
-
-@pytest.mark.parametrize("create", ["restrict", "from_array"])
-def test_torch_compile_connectivity_not_created_by_constructor_raises(device, create):
-    table = _skip_value_e2v_table(4)
-    e2v = _connectivity(table, device, skip_value=-1)
-    v = _field([Vertex], np.arange(4.0), device)
-    if create == "restrict":
-        e2v = e2v[gtx.domain({Edge: (0, 4), E2VDim: (0, 2)})]
-    else:
-        e2v = nd_array_field.NdArrayConnectivityField.from_array(
-            e2v.ndarray[:4], Vertex, domain=gtx.domain({Edge: 4, E2VDim: 2}), skip_value=-1
-        )
-    out = _field([Edge], np.zeros(4), device)
-
-    compiled, _ = _compile(_with_out(_neighbor_sum))
-
-    with pytest.raises(Exception) as excinfo:
-        compiled(v, e2v, out)
-    assert "gtx.as_connectivity" in _chain(excinfo.value)
+    np.testing.assert_array_equal(result.asnumpy(), field.premap(connectivity(copy)).asnumpy())
 
 
 def _chain(error: BaseException) -> str:
@@ -299,50 +237,62 @@ def _chain(error: BaseException) -> str:
     return "\n".join(messages)
 
 
-def test_torch_compile_non_contiguous_inverse_image_raises(device):
-    import torch
+def test_torch_compile_premap_non_contiguous_inverse_image_raises(device):
+    conn = _connectivity(
+        np.asarray([0, 5, 1], dtype=np.int32), device, domain=common.domain({E: (0, 3)})
+    )
+    field = _field(np.arange(3.0), common.domain({V: (0, 3)}), device)
 
-    e2v = _connectivity(torch.asarray([[0, 0], [5, 5], [1, 1]], dtype=torch.int32), device)
-    v = _field([Vertex], np.arange(3.0), device)
-    out = _field([Edge], np.zeros(3), device)
-
-    compiled, _ = _compile(_with_out(_first_neighbor))
+    compiled, _ = _compile(lambda f, c: f.premap(c))
 
     with pytest.raises(Exception) as excinfo:
-        compiled(v, e2v, out)
+        compiled(field, conn)
     assert "non-contiguous" in _chain(excinfo.value)
 
 
-@gtx.field_operator
-def _shift_by_field(
-    a: gtx.Field[gtx.Dims[Edge, K], float], offset: gtx.Field[gtx.Dims[Edge, K], gtx.int32]
-) -> gtx.Field[gtx.Dims[Edge, K], float]:
-    return a(as_offset(Koff, offset))
+@pytest.mark.parametrize("create", ["restrict", "from_array"])
+def test_torch_compile_premap_with_connectivity_not_created_by_constructor_raises(device, create):
+    table = _skip_value_e2v_table(2)
+    conn = _connectivity(table, device, skip_value=-1)
+    if create == "restrict":
+        conn = conn[common.domain({E: (0, 4), E2VDim: (0, 2)})]
+    else:
+        conn = nd_array_field.NdArrayConnectivityField.from_array(
+            conn.ndarray, V, domain=conn.domain, skip_value=-1
+        )
+    field = _field(np.arange(4.0), common.domain({V: 4}), device)
+
+    compiled, _ = _compile(_premap_and_reduce)
+
+    with pytest.raises(Exception) as excinfo:
+        compiled(field, conn)
+    assert "gtx.as_connectivity" in _chain(excinfo.value)
 
 
-def test_torch_compile_as_offset_computed_in_trace(device):
+def test_torch_compile_premap_with_as_offset_computed_in_trace(device):
+    C = Dimension("C")
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    Koff = fbuiltins.FieldOffset("Koff", source=K, target=(K,))
+    domain = common.domain({C: (0, 2), K: (0, 4)})
     values = np.arange(8.0).reshape(2, 4)
     offsets = np.asarray([[1, 1, 0, -1], [0, 2, 1, 0]], dtype=np.int32)
-    a = _field([Edge, K], values, device)
 
-    out = _field([Edge, K], np.zeros((2, 4)), device)
+    def shifted(field, offset_field):
+        return field.premap(experimental.as_offset(Koff, offset_field))
 
-    def step(a, offset, out):
-        _shift_by_field(a, offset, out=out, offset_provider={})
-        return out
+    field = _field(values, domain, device)
+    compiled, graphs = _compile(shifted)
+    result = compiled(field, _field(offsets, domain, device))
 
-    compiled, graphs = _compile(step)
-    result = compiled(a, _field([Edge, K], offsets, device), out)
-
-    assert result.domain == a.domain
+    assert result.domain == domain
     np.testing.assert_array_equal(
         result.asnumpy(), np.take_along_axis(values, np.arange(4) + offsets, axis=1)
     )
-    assert len(graphs) == 1
 
     # out-of-range targets read some element of the field under a trace, without an error
     for shift in (3, -3):
-        result = compiled(a, _field([Edge, K], np.full((2, 4), shift, dtype=np.int32), device), out)
+        result = compiled(field, _field(np.full((2, 4), shift, dtype=np.int32), domain, device))
+        assert result.domain == domain
         targets = np.arange(4) + shift
         in_range = (targets >= 0) & (targets < 4)
         np.testing.assert_array_equal(result.asnumpy()[:, in_range], values[:, targets[in_range]])
@@ -350,44 +300,32 @@ def test_torch_compile_as_offset_computed_in_trace(device):
     assert len(graphs) == 1
 
 
-def test_torch_compile_grad_through_neighbor_sum_with_connectivity_argument(device):
+def test_torch_compile_grad_through_premap_with_connectivity_argument(device):
     import torch
 
-    table = np.asarray([[0, 1], [2, -1]], dtype=np.int32)
-    e2v = _connectivity(table, device, skip_value=-1)
+    conn = _connectivity(np.asarray([[0, 1], [2, -1]], dtype=np.int32), device, skip_value=-1)
     x = torch.tensor([4.0, 9.0, 16.0, 1.0], dtype=torch.float64, device=device, requires_grad=True)
+    field = common._field(x, domain=common.domain({V: 4}))
+    traced = torch.compiler.nonstrict_trace(_premap_and_reduce)
 
-    v = common._field(x, domain=gtx.domain({Vertex: 4}))
+    def loss(field, conn):
+        return torch.sum(traced(field, conn).ndarray ** 2)
 
-    out = _field([Edge], np.zeros(2), device)
-
-    def loss(v, e2v, out):
-        _neighbor_sum(v, out=out, offset_provider={"E2V": e2v})
-        return torch.sum(out.ndarray**2)
-
-    compiled, graphs = _compile(loss)
-    result = compiled(v, e2v, out)
+    result = torch.compile(loss, fullgraph=True, backend="aot_eager")(field, conn)
     result.backward()
 
     np.testing.assert_allclose(result.item(), 13.0**2 + 16.0**2)
     np.testing.assert_allclose(x.grad.cpu().numpy(), [26.0, 26.0, 32.0, 0.0])
-    assert len(graphs) == 1
 
 
-def test_torch_compile_neighbor_sum_with_inductor(device):
+def test_torch_compile_premap_with_inductor(device):
     table = _skip_value_e2v_table(4)
-    values = np.arange(8.0)
-    e2v = _connectivity(table, device, skip_value=-1)
-    v = _field([Vertex], values, device)
-    out = _field([Edge], np.zeros(table.shape[0]), device)
+    field = _field(np.arange(8.0), common.domain({V: 8}), device)
+    conn = _connectivity(table, device, skip_value=-1)
 
-    def step(v, e2v, out):
-        _neighbor_sum_program(v, out, offset_provider={"E2V": e2v})
-        return out
-
-    compiled, graphs = _compile(step, backend="inductor")
+    compiled, graphs = _compile(_premap_and_reduce, backend="inductor")
 
     np.testing.assert_allclose(
-        compiled(v, e2v, out).asnumpy(), _reference_neighbor_sum(values, table)
+        compiled(field, conn).asnumpy(), _premap_and_reduce(field, conn).asnumpy()
     )
     assert len(graphs) == 1
