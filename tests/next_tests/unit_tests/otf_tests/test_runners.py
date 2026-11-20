@@ -745,7 +745,8 @@ sys.exit(0)
     )
 
     assert result.returncode == 0, result.stderr
-    # The running job and the one already handed to the worker's call queue still run.
+    # The running job and the ones already handed to the pool's call queue (up to
+    # `max_workers + 1` jobs in total) still run; the others are cancelled.
     assert len(list(tmp_path.glob("job_*"))) <= 3
 
 

@@ -21,6 +21,7 @@ import signal
 import sys
 import threading
 import warnings
+import weakref
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -212,7 +213,14 @@ def _cancel_pending_tasks_at_exit(pool: concurrent.futures.Executor) -> None:
     register = getattr(threading, "_register_atexit", None)  # CPython implementation detail
     if register is not None:
         try:
-            register(lambda: pool.shutdown(wait=False, cancel_futures=True))
+            # Weak reference: a runner dropped without `shutdown` must stay collectable.
+            pool_ref = weakref.ref(pool)
+
+            def cancel_pending() -> None:
+                if (alive_pool := pool_ref()) is not None:
+                    alive_pool.shutdown(wait=False, cancel_futures=True)
+
+            register(cancel_pending)
         except RuntimeError:  # interpreter is already shutting down
             pass
 
