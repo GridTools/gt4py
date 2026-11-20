@@ -70,8 +70,10 @@ The `gt4py.next` subsite does not include an API reference generated from docstr
 
 The [`Documentation`](../../../.github/workflows/docs.yml) GitHub workflow runs the `docs` nox session:
 
-- On pull requests changing the documentation, the sources or the build configuration, it only builds the site and uploads it as a workflow artifact (`github-pages`), which can be downloaded to review the result.
+- On every pull request, it only builds the site and uploads it as a workflow artifact (`github-pages`), which can be downloaded to review the result.
 - On pushes to `main` of the upstream repository, it additionally deploys that artifact to GitHub Pages.
+
+The build runs on every pull request, with no path filter, so that its `Build documentation` check can be a required status check of the `main` branch: a broken documentation build then blocks merging.
 
 This requires the Pages source of the repository to be set to _GitHub Actions_ (in _Settings > Pages_). Every deployment replaces the whole published site with the result of the build: nothing is stored in a git branch, and only the documentation of the current `main` is available.
 

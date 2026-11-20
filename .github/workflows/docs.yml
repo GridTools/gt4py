@@ -3,6 +3,10 @@ name: Documentation
 # Builds the user documentation site (welcome page plus the 'gt4py.cartesian'
 # and 'gt4py.next' subsites) and, for pushes to 'main' in the upstream repository,
 # deploys it to GitHub Pages (which must use 'GitHub Actions' as source).
+#
+# The build runs on every pull request (no 'paths' filter), so that it can be
+# a required status check: a required check from a workflow skipped by a path
+# filter would stay pending forever.
 
 on:
   push:
@@ -11,13 +15,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - ".github/workflows/docs.yml"
-      - "docs/user/**"
-      - "noxfile.py"
-      - "pyproject.toml"
-      - "src/gt4py/**"
-      - "uv.lock"
   workflow_dispatch:
 
 permissions:
@@ -25,6 +22,7 @@ permissions:
 
 jobs:
   build:
+    name: Build documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
