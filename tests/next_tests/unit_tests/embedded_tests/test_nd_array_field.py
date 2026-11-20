@@ -2532,25 +2532,6 @@ def test_invert_domain(domain, expected):
     assert result == expected
 
 
-def test_eager_concat_where_on_covering_branches_concatenates(nd_array_implementation, monkeypatch):
-    def select(*args):
-        raise AssertionError("eager 'concat_where' selects")
-
-    monkeypatch.setattr(nd_array_field, "_select", select)
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    domain = common.domain({K: (0, 6)})
-    true_field = common._field(
-        asarray(nd_array_implementation, np.arange(6.0), dtype=np.float64), domain=domain
-    )
-    false_field = common._field(
-        asarray(nd_array_implementation, -np.arange(6.0), dtype=np.float64), domain=domain
-    )
-
-    result = concat_where(common.domain({K: (0, 3)}), true_field, false_field)
-
-    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
-
-
 @pytest.mark.uses_concat_where
 @pytest.mark.parametrize(
     "fields_data, dim, expected_data, expect_error",

@@ -946,11 +946,10 @@ def _size0_field(
     )
 
 
-def _concat_where(
-    domain: common.Domain,
-    true_field: common.Field,
-    false_field: common.Field,
-) -> common.Field:
+def _concat_where_slices(
+    domain: common.Domain, true_field: common.Field, false_field: common.Field
+) -> tuple[common.Field, common.Field, tuple[common.Field, ...], tuple[common.Field, ...]]:
+    """The branches intersected orthogonally to `domain`, and their slices that make up the result."""
     if domain.ndim != 1:
         raise NotImplementedError(
             "'concat_where': Can only concatenate fields with a 1-dimensional domain."
@@ -963,55 +962,31 @@ def _concat_where(
     )
 
     true_domain = embedded_common.domain_intersection(t_broadcasted.domain, domain)
-    t_domains = () if true_domain.is_empty() else (true_domain,)
-    f_domains = tuple(
+    t_slices = () if true_domain.is_empty() else (t_broadcasted[true_domain],)
+
+    inverted_domains = _invert_domain(domain)
+    false_domains = tuple(
         intersection
-        for d in _invert_domain(domain)
+        for d in inverted_domains
         if not (
             intersection := embedded_common.domain_intersection(f_broadcasted.domain, d)
         ).is_empty()
     )
+    f_slices = tuple(f_broadcasted[d] for d in false_domains)
+    return t_broadcasted, f_broadcasted, t_slices, f_slices
 
-    if len(t_domains) + len(f_domains) == 0:
+
+def _concat_where(
+    domain: common.Domain,
+    true_field: common.Field,
+    false_field: common.Field,
+) -> common.Field:
+    t_broadcasted, _, t_slices, f_slices = _concat_where_slices(domain, true_field, false_field)
+    if len(t_slices) + len(f_slices) == 0:
         # no data to concatenate, return an empty field
         like = next(f for f in (true_field, false_field) if isinstance(f, NdArrayField))
         return _size0_field(like, dims=t_broadcasted.domain.dims, dtype=true_field.dtype)
-
-    result_range = common.UnitRange(
-        min(d[domain_dim].unit_range.start for d in (*t_domains, *f_domains)),
-        max(d[domain_dim].unit_range.stop for d in (*t_domains, *f_domains)),
-    )
-    if _ops_of(t_broadcasted).concat_where_selects(t_broadcasted.ndarray) and all(
-        result_range <= f.domain[domain_dim].unit_range for f in (t_broadcasted, f_broadcasted)
-    ):
-        return _select(domain, t_broadcasted, f_broadcasted, result_range)
-    return _concat(
-        *(f_broadcasted[d] for d in f_domains),
-        *(t_broadcasted[d] for d in t_domains),
-        dim=domain_dim,
-    )
-
-
-def _select(
-    condition: common.Domain,
-    true_field: common.Field,
-    false_field: common.Field,
-    result_range: common.UnitRange,
-) -> NdArrayField:
-    """`concat_where` on branches that both cover `result_range`, as an elementwise select."""
-    (dim,) = condition.dims
-    result_domain = true_field.domain.replace(dim, common.NamedRange(dim, result_range))
-    ops = _ops_of(true_field)
-    xp = ops.xp
-    selected = condition[dim].unit_range & result_range
-    coords = xp.arange(result_range.start, result_range.stop, device=ops.device(true_field.ndarray))
-    mask = (coords >= selected.start) & (coords < selected.stop)
-    axis = result_domain.dim_index(dim, allow_missing=False)
-    mask = xp.reshape(mask, tuple(-1 if i == axis else 1 for i in range(result_domain.ndim)))
-    return NdArrayField.from_array(
-        xp.where(mask, true_field[result_domain].ndarray, false_field[result_domain].ndarray),
-        domain=result_domain,
-    )
+    return _concat(*f_slices, *t_slices, dim=domain.dims[0])
 
 
 _register_builtin(experimental.concat_where, _concat_where)

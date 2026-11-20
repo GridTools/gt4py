@@ -92,10 +92,6 @@ class ArrayOps:
     def device(self, array: core_defs.NDArrayObject) -> Any:
         return array_api_compat.device(array)
 
-    def concat_where_selects(self, array: core_defs.NDArrayObject) -> bool:
-        """Whether `concat_where` on branches that both cover the result selects instead of concatenating."""
-        return False
-
     def asarray(
         self,
         data: Any,
