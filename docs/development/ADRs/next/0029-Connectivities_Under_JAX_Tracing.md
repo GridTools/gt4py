@@ -50,11 +50,13 @@ A connectivity passed to `jax.jit` can also be used by the branches of `lax.cond
 
 ### Under `torch.compile`
 
-Torch connectivities get the same narrowing under `torch.compile`. Dynamo does not trace embedded code: a compiled region calls it through a `torch.compiler.nonstrict_trace` function, which is one graph without breaks under `fullgraph=True` and runs the embedded code on fake tensors. Embedded programs and field operators do not do that call themselves yet.
+Torch connectivities get the same narrowing under `torch.compile`. Dynamo does not trace embedded code: a compiled region calls it through a `torch.compiler.nonstrict_trace` function, which is one graph without breaks under `fullgraph=True`. Dynamo records the call as one node, and AOTAutograd runs the embedded code as Python on fake tensors.
 
-Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples. A region that gets fields of different domains has to be compiled with `dynamic=False`: otherwise Dynamo makes the bounds of the second domain symbolic, and they are no constants. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor its static values for the pytree context, a `torch.utils._pytree.register_constant` object compared by memory, as in the aux data under `jax.jit`. Torch tensors are mutable, so the memory includes the version counter of the tensor. Dynamo guards it by equality. Unflattening gives a fake child their values as NumPy static values, read when a trace first unflattens the connectivity. A table computed by `as_offset` in the trace has none, as under `jax.jit`.
+This carries the design under `jax.jit` over: domains and static values are constants of the trace, and a graph is specific to them. Torch could express more, see "Symbolic domains under `torch.compile`" below.
 
-A connectivity closed over by the region and passed to the `nonstrict_trace` function is supported; one closed over by that function itself is not. A connectivity without static values for the context, built by `restrict`, `dataclasses.replace`, `copy`, pickling or `NdArrayConnectivityField.from_array`, raises a `TypeError` when it is flattened in the region, which Dynamo reports as `Unsupported`. The `nonstrict_trace` function cannot return a connectivity with static values.
+Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor its static values for the pytree context, a `torch.utils._pytree.register_constant` object compared by memory, as in the aux data under `jax.jit`. Torch tensors are mutable, so the memory includes the version counter of the tensor. Dynamo guards it by equality. Unflattening gives a fake child their values as NumPy static values, read when a trace first unflattens the connectivity. A table computed by `as_offset` in the trace has none, as under `jax.jit`.
+
+A connectivity closed over by the region and passed to the `nonstrict_trace` function is supported.
 
 ## Consequences
 
@@ -73,7 +75,11 @@ Under `jax.jit`:
 
 Under `torch.compile`:
 
-- A compiled graph is specific to the buffers of its connectivities, as under `jax.jit`, and to the domains of its fields. Every other buffer or domain is a recompile, so Dynamo's recompile limit (`torch._dynamo.config.recompile_limit`) bounds their number, and with `fullgraph=True` the call after the limit raises. Unlike under `jax.jit`, a connectivity restricted eagerly is not supported.
+- A compiled graph is specific to the buffers of its connectivities, as under `jax.jit`, and to the domains of its fields. Every other buffer or domain is a recompile, so Dynamo's recompile limit (`torch._dynamo.config.recompile_limit`) bounds their number, and with `fullgraph=True` the call after the limit raises.
+- A region that gets fields of different domains has to be compiled with `dynamic=False`. Otherwise Dynamo makes the bounds of the second domain symbolic, and they are no constants for the pytree context.
+- Only a connectivity created by `common._connectivity` from a concrete tensor outside the region has static values for the context. One built by `restrict`, `dataclasses.replace`, `copy`, pickling or `NdArrayConnectivityField.from_array` raises a `TypeError` when it is flattened in the region, which Dynamo reports as `Unsupported`. Unlike under `jax.jit`, a connectivity restricted eagerly is not supported.
+- A connectivity closed over by the `nonstrict_trace` function itself, rather than passed to it, is not supported, and neither is returning a connectivity with static values from it.
+- Embedded programs and field operators do not call the `nonstrict_trace` function themselves: the region has to call embedded code through one.
 - The static values in the pytree context of a torch connectivity hold its tensor, so the compiled code keeps every table it has seen alive; with torch 2.15 even `torch._dynamo.reset()` does not release them. On a GPU the first trace of a connectivity reads a host copy of its table, which they keep.
 
 Open questions under `jax.jit`, all caused by the static values in the aux data:
@@ -83,6 +89,12 @@ Open questions under `jax.jit`, all caused by the static values in the aux data:
 - `shard_map` rejects the aux data when the table is sharded, so distributed execution is not supported yet.
 
 ## Alternatives considered
+
+### Symbolic domains under `torch.compile`
+
+Unlike jax, torch represents sizes that vary as symbolic integers, and values that depend on data, e.g. from `.item()`, as unbacked symbolic integers, with `torch._check` for what the trace assumes about them. A design native to torch could use that instead of static values. The bounds of a domain would enter the trace as symbolic integers, and the inverse image would be computed on the fake table, giving unbacked integers for the narrowed domain. One graph could then serve every table and every domain, without `dynamic=False` and without a recompile per buffer, and a table computed by `as_offset` could narrow its domain as eager execution does. A non-contiguous inverse image would become a check at run time.
+
+It would need `Domain`, `UnitRange` and the embedded slicing to carry symbolic integers, and every decision on a domain that depends on values to become such a check, in code shared by all array libraries. jax cannot express shapes that depend on data, so the two libraries would no longer share the design under a trace. Whether the embedded code works on symbolic domains has not been explored.
 
 ### Table operations on a per-connectivity object
 
