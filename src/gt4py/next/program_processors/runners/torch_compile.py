@@ -9,159 +9,116 @@
 """
 Embedded execution of programs and field operators under `torch.compile`.
 
-`torch_compile` (created on first access, it requires `torch`) runs the Python
-definition on fields of torch tensors in a `torch.compile` region, through a
-`torch.compiler.nonstrict_trace` function, as `torch_ops` describes. Fields and
-connectivities are arguments of the region; Dynamo specializes on the other
-arguments (see `embedded_jit` for the static ones).
+The embedded code runs in a region through a `torch.compiler.nonstrict_trace`
+function (see `torch_ops`). Fields, connectivities and scalars are arguments of the
+region; the `Dimension`s of the offset provider, a `domain=` argument and the
+parameters in `static_params` are static.
 """
 
 from __future__ import annotations
 
+import contextvars
 import dataclasses
+import inspect
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from gt4py.next import backend as next_backend
-from gt4py.next.embedded import context as embedded_context
-from gt4py.next.program_processors.runners import embedded_jit
+import numpy as np
+import torch
+
+from gt4py.next import backend as next_backend, common, named_collections
+from gt4py.next.embedded.array_libraries import torch_ops
 from gt4py.next.type_system import type_specifications as ts
 
 
-@dataclasses.dataclass(frozen=True)
-class TorchCompileBackend(embedded_jit.EmbeddedJitBackend):
-    """Runs programs and field operators embedded, under `torch.compile`."""
+# Dynamo reports an exception of the embedded code as an unsupported output type
+_embedded_error: contextvars.ContextVar[Exception | None] = contextvars.ContextVar(
+    "_embedded_error", default=None
+)
 
-    def jit(
-        self,
-        function: Callable[..., None],
-        static_argnames: Iterable[str] = (),
-        param_names: Sequence[str] = (),
-        param_types: Iterable[ts.TypeSpec] = (),
-    ) -> CompileRunner:
-        import torch.utils._pytree as torch_pytree
-
-        for type_ in param_types:
-            for cls in embedded_jit.named_collection_dataclasses(type_):
-                if cls not in _registered_dataclasses:
-                    torch_pytree.register_dataclass(cls)
-                    _registered_dataclasses.add(cls)
-        return CompileRunner(function, frozenset(static_argnames), tuple(param_names))
-
-
-_registered_dataclasses: set[type] = set()
-
-
-class CompileRunner(embedded_jit.EmbeddedJitRunner):
-    """
-    One `torch.compile` region per combination of static arguments.
-
-    The static arguments are closed over by the non-strictly traced function,
-    since `nonstrict_trace` only takes tensors, pytrees and constants. The entry
-    point assigns to its `out` fields in place, which the region applies to the
-    caller's tensors.
-    """
-
-    def __init__(
-        self,
-        function: Callable[..., None],
-        static_argnames: frozenset[str],
-        param_names: tuple[str, ...],
-    ) -> None:
-        super().__init__(function, static_argnames, param_names)
-        self._embedded_error: BaseException | None = None
-        self._regions: dict[
-            tuple[embedded_jit.StaticItems, embedded_jit.StaticItems], Callable[..., Any]
-        ] = {}
-
-    def _region(
-        self, static_kwargs: embedded_jit.StaticItems, static_provider: embedded_jit.StaticItems
-    ) -> Callable[..., Any]:
-        import torch
-
-        function = self._function
-
-        @torch.compiler.nonstrict_trace
-        def run_embedded(
-            args: tuple[Any, ...], kwargs: dict[str, Any], connectivities: dict[str, Any]
-        ) -> tuple[()]:
-            with embedded_context.update(
-                offset_provider={**connectivities, **dict(static_provider)}
-            ):
-                try:
-                    function(*args, **kwargs, **dict(static_kwargs))
-                except Exception as error:
-                    # Dynamo reports it as an unsupported output type
-                    self._embedded_error = error
-                    raise
-            # `nonstrict_trace` does not support a `None` output
-            return ()
-
-        def region(
-            args: tuple[Any, ...], kwargs: dict[str, Any], connectivities: dict[str, Any]
-        ) -> tuple[()]:
-            return run_embedded(args, kwargs, connectivities)
-
-        # Dynamo caches per code object, with a recompile limit: every region needs its own
-        region.__code__ = region.__code__.replace()
-        # with dynamic shapes, Dynamo makes domain bounds symbolic, which cannot be in a pytree context
-        return torch.compile(region, fullgraph=True, dynamic=False)
-
-    def _run(
-        self,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        connectivities: dict[str, Any],
-        static_kwargs: embedded_jit.StaticItems,
-        static_provider: embedded_jit.StaticItems,
-    ) -> None:
-        import torch
-        import torch.utils._pytree as torch_pytree
-
-        key = (static_kwargs, static_provider)
-        if (region := self._regions.get(key)) is None:
-            region = self._regions[key] = self._region(static_kwargs, static_provider)
-        args, kwargs = torch_pytree.tree_map(_as_region_argument, (args, kwargs))
-        try:
-            region(args, kwargs, connectivities)
-        except torch._dynamo.exc.Unsupported as unsupported:
-            if (error := self._embedded_error) is None:
-                raise
-            self._embedded_error = None
-            raise error from unsupported
+_Static = tuple[tuple[str, Any], ...]
 
 
 def _as_region_argument(value: Any) -> Any:
-    import numpy as np
-    import torch
-
-    # `nonstrict_trace` takes no NumPy scalars. Dynamo specializes on Python integers and
-    # booleans, as for domain bounds and conditions; a floating-point scalar becomes a 0-d
-    # tensor, which keeps its dtype.
-    if isinstance(value, np.bool_ | np.integer):
-        return value.item()
-    if isinstance(value, np.generic):
+    # Dynamo specializes on Python and NumPy scalars, which `nonstrict_trace` does not
+    # take either: as 0-d tensors they are traced, as by `jax.jit`, and keep their dtype
+    if isinstance(value, float):
+        return torch.tensor(value, dtype=torch.float64)
+    if isinstance(value, bool | int | np.generic):
         return torch.as_tensor(value)
     return value
 
 
-def __getattr__(name: str) -> TorchCompileBackend:
-    if name != "torch_compile":
-        raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
-    import torch
+def _region(entry: Callable[..., None], static: _Static) -> Callable[..., Any]:
+    @torch.compiler.nonstrict_trace
+    def run_embedded(kwargs: dict[str, Any], connectivities: dict[str, Any]) -> tuple[()]:
+        static_kwargs = dict(static)
+        offset_provider = {**connectivities, **dict(static_kwargs.pop("offset_provider"))}
+        try:
+            entry(**kwargs, **static_kwargs, offset_provider=offset_provider)
+        except Exception as error:
+            _embedded_error.set(error)
+            raise
+        # `nonstrict_trace` does not support a `None` output
+        return ()
 
-    from gt4py.next.embedded.array_libraries import (
-        torch_ops,  # noqa: F401 [unused-import] # registers the pytrees
-    )
+    def region(kwargs: dict[str, Any], connectivities: dict[str, Any]) -> tuple[()]:
+        return run_embedded(kwargs, connectivities)
 
-    backend = TorchCompileBackend(
-        name="torch_compile",
-        executor=embedded_jit.not_compiled,
-        allocator=torch,
-        transforms=next_backend.DEFAULT_TRANSFORMS,
-    )
-    globals()[name] = backend
-    return backend
+    # Dynamo's recompile limit is per code object: each region needs its own
+    region.__code__ = region.__code__.replace()
+    # `dynamic=False`: see `torch_ops`
+    return torch.compile(region, fullgraph=True, dynamic=False)
 
 
-torch_compile: TorchCompileBackend
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class TorchCompileBackend(next_backend.EmbeddedJitBackend):
+    """
+    Runs programs and field operators embedded, under `torch.compile`.
+
+    Dynamo cannot rebuild frozen dataclasses such as `Dimension` and `Domain` from a
+    region input, so the static arguments are closed over by one region per
+    combination of their values. The `out` fields are assigned to in place.
+    """
+
+    def jit(
+        self,
+        entry: Callable[..., None],
+        signature: inspect.Signature,
+        static_params: Sequence[str],
+        param_types: Iterable[ts.TypeSpec],
+    ) -> Callable[..., None]:
+        for type_ in param_types:
+            for cls in named_collections.dataclass_types(type_):
+                torch_ops.register_named_collection(cls)
+        static_names = frozenset((*static_params, "domain"))
+        regions: dict[_Static, Callable[..., Any]] = {}
+
+        def run(*args: Any, **kwargs: Any) -> None:
+            arguments = signature.bind(*args, **kwargs).arguments
+            connectivities = {}
+            static_provider = {}
+            for name, value in arguments.pop("offset_provider").items():
+                if isinstance(value, common.Connectivity):
+                    connectivities[name] = value
+                else:
+                    static_provider[name] = value
+            static = (
+                ("offset_provider", tuple(sorted(static_provider.items()))),
+                *sorted((name, arguments.pop(name)) for name in static_names & arguments.keys()),
+            )
+            if (region := regions.get(static)) is None:
+                region = regions[static] = _region(entry, static)
+            dynamic = torch.utils._pytree.tree_map(_as_region_argument, arguments)
+            try:
+                region(dynamic, connectivities)
+            except torch._dynamo.exc.Unsupported as unsupported:
+                if (error := _embedded_error.get()) is None:
+                    raise
+                _embedded_error.set(None)
+                raise error from unsupported
+
+        return run
+
+
+torch_compile = TorchCompileBackend(name="torch_compile", allocator=torch)

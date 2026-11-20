@@ -9,8 +9,9 @@
 """
 `ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
-Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
-connectivity table inside a trace is a tracer, and one of two cases:
+How embedded fields and connectivities behave under JAX tracing is in this module
+(ADR 0029); `runners.jax_jit` runs programs under `jax.jit`. A connectivity table
+inside a trace is a tracer, and one of two cases:
 
 - it stands for a concrete table, which it got as a pytree leaf, or it was
   restricted from such a tracer: its static values are a NumPy view of the
@@ -24,6 +25,7 @@ A concrete table closed over by a trace is not supported.
 from __future__ import annotations
 
 import dataclasses
+import functools
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -248,3 +250,15 @@ jax.tree_util.register_pytree_node(
     _flatten_connectivity,
     _unflatten_connectivity,
 )
+
+# e.g. the `Dimension`s of an offset provider, or a `domain=` argument, in the arguments of `jax.jit`
+jax.tree_util.register_static(common.Dimension)
+jax.tree_util.register_static(common.Domain)
+
+
+@functools.cache
+def register_named_collection(cls: type) -> None:
+    """Make the dataclass named collection `cls` a pytree; the other named collections are tuples."""
+    jax.tree_util.register_dataclass(
+        cls, data_fields=[f.name for f in dataclasses.fields(cls)], meta_fields=[]
+    )
