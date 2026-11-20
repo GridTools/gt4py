@@ -16,8 +16,6 @@ from gt4py.next import astype, common, int32, maximum, neighbor_sum, sqrt
 from gt4py.next.ffront.experimental import as_offset
 
 
-pytestmark = pytest.mark.requires_jax
-
 IDim = gtx.Dimension("IDim")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 Vertex = gtx.Dimension("Vertex")
@@ -97,39 +95,70 @@ def swap(
 
 
 @pytest.fixture(
-    params=["cpu", pytest.param("gpu", marks=pytest.mark.requires_gpu)],
+    params=[
+        pytest.param("jax", marks=pytest.mark.requires_jax),
+        pytest.param("torch", marks=pytest.mark.requires_torch),
+    ]
 )
-def device(request):
-    import jax
+def library(request):
+    return request.param
 
-    try:
-        return jax.devices(request.param)[0]
-    except RuntimeError:
-        pytest.skip(f"no jax '{request.param}' device")
+
+@pytest.fixture(params=["cpu", pytest.param("gpu", marks=pytest.mark.requires_gpu)])
+def device(request, library):
+    if library == "jax":
+        import jax
+
+        try:
+            return jax.devices(request.param)[0]
+        except RuntimeError:
+            pytest.skip(f"no jax '{request.param}' device")
+    import torch
+
+    if request.param == "gpu" and not torch.cuda.is_available():
+        pytest.skip("no torch CUDA device")
+    return torch.device("cuda" if request.param == "gpu" else "cpu")
 
 
 @pytest.fixture
-def backend():
-    from gt4py.next.program_processors.runners import jax_jit
+def backend(library):
+    if library == "jax":
+        from gt4py.next.program_processors.runners import jax_jit
 
-    return jax_jit.jax_jit
+        return jax_jit.jax_jit
+    from gt4py.next.program_processors.runners import torch_compile
+
+    return torch_compile.torch_compile
+
+
+@pytest.fixture
+def jax_only(library):
+    if library != "jax":
+        pytest.skip("inspects the 'jax.jit' cache")
+
+
+def _array(device, values):
+    values = np.asarray(values)
+    if type(device).__module__.startswith("torch"):
+        import torch
+
+        return torch.as_tensor(values, device=device)
+    import jax
+
+    return jax.device_put(values, device)
 
 
 def _field(device, values, dims):
-    import jax
-
     values = np.asarray(values)
     return common._field(
-        jax.device_put(values, device),
+        _array(device, values),
         domain=common.domain({dim: size for dim, size in zip(dims, values.shape)}),
     )
 
 
 def _e2v(device, table=E2V_TABLE):
-    import jax
-
     return common._connectivity(
-        jax.device_put(table, device),
+        _array(device, table),
         codomain=Vertex,
         domain=common.domain({Edge: table.shape[0], E2VDim: table.shape[1]}),
     )
@@ -154,7 +183,7 @@ def test_program_with_connectivity(device, backend):
     np.testing.assert_array_equal(out.asnumpy(), [3.0, 5.0, 7.0, 5.0, 4.0])
 
 
-def test_table_is_a_runtime_argument(device, backend):
+def test_table_is_a_runtime_argument(device, backend, jax_only):
     f = _field(device, [1.0, 2.0, 3.0, 4.0], [Vertex])
     out = _field(device, np.zeros(5), [Edge])
     prog = edge_sum_program.with_backend(backend)
@@ -170,7 +199,7 @@ def test_table_is_a_runtime_argument(device, backend):
     assert "tensor<5x2xi32>" in main_signature
 
 
-def test_retrace_per_table_buffer(device, backend):
+def test_retrace_per_table_buffer(device, backend, jax_only):
     f = _field(device, [1.0, 2.0, 3.0, 4.0], [Vertex])
     out = _field(device, np.zeros(5), [Edge])
     prog = edge_sum_program.with_backend(backend)
@@ -185,7 +214,16 @@ def test_retrace_per_table_buffer(device, backend):
     assert _runner(prog)._cache_size() == 2
 
 
-def test_cartesian_offset_and_traced_scalar(device, backend):
+def test_traced_scalar_does_not_retrace(device, backend, jax_only):
+    f = _field(device, np.arange(6.0), [IDim])
+    prog = shift_scale_program.with_backend(backend)
+    for a in (2.0, 3.0):
+        prog(f, a, _field(device, np.zeros(5), [IDim]), offset_provider={})
+
+    assert _runner(prog)._cache_size() == 1
+
+
+def test_cartesian_offset_and_scalar(device, backend):
     f = _field(device, np.arange(6.0), [IDim])
     prog = shift_scale_program.with_backend(backend)
     for a in (2.0, 3.0):
@@ -194,8 +232,6 @@ def test_cartesian_offset_and_traced_scalar(device, backend):
         prog(f, a, out, offset_provider={})
         shift_scale_program(f, a, expected, offset_provider={})
         np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
-
-    assert _runner(prog)._cache_size() == 1
 
 
 def test_static_param_in_program_domain(device, backend):
@@ -236,7 +272,7 @@ def test_dimension_in_offset_provider_is_static(device, backend):
     np.testing.assert_array_equal(out.asnumpy(), [1.0, 1.0, 4.0, 4.0, 4.0])
 
 
-def test_scalar_only_builtins_on_traced_scalars(device, backend):
+def test_scalar_only_builtins(device, backend):
     f = _field(device, np.arange(3.0), [IDim])
     out = _field(device, np.zeros(3), [IDim])
     expected = _field(device, np.zeros(3), [IDim])
@@ -248,7 +284,7 @@ def test_scalar_only_builtins_on_traced_scalars(device, backend):
     np.testing.assert_array_equal(out.asnumpy(), [0.0, 9.0, 18.0])
 
 
-def test_scan_with_traced_scalar(device, backend):
+def test_scan_with_scalar(device, backend):
     x = _field(device, np.arange(1.0, 5.0), [KDim])
     out = _field(device, np.zeros(4), [KDim])
     expected = _field(device, np.zeros(4), [KDim])
@@ -269,8 +305,6 @@ def test_static_param_of_field_operator(device, backend):
         fo(f, flag, out=out, offset_provider={})
         scale_if(f, flag, out=expected, offset_provider={})
         np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
-
-    assert _runner(fo)._cache_size() == 2
 
 
 def test_field_operator_tuple_out_leaves_inputs(device, backend):

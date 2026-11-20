@@ -288,6 +288,7 @@ markers = [
   'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
   'uses_scalar_in_control_flow: tests that branch in Python on a scalar argument',
   'uses_scalar_in_domain: tests that use a scalar argument as a domain bound',
+  'uses_scan_carry_in_control_flow: tests that branch in Python on the carry of a scan',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', '_local/*', '.*']
