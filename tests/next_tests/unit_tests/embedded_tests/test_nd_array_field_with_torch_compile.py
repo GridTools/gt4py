@@ -37,7 +37,7 @@ def device(request):
     return torch.device(request.param)
 
 
-def _compile(fn, backend="aot_eager"):
+def _compile(fn, backend="aot_eager", **kwargs):
     """
     `fn` called through `nonstrict_trace` in a region compiled with `fullgraph`, and the Dynamo graphs.
 
@@ -55,7 +55,10 @@ def _compile(fn, backend="aot_eager"):
         return compiler(gm, example_inputs)
 
     traced = torch.compiler.nonstrict_trace(fn)
-    return torch.compile(lambda *args: traced(*args), fullgraph=True, backend=recorder), graphs
+    return (
+        torch.compile(lambda *args: traced(*args), fullgraph=True, backend=recorder, **kwargs),
+        graphs,
+    )
 
 
 def _field(values, domain, device):
@@ -98,6 +101,30 @@ def test_torch_compile_field_arguments(device):
     assert result.ndarray.device.type == device.type
     np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
     assert len(graphs) == 1
+
+
+def test_torch_compile_retraces_per_field_domain(device):
+    compiled, graphs = _compile(lambda x: x + x, dynamic=False)
+
+    for num_graphs, (start, stop) in enumerate([(0, 3), (5, 8), (0, 4)], start=1):
+        field = _field(np.arange(float(stop - start)), common.domain({D0: (start, stop)}), device)
+        result = compiled(field)
+
+        assert result.domain == field.domain
+        np.testing.assert_array_equal(result.asnumpy(), 2.0 * field.asnumpy())
+        assert len(graphs) == num_graphs
+
+
+@pytest.mark.xfail(
+    reason="Dynamo makes the bounds of the second domain symbolic, which cannot be in a pytree context",
+    raises=Exception,
+    strict=True,
+)
+def test_torch_compile_another_field_domain_without_dynamic_false(device):
+    compiled, _ = _compile(lambda x: x + x)
+
+    compiled(_field(np.arange(3.0), common.domain({D0: (0, 3)}), device))
+    compiled(_field(np.arange(3.0), common.domain({D0: (5, 8)}), device))
 
 
 def test_torch_pytree_roundtrip(device):
@@ -228,6 +255,27 @@ def test_torch_compile_retraces_per_connectivity_buffer(device):
     np.testing.assert_array_equal(result.asnumpy(), field.premap(connectivity(copy)).asnumpy())
 
 
+def test_torch_compile_retraces_after_in_place_write_of_table(device):
+    import torch
+
+    table = torch.asarray(np.arange(6, dtype=np.int32), device=device)
+    field = _field(np.arange(4.0), common.domain({V: (0, 4)}), device)
+
+    def connectivity():
+        return _connectivity(table, device, domain=common.domain({E: 6}))
+
+    compiled, graphs = _compile(lambda f, c: f.premap(c))
+    assert compiled(field, connectivity()).domain == common.domain({E: (0, 4)})
+
+    table[:] = torch.asarray(np.arange(6, dtype=np.int32)[::-1].copy(), device=device)
+    expected = field.premap(connectivity())
+    result = compiled(field, connectivity())
+
+    assert len(graphs) == 2
+    assert result.domain == expected.domain == common.domain({E: (2, 6)})
+    np.testing.assert_array_equal(result.asnumpy(), expected.asnumpy())
+
+
 def _chain(error: BaseException) -> str:
     """The messages of `error` and its causes: `torch.compile` reports the error of a trace further down."""
     messages = []
@@ -319,6 +367,10 @@ def test_torch_compile_grad_through_premap_with_connectivity_argument(device):
 
 
 def test_torch_compile_premap_with_inductor(device):
+    if device.type == "cpu":
+        # the C++ compiler of inductor's CPU backend comes from `CXX`, which CI sets to `hipcc`
+        # on AMD nodes; the graph is the same as with `aot_eager`
+        pytest.skip("inductor's CPU backend depends on the host C++ compiler")
     table = _skip_value_e2v_table(4)
     field = _field(np.arange(8.0), common.domain({V: 8}), device)
     conn = _connectivity(table, device, skip_value=-1)

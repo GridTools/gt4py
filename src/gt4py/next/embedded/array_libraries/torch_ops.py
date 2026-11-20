@@ -22,8 +22,13 @@ connectivity table inside the trace is one of two cases:
 
 A connectivity reaches the trace through the pytree context only if it was
 created by `common._connectivity`, e.g. `gtx.as_connectivity`, outside of the
-region; `restrict`, `dataclasses.replace` and `NdArrayConnectivityField.from_array`
-give connectivities that are not supported in the region.
+region; `restrict`, `dataclasses.replace`, `copy`, pickling and
+`NdArrayConnectivityField.from_array` give connectivities that are not supported
+in the region.
+
+A region that gets fields of different domains has to be compiled with
+`dynamic=False`: otherwise Dynamo makes the domain bounds symbolic on the second
+domain, and they cannot be in the pytree context.
 """
 
 from __future__ import annotations
@@ -58,8 +63,7 @@ def _gamma(x: torch.Tensor) -> torch.Tensor:
 
 
 def _is_concrete(tensor: Any) -> bool:
-    # the tensors of a trace are subclasses: fake, functional or proxy tensors
-    return type(tensor) is torch.Tensor
+    return isinstance(tensor, torch.Tensor) and not torch._subclasses.fake_tensor.is_fake(tensor)
 
 
 def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArrayField) -> Any:
@@ -126,12 +130,14 @@ class _StaticValuesByMemory:
 
     `torch.compile` guards a constant of the context by equality, so a call with another
     buffer, even with equal values, retraces, while a new connectivity around the same
-    buffer does not. The values are read as NumPy on first use, in a trace that needs them.
+    buffer does not. Torch tensors are mutable, so the memory includes the version of the
+    tensor: a connectivity created after an in-place write retraces too. The values are
+    read as NumPy when a trace first unflattens the connectivity.
     """
 
     __slots__ = ("__weakref__", "_key", "_table", "_values")
 
-    _key: tuple[int, tuple[int, ...], tuple[int, ...], torch.dtype, torch.device]
+    _key: tuple[int, tuple[int, ...], tuple[int, ...], torch.dtype, torch.device, int]
     _table: torch.Tensor
     _values: Optional[np.ndarray]
 
@@ -145,6 +151,7 @@ class _StaticValuesByMemory:
             table.stride(),
             table.dtype,
             table.device,
+            table._version,
         )
         self._values = None
 
