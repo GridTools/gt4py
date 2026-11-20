@@ -2,14 +2,14 @@
 tags: [embedded, jax, torch, connectivities]
 ---
 
-# Connectivities Under JAX Tracing
+# Connectivities in Tracing Embedded Backends
 
 - **Status**: valid
 - **Authors**: Hannes Vogt (@havogt)
 - **Created**: 2026-11-19
 - **Updated**: 2026-11-20
 
-In the context of running embedded `premap` under `jax.jit`, facing a neighbor table that must be a runtime argument for the gather but concrete for domain inference, we decided to pass the concrete table along with its tracer through the pytree aux data of the connectivity, to get the same narrowing as eager execution without compiling tables into the program. We accept a table reference held by jax's jit cache and a silent clamp when the table is only known at runtime (`as_offset`). Under `torch.compile` the static values reach the trace through the pytree context instead.
+In the context of running embedded `premap` under a tracing compiler, `jax.jit` or `torch.compile`, facing a neighbor table that must be a runtime argument for the gather but concrete for domain inference, we decided to pass the concrete table along with the traced one through the pytree metadata of the connectivity (the aux data for jax, the pytree context for torch), to get the same narrowing as eager execution without compiling tables into the program. We accept a table reference held by the compiler's cache and a silent clamp when the table is only known at runtime (`as_offset`). The approach was designed for jax and works for torch too, but it is not the ideal approach for torch: a more torch-native integration should be investigated later.
 
 ## Context
 
@@ -52,7 +52,7 @@ A connectivity passed to `jax.jit` can also be used by the branches of `lax.cond
 
 Torch connectivities get the same narrowing under `torch.compile`. Dynamo does not trace embedded code: a compiled region calls it through a `torch.compiler.nonstrict_trace` function, which is one graph without breaks under `fullgraph=True`. Dynamo records the call as one node, and AOTAutograd runs the embedded code as Python on fake tensors.
 
-This carries the design under `jax.jit` over: domains and static values are constants of the trace, and a graph is specific to them. Torch could express more, see "Symbolic domains under `torch.compile`" below.
+This carries the design under `jax.jit` over: domains and static values are constants of the trace, and a graph is specific to them. It works, but it does not use what torch can express beyond jax, and its limitations below come from that. A more torch-native integration should be investigated later; "Symbolic domains under `torch.compile`" below sketches one.
 
 Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor its static values for the pytree context, a `torch.utils._pytree.register_constant` object compared by memory, as in the aux data under `jax.jit`. Torch tensors are mutable, so the memory includes the version counter of the tensor. Dynamo guards it by equality. Unflattening gives a fake child their values as NumPy static values, read when a trace first unflattens the connectivity. A table computed by `as_offset` in the trace has none, as under `jax.jit`.
 
