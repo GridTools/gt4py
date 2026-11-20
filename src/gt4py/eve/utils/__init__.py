@@ -25,6 +25,14 @@ from boltons.strutils import (
     unwrap_text as unwrap_text,
 )
 
+
+try:
+    # For performance reasons, try to use cytoolz when possible (using cython)
+    import cytoolz as toolz
+except ModuleNotFoundError:
+    # Fall back to pure Python toolz
+    import toolz  # noqa: F401 [unused-import]  # re-exported
+
 from .caching import lru_cache as lru_cache, optional_lru_cache as optional_lru_cache
 from .classes import (
     CustomDefaultDictBase as CustomDefaultDictBase,
@@ -63,10 +71,6 @@ from .hashing import (
     pprint_ddiff as pprint_ddiff,
 )
 from .iterators import (
-    K as K,
-    P as P,
-    S as S,
-    T as T,
     XIterable as XIterable,
     as_xiter as as_xiter,
     first as first,
@@ -79,11 +83,3 @@ from .lazy_imports import (
     resolve_lazy_module as resolve_lazy_module,
 )
 from .strings import AnyWordsIterable as AnyWordsIterable, CaseStyleConverter as CaseStyleConverter
-
-
-try:
-    # For performance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz
-except ModuleNotFoundError:
-    # Fall back to pure Python toolz
-    import toolz  # noqa: F401 [unused-import]  # re-exported

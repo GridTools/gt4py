@@ -22,8 +22,8 @@ from gt4py.eve.utils import XIterable
 #: modules), which must stay importable from the package.
 EVE_UTILS_PUBLIC_NAMES = [
     "AnyWordsIterable", "CaseStyleConverter", "CustomDefaultDictBase", "CustomMapping",
-    "EqualityBy", "FrozenNamespace", "HashableBy", "IndexerCallable", "K", "Namespace", "P", "S",
-    "SequentialIDGenerator", "T", "XIterable", "a10n", "as_xiter", "asciify", "attrchecker",
+    "EqualityBy", "FrozenNamespace", "HashableBy", "IndexerCallable", "Namespace",
+    "SequentialIDGenerator", "XIterable", "a10n", "as_xiter", "asciify", "attrchecker",
     "attrgetter_", "cached_hash", "content_hash", "ddiff", "dhash", "first", "flatten",
     "flatten_iter", "fluid_partial", "format_int_list", "get_fully_qualified_name", "getitem_",
     "hashable_by", "hashable_by_id", "is_collection", "is_lazy_module", "is_noninstantiable",
