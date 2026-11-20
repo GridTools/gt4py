@@ -58,7 +58,7 @@ Three ideas are behind this code:
 
 - **Fields have named dimensions.** A field is an array defined over a domain
   of the grid, and its axes are identified by name instead of by position.
-  Neighbors are accessed by shifting a field along a dimension, `phi(I + 1)`, or
+  Neighbors are accessed by calling a field with an offset, `phi(I + 1)`, or
   through the connectivities of an unstructured mesh.
 - **Computations are operators on whole fields.** There are no loops and no
   indices. The operators are written in a subset of Python, they can call each
@@ -91,7 +91,7 @@ caption: GT4Py DSL
 maxdepth: 1
 ---
 dsl/field-operators
-dsl/shifts
+dsl/premap
 dsl/scan-operators
 dsl/programs
 ```

@@ -20,7 +20,7 @@ without creating new extrema. It is written for a Cartesian grid and shows:
 
 - Small field operators composed into a larger one.
 - Point by point selection with `where`.
-- Boundary conditions with [`concat_where`](../dsl/shifts.md#boundaries-with-concat-where)
+- Boundary conditions with [`concat_where`](../dsl/premap.md#boundaries-with-concat-where)
   (an experimental feature).
 - A time loop in Python calling a GT4Py operator.
 - A [program](../dsl/programs.md) compiled with the `gtfn_cpu` backend.
@@ -158,7 +158,7 @@ np.allclose(phi.asnumpy(), expected)
 
 Compare the two versions: in the NumPy one, every line needs slices which
 encode both the offsets of the stencil and the region where each intermediate
-value is valid. In the GT4Py one the offsets are written as shifts and the
+value is valid. In the GT4Py one the offsets are written explicitly and the
 regions are deduced.
 
 ## Using a program and a compiled backend

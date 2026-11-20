@@ -75,8 +75,9 @@ the grid.
 Computations are written as **field operators**: Python functions decorated with
 `@gtx.field_operator`, which take fields and return fields. There are no loops
 and no indices inside. An expression describes the result at every grid point,
-and neighboring points are reached by _shifting_ a field along a dimension:
-`phi(I + 1)` is the value of `phi` at the next point in the `I` direction.
+and neighboring points are reached by calling a field with an offset along a
+dimension, an operation called _premap_: `phi(I + 1)` is the value of `phi` at
+the next point in the `I` direction.
 
 This is the five-point Laplacian (with unit grid spacing):
 
@@ -175,7 +176,7 @@ print(d_phi.asnumpy().max())
   of fields, and connectivities of unstructured meshes.
 - **GT4Py DSL**: what can be written inside operators.
   - [Field operators](dsl/field-operators.md): types, expressions, conditionals and built-in functions.
-  - [Shifts and neighbors](dsl/shifts.md): Cartesian shifts and unstructured meshes.
+  - [Premap and neighbors](dsl/premap.md): Cartesian offsets and unstructured meshes.
   - [Scan operators](dsl/scan-operators.md): computations which advance along the vertical.
   - [Programs](dsl/programs.md): grouping several operator calls.
 - [Running operators and programs](python/running.md): embedded execution,

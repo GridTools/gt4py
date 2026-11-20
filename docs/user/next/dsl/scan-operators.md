@@ -122,10 +122,10 @@ not optimized.
 ```
 
 A scan operator only sees the values of its arguments at the current level. To
-use the value of a field at another level, shift it in the field operator and
-pass the result as one more argument, for example
+use the value of a field at another level, apply the offset in the field
+operator and pass the result as one more argument, for example
 `my_scan(values, values(K - 1))`. The computation must then be restricted to the
-levels where the shifted field is defined.
+levels where that argument is defined.
 
 ## States with several values
 

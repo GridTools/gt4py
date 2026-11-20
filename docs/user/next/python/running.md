@@ -98,7 +98,7 @@ fast, but:
 
 - There is no compilation, so changes are tested immediately.
 - Domains are checked, which the compiled backends do not do (see the warning
-  in [Shifts and domains](../dsl/shifts.md#shifts-and-domains)).
+  in [Premap and domains](../dsl/premap.md#premap-and-domains)).
 - Errors raised while evaluating an operator point to its line, and a debugger
   can step through the code.
 - Field expressions also work outside operators, so intermediate values can be

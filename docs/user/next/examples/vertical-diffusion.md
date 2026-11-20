@@ -20,7 +20,7 @@ tridiagonal linear system in every column, which is the typical use of
 [scan operators](../dsl/scan-operators.md). The example shows:
 
 - A tridiagonal solver written with a forward and a backward scan.
-- [`concat_where`](../dsl/shifts.md#boundaries-with-concat-where) (an experimental
+- [`concat_where`](../dsl/premap.md#boundaries-with-concat-where) (an experimental
   feature) to give the first and the last level a different treatment.
 - The same code running on many columns at once.
 

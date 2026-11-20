@@ -179,7 +179,7 @@ the operators called by another one and optimize the result as a whole.
 | Arithmetic | `+`, `-`, `*`, `/`, `//`, `%`, `**`, unary `-`                          |
 | Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` (the result is a field of `bool`)      |
 | Logical    | `&` (and), <code>\|</code> (or), `^` (xor), `~` (not)                   |
-| Shifts     | `field(I + 1)`, `field(E2C[0])` (see [Shifts and neighbors](shifts.md)) |
+| Premap     | `field(I + 1)`, `field(E2C[0])` (see [Premap and neighbors](premap.md)) |
 
 Operations between fields and scalars apply to every point of the field. When
 the fields have different dimensions, the result has all of them: adding a field
@@ -209,7 +209,7 @@ These are the built-in functions, all of them imported from `gt4py.next`:
 | `where(mask, a, b)`                                                  | `a` where `mask` is true, `b` elsewhere |
 | `astype(value, dtype)`                                               | Conversion to another data type         |
 | `broadcast(value, (I, J))`                                           | Extension of a value to more dimensions |
-| `neighbor_sum`, `min_over`, `max_over`                               | [Reductions over neighbors](shifts.md)  |
+| `neighbor_sum`, `min_over`, `max_over`                               | [Reductions over neighbors](premap.md)  |
 
 ```{code-cell} ipython3
 from gt4py.next import maximum, sqrt, where
@@ -394,8 +394,8 @@ constructs which are rejected, and what to use instead:
 | --------------------------------------- | ------------------------------------------------------------------- |
 | `for` and `while` loops                 | Field expressions, or a [scan operator](scan-operators.md)          |
 | `and`, `or`, chained comparisons        | `&`, <code>\|</code> with parentheses                               |
-| `if` with a field as condition          | `where` or [`concat_where`](shifts.md#boundaries-with-concat-where) |
-| Indexing a field, `a[i, j]`             | Shifts, `a(I + 1)`                                                  |
+| `if` with a field as condition          | `where` or [`concat_where`](premap.md#boundaries-with-concat-where) |
+| Indexing a field, `a[i, j]`             | Premap, `a(I + 1)`                                                  |
 | Mixing data types, `2 * a`              | Literals of the right type (`2.0 * a`) or `astype`                  |
 | Modifying an argument in place          | Return a new field                                                  |
 | `lambda`, comprehensions, `try`, `with` | A separate field operator, or regular Python code outside of it     |

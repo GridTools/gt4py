@@ -283,5 +283,5 @@ connectivities:
 offset_provider = {"E2C": e2c_connectivity}
 ```
 
-[Shifts and neighbors](../dsl/shifts.md#unstructured-meshes) shows how the
+[Premap and neighbors](../dsl/premap.md#unstructured-meshes) shows how the
 offsets are used in operators.

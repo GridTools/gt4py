@@ -12,17 +12,27 @@ kernelspec:
   name: python3
 ---
 
-# Shifts and neighbors
+# Premap and neighbors
 
 Stencil computations combine the value at a grid point with the values at
 neighboring points. In GT4Py there are no indices to do that. Instead, a field
 is **called** with an offset, and the result is a new field holding the values
-of the neighbors. This operation is a **shift**.
+of the neighbors. This operation is called **premap**.
 
 - On a Cartesian grid the offset is a dimension plus an integer, as in
   `a(I + 1)`.
 - On an unstructured mesh it is a `FieldOffset` such as `E2C`, a tag which
   stands for a connectivity table, as in `a(E2C[0])`.
+
+```{note}
+The name comes from seeing a field as a function from grid points to values.
+An offset is a function too, from every point to one of its neighbors. Calling
+the field with the offset composes both: the offset is applied first, _before_
+the field, and the result is again a field. It is plain function composition,
+like the familiar `map` (or `fmap`) which applies a function to the values of a
+collection, but in the opposite order. Other languages have other names for the
+same operation, for example `contramap` in Haskell.
+```
 
 ```{code-cell} ipython3
 import numpy as np
@@ -30,7 +40,7 @@ import numpy as np
 import gt4py.next as gtx
 ```
 
-## Cartesian shifts
+## Cartesian offsets
 
 `a(I + 1)` is the field whose value at the point `i` is the value of `a` at
 `i + 1`:
@@ -57,8 +67,8 @@ forward_difference(a, out=result, domain={I: (0, 5)})
 print(result.asnumpy())
 ```
 
-Shifts can be applied to any expression and chained, and fields with several
-dimensions can be shifted along any of them:
+Premap can be applied to any expression and chained, and fields with several
+dimensions accept offsets along any of them:
 
 ```python
 a(I + 1)(J - 1)  # diagonal neighbor of a field over I, J
@@ -67,9 +77,9 @@ a(I + 1)(J - 1)  # diagonal neighbor of a field over I, J
 
 The offset must be a literal: `a(I + n)` with a variable `n` is not supported.
 
-### Shifts and domains
+### Premap and domains
 
-Running the same expressions in plain Python shows what a shift does to the
+Running the same expressions in plain Python shows what premap does to the
 domain of a field:
 
 ```{code-cell} ipython3
@@ -79,10 +89,10 @@ print((a(I + 1) - a(I - 1)).domain)
 ```
 
 `a(I + 1)` contains the same values as `a`, relabeled one position to the left:
-a shift moves the domain of a field, it does not make it smaller. An operation
-between fields is defined at the points which all its operands have in common.
-Combining fields shifted by different offsets therefore gives a result on a
-smaller domain than the one of the original field.
+premap with a Cartesian offset moves the domain of a field, it does not make
+it smaller. An operation between fields is defined at the points which all its
+operands have in common. Combining the results of different offsets therefore
+gives a result on a smaller domain than the one of the original field.
 
 ```{warning}
 Embedded execution checks the domains, and it reports an error when a result is
@@ -199,7 +209,7 @@ The values of `cell_values`
 
 ### Selecting one neighbor
 
-Read `E2C` as "for every edge, its cells": shifting a field with it gives a
+Read `E2C` as "for every edge, its cells": calling a field with it gives a
 result on the edges, with values coming from the cells. `cells(E2C[0])` holds,
 for every edge, the value of its first cell:
 
@@ -278,7 +288,7 @@ For instance, `neighbor_sum(weights * cells(E2C), axis=E2CDim)` is a weighted
 sum, where `weights` is a field with dimensions `Edge, E2CDim`.
 
 A field can only have one local dimension, so `cells(E2C)(C2E)` is not
-supported: reduce the first local dimension before shifting again.
+supported: reduce the first local dimension before using another offset.
 
 ## Staggered dimensions
 
@@ -298,8 +308,8 @@ IHalfField = gtx.Field[gtx.Dims[IHalf], gtx.float64]
 ```
 
 The point `i` of `IHalf` is located half a cell _before_ the point `i` of `I`,
-that is, between the cells `i - 1` and `i`. Shifts by half a point move from
-one dimension to the other. The dimension written in the shift is the one of
+that is, between the cells `i - 1` and `i`. Offsets of half a point move from
+one dimension to the other. The dimension written in the offset is the one of
 the **result**:
 
 ```{code-cell} ipython3
