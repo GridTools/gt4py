@@ -330,7 +330,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
         definition = self.definition_stage.definition
         return backend.jit(
-            definition, self.compilation_options.static_params or (), inspect.signature(definition)
+            definition,
+            self.compilation_options.static_params or (),
+            param_names=list(inspect.signature(definition).parameters),
+            param_types=self.__gt_type__().definition.pos_or_kw_args.values(),
         )
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
@@ -554,9 +557,16 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
 
     def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
         op = self._embedded_operator()
+        operator_type = self.foast_stage.foast_node.type
+        assert isinstance(operator_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType)
+        param_names = list(inspect.signature(self.definition_stage.definition).parameters)
+        if isinstance(op, embedded_operators.ScanOperator):
+            param_names = param_names[1:]  # the carry
         return backend.jit(
             lambda *args, **kwargs: embedded_operators.field_operator_call(op, args, kwargs),
-            ("domain",),
+            ("domain", *(self.compilation_options.static_params or ())),
+            param_names=param_names,
+            param_types=operator_type.definition.pos_or_kw_args.values(),
         )
 
     def with_grid_type(self, grid_type: common.GridType) -> FieldOperator:

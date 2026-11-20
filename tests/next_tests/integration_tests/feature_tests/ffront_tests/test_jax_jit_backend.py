@@ -83,6 +83,13 @@ def scaled_cumsum(state: gtx.float64, x: gtx.float64, a: gtx.float64) -> gtx.flo
 
 
 @gtx.field_operator
+def scale_if(f: gtx.Field[[IDim], gtx.float64], flag: bool) -> gtx.Field[[IDim], gtx.float64]:
+    if flag:
+        return 2.0 * f
+    return f
+
+
+@gtx.field_operator
 def swap(
     a: gtx.Field[[IDim], gtx.float64], b: gtx.Field[[IDim], gtx.float64]
 ) -> tuple[gtx.Field[[IDim], gtx.float64], gtx.Field[[IDim], gtx.float64]]:
@@ -251,6 +258,19 @@ def test_scan_with_traced_scalar(device, backend):
 
     np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
     np.testing.assert_array_equal(out.asnumpy(), [2.0, 6.0, 12.0, 20.0])
+
+
+def test_static_param_of_field_operator(device, backend):
+    f = _field(device, np.arange(3.0), [IDim])
+    fo = scale_if.with_backend(backend).with_compilation_options(static_params=("flag",))
+    for flag in (True, False):
+        out = _field(device, np.zeros(3), [IDim])
+        expected = _field(device, np.zeros(3), [IDim])
+        fo(f, flag, out=out, offset_provider={})
+        scale_if(f, flag, out=expected, offset_provider={})
+        np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
+
+    assert _runner(fo)._cache_size() == 2
 
 
 def test_field_operator_tuple_out_leaves_inputs(device, backend):

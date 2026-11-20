@@ -18,12 +18,13 @@ Cartesian offsets) and the parameters named in `static_params` are static.
 from __future__ import annotations
 
 import dataclasses
-import inspect
-from collections.abc import Callable, Iterable
+import pkgutil
+from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import context as embedded_context, nd_array_field
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclasses.dataclass(frozen=True)
@@ -34,9 +35,35 @@ class JaxJitBackend(next_backend.Backend):
         self,
         function: Callable[..., None],
         static_argnames: Iterable[str] = (),
-        signature: inspect.Signature | None = None,
+        param_names: Sequence[str] = (),
+        param_types: Iterable[ts.TypeSpec] = (),
     ) -> JitRunner:
-        return JitRunner(function, frozenset(static_argnames), signature)
+        for type_ in param_types:
+            _register_named_collections(type_)
+        return JitRunner(function, frozenset(static_argnames), tuple(param_names))
+
+
+_registered_dataclasses: set[type] = set()
+
+
+def _register_named_collections(type_: ts.TypeSpec) -> None:
+    """Register the dataclass named collections in `type_` as jax pytrees (tuples already are)."""
+    import jax
+
+    if isinstance(type_, ts.NamedCollectionType):
+        cls = pkgutil.resolve_name(type_.original_python_type)
+        if (
+            isinstance(cls, type)
+            and dataclasses.is_dataclass(cls)
+            and cls not in _registered_dataclasses
+        ):
+            jax.tree_util.register_dataclass(
+                cls, data_fields=[f.name for f in dataclasses.fields(cls)], meta_fields=[]
+            )
+            _registered_dataclasses.add(cls)
+    if isinstance(type_, ts.TupleType | ts.NamedCollectionType):
+        for element_type in type_.types:
+            _register_named_collections(element_type)
 
 
 def _not_compiled(*args: Any, **kwargs: Any) -> Any:
@@ -71,13 +98,14 @@ class JitRunner:
         self,
         function: Callable[..., None],
         static_argnames: frozenset[str],
-        signature: inspect.Signature | None,
+        param_names: tuple[str, ...],
     ) -> None:
         import jax
 
         self._function = function
         self._static_argnames = static_argnames
-        self._signature = signature
+        # static parameters passed positionally are only found by name
+        self._param_names = param_names if static_argnames & set(param_names) else ()
         self._jitted = jax.jit(self._traced, static_argnames=("static_kwargs", "static_provider"))
 
     def _traced(
@@ -106,9 +134,9 @@ class JitRunner:
         **kwargs: Any,
     ) -> None:
         if self._static_argnames:
-            if self._signature is not None:
-                bound = self._signature.bind(*args, **kwargs)
-                args, kwargs = (), dict(bound.arguments)
+            if self._param_names:
+                kwargs = {**dict(zip(self._param_names, args)), **kwargs}
+                args = ()
             static_kwargs = tuple(
                 sorted((name, kwargs.pop(name)) for name in self._static_argnames & kwargs.keys())
             )
