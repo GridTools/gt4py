@@ -105,8 +105,8 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
     """
     if not domains:
         return common.Domain()
-    first = domains[0]
-    if all(d == first for d in domains[1:]):
+    first, *rest = domains
+    if all(d == first for d in rest):
         common.check_dims(first.dims)
         return first
     return functools.reduce(operator.and_, domains)
