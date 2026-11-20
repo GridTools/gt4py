@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import functools
+import operator
 from typing import Sequence
 
 import pytest
@@ -173,6 +175,33 @@ def test_domain_intersection():
 def test_domain_intersection_empty():
     result = domain_intersection()
     assert result == common.Domain()
+
+
+@pytest.mark.parametrize(
+    "testee",
+    [
+        (common.domain({I: (0, 5), J: (1, 2)}),),
+        (common.domain({I: (0, 5), J: (1, 2)}),) * 3,
+        (common.domain({I: (0, 5)}), common.domain({J: (1, 2)})),
+        (common.domain({I: (0, 5)}), common.domain({I: (5, 7)})),
+        (common.domain({I: (0, 0)}), common.domain({I: (0, 0)})),
+        (common.domain({I: (0, 5)}), common.domain({I: (0, 5), J: (1, 2)})),
+    ],
+)
+def test_domain_intersection_matches_pairwise_and(testee):
+    expected = functools.reduce(operator.and_, testee, common.Domain())
+
+    result = domain_intersection(*testee)
+
+    assert result == expected
+
+
+def test_domain_intersection_equal_domains_unordered_dims():
+    K_vertical = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
+    unordered = common.Domain(dims=(K_vertical, I), ranges=(UnitRange(0, 2), UnitRange(0, 3)))
+
+    with pytest.raises(ValueError, match="not ordered correctly"):
+        domain_intersection(unordered, unordered)
 
 
 def test_intersect_domains():
