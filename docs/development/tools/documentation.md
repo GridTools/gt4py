@@ -50,9 +50,13 @@ New pages should be written in [MyST Markdown](https://myst-parser.readthedocs.i
 
 ### Executable pages (MyST notebooks)
 
-In the `gt4py.next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date.
+In the `gt4py.next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date. `quickstart.md` is an example.
 
 Markdown files without that header are rendered as they are, without running their code blocks.
+
+The same files are also run as tests by the `test_examples` nox session, which converts them to `.ipynb` notebooks with `jupytext` and executes them with `nbmake`. The generated `.ipynb` files are excluded from the Sphinx sources.
+
+The pages of the `gt4py.next` subsite are organized in folders: `dsl/` (what can be written inside operators), `python/` (the Python side: grids, fields and execution) and `examples/` (complete small applications). The `test_examples` session picks up every executable page of the subsite, in any folder, so a new page only has to be added to a `toctree`.
 
 Prefer executable pages for anything showing GT4Py code.
 
@@ -72,13 +76,13 @@ The [`Documentation`](../../../.github/workflows/docs.yml) GitHub workflow runs 
 
 - On every pull request, it only builds the site and uploads it as a workflow artifact (`github-pages`), which can be downloaded to review the result. It runs with no path filter, so that its `Build documentation` check can be a required status check of the `main` branch: a broken documentation build then blocks merging.
 - When a GitHub release is published (prereleases are ignored), it builds the site from the release tag and deploys it to GitHub Pages. This is the only automatic publication: merging to `main` does not change the published site.
-- As a manual escape hatch, for example to fix the documentation of the latest release without making a new one, the workflow can be run from the _Actions_ tab selecting a release **tag** (not a branch) and enabling the `deploy` input. On any other ref the deployment is skipped.
+- It can also be deployed manually at any time: run the workflow from the _Actions_ tab enabling the `deploy` input, selecting either the `main` branch, to publish the documentation as it currently is in `main`, or a release **tag**, for example to fix the documentation of the latest release without making a new one. On any other ref the deployment is skipped.
 
 Deploying requires:
 
 - the Pages source of the repository set to _GitHub Actions_ (in _Settings > Pages_);
-- the `github-pages` environment allowing deployments from the release tags (in _Settings > Environments_, add the `v*` tag pattern to the deployment branches and tags).
+- the `github-pages` environment allowing deployments from `main` and from the release tags (in _Settings > Environments_, the deployment branches and tags must include the `main` branch and the `v*` tag pattern).
 
-Every deployment replaces the whole published site with the result of the build: nothing is stored in a git branch, and only the documentation of the last published release is available.
+Every deployment replaces the whole published site with the result of the build: nothing is stored in a git branch, and only the documentation of the last deployment is available.
 
 The `latest/` path, which older links to the documentation use, redirects to the welcome page.

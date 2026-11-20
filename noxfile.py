@@ -268,12 +268,21 @@ def test_examples(session: nox.Session) -> None:
 
     install_session_venv(session, extras=["testing"], groups=["docs", "test"])
 
-    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
+    # Pages of the `gt4py.next` documentation site which are executable notebooks
+    next_docs_dir = pathlib.Path("docs") / "user" / "next"
+    next_docs_pages = sorted(
+        str(page)
+        for page in next_docs_dir.rglob("*.md")
+        if "workshop" not in page.parts and "format_name: myst" in page.read_text()
+    )
+    session.run("jupytext", *next_docs_pages, "--to", ".ipynb")
+    session.run(*"jupytext docs/development/next/toolchain/*.md --to .ipynb".split())
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
         ("docs/user/next/workshop/exercises", ["-k", "solution"]),
-        ("docs/user/next/advanced", None),
+        (" ".join(page.removesuffix(".md") + ".ipynb" for page in next_docs_pages), None),
+        ("docs/development/next/toolchain", None),
         ("examples", (None)),
     ]:
         session.run(
