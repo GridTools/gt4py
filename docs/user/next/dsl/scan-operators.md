@@ -115,21 +115,15 @@ really depends on the previous level, and do everything else in field
 operators.
 ```
 
-```{tip}
-Call scan operators from a field operator or a program. Direct calls from Python
-work, but with a compiled backend they give a warning saying that such calls are
-not optimized.
-```
-
-A scan operator only sees the values of its arguments at the current level. To
-use the value of a field at another level, apply the offset in the field
-operator and pass the result as one more argument, for example
-`my_scan(values, values(K - 1))`. The computation must then be restricted to the
-levels where that argument is defined.
+A scan operator is a function of scalars, not of fields, so it cannot access
+the neighbors of a point. If the value of a neighbor is needed, compute it in
+the field operator and pass it as one more argument, for example
+`my_scan(values, values(I + 1))`.
 
 ## States with several values
 
-When several quantities are carried from level to level, the state is a
+When several quantities are carried from level to level, the state needs to be
+a tuple or, better, a
 [named collection](field-operators.md#named-collections) of scalars, and so are
 `init` and the result:
 
@@ -170,12 +164,6 @@ expressions can be used in the body, as in
 The whole state is stored at every level, so the result of `running_stats` is a
 `RunningStats` of two fields. The field operator calling it decides which of
 them are needed.
-
-```{tip}
-A plain tuple also works as state, with `init=(0.0, 0.0)` and the annotation
-`tuple[float, float]`. Prefer a named collection: the names of its members make
-the scan operator and the code using its result much easier to read.
-```
 
 ## Rules
 

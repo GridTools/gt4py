@@ -14,10 +14,13 @@ kernelspec:
 
 # Programs
 
+Field operators are enough for most computations: if you do not need a
+program, use only field operators.
+
 In the previous pages, operators were called directly from Python with `out=`.
 A **program** groups several such calls into one function, decorated with
-`@gtx.program`. It is compiled as a unit and it gives the application a single
-function to call, for example for a time step of a model.
+`@gtx.program`. It gives the application a single function to call, for example
+for a time step of a model.
 
 Programs are the **interface between the DSL and the rest of the application**.
 Operators are pure functions returning new fields, but a program returns
@@ -29,8 +32,6 @@ possible to use GT4Py from frameworks and models which need to own the buffers
 of their data, instead of relying on GT4Py to allocate them.
 
 A direct call to an operator is equivalent to a program with that single call.
-Direct calls are convenient for small computations and for tests, and programs
-are preferable when several operators are always run together.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -103,10 +104,14 @@ in embedded execution. This is the right choice for developing and testing.
 [Running operators and programs](../python/running.md) shows how to select a backend. The
 later cells of this page hide the warning.
 
-```{tip}
-When an intermediate result is only needed by one operator, avoid the extra
-field (`work` above) by writing a field operator which calls the other one, as
-in `return phi + coefficient * laplacian(phi)`.
+```{important}
+In the compiled backends, the scope of the optimizations is a single call to a
+field operator, made from a program or directly from Python, together with all
+the operators it uses. Separate calls in a program are not optimized together.
+To expose as much as possible to the optimizer, make every call span as much of
+the computation as possible. For example, avoid the intermediate field (`work`
+above) by writing a field operator which calls the other one, as in
+`return phi + coefficient * laplacian(phi)`.
 ```
 
 ## Destination of the results
