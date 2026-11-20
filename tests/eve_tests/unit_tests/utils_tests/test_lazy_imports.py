@@ -152,7 +152,7 @@ class TestLazyImportModule:
                 "lzpkg/reg.py": "from . import REGISTRY\nREGISTRY.append(__name__)\n",
             }
         )
-        eve.utils.lazy_import_module("lzpkg.reg").__file__
+        _ = eve.utils.lazy_import_module("lzpkg.reg").__file__
 
         assert sys.modules["lzpkg"].N == 1
 
@@ -163,7 +163,7 @@ class TestLazyImportModule:
                 "lzpkg/sub.py": "def sub(): pass\n",
             }
         )
-        eve.utils.lazy_import_module("lzpkg.sub").__file__
+        _ = eve.utils.lazy_import_module("lzpkg.sub").__file__
 
         assert isinstance(sys.modules["lzpkg"].sub, types.FunctionType)
 
@@ -259,7 +259,7 @@ class TestLazyImportModule:
 
         for _ in range(2):  # errors are not cached: every access retries the import
             with pytest.raises(ImportError, match="broken library"):
-                proxy.A
+                _ = proxy.A
             assert "lzbroken" not in sys.modules
 
         assert not hasattr(proxy, "__wrapped__")
@@ -287,7 +287,7 @@ class TestLazyImportModule:
 
         for _ in range(2):
             with pytest.raises(ImportError, match="fails after being touched"):
-                proxy.GOOD
+                _ = proxy.GOOD
             assert lzholder.SEEN == "not yet"
 
     @pytest.mark.parametrize("circular", [False, True])
@@ -313,7 +313,7 @@ class TestLazyImportModule:
             proxies = [eve.utils.lazy_import_module(name) for name in ("lzpkg", "lzpkg.sub")]
             errors: list[BaseException] = []
 
-            def touch(proxies=proxies, errors=errors, delay=rng.random() / 500):
+            def touch(delay, proxies=proxies, errors=errors):
                 time.sleep(delay)
                 for proxy in random.sample(proxies, 2):
                     try:
@@ -321,7 +321,10 @@ class TestLazyImportModule:
                     except Exception as error:
                         errors.append(error)
 
-            threads = [threading.Thread(target=touch, daemon=True) for _ in range(4)]
+            threads = [
+                threading.Thread(target=touch, args=(rng.random() / 500,), daemon=True)
+                for _ in range(4)
+            ]
             for thread in threads:
                 thread.start()
             for thread in threads:
@@ -334,6 +337,109 @@ class TestLazyImportModule:
             for proxy in proxies:
                 cached = object.__getattribute__(proxy, "__dict__")[lazy_imports._LAZY_MODULE_SLOT]
                 assert cached is None or cached is sys.modules[proxy.__name__]
+
+    @pytest.mark.parametrize("parent_init", [False, True])
+    def test_namespace_packages(self, make_modules, parent_init):
+        # A namespace package (no `__init__.py`) below a parent which is not imported yet
+        files = {"lzns/part/leaf.py": "X = 1\n"}
+        if parent_init:
+            files["lzns/__init__.py"] = ""
+        make_modules(files)
+
+        part = eve.utils.lazy_import_module("lzns.part")
+        leaf = eve.utils.lazy_import_module("lzns.part.leaf")
+        assert eve.utils.lazy_import_module("lzns.missing", on_missing="none") is None
+
+        assert leaf.X == 1
+        assert eve.utils.resolve_lazy_module(part) is sys.modules["lzns.part"]
+
+    def test_alias_registered_by_non_package_parent(self, make_modules):
+        make_modules(
+            {
+                "lzmod.py": """
+                import sys, types
+                sys.modules[__name__ + ".child"] = CHILD = types.ModuleType(__name__ + ".child")
+                """
+            }
+        )
+        child = eve.utils.lazy_import_module("lzmod.child")
+
+        assert child is sys.modules["lzmod"].CHILD
+        assert child is importlib.import_module("lzmod.child")
+        assert eve.utils.lazy_import_module("lzmod.missing", on_missing="none") is None
+
+    def test_non_import_errors_propagate(self, make_modules):
+        make_modules({"lzbroken/__init__.py": "raise RuntimeError('no device')\n"})
+        proxy = eve.utils.lazy_import_module("lzbroken")
+
+        with pytest.raises(RuntimeError, match="no device"):
+            _ = proxy.X
+        with pytest.raises(RuntimeError, match="no device"):  # not turned into `AttributeError`
+            hasattr(proxy, "__wrapped__")
+        assert "lzbroken" not in sys.modules
+
+    def test_success_after_failure(self, make_modules, tmp_path):
+        flag = tmp_path / "fail_import"
+        flag.touch()
+        make_modules(
+            {
+                "lzflaky/__init__.py": f"""
+                import pathlib
+                if pathlib.Path({str(flag)!r}).exists():
+                    raise ImportError("transient failure")
+                X = 1
+                """
+            }
+        )
+        proxy = eve.utils.lazy_import_module("lzflaky")
+        for _ in range(2):
+            with pytest.raises(ImportError, match="transient failure"):
+                _ = proxy.X
+
+        flag.unlink()
+
+        assert proxy.X == 1
+        assert eve.utils.resolve_lazy_module(proxy) is sys.modules["lzflaky"]
+
+    def test_reload(self, make_modules):
+        make_modules({"lzpkg/__init__.py": "X = 1\n"})
+        proxy = eve.utils.lazy_import_module("lzpkg")
+        _ = proxy.X
+
+        with pytest.raises(ImportError):  # proxies are not in `sys.modules`
+            importlib.reload(proxy)
+        assert importlib.reload(eve.utils.resolve_lazy_module(proxy)) is sys.modules["lzpkg"]
+
+    def test_concurrent_calls(self, make_modules):
+        make_modules(
+            {
+                "lzpkg/__init__.py": "import time; time.sleep(0.01)\nX = 1\n",
+                "lzpkg/sub/__init__.py": "Y = 2\n",
+            }
+        )
+        results: list[object] = []
+        errors: list[BaseException] = []
+
+        def call_and_touch(name):
+            try:
+                proxy = eve.utils.lazy_import_module(name)
+                results.append(eve.utils.resolve_lazy_module(proxy))
+            except Exception as error:
+                errors.append(error)
+
+        names = ["lzpkg", "lzpkg.sub"] * 4
+        threads = [threading.Thread(target=call_and_touch, args=(n,), daemon=True) for n in names]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=10)
+
+        assert not any(thread.is_alive() for thread in threads), "deadlock"
+        assert not errors
+        assert {id(module) for module in results} == {
+            id(sys.modules["lzpkg"]),
+            id(sys.modules["lzpkg.sub"]),
+        }
 
     def test_introspection_does_not_import(self, make_modules, tmp_path):
         # Run in a subprocess: `inspect.getmodule()` (used by `inspect.stack()`) scans `sys.modules`.

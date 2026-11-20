@@ -26,13 +26,15 @@ two go away after migrating):
   (PEP 810 rebinds the name), so identity-based checks (`is`, `==`, `in`,
   dict keys, or utilities checking that an object is importable under its
   qualified name) need `resolve_lazy_module()`.
-- Every attribute access goes through the proxy, and `dir()` imports the
-  module (PEP 810 special-cases it).
+- Every attribute access goes through the proxy, also after the first use.
 - Availability is checked eagerly: missing modules can be turned into `None`
   (`on_missing="none"`). PEP 810 forbids lazy imports inside `try` blocks, so
   optional dependencies will still need an explicit availability check before
-  a `lazy import` (note that `importlib.util.find_spec()` imports the parent
-  packages of dotted names, unlike the check implemented here).
+  a `lazy import`. Note that `importlib.util.find_spec()` imports the parent
+  packages of dotted names, while the check implemented here only does it
+  when the module cannot be found statically (e.g. it is only reachable
+  through the runtime `__path__` of a parent, or registered by its parent in
+  `sys.modules`); in that case the parents run at call time, not at first use.
 
 The PEP 810 `__lazy_modules__` module global (a collection of module names
 whose imports become lazy on Python 3.15+, ignored by older versions) can be
@@ -59,6 +61,8 @@ from collections.abc import Sequence
 from typing import Any, Final, Literal, Optional, overload
 
 
+# Name of the proxy attribute caching the resolved module. It is always answered by
+# the proxy itself, so it shadows an attribute with the same name in the real module.
 _LAZY_MODULE_SLOT: Final = "_lazy_module_resolved_"
 _LAZY_MODULE_LOCAL_ATTRS: Final = frozenset({"__name__", "__class__", _LAZY_MODULE_SLOT})
 
@@ -69,7 +73,8 @@ class _LazyModuleProxy(types.ModuleType):
     The proxy is never registered in `sys.modules`. Resolution is a plain
     `importlib.import_module()` call, so import order, locking, side effects
     and failure rollback follow the standard import semantics. Only `__name__`
-    and `__class__` are answered without importing; any other attribute access
+    and `__class__` (and the private attribute caching the resolved module)
+    are answered without importing; any other attribute access
     (including `__dict__`, `dir()`, attribute assignment and deletion) is
     forwarded to the real module.
     """
@@ -100,9 +105,10 @@ class _LazyModuleProxy(types.ModuleType):
         try:
             module = _LazyModuleProxy._resolve(self)
         except ImportError as error:
-            # Turn import errors into `AttributeError` for dunder probes (e.g.
-            # `hasattr(obj, "__wrapped__")` in `inspect`), so introspection of
-            # namespaces holding a proxy to a broken library does not crash.
+            # Turn `ImportError`s into `AttributeError`s for dunder probes (e.g.
+            # `hasattr(obj, "__wrapped__")` in `inspect`), so introspecting a
+            # namespace holding a proxy to a library which fails to import does not
+            # crash. Other exceptions are propagated unchanged, to avoid masking bugs.
             if len(name) > 4 and name.startswith("__") and name.endswith("__"):
                 raise AttributeError(name) from error
             raise
@@ -129,19 +135,52 @@ def _find_child_module_spec(
 ) -> importlib.machinery.ModuleSpec | None:
     for finder in sys.meta_path:
         find_spec = getattr(finder, "find_spec", None)
-        if find_spec is not None and (spec := find_spec(name, search_path)) is not None:
+        if find_spec is None:
+            continue
+        try:
+            spec = find_spec(name, search_path)
+        except (ImportError, KeyError):
+            # Some finders need the parent package to be imported, e.g. `PathFinder`
+            # for a namespace package portion below a parent missing in `sys.modules`
+            # (`KeyError` up to Python 3.14, `ModuleNotFoundError` afterwards): report
+            # it as not found so the caller falls back to importing the parent.
+            return None
+        if spec is not None:
             return spec
     return None
 
 
+def _import_parent_and_check(parent_name: str, fullname: str) -> bool:
+    """Import the parent of `fullname` for real and check if `fullname` is importable.
+
+    The runtime `__path__` of the parent, or `sys.modules` entries it creates
+    (e.g. aliases, also below non-package modules), can differ from what is
+    statically visible. Note that `importlib.util.find_spec(fullname)` also
+    imports any intermediate packages between the parent and `fullname`.
+    """
+    try:
+        importlib.import_module(parent_name)
+        if fullname in sys.modules:  # e.g. registered as an alias, maybe without `__spec__`
+            return sys.modules[fullname] is not None
+        return importlib.util.find_spec(fullname) is not None
+    except ModuleNotFoundError as error:
+        if error.name is not None and (
+            fullname == error.name or fullname.startswith(f"{error.name}.")
+        ):
+            return False
+        raise
+
+
 def _is_module_available(fullname: str) -> bool:
-    """Check if `fullname` is importable without executing any module code.
+    """Check if `fullname` is importable, executing module code only if needed.
 
     Parent packages already imported are inspected through their runtime
-    `__path__`; the others through the search locations of their specs. If a
-    child is not found below a parent which is not imported yet, the parent is
-    imported for real and the lookup is retried, since its runtime `__path__`
-    (or a `sys.modules` alias it creates) can differ from the static one.
+    `__path__`; the others through the search locations of their specs, which
+    does not execute any module code. Only if the module cannot be found this
+    way below a parent which is not imported yet (or the parent is not a
+    package), the parent is imported for real and the lookup is retried, since
+    its runtime `__path__` or the `sys.modules` entries it creates can differ
+    from the static view (see `_import_parent_and_check()`).
 
     Raises:
         ImportError: if importing a parent package in the fallback path fails
@@ -167,26 +206,14 @@ def _is_module_available(fullname: str) -> bool:
         else:
             assert search_path is not None
             spec = _find_child_module_spec(name, search_path)
-            parent_name = ".".join(parts[: i - 1])
-            if spec is None and parent_name not in sys.modules:
-                try:
-                    importlib.import_module(parent_name)
-                    # The parent can register the module directly in `sys.modules`
-                    # (e.g. as an alias), possibly without a `__spec__`
-                    if fullname in sys.modules:
-                        return sys.modules[fullname] is not None
-                    return importlib.util.find_spec(fullname) is not None
-                except ModuleNotFoundError as error:
-                    if error.name is not None and (
-                        fullname == error.name or fullname.startswith(f"{error.name}.")
-                    ):
-                        return False
-                    raise
+            if spec is None:
+                return _import_parent_and_check(".".join(parts[: i - 1]), fullname)
         if spec is None:
             return False
         search_path = spec.submodule_search_locations
-        if search_path is None and not is_last:  # not a package
-            return False
+        if search_path is None and not is_last:
+            # Not a package, but its code can still register submodules in `sys.modules`
+            return _import_parent_and_check(name, fullname)
     return True
 
 
@@ -211,10 +238,14 @@ def lazy_import_module(fullname: str, *, on_missing: str = "raise") -> Optional[
 
     Temporary equivalent of `lazy import <fullname>` (PEP 810, Python 3.15+):
     see the module docstring for the differences and the migration path. It
-    also works for subpackages (e.g. `"cupyx.profiler"`) without importing
-    their parent packages: checking if the module is installed does not
-    execute any module code, and the actual import happens on first attribute
-    access, through a plain `importlib.import_module(fullname)` call.
+    also works for subpackages (e.g. `"cupyx.profiler"`): checking if the
+    module is installed does not execute any module code when the module can
+    be found through the search locations of its parent packages' specs (the
+    usual case), and the actual import happens on first attribute access,
+    through a plain `importlib.import_module(fullname)` call. Otherwise (e.g.
+    for modules only reachable through a parent's runtime `__path__`, or
+    registered by a parent in `sys.modules`), the parent packages are
+    imported by this call to find out.
 
     The returned proxy is not registered in `sys.modules` and it is not the
     real module object, so identity checks (`is`, `==`, dict keys) against
