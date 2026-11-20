@@ -25,6 +25,8 @@ tridiagonal linear system in every column, which is the typical use of
 - The same code running on many columns at once.
 
 ```{code-cell} ipython3
+import typing
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -55,16 +57,22 @@ x_k = d'_k - c'_k x_{k+1}
 $$
 
 Each sweep is a scan operator. The state of the forward sweep is the pair
-$(c'_{k-1}, d'_{k-1})$, and the state of the backward sweep is $x_{k+1}$:
+$(c'_{k-1}, d'_{k-1})$, kept in a named collection, and the state of the
+backward sweep is $x_{k+1}$:
 
 ```{code-cell} ipython3
-@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0))
-def forward_sweep(
-    state: tuple[float, float], a: float, b: float, c: float, d: float
-) -> tuple[float, float]:
-    c_prime, d_prime = state
-    denominator = b - a * c_prime
-    return c / denominator, (d - a * d_prime) / denominator
+class SweepState(typing.NamedTuple):
+    c_prime: float
+    d_prime: float
+
+
+@gtx.scan_operator(axis=K, forward=True, init=SweepState(c_prime=0.0, d_prime=0.0))
+def forward_sweep(state: SweepState, a: float, b: float, c: float, d: float) -> SweepState:
+    denominator = b - a * state.c_prime
+    return SweepState(
+        c_prime=c / denominator,
+        d_prime=(d - a * state.d_prime) / denominator,
+    )
 
 
 @gtx.scan_operator(axis=K, forward=False, init=0.0)
@@ -74,8 +82,8 @@ def backward_sweep(x_next: float, c_prime: float, d_prime: float) -> float:
 
 @gtx.field_operator
 def solve_tridiagonal(a: IKField, b: IKField, c: IKField, d: IKField) -> IKField:
-    c_prime, d_prime = forward_sweep(a, b, c, d)
-    return backward_sweep(c_prime, d_prime)
+    sweep = forward_sweep(a, b, c, d)
+    return backward_sweep(sweep.c_prime, sweep.d_prime)
 ```
 
 `solve_tridiagonal` is a general solver, which can be reused by any operator

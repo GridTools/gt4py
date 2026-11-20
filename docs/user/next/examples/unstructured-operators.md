@@ -247,12 +247,15 @@ def diffusion_step(
 
 diffusion_step_cpu = diffusion_step.with_backend(gtx.gtfn_cpu)
 
+# All the fields are allocated for the backend
 phi_cpu = gtx.as_field([Cell], initial.ravel(), allocator=gtx.gtfn_cpu)
 new_phi_cpu = gtx.zeros({Cell: n_cells}, allocator=gtx.gtfn_cpu)
+distance_cpu = gtx.full({Edge: n_edges}, 1.0 / dx, allocator=gtx.gtfn_cpu)
+factor_cpu = gtx.as_field([Cell, C2EDim], factors, allocator=gtx.gtfn_cpu)
 
 for _ in range(100):
     diffusion_step_cpu(
-        phi_cpu, 0.2, inverse_distance, geometric_factor, new_phi_cpu, offset_provider=offset_provider
+        phi_cpu, 0.2, distance_cpu, factor_cpu, new_phi_cpu, offset_provider=offset_provider
     )
     phi_cpu, new_phi_cpu = new_phi_cpu, phi_cpu
 

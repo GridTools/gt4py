@@ -21,9 +21,10 @@ function to call, for example for a time step of a model.
 
 Programs are the **interface between the DSL and the rest of the application**.
 Operators are pure functions returning new fields, but a program returns
-nothing and allocates nothing: the results of the operators it calls are
-written **in place** into fields received as arguments of the program. The
-memory of all the fields therefore belongs to the caller. This makes it
+nothing and does not allocate the fields holding its results: the results of
+the operators it calls are written **in place** into fields received as
+arguments of the program. The memory of all these fields therefore belongs to
+the caller. This makes it
 possible to use GT4Py from frameworks and models which need to own the buffers
 of their data, instead of relying on GT4Py to allocate them.
 
