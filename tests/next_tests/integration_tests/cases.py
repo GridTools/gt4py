@@ -398,9 +398,7 @@ def allocate(
 
 def runs_embedded(case: Case) -> bool:
     """Whether the case's programs run embedded, i.e. are not compiled."""
-    from gt4py.next.program_processors.runners import embedded_jit
-
-    return case.backend is None or isinstance(case.backend, embedded_jit.EmbeddedJitBackend)
+    return case.backend is None or isinstance(case.backend, next_backend.EmbeddedJitBackend)
 
 
 def run(

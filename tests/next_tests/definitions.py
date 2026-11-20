@@ -13,7 +13,7 @@ import enum
 import importlib
 import types
 from types import ModuleType
-from typing import Any, Final, Optional
+from typing import Final, Optional
 
 import array_api_strict
 import numpy as np
@@ -102,15 +102,14 @@ class _TorchCUDAAllocator:
 torch_cuda_execution = EmbeddedDummyBackend("EmbeddedTorchCUDA", _TorchCUDAAllocator())
 
 
-def __getattr__(name: str) -> Any:
-    if name != "torch_compile_cuda":
-        raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
-    from gt4py.next.program_processors.runners import torch_compile
-
-    backend = globals()[name] = dataclasses.replace(
-        torch_compile.torch_compile, name="torch_compile_cuda", allocator=_TorchCUDAAllocator()
+_torch_compile = _optional_module("gt4py.next.program_processors.runners.torch_compile")
+torch_compile_cuda = (
+    dataclasses.replace(
+        _torch_compile.torch_compile, name="torch_compile_cuda", allocator=_TorchCUDAAllocator()
     )
-    return backend
+    if _torch_compile is not None
+    else None
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -272,15 +271,14 @@ EMBEDDED_SKIP_LIST = [
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-JAX_JIT_SKIP_LIST = JAX_EMBEDDED_SKIP_LIST + [
-    # scalar arguments are traced unless they are in `static_params`
+#: under a tracing compiler, scalar arguments are traced unless they are in `static_params`
+TRACED_SCALARS_SKIP_LIST = [
     (USES_SCALAR_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCALAR_IN_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN_CARRY_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-TORCH_COMPILE_SKIP_LIST = EMBEDDED_SKIP_LIST + [
-    (USES_SCAN_CARRY_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
-]
+JAX_JIT_SKIP_LIST = JAX_EMBEDDED_SKIP_LIST + TRACED_SCALARS_SKIP_LIST
+TORCH_COMPILE_SKIP_LIST = EMBEDDED_SKIP_LIST + TRACED_SCALARS_SKIP_LIST
 ARRAY_API_STRICT_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_MATH_OUTSIDE_ARRAY_API, XFAIL, "Not in the Array API standard."),
 ]

@@ -165,7 +165,7 @@ def _e2v(device, table=E2V_TABLE):
 
 
 def _runner(entry_point):
-    return entry_point._compiled_programs._jitted
+    return entry_point._jit_entry.jitted
 
 
 def test_program_with_connectivity(device, backend):
@@ -190,11 +190,7 @@ def test_table_is_a_runtime_argument(device, backend, jax_only):
     conn = _e2v(device)
     prog(f, out, offset_provider={"E2V": conn})
 
-    stablehlo = (
-        _runner(prog)
-        .lower((f, out), {}, {"E2V": conn}, static_kwargs=(), static_provider=())
-        .as_text()
-    )
+    stablehlo = _runner(prog).lower(f, out, offset_provider={"E2V": conn}).as_text()
     main_signature = re.search(r"@main\(([^)]*)\)", stablehlo).group(1)
     assert "tensor<5x2xi32>" in main_signature
 
@@ -282,6 +278,15 @@ def test_scalar_only_builtins(device, backend):
 
     np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
     np.testing.assert_array_equal(out.asnumpy(), [0.0, 9.0, 18.0])
+
+
+def test_many_int_values_do_not_retrace(device, backend):
+    f = _field(device, np.arange(3.0), [IDim])
+    fo = scalar_builtins.with_backend(backend)
+    for n in range(10):
+        out = _field(device, np.zeros(3), [IDim])
+        fo(f, 4.0, int32(n), out=out, offset_provider={})
+        np.testing.assert_array_equal(out.asnumpy(), (7.0 + n) * np.arange(3.0))
 
 
 def test_scan_with_scalar(device, backend):
