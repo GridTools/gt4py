@@ -6,7 +6,47 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Utilities for importing modules lazily, on first attribute access."""
+"""Utilities for importing modules lazily, on first attribute access.
+
+This module is a temporary stand-in for the explicit lazy imports of
+Python 3.15 (PEP 810, e.g. `lazy import cupyx.profiler as profiler`), which
+are not available in the Python versions supported by GT4Py (3.12-3.14). Its
+semantics deliberately follow PEP 810, so call sites can be migrated to the
+`lazy` keyword once Python 3.15 is the minimum supported version:
+
+- The module is not executed, nor added to `sys.modules`, until its first
+  use. It is then imported with a plain import statement, so import order,
+  side effects and errors are those of a regular import.
+- If the import fails, nothing is cached and the next use retries it.
+
+Differences with PEP 810 that call sites must take into account (the first
+two go away after migrating):
+
+- The proxy object is not replaced by the real module after the first use
+  (PEP 810 rebinds the name), so identity-based checks (`is`, `==`, `in`,
+  dict keys, or utilities checking that an object is importable under its
+  qualified name) need `resolve_lazy_module()`.
+- Every attribute access goes through the proxy, and `dir()` imports the
+  module (PEP 810 special-cases it).
+- Availability is checked eagerly: missing modules can be turned into `None`
+  (`on_missing="none"`). PEP 810 forbids lazy imports inside `try` blocks, so
+  optional dependencies will still need an explicit availability check before
+  a `lazy import` (note that `importlib.util.find_spec()` imports the parent
+  packages of dotted names, unlike the check implemented here).
+
+The PEP 810 `__lazy_modules__` module global (a collection of module names
+whose imports become lazy on Python 3.15+, ignored by older versions) can be
+used as an intermediate migration step for modules which are always
+installed.
+
+Design notes: unlike `lazy_loader.load()` (scientific-python `lazy-loader`)
+or `importlib.util.LazyLoader`, the proxy is never registered in
+`sys.modules`. A lazy module object in `sys.modules` is loaded by any scan of
+it (e.g. `inspect.getmodule()`, which GT4Py itself triggers at import time),
+makes an installed-but-broken library raise its `ImportError` inside
+unrelated code probing `sys.modules`, and, for subpackages, can run a child
+module before its parent package.
+"""
 
 from __future__ import annotations
 
@@ -169,12 +209,12 @@ def lazy_import_module(fullname: str, *, on_missing: str) -> Optional[types.Modu
 def lazy_import_module(fullname: str, *, on_missing: str = "raise") -> Optional[types.ModuleType]:
     """Return a proxy of a module which is only imported on first attribute access.
 
-    The idea is the same as `lazy_loader.load()` from the scientific-python
-    `lazy-loader` project, but it also works for subpackages (e.g.
-    `"cupyx.profiler"`) without importing their parent packages: checking if
-    the module is installed does not execute any module code, and the actual
-    import happens on first attribute access, through a plain
-    `importlib.import_module(fullname)` call.
+    Temporary equivalent of `lazy import <fullname>` (PEP 810, Python 3.15+):
+    see the module docstring for the differences and the migration path. It
+    also works for subpackages (e.g. `"cupyx.profiler"`) without importing
+    their parent packages: checking if the module is installed does not
+    execute any module code, and the actual import happens on first attribute
+    access, through a plain `importlib.import_module(fullname)` call.
 
     The returned proxy is not registered in `sys.modules` and it is not the
     real module object, so identity checks (`is`, `==`, dict keys) against
@@ -246,7 +286,11 @@ def is_lazy_module(obj: Any) -> bool:
 def resolve_lazy_module(module: types.ModuleType) -> types.ModuleType:
     """Return the real module of a lazy module proxy, importing it if needed.
 
-    Regular modules are returned unchanged.
+    Regular modules are returned unchanged. Use it wherever module identity
+    matters (`is`, `==`, `in`, dict keys, or checks that an object is
+    importable under its qualified name), since proxies only compare equal to
+    themselves. When replacing an eager import by `lazy_import_module()`,
+    check every such use of the imported name.
     """
     if type(module) is _LazyModuleProxy:
         return _LazyModuleProxy._resolve(module)
