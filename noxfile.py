@@ -277,13 +277,13 @@ def test_examples(session: nox.Session) -> None:
         if "format_name: myst" in page.read_text()
     )
     session.run("jupytext", *next_docs_pages, "--to", ".ipynb")
-    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
+    session.run(*"jupytext docs/development/next/toolchain/*.md --to .ipynb".split())
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
         ("docs/user/next/workshop/exercises", ["-k", "solution"]),
         (" ".join(page.removesuffix(".md") + ".ipynb" for page in next_docs_pages), None),
-        ("docs/user/next/advanced", None),
+        ("docs/development/next/toolchain", None),
         ("examples", (None)),
     ]:
         session.run(

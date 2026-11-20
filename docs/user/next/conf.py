@@ -45,8 +45,7 @@ exclude_patterns = [
     "**/*.ipynb",
     ".ipynb_checkpoints",
     "**/.ipynb_checkpoints",
-    # Advanced guides and workshop material are not part of the site (yet)
-    "advanced",
+    # Workshop material is not part of the site (yet)
     "workshop",
 ]
 
