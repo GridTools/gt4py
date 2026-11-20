@@ -11,11 +11,9 @@
 from __future__ import annotations
 
 import collections.abc
-import dataclasses
 import enum
-import itertools
 import re
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable
 from typing import Union
 
 
@@ -122,20 +120,3 @@ class CaseStyleConverter:
     @staticmethod
     def split_kebab_case(name: str) -> list[str]:
         return name.split("-")
-
-
-@dataclasses.dataclass(frozen=True)
-class SequentialIDGenerator:
-    """Simple sequential ID generator."""
-
-    prefix: str = ""
-    counter: Iterator[int] = dataclasses.field(default_factory=itertools.count)
-    #: A string to be used as template for the new ids.
-    #: It should contain the `{prefix}`and `{id}` format keys.
-    format: str = "{prefix}_{id}"
-
-    def __next__(self) -> str:
-        return self.format.format(prefix=self.prefix, id=next(self.counter))
-
-    def next(self) -> str:
-        return self.__next__()
