@@ -358,13 +358,16 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 " 'field.ndarray[...] = ...'."
             )
 
-        ops = array_ops.of(self._ndarray)
-        new_buffer = ops.setitem(self._ndarray, target_slice, assigned)
+        new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, assigned)
         if new_buffer is not self._ndarray:
-            object.__setattr__(self, "_ndarray", new_buffer)
-            # A field whose buffer info was requested is likely exported again.
-            if "__gt_buffer_info__" in self.__dict__:
-                self.__dict__["__gt_buffer_info__"] = ops.buffer_info(new_buffer)
+            self._set_buffer(new_buffer)
+
+    def _set_buffer(self, new_buffer: core_defs.NDArrayObject) -> None:
+        """Replace the buffer by one of the same shape, for libraries whose arrays are immutable."""
+        object.__setattr__(self, "_ndarray", new_buffer)
+        # A field whose buffer info was requested is likely exported again.
+        if "__gt_buffer_info__" in self.__dict__:
+            self.__dict__["__gt_buffer_info__"] = array_ops.of(new_buffer).buffer_info(new_buffer)
 
     __abs__ = _make_builtin("abs", "abs")
 

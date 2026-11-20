@@ -16,6 +16,7 @@ import abc
 import contextlib
 import dataclasses
 import functools
+import inspect
 import types
 import typing
 import warnings
@@ -47,6 +48,7 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, workflow
+from gt4py.next.program_processors.runners import jax_jit
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -104,6 +106,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
+    @abc.abstractmethod
+    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner: ...
+
     def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
 
@@ -118,7 +123,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         )
 
     @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool:
+    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool | jax_jit.JitRunner:
+        if isinstance(self.backend, jax_jit.JaxJitBackend):
+            return self._jax_jit_runner(self.backend)
         # This cached property initializer is only called when JITting the first
         # program variant of the pool. If the program is compiled by directly
         # calling `compile()`, the pool is initialized with the options passed
@@ -133,6 +140,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
+        if isinstance(self.backend, jax_jit.JaxJitBackend):
+            raise RuntimeError(
+                f"Backend '{self.backend.name}' runs embedded under 'jax.jit'; it does not compile."
+            )
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -204,6 +215,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             for op in offset_provider
         )
 
+        assert isinstance(self._compiled_programs, compiled_program.CompiledProgramsPool)
         self._compiled_programs.compile(offset_providers=offset_provider, **static_args)
         return self
 
@@ -314,6 +326,12 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             args=arguments.CompileTimeArgs.empty(),
         )
         return self._frontend_transforms.past_to_itir(no_args_past).data
+
+    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
+        definition = self.definition_stage.definition
+        return backend.jit(
+            definition, self.compilation_options.static_params or (), inspect.signature(definition)
+        )
 
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
@@ -514,6 +532,31 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         assert isinstance(type_, ts.CallableType)
         return type_
 
+    def _embedded_operator(self) -> embedded_operators.EmbeddedOperator:
+        attributes = (
+            self.definition_stage.attributes if self.definition_stage else self.foast_stage.attributes
+        )
+        if attributes is not None and any(
+            has_scan_op_attribute := [
+                attribute in attributes for attribute in ["init", "axis", "forward"]
+            ]
+        ):
+            assert all(has_scan_op_attribute)
+            return embedded_operators.ScanOperator(
+                self.definition_stage.definition,
+                attributes["forward"],
+                attributes["init"],
+                attributes["axis"],
+            )
+        return embedded_operators.EmbeddedOperator(self.definition_stage.definition)
+
+    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
+        op = self._embedded_operator()
+        return backend.jit(
+            lambda *args, **kwargs: embedded_operators.field_operator_call(op, args, kwargs),
+            ("domain",),
+        )
+
     def with_grid_type(self, grid_type: common.GridType) -> FieldOperator:
         return dataclasses.replace(
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
@@ -541,9 +584,13 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             out = kwargs.pop("out")
             if "domain" in kwargs:
                 domain = utils.tree_map(common.domain)(kwargs.pop("domain"))
-                if not isinstance(domain, tuple):
-                    domain = utils.tree_map(lambda _: domain)(out)
-                out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
+                if isinstance(self.backend, jax_jit.JaxJitBackend):
+                    # the operator assigns to `out` inside the trace, not to a restricted copy
+                    kwargs["domain"] = domain
+                else:
+                    if not isinstance(domain, tuple):
+                        domain = utils.tree_map(lambda _: domain)(out)
+                    out = utils.tree_map(lambda f, dom: f[dom])(out, domain)
 
             return self._compiled_programs(
                 *args,
@@ -558,26 +605,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
-            attributes = (
-                self.definition_stage.attributes
-                if self.definition_stage
-                else self.foast_stage.attributes
-            )
-            if attributes is not None and any(
-                has_scan_op_attribute := [
-                    attribute in attributes for attribute in ["init", "axis", "forward"]
-                ]
-            ):
-                assert all(has_scan_op_attribute)
-                forward = attributes["forward"]
-                init = attributes["init"]
-                axis = attributes["axis"]
-                op: embedded_operators.EmbeddedOperator = embedded_operators.ScanOperator(
-                    self.definition_stage.definition, forward, init, axis
-                )
-            else:
-                op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
-            return embedded_operators.field_operator_call(op, args, kwargs)
+            return embedded_operators.field_operator_call(self._embedded_operator(), args, kwargs)
 
 
 GTEntryPoint: TypeAlias = Program | FieldOperator
