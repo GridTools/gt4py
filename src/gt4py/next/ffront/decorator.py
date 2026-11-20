@@ -48,7 +48,7 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, compiled_program, options, workflow
-from gt4py.next.program_processors.runners import jax_jit
+from gt4py.next.program_processors.runners import embedded_jit
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -107,7 +107,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     def __gt_type__(self) -> ts.CallableType: ...
 
     @abc.abstractmethod
-    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner: ...
+    def _embedded_jit_runner(
+        self, backend: embedded_jit.EmbeddedJitBackend
+    ) -> embedded_jit.EmbeddedJitRunner: ...
 
     def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
@@ -123,9 +125,11 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         )
 
     @functools.cached_property
-    def _compiled_programs(self) -> compiled_program.CompiledProgramsPool | jax_jit.JitRunner:
-        if isinstance(self.backend, jax_jit.JaxJitBackend):
-            return self._jax_jit_runner(self.backend)
+    def _compiled_programs(
+        self,
+    ) -> compiled_program.CompiledProgramsPool | embedded_jit.EmbeddedJitRunner:
+        if isinstance(self.backend, embedded_jit.EmbeddedJitBackend):
+            return self._embedded_jit_runner(self.backend)
         # This cached property initializer is only called when JITting the first
         # program variant of the pool. If the program is compiled by directly
         # calling `compile()`, the pool is initialized with the options passed
@@ -140,9 +144,9 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
-        if isinstance(self.backend, jax_jit.JaxJitBackend):
+        if isinstance(self.backend, embedded_jit.EmbeddedJitBackend):
             raise RuntimeError(
-                f"Backend '{self.backend.name}' runs embedded under 'jax.jit'; it does not compile."
+                f"Backend '{self.backend.name}' runs the program embedded; it does not compile."
             )
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
@@ -327,7 +331,9 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         )
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
-    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
+    def _embedded_jit_runner(
+        self, backend: embedded_jit.EmbeddedJitBackend
+    ) -> embedded_jit.EmbeddedJitRunner:
         definition = self.definition_stage.definition
         return backend.jit(
             definition,
@@ -555,7 +561,9 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             )
         return embedded_operators.EmbeddedOperator(self.definition_stage.definition)
 
-    def _jax_jit_runner(self, backend: jax_jit.JaxJitBackend) -> jax_jit.JitRunner:
+    def _embedded_jit_runner(
+        self, backend: embedded_jit.EmbeddedJitBackend
+    ) -> embedded_jit.EmbeddedJitRunner:
         op = self._embedded_operator()
         operator_type = self.foast_stage.foast_node.type
         assert isinstance(operator_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType)
@@ -596,7 +604,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             out = kwargs.pop("out")
             if "domain" in kwargs:
                 domain = utils.tree_map(common.domain)(kwargs.pop("domain"))
-                if isinstance(self.backend, jax_jit.JaxJitBackend):
+                if isinstance(self.backend, embedded_jit.EmbeddedJitBackend):
                     # the operator assigns to `out` inside the trace, not to a restricted copy
                     kwargs["domain"] = domain
                 else:
