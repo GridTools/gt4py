@@ -24,6 +24,11 @@ from gt4py.next.iterator.transforms import constant_folding
         (im.if_(True, im.plus(im.ref("a"), 2), im.minus(9, 5)), im.plus("a", 2)),
         (im.minimum("a", "a"), "a"),
         (im.maximum(1, 2), 2),
+        # neutral operations
+        (im.plus("a", 0), im.ref("a")),
+        (im.multiplies_("a", 1), im.ref("a")),
+        (im.multiplies_("a", 0), im.literal_from_value(0)),
+        (im.multiplies_(0, "a"), im.literal_from_value(0)),
         # canonicalization
         (im.plus("a", 1), im.plus("a", 1)),
         (im.plus(1, "a"), im.plus("a", 1)),

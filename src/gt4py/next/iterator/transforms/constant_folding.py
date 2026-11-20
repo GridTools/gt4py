@@ -81,7 +81,7 @@ class ConstantFolding(
         # `maximum(a + 1, a + (-1))` -> `a + maximum(1, -1)`
         FOLD_MIN_MAX_PLUS = enum.auto()
 
-        # `a + 0` -> `a`, `a * 1` -> `a`
+        # `a + 0` -> `a`, `a * 1` -> `a`, `a * 0` -> `0`
         FOLD_NEUTRAL_OP = enum.auto()
 
         # `1 + 1` -> `2`
@@ -197,6 +197,16 @@ class ConstantFolding(
             and int(node.args[1].value) == 1
         ):
             return node.args[0]
+        # `a * 0` -> `0`
+        # TODO(ehrengruber): this is only correct if `a` is finite; guard against
+        #   `InfinityLiteral` (and NaN) once multiplies infinity-arithmetic is handled.
+        if (
+            cpm.is_call_to(node, "multiplies")
+            and isinstance(node.args[1], ir.Literal)
+            and node.args[1].value.isdigit()
+            and int(node.args[1].value) == 0
+        ):
+            return node.args[1]
         return None
 
     @classmethod
