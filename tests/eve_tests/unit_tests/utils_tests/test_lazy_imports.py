@@ -340,18 +340,52 @@ class TestLazyImportModule:
 
     @pytest.mark.parametrize("parent_init", [False, True])
     def test_namespace_packages(self, make_modules, parent_init):
-        # A namespace package (no `__init__.py`) below a parent which is not imported yet
+        # A namespace package (no `__init__.py`) below a parent which is not imported yet:
+        # the path finder needs the parent in `sys.modules`, so the parent gets imported.
         files = {"lzns/part/leaf.py": "X = 1\n"}
         if parent_init:
             files["lzns/__init__.py"] = ""
         make_modules(files)
 
+        leaf = eve.utils.lazy_import_module("lzns.part.leaf")  # deepest name first
+        assert eve.utils.is_lazy_module(leaf)
+        assert "lzns" in sys.modules
+        assert "lzns.part.leaf" not in sys.modules
         part = eve.utils.lazy_import_module("lzns.part")
-        leaf = eve.utils.lazy_import_module("lzns.part.leaf")
         assert eve.utils.lazy_import_module("lzns.missing", on_missing="none") is None
 
         assert leaf.X == 1
         assert eve.utils.resolve_lazy_module(part) is sys.modules["lzns.part"]
+
+    def test_target_imported_by_parent_in_fallback(self, make_modules, tmp_path):
+        # Only findable through the runtime `__path__` of the parent, which also imports it:
+        # the availability check imports the parent, so the real module is returned.
+        make_modules(
+            {
+                "lzpkg/__init__.py": f"""
+                __path__.append({str(tmp_path / "extra")!r})
+                from . import plug
+                """,
+                "extra/plug.py": "WHERE = 'extra'\n",
+            }
+        )
+        plug = eve.utils.lazy_import_module("lzpkg.plug")
+
+        assert not eve.utils.is_lazy_module(plug)
+        assert plug is sys.modules["lzpkg.plug"]
+
+    @pytest.mark.parametrize("on_missing", ["raise", "none"])
+    def test_available_module_returns_proxy(self, make_modules, on_missing):
+        make_modules({"lzpkg/__init__.py": "X = 1\n"})
+        proxy = eve.utils.lazy_import_module("lzpkg", on_missing=on_missing)
+
+        assert eve.utils.is_lazy_module(proxy)
+        assert proxy.X == 1
+
+    @pytest.mark.parametrize("fullname", ["", ".", ".lzpkg", "lzpkg.", "lzpkg..sub"])
+    def test_invalid_names(self, fullname):
+        with pytest.raises(ValueError, match="Invalid module name"):
+            eve.utils.lazy_import_module(fullname, on_missing="none")
 
     def test_alias_registered_by_non_package_parent(self, make_modules):
         make_modules(

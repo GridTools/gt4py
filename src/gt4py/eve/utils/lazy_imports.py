@@ -15,8 +15,9 @@ semantics deliberately follow PEP 810, so call sites can be migrated to the
 `lazy` keyword once Python 3.15 is the minimum supported version:
 
 - The module is not executed, nor added to `sys.modules`, until its first
-  use. It is then imported with a plain import statement, so import order,
-  side effects and errors are those of a regular import.
+  use (unless finding it requires importing a parent package, see below).
+  It is then imported with `importlib.import_module()`, so import order,
+  side effects and errors are those of a regular import statement.
 - If the import fails, nothing is cached and the next use retries it.
 
 Differences with PEP 810 that call sites must take into account (the first
@@ -60,6 +61,9 @@ import types
 from collections.abc import Sequence
 from typing import Any, Final, Literal, Optional, overload
 
+
+# Sentinel for `sys.modules` lookups (single lookups, since other threads can modify it)
+_NOT_FOUND: Final = object()
 
 # Name of the proxy attribute caching the resolved module. It is always answered by
 # the proxy itself, so it shadows an attribute with the same name in the real module.
@@ -160,8 +164,9 @@ def _import_parent_and_check(parent_name: str, fullname: str) -> bool:
     """
     try:
         importlib.import_module(parent_name)
-        if fullname in sys.modules:  # e.g. registered as an alias, maybe without `__spec__`
-            return sys.modules[fullname] is not None
+        # Registered by the parent (e.g. as an alias, maybe without `__spec__`)
+        if (module := sys.modules.get(fullname, _NOT_FOUND)) is not _NOT_FOUND:
+            return module is not None
         return importlib.util.find_spec(fullname) is not None
     except ModuleNotFoundError as error:
         if error.name is not None and (
@@ -192,8 +197,7 @@ def _is_module_available(fullname: str) -> bool:
     for i in range(1, len(parts) + 1):
         name = ".".join(parts[:i])
         is_last = i == len(parts)
-        if name in sys.modules:
-            module = sys.modules[name]
+        if (module := sys.modules.get(name, _NOT_FOUND)) is not _NOT_FOUND:
             if module is None:  # import explicitly blocked
                 return False
             search_path = getattr(module, "__path__", None)
@@ -273,15 +277,17 @@ def lazy_import_module(fullname: str, *, on_missing: str = "raise") -> Optional[
             library without a working driver) are raised on first access.
 
     Returns:
-        The real module if it is already imported, otherwise a proxy module,
-        or `None` if the module is not installed and `on_missing` is `"none"`.
+        The real module if it is already imported (also when importing a
+        parent package to find it imported it), otherwise a proxy module, or
+        `None` if the module is not installed and `on_missing` is `"none"`.
 
     Raises:
         ModuleNotFoundError: if the module is not installed and `on_missing`
             is `"raise"`.
         ImportError: if a parent package has to be imported to find the module
             (because it is not found statically) and that import fails.
-        ValueError: if `on_missing` is not a valid option.
+        ValueError: if `fullname` is not a valid absolute module name or
+            `on_missing` is not a valid option.
 
     Examples:
         >>> np_linalg = lazy_import_module("numpy.linalg")
@@ -294,6 +300,8 @@ def lazy_import_module(fullname: str, *, on_missing: str = "raise") -> Optional[
         `if TYPE_CHECKING:` block containing a regular `import` of the module
         (type checkers then do not see that the result can be `None`).
     """
+    if "" in fullname.split("."):  # empty, relative or with empty components
+        raise ValueError(f"Invalid module name: expected an absolute name, got '{fullname}'.")
     if on_missing not in ("raise", "none"):
         raise ValueError(
             f"Invalid 'on_missing' value: expected 'raise' or 'none', got '{on_missing}'."
