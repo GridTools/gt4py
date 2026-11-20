@@ -115,6 +115,7 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
+    JAX_JIT = "gt4py.next.program_processors.runners.jax_jit.jax_jit"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -174,6 +175,8 @@ USES_CONCAT_WHERE = "uses_concat_where"
 EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN = "embedded_concat_where_infinite_domain"
 EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN = "embedded_concat_where_non_contiguous_domain"
 USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
+USES_SCALAR_IN_CONTROL_FLOW = "uses_scalar_in_control_flow"
+USES_SCALAR_IN_DOMAIN = "uses_scalar_in_domain"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -255,6 +258,11 @@ EMBEDDED_SKIP_LIST = [
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+JAX_JIT_SKIP_LIST = JAX_EMBEDDED_SKIP_LIST + [
+    # scalar arguments are traced unless they are in `static_params`
+    (USES_SCALAR_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCALAR_IN_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+]
 ARRAY_API_STRICT_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_MATH_OUTSIDE_ARRAY_API, XFAIL, "Not in the Array API standard."),
 ]
@@ -304,6 +312,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.JAX_JIT: JAX_JIT_SKIP_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST

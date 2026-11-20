@@ -81,6 +81,7 @@ def test_concat_where_non_overlapping(cartesian_case, static_domains: bool):
     cases.verify(cartesian_case, testee, ground, air, out=out, ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_concat_where_empty_branch(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(a: cases.IJKField, b: cases.IJKField, N: np.int32) -> cases.IJKField:
@@ -239,6 +240,7 @@ def test_dimension_two_nested_conditions(cartesian_case, static_domains: bool):
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_dimension_two_conditions_and(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.KField, boundary: cases.KField, nlev: np.int32) -> cases.KField:
@@ -347,6 +349,7 @@ def test_dimension_two_conditions_or(cartesian_case, static_domains: bool):
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_lap_like(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(
@@ -612,6 +615,7 @@ def test_with_tuples_of_local_and_nonlocal_leaves(unstructured_case, static_doma
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_nested_conditions_with_empty_branches(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IField, boundary: cases.IField, N: gtx.int32) -> cases.IField:

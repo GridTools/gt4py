@@ -115,6 +115,10 @@ no_backend = NoBackend(
             ),
         ),
         pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.JAX_JIT,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.uses_dace,
         ),
