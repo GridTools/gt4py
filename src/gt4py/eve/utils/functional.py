@@ -10,20 +10,17 @@
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import operator
 from collections.abc import Callable, Iterable
-from typing import Any, Generic, Literal, Optional, ParamSpec, TypeVar, Union, overload
+from typing import Any, Literal, Optional, ParamSpec, TypeVar, Union, overload
 
 from boltons.iterutils import is_collection
 
 from ..type_definitions import NOTHING
-from ..xtyping import ArgsOnlyCallable
 
 
 _P = ParamSpec("_P")
-_S = TypeVar("_S")
 _T = TypeVar("_T")
 
 
@@ -167,27 +164,6 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
     """
     return lambda obj: getitem_(obj, key, default=default)
-
-
-@dataclasses.dataclass(frozen=True)
-class IndexerCallable(Generic[_S, _T]):
-    """
-    An indexer class applying the wrapped function to the index arguments.
-
-    Examples:
-        >>> indexer = IndexerCallable(lambda x: x**2)
-        >>> indexer[3]
-        9
-
-        >>> indexer = IndexerCallable(lambda a, b: a + b)
-        >>> indexer[3, 4]
-        7
-    """
-
-    func: ArgsOnlyCallable[_S, _T]
-
-    def __getitem__(self, key: _S | tuple[_S, ...]) -> _T:
-        return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
 class fluid_partial(functools.partial):

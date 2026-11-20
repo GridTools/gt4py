@@ -27,23 +27,22 @@ from boltons.strutils import (
 
 from .caching import lru_cache as lru_cache, optional_lru_cache as optional_lru_cache
 from .classes import (
+    CustomDefaultDictBase as CustomDefaultDictBase,
+    CustomMapping as CustomMapping,
+    FrozenNamespace as FrozenNamespace,
+    IndexerCallable as IndexerCallable,
+    Namespace as Namespace,
+    SequentialIDGenerator as SequentialIDGenerator,
     get_fully_qualified_name as get_fully_qualified_name,
     is_noninstantiable as is_noninstantiable,
     noninstantiable as noninstantiable,
     register_subclasses as register_subclasses,
-)
-from .containers import (
-    CustomDefaultDictBase as CustomDefaultDictBase,
-    CustomMapping as CustomMapping,
-    FrozenNamespace as FrozenNamespace,
-    Namespace as Namespace,
 )
 from .dispatching import (
     merge_dispatchers as merge_dispatchers,
     singledispatcher as singledispatcher,
 )
 from .functional import (
-    IndexerCallable as IndexerCallable,
     attrchecker as attrchecker,
     attrgetter_ as attrgetter_,
     fluid_partial as fluid_partial,
@@ -79,11 +78,7 @@ from .lazy_imports import (
     lazy_import_module as lazy_import_module,
     resolve_lazy_module as resolve_lazy_module,
 )
-from .strings import (
-    AnyWordsIterable as AnyWordsIterable,
-    CaseStyleConverter as CaseStyleConverter,
-    SequentialIDGenerator as SequentialIDGenerator,
-)
+from .strings import AnyWordsIterable as AnyWordsIterable, CaseStyleConverter as CaseStyleConverter
 
 
 try:
