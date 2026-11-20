@@ -149,7 +149,7 @@ def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
 # Latest supported Python version, since it is the one with the newest Sphinx
 @nox.session(python=PYTHON_VERSIONS[-1], tags=["docs"])
 def docs(session: nox.Session) -> None:
-    """Build the user documentation site (welcome page plus `cartesian` and `next` subsites).
+    """Build the user documentation site (welcome page and `gt4py.cartesian` and `gt4py.next` subsites).
 
     The site is made of three independent Sphinx projects which are built into
     a single tree: the welcome page at the root, with the subsites in the
@@ -165,8 +165,8 @@ def docs(session: nox.Session) -> None:
     if html_dir.exists():
         shutil.rmtree(html_dir)
 
-    # API reference of the `cartesian` subsite: all subpackages except `next` and `eve`
-    # (the `next` subsite has no API reference)
+    # API reference of the `gt4py.cartesian` subsite: all subpackages except `next` and `eve`
+    # (the `gt4py.next` subsite has no API reference)
     src_dir = REPO_ROOT / "src" / "gt4py"
     apidoc_dir = docs_dir / "cartesian" / "_source"
     for generated in apidoc_dir.glob("*.rst"):

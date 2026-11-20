@@ -24,7 +24,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from site_theme import theme_settings  # noqa: E402 [module-import-not-at-top-of-file]
 
 
-project = "GT4Py (next)"
+project = "GT4Py Next"
 copyright = "2014-2026, ETH Zurich"  # noqa: A001 [builtin-variable-shadowing]
 author = "ETH Zurich"
 version = gt4py.__version_info__.base_version
@@ -67,7 +67,7 @@ intersphinx_mapping = {
 globals().update(
     theme_settings(
         __file__,
-        title="GT4Py (next)",
+        title="GT4Py Next",
         # Links to the other sites: (title, path relative to the root of this site)
         site_links=[
             ("Home", "../index.html"),

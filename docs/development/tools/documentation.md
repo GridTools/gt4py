@@ -46,11 +46,11 @@ Recent Sphinx releases drop Python versions faster than GT4Py does, so the Sphin
 
 ## Writing pages
 
-New pages should be written in [MyST Markdown](https://myst-parser.readthedocs.io). The existing reStructuredText pages of the `cartesian` subsite are kept as they are.
+New pages should be written in [MyST Markdown](https://myst-parser.readthedocs.io). The existing reStructuredText pages of the `gt4py.cartesian` subsite are kept as they are.
 
 ### Executable pages (MyST notebooks)
 
-In the `next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date.
+In the `gt4py.next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date.
 
 Markdown files without that header are rendered as they are, without running their code blocks.
 

@@ -9,7 +9,7 @@
 """HTML theme settings shared by the Sphinx projects of the GT4Py documentation.
 
 The documentation is made of three independent Sphinx projects (the welcome
-page and the `cartesian` and `next` subsites) which should look the same and
+page and the `gt4py.cartesian` and `gt4py.next` subsites) which should look the same and
 link to each other. Every `conf.py` calls `theme_settings()` and adds the
 result to its own configuration.
 """

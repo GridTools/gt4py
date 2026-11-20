@@ -1,7 +1,7 @@
 name: Documentation
 
-# Builds the user documentation site (welcome page plus the 'cartesian' and
-# 'next' subsites) and, for pushes to 'main' in the upstream repository,
+# Builds the user documentation site (welcome page plus the 'gt4py.cartesian'
+# and 'gt4py.next' subsites) and, for pushes to 'main' in the upstream repository,
 # deploys it to GitHub Pages (which must use 'GitHub Actions' as source).
 
 on:

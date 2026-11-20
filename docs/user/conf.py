@@ -9,7 +9,7 @@
 """Sphinx configuration of the GT4Py documentation welcome page.
 
 The documentation site is made of three independent Sphinx projects: this
-welcome page and the `cartesian/` and `next/` subsites, which are built into
+welcome page and the `gt4py.cartesian` and `gt4py.next` subsites, which are built into
 subfolders of the output of this one (see the `docs` session in `noxfile.py`).
 """
 
