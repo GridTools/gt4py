@@ -1008,9 +1008,10 @@ def _where_on_range(
     """`concat_where` for branches that both cover `result_range`: a select instead of a concatenation."""
     (dim,) = condition.dims
     result_domain = true_field.domain.replace(dim, common.NamedRange(dim, result_range))
-    xp = true_field.array_ns
+    ops = _ops_of(true_field)
+    xp = ops.xp
     axis = result_domain.dim_index(dim, allow_missing=False)
-    coords = xp.arange(result_range.start, result_range.stop)
+    coords = xp.arange(result_range.start, result_range.stop, device=ops.device(true_field.ndarray))
     mask = (coords >= max(condition[dim].unit_range.start, result_range.start)) & (
         coords < min(condition[dim].unit_range.stop, result_range.stop)
     )
@@ -1018,7 +1019,7 @@ def _where_on_range(
     new_buffer = xp.where(
         mask, true_field[result_domain].ndarray, false_field[result_domain].ndarray
     )
-    return true_field.__class__.from_array(new_buffer, domain=result_domain)
+    return NdArrayField.from_array(new_buffer, domain=result_domain)
 
 
 _register_builtin(experimental.concat_where, _concat_where)

@@ -2544,6 +2544,19 @@ def test_concat_where_select_matches_concatenation(false_range):
     np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
 
 
+def test_concat_where_select_on_non_default_device_of_inputs():
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    domain = common.domain({K: (0, 6)})
+    true_data = strict_array_on_device1(np.arange(6))
+    true_field = common._field(true_data, domain=domain)
+    false_field = common._field(strict_array_on_device1(-np.arange(6)), domain=domain)
+
+    result = concat_where(common.domain({K: (0, 3)}), true_field, false_field)
+
+    assert result.ndarray.device == true_data.device
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
+
+
 @pytest.mark.requires_jax
 def test_jax_concat_where_on_covering_branches_is_a_select():
     import jax
