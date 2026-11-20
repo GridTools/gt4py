@@ -138,6 +138,10 @@ class JaxOps(array_ops.ArrayOps):
     ) -> core_defs.NDArrayObject:
         return jnp.take(array, indices, axis=axis, mode="clip")
 
+    def scalar(self, array: core_defs.NDArrayObject) -> Any:
+        # a traced element stays a 0-d tracer: its value is only known at run time
+        return super().scalar(array) if _is_concrete(array) else array
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 

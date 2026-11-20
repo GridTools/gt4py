@@ -12,13 +12,14 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common, int32, neighbor_sum
+from gt4py.next import astype, common, int32, maximum, neighbor_sum, sqrt
 from gt4py.next.ffront.experimental import as_offset
 
 
 pytestmark = pytest.mark.requires_jax
 
 IDim = gtx.Dimension("IDim")
+KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
 E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
@@ -67,6 +68,18 @@ def dynamic_shift(
     f: gtx.Field[[IDim], gtx.float64], offsets: gtx.Field[[IDim], int32]
 ) -> gtx.Field[[IDim], gtx.float64]:
     return f(as_offset(Ioff, offsets))
+
+
+@gtx.field_operator
+def scalar_builtins(
+    f: gtx.Field[[IDim], gtx.float64], a: gtx.float64, n: int32
+) -> gtx.Field[[IDim], gtx.float64]:
+    return (sqrt(a) + maximum(a, 5.0) + astype(n, gtx.float64)) * f
+
+
+@gtx.scan_operator(axis=KDim, forward=True, init=0.0)
+def scaled_cumsum(state: gtx.float64, x: gtx.float64, a: gtx.float64) -> gtx.float64:
+    return state + a * x
 
 
 @gtx.field_operator
@@ -196,9 +209,7 @@ def test_field_operator_out_and_domain(device, backend):
     out = _field(device, np.full(5, -1.0), [IDim])
     expected = _field(device, np.full(5, -1.0), [IDim])
 
-    shift_scale.with_backend(backend)(
-        f, 2.0, out=out, offset_provider={}, domain={IDim: (1, 4)}
-    )
+    shift_scale.with_backend(backend)(f, 2.0, out=out, offset_provider={}, domain={IDim: (1, 4)})
     shift_scale(f, 2.0, out=expected, offset_provider={}, domain={IDim: (1, 4)})
 
     np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
@@ -216,6 +227,30 @@ def test_dimension_in_offset_provider_is_static(device, backend):
 
     np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
     np.testing.assert_array_equal(out.asnumpy(), [1.0, 1.0, 4.0, 4.0, 4.0])
+
+
+def test_scalar_only_builtins_on_traced_scalars(device, backend):
+    f = _field(device, np.arange(3.0), [IDim])
+    out = _field(device, np.zeros(3), [IDim])
+    expected = _field(device, np.zeros(3), [IDim])
+
+    scalar_builtins.with_backend(backend)(f, 4.0, int32(2), out=out, offset_provider={})
+    scalar_builtins(f, 4.0, int32(2), out=expected, offset_provider={})
+
+    np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
+    np.testing.assert_array_equal(out.asnumpy(), [0.0, 9.0, 18.0])
+
+
+def test_scan_with_traced_scalar(device, backend):
+    x = _field(device, np.arange(1.0, 5.0), [KDim])
+    out = _field(device, np.zeros(4), [KDim])
+    expected = _field(device, np.zeros(4), [KDim])
+
+    scaled_cumsum.with_backend(backend)(x, 2.0, out=out, offset_provider={})
+    scaled_cumsum(x, 2.0, out=expected, offset_provider={})
+
+    np.testing.assert_array_equal(out.asnumpy(), expected.asnumpy())
+    np.testing.assert_array_equal(out.asnumpy(), [2.0, 6.0, 12.0, 20.0])
 
 
 def test_field_operator_tuple_out_leaves_inputs(device, backend):

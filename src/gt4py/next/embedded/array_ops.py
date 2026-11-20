@@ -229,6 +229,10 @@ class ArrayOps:
                 f" to an array of '{self.xp.__name__}'."
             )
 
+    def scalar(self, array: core_defs.NDArrayObject) -> Any:
+        """The element of the 0-d `array`, as a NumPy scalar."""
+        return self.to_numpy(array)[()]
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
@@ -264,6 +268,13 @@ def of(array: Any) -> ArrayOps:
             array_api_compat.array_namespace(array)
         )
         return ops
+
+
+def is_scalar(value: Any) -> bool:
+    """A scalar, or a 0-d array (e.g. a traced scalar argument under `jax.jit`)."""
+    return core_defs.is_scalar_type(value) or (
+        getattr(value, "ndim", None) == 0 and array_api_compat.is_array_api_obj(value)
+    )
 
 
 def default() -> ArrayOps:

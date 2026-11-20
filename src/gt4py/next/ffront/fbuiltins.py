@@ -281,13 +281,24 @@ def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
+def _is_scalar(value: Any) -> bool:
+    from gt4py.next.embedded import array_ops  # avoid circular import
+
+    return array_ops.is_scalar(value)
+
+
+def _array_ops_of_0d(value: Any) -> Any:
+    from gt4py.next.embedded import array_ops  # avoid circular import
+
+    assert array_ops.is_scalar(value)
+    return array_ops.of(value)
+
+
 @BuiltInFunction
 def broadcast(
     field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
-    assert core_defs.is_scalar_type(
-        field
-    )  # default implementation for scalars, Fields are handled via dispatch
+    assert _is_scalar(field)  # default implementation for scalars, Fields are handled via dispatch
     # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
     return field  # type: ignore[return-value] # see comment above
 
@@ -321,8 +332,10 @@ def astype(
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch
-    assert core_defs.is_scalar_type(value)
-    return core_defs.dtype(type_).scalar_type(value)
+    if core_defs.is_scalar_type(value):
+        return core_defs.dtype(type_).scalar_type(value)
+    ops = _array_ops_of_0d(value)
+    return ops.xp.astype(value, ops.dtype(type_))
 
 
 _UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
@@ -379,11 +392,10 @@ def _make_unary_math_builtin(name: str) -> BuiltInFunction:
 
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
-        assert core_defs.is_scalar_type(
-            value
-        )  # default implementation for scalars, Fields are handled via dispatch
-
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
+        # default implementation for scalars, Fields are handled via dispatch
+        if core_defs.is_scalar_type(value):
+            return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
+        return _array_ops_of_0d(value).elementwise_function(name)(value)
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -424,9 +436,10 @@ def _make_binary_math_builtin(name: str) -> BuiltInFunction:
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
-        assert core_defs.is_scalar_type(lhs)
-        assert core_defs.is_scalar_type(rhs)
-        return getattr(np, name)(lhs, rhs)
+        if core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs):
+            return getattr(np, name)(lhs, rhs)
+        ops = _array_ops_of_0d(rhs if core_defs.is_scalar_type(lhs) else lhs)
+        return ops.elementwise_function(name)(ops.operand(lhs, rhs), ops.operand(rhs, lhs))
 
     impl.__name__ = name
     return BuiltInFunction(impl)
