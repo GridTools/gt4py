@@ -27,9 +27,9 @@ EVE_UTILS_PUBLIC_NAMES = [
     "a10n", "as_xiter", "asciify", "attrchecker", "attrgetter_", "cached_hash", "content_hash",
     "ddiff", "deepdiff", "dhash", "first", "flatten", "flatten_iter", "fluid_partial",
     "format_int_list", "get_fully_qualified_name", "getitem_", "hashable_by", "hashable_by_id",
-    "is_collection", "is_noninstantiable", "isinstancechecker", "itemgetter_", "iter_splitlines",
+    "is_collection", "is_lazy_module", "is_noninstantiable", "isinstancechecker", "itemgetter_", "iter_splitlines", "lazy_import_module",
     "lru_cache", "merge_dispatchers", "noninstantiable", "optional_lru_cache", "parse_int_list",
-    "pprint_ddiff", "register_subclasses", "singledispatcher", "slugify", "toolz", "unwrap_text",
+    "pprint_ddiff", "register_subclasses", "resolve_lazy_module", "singledispatcher", "slugify", "toolz", "unwrap_text",
     "with_fluid_partial", "xenumerate", "xiter", "xtyping", "xxhash",
 ]  # fmt: skip
 
