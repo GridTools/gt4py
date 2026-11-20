@@ -7,13 +7,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """
-`ArrayOps` for torch tensors, and the embedded entry points under `torch.compile`.
+`ArrayOps` for torch tensors, and the embedded fields as torch pytrees.
 
 Everything gt4py knows about `torch.compile` is in this module (ADR 0029).
-An embedded program or field operator called in a region that `torch.compile`
-captures runs as one `torch.compiler.nonstrict_trace` call: its fields and
-connectivities are pytree nodes, and the embedded code runs on the fake tensors of
-the trace. A connectivity table inside the trace is one of two cases:
+Dynamo does not trace embedded code: a region calls it through a
+`torch.compiler.nonstrict_trace` function, which gets the fields and connectivities
+as pytree nodes and runs the embedded code on the fake tensors of the trace. A
+connectivity table inside the trace is one of two cases:
 
 - it stands for a concrete table, which it got through the pytree context: its
   static values are a NumPy array with the values of the concrete table;
@@ -29,7 +29,6 @@ give connectivities that are not supported in the region.
 from __future__ import annotations
 
 import dataclasses
-import weakref
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Optional
@@ -305,55 +304,3 @@ torch_pytree.register_pytree_node(
     _flatten_connectivity,
     _unflatten_connectivity,
 )
-
-
-# -- embedded entry points under `torch.compile` --
-
-_entry_points: weakref.WeakValueDictionary[int, Callable[..., Any]] = weakref.WeakValueDictionary()
-_within_nonstrict_call = False
-
-
-def register_entry_point(entry_point: Callable[..., Any]) -> None:
-    """Make `entry_point` callable in a `torch.compile` region; before the region, which applies mutations only after tracing."""
-    _entry_points[id(entry_point)] = entry_point
-
-
-def is_compiling() -> bool:
-    """Whether an embedded entry point is called in a `torch.compile` region, outside of `call`."""
-    return not _within_nonstrict_call and torch.compiler.is_compiling()
-
-
-def call(entry_point: Callable[..., Any], args: tuple, kwargs: dict[str, Any]) -> Any:
-    """Call `entry_point` in a `torch.compile` region as one non-strictly traced function."""
-    if "domain" in kwargs:
-        kwargs = {**kwargs, "domain": _encode_domain_argument(kwargs["domain"])}
-    result = _nonstrict_call(id(entry_point), args, kwargs)
-    return result[0] if result else None
-
-
-def _encode_domain_argument(domain: Any) -> Any:
-    # the dimensions of a domain, e.g. as dict keys, cannot be in a pytree context; a list is
-    # no domain of a tuple output
-    if isinstance(domain, tuple):
-        return tuple(_encode_domain_argument(d) for d in domain)
-    return list(_domain_context(common.domain(domain)))
-
-
-def _decode_domain_argument(domain: Any) -> Any:
-    if isinstance(domain, tuple):
-        return tuple(_decode_domain_argument(d) for d in domain)
-    return _context_domain(tuple(domain))
-
-
-@torch.compiler.nonstrict_trace
-def _nonstrict_call(entry_point_id: int, args: tuple, kwargs: dict[str, Any]) -> tuple[Any, ...]:
-    global _within_nonstrict_call
-    _within_nonstrict_call = True
-    try:
-        if "domain" in kwargs:
-            kwargs = {**kwargs, "domain": _decode_domain_argument(kwargs["domain"])}
-        result = _entry_points[entry_point_id](*args, **kwargs)
-    finally:
-        _within_nonstrict_call = False
-    # a `None` output is not supported by `nonstrict_trace`
-    return () if result is None else (result,)
