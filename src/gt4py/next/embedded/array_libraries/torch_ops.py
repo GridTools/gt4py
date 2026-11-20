@@ -81,9 +81,52 @@ def _as_offset(offset: fbuiltins.FieldOffset, offset_field: nd_array_field.NdArr
     return connectivity
 
 
+def _concat_where(
+    domain: common.Domain, true_field: common.Field, false_field: common.Field
+) -> common.Field:
+    """
+    `concat_where` in a `torch.compile` trace as a select where both branches cover the result.
+
+    Inductor fuses the select into its consumers, while a concatenation materializes the result.
+    Executed eagerly, the select is the slower one: it reads both branches over the whole result.
+    """
+    if all(
+        _is_concrete(f.ndarray)
+        for f in (true_field, false_field)
+        if isinstance(f, nd_array_field.NdArrayField)
+    ):
+        return nd_array_field._concat_where(domain, true_field, false_field)
+    t, f, t_slices, f_slices = nd_array_field._concat_where_slices(domain, true_field, false_field)
+    (dim,) = domain.dims
+    pieces = (*t_slices, *f_slices)
+    if not pieces:
+        return nd_array_field._concat_where(domain, true_field, false_field)
+    result_range = common.UnitRange(
+        min(p.domain[dim].unit_range.start for p in pieces),
+        max(p.domain[dim].unit_range.stop for p in pieces),
+    )
+    if not all(result_range <= b.domain[dim].unit_range for b in (t, f)):
+        return nd_array_field._concat_where(domain, true_field, false_field)
+
+    result_domain = t.domain.replace(dim, common.NamedRange(dim, result_range))
+    selected = domain[dim].unit_range & result_range
+    coords = torch.arange(
+        result_range.start, result_range.stop, device=array_api_compat.device(t.ndarray)
+    )
+    axis = result_domain.dim_index(dim, allow_missing=False)
+    mask = ((coords >= selected.start) & (coords < selected.stop)).reshape(
+        tuple(-1 if i == axis else 1 for i in range(result_domain.ndim))
+    )
+    return nd_array_field.NdArrayField.from_array(
+        torch.where(mask, t[result_domain].ndarray, f[result_domain].ndarray),
+        domain=result_domain,
+    )
+
+
 class TorchOps(array_ops.ArrayOps):
     builtin_overrides: ClassVar[Mapping[Any, Callable[..., Any]]] = {
-        experimental.as_offset: _as_offset
+        experimental.as_offset: _as_offset,
+        experimental.concat_where: _concat_where,
     }
 
     @property
