@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import enum
 import functools
 import itertools
 import math
@@ -23,7 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
@@ -458,6 +459,15 @@ def _broadcast_axes_slice(
     )
 
 
+class StaticValues(enum.Enum):
+    """The static values of a connectivity when they are not a separate array."""
+
+    #: the buffer holds them
+    IN_BUFFER = enum.auto()
+    #: there are none: the values exist only at run time
+    RUN_TIME_ONLY = enum.auto()
+
+
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
     common.GatherConnectivity[common.DimsT, common.DimT],
@@ -465,6 +475,16 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: The values of the table as an array that can be computed on now, possibly of another
+    #: library, for domain inference. A creator sets them for a buffer that is a tracer; they
+    #: must be the values of `_ndarray`.
+    _static_values: core_defs.NDArrayObject | StaticValues = dataclasses.field(
+        default=StaticValues.IN_BUFFER,
+        kw_only=True,
+        compare=False,
+        repr=False,
+        metadata=utils.gt4py_metadata(fingerprint=False),
+    )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -502,27 +522,38 @@ class NdArrayConnectivityField(
     def skip_value(self) -> Optional[core_defs.IntegralScalar]:
         return self._skip_value
 
-    # This embedded run-time cache is only used to speed up repeated calls to
-    # `_inverse_image` and `restrict`, and it should not be considered part of
-    # the connectivity field definition, and therefore it should not be serialized.
+    # These embedded run-time caches are only used to speed up repeated calls to
+    # `_inverse_image` and `restrict`, and they should not be considered part of
+    # the connectivity field definition, and therefore they should not be serialized.
     @functools.cached_property
-    def _cache(self) -> dict:
+    def _inverse_image_cache(self) -> dict[common.UnitRange, common.Domain]:
+        return {}
+
+    @functools.cached_property
+    def _restrict_cache(self) -> dict[Any, tuple[common.Domain, Any, dict, dict]]:
         return {}
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        cache_key = hash((id(self.ndarray), self.domain, image_range))
-
-        if (new_domain := self._cache.get(cache_key, None)) is None:
+        if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = _hyperslice(
-                self._ndarray, image_range, array_ops.of(self._ndarray).xp, self.skip_value
-            )
+            if self._static_values is StaticValues.RUN_TIME_ONLY:
+                # all targets are assumed to be in range; the gather decides what the others read
+                slices: Optional[tuple[slice, ...]] = (slice(None),) * self._ndarray.ndim
+            else:
+                values = (
+                    self._static_values
+                    if self._static_values is not StaticValues.IN_BUFFER
+                    else self._ndarray
+                )
+                slices = _inverse_image_box(
+                    values, image_range, array_ops.of(values).xp, self.skip_value
+                )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
             new_domain = self.domain.slice_at[slices]
-            self._cache[cache_key] = new_domain
+            self._inverse_image_cache[image_range] = new_domain
 
         return new_domain
 
@@ -534,18 +565,26 @@ class NdArrayConnectivityField(
         raise TypeError("'Connectivity' does not support item assignment.")
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
-        cache_key = (id(self.ndarray), self.domain, index)
-
-        if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
+        # Connectivities and arrays are not cached: they may belong to a trace that ends before the cache
+        if (cached := self._restrict_cache.get(index, None)) is None:
             new_domain, buffer_slice = self._slice(index)
-            restricted_connectivity = self.__class__(
-                new_domain,
-                array_ops.of(self._ndarray).asarray(self.ndarray[buffer_slice]),
-                self.codomain,
-                self.skip_value,
-            )
-            self._cache[cache_key] = restricted_connectivity
-
+            # the trailing `Ellipsis` makes indexing with integers only return an array, not a scalar
+            if Ellipsis not in buffer_slice:
+                buffer_slice = (*buffer_slice, Ellipsis)
+            cached = self._restrict_cache[index] = (new_domain, buffer_slice, {}, {})
+        new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
+        static_values = self._static_values
+        if not isinstance(static_values, StaticValues):
+            # static values that are not the buffer itself are restricted along with it
+            static_values = static_values[buffer_slice]
+        restricted_connectivity = dataclasses.replace(
+            self,
+            _domain=new_domain,
+            _ndarray=self._ndarray[buffer_slice],
+            _static_values=static_values,
+        )
+        restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
+        restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
         return restricted_connectivity
 
     __getitem__ = restrict
@@ -712,7 +751,7 @@ def _identity_index_array(
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
 
-def _hyperslice(
+def _inverse_image_box(
     index_array: core_defs.NDArrayObject,
     image_range: common.UnitRange,
     xp: ModuleType,

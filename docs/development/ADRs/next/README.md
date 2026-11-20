@@ -38,6 +38,7 @@ Writing a new ADR is simple:
 ### Embedded Execution
 
 - [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
+- [0029 - Connectivities Under JAX Tracing](0029-Connectivities_Under_JAX_Tracing.md)
 
 ### Transformations
 

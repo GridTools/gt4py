@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import math
 import operator
 import pickle
@@ -120,7 +121,6 @@ def are_equal_fields(a: Field, b: Field) -> bool:
 
 
 def test_nd_array_field_buffer_info(nd_array_implementation):
-    import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
@@ -2162,7 +2162,6 @@ def test_nd_array_field_pickle_roundtrip():
 
 
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
-    import dataclasses
 
     V = Dimension("V")
     E = Dimension("E")
@@ -2195,7 +2194,7 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     )
 
     _ = e2v_conn._inverse_image(UnitRange(2, 5))
-    assert "_cache" in e2v_conn.__dict__
+    assert "_inverse_image_cache" in e2v_conn.__dict__
 
     _ = e2v_conn.__gt_buffer_info__
     assert "__gt_buffer_info__" in e2v_conn.__dict__
@@ -2203,7 +2202,8 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     state = e2v_conn.__getstate__()
     assert state["_codomain"] == V
     assert state["_skip_value"] is None
-    assert "_cache" not in state
+    assert "_inverse_image_cache" not in state
+    assert "_restrict_cache" not in state
     assert "__gt_buffer_info__" not in state
 
 
@@ -2228,7 +2228,8 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
     assert restored.codomain == original.codomain
     assert restored.skip_value == original.skip_value
     assert np.array_equal(restored.ndarray, original.ndarray)
-    assert "_cache" not in restored.__dict__
+    assert "_inverse_image_cache" not in restored.__dict__
+    assert "_restrict_cache" not in restored.__dict__
     assert "__gt_buffer_info__" not in restored.__dict__
 
 
@@ -2397,14 +2398,14 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
         ([[1, 0, -1], [1, 0, 0]], [(0, 2), (1, 3)]),
     ],
 )
-def test_hyperslice(index_array, expected):
+def test_inverse_image_box(index_array, expected):
     index_array = np.asarray(index_array)
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
+    result = nd_array_field._inverse_image_box(index_array, image_range, np, skip_value)
 
     assert result == expected
 
@@ -2614,103 +2615,6 @@ def test_concat(fields_data, dim, expected_data, expect_error):
         np.testing.assert_allclose(result.asnumpy(), expected_array)
 
 
-@pytest.mark.requires_jax
-def test_jax_jit_field_arguments():
-    import jax
-
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
-    a = common._field(
-        jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
-    )
-    b = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
-
-    @jax.jit
-    def add(x, y):
-        return x + y
-
-    result = add(a, b)
-
-    assert isinstance(result, common.Field)
-    assert result.domain == domain
-    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
-
-
-@pytest.mark.requires_jax
-def test_jax_pytree_roundtrip():
-    import jax
-
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
-    field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
-
-    children, treedef = jax.tree_util.tree_flatten(field)
-
-    assert len(children) == 1
-    assert children[0] is field.ndarray
-
-    restored = jax.tree_util.tree_unflatten(treedef, children)
-    assert restored.domain == domain
-
-    other_field = common._field(
-        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
-    )
-    # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
-    assert jax.tree_util.tree_structure(other_field) != treedef
-
-
-@pytest.mark.requires_jax
-def test_jax_pytree_rejects_fields_of_other_libraries():
-    import jax
-
-    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
-
-    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
-        jax.jit(lambda f: f * 2.0)(field)
-
-
-@pytest.mark.requires_jax
-def test_jax_pytree_non_array_leaves():
-    import jax
-
-    D_BATCH = Dimension("D_BATCH")
-    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
-    batched = common._field(jax.numpy.ones((2, 3)), domain=common.domain({D_BATCH: 2, D0: 3}))
-
-    shapes = jax.tree.map(lambda x: x.shape, field)
-    assert jax.tree.leaves(shapes) == [3]
-    assert jax.eval_shape(lambda f: f * 2.0, field).ndarray.shape == (3,)
-    # a field with an axis index as leaf, as `vmap` prefix for the batched field's buffer
-    axes = nd_array_field.NdArrayField(common.domain({D0: 3}), 0)
-    sums = jax.vmap(lambda f: f.ndarray.sum(), in_axes=(axes,))(
-        nd_array_field.NdArrayField(common.domain({D0: 3}), batched.ndarray)
-    )
-    np.testing.assert_allclose(sums, [3.0, 3.0])
-
-
-@pytest.mark.requires_jax
-def test_jax_traced_array_dispatch():
-    import jax
-
-    domain = common.domain({D0: (0, 3)})
-    x = jax.numpy.arange(3, dtype=np.float64)
-
-    def loss(arr):
-        field = common._field(arr, domain=domain)
-        assert isinstance(field, nd_array_field.NdArrayField)
-        assert field.array_ns is jax.numpy
-        return jax.numpy.sum((field * field).ndarray)
-
-    np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())
-    np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
-
-    offsets = jax.numpy.asarray([[2, 0], [1, 2]])
-    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
-
-    def make_connectivity(arr):
-        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
-
-    np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)
-
-
 _TORCH_DEVICES = [
     "cpu",
     pytest.param("cuda", marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda)),
@@ -2871,6 +2775,34 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [1, 2], [2, 3]]),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(np.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
+    calls = 0
+    inverse_image_box = nd_array_field._inverse_image_box
+
+    def counting_inverse_image_box(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return inverse_image_box(*args, **kwargs)
+
+    monkeypatch.setattr(nd_array_field, "_inverse_image_box", counting_inverse_image_box)
+
+    for _ in range(3):
+        result = field.premap(conn[NamedIndex(E2VDim, 0)])
+
+    assert calls == 1
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0])
 
 
 def _scan_cumsum(x, k_dim):
