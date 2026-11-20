@@ -39,6 +39,7 @@ Writing a new ADR is simple:
 
 - [0022 - Limitations of embedded concat_where](0022-Limitations-of-embedded-concat_where.md)
 - [0029 - Connectivities in Tracing Embedded Backends](0029-Connectivities_in_Tracing_Embedded_Backends.md)
+- [0030 - Embedded Jit Backends](0030-Embedded-Jit-Backends.md)
 
 ### Transformations
 
