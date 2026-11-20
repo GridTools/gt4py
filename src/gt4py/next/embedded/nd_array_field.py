@@ -537,15 +537,15 @@ class NdArrayConnectivityField(
         if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            values = (
-                self._ndarray
-                if self._static_values is StaticValues.IN_BUFFER
-                else self._static_values
-            )
-            if isinstance(values, StaticValues):
+            if self._static_values is StaticValues.RUN_TIME_ONLY:
                 # all targets are assumed to be in range; the gather decides what the others read
                 slices: Optional[tuple[slice, ...]] = (slice(None),) * self._ndarray.ndim
             else:
+                values = (
+                    self._static_values
+                    if self._static_values is not StaticValues.IN_BUFFER
+                    else self._ndarray
+                )
                 slices = _inverse_image_box(
                     values, image_range, array_ops.of(values).xp, self.skip_value
                 )
