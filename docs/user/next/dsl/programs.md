@@ -85,14 +85,14 @@ A program is called like a function:
 
 ```{code-cell} ipython3
 nx, ny = 6, 5
-grid = gtx.domain({I: nx, J: ny})
+domain = gtx.domain({I: nx, J: ny})
 
 data = np.zeros((nx, ny))
 data[2:4, 2] = 16.0
 
-phi = gtx.as_field(grid, data)
-work = gtx.zeros(grid)
-new_phi = gtx.zeros(grid)
+phi = gtx.as_field(domain, data)
+work = gtx.zeros(domain)
+new_phi = gtx.zeros(domain)
 
 diffusion_step(phi, 0.125, nx, ny, work, new_phi)
 print(new_phi.asnumpy())
@@ -123,7 +123,7 @@ def laplacian_in_the_interior(phi: IJField, result: IJField):
     laplacian(phi, out=result[1:-1, 1:-1])
 
 
-result = gtx.zeros(grid)
+result = gtx.zeros(domain)
 
 laplacian_in_the_interior(phi, result)
 print(result.asnumpy())
@@ -147,7 +147,7 @@ def compute_differences(phi: IJField, nx: gtx.int32, ny: gtx.int32, dx: IJField,
     differences(phi, out=(dx, dy), domain={I: (0, nx - 1), J: (0, ny - 1)})
 
 
-dx, dy = gtx.zeros(grid), gtx.zeros(grid)
+dx, dy = gtx.zeros(domain), gtx.zeros(domain)
 
 compute_differences(phi, nx, ny, dx, dy)
 print(dx.asnumpy())

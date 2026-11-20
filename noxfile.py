@@ -272,9 +272,8 @@ def test_examples(session: nox.Session) -> None:
     next_docs_dir = pathlib.Path("docs") / "user" / "next"
     next_docs_pages = sorted(
         str(page)
-        for folder in (".", "dsl", "python", "examples")
-        for page in (next_docs_dir / folder).glob("*.md")
-        if "format_name: myst" in page.read_text()
+        for page in next_docs_dir.rglob("*.md")
+        if "workshop" not in page.parts and "format_name: myst" in page.read_text()
     )
     session.run("jupytext", *next_docs_pages, "--to", ".ipynb")
     session.run(*"jupytext docs/development/next/toolchain/*.md --to .ipynb".split())

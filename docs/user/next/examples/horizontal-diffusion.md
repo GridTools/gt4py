@@ -92,14 +92,14 @@ The initial state is a smooth bump with noise added to it:
 
 ```{code-cell} ipython3
 nx, ny = 96, 96
-grid = gtx.domain({I: nx, J: ny})
+domain = gtx.domain({I: nx, J: ny})
 
 x, y = np.meshgrid(np.linspace(-1.0, 1.0, nx), np.linspace(-1.0, 1.0, ny), indexing="ij")
 rng = np.random.default_rng(seed=42)
 initial = np.exp(-4.0 * (x**2 + y**2)) + 0.1 * rng.standard_normal((nx, ny))
 
-phi = gtx.as_field(grid, initial)
-new_phi = gtx.zeros(grid)
+phi = gtx.as_field(domain, initial)
+new_phi = gtx.zeros(domain)
 ```
 
 The time loop is regular Python code. After each step the two fields are
@@ -185,8 +185,8 @@ The first call compiles the program:
 ---
 tags: [remove-stderr]
 ---
-phi_cpu = gtx.as_field(grid, initial, allocator=gtx.gtfn_cpu)
-new_phi_cpu = gtx.zeros(grid, allocator=gtx.gtfn_cpu)
+phi_cpu = gtx.as_field(domain, initial, allocator=gtx.gtfn_cpu)
+new_phi_cpu = gtx.zeros(domain, allocator=gtx.gtfn_cpu)
 
 for _ in range(50):
     diffusion_step_cpu(phi_cpu, 0.03, nx, ny, new_phi_cpu)

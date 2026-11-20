@@ -57,24 +57,18 @@ dimension.
 
 ```{code-cell} ipython3
 nx, ny = 64, 48
-grid = gtx.domain({I: nx, J: ny})
+domain = gtx.domain({I: nx, J: ny})
 
 i, j = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
-phi = gtx.as_field(grid, np.sin(2 * np.pi * i / 16) * np.sin(2 * np.pi * j / 12))
-lap_phi = gtx.zeros(grid)
+phi = gtx.as_field(domain, np.sin(2 * np.pi * i / 16) * np.sin(2 * np.pi * j / 12))
+lap_phi = gtx.zeros(domain)
 
 print(phi.domain)
 ```
 
 The output lists, for each dimension, its kind and its range of indices
-(`start:stop`, with `stop` excluded). Here `grid` is simply the domain covering
-all the points of the grid.
-
-The values are stored in a regular array, which here is a NumPy one:
-
-```{code-cell} ipython3
-type(phi.ndarray), phi.ndarray.shape, phi.ndarray.dtype
-```
+(`start:stop`, with `stop` excluded). Here `domain` covers all the points of
+the grid.
 
 ## A field operator
 
@@ -112,8 +106,7 @@ laplacian(phi, out=lap_phi, domain=interior)
 ```
 
 The points of `lap_phi` outside `interior` have not been touched. `asnumpy()`
-returns the data as a NumPy array, for example to plot it. Both images use the
-same color scale:
+returns the data as a NumPy array, for example to plot it.
 
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
@@ -127,7 +120,7 @@ fig.colorbar(image, ax=axes);
 ```
 
 No backend was selected, so this call was executed directly in Python, with the
-operations on fields evaluated by NumPy. This is called **embedded** execution.
+operations on fields evaluated by NumPy. We call this **embedded** execution.
 It is the default, it needs no compilation, and it can be debugged like any other
 Python code.
 
@@ -135,9 +128,10 @@ Python code.
 
 The same field operator can be compiled to optimized code by a **backend**.
 `with_backend` returns a new version of the operator bound to that backend, here
-`gtx.gtfn_cpu`, which generates C++ code using the GridTools library. The
-backend is also passed as `allocator` when creating the fields it works on, so
-that they get the memory layout the backend prefers:
+`gtx.gtfn_cpu`, which generates C++ code using the
+[GridTools library](https://gridtools.github.io/gridtools/latest/index.html).
+The backend can also be passed as `allocator` when creating fields, so that
+they get the memory layout the backend prefers:
 
 ```{code-cell} ipython3
 ---
@@ -145,8 +139,8 @@ tags: [remove-stderr]
 ---
 laplacian_cpu = laplacian.with_backend(gtx.gtfn_cpu)
 
-phi_cpu = gtx.as_field(grid, phi.asnumpy(), allocator=gtx.gtfn_cpu)
-lap_phi_cpu = gtx.zeros(grid, allocator=gtx.gtfn_cpu)
+phi_cpu = gtx.as_field(domain, phi.asnumpy(), allocator=gtx.gtfn_cpu)
+lap_phi_cpu = gtx.zeros(domain, allocator=gtx.gtfn_cpu)
 
 laplacian_cpu(phi_cpu, out=lap_phi_cpu, domain=interior)
 
@@ -158,7 +152,7 @@ calls reuse the compiled version. Neither the definition of the operator nor the
 way it is called changes.
 
 ```{important}
-The compilation runs in separate processes. In a script, the code that calls a
+The compilation runs in separate processes by default. In a script, the code that calls a
 compiled operator must be inside a function called under
 `if __name__ == "__main__":`, as required by the Python `multiprocessing`
 module. Notebooks and interactive sessions do not need it.
@@ -172,12 +166,8 @@ Python, which is handy for exploring and debugging:
 ```{code-cell} ipython3
 d_phi = phi(I + 1) - phi
 
-print(d_phi.domain)
+print(d_phi.asnumpy().max())
 ```
-
-Note the domain of the result: `phi(I + 1)` is defined only where `phi` has a
-neighbor to the right, and GT4Py tracks this for you.
-[Shifts and neighbors](dsl/shifts.md) explains it.
 
 ## Where to go next
 

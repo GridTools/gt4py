@@ -30,11 +30,11 @@ J = gtx.Dimension("J")
 The examples use these fields:
 
 ```{code-cell} ipython3
-grid = gtx.domain({I: 4, J: 3})
+domain = gtx.domain({I: 4, J: 3})
 
-a = gtx.as_field(grid, np.arange(12.0).reshape(4, 3))
-b = gtx.full(grid, 10.0)
-result = gtx.zeros(grid)
+a = gtx.as_field(domain, np.arange(12.0).reshape(4, 3))
+b = gtx.full(domain, 10.0)
+result = gtx.zeros(domain)
 
 print(a.asnumpy())
 ```
@@ -120,7 +120,7 @@ def add_single_precision(
     return a + astype(float32(2.0) * b, float64)
 
 
-b_single = gtx.full(grid, 10.0, dtype=np.float32)
+b_single = gtx.full(domain, 10.0, dtype=np.float32)
 add_single_precision(a, b_single, out=result)
 print(result.asnumpy())
 ```
@@ -279,7 +279,8 @@ both of them.
 
 Operators can refer to objects defined outside them: dimensions, other
 operators and constants. Scalar constants are grouped in a `FrozenNamespace`, an
-immutable collection of named values:
+immutable collection of named values. For now it is not exported by
+`gt4py.next` and it has to be imported from `gt4py.eve.utils`:
 
 ```{code-cell} ipython3
 from gt4py.eve.utils import FrozenNamespace
@@ -344,7 +345,7 @@ print(result.asnumpy())
 When the result is a collection, `out` is a collection of the same type:
 
 ```{code-cell} ipython3
-half_wind = Wind(u=gtx.zeros(grid), v=gtx.zeros(grid))
+half_wind = Wind(u=gtx.zeros(domain), v=gtx.zeros(domain))
 
 scaled(wind, 0.5, out=half_wind)
 print(half_wind.u.asnumpy())
@@ -367,7 +368,7 @@ def heated(state: State, increment: gtx.float64) -> State:
     return State(temperature=state.temperature + increment, pressure=state.pressure)
 
 
-new_state = State(temperature=gtx.zeros(grid), pressure=gtx.zeros(grid))
+new_state = State(temperature=gtx.zeros(domain), pressure=gtx.zeros(domain))
 
 heated(State(temperature=a, pressure=b), 0.5, out=new_state)
 print(new_state.temperature.asnumpy())

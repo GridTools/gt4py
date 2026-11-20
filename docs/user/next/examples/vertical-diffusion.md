@@ -119,15 +119,15 @@ column to the last one:
 
 ```{code-cell} ipython3
 ni, nk = 64, 40
-grid = gtx.domain({I: ni, K: nk})
+domain = gtx.domain({I: ni, K: nk})
 
 profile = 280.0 + 10.0 * np.exp(-(((np.arange(nk) - 20.0) / 3.0) ** 2))
 initial = np.tile(profile, (ni, 1))
 r_values = np.tile(np.linspace(0.0, 2.0, ni)[:, np.newaxis], (1, nk))
 
-temperature = gtx.as_field(grid, initial)
-new_temperature = gtx.zeros(grid)
-r = gtx.as_field(grid, r_values)
+temperature = gtx.as_field(domain, initial)
+new_temperature = gtx.zeros(domain)
+r = gtx.as_field(domain, r_values)
 
 for _ in range(10):
     diffuse(temperature, r, nk, out=new_temperature)
@@ -173,7 +173,7 @@ def numpy_step(temperature, r):
     return result
 
 
-diffuse(gtx.as_field(grid, initial), r, nk, out=new_temperature)
+diffuse(gtx.as_field(domain, initial), r, nk, out=new_temperature)
 
 np.allclose(new_temperature.asnumpy(), numpy_step(initial, r_values))
 ```

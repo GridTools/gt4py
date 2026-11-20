@@ -1,3 +1,17 @@
+---
+jupytext:
+  formats: ipynb,md:myst
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
 # GT4Py Next
 
 `gt4py.next` is a Python library to write the stencil computations of weather
@@ -10,7 +24,10 @@ generation, is not compatible with it.
 
 This is what it looks like:
 
-```python
+```{code-cell} ipython3
+---
+tags: [remove-stderr]
+---
 import gt4py.next as gtx
 
 I = gtx.Dimension("I")
@@ -25,9 +42,9 @@ def laplacian(phi: IJField) -> IJField:
 
 
 if __name__ == "__main__":
-    grid = gtx.domain({I: 64, J: 48})
-    phi = gtx.ones(grid)
-    result = gtx.zeros(grid)
+    domain = gtx.domain({I: 64, J: 48})
+    phi = gtx.ones(domain)
+    result = gtx.zeros(domain)
 
     # Run it in Python, on NumPy arrays ...
     laplacian(phi, out=result, domain={I: (1, 63), J: (1, 47)})

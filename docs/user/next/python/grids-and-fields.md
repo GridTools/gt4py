@@ -50,9 +50,8 @@ There are three kinds of dimensions:
 | `LOCAL`                | The neighbors of a mesh location (see [Unstructured meshes](#unstructured-meshes)) |
 
 The same definitions work for any grid. In a Cartesian grid every horizontal axis
-is a dimension (`I`, `J`). In an unstructured mesh, every type of location is a
-dimension (`Cell`, `Edge`, `Vertex`), and all the cells are numbered along the
-single `Cell` axis.
+is a dimension (typically `I`, `J`). In an unstructured mesh, every type of
+location is a dimension (e.g. `Cell`, `Edge`, `Vertex`).
 
 ## Domains
 
@@ -94,8 +93,8 @@ temperature = gtx.full(plane, 280.0)
 mask = gtx.zeros(plane, dtype=bool)
 level_index = gtx.as_field({K: 10}, np.arange(10, dtype=np.int32))
 
-print(temperature.domain, temperature.ndarray.dtype)
-print(level_index.domain, level_index.ndarray.dtype)
+print(temperature.domain, temperature.asnumpy().dtype)
+print(level_index.domain, level_index.asnumpy().dtype)
 ```
 
 `gtx.as_field` always **copies** the data: the field does not share memory with
@@ -135,8 +134,6 @@ default:
 
 ```{code-cell} ipython3
 temperature_numpy = gtx.zeros(plane, allocator=np)
-
-print(type(temperature_numpy.ndarray))
 ```
 
 Other libraries are used in the same way, for example CuPy to run on a GPU, or
@@ -147,7 +144,7 @@ import cupy as cp
 import jax.numpy as jnp
 
 temperature_cupy = gtx.zeros(plane, allocator=cp)  # a CuPy array, on the GPU
-temperature_jax = gtx.zeros(plane, allocator=jnp)  # a JAX array
+temperature_jax = gtx.zeros(plane, allocator=jnp)  # a JAX array on the default device
 ```
 
 Alternatively, the `device` argument selects where the data lives, and the
@@ -163,9 +160,10 @@ temperature_gpu = gtx.zeros(plane, device=gpu)
 All the fields used in a call, including `out`, must be held by the same array
 library.
 
-## Reading and writing the data
+## Reading the data
 
-A field gives access to its domain and to its data:
+A field gives access to its domain and to its data. `asnumpy()` always returns
+a NumPy array, copying the data from the device if needed:
 
 ```{code-cell} ipython3
 field = gtx.as_field(plane, np.arange(12.0).reshape(4, 3))
@@ -173,11 +171,6 @@ field = gtx.as_field(plane, np.arange(12.0).reshape(4, 3))
 print(field.domain)
 print(field.asnumpy())
 ```
-
-- `field.ndarray` is the underlying buffer, a NumPy array or the equivalent
-  array of another library (for example CuPy, for fields on a GPU).
-- `field.asnumpy()` always returns a NumPy array, copying the data from the
-  device if needed.
 
 Indexing a field gives another field, a view of a part of the original one.
 Plain integers and slices are **relative** indices: they count positions from
@@ -187,18 +180,8 @@ starts at 2 in the `J` direction, so these two expressions select the same
 column:
 
 ```{code-cell} ipython3
-print(field[:, 0].domain)
-print(field[J(2)].domain)
-```
-
-A scalar or another field can be assigned to a part of a field. To write the
-values of an array, use the buffer:
-
-```{code-cell} ipython3
-field[I(0)] = -1.0
-field.ndarray[-1, :] = np.array([10.0, 20.0, 30.0])
-
-print(field.asnumpy())
+print(field[:, 0].domain, field[:, 0].asnumpy())
+print(field[J(2)].domain, field[J(2)].asnumpy())
 ```
 
 ## Unstructured meshes
@@ -234,8 +217,9 @@ may change soon.
 ```
 
 The edge-to-cell table has one row per edge, with the indices of the cells at
-both sides of it. The edges on the boundary of the mesh have only one cell, and
-the missing neighbor is marked with `-1`:
+both sides of it. All the rows have the same length, but the edges on the
+boundary of the mesh have a cell at one side only. The entry of their row with
+no cell to point to, a **missing neighbor**, is filled with `-1`:
 
 ```{code-cell} ipython3
 edge_to_cell_table = np.array(

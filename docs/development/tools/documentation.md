@@ -56,7 +56,7 @@ Markdown files without that header are rendered as they are, without running the
 
 The same files are also run as tests by the `test_examples` nox session, which converts them to `.ipynb` notebooks with `jupytext` and executes them with `nbmake`. The generated `.ipynb` files are excluded from the Sphinx sources.
 
-The pages of the `gt4py.next` subsite are organized in folders: `dsl/` (what can be written inside operators), `python/` (the Python side: grids, fields and execution) and `examples/` (complete small applications). The `test_examples` session picks up every executable page in these folders, so a new page only has to be added to a `toctree`. A new folder must also be added to the list in that session.
+The pages of the `gt4py.next` subsite are organized in folders: `dsl/` (what can be written inside operators), `python/` (the Python side: grids, fields and execution) and `examples/` (complete small applications). The `test_examples` session picks up every executable page of the subsite, in any folder, so a new page only has to be added to a `toctree`.
 
 Prefer executable pages for anything showing GT4Py code.
 

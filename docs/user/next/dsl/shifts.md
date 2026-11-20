@@ -21,8 +21,8 @@ of the neighbors. This operation is a **shift**.
 
 - On a Cartesian grid the offset is a dimension plus an integer, as in
   `a(I + 1)`.
-- On an unstructured mesh it is a named offset such as `E2C`, which stands for a
-  connectivity table, as in `a(E2C[0])`.
+- On an unstructured mesh it is a `FieldOffset` such as `E2C`, a tag which
+  stands for a connectivity table, as in `a(E2C[0])`.
 
 ```{code-cell} ipython3
 import numpy as np
@@ -62,11 +62,10 @@ dimensions can be shifted along any of them:
 
 ```python
 a(I + 1)(J - 1)  # diagonal neighbor of a field over I, J
-(a * b)(K - 1)  # value of the product at the previous level
+(a * b)(K - 1)  # value of the product at the previous K level
 ```
 
-The offset must be a number written in the code: `a(I + n)` with a variable `n`
-is not supported.
+The offset must be a literal: `a(I + n)` with a variable `n` is not supported.
 
 ### Shifts and domains
 
@@ -79,9 +78,11 @@ print(a(I + 1).domain)
 print((a(I + 1) - a(I - 1)).domain)
 ```
 
-`a(I + 1)` contains the same values as `a`, relabeled one position to the left.
-An operation between fields is defined at the points which all its operands have
-in common, so every shift in a stencil removes points at the boundaries.
+`a(I + 1)` contains the same values as `a`, relabeled one position to the left:
+a shift moves the domain of a field, it does not make it smaller. An operation
+between fields is defined at the points which all its operands have in common.
+Combining fields shifted by different offsets therefore gives a result on a
+smaller domain than the one of the original field.
 
 ```{warning}
 Embedded execution checks the domains, and it reports an error when a result is
@@ -117,10 +118,17 @@ smooth(a, gtx.full({I: 6}, -1.0), out=result)
 print(result.asnumpy())
 ```
 
-Every branch is only computed in its own region. Here `smoothed` is evaluated at
-the interior points, the only ones having both neighbors, so the operator can be
-called on the whole grid. With `where`, both branches would be needed at all the
-points.
+This is the difference with [`where`](field-operators.md#local-variables-and-conditionals):
+
+- `where(mask, a, b)` is an operation between three fields. Its result is only
+  defined at the points which the mask and **both** branches have in common,
+  even at the points where the mask does not select one of them.
+- `concat_where(region, a, b)` takes `a` only inside the region and `b` only
+  outside of it, and concatenates the two pieces. A branch does not need to be
+  defined outside of its own part of the domain.
+
+Here `smoothed` is only defined at the interior points, the only ones having
+both neighbors, and still the operator can be called on the whole grid.
 
 ```{important}
 In embedded execution `concat_where` has some restrictions:
@@ -217,6 +225,16 @@ The connectivities are passed in the `offset_provider` argument of the call. All
 the connectivities used by an operator, including the ones needed by the
 operators it calls, must be there.
 
+```{important}
+Select a neighbor by its index only when **every** location has that neighbor,
+that is, when the connectivity table has no missing entries in that column.
+This is the case of the connectivities with a fixed number of neighbors, like
+the two vertices of an edge. In this mesh every edge has a first cell, so
+`cells(E2C[0])` is fine, but the boundary edges do not have a second one. When
+the number of neighbors is not the same for all the locations, use the
+reductions explained next.
+```
+
 ### All the neighbors: local dimensions and reductions
 
 Without an index, `cells(E2C)` gives the values of all the neighbors at once.
@@ -251,61 +269,16 @@ align: center
 The result of `neighbor_sum(cells(E2C), axis=E2CDim)`
 ```
 
+Reductions **ignore the missing neighbors**: in this example, the sum for a
+boundary edge is just the value of its only cell. They are the way to work with
+connectivities where some locations have fewer neighbors than others.
+
 The values of the neighbors can be combined with other fields before reducing.
 For instance, `neighbor_sum(weights * cells(E2C), axis=E2CDim)` is a weighted
 sum, where `weights` is a field with dimensions `Edge, E2CDim`.
 
-### Composing shifts
-
-The result of a shift is a regular field, which can be passed to other operators
-or shifted again. This operator goes from the cells to the edges and back to the
-cells:
-
-```{code-cell} ipython3
-@gtx.field_operator
-def sum_over_edges(cells: CellField) -> CellField:
-    edge_sums = sum_of_adjacent_cells(cells)
-    return neighbor_sum(edge_sums(C2E), axis=C2EDim)
-
-
-cell_result = gtx.zeros({Cell: 6})
-
-sum_over_edges(cell_values, out=cell_result, offset_provider=offset_provider)
-print(cell_result.asnumpy())
-```
-
-### Missing neighbors
-
-The edges on the boundary of the mesh have only one cell, and their second entry
-in the table is the skip value `-1`. This has two consequences:
-
-- **Reductions ignore the missing neighbors.** In the example above, the sum
-  for a boundary edge is just the value of its only cell.
-- **A selected neighbor is only defined where it exists.** `cells(E2C[1])` has
-  no value at the boundary edges, so an operator using it can only be computed
-  on the interior ones.
-
-In this mesh the interior edges are numbered last, from 6 to 11, so they can be
-selected with a domain:
-
-```{code-cell} ipython3
-@gtx.field_operator
-def jump_across_edge(cells: CellField) -> EdgeField:
-    return cells(E2C[1]) - cells(E2C[0])
-
-
-edge_values = gtx.zeros({Edge: 12})
-
-jump_across_edge(
-    cell_values, out=edge_values, domain={Edge: (6, 12)}, offset_provider=offset_provider
-)
-print(edge_values.asnumpy())
-```
-
-```{tip}
-Number the locations of a mesh so that the ones needing a special treatment,
-like the boundary, are contiguous. Domains can then select them without masks.
-```
+A field can only have one local dimension, so `cells(E2C)(C2E)` is not
+supported: reduce the first local dimension before shifting again.
 
 ## Staggered dimensions
 

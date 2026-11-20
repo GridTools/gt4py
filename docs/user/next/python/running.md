@@ -81,11 +81,11 @@ is NumPy for fields allocated in the default way.
 
 ```{code-cell} ipython3
 nx, ny = 256, 256
-grid = gtx.domain({I: nx, J: ny})
+domain = gtx.domain({I: nx, J: ny})
 
 rng = np.random.default_rng(seed=0)
-phi = gtx.as_field(grid, rng.random((nx, ny)))
-reference = gtx.zeros(grid)
+phi = gtx.as_field(domain, rng.random((nx, ny)))
+reference = gtx.zeros(domain)
 
 diffusion_step(phi, 0.1, True, nx, ny, reference)
 ```
@@ -125,7 +125,7 @@ backends exported by `gt4py.next`:
 | `gtx.gtfn_gpu` | The same for GPUs (see [Running on GPUs](#running-on-gpus)) |
 
 ```{important}
-Compilation jobs run in separate processes. In a script, put the code calling
+Compilation jobs run in separate processes by default. In a script, put the code calling
 compiled programs or operators inside a function called under
 `if __name__ == "__main__":`, as required by the Python `multiprocessing`
 module.
@@ -151,8 +151,8 @@ embedded execution.
 The fields are [allocated for the backend](grids-and-fields.md#allocating-for-a-backend):
 
 ```{code-cell} ipython3
-phi_cpu = gtx.as_field(grid, phi.asnumpy(), allocator=gtx.gtfn_cpu)
-new_phi_cpu = gtx.zeros(grid, allocator=gtx.gtfn_cpu)
+phi_cpu = gtx.as_field(domain, phi.asnumpy(), allocator=gtx.gtfn_cpu)
+new_phi_cpu = gtx.zeros(domain, allocator=gtx.gtfn_cpu)
 ```
 
 ### Compilation at the first call
@@ -285,14 +285,14 @@ device, which is done by passing the backend as allocator. Nothing else changes:
 ```python
 diffusion_step_gpu = diffusion_step.with_backend(gtx.gtfn_gpu)
 
-phi_gpu = gtx.as_field(grid, phi.asnumpy(), allocator=gtx.gtfn_gpu)
-new_phi_gpu = gtx.zeros(grid, allocator=gtx.gtfn_gpu)
+phi_gpu = gtx.as_field(domain, phi.asnumpy(), allocator=gtx.gtfn_gpu)
+new_phi_gpu = gtx.zeros(domain, allocator=gtx.gtfn_gpu)
 
 diffusion_step_gpu(phi_gpu, 0.1, True, nx, ny, new_phi_gpu)
 
 result = new_phi_gpu.asnumpy()  # copies the data back to main memory
 ```
 
-The buffer of a field allocated this way, `field.ndarray`, is a CuPy array.
-Fields on a GPU also work in embedded execution, where the operations are
-evaluated by CuPy.
+The data of a field allocated this way is held in a CuPy array. Fields on a
+GPU also work in embedded execution, where the operations are evaluated by
+CuPy.
