@@ -534,7 +534,9 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
 
     def _embedded_operator(self) -> embedded_operators.EmbeddedOperator:
         attributes = (
-            self.definition_stage.attributes if self.definition_stage else self.foast_stage.attributes
+            self.definition_stage.attributes
+            if self.definition_stage
+            else self.foast_stage.attributes
         )
         if attributes is not None and any(
             has_scan_op_attribute := [

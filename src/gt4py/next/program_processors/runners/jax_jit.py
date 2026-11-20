@@ -20,7 +20,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from collections.abc import Callable, Iterable
-from typing import Any, Final
+from typing import Any
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import context as embedded_context, nd_array_field
@@ -53,7 +53,8 @@ def _written_fields(tree: Any) -> list[nd_array_field.NdArrayField]:
     return [
         leaf
         for leaf in jax.tree.leaves(tree, is_leaf=_is_field)
-        if isinstance(leaf, nd_array_field.NdArrayField) and not isinstance(leaf, common.Connectivity)
+        if isinstance(leaf, nd_array_field.NdArrayField)
+        and not isinstance(leaf, common.Connectivity)
     ]
 
 
@@ -83,7 +84,7 @@ class JitRunner:
         self,
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
-        connectivities: dict[str, common.Connectivity],
+        connectivities: dict[str, Any],
         *,
         static_kwargs: tuple[tuple[str, Any], ...],
         static_provider: tuple[tuple[str, Any], ...],
@@ -114,8 +115,8 @@ class JitRunner:
         else:
             static_kwargs = ()
 
-        connectivities = {}
-        static_provider = []
+        connectivities: dict[str, Any] = {}
+        static_provider: list[tuple[str, Any]] = []
         for name, entry in offset_provider.items():
             if isinstance(entry, common.Connectivity):
                 connectivities[name] = entry
@@ -139,16 +140,18 @@ def __getattr__(name: str) -> JaxJitBackend:
         raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
     import jax.numpy as jnp
 
-    from gt4py.next.embedded.array_libraries import jax_ops  # noqa: F401 [unused-import] # registers the pytrees
+    from gt4py.next.embedded.array_libraries import (
+        jax_ops,  # noqa: F401 [unused-import] # registers the pytrees
+    )
 
     backend = JaxJitBackend(
         name="jax_jit",
         executor=_not_compiled,
-        allocator=jnp,  # type: ignore[arg-type] # an array namespace, as accepted by the field constructors
+        allocator=jnp,
         transforms=next_backend.DEFAULT_TRANSFORMS,
     )
     globals()[name] = backend
     return backend
 
 
-jax_jit: Final[JaxJitBackend]
+jax_jit: JaxJitBackend
