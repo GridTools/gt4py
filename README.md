@@ -102,7 +102,7 @@ Recurrent development tasks like bumping versions of used development tools or r
 
 The user documentation is published at [gridtools.github.io/gt4py](https://GridTools.github.io/gt4py). It is a welcome page linking to two independent subsites, one for `gt4py.cartesian` and one for `gt4py.next`, whose sources live in [`docs/user/`](./docs/user) (the welcome page), [`docs/user/cartesian/`](./docs/user/cartesian) and [`docs/user/next/`](./docs/user/next).
 
-GT4Py uses the Sphinx tool for the documentation, with pages written in reStructuredText (`gt4py.cartesian`) or [MyST](https://myst-parser.readthedocs.io) Markdown (welcome page and `gt4py.next`). MyST pages with a `jupytext` header declaring the `myst` format are notebooks, which are executed when the site is built. To build the whole site in a dedicated environment, run the `docs` nox session:
+GT4Py uses the Sphinx tool for the documentation, with pages written in reStructuredText (`gt4py.cartesian`) or [MyST](https://myst-parser.readthedocs.io) Markdown (welcome page and `gt4py.next`). To build the whole site in a dedicated environment, run the `docs` nox session:
 
 ```bash
 ./noxfile.py -s docs  # the site is written to 'docs/user/_build/html'
