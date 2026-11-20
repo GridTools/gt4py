@@ -10,8 +10,11 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import enum
 import functools
 import itertools
+import math
+import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar, cast
@@ -21,7 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, utils
 from gt4py.next.embedded import (
     array_ops,
     common as embedded_common,
@@ -456,6 +459,15 @@ def _broadcast_axes_slice(
     )
 
 
+class StaticValues(enum.Enum):
+    """The static values of a connectivity when they are not a separate array."""
+
+    #: the buffer holds them
+    IN_BUFFER = enum.auto()
+    #: there are none: the values exist only at run time
+    RUN_TIME_ONLY = enum.auto()
+
+
 @dataclasses.dataclass(frozen=True)
 class NdArrayConnectivityField(
     common.GatherConnectivity[common.DimsT, common.DimT],
@@ -463,6 +475,16 @@ class NdArrayConnectivityField(
 ):
     _codomain: common.DimT
     _skip_value: Optional[core_defs.IntegralScalar]
+    #: The values of the table as an array that can be computed on now, possibly of another
+    #: library, for domain inference. A creator sets them for a buffer that is a tracer; they
+    #: must be the values of `_ndarray`.
+    _static_values: core_defs.NDArrayObject | StaticValues = dataclasses.field(
+        default=StaticValues.IN_BUFFER,
+        kw_only=True,
+        compare=False,
+        repr=False,
+        metadata=utils.gt4py_metadata(fingerprint=False),
+    )
 
     @classmethod
     def from_array(  # type: ignore[override]
@@ -500,27 +522,38 @@ class NdArrayConnectivityField(
     def skip_value(self) -> Optional[core_defs.IntegralScalar]:
         return self._skip_value
 
-    # This embedded run-time cache is only used to speed up repeated calls to
-    # `_inverse_image` and `restrict`, and it should not be considered part of
-    # the connectivity field definition, and therefore it should not be serialized.
+    # These embedded run-time caches are only used to speed up repeated calls to
+    # `_inverse_image` and `restrict`, and they should not be considered part of
+    # the connectivity field definition, and therefore they should not be serialized.
     @functools.cached_property
-    def _cache(self) -> dict:
+    def _inverse_image_cache(self) -> dict[common.UnitRange, common.Domain]:
+        return {}
+
+    @functools.cached_property
+    def _restrict_cache(self) -> dict[Any, tuple[common.Domain, Any, dict, dict]]:
         return {}
 
     def _inverse_image(self, image_range: common.UnitRange) -> common.Domain:
-        cache_key = hash((id(self.ndarray), self.domain, image_range))
-
-        if (new_domain := self._cache.get(cache_key, None)) is None:
+        if (new_domain := self._inverse_image_cache.get(image_range, None)) is None:
             assert common.UnitRange.is_finite(image_range)
 
-            slices = _hyperslice(
-                self._ndarray, image_range, array_ops.of(self._ndarray).xp, self.skip_value
-            )
+            if self._static_values is StaticValues.RUN_TIME_ONLY:
+                # all targets are assumed to be in range; the gather decides what the others read
+                slices: Optional[tuple[slice, ...]] = (slice(None),) * self._ndarray.ndim
+            else:
+                values = (
+                    self._static_values
+                    if self._static_values is not StaticValues.IN_BUFFER
+                    else self._ndarray
+                )
+                slices = _inverse_image_box(
+                    values, image_range, array_ops.of(values).xp, self.skip_value
+                )
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous or empty dimensions.")
 
             new_domain = self.domain.slice_at[slices]
-            self._cache[cache_key] = new_domain
+            self._inverse_image_cache[image_range] = new_domain
 
         return new_domain
 
@@ -532,18 +565,26 @@ class NdArrayConnectivityField(
         raise TypeError("'Connectivity' does not support item assignment.")
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
-        cache_key = (id(self.ndarray), self.domain, index)
-
-        if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
+        # Connectivities and arrays are not cached: they may belong to a trace that ends before the cache
+        if (cached := self._restrict_cache.get(index, None)) is None:
             new_domain, buffer_slice = self._slice(index)
-            restricted_connectivity = self.__class__(
-                new_domain,
-                array_ops.of(self._ndarray).asarray(self.ndarray[buffer_slice]),
-                self.codomain,
-                self.skip_value,
-            )
-            self._cache[cache_key] = restricted_connectivity
-
+            # the trailing `Ellipsis` makes indexing with integers only return an array, not a scalar
+            if Ellipsis not in buffer_slice:
+                buffer_slice = (*buffer_slice, Ellipsis)
+            cached = self._restrict_cache[index] = (new_domain, buffer_slice, {}, {})
+        new_domain, buffer_slice, inverse_image_cache, restrict_cache = cached
+        static_values = self._static_values
+        if not isinstance(static_values, StaticValues):
+            # static values that are not the buffer itself are restricted along with it
+            static_values = static_values[buffer_slice]
+        restricted_connectivity = dataclasses.replace(
+            self,
+            _domain=new_domain,
+            _ndarray=self._ndarray[buffer_slice],
+            _static_values=static_values,
+        )
+        restricted_connectivity.__dict__["_inverse_image_cache"] = inverse_image_cache
+        restricted_connectivity.__dict__["_restrict_cache"] = restrict_cache
         return restricted_connectivity
 
     __getitem__ = restrict
@@ -599,25 +640,77 @@ def _gather_output_domain(
 
 
 def _gather_premap(data: NdArrayField, *connectivities: common.GatherConnectivity) -> NdArrayField:
-    """`premap` via a single advanced-index gather (dimension-preserving and -introducing cases)."""
+    """
+    `premap` as one `ArrayOps.take` along the field axes the connectivities touch, merged into one.
+
+    The field axes from the first to the last one that is a codomain or is read by a connectivity
+    are merged into one axis, indexed by a linear index laid out over the output dimensions that
+    replace them. Axes before and after that run pass through unchanged, so a connectivity that
+    reads no other field dimension takes along its codomain axis with its own table.
+    """
     ops = array_ops.of(data._ndarray)
+    xp = ops.xp
     new_domain = _gather_output_domain(data.domain, connectivities)
+    if new_domain.is_empty():  # the tables cannot be restricted to an empty range
+        empty = xp.empty(
+            new_domain.shape,
+            dtype=ops.dtype(data.dtype.scalar_type),
+            device=ops.device(data._ndarray),
+        )
+        return data.__class__.from_array(empty, domain=new_domain, dtype=data.dtype)
     conn_by_codomain = {conn.codomain: conn for conn in connectivities}
+    read = {*conn_by_codomain, *(dim for conn in connectivities for dim in conn.domain.dims)}
+    touched = [i for i, dim in enumerate(data.domain.dims) if dim in read]
+    lo, hi = touched[0], touched[-1] + 1
+    gathered = new_domain.dims[lo : new_domain.ndim - (data.domain.ndim - hi)]
 
-    # one index array per original field dimension (the connectivity's, or identity), shifted to
-    # 0-based buffer indices; the advanced-index gather broadcasts them against each other
-    def take_index(dim: common.Dimension) -> core_defs.NDArrayObject:
-        start = data.domain[dim].unit_range.start
-        if (conn := conn_by_codomain.get(dim)) is None:
-            return _identity_index_array(new_domain, dim, ops, like=data._ndarray) - start
-        table = _aligned_connectivity_table(conn, new_domain, ops)
-        if conn.skip_value is not None:
-            # skipped neighbors index the field in bounds; the reduction mask discards what they read
-            table = ops.xp.where(table == conn.skip_value, start, table)
-        return table - start
+    buffer = data._ndarray
+    indices, offset, stride = [], 0, 1
+    for axis in reversed(range(lo, hi)):
+        dim = data.domain.dims[axis]
+        if dim in conn_by_codomain:
+            conn = conn_by_codomain[dim]
+            sub_domain = common.Domain(*(new_domain[d] for d in conn.domain.dims))
+            conn = conn if sub_domain == conn.domain else conn.restrict(sub_domain)
+            index, index_dims = ops.asarray(conn.ndarray), conn.domain.dims
+        else:
+            unit_range = new_domain[dim].unit_range
+            index = xp.arange(unit_range.start, unit_range.stop, device=ops.device(buffer))
+            index_dims = (dim,)
+        if index_dims != gathered:
+            index = _lay_out(index, index_dims, new_domain, gathered, xp)
+        if stride != 1:  # in int64, so that the linear index cannot overflow
+            index = xp.astype(index, xp.int64) * stride
+        indices.append(index)
+        offset += data.domain[axis].unit_range.start * stride
+        stride *= buffer.shape[axis]
 
-    new_buffer = data._ndarray[tuple(take_index(dim) for dim in data.domain.dims)]
+    if hi - lo > 1:
+        # the offset is subtracted from the smallest index array only; a skipped neighbor may now
+        # select another in-bounds element of the merged axis, which is allowed
+        indices.sort(key=lambda index: math.prod(index.shape))
+        indices[0] = xp.astype(indices[0], xp.int64)
+        buffer = xp.reshape(buffer, (*buffer.shape[:lo], stride, *buffer.shape[hi:]))
+    if offset != 0:
+        indices[0] = indices[0] - offset
+    flat_index = functools.reduce(operator.add, indices)
+    new_buffer = ops.take(buffer, flat_index, axis=lo)
     return data.__class__.from_array(new_buffer, domain=new_domain, dtype=data.dtype)
+
+
+def _lay_out(
+    array: core_defs.NDArrayObject,
+    dims: Sequence[common.Dimension],
+    domain: common.Domain,
+    target_dims: Sequence[common.Dimension],
+    xp: ModuleType,
+) -> core_defs.NDArrayObject:
+    """`array` over `dims` laid out over `target_dims` of `domain`, with size-1 axes for the others."""
+    order = sorted(range(len(dims)), key=lambda i: target_dims.index(dims[i]))
+    if order != list(range(len(dims))):
+        array = xp.permute_dims(array, tuple(order))
+    shape = tuple(len(domain[d].unit_range) if d in dims else 1 for d in target_dims)
+    return xp.reshape(array, shape)
 
 
 def _aligned_connectivity_table(
@@ -633,20 +726,7 @@ def _aligned_connectivity_table(
     """
     sub_domain = common.Domain(*(domain[d] for d in connectivity.domain.dims))
     conn = connectivity if sub_domain == connectivity.domain else connectivity.restrict(sub_domain)
-    xp = ops.xp
-    arr = ops.asarray(conn.ndarray)
-    # the axis of `arr` for each output dimension: the connectivity's own axis, or a fresh appended one
-    ndim = conn.domain.ndim
-    fresh_axis = {
-        dim: ndim + i for i, dim in enumerate(d for d in domain.dims if d not in conn.domain.dims)
-    }
-    transposed_axes = tuple(
-        fresh_axis[dim] if dim in fresh_axis else conn.domain.dim_index(dim, allow_missing=False)
-        for dim in domain.dims
-    )
-    if fresh_axis:  # add size-1 axes for output dimensions the connectivity does not span
-        arr = xp.reshape(arr, (*arr.shape, *(1,) * len(fresh_axis)))
-    return xp.permute_dims(arr, transposed_axes)  # reorder to the output dimension order
+    return _lay_out(ops.asarray(conn.ndarray), conn.domain.dims, domain, domain.dims, ops.xp)
 
 
 def _identity_index_array(
@@ -671,7 +751,7 @@ def _identity_index_array(
     return xp.broadcast_to(xp.reshape(indices, shape), domain.shape)
 
 
-def _hyperslice(
+def _inverse_image_box(
     index_array: core_defs.NDArrayObject,
     image_range: common.UnitRange,
     xp: ModuleType,

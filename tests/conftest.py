@@ -49,6 +49,14 @@ def _is_importable(module_name: str) -> bool:
         return False
 
 
+def _is_torch_cuda_available() -> bool:
+    if not _is_importable("torch"):
+        return False
+    import torch
+
+    return torch.cuda.is_available()
+
+
 def _is_gpu_available() -> bool:
     """Check that a GPU device is actually usable, not merely that `cupy` is installed."""
     from gt4py._core import definitions as core_defs
@@ -63,6 +71,8 @@ _REQUIREMENT_PROBES: Final[dict[str, tuple[collections.abc.Callable[[], bool], s
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
     "requires_gpu": (_is_gpu_available, "`cupy` and a reachable GPU device"),
     "requires_jax": (lambda: _is_importable("jax"), "the `jax` package"),
+    "requires_torch": (lambda: _is_importable("torch"), "the `torch` package"),
+    "requires_torch_cuda": (_is_torch_cuda_available, "`torch` with a usable CUDA device"),
 }
 
 

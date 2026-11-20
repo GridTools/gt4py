@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import math
 import operator
 import pickle
@@ -43,6 +44,7 @@ from next_tests.unit_tests.conftest import (
     asarray,
     is_array_api_strict,
     is_cupy,
+    is_torch,
     strict_array_on_device1,
 )
 
@@ -119,7 +121,6 @@ def are_equal_fields(a: Field, b: Field) -> bool:
 
 
 def test_nd_array_field_buffer_info(nd_array_implementation):
-    import dataclasses
 
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
@@ -449,6 +450,11 @@ def test_neighbor_reduction_keeps_dtype(
     with embedded_context.update(offset_provider={"E2V": conn}):
         if dtype == "bool" and is_array_api_strict(nd_array_implementation):
             with pytest.raises(TypeError):
+                builtin(field, axis=E2V)
+            return
+        if dtype in ("uint16", "uint32", "uint64") and is_torch(nd_array_implementation):
+            # torch has no reductions for these dtypes
+            with pytest.raises(NotImplementedError):
                 builtin(field, axis=E2V)
             return
         result = builtin(field, axis=E2V)
@@ -937,6 +943,110 @@ def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
     return field, conn, data
 
 
+@pytest.mark.parametrize("start", [0, 3, -2])
+@pytest.mark.parametrize(
+    "layout",
+    [
+        "neighbor_leading",
+        "neighbor_trailing",
+        "neighbor_middle",
+        "one_dim",
+        "same_dim",
+        "permutation",
+    ],
+)
+def test_gather_premap_single_axis(nd_array_implementation, layout, start):
+    NV, NK, NX, NE = 6, 3, 2, 5
+    rng = np.random.default_rng(0)
+    v_range = UnitRange(start, start + NV)
+    k, x = (_GK, UnitRange(0, NK)), (_GX, UnitRange(0, NX))
+    if layout == "same_dim":
+        conn_dims = [(_GV, v_range), (_GV2V, UnitRange(0, 3))]
+    elif layout == "permutation":
+        conn_dims = [(_GV, v_range)]
+    else:
+        conn_dims = [(_GE, UnitRange(0, NE)), (_GE2V, UnitRange(0, 2))]
+    field_dims = {
+        "neighbor_leading": [(_GV, v_range), k],
+        "neighbor_trailing": [k, (_GV, v_range)],
+        "neighbor_middle": [x, (_GV, v_range), k],
+        "one_dim": [(_GV, v_range)],
+        "same_dim": [(_GV, v_range), k],
+        "permutation": [(_GV, v_range), k],
+    }[layout]
+    table_shape = tuple(len(r) for _, r in conn_dims)
+    table = (
+        start + rng.permutation(NV)
+        if layout == "permutation"
+        else rng.integers(start, start + NV, size=table_shape)
+    ).astype(np.int32)
+    field, conn, data = _gather_case(nd_array_implementation, field_dims, conn_dims, _GV, table)
+
+    result = field.premap(conn)
+
+    axis = [d for d, _ in field_dims].index(_GV)
+    expected_dims = (
+        *(d for d, _ in field_dims[:axis]),
+        *(d for d, _ in conn_dims),
+        *(d for d, _ in field_dims[axis + 1 :]),
+    )
+    expected_ranges = (
+        *(r for _, r in field_dims[:axis]),
+        *(r for _, r in conn_dims),
+        *(r for _, r in field_dims[axis + 1 :]),
+    )
+    assert result.domain == common.Domain(dims=expected_dims, ranges=expected_ranges)
+    assert np.array_equal(result.asnumpy(), np.take(data, table - start, axis=axis))
+
+
+# with 3 neighbors the (GV, GV2V) block is square, so a transposed result has the right shape
+@pytest.mark.parametrize("n_neighbors", [3, 4])
+def test_gather_premap_codomain_in_non_leading_connectivity_position(
+    nd_array_implementation, n_neighbors
+):
+    # the output keeps the field's dimension order (GV, GV2V, GK), not the connectivity's (GV2V, GV)
+    rng = np.random.default_rng(7)
+    table = rng.integers(0, 3, size=(n_neighbors, 5)).astype(np.int32)  # (GV2V, GV) -> GV
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 3)), (_GK, UnitRange(0, 2))],
+        [(_GV2V, UnitRange(5, 5 + n_neighbors)), (_GV, UnitRange(0, 5))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GV, _GV2V, _GK),
+        ranges=(UnitRange(0, 3), UnitRange(5, 5 + n_neighbors), UnitRange(0, 2)),
+    )
+    expected = np.empty((3, n_neighbors, 2))
+    for v in range(3):
+        for n in range(n_neighbors):
+            expected[v, n, :] = data[table[n, v], :]
+    assert np.array_equal(result.asnumpy(), expected)
+
+
+def test_gather_premap_single_axis_narrowed(nd_array_implementation):
+    # the last edge maps entirely outside the field, so the output loses it
+    table = np.asarray([[0, 1], [2, 3], [4, 5], [7, 8]], dtype=np.int32)
+    field, conn, data = _gather_case(
+        nd_array_implementation,
+        [(_GV, UnitRange(0, 6)), (_GK, UnitRange(0, 2))],
+        [(_GE, UnitRange(0, 4)), (_GE2V, UnitRange(0, 2))],
+        _GV,
+        table,
+    )
+
+    result = field.premap(conn)
+
+    assert result.domain == common.Domain(
+        dims=(_GE, _GE2V, _GK), ranges=(UnitRange(0, 3), UnitRange(0, 2), UnitRange(0, 2))
+    )
+    assert np.array_equal(result.asnumpy(), np.take(data, table[:3], axis=0))
+
+
 # with start -3 the neighbor 2 becomes the valid index -1, so the skip value must lie outside the
 # codomain range there
 @pytest.mark.parametrize("start, skip_value", [(0, -1), (5, -1), (8, -1), (-3, -100)])
@@ -973,6 +1083,165 @@ def test_gather_premap_skip_values_on_offset_domain(
     if with_second_connectivity:
         expected = expected[..., k_table]
     assert np.array_equal(result.asnumpy()[is_neighbor], expected[is_neighbor])
+
+
+def _gather_reference(data, field_domain, connectivities, out_domain):
+    """Loop-based simultaneous gather and the mask of output positions without a skipped neighbor."""
+    by_codomain = {
+        codomain: (table, domain, skip) for table, domain, codomain, skip in connectivities
+    }
+    out = np.zeros(out_domain.shape)
+    valid = np.ones(out_domain.shape, dtype=bool)
+    for idx in np.ndindex(*out_domain.shape):
+        coord = {nr.dim: nr.unit_range.start + i for nr, i in zip(out_domain, idx)}
+        field_idx = []
+        for nr in field_domain:
+            if nr.dim in by_codomain:
+                table, domain, skip = by_codomain[nr.dim]
+                value = int(
+                    table[tuple(coord[d] - domain[d].unit_range.start for d in domain.dims)]
+                )
+                if value == skip:
+                    valid[idx] = False
+                    break
+            else:
+                value = coord[nr.dim]
+            field_idx.append(value - nr.unit_range.start)
+        else:
+            out[idx] = data[tuple(field_idx)]
+    return out, valid
+
+
+def _table(rng, domain, codomain_range, skip_value=None):
+    table = rng.integers(codomain_range.start, codomain_range.stop, size=domain.shape)
+    if skip_value is not None:
+        table[rng.random(domain.shape) < 0.25] = skip_value
+    return table.astype(np.int32)
+
+
+def _multi_gather_case(name, rng):
+    v, k = (_GV, UnitRange(3, 9)), (_GK, UnitRange(2, 6))
+    e, e2v, x = (_GE, UnitRange(0, 5)), (_GE2V, UnitRange(0, 2)), (_GX, UnitRange(0, 7))
+    if name == "as_offset":  # (GE, GK) -> GK on a (GE, GK) field
+        field_dims, conns, out_dims = [e, k], [([e, k], _GK, -1)], [e, k]
+    elif name == "neighbor_and_level":  # (GE, GE2V) -> GV and (GE, GE2V, GK) -> GK on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k], _GK, None)]
+        out_dims = [e, e2v, k]
+    elif name == "per_level_neighbor":  # (GE, GK) -> GV on a (GV, GK) field
+        field_dims, conns, out_dims = [v, k], [([e, k], _GV, -1)], [e, k]
+    elif name == "as_offset_narrowed":  # GE and GK narrowed by the table, negative GE start
+        field_dims = [(_GE, UnitRange(-2, 3)), k]
+        conn_dims = [(_GE, UnitRange(-1, 2)), (_GK, UnitRange(3, 5))]
+        conns, out_dims = [(conn_dims, _GK, -1)], conn_dims
+    elif name == "neighbor_and_level_narrowed":  # the level table narrows GK
+        field_dims = [v, k]
+        k_narrowed = (_GK, UnitRange(3, 5))
+        conns = [([e, e2v], _GV, -1), ([e, e2v, k_narrowed], _GK, None)]
+        out_dims = [e, e2v, k_narrowed]
+    elif name == "per_level_neighbor_narrowed":  # the table narrows GK, negative GK starts
+        field_dims = [v, (_GK, UnitRange(-3, 2))]
+        k_narrowed = (_GK, UnitRange(-2, 1))
+        conns, out_dims = [([e, k_narrowed], _GV, -1)], [e, k_narrowed]
+    elif name == "disjoint":  # (GE, GE2V) -> GV and a (GK,) -> GK permutation on (GV, GK)
+        field_dims = [v, k]
+        conns = [([e, e2v], _GV, -1), ([k], _GK, "permutation")]
+        out_dims = [e, e2v, k]
+    else:
+        assert name == "diagonal"  # (GX,) -> GV and (GX,) -> GE on (GV, GE): out[x] = f[a[x], b[x]]
+        field_dims = [v, (_GE, UnitRange(-2, 3))]
+        conns = [([x], _GV, None), ([x], _GE, None)]
+        out_dims = [x]
+    field_domain = common.Domain(
+        dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
+    )
+    connectivities = []
+    for conn_dims, codomain, skip in conns:
+        domain = common.Domain(
+            dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
+        )
+        codomain_range = field_domain[codomain].unit_range
+        if skip == "permutation":
+            table = (codomain_range.start + rng.permutation(len(codomain_range))).astype(np.int32)
+            skip = None
+        else:
+            table = _table(rng, domain, codomain_range, skip)
+        connectivities.append((table, domain, codomain, skip))
+    out_domain = common.Domain(
+        dims=tuple(d for d, _ in out_dims), ranges=tuple(r for _, r in out_dims)
+    )
+    return field_domain, connectivities, out_domain
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "as_offset",
+        "as_offset_narrowed",
+        "neighbor_and_level",
+        "neighbor_and_level_narrowed",
+        "per_level_neighbor",
+        "per_level_neighbor_narrowed",
+        "disjoint",
+        "diagonal",
+    ],
+)
+def test_gather_premap_multiple_or_reading_connectivities(nd_array_implementation, name):
+    rng = np.random.default_rng(1)
+    field_domain, connectivities, out_domain = _multi_gather_case(name, rng)
+    data = rng.random(field_domain.shape)
+    field = common._field(asarray(nd_array_implementation, data), domain=field_domain)
+    conn_fields = [
+        common._connectivity(
+            asarray(nd_array_implementation, table),
+            domain=domain,
+            codomain=codomain,
+            skip_value=skip,
+        )
+        for table, domain, codomain, skip in connectivities
+    ]
+
+    result = field.premap(*conn_fields)
+
+    assert result.domain == out_domain
+    expected, valid = _gather_reference(data, field_domain, connectivities, out_domain)
+    assert valid.any()
+    assert np.array_equal(result.asnumpy()[valid], expected[valid])
+
+
+@pytest.mark.parametrize(
+    "conn_dims, codomains, expected_dims",
+    [
+        # two connectivities over disjoint ranges of the same new dimension
+        ([[(_GX, UnitRange(0, 3))], [(_GX, UnitRange(3, 6))]], [_GV, _GE], (_GX,)),
+        # a reshuffle over a range of the field dimension the field does not have
+        ([[(_GE, UnitRange(5, 7))]], [_GE], (_GV, _GE)),
+    ],
+    ids=["disjoint_new_dimension", "outside_field"],
+)
+def test_gather_premap_empty_output(nd_array_implementation, conn_dims, codomains, expected_dims):
+    field_domain = common.Domain(dims=(_GV, _GE), ranges=(UnitRange(3, 9), UnitRange(-2, 3)))
+    field = common._field(
+        asarray(nd_array_implementation, np.ones(field_domain.shape)), domain=field_domain
+    )
+    conns = [
+        common._connectivity(
+            asarray(  # every entry maps into the field, so only the domains are disjoint
+                nd_array_implementation,
+                np.full([len(r) for _, r in dims], field_domain[codomain].unit_range.start),
+                dtype=np.int32,
+            ),
+            domain=common.Domain(dims=tuple(d for d, _ in dims), ranges=tuple(r for _, r in dims)),
+            codomain=codomain,
+        )
+        for dims, codomain in zip(conn_dims, codomains)
+    ]
+
+    result = field.premap(*conns)
+
+    assert result.domain.dims == expected_dims
+    assert result.domain.is_empty()
+    assert result.asnumpy().shape == result.domain.shape
 
 
 @pytest.mark.parametrize(
@@ -1893,7 +2162,6 @@ def test_nd_array_field_pickle_roundtrip():
 
 
 def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
-    import dataclasses
 
     V = Dimension("V")
     E = Dimension("E")
@@ -1926,7 +2194,7 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     )
 
     _ = e2v_conn._inverse_image(UnitRange(2, 5))
-    assert "_cache" in e2v_conn.__dict__
+    assert "_inverse_image_cache" in e2v_conn.__dict__
 
     _ = e2v_conn.__gt_buffer_info__
     assert "__gt_buffer_info__" in e2v_conn.__dict__
@@ -1934,7 +2202,8 @@ def test_nd_array_connectivity_field_getstate_excludes_runtime_caches():
     state = e2v_conn.__getstate__()
     assert state["_codomain"] == V
     assert state["_skip_value"] is None
-    assert "_cache" not in state
+    assert "_inverse_image_cache" not in state
+    assert "_restrict_cache" not in state
     assert "__gt_buffer_info__" not in state
 
 
@@ -1959,7 +2228,8 @@ def test_nd_array_connectivity_field_setstate_restores_state_without_caches():
     assert restored.codomain == original.codomain
     assert restored.skip_value == original.skip_value
     assert np.array_equal(restored.ndarray, original.ndarray)
-    assert "_cache" not in restored.__dict__
+    assert "_inverse_image_cache" not in restored.__dict__
+    assert "_restrict_cache" not in restored.__dict__
     assert "__gt_buffer_info__" not in restored.__dict__
 
 
@@ -2128,14 +2398,14 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
         ([[1, 0, -1], [1, 0, 0]], [(0, 2), (1, 3)]),
     ],
 )
-def test_hyperslice(index_array, expected):
+def test_inverse_image_box(index_array, expected):
     index_array = np.asarray(index_array)
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
     expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
-    result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
+    result = nd_array_field._inverse_image_box(index_array, image_range, np, skip_value)
 
     assert result == expected
 
@@ -2345,101 +2615,154 @@ def test_concat(fields_data, dim, expected_data, expect_error):
         np.testing.assert_allclose(result.asnumpy(), expected_array)
 
 
-@pytest.mark.requires_jax
-def test_jax_jit_field_arguments():
-    import jax
+_TORCH_DEVICES = [
+    "cpu",
+    pytest.param("cuda", marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda)),
+]
 
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
-    a = common._field(
-        jax.numpy.asarray(np.arange(6, dtype=np.float64).reshape(2, 3)), domain=domain
+
+def _torch_field(values, device, dtype=None):
+    import torch
+
+    tensor = torch.asarray(values, dtype=dtype or torch.float64, device=device)
+    return common._field(tensor, domain=common.domain({D0: tensor.shape[0]}))
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+@pytest.mark.parametrize(
+    "builtin, np_func",
+    [
+        (fbuiltins.minimum, np.minimum),
+        (fbuiltins.maximum, np.maximum),
+        (fbuiltins.fmod, np.fmod),
+        (operator.add, operator.add),
+        (operator.lt, operator.lt),
+        (operator.eq, operator.eq),
+    ],
+)
+@pytest.mark.parametrize(
+    "scalar", [0.5, np.float64(0.5), np.float32(0.5)], ids=["python", "float64", "float32"]
+)
+@pytest.mark.parametrize("scalar_first", [True, False])
+def test_torch_binary_builtin_with_scalar(device, builtin, np_func, scalar, scalar_first):
+    field = _torch_field([1.0, -2.0, 3.0], device)
+    args = (scalar, field) if scalar_first else (field, scalar)
+    expected = np_func(*(a.asnumpy() if isinstance(a, common.Field) else a for a in args))
+
+    result = builtin(*args)
+
+    assert result.ndarray.device.type == device
+    assert result.asnumpy().dtype == expected.dtype
+    np.testing.assert_allclose(result.asnumpy(), expected)
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+@pytest.mark.parametrize("op", [operator.and_, operator.or_, operator.xor])
+def test_torch_logical_op_with_python_bool(device, op):
+    import torch
+
+    field = _torch_field([True, False], device, dtype=torch.bool)
+
+    result = op(field, True)
+
+    assert result.ndarray.device.type == device
+    np.testing.assert_array_equal(result.asnumpy(), op(np.asarray([True, False]), True))
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_python_int_keeps_integer_dtype(device):
+    import torch
+
+    field = _torch_field([1, 2], device, dtype=torch.int32)
+
+    assert (field + 1).ndarray.dtype == torch.int32
+    assert fbuiltins.minimum(field, 1).ndarray.dtype == torch.int32
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_where_with_scalar_condition_keeps_device(device):
+    result = fbuiltins.where(True, _torch_field([1.0, 2.0], device), 0.0)
+
+    assert result.ndarray.device.type == device
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0])
+
+
+@pytest.mark.requires_torch
+def test_torch_gamma_at_poles_matches_scipy():
+    import scipy.special
+
+    x = [0.0, -0.0, -1.0, -2.0, -2.5, 0.5, 5.0]
+
+    result = fbuiltins.gamma(_torch_field(x, "cpu"))
+
+    np.testing.assert_allclose(result.asnumpy(), scipy.special.gamma(x), equal_nan=True)
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_scan_result_on_device_of_inputs(device):
+    import torch
+
+    from gt4py.next.embedded import context as embedded_context, operators
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    scan = operators.ScanOperator(lambda state, x: state + x, forward=True, init=0.0, axis=K)
+    x = common._field(
+        torch.ones(4, dtype=torch.float64, device=device), domain=common.domain({K: 4})
     )
-    b = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
 
-    @jax.jit
-    def add(x, y):
-        return x + y
+    with embedded_context.update(
+        closure_column_range=NamedRange(K, UnitRange(0, 4)), offset_provider={}
+    ):
+        result = scan(x)
 
-    result = add(a, b)
-
-    assert isinstance(result, common.Field)
-    assert result.domain == domain
-    np.testing.assert_allclose(result.asnumpy(), a.asnumpy() + b.asnumpy())
+    assert result.ndarray.device.type == device
+    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
 
 
-@pytest.mark.requires_jax
-def test_jax_pytree_roundtrip():
-    import jax
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_asnumpy_of_tensor_requiring_grad(device):
+    import torch
 
-    domain = common.domain({D0: (1, 3), D1: (2, 5)})
-    field = common._field(jax.numpy.ones((2, 3), dtype=np.float64), domain=domain)
+    tensor = torch.asarray([1.0, 2.0], dtype=torch.float64, device=device).requires_grad_()
+    field = common._field(tensor, domain=common.domain({D0: 2}))
 
-    children, treedef = jax.tree_util.tree_flatten(field)
+    np.testing.assert_array_equal(field.asnumpy(), [1.0, 2.0])
 
-    assert len(children) == 1
-    assert children[0] is field.ndarray
 
-    restored = jax.tree_util.tree_unflatten(treedef, children)
-    assert restored.domain == domain
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_grad_through_premap_with_skip_values(device):
+    import torch
 
-    other_field = common._field(
-        jax.numpy.ones((2, 3), dtype=np.float64), domain=common.domain({D0: (0, 2), D1: (2, 5)})
+    from gt4py.next.embedded import context as embedded_context
+
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    e2v = common._connectivity(
+        torch.asarray([[0, 1], [2, -1]], dtype=torch.int32, device=device),
+        codomain=V,
+        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
+        skip_value=-1,
     )
-    # the domain is part of the tree structure, hence a domain change forces a 'jax.jit' retrace
-    assert jax.tree_util.tree_structure(other_field) != treedef
+    # the skip entry gathers some element before it is masked, and the gradient is NaN where
+    # the operator is singular at that element, so every element is regular for `sqrt`
+    x = torch.tensor([4.0, 9.0, 16.0, 1.0], dtype=torch.float64, device=device, requires_grad=True)
+    field = common._field(x, domain=common.domain({V: (0, 4)}))
 
+    with embedded_context.update(offset_provider={"E2V": e2v}):
+        result = fbuiltins.neighbor_sum(fbuiltins.sqrt(field.premap(e2v)), axis=E2VDim)
+    loss = torch.sum(result.ndarray)
+    loss.backward()
 
-@pytest.mark.requires_jax
-def test_jax_pytree_rejects_fields_of_other_libraries():
-    import jax
-
-    field = common._field(np.ones(3), domain=common.domain({D0: 3}))
-
-    with pytest.raises(AssertionError, match="Only fields of JAX arrays"):
-        jax.jit(lambda f: f * 2.0)(field)
-
-
-@pytest.mark.requires_jax
-def test_jax_pytree_non_array_leaves():
-    import jax
-
-    D_BATCH = Dimension("D_BATCH")
-    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
-    batched = common._field(jax.numpy.ones((2, 3)), domain=common.domain({D_BATCH: 2, D0: 3}))
-
-    shapes = jax.tree.map(lambda x: x.shape, field)
-    assert jax.tree.leaves(shapes) == [3]
-    assert jax.eval_shape(lambda f: f * 2.0, field).ndarray.shape == (3,)
-    # a field with an axis index as leaf, as `vmap` prefix for the batched field's buffer
-    axes = nd_array_field.NdArrayField(common.domain({D0: 3}), 0)
-    sums = jax.vmap(lambda f: f.ndarray.sum(), in_axes=(axes,))(
-        nd_array_field.NdArrayField(common.domain({D0: 3}), batched.ndarray)
-    )
-    np.testing.assert_allclose(sums, [3.0, 3.0])
-
-
-@pytest.mark.requires_jax
-def test_jax_traced_array_dispatch():
-    import jax
-
-    domain = common.domain({D0: (0, 3)})
-    x = jax.numpy.arange(3, dtype=np.float64)
-
-    def loss(arr):
-        field = common._field(arr, domain=domain)
-        assert isinstance(field, nd_array_field.NdArrayField)
-        assert field.array_ns is jax.numpy
-        return jax.numpy.sum((field * field).ndarray)
-
-    np.testing.assert_allclose(jax.grad(loss)(x), 2.0 * x.__array__())
-    np.testing.assert_allclose(jax.jit(loss)(x), loss(x))
-
-    offsets = jax.numpy.asarray([[2, 0], [1, 2]])
-    codomain = common.domain({D0: (0, 2), D1: (0, 2)})
-
-    def make_connectivity(arr):
-        return common._connectivity(arr, codomain=D0, domain=codomain).ndarray
-
-    np.testing.assert_array_equal(jax.jit(make_connectivity)(offsets), offsets)
+    np.testing.assert_allclose(loss.item(), 9.0)
+    np.testing.assert_allclose(x.grad.cpu().numpy(), [0.25, 1.0 / 6.0, 0.125, 0.0])
 
 
 def test_connectivity_field_setitem_raises():
@@ -2452,6 +2775,34 @@ def test_connectivity_field_setitem_raises():
 
     with pytest.raises(TypeError, match="item assignment"):
         conn[NamedIndex(D1, 1)] = np.asarray([0, 1])
+
+
+def test_connectivity_field_restrict_keeps_inverse_image_cache(monkeypatch):
+    V = Dimension("V")
+    E = Dimension("E")
+    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
+    conn = common._connectivity(
+        np.asarray([[0, 1], [1, 2], [2, 3]]),
+        codomain=V,
+        domain=common.domain({E: (0, 3), E2VDim: (0, 2)}),
+    )
+    field = common._field(np.asarray([10.0, 20.0]), domain=common.domain({V: (0, 2)}))
+    calls = 0
+    inverse_image_box = nd_array_field._inverse_image_box
+
+    def counting_inverse_image_box(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return inverse_image_box(*args, **kwargs)
+
+    monkeypatch.setattr(nd_array_field, "_inverse_image_box", counting_inverse_image_box)
+
+    for _ in range(3):
+        result = field.premap(conn[NamedIndex(E2VDim, 0)])
+
+    assert calls == 1
+    assert result.domain == common.domain({E: (0, 2)})
+    np.testing.assert_array_equal(result.asnumpy(), [10.0, 20.0])
 
 
 def _scan_cumsum(x, k_dim):
@@ -2485,3 +2836,21 @@ def test_scan_result_on_non_default_device_of_inputs():
 
     assert result.ndarray.device == data.device
     np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device", _TORCH_DEVICES)
+def test_torch_buffer_info(device):
+    import torch
+
+    data = torch.arange(24.0, dtype=torch.float64, device=device).reshape(2, 3, 4)[:, 1:, ::2]
+    field = common._field(data, domain=common.domain({D0: 2, D1: 2, D2: 2}))
+
+    buffer_info = field.__gt_buffer_info__
+
+    assert buffer_info.data_ptr == data.data_ptr()
+    assert buffer_info.shape == tuple(data.shape)
+    assert buffer_info.elem_strides == data.stride()
+    assert buffer_info.device.device_type == (
+        core_defs.DeviceType.CUDA if device == "cuda" else core_defs.DeviceType.CPU
+    )

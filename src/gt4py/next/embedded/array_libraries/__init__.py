@@ -13,7 +13,7 @@ import importlib
 from . import numpy_ops as numpy_ops
 
 
-for _library in ("cupy", "jax"):
+for _library in ("cupy", "jax", "torch"):
     try:
         importlib.import_module(_library)
     except ImportError:
