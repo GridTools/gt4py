@@ -13,7 +13,7 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
 from gt4py.next import common, errors, field_utils, named_collections, utils
-from gt4py.next.embedded import common as embedded_common, context as embedded_context
+from gt4py.next.embedded import array_ops, common as embedded_common, context as embedded_context
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -76,9 +76,12 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 # convert custom NamedCollections to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
-                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                assert all(
+                    array_ops.is_scalar_or_0d(a)
+                    for a in utils.flatten_nested_tuple((acc_extracted,))
+                )
                 assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
-                _tuple_assign_value(pos, res_extracted, acc_extracted)
+                _tuple_assign_value(pos, res_extracted, acc_extracted)  # type: ignore[arg-type] # 0-d arrays are scalars too
 
         if len(non_scan_domain) == 0:
             # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
@@ -161,7 +164,7 @@ def _tuple_assign_field(
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
-            assert core_defs.is_scalar_type(source)
+            assert array_ops.is_scalar_or_0d(source)
             target[domain] = source
 
     if not isinstance(domain, tuple):
@@ -196,7 +199,7 @@ def _tuple_at(
     @named_collections.tree_map_named_collection
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
-        assert core_defs.is_scalar_type(res)
+        assert array_ops.is_scalar_or_0d(res)
         return res
 
     return impl(field)  # type: ignore[return-value]

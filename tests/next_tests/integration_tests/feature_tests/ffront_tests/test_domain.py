@@ -22,6 +22,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_scalar_in_domain_and_fo
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
     @gtx.field_operator
@@ -56,6 +57,7 @@ def test_single_value_field(cartesian_case):
     cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_domain(cartesian_case):
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:
@@ -74,6 +76,7 @@ def test_domain(cartesian_case):
     cases.verify(cartesian_case, program_domain, a, size, out, inout=out, ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
     lower_i = 1
@@ -98,6 +101,7 @@ def test_domain_input_bounds(cartesian_case):
     cases.verify(cartesian_case, program_domain, inp, out, lower_i, upper_i, inout=out, ref=ref)
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
     upper_i = cartesian_case.default_sizes[IDim]
@@ -143,6 +147,7 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator

@@ -190,6 +190,7 @@ def test_solve_triag(cartesian_case):
     cases.verify_with_default_data(cartesian_case, solve_tridiag, ref=expected)
 
 
+@pytest.mark.uses_scan_carry_in_control_flow
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)

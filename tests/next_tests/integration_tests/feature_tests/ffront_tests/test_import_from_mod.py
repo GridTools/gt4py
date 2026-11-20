@@ -22,6 +22,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_import_dims_module(cartesian_case):
     @gtx.field_operator
     def mod_op(f: cases.IField) -> cases.IKField:

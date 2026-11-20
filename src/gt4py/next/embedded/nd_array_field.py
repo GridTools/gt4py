@@ -69,7 +69,7 @@ def _make_builtin(
                 arrays.append(array)
                 transformed.append(array)
             else:
-                assert core_defs.is_scalar_type(f)
+                assert array_ops.is_scalar_or_0d(f)
                 transformed.append(f)
         if len(arrays) < len(transformed):
             transformed = [ops.operand(v, arrays[0]) for v in transformed]
@@ -193,8 +193,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             raise ValueError(
                 f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
             )
-        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
-        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
+        return array_ops.of(self._ndarray).scalar(self._ndarray)
 
     def premap(
         self: NdArrayField,
@@ -349,7 +348,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
             assigned = value.ndarray
-        elif isinstance(value, bool | int | float | np.generic):
+        elif isinstance(value, bool | int | float | np.generic) or array_ops.is_scalar_or_0d(value):
             assigned = value
         else:
             raise TypeError(
@@ -358,13 +357,16 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 " 'field.ndarray[...] = ...'."
             )
 
-        ops = array_ops.of(self._ndarray)
-        new_buffer = ops.setitem(self._ndarray, target_slice, assigned)
+        new_buffer = array_ops.of(self._ndarray).setitem(self._ndarray, target_slice, assigned)
         if new_buffer is not self._ndarray:
-            object.__setattr__(self, "_ndarray", new_buffer)
-            # A field whose buffer info was requested is likely exported again.
-            if "__gt_buffer_info__" in self.__dict__:
-                self.__dict__["__gt_buffer_info__"] = ops.buffer_info(new_buffer)
+            self._set_buffer(new_buffer)
+
+    def _set_buffer(self, new_buffer: core_defs.NDArrayObject) -> None:
+        """Replace the buffer by one of the same shape, for libraries whose arrays are immutable."""
+        object.__setattr__(self, "_ndarray", new_buffer)
+        # A field whose buffer info was requested is likely exported again.
+        if "__gt_buffer_info__" in self.__dict__:
+            self.__dict__["__gt_buffer_info__"] = array_ops.of(new_buffer).buffer_info(new_buffer)
 
     __abs__ = _make_builtin("abs", "abs")
 

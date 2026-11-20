@@ -20,6 +20,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_cartesian_shift
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator

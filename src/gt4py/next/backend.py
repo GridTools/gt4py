@@ -8,8 +8,11 @@
 
 from __future__ import annotations
 
+import abc
 import dataclasses
-from typing import Generic
+import inspect
+from collections.abc import Callable, Sequence
+from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, custom_layout_allocators as next_allocators
@@ -172,6 +175,45 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
         return self.allocator
+
+
+def _not_compiled(*args: Any, **kwargs: Any) -> Any:
+    raise RuntimeError("An embedded jit backend runs programs embedded; it does not compile them.")
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class EmbeddedJitBackend(Backend, abc.ABC):
+    """
+    Runs programs and field operators embedded, inside the tracing compiler of an array library.
+
+    Instead of compiling, it wraps the embedded entry point of a program or field operator once,
+    e.g. in `jax.jit`. The allocator allocates arrays of the library.
+    """
+
+    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
+        _not_compiled
+    )
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef] = (
+        DEFAULT_TRANSFORMS
+    )
+
+    @abc.abstractmethod
+    def jit(
+        self,
+        entry: Callable[..., None],
+        signature: inspect.Signature,
+        static_params: Sequence[str],
+    ) -> Callable[..., None]:
+        """
+        Wrap `entry`, called as `signature` describes, in the tracing compiler.
+
+        Args:
+            entry: Runs the program or field operator embedded; it assigns to its `out` fields.
+                Its arguments are fields, connectivities, scalars and (nested) tuples of them.
+            signature: The parameters of `entry`, including the keyword-only `offset_provider`.
+            static_params: The parameters whose values are compile-time constants.
+        """
+        ...
 
 
 @dataclasses.dataclass(frozen=True)

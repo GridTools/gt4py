@@ -24,6 +24,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_simple_if(condition, cartesian_case):
@@ -43,6 +44,7 @@ def test_simple_if(condition, cartesian_case):
 
 
 # TODO(tehrengruber): test with fields on different domains
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
@@ -74,6 +76,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_local_if(cartesian_case, condition):
@@ -93,6 +96,7 @@ def test_local_if(cartesian_case, condition):
     cases.verify(cartesian_case, local_if, a, b, condition, out=out, ref=(a if condition else b))
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_temporary_if(cartesian_case, condition):
@@ -115,6 +119,7 @@ def test_temporary_if(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_if_return(cartesian_case, condition):
@@ -137,6 +142,7 @@ def test_if_return(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_if_stmt_if_branch_returns(cartesian_case, condition):
@@ -156,6 +162,7 @@ def test_if_stmt_if_branch_returns(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_if_stmt_else_branch_returns(cartesian_case, condition):
@@ -177,6 +184,7 @@ def test_if_stmt_else_branch_returns(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_if_stmt_both_branches_return(cartesian_case, condition):
@@ -198,6 +206,7 @@ def test_if_stmt_both_branches_return(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
 def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
@@ -235,6 +244,7 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition", [True, False])
 @pytest.mark.uses_if_stmts
 def test_nested_if(cartesian_case, condition):
@@ -270,6 +280,7 @@ def test_nested_if(cartesian_case, condition):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
 def test_if_without_else(cartesian_case, condition1, condition2):
@@ -353,6 +364,7 @@ def test_if_inconsistent_types():
             return result
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
     @gtx.field_operator
@@ -380,6 +392,7 @@ def test_ternary_operator(cartesian_case, left, right):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 @pytest.mark.uses_tuple_returns
 def test_ternary_operator_tuple(cartesian_case, left, right):
