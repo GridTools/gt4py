@@ -63,14 +63,8 @@ class Runner(Protocol):
         """
         ...
 
-    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
-        """Release the resources backing this runner (workers, threads).
-
-        Args:
-            wait: Wait for the running tasks to finish before returning.
-            cancel_pending: Drop the tasks that have not started yet instead of
-                running them first.
-        """
+    def shutdown(self, wait: bool = True) -> None:
+        """Release the resources backing this runner (workers, threads)."""
         ...
 
 
@@ -93,7 +87,7 @@ class SerialRunner:
     ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return _run_in_calling_thread(task)
 
-    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
+    def shutdown(self, wait: bool = True) -> None:
         return None
 
 
@@ -108,8 +102,8 @@ class ThreadRunner:
     ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return self._pool.submit(task.compile)
 
-    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
-        self._pool.shutdown(wait=wait, cancel_futures=cancel_pending)
+    def shutdown(self, wait: bool = True) -> None:
+        self._pool.shutdown(wait=wait)
 
 
 def _detect_cuda_archs() -> str | None:
@@ -121,6 +115,10 @@ def _detect_cuda_archs() -> str | None:
     if core_defs.CUPY_DEVICE_TYPE is not core_defs.DeviceType.CUDA:
         return None
     return compilation_common.get_device_arch()
+
+
+def _ignore_sigint(signum: int, frame: Any) -> None:
+    """No-op ``SIGINT`` handler of the worker processes."""
 
 
 def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:
@@ -143,13 +141,17 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     then travels to workers as part of the pickled executor and this
     ``CUDAARCHS`` export becomes obsolete.
 
-    Workers also ignore ``SIGINT``: terminal Ctrl-C and the interrupt / shutdown
-    of a Jupyter kernel are delivered to the whole process group, which would
-    otherwise print a ``KeyboardInterrupt`` traceback from every idle worker and
-    kill them (leaving the pool broken for the rest of the session). The main
-    process stays in charge: it shuts the pool down at exit.
+    Workers also stop reacting to ``SIGINT``: terminal Ctrl-C and the interrupt /
+    shutdown of a Jupyter kernel are delivered to the whole process group, which
+    would otherwise print a ``KeyboardInterrupt`` traceback from every idle worker
+    and kill them (leaving the pool broken for the rest of the session). The main
+    process stays in charge: it shuts the pool down at exit. A no-op handler is
+    installed rather than ``SIG_IGN`` because the latter would be inherited by the
+    compiler processes (cmake, ninja, ...) started by the worker, which then
+    could not be interrupted anymore, whereas a handled signal is reset to its
+    default disposition in a child process.
     """
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGINT, _ignore_sigint)
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
         os.environ["CUDAARCHS"] = cuda_archs
@@ -196,6 +198,23 @@ def _run_compilation_task_in_worker(
     # the pool for all later tasks.
     compilable = pickle.loads(compilable_blob)
     return executor(compilable)
+
+
+def _cancel_pending_tasks_at_exit(pool: concurrent.futures.Executor) -> None:
+    """Drop the tasks still queued in `pool` when the interpreter exits.
+
+    Nobody can use the result of a compilation at that point, and without this
+    the interpreter would first run all the queued compilations (e.g. after a
+    Ctrl-C): `concurrent.futures` waits for them in an exit hook of `threading`,
+    which runs before any `atexit` callback, so the hook has to be registered
+    there too (hooks run in reverse order of registration).
+    """
+    register = getattr(threading, "_register_atexit", None)  # CPython implementation detail
+    if register is not None:
+        try:
+            register(lambda: pool.shutdown(wait=False, cancel_futures=True))
+        except RuntimeError:  # interpreter is already shutting down
+            pass
 
 
 _BROKEN_POOL_HINT = (
@@ -261,6 +280,7 @@ class ProcessRunner:
             initializer=_pool_worker_initializer,
             initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
+        _cancel_pending_tasks_at_exit(self._pool)
 
     def submit(
         self, task: CompilationTask
@@ -289,16 +309,20 @@ class ProcessRunner:
             future.set_exception(error)
             return future
 
-        return self._pool.submit(
-            _run_compilation_task_in_worker,
-            executor_blob=executor_blob,
-            compilable_blob=compilable_blob,
-            config_overrides=_config_snapshot(),
-            recursion_limit=sys.getrecursionlimit(),
-        )
+        try:
+            return self._pool.submit(
+                _run_compilation_task_in_worker,
+                executor_blob=executor_blob,
+                compilable_blob=compilable_blob,
+                config_overrides=_config_snapshot(),
+                recursion_limit=sys.getrecursionlimit(),
+            )
+        except BrokenProcessPool as error:
+            add_hint_to_broken_pool_error(error)
+            raise
 
-    def shutdown(self, wait: bool = True, *, cancel_pending: bool = False) -> None:
-        self._pool.shutdown(wait=wait, cancel_futures=cancel_pending)
+    def shutdown(self, wait: bool = True) -> None:
+        self._pool.shutdown(wait=wait)
 
 
 def from_config() -> Runner:
@@ -339,27 +363,17 @@ def get_default_runner() -> Runner:
         return _default_runner
 
 
-def reset_default_runner(*, cancel_pending: bool = False) -> None:
+def reset_default_runner() -> None:
     """Shut down and discard the default runner, waiting for its ongoing jobs.
 
     The next `get_default_runner` call creates a fresh runner from the
     current configuration.
-
-    Args:
-        cancel_pending: Drop the jobs that have not started yet instead of
-            running them before returning. Jobs already running are still awaited.
     """
     global _default_runner
     with _default_runner_lock:
         if _default_runner is not None:
-            _default_runner.shutdown(wait=True, cancel_pending=cancel_pending)
+            _default_runner.shutdown(wait=True)
             _default_runner = None
-
-
-def _shutdown_default_runner_at_exit() -> None:
-    # Nobody can use the result of a compilation at interpreter exit: do not
-    # start the queued ones (e.g. after a Ctrl-C).
-    reset_default_runner(cancel_pending=True)
 
 
 # Shut down worker pools while the interpreter is still intact; relying on
@@ -369,4 +383,4 @@ def _shutdown_default_runner_at_exit() -> None:
 # ``weakref.finalize``, whose exit hook is registered no later than the import
 # of `otf.compilation.cache` above — atexit runs LIFO, so this shutdown runs
 # before those directories disappear.
-atexit.register(_shutdown_default_runner_at_exit)
+atexit.register(reset_default_runner)

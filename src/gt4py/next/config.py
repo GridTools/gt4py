@@ -166,9 +166,7 @@ BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
     os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
 ]
 
-#: User-defined level to enable metrics at lower or equal level.
-#: Enabling metrics collection will do extra synchronization and will have
-#: impact on runtime performance.
+
 #: Warn (once per process) when a program is compiled while Python runs without
 #: the ``-O`` flag: the assertions and argument checks guarded by ``__debug__``
 #: add overhead to every program call. Opt-in (``GT4PY_WARN_PYTHON_DEBUG_MODE=1``),
@@ -176,6 +174,10 @@ BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
 #: the hint is only noise; enable it when benchmarking.
 WARN_PYTHON_DEBUG_MODE: bool = env_flag_to_bool("GT4PY_WARN_PYTHON_DEBUG_MODE", default=False)
 
+
+#: User-defined level to enable metrics at lower or equal level.
+#: Enabling metrics collection will do extra synchronization and will have
+#: impact on runtime performance.
 COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", default=0)
 
 

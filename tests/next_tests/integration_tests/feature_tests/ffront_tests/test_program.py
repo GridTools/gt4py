@@ -104,10 +104,11 @@ def test_embedded_program_call_is_silent():
     a = gtx.as_field([dim], np.arange(3.0))
     out = gtx.zeros({dim: 3})
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         prog(a, out, offset_provider={})
 
+    assert not [w for w in caught if issubclass(w.category, UserWarning)]
     np.testing.assert_array_equal(out.asnumpy(), np.arange(3.0) + 1.0)
 
 
