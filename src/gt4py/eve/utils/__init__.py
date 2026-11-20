@@ -6,18 +6,10 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""General utility functions. Some functionalities are directly imported from dependencies.
-
-All public names are defined in the submodules and re-exported here. Some
-names which were only imported by the former single-module `eve.utils`
-(`deepdiff`, `xxhash`, `xtyping`, `NOTHING`, `NothingType`, `ArgsOnlyCallable`)
-are also re-exported for backwards compatibility.
-"""
+"""General utility functions. Some functionalities are directly imported from dependencies."""
 
 from __future__ import annotations
 
-import deepdiff as deepdiff  # backwards compatibility (see module docstring)
-import xxhash as xxhash  # backwards compatibility (see module docstring)
 from boltons.iterutils import (
     flatten as flatten,
     flatten_iter as flatten_iter,
@@ -33,12 +25,6 @@ from boltons.strutils import (
     unwrap_text as unwrap_text,
 )
 
-from .. import xtyping as xtyping  # backwards compatibility (see module docstring)
-from ..type_definitions import (  # backwards compatibility (see module docstring)
-    NOTHING as NOTHING,
-    NothingType as NothingType,
-)
-from ..xtyping import ArgsOnlyCallable as ArgsOnlyCallable  # backwards compatibility
 from .caching import lru_cache as lru_cache, optional_lru_cache as optional_lru_cache
 from .classes import (
     CustomDefaultDictBase as CustomDefaultDictBase,
