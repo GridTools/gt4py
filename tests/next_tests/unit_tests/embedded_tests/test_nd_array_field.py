@@ -2532,30 +2532,22 @@ def test_invert_domain(domain, expected):
     assert result == expected
 
 
-@pytest.mark.parametrize("false_range", [(0, 6), (2, 6)], ids=["covering", "partial"])
-def test_concat_where_select_matches_concatenation(false_range):
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    true_values = np.arange(6, dtype=np.float64)
-    false_values = -np.arange(*false_range, dtype=np.float64)
-    true_field = common._field(true_values, domain=common.domain({K: (0, 6)}))
-    false_field = common._field(false_values, domain=common.domain({K: false_range}))
+def test_eager_concat_where_on_covering_branches_concatenates(nd_array_implementation, monkeypatch):
+    def select(*args):
+        raise AssertionError("eager 'concat_where' selects")
 
-    result = concat_where(common.domain({K: (0, 3)}), true_field, false_field)
-
-    assert result.domain == common.domain({K: (0, 6)})
-    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
-
-
-def test_concat_where_select_on_non_default_device_of_inputs():
+    monkeypatch.setattr(nd_array_field, "_select", select)
     K = Dimension("K", kind=DimensionKind.VERTICAL)
     domain = common.domain({K: (0, 6)})
-    true_data = strict_array_on_device1(np.arange(6))
-    true_field = common._field(true_data, domain=domain)
-    false_field = common._field(strict_array_on_device1(-np.arange(6)), domain=domain)
+    true_field = common._field(
+        asarray(nd_array_implementation, np.arange(6.0), dtype=np.float64), domain=domain
+    )
+    false_field = common._field(
+        asarray(nd_array_implementation, -np.arange(6.0), dtype=np.float64), domain=domain
+    )
 
     result = concat_where(common.domain({K: (0, 3)}), true_field, false_field)
 
-    assert result.ndarray.device == true_data.device
     np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
 
 

@@ -90,6 +90,12 @@ class TorchOps(array_ops.ArrayOps):
     def array_ns(self) -> ModuleType:
         return torch
 
+    def concat_where_selects(self, array: core_defs.NDArrayObject) -> bool:
+        # inductor fuses the select into its consumers, while a concatenation materializes the
+        # result; executed eagerly, the select is the slower one: it reads both branches over the
+        # whole result
+        return not _is_concrete(array)
+
     def operand(self, value: Any, like: core_defs.NDArrayObject) -> Any:
         """
         `value` as an operand of an elementwise function next to the tensor `like`.

@@ -381,3 +381,39 @@ def test_torch_compile_premap_with_inductor(device):
         compiled(field, conn).asnumpy(), _premap_and_reduce(field, conn).asnumpy()
     )
     assert len(graphs) == 1
+
+
+@pytest.mark.parametrize(
+    "false_range, aten_op",
+    [((0, 6), "aten.where.self"), ((2, 6), "aten.cat.default")],
+    ids=["covering-is-a-select", "partial-concatenates"],
+)
+def test_torch_compile_concat_where(device, false_range, aten_op):
+    import torch
+    from torch._functorch.aot_autograd import aot_module_simplified
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    true_field = _field(np.arange(6.0), common.domain({K: (0, 6)}), device)
+    false_field = _field(
+        -np.arange(*false_range, dtype=np.float64), common.domain({K: false_range}), device
+    )
+    aten_graphs = []
+
+    def record_aten_graph(gm, example_inputs):
+        def forward(graph, _):
+            aten_graphs.append(graph)
+            return graph
+
+        return aot_module_simplified(gm, example_inputs, fw_compiler=forward)
+
+    traced = torch.compiler.nonstrict_trace(
+        lambda t, f: experimental.concat_where(common.domain({K: (0, 3)}), t, f)
+    )
+    compiled = torch.compile(lambda *args: traced(*args), fullgraph=True, backend=record_aten_graph)
+    result = compiled(true_field, false_field)
+
+    assert result.domain == common.domain({K: (0, 6)})
+    assert result.ndarray.device.type == device.type
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
+    aten_ops = {str(node.target) for graph in aten_graphs for node in graph.graph.nodes}
+    assert (aten_ops & {"aten.where.self", "aten.cat.default"}) == {aten_op}
