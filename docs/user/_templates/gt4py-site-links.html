@@ -1,0 +1,13 @@
+{#- Sidebar component shared by the GT4Py documentation sites: links to the
+    other sites, defined in `html_context["gt4py_site_links"]` as (title, path)
+    pairs with paths relative to the root of the current site. -#}
+{%- if gt4py_site_links %}
+<div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">GT4Py documentation</span></p>
+  <ul>
+    {%- for title, path in gt4py_site_links %}
+    <li class="toctree-l1"><a class="reference external" href="{{ pathto(path, 1) }}">{{ title }}</a></li>
+    {%- endfor %}
+  </ul>
+</div>
+{%- endif %}

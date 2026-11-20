@@ -7,6 +7,8 @@ SPHINXBUILD        = sphinx-build
 PAPER              = 
 SRCDIR             = ../../../src/gt4py
 SPHINX_APIDOC_OPTS = --private # private modules for gt4py._core
+# Subpackages which are not part of the 'gt4py.cartesian' documentation
+APIDOC_EXCLUDES    = $(SRCDIR)/next $(SRCDIR)/eve
 AUTODOCDIR         = _source
 BUILDDIR           = _build
 
@@ -56,7 +58,7 @@ clean:
 autodoc:
 	@echo
 	@echo "Running sphinx-apidoc..."
-	sphinx-apidoc ${SPHINX_APIDOC_OPTS} -o ${AUTODOCDIR} ${SRCDIR}
+	sphinx-apidoc ${SPHINX_APIDOC_OPTS} -o ${AUTODOCDIR} ${SRCDIR} ${APIDOC_EXCLUDES}
 	@echo
 	@echo "sphinx-apidoc finished. The generated autodocs are in $(AUTODOCDIR)."
 
