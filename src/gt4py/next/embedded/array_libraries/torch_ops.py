@@ -39,7 +39,6 @@ domain, and they cannot be in the pytree context.
 from __future__ import annotations
 
 import dataclasses
-import functools
 from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, ClassVar, Optional
@@ -321,9 +320,3 @@ torch_pytree.register_pytree_node(
     _flatten_connectivity,
     _unflatten_connectivity,
 )
-
-
-@functools.cache
-def register_named_collection(cls: type) -> None:
-    """Make the dataclass named collection `cls` a pytree; the other named collections are tuples."""
-    torch_pytree.register_dataclass(cls)

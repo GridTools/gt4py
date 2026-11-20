@@ -25,7 +25,6 @@ A concrete table closed over by a trace is not supported.
 from __future__ import annotations
 
 import dataclasses
-import functools
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, NamedTuple, Optional
 
@@ -251,14 +250,5 @@ jax.tree_util.register_pytree_node(
     _unflatten_connectivity,
 )
 
-# e.g. the `Dimension`s of an offset provider, or a `domain=` argument, in the arguments of `jax.jit`
+# e.g. the `Dimension`s of an offset provider in the arguments of `jax.jit`
 jax.tree_util.register_static(common.Dimension)
-jax.tree_util.register_static(common.Domain)
-
-
-@functools.cache
-def register_named_collection(cls: type) -> None:
-    """Make the dataclass named collection `cls` a pytree; the other named collections are tuples."""
-    jax.tree_util.register_dataclass(
-        cls, data_fields=[f.name for f in dataclasses.fields(cls)], meta_fields=[]
-    )

@@ -11,8 +11,8 @@ Embedded execution of programs and field operators under `torch.compile`.
 
 The embedded code runs in a region through a `torch.compiler.nonstrict_trace`
 function (see `torch_ops`). Fields, connectivities and scalars are arguments of the
-region; the `Dimension`s of the offset provider, a `domain=` argument and the
-parameters in `static_params` are static.
+region; the `Dimension`s of the offset provider and the parameters in
+`static_params` are static.
 """
 
 from __future__ import annotations
@@ -20,15 +20,13 @@ from __future__ import annotations
 import contextvars
 import dataclasses
 import inspect
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
 import torch
 
-from gt4py.next import backend as next_backend, common, named_collections
-from gt4py.next.embedded.array_libraries import torch_ops
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next import backend as next_backend, common
 
 
 # Dynamo reports an exception of the embedded code as an unsupported output type
@@ -86,12 +84,8 @@ class TorchCompileBackend(next_backend.EmbeddedJitBackend):
         entry: Callable[..., None],
         signature: inspect.Signature,
         static_params: Sequence[str],
-        param_types: Iterable[ts.TypeSpec],
     ) -> Callable[..., None]:
-        for type_ in param_types:
-            for cls in named_collections.dataclass_types(type_):
-                torch_ops.register_named_collection(cls)
-        static_names = frozenset((*static_params, "domain"))
+        static_names = frozenset(static_params)
         regions: dict[_Static, Callable[..., Any]] = {}
 
         def run(*args: Any, **kwargs: Any) -> None:
@@ -110,13 +104,15 @@ class TorchCompileBackend(next_backend.EmbeddedJitBackend):
             if (region := regions.get(static)) is None:
                 region = regions[static] = _region(entry, static)
             dynamic = torch.utils._pytree.tree_map(_as_region_argument, arguments)
+            token = _embedded_error.set(None)
             try:
                 region(dynamic, connectivities)
             except torch._dynamo.exc.Unsupported as unsupported:
                 if (error := _embedded_error.get()) is None:
                     raise
-                _embedded_error.set(None)
                 raise error from unsupported
+            finally:
+                _embedded_error.reset(token)
 
         return run
 

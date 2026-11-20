@@ -270,7 +270,7 @@ def of(array: Any) -> ArrayOps:
         return ops
 
 
-def is_scalar(value: Any) -> bool:
+def is_scalar_or_0d(value: Any) -> bool:
     """A scalar, or a 0-d array (e.g. a traced scalar argument under `jax.jit`)."""
     return core_defs.is_scalar_type(value) or (
         getattr(value, "ndim", None) == 0 and array_api_compat.is_array_api_obj(value)

@@ -77,7 +77,8 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
                 assert all(
-                    array_ops.is_scalar(a) for a in utils.flatten_nested_tuple((acc_extracted,))
+                    array_ops.is_scalar_or_0d(a)
+                    for a in utils.flatten_nested_tuple((acc_extracted,))
                 )
                 assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
                 _tuple_assign_value(pos, res_extracted, acc_extracted)  # type: ignore[arg-type] # 0-d arrays are scalars too
@@ -163,7 +164,7 @@ def _tuple_assign_field(
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
-            assert array_ops.is_scalar(source)
+            assert array_ops.is_scalar_or_0d(source)
             target[domain] = source
 
     if not isinstance(domain, tuple):
@@ -198,7 +199,7 @@ def _tuple_at(
     @named_collections.tree_map_named_collection
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
-        assert array_ops.is_scalar(res)
+        assert array_ops.is_scalar_or_0d(res)
         return res
 
     return impl(field)  # type: ignore[return-value]

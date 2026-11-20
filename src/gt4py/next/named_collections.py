@@ -13,7 +13,7 @@ import functools
 import inspect
 import pkgutil
 import typing
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, Final, TypeAlias, TypeGuard, TypeVar
 
 import typing_extensions
@@ -394,14 +394,3 @@ def tree_map_named_collection(
         return construct(result)  # type: ignore[arg-type]
 
     return impl
-
-
-def dataclass_types(type_: ts.TypeSpec) -> Iterator[type]:
-    """The dataclasses of the named collections in `type_`, e.g. to register them as pytrees."""
-    if isinstance(type_, ts.NamedCollectionType):
-        cls = pkgutil.resolve_name(type_.original_python_type)
-        if isinstance(cls, type) and dataclasses.is_dataclass(cls):
-            yield cls
-    if isinstance(type_, ts.TupleType | ts.NamedCollectionType):
-        for element_type in type_.types:
-            yield from dataclass_types(element_type)
