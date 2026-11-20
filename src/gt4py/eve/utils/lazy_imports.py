@@ -15,7 +15,7 @@ semantics deliberately follow PEP 810, so call sites can be migrated to the
 `lazy` keyword once Python 3.15 is the minimum supported version:
 
 - The module is not executed, nor added to `sys.modules`, until its first
-  use (unless finding it requires importing a parent package, see below).
+  use (unless finding it requires importing its parent packages, see below).
   It is then imported with `importlib.import_module()`, so import order,
   side effects and errors are those of a regular import statement.
 - If the import fails, nothing is cached and the next use retries it.
@@ -277,9 +277,10 @@ def lazy_import_module(fullname: str, *, on_missing: str = "raise") -> Optional[
             library without a working driver) are raised on first access.
 
     Returns:
-        The real module if it is already imported (also when importing a
-        parent package to find it imported it), otherwise a proxy module, or
-        `None` if the module is not installed and `on_missing` is `"none"`.
+        The real module if it is already imported (possibly by this call, if
+        finding it required importing its parent packages), otherwise a proxy
+        module, or `None` if the module is not installed and `on_missing` is
+        `"none"`.
 
     Raises:
         ModuleNotFoundError: if the module is not installed and `on_missing`
