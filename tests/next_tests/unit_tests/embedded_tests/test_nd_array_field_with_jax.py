@@ -15,7 +15,7 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import Dimension, DimensionKind, NamedIndex
 from gt4py.next.embedded import context as embedded_context, nd_array_field
-from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront import experimental, fbuiltins
 
 
 D0 = Dimension("D0")
@@ -643,4 +643,21 @@ def test_jax_jit_as_offset_connectivity_through_cond_and_scan():
     np.testing.assert_array_equal(jax.jit(via_cond)(False, field, offsets), [2.0, 4.0, 4.0, 4.0])
     np.testing.assert_array_equal(
         jax.jit(via_scan)(field, offsets), [[1.0, 2.0, 2.0, 2.0], [2.0, 4.0, 4.0, 4.0]]
+    )
+
+
+@pytest.mark.requires_jax
+def test_jax_concat_where_on_covering_branches_is_a_select():
+    import jax
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+    domain = common.domain({K: (0, 6)})
+    true_field = common._field(jax.numpy.arange(6, dtype=np.float64), domain=domain)
+    false_field = common._field(-jax.numpy.arange(6, dtype=np.float64), domain=domain)
+
+    select = jax.jit(lambda t, f: experimental.concat_where(common.domain({K: (0, 3)}), t, f))
+
+    assert "concatenate(" not in select.lower(true_field, false_field).compile().as_text()
+    np.testing.assert_array_equal(
+        select(true_field, false_field).asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0]
     )

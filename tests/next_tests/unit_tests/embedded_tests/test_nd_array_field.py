@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# Tests specific to one array library go in a separate file, e.g. `test_nd_array_field_with_jax.py`.
+
 import dataclasses
 import math
 import operator
@@ -2555,23 +2557,6 @@ def test_concat_where_select_on_non_default_device_of_inputs():
 
     assert result.ndarray.device == true_data.device
     np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0])
-
-
-@pytest.mark.requires_jax
-def test_jax_concat_where_on_covering_branches_is_a_select():
-    import jax
-
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    domain = common.domain({K: (0, 6)})
-    true_field = common._field(jax.numpy.arange(6, dtype=np.float64), domain=domain)
-    false_field = common._field(-jax.numpy.arange(6, dtype=np.float64), domain=domain)
-
-    select = jax.jit(lambda t, f: concat_where(common.domain({K: (0, 3)}), t, f))
-
-    assert "concatenate(" not in select.lower(true_field, false_field).compile().as_text()
-    np.testing.assert_array_equal(
-        select(true_field, false_field).asnumpy(), [0.0, 1.0, 2.0, -3.0, -4.0, -5.0]
-    )
 
 
 @pytest.mark.uses_concat_where
