@@ -1,21 +1,34 @@
 name: Documentation
 
 # Builds the user documentation site (welcome page plus the 'gt4py.cartesian'
-# and 'gt4py.next' subsites) and, for pushes to 'main' in the upstream repository,
-# deploys it to GitHub Pages (which must use 'GitHub Actions' as source).
+# and 'gt4py.next' subsites) and deploys it to GitHub Pages (which must use
+# 'GitHub Actions' as source) only when a version is released:
 #
-# The build runs on every pull request (no 'paths' filter), so that it can be
-# a required status check: a required check from a workflow skipped by a path
-# filter would stay pending forever.
+# - On every pull request the site is only built (and uploaded as an artifact).
+#   There is no 'paths' filter, so that the build can be a required status
+#   check: a required check from a workflow skipped by a path filter would stay
+#   pending forever.
+# - When a (non-prerelease) GitHub release is published, the site is built from
+#   the release tag and deployed.
+# - Manual escape hatch, e.g. to fix the documentation of the latest release
+#   without making a new one: run this workflow from a release tag (not from a
+#   branch) with the 'deploy' input enabled.
+#
+# The 'github-pages' environment must allow deployments from the release tags
+# (deployment branches and tags policy: 'v*').
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the site to GitHub Pages (only effective when run from a release tag)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -44,7 +57,11 @@ jobs:
 
   deploy:
     needs: build
-    if: github.repository == 'GridTools/gt4py' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: >-
+      github.repository == 'GridTools/gt4py' && (
+        (github.event_name == 'release' && !github.event.release.prerelease) ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy && github.ref_type == 'tag')
+      )
     runs-on: ubuntu-latest
     permissions:
       pages: write

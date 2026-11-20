@@ -70,11 +70,15 @@ The `gt4py.next` subsite does not include an API reference generated from docstr
 
 The [`Documentation`](../../../.github/workflows/docs.yml) GitHub workflow runs the `docs` nox session:
 
-- On every pull request, it only builds the site and uploads it as a workflow artifact (`github-pages`), which can be downloaded to review the result.
-- On pushes to `main` of the upstream repository, it additionally deploys that artifact to GitHub Pages.
+- On every pull request, it only builds the site and uploads it as a workflow artifact (`github-pages`), which can be downloaded to review the result. It runs with no path filter, so that its `Build documentation` check can be a required status check of the `main` branch: a broken documentation build then blocks merging.
+- When a GitHub release is published (prereleases are ignored), it builds the site from the release tag and deploys it to GitHub Pages. This is the only automatic publication: merging to `main` does not change the published site.
+- As a manual escape hatch, for example to fix the documentation of the latest release without making a new one, the workflow can be run from the _Actions_ tab selecting a release **tag** (not a branch) and enabling the `deploy` input. On any other ref the deployment is skipped.
 
-The build runs on every pull request, with no path filter, so that its `Build documentation` check can be a required status check of the `main` branch: a broken documentation build then blocks merging.
+Deploying requires:
 
-This requires the Pages source of the repository to be set to _GitHub Actions_ (in _Settings > Pages_). Every deployment replaces the whole published site with the result of the build: nothing is stored in a git branch, and only the documentation of the current `main` is available.
+- the Pages source of the repository set to _GitHub Actions_ (in _Settings > Pages_);
+- the `github-pages` environment allowing deployments from the release tags (in _Settings > Environments_, add the `v*` tag pattern to the deployment branches and tags).
+
+Every deployment replaces the whole published site with the result of the build: nothing is stored in a git branch, and only the documentation of the last published release is available.
 
 The `latest/` path, which older links to the documentation use, redirects to the welcome page.
