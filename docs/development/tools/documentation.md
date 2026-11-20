@@ -50,9 +50,13 @@ New pages should be written in [MyST Markdown](https://myst-parser.readthedocs.i
 
 ### Executable pages (MyST notebooks)
 
-In the `gt4py.next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date.
+In the `gt4py.next` subsite, Markdown files with a `jupytext` header declaring the `myst` format are notebooks: [MyST-NB](https://myst-nb.readthedocs.io) executes their `{code-cell}` blocks when the site is built and renders the outputs. A failing cell fails the build, so the examples in the documentation cannot silently go out of date. `quickstart.md` is an example.
 
 Markdown files without that header are rendered as they are, without running their code blocks.
+
+The same files are also run as tests by the `test_examples` nox session, which converts them to `.ipynb` notebooks with `jupytext` and executes them with `nbmake`. The generated `.ipynb` files are excluded from the Sphinx sources.
+
+The pages of the `gt4py.next` subsite are organized in folders: `dsl/` (what can be written inside operators), `python/` (the Python side: grids, fields and execution) and `examples/` (complete small applications). The `test_examples` session picks up every executable page in these folders, so a new page only has to be added to a `toctree`. A new folder must also be added to the list in that session.
 
 Prefer executable pages for anything showing GT4Py code.
 
