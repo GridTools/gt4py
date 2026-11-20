@@ -41,7 +41,7 @@ print(a.asnumpy())
 
 ## Anatomy of a field operator
 
-A field operator takes fields and scalars, and returns a field:
+A field operator takes fields and scalars, and returns fields:
 
 ```{code-cell} ipython3
 IJField = gtx.Field[gtx.Dims[I, J], gtx.float64]
@@ -63,10 +63,14 @@ print(result.asnumpy())
   the result only depends on them.
 - The function is analyzed when it is decorated, so mistakes in the definition
   are reported at that point, before running anything.
-- **Built-in functions and data types used in the body are imported by name**,
-  as in `from gt4py.next import where, astype, float32`. Calling them through
-  the module (`gtx.where(...)`) is not supported yet inside operators. Types in
-  annotations can be written either way.
+
+```{note}
+The built-in functions and data types used in the body of an operator must be
+**imported by name**, as in `from gt4py.next import where, astype, float32`.
+Calling them through the module (`gtx.where(...)`) is not supported inside
+operators. We are working on removing this restriction, which will go away
+soon. Types in annotations can already be written either way.
+```
 
 ## Types
 
@@ -148,6 +152,20 @@ print(result.asnumpy())
 
 This example also shows that a field operator can **call other field
 operators**.
+
+A tuple can also be an argument. Its members are unpacked, or accessed with an
+index like `vector[0]`, and the operator is called with a regular Python tuple:
+
+```{code-cell} ipython3
+@gtx.field_operator
+def squared_norm(vector: tuple[IJField, IJField]) -> IJField:
+    u, v = vector
+    return u * u + v * v
+
+
+squared_norm((a, b), out=result)
+print(result.asnumpy())
+```
 
 ```{tip}
 Build large computations out of small operators. The compiled backends inline
@@ -260,21 +278,34 @@ both of them.
 ## Values from the enclosing scope
 
 Operators can refer to objects defined outside them: dimensions, other
-operators and scalar constants.
+operators and constants. Scalar constants are grouped in a `FrozenNamespace`, an
+immutable collection of named values:
 
 ```{code-cell} ipython3
-GRAVITY = 9.80665
+from gt4py.eve.utils import FrozenNamespace
+
+constants = FrozenNamespace(gravity=9.80665, earth_radius=6.371e6)
 
 
 @gtx.field_operator
 def geopotential(height: IJField) -> IJField:
-    return GRAVITY * height
+    return constants.gravity * height
+
+
+geopotential(a, out=result)
+print(result.asnumpy())
+```
+
+```{important}
+The compiled backends **inline the values of the constants** in the generated
+code when the operator is compiled. This is why they have to be immutable: a
+plain global variable (`GRAVITY = 9.80665`) is only accepted in embedded
+execution, and the compiled backends reject it.
 ```
 
 ```{tip}
 Use this only for true constants. A value which may change during the execution
-of the application must be passed as an argument: changing a global variable
-after the operator has been compiled may have no effect.
+of the application must be passed as an argument.
 ```
 
 ## Named collections
@@ -319,11 +350,39 @@ scaled(wind, 0.5, out=half_wind)
 print(half_wind.u.asnumpy())
 ```
 
+Dataclasses work in the same way:
+
+```{code-cell} ipython3
+import dataclasses
+
+
+@dataclasses.dataclass
+class State:
+    temperature: IJField
+    pressure: IJField
+
+
+@gtx.field_operator
+def heated(state: State, increment: gtx.float64) -> State:
+    return State(temperature=state.temperature + increment, pressure=state.pressure)
+
+
+new_state = State(temperature=gtx.zeros(grid), pressure=gtx.zeros(grid))
+
+heated(State(temperature=a, pressure=b), 0.5, out=new_state)
+print(new_state.temperature.asnumpy())
+```
+
 The rules are:
 
 - The class must be defined at module level, not inside a function.
 - Dataclasses are accepted when all their members are set by the constructor and
   none of them has a default value.
+
+```{note}
+Support for other kinds of static containers (_pytrees_) will probably be added
+in the future.
+```
 
 ## Unsupported Python, and what to use instead
 

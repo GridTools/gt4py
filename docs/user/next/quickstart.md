@@ -59,8 +59,8 @@ dimension.
 nx, ny = 64, 48
 grid = gtx.domain({I: nx, J: ny})
 
-x, y = np.meshgrid(np.linspace(-2.0, 2.0, nx), np.linspace(-1.5, 1.5, ny), indexing="ij")
-phi = gtx.as_field(grid, np.exp(-(x**2 + y**2)))
+i, j = np.meshgrid(np.arange(nx), np.arange(ny), indexing="ij")
+phi = gtx.as_field(grid, np.sin(2 * np.pi * i / 16) * np.sin(2 * np.pi * j / 12))
 lap_phi = gtx.zeros(grid)
 
 print(phi.domain)
@@ -112,16 +112,18 @@ laplacian(phi, out=lap_phi, domain=interior)
 ```
 
 The points of `lap_phi` outside `interior` have not been touched. `asnumpy()`
-returns the data as a NumPy array, for example to plot it:
+returns the data as a NumPy array, for example to plot it. Both images use the
+same color scale:
 
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
 
 fig, axes = plt.subplots(1, 2, figsize=(9, 3.2), constrained_layout=True)
 for ax, field, title in zip(axes, (phi, lap_phi), ("phi", "laplacian(phi)")):
-    image = ax.imshow(field.asnumpy().T, origin="lower", cmap="RdBu_r")
+    data = field.asnumpy().T
+    image = ax.imshow(data, origin="lower", cmap="RdBu_r", vmin=-1.0, vmax=1.0)
     ax.set(title=title, xlabel="I", ylabel="J")
-    fig.colorbar(image, ax=ax)
+fig.colorbar(image, ax=axes);
 ```
 
 No backend was selected, so this call was executed directly in Python, with the
@@ -133,7 +135,9 @@ Python code.
 
 The same field operator can be compiled to optimized code by a **backend**.
 `with_backend` returns a new version of the operator bound to that backend, here
-`gtx.gtfn_cpu`, which generates C++ code using the GridTools library:
+`gtx.gtfn_cpu`, which generates C++ code using the GridTools library. The
+backend is also passed as `allocator` when creating the fields it works on, so
+that they get the memory layout the backend prefers:
 
 ```{code-cell} ipython3
 ---
@@ -141,8 +145,10 @@ tags: [remove-stderr]
 ---
 laplacian_cpu = laplacian.with_backend(gtx.gtfn_cpu)
 
-lap_phi_cpu = gtx.zeros(grid)
-laplacian_cpu(phi, out=lap_phi_cpu, domain=interior)
+phi_cpu = gtx.as_field(grid, phi.asnumpy(), allocator=gtx.gtfn_cpu)
+lap_phi_cpu = gtx.zeros(grid, allocator=gtx.gtfn_cpu)
+
+laplacian_cpu(phi_cpu, out=lap_phi_cpu, domain=interior)
 
 np.allclose(lap_phi_cpu.asnumpy(), lap_phi.asnumpy())
 ```

@@ -126,6 +126,43 @@ Allocate the fields with the backend which is going to run the operators. For
 GPU backends it is required, since the fields must be on the device.
 ```
 
+### Allocating for embedded execution
+
+In [embedded execution](running.md#embedded-execution) the operations are
+evaluated by the array library holding the data of the fields. The library is
+selected by passing its array namespace as `allocator`. For NumPy, which is the
+default:
+
+```{code-cell} ipython3
+temperature_numpy = gtx.zeros(plane, allocator=np)
+
+print(type(temperature_numpy.ndarray))
+```
+
+Other libraries are used in the same way, for example CuPy to run on a GPU, or
+JAX:
+
+```python
+import cupy as cp
+import jax.numpy as jnp
+
+temperature_cupy = gtx.zeros(plane, allocator=cp)  # a CuPy array, on the GPU
+temperature_jax = gtx.zeros(plane, allocator=jnp)  # a JAX array
+```
+
+Alternatively, the `device` argument selects where the data lives, and the
+field is allocated with the default library for that kind of device (CuPy for
+GPUs):
+
+```python
+gpu = gtx.Device(gtx.DeviceType.CUDA, 0)  # the first CUDA device
+
+temperature_gpu = gtx.zeros(plane, device=gpu)
+```
+
+All the fields used in a call, including `out`, must be held by the same array
+library.
+
 ## Reading and writing the data
 
 A field gives access to its domain and to its data:
@@ -189,6 +226,12 @@ edge_values = gtx.zeros({Edge: 12})
 ```
 
 ### Connectivities and offsets
+
+```{important}
+We are working on a new iteration of the connectivities and offsets explained
+here, to make them simpler and more user-friendly. This part of the interface
+may change soon.
+```
 
 The edge-to-cell table has one row per edge, with the indices of the cells at
 both sides of it. The edges on the boundary of the mesh have only one cell, and

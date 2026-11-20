@@ -129,20 +129,31 @@ levels where the shifted field is defined.
 
 ## States with several values
 
-When several quantities are carried from level to level, the state is a tuple,
-and so are `init` and the result:
+When several quantities are carried from level to level, the state is a
+[named collection](field-operators.md#named-collections) of scalars, and so are
+`init` and the result:
 
 ```{code-cell} ipython3
-@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0))
-def sum_and_maximum(state: tuple[float, float], value: float) -> tuple[float, float]:
-    total, largest = state
-    return total + value, value if value > largest else largest
+import typing
+
+
+class RunningStats(typing.NamedTuple):
+    total: float
+    largest: float
+
+
+@gtx.scan_operator(axis=K, forward=True, init=RunningStats(total=0.0, largest=0.0))
+def running_stats(state: RunningStats, value: float) -> RunningStats:
+    return RunningStats(
+        total=state.total + value,
+        largest=value if value > state.largest else state.largest,
+    )
 
 
 @gtx.field_operator
 def below_running_maximum(values: KField) -> KField:
-    _, largest = sum_and_maximum(values)
-    return largest - values
+    stats = running_stats(values)
+    return stats.largest - values
 
 
 below_running_maximum(gtx.as_field({K: 5}, np.array([1.0, 3.0, 2.0, 5.0, 4.0])), out=result)
@@ -153,22 +164,25 @@ The result is zero at the levels where a new maximum is reached, and the
 distance to the largest value seen so far at the others.
 
 Since the arguments are scalars, regular `if` statements and conditional
-expressions can be used in the body, as in `value if value > largest else largest` above.
+expressions can be used in the body, as in
+`value if value > state.largest else state.largest` above.
 
-The whole state is stored at every level, so the result of `sum_and_maximum` is
-a tuple of two fields. The field operator calling it decides which of them are
-needed.
+The whole state is stored at every level, so the result of `running_stats` is a
+`RunningStats` of two fields. The field operator calling it decides which of
+them are needed.
 
-The state can also be a
-[named collection](field-operators.md#named-collections), which gives names to
-its members.
+```{tip}
+A plain tuple also works as state, with `init=(0.0, 0.0)` and the annotation
+`tuple[float, float]`. Prefer a named collection: the names of its members make
+the scan operator and the code using its result much easier to read.
+```
 
 ## Rules
 
 - The first parameter is the state. Its type, the type of `init` and the type of
   the returned value must be the same.
-- All the parameters are scalars or tuples of scalars, and they must be
-  annotated.
+- All the parameters are scalars, or named collections or tuples of scalars,
+  and they must be annotated.
 - A scan operator needs at least one field argument, which defines the columns
   it runs on.
 - The body follows the same rules as the body of a

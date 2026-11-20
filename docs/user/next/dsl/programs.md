@@ -19,6 +19,14 @@ A **program** groups several such calls into one function, decorated with
 `@gtx.program`. It is compiled as a unit and it gives the application a single
 function to call, for example for a time step of a model.
 
+Programs are the **interface between the DSL and the rest of the application**.
+Operators are pure functions returning new fields, but a program returns
+nothing and allocates nothing: the results of the operators it calls are
+written **in place** into fields received as arguments of the program. The
+memory of all the fields therefore belongs to the caller. This makes it
+possible to use GT4Py from frameworks and models which need to own the buffers
+of their data, instead of relying on GT4Py to allocate them.
+
 A direct call to an operator is equivalent to a program with that single call.
 Direct calls are convenient for small computations and for tests, and programs
 are preferable when several operators are always run together.
