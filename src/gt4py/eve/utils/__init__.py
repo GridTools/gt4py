@@ -74,6 +74,11 @@ from .iterators import (
     xenumerate as xenumerate,
     xiter as xiter,
 )
+from .lazy_imports import (
+    is_lazy_module as is_lazy_module,
+    lazy_import_module as lazy_import_module,
+    resolve_lazy_module as resolve_lazy_module,
+)
 from .strings import (
     AnyWordsIterable as AnyWordsIterable,
     CaseStyleConverter as CaseStyleConverter,
