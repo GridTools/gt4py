@@ -619,6 +619,20 @@ def test_dimension_promotion(
         assert exc_info.match(re.escape(expected_error_msg))
 
 
+def test_dimension_promotion_repeated_calls():
+    I, K = Dimension("I"), Dimension("K", kind=DimensionKind.VERTICAL)
+
+    first = promote_dims([I], [K])
+    first.append(Dimension("J"))
+
+    assert promote_dims([I], [K]) == [I, K]
+    for _ in range(2):
+        with pytest.raises(ValueError, match="not ordered correctly"):
+            promote_dims([K, I])
+        with pytest.raises(ValueError, match="not ordered correctly"):
+            common.check_dims([K, I])
+
+
 def _read_only(array):
     array = array.copy()
     array.flags.writeable = False
