@@ -716,7 +716,7 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A :ref:`Dimension` to reduce over.
+        axis: A `Dimension` to reduce over.
         forward: Boolean specifying the direction.
         init: Initial value for the carry argument of the scan pass.
 
