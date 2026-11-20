@@ -31,6 +31,10 @@ A region that gets fields of different domains has to be compiled with
 domain, and they cannot be in the pytree context.
 """
 
+# TODO(havogt): this module and `jax_ops` share their design (pytree nodes of fields and
+#   connectivities, static values compared by memory); refactor them to share the common
+#   infrastructure.
+
 from __future__ import annotations
 
 import dataclasses
@@ -199,14 +203,14 @@ common._connectivity.register(torch.Tensor, _connectivity)
 _DomainContext = tuple[tuple[str, common.DimensionKind, int, int], ...]
 
 
-def _domain_context(domain: common.Domain) -> _DomainContext:
+def _domain_to_context(domain: common.Domain) -> _DomainContext:
     return tuple(
         (dim.value, dim.kind, rng.start, rng.stop)
         for dim, rng in zip(domain.dims, domain.ranges, strict=True)
     )
 
 
-def _context_domain(context: _DomainContext) -> common.Domain:
+def _domain_from_context(context: _DomainContext) -> common.Domain:
     return common.Domain(
         dims=tuple(common.Dimension(value, kind) for value, kind, _, _ in context),
         ranges=tuple(common.UnitRange(start, stop) for _, _, start, stop in context),
@@ -222,13 +226,13 @@ def _flatten_field(field: nd_array_field.NdArrayField) -> tuple[list[torch.Tenso
         raise TypeError(
             f"Only fields of torch tensors are torch pytrees, got a field of '{type(field.ndarray)}'."
         )
-    return [field.ndarray], _domain_context(field.domain)
+    return [field.ndarray], _domain_to_context(field.domain)
 
 
 def _unflatten_field(
     children: list[torch.Tensor], context: _DomainContext
 ) -> nd_array_field.NdArrayField:
-    return nd_array_field.NdArrayField(_context_domain(context), children[0])
+    return nd_array_field.NdArrayField(_domain_from_context(context), children[0])
 
 
 torch_pytree.register_pytree_node(nd_array_field.NdArrayField, _flatten_field, _unflatten_field)
@@ -269,7 +273,7 @@ def _flatten_connectivity(
     codomain = connectivity.codomain
     skip_value = connectivity.skip_value
     return [ndarray], (
-        _domain_context(connectivity.domain),
+        _domain_to_context(connectivity.domain),
         codomain.value,
         codomain.kind,
         None if skip_value is None else int(skip_value),
@@ -293,7 +297,7 @@ def _unflatten_connectivity(
             else nd_array_field.StaticValues.RUN_TIME_ONLY
         )
     connectivity: nd_array_field.NdArrayConnectivityField = nd_array_field.NdArrayConnectivityField(
-        _context_domain(domain),
+        _domain_from_context(domain),
         ndarray,
         common.Dimension(codomain_value, codomain_kind),
         skip_value,
