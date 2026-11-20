@@ -16,25 +16,6 @@ GT4Py is a Python library for generating high performance implementations of ste
 
 **NOTE:** GT4Py contains two generations of the library, which are not compatible with each other. `gt4py.next` is the current one, where most of the active development happens, and the one to choose for new projects. `gt4py.cartesian` is the previous generation, limited to Cartesian grids: it is still maintained for the models relying on it and enriched with features where needed.
 
-## 📃 Description
-
-GT4Py is a Python library for expressing computational motifs as found in weather and climate applications. These computations are expressed in a domain specific language (GTScript) which is translated to high-performance implementations for CPUs and GPUs.
-
-The DSL expresses computations on a 3-dimensional Cartesian grid. The horizontal axes (`I`, `J`) are always computed in parallel, while the vertical (`K`) can be iterated in sequential, forward or backward, order. Cartesian offsets are expressed relative to a center index.
-
-In addition, GT4Py provides functions to allocate arrays with memory layout suited for a particular backend.
-
-The following backends are supported:
-
-- `numpy`: A vectorized python backend
-- `gt:cpu_ifirst`: GridTools C++ CPU backend using `I`-first data ordering
-- `gt:cpu_kfirst`: GridTools C++ CPU backend using `K`-first data ordering
-- `gt:gpu`: GridTools backend for CUDA
-- `dace:cpu`: Dace code-generated CPU backend
-- `dace:cpu_kfirst`: Dace code-generated CPU backend using `K`-first data ordering
-- `dace:gpu`: Dace code-generated GPU backend
-- `debug`: A pure python backend used for prototyping new features
-
 ## 🚜 Installation
 
 GT4Py can be installed as a regular Python package using [uv](https://docs.astral.sh/uv/), [pip](https://pip.pypa.io/en/stable/) or any other PEP-517 compatible frontend. We strongly recommended to use`uv` to create and manage virtual environments for your own projects.
