@@ -13,7 +13,9 @@ import hashlib
 import multiprocessing
 import os
 import pickle
+import subprocess
 import sys
+import time
 import unittest.mock as mock
 
 import numpy as np
@@ -609,3 +611,190 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
         assert isinstance(runners.get_default_runner(), runners.SerialRunner)
         runners.reset_default_runner()
+
+
+_HELPERS_MODULE = """
+import dataclasses
+import pathlib
+import subprocess
+import time
+
+
+class Artifact:
+    def load(self):
+        return lambda *args, **kwargs: None
+
+
+@dataclasses.dataclass(frozen=True)
+class Executor:
+    marker: str
+    sleep: float = 0.0  # time spent in this (worker) process
+    child_sleep: float = 0.0  # time spent in a child process, like cmake or ninja
+
+    def __call__(self, compilable):
+        pathlib.Path(self.marker).touch()
+        time.sleep(self.sleep)
+        if self.child_sleep:
+            subprocess.run(["sleep", str(self.child_sleep)], check=True)
+        return Artifact()
+"""
+
+# Executed in a subprocess, in a session of its own: the tests below send signals to the
+# whole process group, as a terminal does on Ctrl-C and Jupyter on kernel interrupt / shutdown.
+_SCENARIO_SCRIPT = """
+import os, pathlib, signal, sys, time
+
+import gt4py.next.otf.runners as runners
+import scenario_helpers
+
+tmp = pathlib.Path({tmp!r})
+
+
+def task(name, **kwargs):
+    executor = scenario_helpers.Executor(marker=str(tmp / name), **kwargs)
+    return runners.CompilationTask(name=name, compilable=None, executor=executor)
+
+
+def wait_for(name):
+    deadline = time.monotonic() + 120
+    while not (tmp / name).exists():
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+
+
+if __name__ == "__main__":
+    runner = runners.ProcessRunner(max_workers={workers}, shared_session_cache_dir=str(tmp))
+{body}
+"""
+
+
+def _run_scenario(tmp_path, body: str, workers: int = 1):
+    (tmp_path / "scenario_helpers.py").write_text(_HELPERS_MODULE)
+    script = tmp_path / "scenario.py"
+    indented = "\n".join("    " + line for line in body.strip().splitlines())
+    script.write_text(_SCENARIO_SCRIPT.format(tmp=str(tmp_path), workers=workers, body=indented))
+    start = time.monotonic()
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=tmp_path,
+        start_new_session=True,
+    )
+    return result, time.monotonic() - start
+
+
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals and `sleep`")
+
+
+@posix_only
+def test_idle_process_runner_workers_survive_sigint(tmp_path):
+    """SIGINT sent to the process group (Ctrl-C, Jupyter kernel interrupt) must neither make
+    the idle workers print a `KeyboardInterrupt` traceback nor break the pool."""
+    result, _ = _run_scenario(
+        tmp_path,
+        """
+signal.signal(signal.SIGINT, lambda *args: None)  # the main process is not the subject here
+warm_up = [runner.submit(task(f"warm_up_{i}", sleep=1)) for i in range(2)]
+[future.result(timeout=120) for future in warm_up]  # both workers are now idle
+os.killpg(os.getpgid(0), signal.SIGINT)
+time.sleep(1)
+runner.submit(task("after_sigint")).result(timeout=120)
+runner.shutdown(wait=True)
+print("survived")
+""",
+        workers=2,
+    )
+
+    assert result.stdout.strip() == "survived", result.stderr
+    assert "KeyboardInterrupt" not in result.stderr
+    assert result.stderr.strip() == ""
+
+
+@posix_only
+def test_ctrl_c_interrupts_the_compiler_processes_of_the_workers(tmp_path):
+    """The compiler processes started by a worker (cmake, ninja, ...) must still react to
+    Ctrl-C, and the exit must not wait for them (nor for the queued compilations)."""
+    result, elapsed = _run_scenario(
+        tmp_path,
+        """
+runner.submit(task("long", child_sleep=60))
+wait_for("long")
+time.sleep(1)  # let the child process start
+os.killpg(os.getpgid(0), signal.SIGINT)
+time.sleep(30)  # never completes: the main process gets a KeyboardInterrupt
+""",
+    )
+
+    assert "KeyboardInterrupt" in result.stderr  # of the main process, which handles Ctrl-C
+    assert elapsed < 40, "the exit waited for the child process"
+
+
+@posix_only
+def test_queued_compilations_are_not_run_at_exit(tmp_path):
+    """Nobody can use the result of a compilation at interpreter exit: do not start the queued ones."""
+    result, _ = _run_scenario(
+        tmp_path,
+        """
+for i in range(6):
+    runner.submit(task(f"job_{i}", sleep=2))
+wait_for("job_0")
+sys.exit(0)
+""",
+    )
+
+    assert result.returncode == 0, result.stderr
+    # The running job and the ones already handed to the pool's call queue (up to
+    # `max_workers + 1` jobs in total) still run; the others are cancelled.
+    assert len(list(tmp_path.glob("job_*"))) <= 3
+
+
+def test_process_runner_refuses_to_start_while_a_worker_imports_main(tmp_path, monkeypatch):
+    monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
+
+    with pytest.raises(RuntimeError, match=r'if __name__ == "__main__"'):
+        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
+
+
+_UNGUARDED_SCRIPT = """
+import gt4py.next.otf.runners as runners
+
+
+def executor(compilable):
+    raise AssertionError("must not run: the worker cannot even import this script")
+
+
+task = runners.CompilationTask(name="t", compilable=None, executor=executor)
+{call}
+"""
+
+
+@pytest.mark.parametrize("guarded", [False, True], ids=["unguarded", "guarded"])
+def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
+    """A script submitting compilations at module level is re-imported by every
+    spawned worker: that must give an actionable error, not a bare
+    `RuntimeError: ... bootstrapping phase` followed by `BrokenProcessPool`."""
+    call = (
+        "runner = runners.ProcessRunner(max_workers=1, shared_session_cache_dir="
+        f"{str(tmp_path)!r})\n"
+        "try:\n    runner.submit(task).result(timeout=120)\nfinally:\n    runner.shutdown(wait=True)"
+    )
+    if guarded:
+        call = 'if __name__ == "__main__":\n' + "\n".join("    " + l for l in call.splitlines())
+    script = tmp_path / "script.py"
+    script.write_text(_UNGUARDED_SCRIPT.format(call=call))
+
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, timeout=300, cwd=tmp_path
+    )
+
+    assert "bootstrapping phase" not in result.stderr
+    if guarded:
+        # The worker imports the script without calling anything; the task itself
+        # then fails with the executor's own error, which is propagated unchanged.
+        assert "AssertionError: must not run" in result.stderr
+    else:
+        assert result.returncode != 0
+        assert 'if __name__ == "__main__"' in result.stderr
+        assert "BrokenProcessPool" in result.stderr

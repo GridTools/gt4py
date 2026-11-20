@@ -166,6 +166,15 @@ BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
     os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
 ]
 
+
+#: Warn (once per process) when a program is compiled while Python runs without
+#: the ``-O`` flag: the assertions and argument checks guarded by ``__debug__``
+#: add overhead to every program call. Opt-in (``GT4PY_WARN_PYTHON_DEBUG_MODE=1``),
+#: as running in debug mode is the norm in notebooks, scripts and tests, where
+#: the hint is only noise; enable it when benchmarking.
+WARN_PYTHON_DEBUG_MODE: bool = env_flag_to_bool("GT4PY_WARN_PYTHON_DEBUG_MODE", default=False)
+
+
 #: User-defined level to enable metrics at lower or equal level.
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.

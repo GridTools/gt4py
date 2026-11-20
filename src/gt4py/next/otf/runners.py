@@ -17,9 +17,12 @@ import multiprocessing
 import os
 import pathlib
 import pickle
+import signal
 import sys
 import threading
 import warnings
+import weakref
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
@@ -115,6 +118,10 @@ def _detect_cuda_archs() -> str | None:
     return compilation_common.get_device_arch()
 
 
+def _ignore_sigint(signum: int, frame: Any) -> None:
+    """No-op ``SIGINT`` handler of the worker processes."""
+
+
 def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:
     """Prepare a worker process for building without touching the parent's GPU.
 
@@ -134,7 +141,18 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     at backend construction, no detection inside the build). The architecture
     then travels to workers as part of the pickled executor and this
     ``CUDAARCHS`` export becomes obsolete.
+
+    Workers also stop reacting to ``SIGINT``: terminal Ctrl-C and the interrupt /
+    shutdown of a Jupyter kernel are delivered to the whole process group, which
+    would otherwise print a ``KeyboardInterrupt`` traceback from every idle worker
+    and kill them (leaving the pool broken for the rest of the session). The main
+    process stays in charge: it shuts the pool down at exit. A no-op handler is
+    installed rather than ``SIG_IGN`` because the latter would be inherited by the
+    compiler processes (cmake, ninja, ...) started by the worker, which then
+    could not be interrupted anymore, whereas a handled signal is reset to its
+    default disposition in a child process.
     """
+    signal.signal(signal.SIGINT, _ignore_sigint)
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
         os.environ["CUDAARCHS"] = cuda_archs
@@ -183,6 +201,59 @@ def _run_compilation_task_in_worker(
     return executor(compilable)
 
 
+def _cancel_pending_tasks_at_exit(pool: concurrent.futures.Executor) -> None:
+    """Drop the tasks still queued in `pool` when the interpreter exits.
+
+    Nobody can use the result of a compilation at that point, and without this
+    the interpreter would first run all the queued compilations (e.g. after a
+    Ctrl-C): `concurrent.futures` waits for them in an exit hook of `threading`,
+    which runs before any `atexit` callback, so the hook has to be registered
+    there too (hooks run in reverse order of registration).
+    """
+    register = getattr(threading, "_register_atexit", None)  # CPython implementation detail
+    if register is not None:
+        try:
+            # Weak reference: a runner dropped without `shutdown` must stay collectable.
+            pool_ref = weakref.ref(pool)
+
+            def cancel_pending() -> None:
+                if (alive_pool := pool_ref()) is not None:
+                    alive_pool.shutdown(wait=False, cancel_futures=True)
+
+            register(cancel_pending)
+        except RuntimeError:  # interpreter is already shutting down
+            pass
+
+
+_BROKEN_POOL_HINT = (
+    "A compilation worker process terminated abruptly. If this happens in a plain "
+    "script that calls a compiled program at module level, guard the entry point of "
+    'the script with `if __name__ == "__main__":` (the workers import the main '
+    "module); alternatively set `GT4PY_BUILD_JOBS_MODE=serial` to compile in the "
+    "calling process."
+)
+
+
+def add_hint_to_broken_pool_error(error: BaseException) -> None:
+    """Add a note with the usual causes to a `BrokenProcessPool` error (in place).
+
+    Other exceptions, and errors already carrying the hint, are left untouched.
+    """
+    if isinstance(error, BrokenProcessPool) and (
+        _BROKEN_POOL_HINT not in getattr(error, "__notes__", ())
+    ):
+        error.add_note(_BROKEN_POOL_HINT)
+
+
+def _is_importing_main_module_in_worker() -> bool:
+    """Whether this is a spawned worker that is still importing the parent's `__main__`.
+
+    ``spawn`` workers re-import the main module of the parent, before they are
+    flagged as child processes (`multiprocessing.parent_process()` is still `None`).
+    """
+    return getattr(multiprocessing.current_process(), "_inheriting", False)
+
+
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
@@ -195,6 +266,13 @@ class ProcessRunner:
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
+        if _is_importing_main_module_in_worker():
+            raise RuntimeError(
+                "A compiled GT4Py program was called while a compilation worker process was "
+                "importing the main module of the script. Guard the entry point of the "
+                'script with `if __name__ == "__main__":` so that the calls only happen '
+                "in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
+            )
         # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
         # this pool's own manager thread), CUDA contexts and MPI state, none of which
         # survive fork safely. The gtfn GPU build even touches CUDA at *compile* time
@@ -210,6 +288,7 @@ class ProcessRunner:
             initializer=_pool_worker_initializer,
             initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
+        _cancel_pending_tasks_at_exit(self._pool)
 
     def submit(
         self, task: CompilationTask
@@ -238,13 +317,17 @@ class ProcessRunner:
             future.set_exception(error)
             return future
 
-        return self._pool.submit(
-            _run_compilation_task_in_worker,
-            executor_blob=executor_blob,
-            compilable_blob=compilable_blob,
-            config_overrides=_config_snapshot(),
-            recursion_limit=sys.getrecursionlimit(),
-        )
+        try:
+            return self._pool.submit(
+                _run_compilation_task_in_worker,
+                executor_blob=executor_blob,
+                compilable_blob=compilable_blob,
+                config_overrides=_config_snapshot(),
+                recursion_limit=sys.getrecursionlimit(),
+            )
+        except BrokenProcessPool as error:
+            add_hint_to_broken_pool_error(error)
+            raise
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)

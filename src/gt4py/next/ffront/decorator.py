@@ -18,7 +18,6 @@ import dataclasses
 import functools
 import types
 import typing
-import warnings
 from collections.abc import Callable
 from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
@@ -364,14 +363,8 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
-                # Embedded execution.
-                warnings.warn(
-                    UserWarning(
-                        f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
-                    ),
-                    stacklevel=2,
-                )
-
+                # Embedded execution (no backend): the documented default for development
+                # and debugging, so it is deliberately silent.
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
