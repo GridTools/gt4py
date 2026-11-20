@@ -48,11 +48,11 @@ A connectivity passed to `jit` can also be used by the branches of `lax.cond`, t
 
 ### Under `torch.compile`
 
-Torch connectivities get the same narrowing under `torch.compile`, and everything that knows about it is in `torch_ops.py`. An embedded program or field operator called in a compiled region is one `torch.compiler.nonstrict_trace` call: Dynamo does not trace the embedded code, so a call with `fullgraph=True` is one graph without breaks, and the embedded code runs on fake tensors.
+Torch connectivities get the same narrowing under `torch.compile`, and everything that knows about it is in `torch_ops.py`. Dynamo does not trace embedded code: a compiled region calls it through a `torch.compiler.nonstrict_trace` function, which is one graph without breaks under `fullgraph=True` and runs the embedded code on fake tensors. Embedded programs and field operators do not do that call themselves yet.
 
-Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples, as is the `domain` argument of a field operator call. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor its static values for the pytree context, a `torch.utils._pytree.register_constant` object compared by memory, as in the aux data for jax. Dynamo guards it by equality. Unflattening gives a fake child their values as NumPy static values, read on first use. A table computed by `as_offset` in the trace has none, as for jax.
+Fields and connectivities are torch pytree nodes. Dynamo flattens them symbolically and accepts only constants in the pytree context, so the domain is in it as plain tuples. Dynamo cannot read a table from its fake tensor, so `common._connectivity` gives every connectivity it creates from a concrete tensor its static values for the pytree context, a `torch.utils._pytree.register_constant` object compared by memory, as in the aux data for jax. Dynamo guards it by equality. Unflattening gives a fake child their values as NumPy static values, read on first use. A table computed by `as_offset` in the trace has none, as for jax.
 
-Every tensor a compiled region reads reaches the call as an argument, so a connectivity closed over by the region, e.g. in an offset provider built outside it, is supported. A connectivity without them, built by `restrict`, `dataclasses.replace` or `NdArrayConnectivityField.from_array`, raises a `TypeError` when it is flattened in the region.
+Every tensor a compiled region reads reaches the `nonstrict_trace` function as an argument, so a connectivity closed over by the region is supported. A connectivity without them, built by `restrict`, `dataclasses.replace` or `NdArrayConnectivityField.from_array`, raises a `TypeError` when it is flattened in the region.
 
 ## Consequences
 
