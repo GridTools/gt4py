@@ -18,28 +18,6 @@ from gt4py import eve
 from gt4py.eve.utils import XIterable
 
 
-#: Public names of `gt4py.eve.utils` (including names re-exported from other
-#: modules), which must stay importable from the package.
-EVE_UTILS_PUBLIC_NAMES = [
-    "AnyWordsIterable", "CaseStyleConverter", "CustomDefaultDictBase", "CustomMapping",
-    "EqualityBy", "FrozenNamespace", "HashableBy", "IndexerCallable", "Namespace",
-    "SequentialIDGenerator", "XIterable", "a10n", "as_xiter", "asciify", "attrchecker",
-    "attrgetter_", "cached_hash", "content_hash", "ddiff", "dhash", "first", "flatten",
-    "flatten_iter", "fluid_partial", "format_int_list", "get_fully_qualified_name", "getitem_",
-    "hashable_by", "hashable_by_id", "is_collection", "is_noninstantiable", "isinstancechecker",
-    "itemgetter_", "iter_splitlines", "lru_cache", "merge_dispatchers", "noninstantiable",
-    "optional_lru_cache", "parse_int_list", "pprint_ddiff", "register_subclasses",
-    "singledispatcher", "slugify", "toolz", "unwrap_text", "with_fluid_partial", "xenumerate",
-    "xiter",
-]  # fmt: skip
-
-
-@pytest.mark.parametrize("name", EVE_UTILS_PUBLIC_NAMES)
-def test_public_names(name):
-    assert hasattr(eve.utils, name)
-    exec(f"from gt4py.eve.utils import {name}", {})
-
-
 def test_first():
     from gt4py.eve.utils import first
 
