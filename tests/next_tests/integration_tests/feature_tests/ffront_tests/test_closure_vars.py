@@ -45,3 +45,22 @@ def test_constant_closure_vars_with_enums(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: Constants.PI * Constants.E * input
     )
+
+
+def test_param_shadowing_closure_var_field_operator(cartesian_case):
+    # `scale` is a closure variable of `testee` and therefore becomes a function definition of the
+    # lowered program. The parameter of `shadow` has the same name and must not be confused with it.
+    @gtx.field_operator
+    def scale(a: cases.IFloatField) -> cases.IFloatField:
+        return 2.0 * a
+
+    @gtx.field_operator
+    def shadow(scale: cases.IFloatField) -> cases.IFloatField:
+        return scale + 1.0
+
+    @gtx.program
+    def testee(a: cases.IFloatField, out: cases.IFloatField):
+        scale(a, out=out)
+        shadow(out, out=out)
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: 2.0 * a + 1.0)

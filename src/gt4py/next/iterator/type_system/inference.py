@@ -563,6 +563,11 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
+        if isinstance(fun, ts.DeferredType):
+            # Missing information propagates as `DeferredType`. The type of the function is
+            # unknown, e.g. because it is an undeclared symbol when an expression is re-inferred
+            # without its enclosing scope, hence the type of the call is unknown as well.
+            return ts.DeferredType(constraint=None)
         result = fun(*args, **syntactic_info, offset_provider_type=self.offset_provider_type)
 
         if isinstance(result, ObservableTypeSynthesizer):

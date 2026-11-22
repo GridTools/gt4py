@@ -160,9 +160,7 @@ def apply_common_transforms(
     uids = utils.IDGeneratorPool()
 
     ir = MergeLet().visit(ir)
-    ir = inline_fundefs.InlineFundefs().visit(ir)
-
-    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = inline_fundefs.inline_fundefs(ir)
     ir = NormalizeShifts().visit(ir)
 
     # TODO(tehrengruber): Many iterator test contain lifts that need to be inlined, e.g.
@@ -284,8 +282,7 @@ def apply_fieldview_transforms(
         ir, offset_provider, None, use_max_domain_range_on_unstructured_shift
     )
 
-    ir = inline_fundefs.InlineFundefs().visit(ir)
-    ir = inline_fundefs.prune_unreferenced_fundefs(ir)
+    ir = inline_fundefs.inline_fundefs(ir)
     # required for dead-code-elimination and `prune_empty_concat_where` pass
     ir = concat_where.expand_tuple_args(ir, offset_provider_type=offset_provider_type)  # type: ignore[assignment]  # always an itir.Program
     ir = expand_tuple_maps.ExpandTupleMaps.apply(
