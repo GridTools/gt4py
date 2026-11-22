@@ -190,6 +190,8 @@ class NativeFunction(eve.StrEnum):
     FLOAT32 = "float32"
     FLOAT64 = "float64"
 
+    RAND = "rand"
+
     IR_OP_TO_NUM_ARGS: ClassVar[Dict[NativeFunction, int]]
 
     @property
@@ -237,6 +239,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
         NativeFunction.ERFC: 1,
         NativeFunction.ROUND: 1,
         NativeFunction.ROUND_AWAY_FROM_ZERO: 1,
+        NativeFunction.RAND: 2,
     }.items()
 }
 
@@ -989,6 +992,7 @@ OP_TO_UFUNC_NAME: Final[
         NativeFunction.ERFC: "erfc",
         NativeFunction.ROUND: "round",
         NativeFunction.ROUND_AWAY_FROM_ZERO: "round_away_from_zero",
+        NativeFunction.RAND: "rand",
     },
 }
 

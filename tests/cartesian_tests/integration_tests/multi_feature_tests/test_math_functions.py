@@ -17,6 +17,7 @@ from gt4py.cartesian.gtscript import (
     erf,
     erfc,
     interval,
+    rand,
     round,
     round_away_from_zero,
     stencil,
@@ -109,3 +110,30 @@ def test_round_away_from_zero(backend):
 
     assert (A[0, 0, :] == initial_values).all()
     assert (B[0, 0, :] == expected).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_rand(backend):
+    # disable dace backends until random is in the ufunc there as well.
+    if "dace" in backend:
+        return
+
+    @stencil(backend=backend)
+    def stencil_rand(field_a: Field[np.float32], field_b: Field[np.float32]):
+        with computation(PARALLEL), interval(...):
+            field_b = rand(field_a, field_a + 3.0)
+
+    initial_values = np.array([[[-1.0, 0.0, 1.0, 2.0]]], dtype=np.float32)
+    A = storage.from_array(initial_values, np.float32, backend=backend)
+    B = storage.full(initial_values.shape, -1.0, np.float32, backend=backend)
+
+    np.random.seed(1234)
+    stencil_rand(A, B)
+
+    lower = initial_values[0, 0, :]
+    upper = lower + 3.0
+    B_cpu = storage_utils.cpu_copy(B)
+
+    assert (A[0, 0, :] == initial_values).all()
+    assert ((B_cpu[0, 0, :] >= lower) & (B_cpu[0, 0, :] < upper)).all()
+    assert B_cpu.dtype == np.float32

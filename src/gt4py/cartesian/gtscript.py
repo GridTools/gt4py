@@ -64,6 +64,7 @@ MATH_BUILTINS = {
     "erfc",
     "round",
     "round_away_from_zero",
+    "rand",
 }
 
 TYPE_HINT_AND_CAST_BUILTINS = {
@@ -1018,6 +1019,11 @@ def erf(x) -> _gt_all_op_types:  # type: ignore[empty-body]
 
 def erfc(x) -> _gt_all_op_types:  # type: ignore[empty-body]
     """Computes the complementary error function of `x`, which is `1.0 - erf(x)`."""
+    pass
+
+
+def rand(x, y) -> _gt_all_op_types:  # type: ignore[empty-body]
+    """Random number between x and y."""
     pass
 
 
