@@ -133,6 +133,34 @@ def test_neighbor_sum(unstructured_case_3d, fop):
 
 
 @pytest.mark.uses_unstructured_shift
+def test_reduction_of_computed_field_static_domains(unstructured_case):
+    if unstructured_case.backend is None:
+        pytest.skip("Static domains require a compiled backend.")
+
+    @gtx.field_operator
+    def testee_op(vertex_f: cases.VField) -> cases.VField:
+        edge_f = neighbor_sum(vertex_f(E2V), axis=E2VDim)
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+    @gtx.program(backend=unstructured_case.backend, static_domains=True)
+    def testee(vertex_f: cases.VField, out: cases.VField):
+        testee_op(vertex_f, out=out)
+
+    e2v_table = unstructured_case.offset_provider["E2V"].asnumpy()
+    v2e_table = unstructured_case.offset_provider["V2E"].asnumpy()
+    vertex_f = cases.allocate(unstructured_case, testee, "vertex_f")()
+    out = cases.allocate(unstructured_case, testee, "out")()
+
+    edge_ref = np.sum(vertex_f.asnumpy()[e2v_table], axis=1)
+    ref = np.sum(
+        edge_ref[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
+    )
+
+    testee(vertex_f, out, offset_provider=unstructured_case.offset_provider)
+    assert np.array_equal(out.asnumpy(), ref)
+
+
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_cartesian_shift
 def test_reduction_execution_with_offset(unstructured_case_3d):
     EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
