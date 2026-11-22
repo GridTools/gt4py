@@ -81,3 +81,55 @@ def test_corrupt_entry_self_heals(temp_cache):
     assert key not in temp_cache
     temp_cache[key] = {"a": 2}
     assert temp_cache[key] == {"a": 2}
+
+
+def test_get_item_takes_no_lock(temp_cache, monkeypatch):
+    temp_cache["key"] = 1
+
+    def no_lock(*args, **kwargs):
+        raise AssertionError("reads must not lock")
+
+    monkeypatch.setattr(filecache.locking, "lock", no_lock)
+    assert temp_cache["key"] == 1
+
+
+def test_get_item_creates_no_lock_file(temp_cache):
+    temp_cache["key"] = 1
+    for p in temp_cache.path.glob("*.lock"):
+        p.unlink()
+    before = set(temp_cache.path.iterdir())
+
+    assert temp_cache["key"] == 1
+    assert set(temp_cache.path.iterdir()) == before
+
+
+def test_corrupt_entry_replaced_during_read_is_kept(temp_cache, monkeypatch):
+    key = "raced"
+    temp_cache[key] = {"a": 1}
+    temp_cache._get_path(key).write_bytes(b"\x80\x05garbage-not-a-pickle")
+    original_load = filecache.pickle.load
+
+    def load_while_writer_replaces(f):
+        temp_cache[key] = {"a": 2}
+        return original_load(f)
+
+    monkeypatch.setattr(filecache.pickle, "load", load_while_writer_replaces)
+    with pytest.raises(KeyError):
+        _ = temp_cache[key]
+    monkeypatch.setattr(filecache.pickle, "load", original_load)
+
+    assert temp_cache[key] == {"a": 2}
+
+
+def test_delete_item_removed_concurrently_raises_keyerror(temp_cache, monkeypatch):
+    key = "raced_delete"
+    temp_cache[key] = 1
+    real_lock = filecache.locking.lock
+
+    def lock_after_concurrent_delete(path):
+        temp_cache._get_path(key).unlink()
+        return real_lock(path)
+
+    monkeypatch.setattr(filecache.locking, "lock", lock_after_concurrent_delete)
+    with pytest.raises(KeyError):
+        del temp_cache[key]
