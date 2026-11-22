@@ -16,7 +16,6 @@ import abc
 import contextlib
 import dataclasses
 import functools
-import inspect
 import types
 import typing
 import warnings
@@ -32,7 +31,6 @@ from gt4py.next import (
     custom_layout_allocators as next_allocators,
     embedded as next_embedded,
     errors,
-    named_collections,
     utils,
 )
 from gt4py.next.embedded import operators as embedded_operators
@@ -102,7 +100,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         metadata=utils.gt4py_metadata(fingerprint=False)
     )
     compilation_options: options.CompilationOptions
-    # an attribute, not a cached property, to cost the call no more than `backend is not None`
+    # an attribute, not a property, to cost the call no more than `backend is not None`
     _is_compiled: bool = dataclasses.field(
         init=False, repr=False, compare=False, metadata=utils.gt4py_metadata(fingerprint=False)
     )
@@ -115,54 +113,14 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             and not isinstance(self.backend, next_backend.EmbeddedJitBackend),
         )
 
+    @functools.cached_property
+    def _embedded_jit(self) -> Callable[..., None]:
+        """This entry point run embedded inside the tracing compiler of its embedded jit backend."""
+        assert isinstance(self.backend, next_backend.EmbeddedJitBackend)
+        return self.backend.jit(typing.cast(GTEntryPoint, self))
+
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
-
-    def _jit(
-        self,
-        entry: Callable[..., None],
-        *keyword_only: inspect.Parameter,
-        static_params: Sequence[str] = (),
-    ) -> Callable[..., None]:
-        """
-        `entry`, the embedded execution, wrapped by the embedded jit backend.
-
-        Named collections reach the backend as tuples, which are pytrees in every
-        library, and `entry` gets them rebuilt.
-        """
-        assert isinstance(self.backend, next_backend.EmbeddedJitBackend)
-        program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
-        assert isinstance(program_type, ts_ffront.ProgramType)
-        signature: inspect.Signature = ffront_type_info.signature_in_program_context(program_type)
-        signature = signature.replace(parameters=[*signature.parameters.values(), *keyword_only])
-        static_params = (*(self.compilation_options.static_params or ()), *static_params)
-        params = program_type.definition.pos_or_kw_args | program_type.definition.kw_only_args
-        constructors = {
-            name: _named_collection_constructor(type_)
-            for name, type_ in params.items()
-            if type_info.needs_value_extraction(type_)
-        }
-        if not constructors:
-            return self.backend.jit(entry, signature, static_params)
-
-        def with_named_collections(**kwargs: Any) -> None:
-            entry(
-                **{name: constructors.get(name, _identity)(value) for name, value in kwargs.items()}
-            )
-
-        jitted = self.backend.jit(with_named_collections, signature, static_params)
-        param_names = tuple(program_type.definition.pos_or_kw_args)
-
-        def run(*args: Any, **kwargs: Any) -> None:
-            kwargs = {**dict(zip(param_names, args)), **kwargs}
-            jitted(
-                **{
-                    name: arguments.extract(value) if name in constructors else value
-                    for name, value in kwargs.items()
-                }
-            )
-
-        return run
 
     def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
@@ -380,19 +338,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         )
         return self._frontend_transforms.past_to_itir(no_args_past).data
 
-    def _run_embedded(
-        self, *args: Any, offset_provider: common.OffsetProvider, **kwargs: Any
-    ) -> None:
-        with next_embedded.context.update(offset_provider=offset_provider):
-            self.definition_stage.definition(*args, **kwargs)
-
-    @functools.cached_property
-    def _jit_entry(self) -> Callable[..., None]:
-        return self._jit(
-            self._run_embedded,
-            inspect.Parameter("offset_provider", inspect.Parameter.KEYWORD_ONLY),
-        )
-
     def with_grid_type(self, grid_type: common.GridType) -> Program:
         return dataclasses.replace(
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
@@ -443,7 +388,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 )
             elif self.backend is not None:
                 with embedded_program_call_context(self, args, offset_provider, kwargs):
-                    self._jit_entry(*args, offset_provider=offset_provider, **kwargs)
+                    self._embedded_jit(*args, offset_provider=offset_provider, **kwargs)
             else:
                 # Embedded execution.
                 warnings.warn(
@@ -453,8 +398,9 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
-                with embedded_program_call_context(self, args, offset_provider, kwargs):
-                    self._run_embedded(*args, offset_provider=offset_provider, **kwargs)
+                with next_embedded.context.update(offset_provider=offset_provider):
+                    with embedded_program_call_context(self, args, offset_provider, kwargs):
+                        self.definition_stage.definition(*args, **kwargs)
 
 
 @typing.overload
@@ -595,39 +541,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         assert isinstance(type_, ts.CallableType)
         return type_
 
-    @functools.cached_property
-    def _embedded_operator(self) -> embedded_operators.EmbeddedOperator:
-        attributes = (
-            self.definition_stage.attributes
-            if self.definition_stage
-            else self.foast_stage.attributes
-        )
-        if attributes is not None and any(
-            has_scan_op_attribute := [
-                attribute in attributes for attribute in ["init", "axis", "forward"]
-            ]
-        ):
-            assert all(has_scan_op_attribute)
-            return embedded_operators.ScanOperator(
-                self.definition_stage.definition,
-                attributes["forward"],
-                attributes["init"],
-                attributes["axis"],
-            )
-        return embedded_operators.EmbeddedOperator(self.definition_stage.definition)
-
-    def _run_embedded(self, *args: Any, **kwargs: Any) -> Any:
-        return embedded_operators.field_operator_call(self._embedded_operator, args, kwargs)
-
-    @functools.cached_property
-    def _jit_entry(self) -> Callable[..., None]:
-        return self._jit(
-            self._run_embedded,
-            inspect.Parameter("domain", inspect.Parameter.KEYWORD_ONLY, default=None),
-            inspect.Parameter("offset_provider", inspect.Parameter.KEYWORD_ONLY),
-            static_params=("domain",),
-        )
-
     def with_grid_type(self, grid_type: common.GridType) -> FieldOperator:
         return dataclasses.replace(
             self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
@@ -673,32 +586,30 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
                 if self.backend is not None:
-                    if "out" not in kwargs:
-                        raise errors.MissingArgumentError(None, "out", True)
-                    if "domain" in kwargs:
-                        # a `Domain` is static under the tracing compiler, a `dict` is not
-                        kwargs["domain"] = utils.tree_map(common.domain)(kwargs["domain"])
-                    return self._jit_entry(*args, **kwargs)
-            return self._run_embedded(*args, **kwargs)
+                    return self._embedded_jit(*args, **kwargs)
+            attributes = (
+                self.definition_stage.attributes
+                if self.definition_stage
+                else self.foast_stage.attributes
+            )
+            if attributes is not None and any(
+                has_scan_op_attribute := [
+                    attribute in attributes for attribute in ["init", "axis", "forward"]
+                ]
+            ):
+                assert all(has_scan_op_attribute)
+                forward = attributes["forward"]
+                init = attributes["init"]
+                axis = attributes["axis"]
+                op: embedded_operators.EmbeddedOperator = embedded_operators.ScanOperator(
+                    self.definition_stage.definition, forward, init, axis
+                )
+            else:
+                op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
+            return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 GTEntryPoint: TypeAlias = Program | FieldOperator
-
-
-def _identity(value: Any) -> Any:
-    return value
-
-
-def _named_collection_constructor(type_: ts.TypeSpec) -> Callable[[Any], Any]:
-    """Rebuild the named collections of a value of `type_` from the tuples of `arguments.extract`."""
-    if isinstance(type_, ts.NamedCollectionType):
-        return named_collections.make_named_collection_constructor_from_type_spec(type_)
-    if isinstance(type_, ts.TupleType) and type_info.needs_value_extraction(type_):
-        constructors = [_named_collection_constructor(element) for element in type_.types]
-        return lambda values: tuple(
-            constructor(value) for constructor, value in zip(constructors, values, strict=True)
-        )
-    return _identity
 
 
 # TODO(tehrengruber): This class does not follow the Liskov-Substitution principle as it doesn't

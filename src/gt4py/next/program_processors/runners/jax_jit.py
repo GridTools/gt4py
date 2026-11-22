@@ -18,13 +18,18 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import jax
 import jax.numpy as jnp
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.program_processors.runners import embedded_jit
+
+
+if TYPE_CHECKING:
+    from gt4py.next.ffront import decorator
 
 
 def _is_field(x: Any) -> bool:
@@ -80,11 +85,13 @@ class JaxJitBackend(next_backend.EmbeddedJitBackend):
     JAX arrays are immutable, so an assignment to an `out` field gives it a new
     buffer: the jitted function returns the new buffer of each field it assigned
     to, and the caller's fields get them. A field passed more than once is one
-    field in the trace, so its aliases see the assignment. The returned callable has the
-    `jax.jit` object as its `jitted` attribute, to inspect its traces.
+    field in the trace, so its aliases see the assignment.
     """
 
-    def jit(
+    def jit(self, entry_point: decorator.GTEntryPoint) -> Callable[..., None]:
+        return embedded_jit.jit(entry_point, self._wrap)
+
+    def _wrap(
         self,
         entry: Callable[..., None],
         signature: inspect.Signature,
@@ -110,7 +117,7 @@ class JaxJitBackend(next_backend.EmbeddedJitBackend):
                 if buffer is not None:
                     field._set_buffer(buffer)
 
-        run.jitted = jitted  # type: ignore[attr-defined]
+        run.__wrapped__ = jitted  # type: ignore[attr-defined]
         return run
 
 

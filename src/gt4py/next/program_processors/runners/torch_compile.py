@@ -21,12 +21,17 @@ import contextvars
 import dataclasses
 import inspect
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
 from gt4py.next import backend as next_backend, common
+from gt4py.next.program_processors.runners import embedded_jit
+
+
+if TYPE_CHECKING:
+    from gt4py.next.ffront import decorator
 
 
 # Dynamo reports an exception of the embedded code as an unsupported output type
@@ -79,7 +84,10 @@ class TorchCompileBackend(next_backend.EmbeddedJitBackend):
     combination of their values. The `out` fields are assigned to in place.
     """
 
-    def jit(
+    def jit(self, entry_point: decorator.GTEntryPoint) -> Callable[..., None]:
+        return embedded_jit.jit(entry_point, self._wrap)
+
+    def _wrap(
         self,
         entry: Callable[..., None],
         signature: inspect.Signature,

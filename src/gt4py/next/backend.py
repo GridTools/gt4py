@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import inspect
-from collections.abc import Callable, Sequence
-from typing import Any, Generic
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config, custom_layout_allocators as next_allocators
@@ -28,6 +27,10 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, artifacts, stages, toolchain, workflow
+
+
+if TYPE_CHECKING:
+    from gt4py.next.ffront import decorator as ffront_decorator
 
 
 def jit_to_aot_args(
@@ -186,8 +189,9 @@ class EmbeddedJitBackend(Backend, abc.ABC):
     """
     Runs programs and field operators embedded, inside the tracing compiler of an array library.
 
-    Instead of compiling, it wraps the embedded entry point of a program or field operator once,
-    e.g. in `jax.jit`. The allocator allocates arrays of the library.
+    Instead of compiling, it wraps the embedded execution of a program or field operator once,
+    e.g. in `jax.jit`. The allocator allocates arrays of the library. A stopgap until embedded
+    execution is represented by backends (ADR 0030).
     """
 
     executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
@@ -198,20 +202,11 @@ class EmbeddedJitBackend(Backend, abc.ABC):
     )
 
     @abc.abstractmethod
-    def jit(
-        self,
-        entry: Callable[..., None],
-        signature: inspect.Signature,
-        static_params: Sequence[str],
-    ) -> Callable[..., None]:
+    def jit(self, entry_point: ffront_decorator.GTEntryPoint) -> Callable[..., None]:
         """
-        Wrap `entry`, called as `signature` describes, in the tracing compiler.
+        `entry_point` run embedded inside the tracing compiler, called as the entry point is.
 
-        Args:
-            entry: Runs the program or field operator embedded; it assigns to its `out` fields.
-                Its arguments are fields, connectivities, scalars and (nested) tuples of them.
-            signature: The parameters of `entry`, including the keyword-only `offset_provider`.
-            static_params: The parameters whose values are compile-time constants.
+        Called once per entry point: the result is cached by it.
         """
         ...
 
