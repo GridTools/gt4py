@@ -658,3 +658,41 @@ def test_func_reinference():
     testee = im.call(im.ref("f", f_type))()
     result = itir_type_inference.reinfer(copy.deepcopy(testee))
     assert result.type == float_i_field
+
+
+def _testee_with_annex() -> itir.FunCall:
+    """A call whose two arguments share one preserved (`domain`) annex value."""
+    testee = im.make_tuple(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field))
+    domain = im.domain(common.GridType.CARTESIAN, {IDim: (0, 1)})
+    for arg in testee.args:
+        arg.annex.domain = domain
+    return testee
+
+
+def test_infer_copies_the_preserved_annex():
+    testee = _testee_with_annex()
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, inplace=False
+    )
+
+    assert result is not testee
+    assert result.type is not None
+    assert testee.type is None
+    for original, inferred in zip(testee.args, result.args, strict=True):
+        assert inferred is not original
+        assert inferred.annex.domain == original.annex.domain
+        assert inferred.annex.domain is not original.annex.domain
+    # Annex values shared by several nodes stay shared, they are copied with one memo.
+    assert result.args[0].annex.domain is result.args[1].annex.domain
+
+
+def test_infer_inplace_shares_the_preserved_annex():
+    testee = _testee_with_annex()
+
+    result = itir_type_inference.infer(
+        testee, offset_provider_type={}, allow_undeclared_symbols=True, inplace=True
+    )
+
+    for original, inferred in zip(testee.args, result.args, strict=True):
+        assert inferred.annex.domain is original.annex.domain
