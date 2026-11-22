@@ -179,6 +179,6 @@ print(d_phi.asnumpy().max())
   - [Premap and neighbors](dsl/premap.md): Cartesian offsets and unstructured meshes.
   - [Scan operators](dsl/scan-operators.md): computations which advance along the vertical.
   - [Programs](dsl/programs.md): grouping several operator calls.
-- [Running operators and programs](python/running.md): embedded execution,
+- [Executing GT4Py programs](python/running.md): embedded execution,
   backends and compilation.
 - [Examples](examples/index.md): complete, small applications.

@@ -74,3 +74,21 @@ globals().update(
         ],
     )
 )
+
+
+def _remove_sdfg_viewer(app, doctree, docname):  # type: ignore[no-untyped-def]
+    """Drop the scripts of the DaCe SDFG viewer from the notebook outputs.
+
+    Importing `dace` in a notebook kernel displays an HTML output which loads
+    the viewer (or inlines it when offline). The pages do not use it and it
+    slows down their loading.
+    """
+    from docutils import nodes
+
+    for node in list(doctree.findall(nodes.raw)):
+        if "sdfv" in node.astext():
+            node.parent.remove(node)
+
+
+def setup(app):  # type: ignore[no-untyped-def]
+    app.connect("doctree-resolved", _remove_sdfg_viewer)

@@ -14,24 +14,28 @@ kernelspec:
 
 # Programs
 
-Field operators are enough for most computations: if you do not need a
-program, use only field operators.
+In the previous pages, the **interface between the DSL and the rest of the
+application** were the operators, called directly from Python with the `out`
+argument. These field operators are enough for most computations: if you do not
+need a program, stick to direct field operator calls.
 
-In the previous pages, operators were called directly from Python with `out=`.
-A **program** groups several such calls into one function, decorated with
-`@gtx.program`. It gives the application a single function to call, for example
-for a time step of a model.
+A **program** groups several field operator calls into one function, decorated
+with `@gtx.program`. It gives the application a single function to call, for
+example for a time step of a model.
 
-Programs are the **interface between the DSL and the rest of the application**.
-Operators are pure functions returning new fields, but a program returns
-nothing and does not allocate the fields holding its results: the results of
-the operators it calls are written **in place** into fields received as
-arguments of the program. The memory of all these fields therefore belongs to
-the caller. This makes it
-possible to use GT4Py from frameworks and models which need to own the buffers
-of their data, instead of relying on GT4Py to allocate them.
+Inside the DSL, operators are pure functions returning new fields. At this
+interface, instead, nothing is returned and no field is allocated for the
+results: they are written **in place** into fields provided by the caller, the
+`out` of a direct call or the arguments of a program. The memory of all these
+fields therefore belongs to the caller. This makes it possible to use GT4Py
+from frameworks and models which need to own the buffers of their data, instead
+of relying on GT4Py to allocate them.
 
 A direct call to an operator is equivalent to a program with that single call.
+
+## Defining and calling a program
+
+The examples of this page use these two field operators:
 
 ```{code-cell} ipython3
 import numpy as np
@@ -53,8 +57,6 @@ def laplacian(phi: IJField) -> IJField:
 def diffuse(phi: IJField, laplacian_of_phi: IJField, coefficient: gtx.float64) -> IJField:
     return phi + coefficient * laplacian_of_phi
 ```
-
-## Defining and calling a program
 
 This program computes the Laplacian of a field into a work field, and then uses
 it to update the field:
@@ -81,6 +83,10 @@ def diffusion_step(
   dimension. The bounds can be expressions with the scalar parameters of the
   program, which avoids fixing the size of the grid in the code.
 - A program does not return anything.
+- The connectivities of unstructured meshes are passed once, in the
+  `offset_provider` argument of the call to the program, and not in the calls
+  to the operators inside it. `out`, on the other hand, is given in every
+  operator call inside the program.
 
 A program is called like a function:
 
@@ -101,7 +107,7 @@ print(new_phi.asnumpy())
 
 The warning is a reminder that no backend was selected, so the program was run
 in embedded execution. This is the right choice for developing and testing.
-[Running operators and programs](../python/running.md) shows how to select a backend. The
+[Executing GT4Py programs](../python/running.md) shows how to select a backend. The
 later cells of this page hide the warning.
 
 ```{important}

@@ -196,5 +196,5 @@ np.allclose(phi_cpu.asnumpy(), phi.asnumpy())
 ```
 
 The compiled program gives the same result as the embedded execution.
-[Running operators and programs](../python/running.md) explains the backends,
+[Executing GT4Py programs](../python/running.md) explains the backends,
 and how to compile in advance.
