@@ -17,9 +17,9 @@ Embedded execution runs the definition of a program on fields of any array libra
 
 ## Decision
 
-`EmbeddedJitBackend` (in `gt4py.next.backend`) is a `Backend` that does not compile: its `jit(entry, signature, static_params)` wraps the embedded entry point once. There are two instances, `runners.jax_jit.jax_jit` and `runners.torch_compile.torch_compile`.
+`EmbeddedJitBackend` (in `gt4py.next.backend`) is a `Backend` that does not compile: its `jit(entry_point)` returns the entry point run embedded inside the tracing compiler. There are two instances, `runners.jax_jit.jax_jit` and `runners.torch_compile.torch_compile`. What they share (the embedded execution, its signature and static parameters, the named collections) is in `runners.embedded_jit`; each backend only wraps it in its compiler.
 
-- **Dispatch**: an entry point with such a backend takes the embedded path and calls its cached jitted entry. Whether an entry point is compiled is an attribute set at creation, so the call of a compiled backend costs what it did. `.compile()` raises.
+- **Dispatch**: this is a stopgap until embedded execution is represented by backends, so the decorator has a single hook. An entry point with such a backend takes the embedded path and calls `backend.jit(entry_point)`, cached on the entry point. Whether an entry point is compiled is an attribute set at creation, so the call of a compiled backend costs what it did. `.compile()` raises.
 - **Arguments**: fields and connectivities (pytrees, ADR 0029) and scalars are traced. The `Dimension`s of the offset provider and the parameters in `static_params` are static; for a field operator called with `out=`, so is `domain`.
 - **Named collections** reach the backend as tuples and are rebuilt inside, as the compiled path extracts them: no user type is registered as a pytree.
 - **`out`**: under jax the jitted function returns the new buffers of the fields it assigned to, which the caller's fields get; a field passed twice and assigned to is rejected. Under torch the assignment is in place.
