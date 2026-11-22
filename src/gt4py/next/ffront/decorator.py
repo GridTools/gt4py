@@ -210,7 +210,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
             )  # To avoid confusion with tuple args
 
         if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+            offset_provider = [offset_provider]
 
         assert all(
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
