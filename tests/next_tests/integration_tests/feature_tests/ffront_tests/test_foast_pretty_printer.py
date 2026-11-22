@@ -70,17 +70,17 @@ def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
     @scan_operator(axis=KDim, forward=False, init=1)
-    def scan(inp: int32) -> int32:
+    def scan_op(inp: int32) -> int32:
         foo = inp
         return inp
 
     expected = textwrap.dedent(
         f"""
         @scan_operator(axis=KDim[vertical], forward=False, init=1)
-        def scan(inp: int32) -> int32:
+        def scan_op(inp: int32) -> int32:
           {ssa.unique_name("foo", 0)} = inp
           return inp
         """
     ).strip()
 
-    assert pretty_format(scan.foast_stage.foast_node) == expected
+    assert pretty_format(scan_op.foast_stage.foast_node) == expected
