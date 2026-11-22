@@ -169,7 +169,8 @@ def _e2v(device, table=E2V_TABLE):
 
 
 def _jitted(entry_point):
-    return entry_point._jit_entry.jitted
+    """The `jax.jit` object, under the call adapter of `embedded_jit` and the write-back of `jax_jit`."""
+    return entry_point._embedded_jit.__wrapped__.__wrapped__
 
 
 def test_out_assigned_in_the_callers_field(device, backend):
