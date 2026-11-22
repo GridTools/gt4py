@@ -35,6 +35,7 @@ from gt4py.next import (
 )
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
+    fbuiltins,
     field_operator_ast as foast,
     foast_to_gtir,
     past_process_args,
@@ -103,6 +104,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
 
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
+
+    @property
+    @abc.abstractmethod
+    def _all_closure_vars(self) -> dict[str, Any]: ...
 
     def with_backend(self, backend: next_backend.Backend | None) -> Self:
         return dataclasses.replace(self, backend=backend)
@@ -184,18 +189,26 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
                 static_domains=self.compilation_options.static_domains,
             )
 
-        if self.compilation_options.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
+        if offset_provider is None:
+            offset_provider = self.compilation_options.connectivities
+        if offset_provider is None:
+            if unstructured_offsets := [
+                name
+                for name, value in self._all_closure_vars.items()
+                if isinstance(value, fbuiltins.FieldOffset)
+                and not fbuiltins.is_cartesian_offset(value)
+            ]:
+                raise ValueError(
+                    f"Cannot compile '{self.definition_stage.definition.__name__}' without"
+                    f" 'offset_provider' or 'connectivities': it uses the unstructured offsets"
+                    f" {', '.join(repr(o) for o in unstructured_offsets)}."
+                )
+            offset_provider = {}
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists."
             )  # To avoid confusion with tuple args
 
-        offset_provider = (
-            self.compilation_options.connectivities if offset_provider is None else offset_provider
-        )
         if not isinstance(offset_provider, list):
             offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
 
@@ -508,6 +521,10 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         #  a `next_backend.Transforms`, but the backend type annotation does not reflect that.
         assert isinstance(self.backend.transforms, next_backend.Transforms)
         return self.backend.transforms
+
+    @functools.cached_property
+    def _all_closure_vars(self) -> dict[str, Any]:
+        return transform_utils._get_closure_vars_recursively(self.foast_stage.closure_vars)
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_stage.foast_node.type
