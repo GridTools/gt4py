@@ -1,0 +1,16 @@
+/* Shared by all the GT4Py documentation sites */
+
+/* The logo has dark text: keep it readable on the dark variant of the theme */
+body[data-theme="dark"] .sidebar-logo {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body:not([data-theme="light"]) .sidebar-logo {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 6px;
+  }
+}
