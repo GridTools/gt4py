@@ -139,11 +139,11 @@ class BindingCodeGenerator(TemplatedGenerator):
                 {{return_stmt}}
             }
             else {
-                auto start = std::chrono::high_resolution_clock::now();
+                auto _gt4py_start = std::chrono::high_resolution_clock::now();
                 {{body}}
                 {% if _this_node.on_device %}cudaDeviceSynchronize();{% endif %}
-                auto stop = std::chrono::high_resolution_clock::now();
-                exec_info->operator[]("run_cpp_duration") = std::chrono::duration<double>(stop - start).count();
+                auto _gt4py_stop = std::chrono::high_resolution_clock::now();
+                exec_info->operator[]("run_cpp_duration") = std::chrono::duration<double>(_gt4py_stop - _gt4py_start).count();
                 {{return_stmt}}
             }
         }\

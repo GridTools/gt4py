@@ -98,6 +98,44 @@ def test_domain_input_bounds(cartesian_case):
     cases.verify(cartesian_case, program_domain, inp, out, lower_i, upper_i, inout=out, ref=ref)
 
 
+def test_domain_bounds_named_start_stop(cartesian_case):
+    @gtx.field_operator
+    def fieldop_domain(a: cases.IField) -> cases.IField:
+        return a + a
+
+    @gtx.program
+    def program_domain(inp: cases.IField, out: cases.IField, start: int32, stop: int32):
+        fieldop_domain(inp, out=out, domain={IDim: (start, stop)})
+
+    start, stop = 1, cartesian_case.default_sizes[IDim] - 1
+    inp = cases.allocate(cartesian_case, program_domain, "inp")()
+    out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
+
+    ref = out.asnumpy().copy()
+    ref[start:stop] = inp.asnumpy()[start:stop] * 2
+
+    cases.verify(cartesian_case, program_domain, inp, out, start, stop, inout=out, ref=ref)
+
+
+def test_domain_bound_named_stop(cartesian_case):
+    @gtx.field_operator
+    def fieldop_domain(a: cases.IField) -> cases.IField:
+        return a + a
+
+    @gtx.program
+    def program_domain(inp: cases.IField, out: cases.IField, stop: int32):
+        fieldop_domain(inp, out=out, domain={IDim: (0, stop)})
+
+    stop = cartesian_case.default_sizes[IDim] - 1
+    inp = cases.allocate(cartesian_case, program_domain, "inp")()
+    out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
+
+    ref = out.asnumpy().copy()
+    ref[:stop] = inp.asnumpy()[:stop] * 2
+
+    cases.verify(cartesian_case, program_domain, inp, out, stop, inout=out, ref=ref)
+
+
 def test_domain_input_bounds_1(cartesian_case):
     lower_i = 1
     upper_i = cartesian_case.default_sizes[IDim]
