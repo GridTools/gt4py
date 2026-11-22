@@ -74,7 +74,7 @@ def translate(program, enabled, **extra_options):
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
         auto_optimize_args={"fuse_scan_inputs": enabled, **extra_options},
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
     )
@@ -226,7 +226,7 @@ def test_compiled_staggered_scan_fusion(tmp_path, input_dim, forward, mixed, lev
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=True,
         auto_optimize_args={"fuse_scan_inputs": True},
-        async_sdfg_call=False,
+        sync_sdfg_call=True,
         unstructured_horizontal_has_unit_stride=False,
         use_metrics=False,
     ).generate_sdfg(program, offset_provider={}, column_axis=scan_dim)
@@ -585,7 +585,7 @@ def test_invalid_scan_fusion_scope_is_rejected():
             device_type=core_defs.DeviceType.CPU,
             auto_optimize=True,
             auto_optimize_args={"fuse_scan_inputs": True, "scan_fusion_scope": "field_operators"},
-            async_sdfg_call=False,
+            sync_sdfg_call=True,
             unstructured_horizontal_has_unit_stride=False,
             use_metrics=False,
         )
