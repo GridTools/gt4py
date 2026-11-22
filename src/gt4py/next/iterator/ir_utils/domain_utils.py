@@ -30,6 +30,12 @@ _NON_CONTIGUOUS_DOMAIN_WARNING_THRESHOLD: float = 1 / 4
 _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
 
 
+def _fold_index_expr(expr: itir.Expr) -> itir.Expr:
+    # Range bounds are integers, which allows folding repeated operands of nested
+    # `minimum`/`maximum` calls. Without it, bounds grow with every union of ranges.
+    return ConstantFolding.apply(expr, enabled_transformations=ConstantFolding.Transformation.all())  # type: ignore[return-value]  # always an itir.Expr
+
+
 @dataclasses.dataclass(frozen=True)
 class SymbolicRange:
     start: itir.Expr
@@ -45,8 +51,8 @@ class SymbolicRange:
 
     def empty(self) -> bool | None:
         # constant fold so that translated bounds like `0 + 1` are recognized as literals
-        start = ConstantFolding.apply(self.start)
-        stop = ConstantFolding.apply(self.stop)
+        start = _fold_index_expr(self.start)
+        stop = _fold_index_expr(self.stop)
         if isinstance(start, itir.Literal) and isinstance(stop, itir.Literal):
             return int(start.value) >= int(stop.value)
         elif start == stop:
@@ -261,7 +267,7 @@ def _reduce_ranges(
     stop = functools.reduce(stop_reduce_op, [range_.stop for range_ in ranges])
     # constant fold to keep the tree small and so translated bounds (e.g. `0 + 1`) collapse to a
     # literal (we deliberately do not fold in `translate`)
-    start, stop = ConstantFolding.apply(start), ConstantFolding.apply(stop)  # type: ignore[assignment]  # always an itir.Expr
+    start, stop = _fold_index_expr(start), _fold_index_expr(stop)
     return SymbolicRange(start, stop)
 
 
