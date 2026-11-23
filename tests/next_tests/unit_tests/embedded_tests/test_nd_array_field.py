@@ -356,6 +356,41 @@ def test_as_scalar(nd_array_implementation):
     assert isinstance(result, np.float32)
 
 
+def test_0d_array_operand(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0], nd_array_implementation)
+
+    result = field * asarray(nd_array_implementation, 3.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(result.asnumpy(), [3.0, 6.0])
+    assert result.asnumpy().dtype == np.float32
+
+
+def test_setitem_0d_array(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    field[field.domain.slice_at[1:2]] = asarray(nd_array_implementation, 7.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(field.asnumpy(), [1.0, 7.0, 3.0])
+
+
+def test_math_builtins_on_0d_arrays(nd_array_implementation):
+    four = asarray(nd_array_implementation, 4.0, dtype=np.float32)
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    assert float(fbuiltins.sqrt(four)) == 2.0
+    assert float(fbuiltins.maximum(four, 5.0)) == 5.0
+    as_float = fbuiltins.astype(two, np.float64)
+    assert float(as_float) == 2.0
+    assert as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+
+
+def test_math_builtins_reject_nd_arrays(nd_array_implementation):
+    values = asarray(nd_array_implementation, [1.0, 4.0], dtype=np.float32)
+
+    with pytest.raises(AssertionError):
+        fbuiltins.sqrt(values)
+
+
 def product_nd_array_implementation_params():
     for xp1 in ND_ARRAY_IMPLEMENTATIONS:
         for xp2 in ND_ARRAY_IMPLEMENTATIONS:

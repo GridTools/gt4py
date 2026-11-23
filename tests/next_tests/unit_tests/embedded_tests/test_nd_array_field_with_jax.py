@@ -665,6 +665,18 @@ def test_jax_jit_traced_scalar_operands():
 
 
 @pytest.mark.requires_jax
+def test_jax_jit_traced_python_scalar_keeps_the_field_dtype():
+    import jax
+
+    field = common._field(jax.numpy.arange(3.0, dtype=np.float32), domain=common.domain({D0: 3}))
+
+    result = jax.jit(lambda f, a: a * f)(field, 2.0)
+
+    assert result.asnumpy().dtype == np.float32
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 2.0, 4.0])
+
+
+@pytest.mark.requires_jax
 def test_jax_jit_setitem_traced_scalar():
     import jax
 
