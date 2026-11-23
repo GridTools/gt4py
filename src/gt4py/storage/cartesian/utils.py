@@ -185,7 +185,8 @@ def asarray(
     if device == "cpu":
         xp = np
     elif device == "gpu":
-        assert cp is not None
+        if cp is None:
+            raise RuntimeError("CuPy is required for GPU arrays")
         xp = cp
     elif not device:
         if hasattr(array, "__dlpack_device__"):

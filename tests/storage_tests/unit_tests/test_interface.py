@@ -22,6 +22,13 @@ from gt4py.cartesian import gtscript
 from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 
+def test_asarray_requires_cupy_when_gpu_is_requested(monkeypatch):
+    monkeypatch.setattr("gt4py.storage.cartesian.utils.cp", None)
+
+    with pytest.raises(RuntimeError, match="CuPy is required for GPU arrays"):
+        gt4py.storage.cartesian.utils.asarray(np.zeros((1,)), device="gpu")
+
+
 CPU_LAYOUTS = [
     name
     for name, info in gt4py.storage.cartesian.layout_registry.REGISTRY.items()
