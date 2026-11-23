@@ -356,6 +356,78 @@ def test_as_scalar(nd_array_implementation):
     assert isinstance(result, np.float32)
 
 
+def test_0d_array_operand(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0], nd_array_implementation)
+
+    result = field * asarray(nd_array_implementation, 3.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(result.asnumpy(), [3.0, 6.0])
+    assert result.asnumpy().dtype == np.float32
+
+
+def test_setitem_0d_array(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    field[field.domain.slice_at[1:2]] = asarray(nd_array_implementation, 7.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(field.asnumpy(), [1.0, 7.0, 3.0])
+
+
+def test_math_builtins_on_0d_arrays(nd_array_implementation):
+    four = asarray(nd_array_implementation, 4.0, dtype=np.float32)
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    xp = array_ops.of(four).xp
+    for result, expected in ((fbuiltins.sqrt(four), 2.0), (fbuiltins.maximum(four, 5.0), 5.0)):
+        assert result.ndim == 0 and array_ops.of(result).xp is xp
+        assert result.dtype == array_ops.of(four).dtype(np.float32)
+        assert float(result) == expected
+    as_float = fbuiltins.astype(two, np.float64)
+    assert as_float.ndim == 0 and array_ops.of(as_float).xp is xp
+    assert as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert float(as_float) == 2.0
+
+
+def test_broadcast_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2.0, dtype=np.float32)
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    broadcasted = fbuiltins.broadcast(two, (D0,))
+
+    # as for a scalar: the value itself, which broadcasts in the operations it takes part in
+    assert broadcasted is two
+    np.testing.assert_array_equal((field * broadcasted).asnumpy(), [2.0, 4.0, 6.0])
+
+
+def test_where_with_0d_array_branches(nd_array_implementation):
+    mask = common._field(
+        asarray(nd_array_implementation, [True, False], dtype=np.bool_),
+        domain=common.domain({D0: 2}),
+    )
+    one = asarray(nd_array_implementation, 1.0, dtype=np.float32)
+
+    first, second = fbuiltins.where(mask, (one, 2.0), (3.0, one))
+
+    np.testing.assert_array_equal(first.asnumpy(), [1.0, 3.0])
+    np.testing.assert_array_equal(second.asnumpy(), [2.0, 1.0])
+
+
+def test_astype_tuple_with_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    as_float, scalar = fbuiltins.astype((two, np.int32(3)), np.float64)
+
+    assert as_float.ndim == 0 and as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert scalar == 3.0 and isinstance(scalar, np.float64)
+
+
+def test_math_builtins_reject_nd_arrays(nd_array_implementation):
+    values = asarray(nd_array_implementation, [1.0, 4.0], dtype=np.float32)
+
+    with pytest.raises(AssertionError):
+        fbuiltins.sqrt(values)
+
+
 def product_nd_array_implementation_params():
     for xp1 in ND_ARRAY_IMPLEMENTATIONS:
         for xp2 in ND_ARRAY_IMPLEMENTATIONS:

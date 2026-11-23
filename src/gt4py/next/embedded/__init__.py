@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from . import array_libraries, array_ops, common, context, exceptions, nd_array_field
+# not `nd_array_field` and `array_libraries`: they import `ffront.fbuiltins`, which imports
+# this package
+from . import array_ops, common, context, exceptions
 
 
-__all__ = ["array_libraries", "array_ops", "common", "context", "exceptions", "nd_array_field"]
+__all__ = ["array_ops", "common", "context", "exceptions"]

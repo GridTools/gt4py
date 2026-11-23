@@ -38,9 +38,10 @@ from .common import (
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
-from .embedded import (  # Just for registering field implementations
-    nd_array_field as _nd_array_field,
-)
+
+# for their side effects: the field implementation, and the `ArrayOps` and pytrees of the
+# installed array libraries
+from .embedded import array_libraries as _array_libraries, nd_array_field as _nd_array_field
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import (

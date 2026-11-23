@@ -381,3 +381,71 @@ def test_torch_compile_premap_with_inductor(device):
         compiled(field, conn).asnumpy(), _premap_and_reduce(field, conn).asnumpy()
     )
     assert len(graphs) == 1
+
+
+def test_torch_compile_traced_scalar_operands(device):
+    import torch
+
+    field = _field(np.arange(3.0), common.domain({D0: 3}), device)
+
+    def compute(f, a, n):
+        return fbuiltins.sqrt(a) * f + fbuiltins.maximum(a, 5.0) + fbuiltins.astype(n, np.float64)
+
+    compiled, _ = _compile(compute)
+    a = torch.tensor(4.0, dtype=torch.float64)
+    n = torch.tensor(2, dtype=torch.int32)
+
+    np.testing.assert_allclose(compiled(field, a, n).asnumpy(), compute(field, a, n).asnumpy())
+
+
+def test_torch_compile_as_scalar_of_traced_field(device):
+    field = _field(np.arange(3.0), common.domain({D0: 3}), device)
+
+    def element_times_field(f):
+        return f[NamedIndex(D0, 2)].as_scalar() * f
+
+    compiled, _ = _compile(element_times_field)
+
+    np.testing.assert_array_equal(compiled(field).asnumpy(), [0.0, 2.0, 4.0])
+
+
+def test_torch_compile_setitem_traced_scalar(device):
+    import torch
+
+    field = _field(np.zeros(3), common.domain({D0: 3}), device)
+
+    def fill(f, a):
+        f[common.domain({D0: (1, 2)})] = a
+        return f
+
+    compiled, _ = _compile(fill)
+
+    np.testing.assert_array_equal(
+        compiled(field, torch.tensor(7.0, dtype=torch.float64)).asnumpy(), [0.0, 7.0, 0.0]
+    )
+
+
+def test_torch_compile_scan_operator(device):
+    import torch
+
+    import gt4py.next as gtx
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+
+    @gtx.scan_operator(axis=K, forward=True, init=0.0)
+    def scaled_cumsum(state: gtx.float64, x: gtx.float64, a: gtx.float64) -> gtx.float64:
+        return state + a * x
+
+    def run(x, a):
+        out = common._field(
+            torch.zeros(4, dtype=torch.float64, device=device), domain=common.domain({K: 4})
+        )
+        scaled_cumsum(x, a, out=out, offset_provider={})
+        return out
+
+    x = _field(np.arange(1.0, 5.0), common.domain({K: 4}), device)
+    a = torch.tensor(2.0, dtype=torch.float64)
+    compiled, _ = _compile(run)
+
+    np.testing.assert_array_equal(compiled(x, a).asnumpy(), run(x, a).asnumpy())
+    np.testing.assert_array_equal(compiled(x, a).asnumpy(), [2.0, 6.0, 12.0, 20.0])

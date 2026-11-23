@@ -69,7 +69,7 @@ def _make_builtin(
                 arrays.append(array)
                 transformed.append(array)
             else:
-                assert core_defs.is_scalar_type(f)
+                assert array_ops.is_scalar_like(f)
                 transformed.append(f)
         if len(arrays) < len(transformed):
             transformed = [ops.operand(v, arrays[0]) for v in transformed]
@@ -193,8 +193,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             raise ValueError(
                 f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
             )
-        # note: `.item()` will return a Python type, therefore we use indexing with an empty tuple
-        return self.asnumpy()[()]  # type: ignore[return-value] # should be ensured by the 0-d check
+        return array_ops.of(self._ndarray).scalar(self._ndarray)
 
     def premap(
         self: NdArrayField,
@@ -349,7 +348,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
             assigned = value.ndarray
-        elif isinstance(value, bool | int | float | np.generic):
+        elif array_ops.is_scalar_like(value):
             assigned = value
         else:
             raise TypeError(

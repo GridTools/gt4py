@@ -121,6 +121,10 @@ class TorchOps(array_ops.ArrayOps):
             return _gamma
         return super()._elementwise_function(name)
 
+    def scalar(self, array: core_defs.NDArrayObject) -> Any:
+        # an element in a trace stays a 0-d tensor: its value is only known at run time
+        return super().scalar(array) if _is_concrete(array) else array
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return array.detach().cpu().numpy()  # type: ignore[attr-defined] # `NDArrayObject` typing is not complete
 
