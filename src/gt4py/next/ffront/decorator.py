@@ -29,11 +29,10 @@ from gt4py.next import (
     backend as next_backend,
     common,
     custom_layout_allocators as next_allocators,
-    embedded as next_embedded,
     errors,
     utils,
 )
-from gt4py.next.embedded import operators as embedded_operators
+from gt4py.next.embedded import context as embedded_context, operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     foast_to_gtir,
@@ -396,7 +395,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     stacklevel=2,
                 )
 
-                with next_embedded.context.update(offset_provider=offset_provider):
+                with embedded_context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
 
@@ -558,7 +557,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
-        if not next_embedded.context.within_valid_context() and self._is_compiled:
+        if not embedded_context.within_valid_context() and self._is_compiled:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
@@ -580,7 +579,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
                 else enable_jit,
             )
         else:
-            if not next_embedded.context.within_valid_context():
+            if not embedded_context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
                 if isinstance(self.backend, next_backend.EmbeddedJitBackend):
