@@ -304,9 +304,15 @@ def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
 
 
 @pytest.mark.uses_unstructured_shift
-def test_compile_unstructured_without_offset_provider_errors(compile_testee_unstructured):
-    with pytest.raises(ValueError, match="without 'offset_provider'.*'V2E'"):
+def test_compile_unstructured_without_offset_provider_errors(
+    unstructured_case, compile_testee_unstructured
+):
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+
+    # depending on the compilation runner the error is raised on compile or on the first call
+    with pytest.raises(KeyError, match="'V2E' not found in offset provider"):
         compile_testee_unstructured.compile()
+        compile_testee_unstructured(*args, **kwargs)
 
 
 # override mesh descriptor to contain only the simple mesh
