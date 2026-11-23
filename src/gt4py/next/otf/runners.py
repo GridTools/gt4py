@@ -17,11 +17,9 @@ import multiprocessing
 import os
 import pathlib
 import pickle
-import signal
 import sys
 import threading
 import warnings
-import weakref
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Protocol, runtime_checkable
 
@@ -118,10 +116,6 @@ def _detect_cuda_archs() -> str | None:
     return compilation_common.get_device_arch()
 
 
-def _ignore_sigint(signum: int, frame: Any) -> None:
-    """No-op ``SIGINT`` handler of the worker processes."""
-
-
 def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | None) -> None:
     """Prepare a worker process for building without touching the parent's GPU.
 
@@ -141,18 +135,7 @@ def _pool_worker_initializer(shared_session_cache_dir: str, cuda_archs: str | No
     at backend construction, no detection inside the build). The architecture
     then travels to workers as part of the pickled executor and this
     ``CUDAARCHS`` export becomes obsolete.
-
-    Workers also stop reacting to ``SIGINT``: terminal Ctrl-C and the interrupt /
-    shutdown of a Jupyter kernel are delivered to the whole process group, which
-    would otherwise print a ``KeyboardInterrupt`` traceback from every idle worker
-    and kill them (leaving the pool broken for the rest of the session). The main
-    process stays in charge: it shuts the pool down at exit. A no-op handler is
-    installed rather than ``SIG_IGN`` because the latter would be inherited by the
-    compiler processes (cmake, ninja, ...) started by the worker, which then
-    could not be interrupted anymore, whereas a handled signal is reset to its
-    default disposition in a child process.
     """
-    signal.signal(signal.SIGINT, _ignore_sigint)
     _cache._session_cache_dir_path = pathlib.Path(shared_session_cache_dir)
     if cuda_archs is not None:
         os.environ["CUDAARCHS"] = cuda_archs
@@ -199,30 +182,6 @@ def _run_compilation_task_in_worker(
     # the pool for all later tasks.
     compilable = pickle.loads(compilable_blob)
     return executor(compilable)
-
-
-def _cancel_pending_tasks_at_exit(pool: concurrent.futures.Executor) -> None:
-    """Drop the tasks still queued in `pool` when the interpreter exits.
-
-    Nobody can use the result of a compilation at that point, and without this
-    the interpreter would first run all the queued compilations (e.g. after a
-    Ctrl-C): `concurrent.futures` waits for them in an exit hook of `threading`,
-    which runs before any `atexit` callback, so the hook has to be registered
-    there too (hooks run in reverse order of registration).
-    """
-    register = getattr(threading, "_register_atexit", None)  # CPython implementation detail
-    if register is not None:
-        try:
-            # Weak reference: a runner dropped without `shutdown` must stay collectable.
-            pool_ref = weakref.ref(pool)
-
-            def cancel_pending() -> None:
-                if (alive_pool := pool_ref()) is not None:
-                    alive_pool.shutdown(wait=False, cancel_futures=True)
-
-            register(cancel_pending)
-        except RuntimeError:  # interpreter is already shutting down
-            pass
 
 
 _BROKEN_POOL_HINT = (
@@ -288,7 +247,6 @@ class ProcessRunner:
             initializer=_pool_worker_initializer,
             initargs=(shared_session_cache_dir, _detect_cuda_archs()),
         )
-        _cancel_pending_tasks_at_exit(self._pool)
 
     def submit(
         self, task: CompilationTask
