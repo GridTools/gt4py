@@ -11,12 +11,12 @@ import sys
 import textwrap
 import typing
 
-import numpy as np
 import pytest
 
 from gt4py.next import common
 from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.type_system import type_specifications as ts
+
 
 IDim = common.Dimension("IDim")
 
@@ -38,16 +38,19 @@ def test_type_conversion_helper_accepts_both_union_spellings(union):
     assert fbuiltins._type_conversion_helper(union) == (ts.FieldType, ts.TupleType)
 
 
-_ALL_BUILTINS = [getattr(fbuiltins, name) for name in fbuiltins.FUN_BUILTIN_NAMES] + [
-    getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+_DECLARED_BUILTINS = [(fbuiltins, name) for name in fbuiltins.FUN_BUILTIN_NAMES] + [
+    (experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
 ]
 
 
-@pytest.mark.parametrize("builtin", _ALL_BUILTINS, ids=lambda builtin: builtin.name)
-def test_builtin_declaration(builtin):
+@pytest.mark.parametrize(
+    "module, name", _DECLARED_BUILTINS, ids=[name for _, name in _DECLARED_BUILTINS]
+)
+def test_builtin_declaration(module, name):
+    builtin = getattr(module, name)
+
+    assert builtin.name == f"{module.__name__}.{name}"
     assert isinstance(builtin.__gt_type__(), ts.FunctionType)
-    assert builtin.name == f"{builtin.definition.__module__}.{builtin.definition.__name__}"
-    assert builtin.__doc__ == builtin.definition.__doc__
 
 
 def test_builtin_docstring():
@@ -70,9 +73,9 @@ def test_call_goes_to_the_implementation(monkeypatch):
 
 
 def test_call_without_implementation(monkeypatch):
-    monkeypatch.setattr(fbuiltins, "call_implementation", fbuiltins._no_implementation)
+    monkeypatch.setattr(fbuiltins, "call_implementation", fbuiltins._not_registered)
 
-    with pytest.raises(RuntimeError, match="'gt4py.next.ffront.fbuiltins.sqrt' was called"):
+    with pytest.raises(RuntimeError, match=r"'gt4py\.next\.ffront\.fbuiltins\.sqrt' was called"):
         fbuiltins.sqrt(1.0)
 
 

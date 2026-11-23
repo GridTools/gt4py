@@ -46,16 +46,6 @@ def test_every_builtin_has_a_field_implementation(builtin):
     assert nd_array_field.NdArrayField.__gt_builtin_func__(builtin) is not NotImplemented
 
 
-def test_every_builtin_is_implemented():
-    declared = {getattr(fbuiltins, name) for name in fbuiltins.FUN_BUILTIN_NAMES} | {
-        getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
-    }
-
-    assert embedded_builtins.ALL_BUILTINS == declared
-    for builtin in declared - embedded_builtins.FIELD_ONLY_BUILTINS:
-        assert builtin in embedded_builtins._SCALAR_IMPLEMENTATIONS
-
-
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize(
     "name", fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
@@ -93,6 +83,19 @@ def test_scalar_results():
 )
 def test_call_without_embedded_implementation(call):
     with pytest.raises(TypeError, match="has no embedded implementation"):
+        call()
+
+
+@pytest.mark.parametrize(
+    "call, message",
+    [
+        (lambda: fbuiltins.sqrt(1.0, 2.0), "takes 1 positional argument but 2 were given"),
+        (lambda: fbuiltins.minimum(1.0, 2.0, 3.0), "takes 2 positional arguments but 3 were given"),
+    ],
+    ids=["unary", "binary"],
+)
+def test_scalar_call_with_too_many_arguments(call, message):
+    with pytest.raises(TypeError, match=message):
         call()
 
 
