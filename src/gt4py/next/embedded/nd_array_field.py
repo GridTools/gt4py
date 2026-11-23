@@ -198,7 +198,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     def premap(
         self: NdArrayField,
-        *connectivities: common.Connectivity | fbuiltins.FieldOffset,
+        *connectivities: common.Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
     ) -> NdArrayField:
         """
         Rearrange the field content using the provided connectivities (index mappings).
@@ -273,11 +273,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
 
         for connectivity in connectivities:
-            # For neighbor reductions, a FieldOffset is passed instead of an actual Connectivity
-            if not isinstance(connectivity, common.Connectivity):
-                assert isinstance(connectivity, fbuiltins.FieldOffset)
-                connectivity = connectivity.as_connectivity_field()
-            assert isinstance(connectivity, common.Connectivity)
+            connectivity = _as_connectivity(connectivity)
 
             conn_fields.append(connectivity)
             codomains_counter[connectivity.codomain] += 1
@@ -320,8 +316,8 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     def __call__(
         self,
-        index_field: common.Connectivity | fbuiltins.FieldOffset,
-        *args: common.Connectivity | fbuiltins.FieldOffset,
+        index_field: common.Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
+        *args: common.Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
     ) -> common.Field:
         return functools.reduce(
             lambda field, current_index_field: field.premap(current_index_field),
@@ -793,6 +789,24 @@ def _inverse_image_box(
 
 
 # -- Specialized implementations for builtin operations on array fields --
+
+
+def _as_connectivity(
+    offset: common.Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
+) -> common.Connectivity:
+    """The connectivity an offset stands for, in the offset provider of the embedded context."""
+    if isinstance(offset, common.Connectivity):
+        return offset
+    field_offset = offset.offset if isinstance(offset, fbuiltins.FieldOffsetAtIndex) else offset
+    offset_definition = common.get_offset(
+        embedded_context.get_offset_provider(), field_offset.value
+    )
+    if isinstance(offset, fbuiltins.FieldOffsetAtIndex):
+        assert common.is_neighbor_table(offset_definition)
+        return offset_definition[common.NamedIndex(field_offset.target[-1], offset.index)]
+    if not isinstance(offset_definition, common.Connectivity):
+        raise NotImplementedError()
+    return offset_definition
 
 
 _builtin_implementations: dict[fbuiltins.BuiltInFunction, Callable[..., Any]] = {}
