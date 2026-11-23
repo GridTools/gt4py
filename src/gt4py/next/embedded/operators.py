@@ -163,7 +163,7 @@ def _tuple_assign_field(
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
-            assert array_ops.is_scalar_or_0d_array(source)
+            assert array_ops.is_scalar_like(source)
             target[domain] = source
 
     if not isinstance(domain, tuple):
@@ -181,20 +181,18 @@ def _intersect_scan_args(
 
 def _is_maybe_nested_in_tuple_of_scalars(
     value: object,
-) -> TypeIs[xtyping.MaybeNestedInTuple[core_defs.Scalar | core_defs.NDArrayObject]]:
+) -> TypeIs[xtyping.MaybeNestedInTuple[array_ops.ScalarLike]]:
     """Scalars or 0-d arrays, or (nested) tuples of them."""
-    return all(array_ops.is_scalar_or_0d_array(v) for v in utils.flatten_nested_tuple((value,)))
+    return all(array_ops.is_scalar_like(v) for v in utils.flatten_nested_tuple((value,)))
 
 
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
     target: xtyping.MaybeNestedInTuple[common.MutableField],
-    source: xtyping.MaybeNestedInTuple[core_defs.Scalar | core_defs.NDArrayObject],
+    source: xtyping.MaybeNestedInTuple[array_ops.ScalarLike],
 ) -> None:
     @utils.tree_map
-    def impl(
-        target: common.MutableField, source: core_defs.Scalar | core_defs.NDArrayObject
-    ) -> None:
+    def impl(target: common.MutableField, source: array_ops.ScalarLike) -> None:
         target[pos] = source
 
     impl(target, source)
@@ -202,12 +200,12 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
-) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
+    field: xtyping.MaybeNestedInTuple[common.Field | array_ops.ScalarLike],
+) -> array_ops.ScalarLike | tuple[array_ops.ScalarLike | tuple, ...]:
     @named_collections.tree_map_named_collection
-    def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
+    def impl(field: common.Field | array_ops.ScalarLike) -> array_ops.ScalarLike:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
-        assert array_ops.is_scalar_or_0d_array(res)
+        assert array_ops.is_scalar_like(res)
         return res
 
     return impl(field)  # type: ignore[return-value]

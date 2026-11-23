@@ -69,7 +69,7 @@ def _make_builtin(
                 arrays.append(array)
                 transformed.append(array)
             else:
-                assert array_ops.is_scalar_or_0d_array(f)
+                assert array_ops.is_scalar_like(f)
                 transformed.append(f)
         if len(arrays) < len(transformed):
             transformed = [ops.operand(v, arrays[0]) for v in transformed]
@@ -348,7 +348,7 @@ class NdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
             assigned = value.ndarray
-        elif array_ops.is_scalar_or_0d_array(value):
+        elif array_ops.is_scalar_like(value):
             assigned = value
         else:
             raise TypeError(

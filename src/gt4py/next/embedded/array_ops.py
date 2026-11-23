@@ -25,11 +25,12 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, TypeAlias
 
 import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import numpy as np
+from typing_extensions import TypeIs
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
@@ -284,7 +285,11 @@ def is_0d_array(value: Any) -> bool:
     )
 
 
-def is_scalar_or_0d_array(value: Any) -> bool:
+#: What embedded accepts where it accepts a scalar: a scalar, or a 0-d array (`is_scalar_like`)
+ScalarLike: TypeAlias = core_defs.Scalar | core_defs.NDArrayObject
+
+
+def is_scalar_like(value: Any) -> TypeIs[ScalarLike]:
     """A scalar, or a 0-d array."""
     return core_defs.is_scalar_type(value) or is_0d_array(value)
 
