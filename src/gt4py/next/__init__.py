@@ -39,6 +39,7 @@ from .common import (
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
 from .embedded import (  # Just for registering field implementations
+    array_libraries as _array_libraries,
     nd_array_field as _nd_array_field,
 )
 from .ffront import fbuiltins
