@@ -13,6 +13,7 @@ from types import UnionType
 from typing import (
     Any,
     Callable,
+    Concatenate,
     Final,
     Generic,
     NoReturn,
@@ -162,7 +163,7 @@ class BuiltInFunction(Generic[_R, _P]):
     """
     A builtin of the DSL, declared by `definition`: its signature types it, its docstring documents it.
 
-    Calling it with values runs it: `call_implementation` (embedded) implements every builtin.
+    Calling it runs `call_implementation`, which `gt4py.next.embedded` sets.
     """
 
     name: str = dataclasses.field(init=False)
@@ -199,16 +200,15 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-def _no_implementation(builtin: BuiltInFunction, /, *args: Any, **kwargs: Any) -> NoReturn:
+def _not_registered(builtin: BuiltInFunction, /, *args: Any, **kwargs: Any) -> NoReturn:
     raise RuntimeError(
         f"'{builtin.name}' was called with values, but no implementation of the builtins is"
         " registered: import 'gt4py.next.embedded'."
     )
 
 
-# dependency inversion (as `iterator.runtime.fendef_embedded`): calling a builtin with values is
-# embedded execution, which sets this
-call_implementation: Callable[..., Any] = _no_implementation
+# dependency inversion, as `iterator.runtime.fendef_embedded`: set by `gt4py.next.embedded` on import
+call_implementation: Callable[Concatenate[BuiltInFunction, ...], Any] = _not_registered
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])

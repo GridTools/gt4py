@@ -39,7 +39,7 @@ _ASTYPE: Final = cast(fbuiltins.BuiltInFunction, fbuiltins.astype)
 def _no_implementation(builtin: fbuiltins.BuiltInFunction, args: tuple[Any, ...]) -> NoReturn:
     raise TypeError(
         f"'{builtin.name}' has no embedded implementation for arguments of type"
-        f" {tuple(type(arg).__name__ for arg in args)}."
+        f" ({', '.join(type(arg).__name__ for arg in args)})."
     )
 
 
@@ -104,13 +104,28 @@ _TREE_MAPS: Final[dict[fbuiltins.BuiltInFunction, Callable[..., Any]]] = {
 # -- scalars --
 
 
-def _scalar(builtin: fbuiltins.BuiltInFunction, function: Callable[..., Any]) -> Callable[..., Any]:
-    """`function` for scalar arguments of `builtin`, which take no other values."""
+def _unary(
+    builtin: fbuiltins.BuiltInFunction, function: Callable[[Any], Any]
+) -> Callable[..., Any]:
+    """The implementation of `builtin` for a scalar: `function`."""
 
-    def implementation(*args: Any) -> Any:
-        if not all(core_defs.is_scalar_type(arg) for arg in args):
-            _no_implementation(builtin, args)
-        return function(*args)
+    def implementation(value: core_defs.Scalar, /) -> Any:
+        if not core_defs.is_scalar_type(value):
+            _no_implementation(builtin, (value,))
+        return function(value)
+
+    return implementation
+
+
+def _binary(
+    builtin: fbuiltins.BuiltInFunction, function: Callable[[Any, Any], Any]
+) -> Callable[..., Any]:
+    """The implementation of `builtin` for two scalars: `function`."""
+
+    def implementation(lhs: core_defs.Scalar, rhs: core_defs.Scalar, /) -> Any:
+        if not (core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs)):
+            _no_implementation(builtin, (lhs, rhs))
+        return function(lhs, rhs)
 
     return implementation
 
@@ -169,17 +184,17 @@ _SCALAR_IMPLEMENTATIONS: Final[dict[fbuiltins.BuiltInFunction, Callable[..., Any
     fbuiltins.broadcast: _broadcast,
     _ASTYPE: _astype,
     **{
-        getattr(fbuiltins, name): _scalar(getattr(fbuiltins, name), function)
+        getattr(fbuiltins, name): _unary(getattr(fbuiltins, name), function)
         for name, function in _UNARY_MATH_FUNCTIONS.items()
     },
     **{
-        getattr(fbuiltins, name): _scalar(getattr(fbuiltins, name), getattr(np, name))
+        getattr(fbuiltins, name): _binary(getattr(fbuiltins, name), getattr(np, name))
         for name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES
     },
 }
 
 #: The builtins that need a field argument: called with scalars only, they raise
-FIELD_ONLY_BUILTINS: Final = frozenset(
+_FIELD_ONLY_BUILTINS: Final = frozenset(
     {
         fbuiltins.neighbor_sum,
         fbuiltins.max_over,
@@ -195,14 +210,9 @@ ALL_BUILTINS: Final = frozenset(
     | {getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES}
 )
 
-assert _UNARY_MATH_FUNCTIONS.keys() == {
-    *fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES,
-    *fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES,
-    *fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES,
-}
 assert (
-    _SCALAR_IMPLEMENTATIONS.keys() | FIELD_ONLY_BUILTINS == ALL_BUILTINS
-    and not _SCALAR_IMPLEMENTATIONS.keys() & FIELD_ONLY_BUILTINS
+    _SCALAR_IMPLEMENTATIONS.keys() | _FIELD_ONLY_BUILTINS == ALL_BUILTINS
+    and not _SCALAR_IMPLEMENTATIONS.keys() & _FIELD_ONLY_BUILTINS
 ), "Every builtin needs an embedded implementation for scalars, or to be field-only."
 
 fbuiltins.call_implementation = _call
