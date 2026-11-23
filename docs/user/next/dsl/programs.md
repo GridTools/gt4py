@@ -14,24 +14,26 @@ kernelspec:
 
 # Programs
 
-In the previous pages, the **interface between the DSL and the rest of the
-application** were the operators, called directly from Python with the `out`
-argument. These field operators are enough for most computations: if you do not
-need a program, stick to direct field operator calls.
+In the previous pages, field operators were called directly from Python with
+the `out` argument. These direct calls are the simplest **interface between the
+DSL and the rest of the application**, and they are enough for most
+computations: if you do not need a program, stick to direct field operator
+calls.
 
 A **program** groups several field operator calls into one function, decorated
 with `@gtx.program`. It gives the application a single function to call, for
 example for a time step of a model.
 
-Inside the DSL, operators are pure functions returning new fields. At this
-interface, instead, nothing is returned and no field is allocated for the
-results: they are written **in place** into fields provided by the caller, the
-`out` of a direct call or the arguments of a program. The memory of all these
-fields therefore belongs to the caller. This makes it possible to use GT4Py
-from frameworks and models which need to own the buffers of their data, instead
-of relying on GT4Py to allocate them.
+Inside the DSL, operators are pure functions that return new fields. Calls from
+Python work differently: nothing is returned and no field is allocated for the
+results. The results are written **in place** into fields provided by the
+caller: the `out` of a direct call, or the arguments of a program. The memory
+of these fields therefore belongs to the caller. This makes it possible to use
+GT4Py from frameworks and models that need to own the buffers of their data,
+instead of relying on GT4Py to allocate them.
 
-A direct call to an operator is equivalent to a program with that single call.
+In the compiled backends, a direct call to an operator is equivalent to a
+program with that single call.
 
 ## Defining and calling a program
 
@@ -76,17 +78,16 @@ def diffusion_step(
 ```
 
 - The parameters are annotated like in field operators. Input and output fields
-  are all regular parameters.
+  are declared in the same way, as ordinary parameters.
 - Every statement is a call to a field operator or a scan operator, with the
   destination of its result in `out`.
-- `domain` gives the points to compute, as a range of indices for each
-  dimension. The bounds can be expressions with the scalar parameters of the
+- `domain` gives the points to compute, as a `(start, stop)` range of indices
+  for each dimension, with `stop` excluded. The bounds can be expressions with the scalar parameters of the
   program, which avoids fixing the size of the grid in the code.
 - A program does not return anything.
 - The connectivities of unstructured meshes are passed once, in the
-  `offset_provider` argument of the call to the program, and not in the calls
-  to the operators inside it. `out`, on the other hand, is given in every
-  operator call inside the program.
+  `offset_provider` argument of the call to the program, not in the calls to
+  the operators inside it. `out`, by contrast, is given in every operator call.
 
 A program is called like a function:
 
@@ -105,18 +106,20 @@ diffusion_step(phi, 0.125, nx, ny, work, new_phi)
 print(new_phi.asnumpy())
 ```
 
-The warning is a reminder that no backend was selected, so the program was run
-in embedded execution. This is the right choice for developing and testing.
-[Executing GT4Py programs](../python/running.md) shows how to select a backend. The
-later cells of this page hide the warning.
+The warning says that no backend was selected, so the program ran in embedded
+execution: plain Python, which is slow but easy to test and debug.
+[Executing GT4Py programs](../python/running.md) shows how to select a compiled
+backend. The later cells of this page hide the warning.
 
 ```{important}
-In the compiled backends, the scope of the optimizations is a single call to a
-field operator, made from a program or directly from Python, together with all
-the operators it uses. Separate calls in a program are not optimized together.
-To expose as much as possible to the optimizer, make every call span as much of
-the computation as possible. For example, avoid the intermediate field (`work`
-above) by writing a field operator which calls the other one, as in
+In the compiled backends, every call to a field operator is optimized together
+with all the operators it uses. Whether separate calls in a program are also
+optimized together depends on the backend: `gtfn` runs them one after the
+other, as separate computations, while the DaCe backends may merge consecutive
+calls when the data dependencies allow it. To expose as much as possible to the
+optimizer, make every call span as much of the computation as possible. For
+example, avoid the intermediate field (`work` above) by writing a field
+operator which calls the other one, as in
 `return phi + coefficient * laplacian(phi)`.
 ```
 
@@ -177,5 +180,3 @@ collection of the same type.
   ones for intermediate results.
 - Every call needs the `out` argument.
 - The type of `out` must be the type returned by the operator.
-- Offsets and connectivities are passed when calling the program, with the
-  `offset_provider` argument, and they are used by all the operators in it.

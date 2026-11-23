@@ -67,17 +67,21 @@ print(result.asnumpy())
 ```{note}
 The built-in functions and data types used in the body of an operator must be
 **imported by name**, as in `from gt4py.next import where, astype, float32`.
-Calling them through the module (`gtx.where(...)`) is not supported inside
+Calling them through the module (`gtx.where(...)`) is not yet supported inside
 operators. We are working on removing this restriction, which will go away
-soon. Types in annotations can already be written either way.
+soon. In type annotations, both forms already work.
 ```
 
 ## Types
 
 ### Fields
 
-The type of a field is `gtx.Field[gtx.Dims[...], dtype]`, with its dimensions
-and the data type of its values.
+A field is annotated as `gtx.Field[gtx.Dims[...], dtype]`: `Dims` lists the
+dimensions of the field and `dtype` is the data type of its values.
+
+The dimensions in `Dims[...]` must be written in a fixed order: horizontal
+dimensions first, then local, then vertical, and alphabetically by name within
+each kind. `Dims[J, I]` is an error: write `Dims[I, J]`.
 
 ```{tip}
 Give names to the field types used in a model, as done with `IJField` above.
@@ -88,26 +92,31 @@ Signatures become shorter and easier to read.
 
 Scalar parameters are annotated with one of the data types:
 
-| Kind            | Types                                                                      |
-| --------------- | -------------------------------------------------------------------------- |
-| Boolean         | `bool`                                                                     |
-| Signed integers | `gtx.int8`, `gtx.int16`, `gtx.int32`, `gtx.int64`, `int` (same as `int64`) |
-| Unsigned        | `gtx.uint8`, `gtx.uint16`, `gtx.uint32`, `gtx.uint64`                      |
-| Floating point  | `gtx.float32`, `gtx.float64`, `float` (same as `float64`)                  |
+| Kind              | Types                                                                      |
+| ----------------- | -------------------------------------------------------------------------- |
+| Boolean           | `bool`                                                                     |
+| Signed integers   | `gtx.int8`, `gtx.int16`, `gtx.int32`, `gtx.int64`, `int` (same as `int64`) |
+| Unsigned integers | `gtx.uint8`, `gtx.uint16`, `gtx.uint32`, `gtx.uint64`                      |
+| Floating point    | `gtx.float32`, `gtx.float64`, `float` (same as `float64`)                  |
 
-A number written in the code has type `float64` if it has a decimal point, and
-`int32` otherwise (`int64` if it does not fit).
+A floating-point literal (`2.0`, `1e-3`) has type `float64`. An integer literal
+has type `int32`, or `int64` if it does not fit in `int32`.
 
 ### No implicit conversions
 
-GT4Py never converts between data types on its own. Both sides of an operation
-must have the same data type, which means that:
+GT4Py never converts between data types implicitly: both operands of an
+operation must have the same data type. In practice:
 
 - With `float64` fields, write `2.0 * a`, not `2 * a`.
 - With `float32` fields, write `float32(2.0) * a`.
 - With `int64` values, including the parameters annotated with `int`, write
-  `int64(1)`.
-- To combine values of different types, convert one of them with `astype`.
+  integer literals as `int64(1)`.
+- To combine values of different types, convert one of them with `astype`. The
+  type names only accept literal numbers (`float32(2.0)`): to convert a
+  variable, use `astype(x, float32)`.
+
+The only exception is the exponent of `**`: `a ** 2` is valid for a `float64`
+field.
 
 ```{code-cell} ipython3
 from gt4py.next import astype, float32, float64
@@ -150,11 +159,9 @@ product(a, b, out=result)
 print(result.asnumpy())
 ```
 
-This example also shows that a field operator can **call other field
-operators**.
-
-A tuple can also be an argument. Its members are unpacked, or accessed with an
-index like `vector[0]`, and the operator is called with a regular Python tuple:
+Inside the operator, the members of a tuple argument are unpacked
+(`u, v = vector`) or accessed by index (`vector[0]`). The operator is called
+with a regular Python tuple:
 
 ```{code-cell} ipython3
 @gtx.field_operator
@@ -167,6 +174,10 @@ squared_norm((a, b), out=result)
 print(result.asnumpy())
 ```
 
+### Calling other operators
+
+A field operator can **call other field operators**, as `product` does above.
+
 ```{tip}
 Build large computations out of small operators. The compiled backends inline
 the operators called by another one and optimize the result as a whole.
@@ -178,20 +189,22 @@ the operators called by another one and optimize the result as a whole.
 | ---------- | ----------------------------------------------------------------------- |
 | Arithmetic | `+`, `-`, `*`, `/`, `//`, `%`, `**`, unary `-`                          |
 | Comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` (the result is a field of `bool`)      |
-| Logical    | `&` (and), <code>\|</code> (or), `^` (xor), `~` (not)                   |
+| Logical    | `&` (and), <code>\|</code> (or), `^` (xor), `~` (not, for fields)       |
 | Premap     | `field(I + 1)`, `field(E2C[0])` (see [Premap and neighbors](premap.md)) |
 
 Operations between fields and scalars apply to every point of the field. When
 the fields have different dimensions, the result has all of them: adding a field
 over `K` to a field over `I, J` gives a field over `I, J, K`.
 
-`%` is only defined for integers; use `fmod` for floating point values.
+`%` is only defined for integers; use `fmod` for floating-point values.
 
 ```{important}
-Use `&` and `|` to combine conditions, and put each comparison between
-parentheses: `(a > 0.0) & (a < 1.0)`. The Python keywords `and` and `or`, and
-chained comparisons like `0.0 < a < 1.0`, are not supported, not even for
-scalars. Use `~` instead of `not` for fields.
+Use `&` and `|` to combine conditions, and put each comparison in parentheses,
+because `&` and `|` bind more tightly than comparisons:
+`(a > 0.0) & (a < 1.0)`. The Python keywords `and` and `or` are not supported,
+not even for scalars, and neither are chained comparisons like
+`0.0 < a < 1.0`. To negate, use `~` for fields and `not` for a scalar `bool`,
+as in `if not enabled:`.
 ```
 
 ### Built-in functions
@@ -205,7 +218,7 @@ These are the built-in functions, all of them imported from `gt4py.next`:
 | `sinh`, `cosh`, `tanh`, `arcsinh`, `arccosh`, `arctanh`              | Hyperbolic functions                    |
 | `floor`, `ceil`, `trunc`                                             | Rounding                                |
 | `minimum`, `maximum`                                                 | Minimum or maximum of two values        |
-| `isfinite`, `isinf`, `isnan`                                         | Checks on floating point values         |
+| `isfinite`, `isinf`, `isnan`                                         | Checks on floating-point values         |
 | `where(mask, a, b)`                                                  | `a` where `mask` is true, `b` elsewhere |
 | `astype(value, dtype)`                                               | Conversion to another data type         |
 | `broadcast(value, (I, J))`                                           | Extension of a value to more dimensions |
@@ -224,10 +237,18 @@ clipped_root(a, 2.0, out=result)
 print(result.asnumpy())
 ```
 
+Apart from `abs`, `neg`, `minimum`, `maximum`, `fmod` and `power`, the
+mathematical functions need floating-point arguments. As with the operators,
+both arguments of `minimum`, `maximum`, `fmod` and `power` must have the same
+type: `maximum(a, 0.0)`, not `maximum(a, 0)`. The mask of `where` must be a
+field, and its branches can also be tuples or
+[named collections](#named-collections).
+
 ```{note}
-A few operations are not available yet in the `gtfn` backends: `//`, and
-`max_over` on integer fields, fail to compile, and `%` with negative operands
-follows the C++ sign convention instead of the Python one.
+The [compiled backends](../python/running.md#compiled-backends) differ from
+Python in a few operations. `%` with negative operands takes the sign of the
+dividend, as in C++ (`-5 % 3` is `-2`, not `1`). In the `gtfn` backends, `//`
+and `max_over` on integer fields fail to compile.
 ```
 
 ## Local variables and conditionals
@@ -236,7 +257,7 @@ Intermediate results can be stored in local variables, which helps to write
 long expressions in readable steps:
 
 ```{code-cell} ipython3
-from gt4py.next import abs  # shadows the Python built-in, which does not work on fields
+from gt4py.next import abs  # the Python built-in `abs` is not accepted inside operators
 
 
 @gtx.field_operator
@@ -254,9 +275,10 @@ There are two ways to choose between values, for two different situations:
 
 - **`where(mask, a, b)`** selects point by point with a field of `bool`. Both
   `a` and `b` are computed at all the points.
-- **`if` statements** and the `x if condition else y` expression take a
-  **scalar** `bool` condition, so they select the computation for the whole
-  field. They are meant for configuration options.
+- **`if` statements** and the `x if condition else y` expression need a
+  **scalar** `bool` condition, so they choose the computation for the whole
+  field. Use them for options which are the same at every point, such as a
+  flag.
 
 ```{code-cell} ipython3
 @gtx.field_operator
@@ -272,8 +294,9 @@ limit(a, 6.0, True, out=result)
 print(result.asnumpy())
 ```
 
-A variable assigned in the two branches of an `if` must have the same type in
-both of them.
+A variable first assigned inside an `if` must be assigned in both branches,
+with the same type. A variable assigned before the `if` can be reassigned in
+only one of them.
 
 ## Values from the enclosing scope
 
@@ -297,25 +320,29 @@ geopotential(a, out=result)
 print(result.asnumpy())
 ```
 
+A constant has the type of its value: `9.80665` is a `float64`. In a `float32`
+model, write `gravity=gtx.float32(9.80665)`.
+
 ```{important}
 The compiled backends **inline the values of the constants** in the generated
 code when the operator is compiled. This is why they have to be immutable: a
-plain global variable (`GRAVITY = 9.80665`) is only accepted in embedded
-execution, and the compiled backends reject it.
+plain global variable (`GRAVITY = 9.80665`) only works when the operator runs
+in Python without compiling, which is the default, and the compiled backends
+reject it.
 ```
 
 ```{tip}
-Use this only for true constants. A value which may change during the execution
-of the application must be passed as an argument.
+Use this only for true constants. A value that can change while the application
+runs must be passed as an argument.
 ```
 
 ## Named collections
 
-Models usually handle groups of related fields, like the components of the wind
-or the state of the atmosphere. Instead of long lists of arguments or anonymous
-tuples, operators can take and return **named collections**: a
-`typing.NamedTuple`, or a dataclass, whose members are fields, scalars or other
-collections.
+Models usually handle groups of related fields, such as the components of the
+wind or the state of the atmosphere. Instead of long lists of arguments or
+anonymous tuples, operators can take and return **named collections**. A named
+collection is a `typing.NamedTuple` or a dataclass whose members are fields,
+scalars or other collections.
 
 ```{code-cell} ipython3
 import typing
@@ -376,7 +403,10 @@ print(new_state.temperature.asnumpy())
 
 The rules are:
 
-- The class must be defined at module level, not inside a function.
+- The class must be defined at module level, not inside a function: the
+  compiled backends cannot find it otherwise.
+- Members are accessed by name (`wind.u`) or by unpacking (`u, v = wind`), not
+  by index.
 - Dataclasses are accepted when all their members are set by the constructor and
   none of them has a default value.
 
@@ -387,19 +417,21 @@ in the future.
 
 ## Unsupported Python, and what to use instead
 
-The body of an operator is not arbitrary Python. These are the most common
-constructs which are rejected, and what to use instead:
+The body of an operator is not arbitrary Python. The table lists the most common
+constructs that are rejected, and what to use instead:
 
-| Not supported                           | Use instead                                                         |
-| --------------------------------------- | ------------------------------------------------------------------- |
-| `for` and `while` loops                 | Field expressions, or a [scan operator](scan-operators.md)          |
-| `and`, `or`, chained comparisons        | `&`, <code>\|</code> with parentheses                               |
-| `if` with a field as condition          | `where` or [`concat_where`](premap.md#boundaries-with-concat-where) |
-| Indexing a field, `a[i, j]`             | Premap, `a(I + 1)`                                                  |
-| Mixing data types, `2 * a`              | Literals of the right type (`2.0 * a`) or `astype`                  |
-| Modifying an argument in place          | Return a new field                                                  |
-| `lambda`, comprehensions, `try`, `with` | A separate field operator, or regular Python code outside of it     |
-| Calling NumPy or other Python functions | The built-in functions, or compute the value before the call        |
+| Not supported                                                             | Use instead                                                                                              |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `for` and `while` loops                                                   | Field expressions, or a [scan operator](scan-operators.md)                                               |
+| `and`, `or`, chained comparisons                                          | `&`, <code>\|</code> with parentheses                                                                    |
+| `if` with a field as condition                                            | `where` or [`concat_where`](premap.md#boundaries-with-concat-where)                                      |
+| Indexing a field, `a[i, j]`                                               | Premap, `a(I + 1)`                                                                                       |
+| Mixing data types, `2 * a`                                                | Literals of the right type (`2.0 * a`) or `astype`                                                       |
+| `x += 1.0`, `a[0] = 1.0`, modifying an argument in place                  | `x = x + 1.0`, or return a new field                                                                     |
+| `lambda`, comprehensions, `try`, `with`                                   | A separate field operator, or regular Python code outside of it                                          |
+| Calling Python built-ins (`abs`, `min`, `max`), `math` or NumPy functions | The [built-in functions](#built-in-functions), or compute the value in Python and pass it as an argument |
 
-In all these cases the error is reported when the operator is defined, in most
-of them pointing to the offending line.
+All these constructs are rejected when the operator is defined, before anything
+runs. Not every message is descriptive: some of them point to the first line of
+the definition instead of the offending one, so check the code against this
+table when an error is hard to understand.
