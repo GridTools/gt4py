@@ -230,9 +230,9 @@ class ProcessRunner:
         if _is_importing_main_module_in_child_process():
             raise RuntimeError(
                 "A compiled GT4Py program was called while a child process (e.g. a GT4Py "
-                "compilation worker) was importing the main module of the script. Guard the entry point of the "
-                'script with `if __name__ == "__main__":` so that the calls only happen '
-                "in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
+                "compilation worker) was importing the main module of the script. Guard the "
+                'entry point of the script with `if __name__ == "__main__":` so that the '
+                "calls only happen in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
             )
         # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
         # this pool's own manager thread), CUDA contexts and MPI state, none of which
