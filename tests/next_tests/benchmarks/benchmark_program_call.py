@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from gt4py._core import definitions as core_defs
 from gt4py import next as gtx
 from gt4py.next import Dims, gtfn_cpu, gtfn_gpu, broadcast, typing as gtx_typing
 
@@ -36,21 +35,6 @@ except ImportError:
 GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
 
 BACKENDS: Final = GTFN_BACKENDS + DACE_BACKENDS
-BACKEND_PARAMS: Final = [
-    pytest.param(
-        b,
-        id=b.name,
-        marks=[
-            *([pytest.mark.uses_dace] if b in DACE_BACKENDS else []),
-            *(
-                [pytest.mark.requires_gpu]
-                if b.allocator.__gt_device_type__ != core_defs.DeviceType.CPU
-                else []
-            ),
-        ],
-    )
-    for b in BACKENDS
-]
 
 
 if TYPE_CHECKING:
@@ -61,7 +45,7 @@ Cell = gtx.Dimension("Cell")
 IDim = gtx.Dimension("IDim")
 
 
-@pytest.mark.parametrize("backend", BACKEND_PARAMS)
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_const_no_args_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -74,7 +58,7 @@ def benchmark_const_no_args_program(
         const(out=out)
 
     size = 1
-    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64, allocator=backend)
+    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
 
     # Initial compilation
     compiled_program = const_no_args.with_backend(backend)
@@ -83,7 +67,7 @@ def benchmark_const_no_args_program(
     benchmark(compiled_program, out=out_field)
 
 
-@pytest.mark.parametrize("backend", BACKEND_PARAMS)
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_copy_01_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -100,8 +84,8 @@ def benchmark_copy_01_arg_program(
         identity_fop(in_field, out=out)
 
     size = 1
-    in_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64, allocator=backend)
-    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64, allocator=backend)
+    in_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
+    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
 
     # Initial compilation
     compiled_program = copy_01_arg.with_backend(backend)
@@ -110,7 +94,7 @@ def benchmark_copy_01_arg_program(
     benchmark(compiled_program, in_field, out=out_field)
 
 
-@pytest.mark.parametrize("backend", BACKEND_PARAMS)
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_01_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -136,8 +120,8 @@ def benchmark_horizontal_copy_01_arg_program(
         )
 
     size = 1
-    input_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
+    input_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
     # Initial compilation
     compiled_program = horizontal_copy_01_arg_program.with_backend(backend)
@@ -157,7 +141,7 @@ def benchmark_horizontal_copy_01_arg_program(
     )
 
 
-@pytest.mark.parametrize("backend", BACKEND_PARAMS)
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_05_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -195,10 +179,8 @@ def benchmark_horizontal_copy_05_arg_program(
         )
 
     size = 1
-    input_fields = [
-        gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend) for _ in range(5)
-    ]
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
+    input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(5)]
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
     # Initial compilation
     compiled_program = horizontal_copy_05_arg_program.with_backend(backend)
@@ -218,7 +200,7 @@ def benchmark_horizontal_copy_05_arg_program(
     )
 
 
-@pytest.mark.parametrize("backend", BACKEND_PARAMS)
+@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
 def benchmark_horizontal_copy_25_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -316,10 +298,8 @@ def benchmark_horizontal_copy_25_arg_program(
         )
 
     size = 1
-    input_fields = [
-        gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend) for _ in range(25)
-    ]
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
+    input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(25)]
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
 
     # Initial compilation
     compiled_program = horizontal_copy_25_arg_program.with_backend(backend)
