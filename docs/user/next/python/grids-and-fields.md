@@ -129,15 +129,15 @@ GPU backends it is required, since the fields must be on the device.
 
 In [embedded execution](running.md#embedded-execution) the operations are
 evaluated by the array library holding the data of the fields. The library is
-selected by passing its array namespace as `allocator`. For NumPy, which is the
-default:
+selected by passing its array namespace as `allocator`. For NumPy:
 
 ```{code-cell} ipython3
 temperature_numpy = gtx.zeros(plane, allocator=np)
 ```
 
 Other libraries are used in the same way, for example CuPy to run on a GPU, or
-JAX:
+JAX. Both are optional dependencies, installed with extras of the package such
+as `pip install "gt4py[cuda12]"` or `pip install "gt4py[jax]"`:
 
 ```python
 import cupy as cp
@@ -256,14 +256,14 @@ print(e2c_connectivity.domain)
 ```
 
 - In the offset, `source` is the dimension of the field which is read (cells),
-  and `target` are the dimensions of the result: the edges, plus the local
+  and `target` lists the dimensions of the result: the edges, plus the local
   dimension numbering the neighbors. `E2C` therefore turns a field on cells into
-  a field on edges.
+  a field on edges with an extra local dimension.
 - In `as_connectivity`, the first argument gives the dimensions of the table and
   `codomain` is the dimension its entries point to.
 - The value marking the missing neighbors is the `skip_value` of the
   connectivity. `as_connectivity` uses `-1` when the table contains any `-1`,
-  and it can also be set with the `skip_value` argument.
+  and a different value can be given with the `skip_value` argument.
 
 The offset is only a symbol. This keeps the operators independent of the mesh:
 the same code runs on a different mesh by providing a different table.

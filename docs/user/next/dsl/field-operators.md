@@ -95,8 +95,8 @@ Scalar parameters are annotated with one of the data types:
 | Unsigned        | `gtx.uint8`, `gtx.uint16`, `gtx.uint32`, `gtx.uint64`                      |
 | Floating point  | `gtx.float32`, `gtx.float64`, `float` (same as `float64`)                  |
 
-A number written in the code has type `float64` if it has a decimal point, and
-`int32` otherwise (`int64` if it does not fit).
+A floating-point number written in the code (`2.0`, `1e-3`) has type `float64`.
+An integer has type `int32`, or `int64` if it does not fit.
 
 ### No implicit conversions
 
@@ -224,19 +224,13 @@ clipped_root(a, 2.0, out=result)
 print(result.asnumpy())
 ```
 
-```{note}
-A few operations are not available yet in the `gtfn` backends: `//`, and
-`max_over` on integer fields, fail to compile, and `%` with negative operands
-follows the C++ sign convention instead of the Python one.
-```
-
 ## Local variables and conditionals
 
 Intermediate results can be stored in local variables, which helps to write
 long expressions in readable steps:
 
 ```{code-cell} ipython3
-from gt4py.next import abs  # shadows the Python built-in, which does not work on fields
+from gt4py.next import abs  # the Python built-in `abs` is not accepted inside operators
 
 
 @gtx.field_operator
@@ -401,5 +395,5 @@ constructs which are rejected, and what to use instead:
 | `lambda`, comprehensions, `try`, `with` | A separate field operator, or regular Python code outside of it     |
 | Calling NumPy or other Python functions | The built-in functions, or compute the value before the call        |
 
-In all these cases the error is reported when the operator is defined, in most
-of them pointing to the offending line.
+In all these cases the error is reported when the operator is defined, before
+anything runs.

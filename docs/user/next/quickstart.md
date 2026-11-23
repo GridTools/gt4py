@@ -28,7 +28,7 @@ pip install gt4py
 ```
 
 This is all that is needed to run computations in Python. To compile them with
-the `gtfn_cpu` backend, used at the end of this page, a C++ compiler supporting
+the `gtfn_cpu` backend, used later on this page, a C++ compiler supporting
 C++17 must also be available on the system.
 
 ## Dimensions
@@ -74,10 +74,10 @@ the grid.
 
 Computations are written as **field operators**: Python functions decorated with
 `@gtx.field_operator`, which take fields and return fields. There are no loops
-and no indices inside. An expression describes the result at every grid point,
-and neighboring points are reached by calling a field with an offset along a
-dimension, an operation called _premap_: `phi(I + 1)` is the value of `phi` at
-the next point in the `I` direction.
+and no indices inside. An expression describes the result at every grid point.
+Neighboring points are reached by calling a field with an offset along a
+dimension, an operation called _premap_. For example, `phi(I + 1)` is the value
+of `phi` at the next point in the `I` direction.
 
 This is the five-point Laplacian (with unit grid spacing):
 
@@ -153,10 +153,10 @@ calls reuse the compiled version. Neither the definition of the operator nor the
 way it is called changes.
 
 ```{important}
-The compilation runs in separate processes by default. In a script, the code that calls a
-compiled operator must be inside a function called under
-`if __name__ == "__main__":`, as required by the Python `multiprocessing`
-module. Notebooks and interactive sessions do not need it.
+By default, GT4Py compiles in separate processes. In a script, the code that
+calls a compiled operator must therefore be under `if __name__ == "__main__":`,
+as required by the Python `multiprocessing` module. Notebooks and interactive
+sessions do not need it.
 ```
 
 ## Exploring fields in Python

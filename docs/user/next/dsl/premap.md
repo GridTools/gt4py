@@ -89,8 +89,8 @@ print((a(I + 1) - a(I - 1)).domain)
 ```
 
 `a(I + 1)` contains the same values as `a`, relabeled one position to the left:
-premap with a Cartesian offset moves the domain of a field, it does not make
-it smaller. An operation between fields is defined at the points which all its
+premap with a Cartesian offset moves the domain of a field, but it does not
+make it smaller. An operation between fields is defined at the points which all its
 operands have in common. Combining the results of different offsets therefore
 gives a result on a smaller domain than the one of the original field.
 
@@ -147,8 +147,9 @@ In embedded execution `concat_where` has some restrictions:
   `I < 1`, `K == 0` or `(I > 0) & (I < 5)`. Conditions with `|` or `!=`, or
   involving two dimensions, are not supported. Nest several `concat_where` calls
   instead.
-- A scalar is only accepted as the branch of a region bounded on both sides.
-  Otherwise use fields in both branches.
+- A scalar is only accepted as the first branch, and only if its region is
+  bounded on both sides, like `(I > 0) & (I < 5)`. Otherwise use fields in both
+  branches.
 ```
 
 ## Unstructured meshes

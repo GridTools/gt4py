@@ -61,8 +61,8 @@ Three ideas are behind this code:
   Neighbors are accessed by calling a field with an offset, `phi(I + 1)`, or
   through the connectivities of an unstructured mesh.
 - **Computations are operators on whole fields.** There are no loops and no
-  indices. The operators are written in a subset of Python, they can call each
-  other, and type errors are reported when they are defined.
+  indices. The operators are written in a subset of Python and can call each
+  other. Type errors are reported as soon as an operator is defined.
 - **The same code runs in different ways.** By default it is executed directly
   in Python, which is ideal for development and debugging. For production, a
   backend compiles it to optimized code for CPUs or GPUs.

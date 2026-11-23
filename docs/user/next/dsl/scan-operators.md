@@ -124,8 +124,8 @@ the field operator and pass it as one more argument, for example
 
 When several quantities are carried from level to level, the state needs to be
 a tuple or, better, a
-[named collection](field-operators.md#named-collections) of scalars, and so are
-`init` and the result:
+[named collection](field-operators.md#named-collections) of scalars. `init` and
+the returned value have the same structure:
 
 ```{code-cell} ipython3
 import typing

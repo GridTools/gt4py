@@ -14,10 +14,11 @@ kernelspec:
 
 # Programs
 
-In the previous pages, the **interface between the DSL and the rest of the
-application** were the operators, called directly from Python with the `out`
-argument. These field operators are enough for most computations: if you do not
-need a program, stick to direct field operator calls.
+In the previous pages, field operators were called directly from Python with
+the `out` argument. These direct calls are the simplest **interface between the
+DSL and the rest of the application**, and they are enough for most
+computations: if you do not need a program, stick to direct field operator
+calls.
 
 A **program** groups several field operator calls into one function, decorated
 with `@gtx.program`. It gives the application a single function to call, for
@@ -177,5 +178,3 @@ collection of the same type.
   ones for intermediate results.
 - Every call needs the `out` argument.
 - The type of `out` must be the type returned by the operator.
-- Offsets and connectivities are passed when calling the program, with the
-  `offset_provider` argument, and they are used by all the operators in it.

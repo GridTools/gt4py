@@ -77,7 +77,9 @@ scan operators are called with their arguments plus `out`.
 | `offset_provider` | All calls                 | Connectivities of the unstructured offsets used. Not needed in Cartesian grids |
 
 An operator called from Python does not return the result: it writes it into
-`out`. Scalar arguments accept Python and NumPy numbers.
+`out`. Scalar arguments must have the declared type: a Python `float` or `int`
+is accepted for a `float64` or `int32` parameter, and a NumPy scalar for its
+own type.
 
 ## Embedded execution
 
@@ -122,9 +124,9 @@ Outside operators the built-in functions can be called through the module, as in
 `gtx.where`.
 
 ```{note}
-Outside operators, expressions using the offsets of an unstructured mesh or
-scan operators need some additional setup, which is not documented yet. We are
-working on making this simpler.
+Outside operators, expressions which use the offsets of an unstructured mesh,
+or which call scan operators, need some additional setup that is not documented
+yet. We are working on making this simpler.
 ```
 
 ## Compiled backends
@@ -143,10 +145,10 @@ All of them are used in the same way. The examples of this page use
 `gtx.gtfn_cpu`, and they work with any other backend by replacing its name.
 
 ```{important}
-Compilation jobs run in separate processes by default. In a script, put the code calling
-compiled programs or operators inside a function called under
+By default, GT4Py compiles in separate processes. In a script, the code that
+calls compiled programs or operators must therefore be under
 `if __name__ == "__main__":`, as required by the Python `multiprocessing`
-module.
+module. Notebooks and interactive sessions do not need it.
 ```
 
 `with_backend` returns a copy of a program or operator bound to a backend. The
@@ -160,7 +162,9 @@ The backend can also be fixed in the definition, with
 `@gtx.program(backend=gtx.gtfn_cpu)` or
 `@gtx.field_operator(backend=gtx.gtfn_cpu)`.
 
-The fields are [allocated for the backend](grids-and-fields.md#allocating-for-a-backend):
+The fields are also
+[allocated for the backend](grids-and-fields.md#allocating-for-a-backend) which
+runs the program:
 
 ```{code-cell} ipython3
 phi_cpu = gtx.as_field(domain, phi.asnumpy(), allocator=gtx.gtfn_cpu)
@@ -188,10 +192,11 @@ print("same result:", np.allclose(new_phi_cpu.asnumpy(), reference.asnumpy()))
 ```
 
 ```{tip}
-Compiled programs warn when Python runs with assertions enabled, which is the
-default, because the checks done by GT4Py in every call take some time. For
-production runs, start Python with the `-O` option or set the `PYTHONOPTIMIZE=1`
-environment variable. These warnings are hidden in this page.
+When Python runs with assertions enabled, which is the default, GT4Py checks
+the arguments of every call, which takes some time, and it warns about it when
+compiling a program. For production runs, start Python with the `-O` option or
+set the `PYTHONOPTIMIZE=1` environment variable. The warning is hidden in this
+page.
 ```
 
 The same program with the DaCe backend:
@@ -218,7 +223,7 @@ variables control it:
 | Variable                     | Values                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------ |
 | `GT4PY_BUILD_CACHE_LIFETIME` | `session` (default): the cache is deleted when Python exits. `persistent`: it is kept and reused |
-| `GT4PY_BUILD_CACHE_DIR`      | Folder containing the persistent cache (`.gt4py_cache`). By default, the current folder          |
+| `GT4PY_BUILD_CACHE_DIR`      | Folder where the persistent cache (`.gt4py_cache`) is created. By default, the current folder    |
 
 ```{tip}
 With the default settings every run of an application compiles its programs
@@ -238,12 +243,13 @@ tags: [remove-stderr]
 ---
 precompiled_step = diffusion_step.with_backend(gtx.gtfn_cpu)
 
-precompiled_step.compile(offset_provider={})
+precompiled_step.compile()
 gtx.wait_for_compilation()
 ```
 
-- `compile` needs the offset provider that will be used in the calls, because
-  the generated code depends on the connectivities.
+- For programs on unstructured meshes, `compile` needs the offset provider that
+  will be used in the calls (`compile(offset_provider=...)`), because the
+  generated code depends on the connectivities.
 - The compilation runs in the background and `compile` returns immediately, so
   several programs can be compiled in parallel. A program which is called
   before its compilation has finished simply waits for it at that point.
@@ -260,20 +266,15 @@ run, like `limited` in the example. Declaring them as **static** lets the
 backend generate a specialized version of the program for each value, where
 the `if` on `limited` is already decided when compiling.
 
-`with_static_params` declares the static parameters of a program, and `compile`
-receives the list of values to prepare for each of them:
+`compile` receives, for each static parameter, the list of values to prepare:
 
 ```{code-cell} ipython3
 ---
 tags: [remove-stderr]
 ---
-static_step = (
-    diffusion_step.with_backend(gtx.gtfn_cpu)
-    .with_static_params("limited")
-    .with_compilation_options(enable_jit=False)
-)
+static_step = diffusion_step.with_backend(gtx.gtfn_cpu).with_compilation_options(enable_jit=False)
 
-static_step.compile(limited=[True, False], offset_provider={})
+static_step.compile(limited=[True, False]);
 ```
 
 Two variants are compiled. The program is called as usual, and the value of the
@@ -292,8 +293,9 @@ of a run. Set the options before calling `compile`, because
 `with_compilation_options` returns a new program which does not share the
 variants already compiled.
 
-Static parameters can also be declared in the decorator, which is the way to do
-it for field operators:
+A program or operator which is compiled at its first call, without `compile`,
+needs its static parameters declared beforehand, with
+`with_static_params("limited")` for a program, or in the decorator:
 
 ```python
 @gtx.field_operator(static_params=["limited"])
@@ -307,11 +309,10 @@ options. Every combination of values is a different compilation.
 
 ## Static domains
 
-By default the compiled code works for fields of any size, because the domains
-of the fields are only known when the program is called. With the
-`static_domains` option, the domains of the field arguments are fixed at
-compile time, like the values of static parameters, and the backend uses them
-to generate better code.
+By default the compiled code works for fields of any size: it reads their
+domains when the program is called. With the `static_domains` option, the
+domains of the field arguments are fixed at compile time, like the values of
+static parameters, and the backend uses them to generate better code.
 
 ```{code-cell} ipython3
 ---
@@ -328,7 +329,6 @@ print("same result:", np.allclose(new_phi_cpu.asnumpy(), reference.asnumpy()))
 
 - The program is compiled at its first call, for the domains of the fields it
   receives. A call with fields over different domains compiles a new variant.
-  `compile` does not support programs with static domains yet.
 - The option can also be given in the decorator, as in
   `@gtx.program(static_domains=True)`.
 
@@ -340,7 +340,7 @@ which are only known at run time are not as good.
 ## Running on GPUs
 
 `gtx.dace_gpu` and `gtx.gtfn_gpu` generate code for GPUs. They need CuPy, installed with one of the
-extras of the package (for example `pip install gt4py[cuda12]`), and the
+extras of the package (for example `pip install "gt4py[cuda12]"`), and the
 compiler toolchain of the GPU vendor on the system. The fields must be on the
 device, which is done by passing the backend as allocator. Nothing else changes:
 
