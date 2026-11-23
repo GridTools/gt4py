@@ -779,9 +779,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def as_scalar(self) -> core_defs.ScalarT: ...
 
     @abc.abstractmethod
-    def premap(
-        self, index_field: Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex
-    ) -> Field: ...
+    def premap(self, index_field: Connectivity | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
@@ -789,8 +787,8 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __call__(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
-        *args: Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
     ) -> Field: ...
 
     @abc.abstractmethod
@@ -1235,8 +1233,8 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
 
     def premap(
         self,
-        index_field: Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
-        *args: Connectivity | fbuiltins.FieldOffset | fbuiltins.FieldOffsetAtIndex,
+        index_field: Connectivity | fbuiltins.FieldOffset,
+        *args: Connectivity | fbuiltins.FieldOffset,
     ) -> Connectivity:
         raise NotImplementedError()
 

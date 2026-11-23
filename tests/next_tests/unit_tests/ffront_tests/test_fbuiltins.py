@@ -7,9 +7,6 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import subprocess
-import sys
-import textwrap
 import typing
 
 import numpy as np
@@ -82,41 +79,3 @@ def test_where_rejects_mismatched_named_collections(true_type, false_type):
     mask = constructors.as_field([IDim], np.array([True, False, True]))
     with pytest.raises(ValueError, match="named collection of the same type"):
         fbuiltins.where(mask, make(true_type), make(false_type))
-
-
-def test_fbuiltins_does_not_import_embedded():
-    # `gt4py.next` imports embedded itself, so it is replaced by a bare package of the same path
-    code = textwrap.dedent(
-        """
-        import pathlib, sys, types
-        import gt4py
-
-        package = types.ModuleType("gt4py.next")
-        package.__path__ = [str(pathlib.Path(gt4py.__file__).parent / "next")]
-        sys.modules["gt4py.next"] = package
-        import gt4py.next.ffront.fbuiltins
-
-        print(sorted(name for name in sys.modules if name.startswith("gt4py.next.embedded")))
-        """
-    )
-    result = subprocess.run(
-        [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
-    )
-
-    assert result.stdout.strip() == "[]"
-
-
-class _Marker:
-    pass
-
-
-def test_fallback_dispatcher(monkeypatch):
-    def dispatcher(builtin, args):
-        if any(isinstance(arg, _Marker) for arg in args):
-            return lambda *args: ("fallback", builtin)
-        return NotImplemented
-
-    monkeypatch.setattr(fbuiltins, "fallback_dispatcher", dispatcher)
-
-    assert fbuiltins.sqrt(_Marker()) == ("fallback", fbuiltins.sqrt)
-    assert fbuiltins.sqrt(np.float64(4.0)) == 2.0

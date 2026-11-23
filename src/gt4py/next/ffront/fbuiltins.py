@@ -184,11 +184,6 @@ class BuiltInFunction(Generic[_R, _P]):
             ) is not NotImplemented:
                 return op_func
         else:
-            if (
-                fallback_dispatcher is not None
-                and (op_func := fallback_dispatcher(self, args)) is not NotImplemented
-            ):
-                return op_func
             return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
@@ -213,14 +208,6 @@ class BuiltInFunction(Generic[_R, _P]):
             },
             returns=_type_conversion(signature.return_annotation),
         )
-
-
-#: `(builtin, args) -> implementation | NotImplemented`, tried when no argument type implements
-#: `builtin`, before its default implementation
-FallbackDispatcher: TypeAlias = Callable[[BuiltInFunction, tuple[Any, ...]], Any]
-
-# dependency inversion: an implementation of the builtins, e.g. embedded, may set it
-fallback_dispatcher: FallbackDispatcher | None = None
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
@@ -504,22 +491,34 @@ class FieldOffset(runtime.Offset):
     def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
 
-    def __getitem__(self, index: int) -> "FieldOffsetAtIndex":
-        """The neighbor `index` of the local dimension, e.g. `E2V[0]`."""
-        return FieldOffsetAtIndex(self, index)
+    def __getitem__(self, offset: int) -> common.Connectivity:
+        """Serve as a connectivity factory."""
+        from gt4py.next import embedded  # avoid circular import
 
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.get_offset_provider(None)
+        assert current_offset_provider is not None
+        offset_definition = common.get_offset(current_offset_provider, self.value)
 
-@dataclasses.dataclass(frozen=True)
-class FieldOffsetAtIndex:
-    """
-    A `FieldOffset` to one neighbor of its local dimension.
+        assert common.is_neighbor_table(offset_definition)
+        named_index = common.NamedIndex(self.target[-1], offset)
+        connectivity = offset_definition[named_index]
 
-    Like the `FieldOffset`, it stands for a connectivity of the offset provider, which an
-    implementation of `premap` looks up.
-    """
+        return connectivity
 
-    offset: FieldOffset
-    index: int
+    def as_connectivity_field(self) -> common.Connectivity:
+        """Convert to connectivity field using the offset providers in current embedded execution context."""
+        from gt4py.next import embedded  # avoid circular import
+
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.get_offset_provider(None)
+        assert current_offset_provider is not None
+        offset_definition = common.get_offset(current_offset_provider, self.value)
+
+        if not isinstance(offset_definition, common.Connectivity):
+            raise NotImplementedError()
+
+        return offset_definition
 
 
 def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:
