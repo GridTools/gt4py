@@ -102,7 +102,9 @@ class _TorchCUDAAllocator:
 torch_cuda_execution = EmbeddedDummyBackend("EmbeddedTorchCUDA", _TorchCUDAAllocator())
 
 
-_torch_compile = _optional_module("gt4py.next.program_processors.runners.torch_compile")
+_torch_compile = _optional_module(
+    "gt4py.next.program_processors.runners.experimental.torch_compile"
+)
 torch_compile_cuda = (
     dataclasses.replace(
         _torch_compile.torch_compile, name="torch_compile_cuda", allocator=_TorchCUDAAllocator()
@@ -125,8 +127,8 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
-    JAX_JIT = "gt4py.next.program_processors.runners.jax_jit.jax_jit"
-    TORCH_COMPILE = "gt4py.next.program_processors.runners.torch_compile.torch_compile"
+    JAX_JIT = "gt4py.next.program_processors.runners.experimental.jax_jit.jax_jit"
+    TORCH_COMPILE = "gt4py.next.program_processors.runners.experimental.torch_compile.torch_compile"
     TORCH_COMPILE_CUDA = "next_tests.definitions.torch_compile_cuda"
 
 

@@ -121,10 +121,10 @@ def device(request, library):
 @pytest.fixture
 def backend(library):
     if library == "jax":
-        from gt4py.next.program_processors.runners import jax_jit
+        from gt4py.next.program_processors.runners.experimental import jax_jit
 
         return jax_jit.jax_jit
-    from gt4py.next.program_processors.runners import torch_compile
+    from gt4py.next.program_processors.runners.experimental import torch_compile
 
     return torch_compile.torch_compile
 
@@ -192,7 +192,7 @@ def test_table_is_a_runtime_argument():
     device = jax.devices("cpu")[0]
     f = _field(device, [1.0, 2.0, 3.0, 4.0], [Vertex])
     out = _field(device, np.zeros(5), [Edge])
-    from gt4py.next.program_processors.runners import jax_jit
+    from gt4py.next.program_processors.runners.experimental import jax_jit
 
     prog = edge_sum_program.with_backend(jax_jit.jax_jit)
     conn = _e2v(device)
@@ -206,7 +206,7 @@ def test_table_is_a_runtime_argument():
 def test_retrace_per_table_buffer():
     import jax
 
-    from gt4py.next.program_processors.runners import jax_jit
+    from gt4py.next.program_processors.runners.experimental import jax_jit
 
     device = jax.devices("cpu")[0]
     out = _field(device, np.zeros(5), [Edge])
@@ -299,6 +299,12 @@ def test_missing_out_is_rejected(device, backend):
         scale.with_backend(backend)(
             _field(device, np.arange(3.0), [IDim]), int32(1), offset_provider={}
         )
+
+
+def test_exported_from_experimental(library, backend):
+    from gt4py.next import experimental
+
+    assert getattr(experimental, {"jax": "jax_jit", "torch": "torch_compile"}[library]) is backend
 
 
 def test_compile_is_rejected(backend):
