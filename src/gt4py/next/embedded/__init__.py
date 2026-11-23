@@ -6,8 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-# `nd_array_field` and `array_libraries` import `ffront.fbuiltins`, which imports this package:
-# `gt4py.next` imports them after `ffront`
+# not `nd_array_field` and `array_libraries`: they import `ffront.fbuiltins`, which imports
+# this package
 from . import array_ops, common, context, exceptions
 
 

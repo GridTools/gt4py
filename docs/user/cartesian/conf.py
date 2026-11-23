@@ -149,7 +149,7 @@ from site_theme import theme_settings  # noqa: E402 [module-import-not-at-top-of
 globals().update(
     theme_settings(
         __file__,
-        title="GT4Py (cartesian)",
+        title="GT4Py Cartesian",
         # Links to the other sites: (title, path relative to the root of this site)
         site_links=[
             ("Home", "../index.html"),

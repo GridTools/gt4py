@@ -20,7 +20,7 @@ The idea is to run test sessions only when needed. This means that a set of test
 
 ### Documentation
 
-A `Documentation` workflow builds the user documentation site with the `docs` nox session and, when a release is published, deploys it to GitHub Pages. See [documentation.md](documentation.md) for details.
+A `Documentation` workflow builds the user documentation site with the `docs` nox session and deploys it to GitHub Pages when a release is published, or when run manually from `main` or from a tag. See [documentation.md](documentation.md) for details.
 
 ### Daily CI
 

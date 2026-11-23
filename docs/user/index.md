@@ -32,7 +32,7 @@ target hardware.
 ---
 link: next/index.html
 ---
-Documentation coming soon.
+Quickstart and guide to the DSL.
 ```
 
 ## GT4Py Cartesian

@@ -9,9 +9,9 @@
 """Sphinx configuration of the `gt4py.next` documentation subsite.
 
 Pages are MyST Markdown files. The ones with a `jupytext` header declaring the
-`myst` format are notebooks which get executed at build time, so their
-outputs are always up to date. Any other Markdown page (like the current
-placeholder `index.md`) is rendered as is, without executing its code blocks.
+`myst` format (like `quickstart.md`) are notebooks which get executed at
+build time, so their outputs are always up to date. Any other Markdown page is
+rendered as is, without executing its code blocks.
 """
 
 import pathlib
@@ -45,8 +45,7 @@ exclude_patterns = [
     "**/*.ipynb",
     ".ipynb_checkpoints",
     "**/.ipynb_checkpoints",
-    # Advanced guides and workshop material are not part of the site (yet)
-    "advanced",
+    # Workshop material is not part of the site (yet)
     "workshop",
 ]
 
@@ -75,3 +74,21 @@ globals().update(
         ],
     )
 )
+
+
+def _remove_sdfg_viewer(app, doctree, docname):  # type: ignore[no-untyped-def]
+    """Drop the scripts of the DaCe SDFG viewer from the notebook outputs.
+
+    Importing `dace` in a notebook kernel displays an HTML output which loads
+    the viewer (or inlines it when offline). The pages do not use it and it
+    slows down their loading.
+    """
+    from docutils import nodes
+
+    for node in list(doctree.findall(nodes.raw)):
+        if "sdfv" in node.astext():
+            node.parent.remove(node)
+
+
+def setup(app):  # type: ignore[no-untyped-def]
+    app.connect("doctree-resolved", _remove_sdfg_viewer)
