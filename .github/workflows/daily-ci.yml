@@ -75,16 +75,7 @@ jobs:
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
 
-      - name: TEMP macOS OpenMP probe
-        if: ${{ matrix.os == 'macos-latest' }}
-        timeout-minutes: 40
-        env:
-          UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
-          UV_PYTHON_PREFERENCE: only-managed
-        run: ./.github/omp-probe.sh
-
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
-        if: false  # TEMP: probe run only
         env:
           # Set uv options through env vars to ensure all commands (including nox) use the same settings
           UV_RESOLUTION: ${{ matrix.dependencies-strategy }}
