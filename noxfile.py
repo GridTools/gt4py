@@ -145,7 +145,8 @@ def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
         return False
     if sys.platform == "darwin":
         # the torch wheels carry their own `libomp.dylib`, which clashes with the Homebrew
-        # one the extension links: two OpenMP runtimes abort with `OMP: Error #15`
+        # one the compiled gtfn and dace extensions link: two OpenMP runtimes abort with
+        # `OMP: Error #15`
         return False
     return True
 

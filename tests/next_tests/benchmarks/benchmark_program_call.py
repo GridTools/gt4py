@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
+from gt4py._core import definitions as core_defs
 from gt4py import next as gtx
 from gt4py.next import Dims, gtfn_cpu, gtfn_gpu, broadcast, typing as gtx_typing
 
@@ -36,8 +37,19 @@ GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
 
 BACKENDS: Final = GTFN_BACKENDS + DACE_BACKENDS
 BACKEND_PARAMS: Final = [
-    *(pytest.param(b, id=b.name) for b in GTFN_BACKENDS),
-    *(pytest.param(b, id=b.name, marks=pytest.mark.uses_dace) for b in DACE_BACKENDS),
+    pytest.param(
+        b,
+        id=b.name,
+        marks=[
+            *([pytest.mark.uses_dace] if b in DACE_BACKENDS else []),
+            *(
+                [pytest.mark.requires_gpu]
+                if b.allocator.__gt_device_type__ != core_defs.DeviceType.CPU
+                else []
+            ),
+        ],
+    )
+    for b in BACKENDS
 ]
 
 
