@@ -14,12 +14,11 @@ from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuilt
 
 
 @BuiltInFunction
-def as_offset(offset: FieldOffset, field: common.Field, /) -> common.Connectivity:
-    raise NotImplementedError()
+def as_offset(offset: FieldOffset, field: common.Field, /) -> common.Connectivity: ...  # type: ignore[empty-body]
 
 
 @WhereBuiltinFunction
-def concat_where(
+def concat_where(  # type: ignore[empty-body]
     domain: common.Domain,
     true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
@@ -46,7 +45,6 @@ def concat_where(
     Raises:
         NonContiguousDomain: If the resulting domain has interior gaps.
     """
-    raise NotImplementedError()
 
 
 EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset", "concat_where"]

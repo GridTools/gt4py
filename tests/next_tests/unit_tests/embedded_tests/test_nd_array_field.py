@@ -463,25 +463,6 @@ def test_neighbor_reduction_keeps_dtype(
     assert np.array_equal(result.asnumpy(), expected_bool if dtype == "bool" else expected)
 
 
-def test_non_dispatched_function():
-    @fbuiltins.BuiltInFunction
-    def fma(a: common.Field, b: common.Field, c: common.Field, /) -> common.Field:
-        return a * b + c
-
-    inp_a = [-1.0, 4.2, 42]
-    inp_b = [2.0, 3.0, -3.0]
-    inp_c = [-2.0, -3.0, 3.0]
-
-    expected = np.asarray(inp_a) * np.asarray(inp_b) + np.asarray(inp_c)
-
-    field_inp_a = _make_field_or_scalar(inp_a, np)
-    field_inp_b = _make_field_or_scalar(inp_b, np)
-    field_inp_c = _make_field_or_scalar(inp_c, np)
-
-    result = fma(field_inp_a, field_inp_b, field_inp_c)
-    assert np.allclose(result.ndarray, expected)
-
-
 def test_domain_premap():
     # Translation case
     I = Dimension("I")

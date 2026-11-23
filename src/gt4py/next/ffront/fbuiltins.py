@@ -8,15 +8,15 @@
 
 import dataclasses
 import inspect
-import math
-import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
 from types import UnionType
 from typing import (
     Any,
     Callable,
+    Concatenate,
     Final,
     Generic,
+    NoReturn,
     ParamSpec,
     Tuple,
     TypeAlias,
@@ -28,7 +28,6 @@ from typing import (
     overload,
 )
 
-import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
@@ -161,33 +160,24 @@ def _type_conversion(t: type) -> ts.DeferredType:
 
 @dataclasses.dataclass(frozen=True)
 class BuiltInFunction(Generic[_R, _P]):
+    """
+    A builtin of the DSL, declared by `definition`: its signature types it, its docstring documents it.
+
+    Calling it runs `call_implementation`, which `gt4py.next.embedded` sets.
+    """
+
     name: str = dataclasses.field(init=False)
-    # `function` can be used to provide a default implementation for all `Field` implementations,
-    # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
-    function: Callable[_P, _R]
+    definition: Callable[_P, _R]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
-        object.__setattr__(self, "__doc__", self.function.__doc__)
+        object.__setattr__(self, "name", f"{self.definition.__module__}.{self.definition.__name__}")
+        object.__setattr__(self, "__doc__", self.definition.__doc__)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
-        impl = self.dispatch(*args)
-        return impl(*args, **kwargs)
-
-    def dispatch(self, *args: Any) -> Callable[_P, _R]:
-        arg_types = tuple(type(arg) for arg in args)
-        for atype in arg_types:
-            # current strategy is to select the implementation of the first arg that supports the operation
-            # TODO: define a strategy that converts or prevents conversion
-            if (dispatcher := getattr(atype, "__gt_builtin_func__", None)) is not None and (
-                op_func := dispatcher(self)
-            ) is not NotImplemented:
-                return op_func
-        else:
-            return self.function
+        return call_implementation(self, *args, **kwargs)
 
     def __gt_type__(self) -> ts.FunctionType:
-        signature = inspect.signature(self.function)
+        signature = inspect.signature(self.definition)
         params = signature.parameters
 
         return ts.FunctionType(
@@ -208,6 +198,17 @@ class BuiltInFunction(Generic[_R, _P]):
             },
             returns=_type_conversion(signature.return_annotation),
         )
+
+
+def _not_registered(builtin: BuiltInFunction, /, *args: Any, **kwargs: Any) -> NoReturn:
+    raise RuntimeError(
+        f"'{builtin.name}' was called with values, but no implementation of the builtins is"
+        " registered: import 'gt4py.next.embedded'."
+    )
+
+
+# dependency inversion, as `iterator.runtime.fendef_embedded`: set by `gt4py.next.embedded` on import
+call_implementation: Callable[Concatenate[BuiltInFunction, ...], Any] = _not_registered
 
 
 CondT = TypeVar("CondT", bound=Union[common.Field, common.Domain])
@@ -242,64 +243,34 @@ class WhereBuiltinFunction(
     ) -> Tuple: ...
 
     def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
-        if isinstance(true_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES) or isinstance(
-            false_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES
-        ):
-            if type(true_field) is not type(false_field):
-                raise ValueError(
-                    f"Either both or none can be a named collection of the same type in '{true_field=}' and '{false_field=}'."
-                )
-            return named_collections.tree_map_named_collection(lambda t, f: self(cond, t, f))(  # type: ignore[return-value] # `NamedCollection` is not `_R`
-                true_field, false_field
-            )
-        if isinstance(true_field, tuple) or isinstance(false_field, tuple):
-            if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
-                raise ValueError(
-                    # TODO(havogt) find a strategy to unify parsing and embedded error messages
-                    f"Either both or none can be tuple in '{true_field=}' and '{false_field=}'."
-                )
-            if len(true_field) != len(false_field):
-                raise ValueError(
-                    "Tuple of different size not allowed."
-                )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(self(cond, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(cond, true_field, false_field)
 
 
 @BuiltInFunction
-def neighbor_sum(field: common.Field, /, axis: common.Dimension) -> common.Field:
-    raise NotImplementedError()
+def neighbor_sum(field: common.Field, /, axis: common.Dimension) -> common.Field: ...  # type: ignore[empty-body]
 
 
 @BuiltInFunction
-def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
-    raise NotImplementedError()
+def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field: ...  # type: ignore[empty-body]
 
 
 @BuiltInFunction
-def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
-    raise NotImplementedError()
+def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field: ...  # type: ignore[empty-body]
 
 
 @BuiltInFunction
-def broadcast(
+def broadcast(  # type: ignore[empty-body]
     field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
-) -> common.Field:
-    assert core_defs.is_scalar_type(
-        field
-    )  # default implementation for scalars, Fields are handled via dispatch
-    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
-    return field  # type: ignore[return-value] # see comment above
+) -> common.Field: ...
 
 
 @WhereBuiltinFunction
-def where(
+def where(  # type: ignore[empty-body]
     mask: common.Field,
     true_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     false_field: common.Field | core_defs.ScalarT | Tuple | named_collections.CustomNamedCollection,
     /,
-) -> common.Field | Tuple:
-    raise NotImplementedError()
+) -> common.Field | Tuple: ...
 
 
 @overload
@@ -315,78 +286,44 @@ def astype(value: Tuple, type_: type, /) -> Tuple: ...
 
 
 @BuiltInFunction
-def astype(
+def astype(  # type: ignore[empty-body]
     value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
-) -> common.Field | core_defs.ScalarT | Tuple:
-    if isinstance(value, tuple):
-        return tuple(astype(v, type_) for v in value)
-    # default implementation for scalars, Fields are handled via dispatch
-    assert core_defs.is_scalar_type(value)
-    return core_defs.dtype(type_).scalar_type(value)
+) -> common.Field | core_defs.ScalarT | Tuple: ...
 
 
-_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
-UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
-
-
-try:
-    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
-except ImportError:
-
-    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
-        # restore the input scalar type, which `math.gamma` widens to `float`
-        return type(value)(math.gamma(value))
-
-
-_UNARY_MATH_FP_BUILTIN_IMPL: Final = {
-    "sin": np.sin,
-    "cos": np.cos,
-    "tan": np.tan,
-    "arcsin": np.arcsin,
-    "arccos": np.arccos,
-    "arctan": np.arctan,
-    "sinh": np.sinh,
-    "cosh": np.cosh,
-    "tanh": np.tanh,
-    "arcsinh": np.arcsinh,
-    "arccosh": np.arccosh,
-    "arctanh": np.arctanh,
-    "sqrt": np.sqrt,
-    "exp": np.exp,
-    "log": np.log,
-    "gamma": _gamma,
-    "cbrt": np.cbrt,
-    "floor": np.floor,
-    "ceil": np.ceil,
-    "trunc": np.trunc,
-}
-UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
-
-_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
-    "isfinite": np.isfinite,
-    "isinf": np.isinf,
-    "isnan": np.isnan,
-}
-UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
+UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = ["abs", "neg"]
+UNARY_MATH_FP_BUILTIN_NAMES: Final = [
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+]
+UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name: str) -> BuiltInFunction:
-    _math_builtin = (
-        _UNARY_MATH_NUMBER_BUILTIN_IMPL
-        | _UNARY_MATH_FP_BUILTIN_IMPL
-        | _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL
-    )[name]
+    def definition(  # type: ignore[empty-body]
+        value: common.Field | core_defs.ScalarT, /
+    ) -> common.Field | core_defs.ScalarT: ...
 
-    def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
-        # TODO(havogt): enable tests in `test_math_builtin_execution.py`
-        assert core_defs.is_scalar_type(
-            value
-        )  # default implementation for scalars, Fields are handled via dispatch
-
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
-
-    impl.__name__ = name
-    return BuiltInFunction(impl)
+    definition.__name__ = name
+    return BuiltInFunction(definition)
 
 
 abs = _make_unary_math_builtin("abs")  # noqa: A001 [shadowing]
@@ -420,16 +357,12 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
 def _make_binary_math_builtin(name: str) -> BuiltInFunction:
-    def impl(
+    def definition(  # type: ignore[empty-body]
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
-    ) -> common.Field | core_defs.ScalarT:
-        # default implementation for scalars, Fields are handled via dispatch
-        assert core_defs.is_scalar_type(lhs)
-        assert core_defs.is_scalar_type(rhs)
-        return getattr(np, name)(lhs, rhs)
+    ) -> common.Field | core_defs.ScalarT: ...
 
-    impl.__name__ = name
-    return BuiltInFunction(impl)
+    definition.__name__ = name
+    return BuiltInFunction(definition)
 
 
 minimum = _make_binary_math_builtin("minimum")
