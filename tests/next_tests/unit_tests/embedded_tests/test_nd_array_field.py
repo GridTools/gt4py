@@ -377,11 +377,45 @@ def test_math_builtins_on_0d_arrays(nd_array_implementation):
     four = asarray(nd_array_implementation, 4.0, dtype=np.float32)
     two = asarray(nd_array_implementation, 2, dtype=np.int32)
 
-    assert float(fbuiltins.sqrt(four)) == 2.0
-    assert float(fbuiltins.maximum(four, 5.0)) == 5.0
+    xp = array_ops.of(four).xp
+    for result, expected in ((fbuiltins.sqrt(four), 2.0), (fbuiltins.maximum(four, 5.0), 5.0)):
+        assert result.ndim == 0 and array_ops.of(result).xp is xp
+        assert result.dtype == array_ops.of(four).dtype(np.float32)
+        assert float(result) == expected
     as_float = fbuiltins.astype(two, np.float64)
-    assert float(as_float) == 2.0
+    assert as_float.ndim == 0 and array_ops.of(as_float).xp is xp
     assert as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert float(as_float) == 2.0
+
+
+def test_broadcast_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2.0, dtype=np.float32)
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    broadcasted = fbuiltins.broadcast(two, (D0,))
+
+    assert isinstance(broadcasted, common.Field)
+    np.testing.assert_array_equal((broadcasted * field).asnumpy(), [2.0, 4.0, 6.0])
+    unchanged = fbuiltins.broadcast(two, ())
+    assert not isinstance(unchanged, common.Field) and unchanged.ndim == 0
+
+
+def test_where_with_0d_condition_and_tuple_branches(nd_array_implementation):
+    condition = asarray(nd_array_implementation, True, dtype=np.bool_)
+    one = asarray(nd_array_implementation, 1.0, dtype=np.float32)
+
+    first, second = fbuiltins.where(condition, (one, 2.0), (3.0, 4.0))
+
+    assert float(first) == 1.0 and float(second) == 2.0
+
+
+def test_astype_tuple_with_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    as_float, scalar = fbuiltins.astype((two, np.int32(3)), np.float64)
+
+    assert as_float.ndim == 0 and as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert scalar == 3.0 and isinstance(scalar, np.float64)
 
 
 def test_math_builtins_reject_nd_arrays(nd_array_implementation):

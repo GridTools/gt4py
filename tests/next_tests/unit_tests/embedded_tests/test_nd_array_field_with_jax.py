@@ -670,10 +670,14 @@ def test_jax_jit_traced_python_scalar_keeps_the_field_dtype():
 
     field = common._field(jax.numpy.arange(3.0, dtype=np.float32), domain=common.domain({D0: 3}))
 
-    result = jax.jit(lambda f, a: a * f)(field, 2.0)
-
-    assert result.asnumpy().dtype == np.float32
-    np.testing.assert_array_equal(result.asnumpy(), [0.0, 2.0, 4.0])
+    for expression, expected in (
+        (lambda f, a: a * f, [0.0, 4.0, 8.0]),
+        (lambda f, a: fbuiltins.sqrt(a) * f, [0.0, 2.0, 4.0]),
+        (lambda f, a: fbuiltins.maximum(a, 5.0) * f, [0.0, 5.0, 10.0]),
+    ):
+        result = jax.jit(expression)(field, 4.0)
+        assert result.asnumpy().dtype == np.float32
+        np.testing.assert_array_equal(result.asnumpy(), expected)
 
 
 @pytest.mark.requires_jax
