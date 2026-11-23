@@ -103,11 +103,3 @@ maxdepth: 1
 ---
 python/running
 ```
-
-```{toctree}
----
-caption: Examples
-maxdepth: 2
----
-examples/index
-```
