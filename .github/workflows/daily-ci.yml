@@ -74,10 +74,6 @@ jobs:
           echo "GT4PY_CARTESIAN_ENABLE_OPENMP=True" >> $GITHUB_ENV
           echo "OPENMP_CPPFLAGS=-Xclang -fopenmp -Xclang -I$(brew --prefix libomp)/include" >> $GITHUB_ENV
           echo "OPENMP_LDFLAGS=-Xclang -fopenmp $(brew --prefix libomp)/lib/libomp.dylib" >> $GITHUB_ENV
-          # The torch wheels carry their own `libomp.dylib` next to the Homebrew one linked
-          # above; libomp aborts with `OMP: Error #15` when a second runtime initializes in
-          # the same process unless it is told that a duplicate is acceptable.
-          echo "KMP_DUPLICATE_LIB_OK=TRUE" >> $GITHUB_ENV
 
       - name: Run CPU tests for '${{ matrix.gt4py-module }}' with '${{ matrix.dependencies-strategy }}' resolution strategy
         env:
