@@ -185,14 +185,15 @@ class BuiltInFunction(Generic[_R, _P]):
             ) is not NotImplemented:
                 return op_func
         else:
-            if any(_is_0d_array(arg) for arg in args):
+            if any(array_ops.is_0d_array(arg) for arg in args):
                 return self._call_with_0d_fields
             return self.function
 
     def _call_with_0d_fields(self, *args: Any, **kwargs: Any) -> Any:
         """Call the field implementation with each 0-d array (e.g. a traced scalar) as a 0-d field."""
         fields = [
-            common._field(arg, domain=common.Domain()) if _is_0d_array(arg) else arg for arg in args
+            common._field(arg, domain=common.Domain()) if array_ops.is_0d_array(arg) else arg
+            for arg in args
         ]
         result = cast(Callable[..., Any], self)(*fields, **kwargs)
         if isinstance(result, common.Field) and result.domain.ndim == 0:
@@ -292,10 +293,6 @@ def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
 @BuiltInFunction
 def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
-
-
-def _is_0d_array(value: Any) -> bool:
-    return array_ops.is_scalar_or_0d_array(value) and not core_defs.is_scalar_type(value)
 
 
 @BuiltInFunction

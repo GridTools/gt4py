@@ -275,11 +275,18 @@ def of(array: Any) -> ArrayOps:
         return ops
 
 
-def is_scalar_or_0d_array(value: Any) -> bool:
-    """A scalar, or a 0-d array (e.g. a traced scalar argument under `jax.jit`)."""
-    return core_defs.is_scalar_type(value) or (
-        getattr(value, "ndim", None) == 0 and array_api_compat.is_array_api_obj(value)
+def is_0d_array(value: Any) -> bool:
+    """A 0-d array that is not a scalar, e.g. a traced scalar argument under `jax.jit`."""
+    return (
+        not core_defs.is_scalar_type(value)
+        and getattr(value, "ndim", None) == 0
+        and array_api_compat.is_array_api_obj(value)
     )
+
+
+def is_scalar_or_0d_array(value: Any) -> bool:
+    """A scalar, or a 0-d array."""
+    return core_defs.is_scalar_type(value) or is_0d_array(value)
 
 
 def default() -> ArrayOps:
