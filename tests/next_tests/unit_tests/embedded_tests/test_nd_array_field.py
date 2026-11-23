@@ -394,19 +394,22 @@ def test_broadcast_0d_array(nd_array_implementation):
 
     broadcasted = fbuiltins.broadcast(two, (D0,))
 
-    assert isinstance(broadcasted, common.Field)
-    np.testing.assert_array_equal((broadcasted * field).asnumpy(), [2.0, 4.0, 6.0])
-    unchanged = fbuiltins.broadcast(two, ())
-    assert not isinstance(unchanged, common.Field) and unchanged.ndim == 0
+    # as for a scalar: the value itself, which broadcasts in the operations it takes part in
+    assert broadcasted is two
+    np.testing.assert_array_equal((field * broadcasted).asnumpy(), [2.0, 4.0, 6.0])
 
 
-def test_where_with_0d_condition_and_tuple_branches(nd_array_implementation):
-    condition = asarray(nd_array_implementation, True, dtype=np.bool_)
+def test_where_with_0d_array_branches(nd_array_implementation):
+    mask = common._field(
+        asarray(nd_array_implementation, [True, False], dtype=np.bool_),
+        domain=common.domain({D0: 2}),
+    )
     one = asarray(nd_array_implementation, 1.0, dtype=np.float32)
 
-    first, second = fbuiltins.where(condition, (one, 2.0), (3.0, 4.0))
+    first, second = fbuiltins.where(mask, (one, 2.0), (3.0, one))
 
-    assert float(first) == 1.0 and float(second) == 2.0
+    np.testing.assert_array_equal(first.asnumpy(), [1.0, 3.0])
+    np.testing.assert_array_equal(second.asnumpy(), [2.0, 1.0])
 
 
 def test_astype_tuple_with_0d_array(nd_array_implementation):
