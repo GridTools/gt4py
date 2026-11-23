@@ -5,11 +5,12 @@ on:
     - cron: '51 0 * * *'
   workflow_dispatch:
 
-  ## COMMENTED OUT: only for testing CI action changes.
+  ## TEMPORARY: enabled to verify the array-api-compat and macOS OpenMP fixes on
+  ## this PR. Remove together with the trimmed matrix before merging.
   ## It only works for PRs to `main` branch from branches in the upstream gt4py repo.
-  # pull_request:
-  #   branches:
-  #     - main
+  pull_request:
+    branches:
+      - main
   ## END
 
 jobs:
@@ -36,9 +37,16 @@ jobs:
         # between the different compatible versions for a given package requirement
         # [arg: --resolution, env: UV_RESOLUTION=]
         dependencies-strategy: ["lowest-direct", "highest"]
-        gt4py-module: ["cartesian", "eve", "next", "storage"]
+        # TEMPORARY: narrowed to the jobs affected by this PR; restore the full
+        # matrix (cartesian, eve, next, storage x 3.12, 3.13, 3.14) before merging.
+        gt4py-module: ["next"]
         os: ["ubuntu-latest", "macos-latest"]
-        python-version: ${{ fromJSON(needs.get-python-versions.outputs.python-versions) }}
+        python-version: ["3.12"]
+        exclude:
+          - dependencies-strategy: highest
+            os: ubuntu-latest
+          - dependencies-strategy: lowest-direct
+            os: macos-latest
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
