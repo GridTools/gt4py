@@ -27,7 +27,7 @@ import numpy as np
 import torch
 
 from gt4py.next import backend as next_backend, common
-from gt4py.next.program_processors.runners import embedded_jit
+from gt4py.next.program_processors.runners.experimental import embedded_jit
 
 
 if TYPE_CHECKING:

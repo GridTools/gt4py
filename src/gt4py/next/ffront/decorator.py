@@ -386,7 +386,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
-            elif self.backend is not None:
+            elif isinstance(self.backend, next_backend.EmbeddedJitBackend):
                 with embedded_program_call_context(self, args, offset_provider, kwargs):
                     self._embedded_jit(*args, offset_provider=offset_provider, **kwargs)
             else:
@@ -585,7 +585,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             if not next_embedded.context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
-                if self.backend is not None:
+                if isinstance(self.backend, next_backend.EmbeddedJitBackend):
                     return self._embedded_jit(*args, **kwargs)
             attributes = (
                 self.definition_stage.attributes

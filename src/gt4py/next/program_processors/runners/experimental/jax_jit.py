@@ -25,7 +25,7 @@ import jax.numpy as jnp
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.program_processors.runners import embedded_jit
+from gt4py.next.program_processors.runners.experimental import embedded_jit
 
 
 if TYPE_CHECKING:

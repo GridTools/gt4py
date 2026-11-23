@@ -10,7 +10,7 @@
 `ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
 How embedded fields and connectivities behave under JAX tracing is in this module
-(ADR 0029); `runners.jax_jit` runs programs under `jax.jit`. A connectivity table
+(ADR 0029); `runners.experimental.jax_jit` runs programs under `jax.jit`. A connectivity table
 inside a trace is a tracer, and one of two cases:
 
 - it stands for a concrete table, which it got as a pytree leaf, or it was

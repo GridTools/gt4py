@@ -17,7 +17,7 @@ Embedded execution runs the definition of a program on fields of any array libra
 
 ## Decision
 
-`EmbeddedJitBackend` (in `gt4py.next.backend`) is a `Backend` that does not compile: its `jit(entry_point)` returns the entry point run embedded inside the tracing compiler. There are two instances, `runners.jax_jit.jax_jit` and `runners.torch_compile.torch_compile`. What they share (the embedded execution, its signature and static parameters, the named collections) is in `runners.embedded_jit`; each backend only wraps it in its compiler.
+`EmbeddedJitBackend` (in `gt4py.next.backend`) is a `Backend` that does not compile: its `jit(entry_point)` returns the entry point run embedded inside the tracing compiler. There are two instances, `runners.experimental.jax_jit.jax_jit` and `runners.experimental.torch_compile.torch_compile`, exported as `gt4py.next.experimental.jax_jit` and `gt4py.next.experimental.torch_compile`. What they share (the embedded execution, its signature and static parameters, the named collections) is in `runners.experimental.embedded_jit`; each backend only wraps it in its compiler.
 
 - **Dispatch**: this is a stopgap until embedded execution is represented by backends, so the decorator has a single hook. An entry point with such a backend takes the embedded path and calls `backend.jit(entry_point)`, cached on the entry point. Whether an entry point is compiled is an attribute set at creation, so the call of a compiled backend costs what it did. `.compile()` raises.
 - **Arguments**: fields and connectivities (pytrees, ADR 0029) and scalars are traced. The `Dimension`s of the offset provider and the parameters in `static_params` are static; for a field operator called with `out=`, so is `domain`.
