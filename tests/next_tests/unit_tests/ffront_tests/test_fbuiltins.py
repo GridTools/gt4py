@@ -6,33 +6,19 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import dataclasses
+import subprocess
+import sys
+import textwrap
 import typing
 
 import numpy as np
 import pytest
 
-from gt4py.next import common, constructors
-from gt4py.next.ffront import fbuiltins
+from gt4py.next import common
+from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.type_system import type_specifications as ts
 
-
-# values inside the domain of every unary math builtin (0.5 is invalid for `arccosh`)
-_SAFE_INPUT = {"arccosh": 2.0}
-
 IDim = common.Dimension("IDim")
-
-
-@dataclasses.dataclass
-class _Pair:
-    a: common.Field[[IDim], np.float64]
-    b: common.Field[[IDim], np.float64]
-
-
-@dataclasses.dataclass
-class _OtherPair:
-    a: common.Field[[IDim], np.float64]
-    b: common.Field[[IDim], np.float64]
 
 
 @pytest.mark.parametrize("tuple_spelling", [typing.Tuple, tuple, typing.Tuple[int], tuple[int]])
@@ -52,30 +38,62 @@ def test_type_conversion_helper_accepts_both_union_spellings(union):
     assert fbuiltins._type_conversion_helper(union) == (ts.FieldType, ts.TupleType)
 
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize(
-    "name", fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-)
-def test_unary_math_builtin_scalar_preserves_dtype(name, dtype):
-    value = dtype(_SAFE_INPUT.get(name, 0.5))
-    assert type(getattr(fbuiltins, name)(value)) is dtype
+_ALL_BUILTINS = [getattr(fbuiltins, name) for name in fbuiltins.FUN_BUILTIN_NAMES] + [
+    getattr(experimental, name) for name in experimental.EXPERIMENTAL_FUN_BUILTIN_NAMES
+]
 
 
-@pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize("name", fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES)
-def test_unary_math_predicate_builtin_scalar_returns_bool(name, dtype):
-    assert isinstance(getattr(fbuiltins, name)(dtype(0.5)), (bool, np.bool_))
+@pytest.mark.parametrize("builtin", _ALL_BUILTINS, ids=lambda builtin: builtin.name)
+def test_builtin_declaration(builtin):
+    assert isinstance(builtin.__gt_type__(), ts.FunctionType)
+    assert builtin.name == f"{builtin.definition.__module__}.{builtin.definition.__name__}"
+    assert builtin.__doc__ == builtin.definition.__doc__
 
 
-@pytest.mark.parametrize(
-    "true_type, false_type", [(float, _Pair), (_Pair, float), (_Pair, _OtherPair)]
-)
-def test_where_rejects_mismatched_named_collections(true_type, false_type):
-    def make(type_):
-        if type_ is float:
-            return 1.0
-        return type_(*(constructors.as_field([IDim], np.arange(3.0)) for _ in range(2)))
+def test_builtin_docstring():
+    assert experimental.concat_where.__doc__.lstrip().startswith("Assemble")
 
-    mask = constructors.as_field([IDim], np.array([True, False, True]))
-    with pytest.raises(ValueError, match="named collection of the same type"):
-        fbuiltins.where(mask, make(true_type), make(false_type))
+
+def test_call_goes_to_the_implementation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        fbuiltins, "call_implementation", lambda *args, **kwargs: calls.append((args, kwargs))
+    )
+
+    fbuiltins.where("mask", "a", "b")
+    fbuiltins.neighbor_sum("field", axis=IDim)
+
+    assert calls == [
+        ((fbuiltins.where, "mask", "a", "b"), {}),
+        ((fbuiltins.neighbor_sum, "field"), {"axis": IDim}),
+    ]
+
+
+def test_call_without_implementation(monkeypatch):
+    monkeypatch.setattr(fbuiltins, "call_implementation", fbuiltins._no_implementation)
+
+    with pytest.raises(RuntimeError, match="'gt4py.next.ffront.fbuiltins.sqrt' was called"):
+        fbuiltins.sqrt(1.0)
+
+
+def test_fbuiltins_does_not_import_embedded():
+    """Importing `fbuiltins` loads no embedded module (function-local imports are not seen)."""
+    # `gt4py.next` imports embedded itself, so it is replaced by a bare package of the same path
+    code = textwrap.dedent(
+        """
+        import pathlib, sys, types
+        import gt4py
+
+        package = types.ModuleType("gt4py.next")
+        package.__path__ = [str(pathlib.Path(gt4py.__file__).parent / "next")]
+        sys.modules["gt4py.next"] = package
+        import gt4py.next.ffront.fbuiltins
+
+        print(sorted(name for name in sys.modules if name.startswith("gt4py.next.embedded")))
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True, check=True
+    )
+
+    assert result.stdout.strip() == "[]"
