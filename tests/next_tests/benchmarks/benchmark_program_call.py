@@ -35,6 +35,10 @@ except ImportError:
 GTFN_BACKENDS = [gtfn_cpu, gtfn_gpu] if cp is not None else [gtfn_cpu]
 
 BACKENDS: Final = GTFN_BACKENDS + DACE_BACKENDS
+BACKEND_PARAMS: Final = [
+    *(pytest.param(b, id=b.name) for b in GTFN_BACKENDS),
+    *(pytest.param(b, id=b.name, marks=pytest.mark.uses_dace) for b in DACE_BACKENDS),
+]
 
 
 if TYPE_CHECKING:
@@ -45,7 +49,7 @@ Cell = gtx.Dimension("Cell")
 IDim = gtx.Dimension("IDim")
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+@pytest.mark.parametrize("backend", BACKEND_PARAMS)
 def benchmark_const_no_args_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -67,7 +71,7 @@ def benchmark_const_no_args_program(
     benchmark(compiled_program, out=out_field)
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+@pytest.mark.parametrize("backend", BACKEND_PARAMS)
 def benchmark_copy_01_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -94,7 +98,7 @@ def benchmark_copy_01_arg_program(
     benchmark(compiled_program, in_field, out=out_field)
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+@pytest.mark.parametrize("backend", BACKEND_PARAMS)
 def benchmark_horizontal_copy_01_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -141,7 +145,7 @@ def benchmark_horizontal_copy_01_arg_program(
     )
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+@pytest.mark.parametrize("backend", BACKEND_PARAMS)
 def benchmark_horizontal_copy_05_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
@@ -200,7 +204,7 @@ def benchmark_horizontal_copy_05_arg_program(
     )
 
 
-@pytest.mark.parametrize("backend", BACKENDS, ids=lambda b: b.name)
+@pytest.mark.parametrize("backend", BACKEND_PARAMS)
 def benchmark_horizontal_copy_25_arg_program(
     benchmark: ptb_fixture.BenchmarkFixture, backend: gtx_typing.Backend
 ):
