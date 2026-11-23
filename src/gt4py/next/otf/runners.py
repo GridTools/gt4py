@@ -227,13 +227,6 @@ class ProcessRunner:
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
-        if _is_importing_main_module_in_child_process():
-            raise RuntimeError(
-                "A compiled GT4Py program was called while a child process (e.g. a GT4Py "
-                "compilation worker) was importing the main module of the script. Guard the "
-                'entry point of the script with `if __name__ == "__main__":` so that the '
-                "calls only happen in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
-            )
         # spawn (not fork): the parent may already hold running threads (BLAS/OpenMP,
         # this pool's own manager thread), CUDA contexts and MPI state, none of which
         # survive fork safely. The gtfn GPU build even touches CUDA at *compile* time
@@ -277,6 +270,16 @@ class ProcessRunner:
             future.set_exception(error)
             return future
 
+        # Checked here, where worker processes get started, not at construction:
+        # creating a runner while importing `__main__` in a child process is harmless.
+        if _is_importing_main_module_in_child_process():
+            raise RuntimeError(
+                f"Compilation of '{task.name}' was started while a child process (e.g. a "
+                "GT4Py compilation worker) was importing the main module of the script. Guard "
+                'the entry point of the script with `if __name__ == "__main__":` so that '
+                "programs are only called in the main process (or set "
+                "`GT4PY_BUILD_JOBS_MODE=serial`)."
+            )
         try:
             return self._pool.submit(
                 _run_compilation_task_in_worker,

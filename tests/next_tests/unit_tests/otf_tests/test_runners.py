@@ -505,6 +505,22 @@ def test_wait_for_compilation_groups_multiple_failures():
     compiled_program.wait_for_compilation()
 
 
+def test_wait_for_compilation_hints_at_broken_process_pool():
+    # A broken pool fails all its futures with the same exception instance.
+    error = BrokenProcessPool("boom")
+    futures = [concurrent.futures.Future() for _ in range(2)]
+    for i, future in enumerate(futures):
+        future.set_exception(error)
+        compiled_program._ongoing_compilations[future] = f"testee_{i} (backend)"
+
+    with pytest.raises(ExceptionGroup) as exc_info:
+        compiled_program.wait_for_compilation()
+
+    assert all(e is error for e in exc_info.value.exceptions)
+    assert len(error.__notes__) == 1  # added once, although reported twice
+    assert 'if __name__ == "__main__"' in error.__notes__[0]
+
+
 def test_wait_for_compilation_drains_foreign_entries():
     """Pin the leak the `isolate_ongoing_compilations` fixture exists to contain.
 
@@ -622,15 +638,22 @@ def test_process_runner_submit_hints_at_broken_pool(process_runner):
     assert any('if __name__ == "__main__"' in note for note in exc_info.value.__notes__)
 
 
-def test_process_runner_refuses_to_start_while_a_worker_imports_main(tmp_path, monkeypatch):
+def test_process_runner_refuses_to_submit_while_a_child_imports_main(process_runner, monkeypatch):
     monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
 
     with pytest.raises(RuntimeError, match=r'if __name__ == "__main__"'):
-        runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
+        process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
+
+
+def test_process_runner_can_be_created_while_a_child_imports_main(tmp_path, monkeypatch):
+    """Only starting a compilation is refused: a module-level runner is harmless."""
+    monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
+
+    runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)).shutdown()
 
 
 _SCRIPT_TEMPLATE = """
-import gt4py.next.otf.runners as runners
+from gt4py.next.otf import compiled_program, runners
 
 
 def executor(compilable):
@@ -641,24 +664,34 @@ task = runners.CompilationTask(name="t", compilable=None, executor=executor)
 {call}
 """
 
+# What calling a compiled program does: submit to the default runner, then wait.
+_COMPILE_AND_WAIT = """\
+future = runners.get_default_runner().submit(task)
+compiled_program._ongoing_compilations[future] = "t"
+compiled_program.wait_for_compilation()"""
+
 
 @pytest.mark.parametrize("guarded", [False, True], ids=["unguarded", "guarded"])
 def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
-    """A script submitting compilations at module level is re-imported by every
-    spawned worker: that must give an actionable error, not a bare
-    `RuntimeError: ... bootstrapping phase` followed by `BrokenProcessPool`."""
-    call = (
-        "runner = runners.ProcessRunner(max_workers=1, shared_session_cache_dir="
-        f"{str(tmp_path)!r})\n"
-        "try:\n    runner.submit(task).result(timeout=120)\nfinally:\n    runner.shutdown(wait=True)"
-    )
+    """A script compiling at module level is re-imported by every spawned worker.
+
+    The worker must fail with an actionable error instead of the bare
+    `RuntimeError: ... bootstrapping phase`, and the `BrokenProcessPool` that the
+    script then gets must carry a hint at the missing guard.
+    """
+    call = _COMPILE_AND_WAIT
     if guarded:
         call = 'if __name__ == "__main__":\n' + "\n".join("    " + l for l in call.splitlines())
     script = tmp_path / "script.py"
     script.write_text(_SCRIPT_TEMPLATE.format(call=call))
 
     result = subprocess.run(
-        [sys.executable, str(script)], capture_output=True, text=True, timeout=300, cwd=tmp_path
+        [sys.executable, str(script)],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=tmp_path,
+        env={**os.environ, "GT4PY_BUILD_JOBS_MODE": "process", "GT4PY_BUILD_JOBS": "1"},
     )
 
     assert "bootstrapping phase" not in result.stderr
@@ -668,5 +701,6 @@ def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
         assert "AssertionError: executor ran in the worker" in result.stderr
     else:
         assert result.returncode != 0
-        assert 'if __name__ == "__main__"' in result.stderr
+        assert "RuntimeError: Compilation of 't' was started while a child process" in result.stderr
         assert "BrokenProcessPool" in result.stderr
+        assert "A compilation worker process terminated abruptly" in result.stderr  # the hint

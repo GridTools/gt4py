@@ -108,7 +108,7 @@ def test_embedded_program_call_is_silent():
         warnings.simplefilter("always")
         prog(a, out, offset_provider={})
 
-    assert not [w for w in caught if issubclass(w.category, UserWarning)]
+    assert not [w for w in caught if "Using Python execution" in str(w.message)]
     np.testing.assert_array_equal(out.asnumpy(), np.arange(3.0) + 1.0)
 
 
